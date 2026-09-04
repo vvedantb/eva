@@ -10,8 +10,9 @@ import { toRepoRelativePath } from "@/lib/components/chat/ChangedFilesCard";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
 import type { SandboxFileListApi } from "@/lib/components/sandbox/useSandboxFileList";
 import { fileViewerPathParser } from "@/lib/search-params";
-import { FileViewerPanel, ViewerNotice } from "./FileViewerPanel";
+import { FileViewerPanel } from "./FileViewerPanel";
 import { SandboxFileTree } from "./_components/SandboxFileTree";
+import { ViewerNotice } from "./_components/ViewerNotice";
 
 interface FilesPanelProps {
   sandboxId: string | undefined;
@@ -31,7 +32,7 @@ function deriveSelectedRelPath(
   return relative === file ? null : relative;
 }
 
-/** Full-repo tree and read-only viewer driven by the shared sandbox file list. */
+/** Full-repo tree and editable viewer driven by the shared sandbox file list. */
 export function FilesPanel({
   sandboxId,
   repoId,
@@ -43,6 +44,10 @@ export function FilesPanel({
   const { state: listState, isRefreshing, refresh } = fileList;
   const root = listState.kind === "loaded" ? listState.root : null;
   const selectedPath = deriveSelectedRelPath(file, root);
+  // The repo directory's own name, so the tree's toolbar is labelled with the
+  // repo rather than a generic "Files". Undefined (not "") when there is no
+  // root yet, so the tree keeps its own fallback label.
+  const rootLabel = root === null ? undefined : root.split("/").pop();
 
   // Below `md` the tree and the viewer are separate panes, so opening a file has
   // to move you to the file — otherwise the tap looks like it did nothing.
@@ -102,6 +107,7 @@ export function FilesPanel({
             isRefreshing={isRefreshing}
             onRefresh={refresh}
             onSelectFile={handleSelectFile}
+            rootLabel={rootLabel}
           />
         )
       }
@@ -111,6 +117,7 @@ export function FilesPanel({
           sandboxId={sandboxId}
           repoId={repoId}
           isActive={isActive}
+          root={root}
         />
       </div>
     </ResizableSidebar>

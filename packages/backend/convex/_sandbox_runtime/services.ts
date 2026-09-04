@@ -13,6 +13,8 @@ import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
 import { assertActionSandboxAccess } from "../functions";
 import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
+// Aliased: this module's public action is also called writeSandboxFile.
+import { writeSandboxFile as writeFileToSandbox } from "./sandboxFiles";
 
 /** Starts or stops a code-server instance inside a sandbox. */
 export const toggleCodeServer = action({
@@ -359,6 +361,74 @@ export const readSandboxFile = action({
     const size = Number.parseInt(firstLine, 10);
     const truncated = Number.isFinite(size) && size > MAX_FILE_VIEWER_BYTES;
     return { status: "ok" as const, content, truncated };
+  },
+});
+
+/**
+ * Whether a path is safe to write to. The File Viewer only ever saves back a
+ * path it received from listSandboxFiles or readSandboxFile, so anything else
+ * is a client bug or a probe: reject outright rather than normalise, so a
+ * traversal attempt can never resolve to a write somewhere unintended.
+ */
+export function isValidSandboxWritePath(path: string): boolean {
+  if (!path.startsWith("/")) return false;
+  if (path.includes(String.fromCharCode(0))) return false;
+  if (path.endsWith("/")) return false;
+  // Catches `/../`, a leading `/..`, and a trailing `/..` in one pass.
+  return !path.split("/").includes("..");
+}
+
+/**
+ * Writes a file back into a running sandbox — the File Viewer's save path.
+ *
+ * Authorization is identical to readSandboxFile: authorizedRunningHandle checks
+ * identity, repo access, and the repo↔sandbox binding, and never resumes a
+ * stopped VM.
+ *
+ * Deliberately overwrites with no conflict check. The sandbox is the user's own
+ * workspace and the agent may be editing the same file; last write wins, the
+ * same as two terminals would.
+ */
+export const writeSandboxFile = action({
+  args: {
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    path: v.string(),
+    content: v.string(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("ok"), size: v.number() }),
+    v.object({ status: v.literal("not_running") }),
+    v.object({ status: v.literal("too_large"), size: v.number() }),
+  ),
+  handler: async (ctx, args) => {
+    if (!isValidSandboxWritePath(args.path)) {
+      throw new Error("Invalid file path");
+    }
+
+    // The viewer reads at most MAX_FILE_VIEWER_BYTES, so a truncated read must
+    // never be saved back over the whole file. Capping writes at the same size
+    // makes that impossible even when the client forgets to check `truncated`.
+    // Checked before touching the sandbox so an oversized body costs nothing.
+    const size = new TextEncoder().encode(args.content).byteLength;
+    if (size > MAX_FILE_VIEWER_BYTES) {
+      return { status: "too_large" as const, size };
+    }
+
+    const handle = await authorizedRunningHandle(
+      ctx,
+      args.repoId,
+      args.sandboxId,
+    );
+    if (!handle) {
+      return { status: "not_running" as const };
+    }
+
+    // Goes through the provider's writeFile, never a shell command — see
+    // MAX_INLINE_EXEC_CONTENT_BYTES in sandboxFiles.ts for why content must
+    // never be interpolated into an exec argument.
+    await writeFileToSandbox(handle, args.path, args.content);
+    return { status: "ok" as const, size };
   },
 });
 
