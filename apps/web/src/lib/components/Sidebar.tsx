@@ -15,6 +15,7 @@ import {
   IconCircleHalf,
   IconX,
 } from "@tabler/icons-react";
+import { AveHeaderButton } from "@/lib/components/ave/AveHeaderButton";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { api } from "@eva/backend";
@@ -121,6 +122,10 @@ export function Sidebar() {
   const {
     collapsed,
     setCollapsed,
+    // Context-owned so the "select something from the sidebar" landing pages
+    // can open the drawer from their empty state (`OpenNavigationButton`).
+    mobileOpen,
+    setMobileOpen,
     setSessionsNavMode,
     sidebarWidth,
     setSidebarWidth,
@@ -128,7 +133,6 @@ export function Sidebar() {
     commitSidebarWidth,
   } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   // The drawer lives above the router, so navigating does not unmount it. Close
@@ -378,6 +382,10 @@ export function Sidebar() {
             </span>
           </Link>
         )}
+        {/* Manager Ave's summon button lives here below `lg`; the floating
+            launcher is desktop-only because it covers the composer's send
+            button on a phone. */}
+        <AveHeaderButton />
         <Button
           size="icon"
           variant="ghost"

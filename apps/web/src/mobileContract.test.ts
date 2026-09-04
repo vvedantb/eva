@@ -343,3 +343,45 @@ describe("floating overlays", () => {
     );
   });
 });
+
+/**
+ * Toolbars drop a button's text below `sm` and keep the icon. Where that text
+ * was the button's only name (`<span className="hidden sm:inline">Select</span>`
+ * with no `aria-label` on the button), the phone got an unnamed control, and a
+ * hover-only tooltip does not name anything on touch. `max-sm:sr-only` hides the
+ * same text visually while keeping it in the accessibility tree, and renders
+ * identically to `sm:inline` from `sm` up.
+ */
+describe("buttons that hide their label on phones", () => {
+  it("keep an accessible name", () => {
+    const offenders = styledSources().flatMap(({ path, source }) => {
+      const hits = [
+        ...source.matchAll(/<span\s+className="hidden (?:sm|md):inline"/g),
+      ];
+      return hits.flatMap((hit) => {
+        const at = hit.index;
+        // The span's own control: the nearest `<Button`/`<button` opening tag
+        // before it. A closing `</Button>`/`</button>` in between means the
+        // span is outside any control (status text) and is left alone.
+        const before = source.slice(Math.max(0, at - 1200), at);
+        const openAt = Math.max(
+          before.lastIndexOf("<Button"),
+          before.lastIndexOf("<button"),
+        );
+        if (openAt === -1) return [];
+        const control = before.slice(openAt);
+        if (/<\/[Bb]utton>/.test(control)) return [];
+        if (/\baria-label=/.test(control)) return [];
+        // A shorter phone label beside it (`<span className="sm:hidden">Run`)
+        // names the button just as well.
+        const after = source.slice(at, at + 240);
+        if (/className="sm:hidden"/.test(after)) return [];
+        return [`${path}: ${hit[0]}`];
+      });
+    });
+    expect(
+      offenders,
+      "use max-sm:sr-only so the button keeps its name on a phone",
+    ).toEqual([]);
+  });
+});

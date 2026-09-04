@@ -125,7 +125,7 @@ export function MonorepoClient() {
           className="motion-press border-border text-muted-foreground"
         >
           <IconRefresh size={16} className={loading ? "animate-spin" : ""} />
-          <span className="hidden sm:inline">Re-detect</span>
+          <span className="max-sm:sr-only">Re-detect</span>
         </Button>
       }
     >

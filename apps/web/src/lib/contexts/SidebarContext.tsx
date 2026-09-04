@@ -95,6 +95,9 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     SIDEBAR_DEFAULT_WIDTH_PX,
   );
   const [dragWidth, setDragWidth] = useState<number | null>(null);
+  // Not persisted: a drawer that reopens itself on the next visit is a bug, and
+  // navigation closes it (see `Sidebar`), so the only meaningful value is now.
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const setCollapsed = (value: boolean) => {
     setCollapsedState(value);
@@ -127,6 +130,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       value={{
         collapsed,
         setCollapsed,
+        mobileOpen,
+        setMobileOpen,
         sessionsNavMode,
         setSessionsNavMode,
         sidebarWidth: displayWidth,
