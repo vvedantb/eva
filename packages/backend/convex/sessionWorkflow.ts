@@ -21,6 +21,7 @@ export {
 
 export {
   startExecute,
+  retryLastTurnWithAccount,
   prewarmDaemon,
   prewarmDaemonNow,
   getDaemonPrewarmData,
