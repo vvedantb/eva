@@ -1,28 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import { api, getAIModelProvider, type AIModel, type Id } from "@eva/backend";
+import {
+  api,
+  getAIModelProvider,
+  parseUsageLimitResetTime,
+  type AIModel,
+  type Id,
+} from "@eva/backend";
 import { useMutation } from "convex/react";
-import { Badge, Button, type ModelAccount } from "@eva/ui";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { IconAlertTriangle } from "@tabler/icons-react";
+import type { ModelAccount } from "@eva/ui";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
-import { usageLimitResetText } from "./usageLimitBanner";
+import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
+import { useMinuteNow } from "@/lib/components/usage-limits/_useMinuteNow";
+import {
+  usageLimitResetClock,
+  usageLimitResetText,
+  usageLimitRetryCandidates,
+} from "./usageLimitBanner";
+import { UsageLimitAccountOption } from "./UsageLimitAccountOption";
 import type { SessionMessage } from "./useSessionSend";
 
-/** In-flight key for the team credential, which has no account id. */
-const TEAM_KEY = "team";
-
-interface RetryCandidate {
-  /** Stable key for the in-flight button: an account id, or `TEAM_KEY`. */
+/** A candidate whose id has been checked against the live account docs. */
+interface ResolvedCandidate {
   key: string;
-  /** Possessive noun for the button copy: "Vedant's account" / "the team account". */
-  label: string;
+  name: string;
+  isTeam: boolean;
+  isOwn: boolean;
   /** null = the team credential. */
   accountId: Id<"userProviderAccounts"> | null;
 }
 
 interface UsageLimitRecoveryBannerProps {
   sessionId: Id<"sessions">;
+  repoId: Id<"githubRepos">;
   messages: SessionMessage[];
   model: AIModel;
   accounts: ReadonlyArray<ModelAccount>;
@@ -42,10 +56,15 @@ interface UsageLimitRecoveryBannerProps {
  * One-click recovery for a turn that failed on the provider's usage limit.
  * Shown only while that failed reply is the newest message: the retry stages a
  * fresh assistant placeholder, which becomes the newest message and dismisses
- * the banner without any extra state.
+ * the card without any extra state.
+ *
+ * Each account is a row with its own headroom, because the choice between them
+ * is exactly the number the rows carry — switching to an account that is also
+ * out costs another failed turn.
  */
 export function UsageLimitRecoveryBanner({
   sessionId,
+  repoId,
   messages,
   model,
   accounts,
@@ -59,6 +78,10 @@ export function UsageLimitRecoveryBanner({
   const retryLastTurn = useMutation(
     api.sessionWorkflow.retryLastTurnWithAccount,
   );
+  const now = useMinuteNow();
+  // Same query and same quantised clock as the composer's usage chip, so the
+  // cache serves both and the two surfaces cannot disagree by a tick.
+  const entries = useQuery(api.usageLimits.getForViewer, { repoId, now });
 
   const newest = messages.at(-1);
   if (
@@ -73,42 +96,39 @@ export function UsageLimitRecoveryBanner({
     return null;
   }
 
-  const provider = getAIModelProvider(model);
-  const accountCandidates: RetryCandidate[] = accounts.flatMap((account) => {
-    if (account.provider !== provider) return [];
-    if (account.id === currentAccountId) return [];
-    const accountId = resolveAccountId(account.id);
+  const candidates = usageLimitRetryCandidates({
+    accounts,
+    provider: getAIModelProvider(model),
+    currentAccountId,
+  }).flatMap<ResolvedCandidate>((candidate) => {
+    if (candidate.accountId === null) {
+      return [{ ...candidate, isTeam: true, accountId: null }];
+    }
+    const accountId = resolveAccountId(candidate.accountId);
     // A deleted account is still in a stale picker snapshot; retrying on it
-    // would fail server-side, so leave it out rather than offer a dead button.
+    // would fail server-side, so leave it out rather than offer a dead row.
     if (accountId === undefined) return [];
-    return [
-      { key: account.id, label: `${account.label}'s account`, accountId },
-    ];
+    return [{ ...candidate, isTeam: false, accountId }];
   });
-  // Team last: a personal account is the more likely fix, and the team
-  // credential is shared, so spending it is the fallback.
-  const candidates: RetryCandidate[] =
-    currentAccountId === null
-      ? accountCandidates
-      : [
-          ...accountCandidates,
-          { key: TEAM_KEY, label: "the team account", accountId: null },
-        ];
 
   const currentLabel = resolveCredentialSourceLabel(currentAccountId, accounts);
-  const reset = usageLimitResetText(newest.content);
-  const owner = currentLabel === "Team" ? "The team" : `${currentLabel}'s`;
-  const suffix =
-    candidates.length === 0
-      ? " No other shared account is available."
-      : isSandboxActive
-        ? ""
-        : " Wake the sandbox to retry.";
-  const description = `${owner} Claude account hit its usage limit${
-    reset === undefined ? "" : ` · ${reset}`
-  }.${suffix}`;
+  const ownerLabel = currentLabel === "Team" ? "The team" : `${currentLabel}'s`;
+  const resetAt = parseUsageLimitResetTime(newest.content);
+  const resetText = usageLimitResetText(newest.content);
+  const resetClock = usageLimitResetClock(newest.content);
+  const subtitle =
+    resetAt !== null && resetAt > now && resetClock !== undefined
+      ? `Resets in ${formatResetDistanceMs(resetAt - now)} (${resetClock})`
+      : resetText === undefined
+        ? "Waiting for the window to reset will also work."
+        : `${resetText.charAt(0).toUpperCase()}${resetText.slice(1)}`;
 
-  const handleRetry = (candidate: RetryCandidate) => {
+  const entryFor = (accountId: Id<"userProviderAccounts"> | null) =>
+    entries?.find(
+      (entry) => entry.providerAccountId === (accountId ?? undefined),
+    );
+
+  const handleRetry = (candidate: ResolvedCandidate) => {
     setInFlightKey(candidate.key);
     // The switch has to complete before the retry stages the turn, or the
     // replacement daemon would still be running the exhausted credential.
@@ -129,31 +149,51 @@ export function UsageLimitRecoveryBanner({
   };
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5">
-      <Badge
-        variant="destructive"
-        className="shrink-0 rounded-md px-1.5 py-0 text-[10px] font-semibold tracking-wide uppercase"
-      >
-        Limit reached
-      </Badge>
-      <span className="min-w-0 flex-1 text-sm text-muted-foreground">
-        {description}
-      </span>
-      {candidates.map((candidate) => (
-        <Button
-          key={candidate.key}
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="h-7 shrink-0 gap-1 px-2 text-xs"
-          disabled={!isSandboxActive || isExecuting || inFlightKey !== null}
-          onClick={() => handleRetry(candidate)}
-        >
-          {inFlightKey === candidate.key
-            ? `Switching to ${candidate.label}...`
-            : `Switch to ${candidate.label} and retry`}
-        </Button>
-      ))}
+    <div className="mb-2 flex flex-col gap-3 rounded-surface bg-muted p-3">
+      <div className="flex items-start gap-2.5">
+        <IconAlertTriangle
+          size={18}
+          className="mt-0.5 shrink-0 text-destructive"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">
+            {ownerLabel} Claude account is out of usage
+          </p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        {candidates.length > 0 ? (
+          <span className="hidden max-w-56 shrink-0 text-right text-xs text-muted-foreground sm:block">
+            Retry on another account — same model and reasoning
+          </span>
+        ) : null}
+      </div>
+      {candidates.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No other Claude account is shared with you. Ask a teammate to share
+          theirs in Settings → Accounts, or wait for the reset.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {candidates.map((candidate) => (
+            <UsageLimitAccountOption
+              key={candidate.key}
+              name={candidate.name}
+              isTeam={candidate.isTeam}
+              isOwn={candidate.isOwn}
+              entry={entryFor(candidate.accountId)}
+              now={now}
+              disabled={!isSandboxActive || isExecuting || inFlightKey !== null}
+              inFlight={inFlightKey === candidate.key}
+              onSelect={() => handleRetry(candidate)}
+            />
+          ))}
+          {isSandboxActive ? null : (
+            <p className="px-3 pt-0.5 text-xs text-muted-foreground">
+              Wake the sandbox to retry.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

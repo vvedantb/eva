@@ -362,6 +362,7 @@ export function ChatPanel({
               />
               <UsageLimitRecoveryBanner
                 sessionId={sessionId}
+                repoId={repo._id}
                 messages={messages}
                 model={model}
                 accounts={accounts}

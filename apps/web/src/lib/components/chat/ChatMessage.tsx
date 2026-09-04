@@ -44,7 +44,11 @@ import { EvaIcon } from "@/lib/components/EvaIcon";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
-import { getAssistantTurnState } from "@/lib/components/chat/chatBodyUtils";
+import {
+  getAssistantTurnState,
+  stripErrorPrefix,
+} from "@/lib/components/chat/chatBodyUtils";
+import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
 
@@ -338,11 +342,20 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                       )}
                       {agentSpawnRow}
-                      {/* wrap-anywhere: without it a long unbreakable token is
-                        silently clipped by MessageContent's overflow-hidden. */}
-                      <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                        {message.content}
-                      </MessageResponse>
+                      {message.errorType === "rate_limit" ? (
+                        // A limit failure is not a reply: as markdown it read
+                        // as Eva answering "Error: …" in body copy.
+                        <TurnErrorNotice
+                          title="Claude usage limit reached"
+                          detail={stripErrorPrefix(message.content)}
+                        />
+                      ) : (
+                        /* wrap-anywhere: without it a long unbreakable token is
+                          silently clipped by MessageContent's overflow-hidden. */
+                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+                          {message.content}
+                        </MessageResponse>
+                      )}
                       {showChangedFiles && changedFiles.length > 0 ? (
                         <ChangedFilesCard
                           files={changedFiles}
