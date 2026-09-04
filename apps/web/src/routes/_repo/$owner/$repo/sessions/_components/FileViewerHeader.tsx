@@ -78,40 +78,46 @@ export function FileViewerHeader({
 }: FileViewerHeaderProps) {
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2">
+      {/* `direction: rtl` on the scroller starts it scrolled to the end, so a
+          path too long for the header keeps its file name in view instead of
+          its first directory. The inner strip flips back to ltr and fills the
+          width, so a short path still sits on the left. */}
       <div
-        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none text-xs"
+        className="min-w-0 flex-1 overflow-x-auto scrollbar-none [direction:rtl]"
         title={title}
       >
-        {segments.map((segment, index) => (
-          // Keyed by the path so far: a repeated directory name (`src/src`)
-          // would collide on the label alone.
-          <span
-            key={segments
-              .slice(0, index + 1)
-              .map((crumb) => crumb.label)
-              .join("/")}
-            className="flex shrink-0 items-center gap-1"
-          >
-            {index > 0 ? (
-              <IconChevronRight className="size-3 shrink-0 text-muted-foreground/60" />
-            ) : null}
+        <div className="flex w-max min-w-full items-center gap-1 text-xs [direction:ltr]">
+          {segments.map((segment, index) => (
+            // Keyed by the path so far: a repeated directory name (`src/src`)
+            // would collide on the label alone.
             <span
-              className={
-                segment.isFile
-                  ? "font-medium text-foreground"
-                  : "text-muted-foreground"
-              }
+              key={segments
+                .slice(0, index + 1)
+                .map((crumb) => crumb.label)
+                .join("/")}
+              className="flex shrink-0 items-center gap-1"
             >
-              {segment.label}
+              {index > 0 ? (
+                <IconChevronRight className="size-3 shrink-0 text-muted-foreground/60" />
+              ) : null}
+              <span
+                className={
+                  segment.isFile
+                    ? "font-medium text-foreground"
+                    : "text-muted-foreground"
+                }
+              >
+                {segment.label}
+              </span>
             </span>
-          </span>
-        ))}
-        {dirty ? (
-          <span
-            aria-label="Unsaved changes"
-            className="size-1.5 shrink-0 rounded-full bg-primary"
-          />
-        ) : null}
+          ))}
+          {dirty ? (
+            <span
+              aria-label="Unsaved changes"
+              className="size-1.5 shrink-0 rounded-full bg-primary"
+            />
+          ) : null}
+        </div>
       </div>
 
       {markdown ? (
