@@ -7,6 +7,8 @@ import {
   IconFoldDown,
   IconFoldUp,
   IconFolder,
+  IconLayoutSidebar,
+  IconLayoutSidebarRight,
   IconRefresh,
   IconSearch,
 } from "@tabler/icons-react";
@@ -22,9 +24,13 @@ interface SandboxFileTreeProps {
   onSelectFile: (relPath: string) => void;
   /** Repo root folder name shown in the toolbar; falls back to "Files". */
   rootLabel?: string;
+  /** Which side of the viewer this tree currently sits on. */
+  side: "left" | "right";
+  /** Moves the tree to the other side of the viewer. */
+  onToggleSide: () => void;
 }
 
-/** Shared so the three toolbar icon buttons cannot drift apart. */
+/** Shared so the four toolbar icon buttons cannot drift apart. */
 const TOOLBAR_BUTTON_CLASS =
   "max-sm:hit-target size-7 shrink-0 p-0 text-muted-foreground hover:text-foreground";
 
@@ -62,6 +68,8 @@ export function SandboxFileTree({
   onRefresh,
   onSelectFile,
   rootLabel,
+  side,
+  onToggleSide,
 }: SandboxFileTreeProps) {
   const { resolvedTheme } = useThemeMode();
   // Mirrors the toggle's own actions only: `initialExpansion: 1` means the
@@ -112,6 +120,12 @@ export function SandboxFileTree({
     }
     setExpanded(next);
   };
+
+  // The button names where the tree is going, not where it is.
+  const moveSideLabel =
+    side === "left"
+      ? "Move file list to the right"
+      : "Move file list to the left";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -175,6 +189,27 @@ export function SandboxFileTree({
           <TooltipContent className="text-xs">
             {expanded ? "Collapse all" : "Expand all"}
           </TooltipContent>
+        </Tooltip>
+        {/* Hidden below `md`: there the tree and the viewer are separate panes
+            reached through the switcher, so neither is beside the other and
+            "which side" means nothing. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={cn(TOOLBAR_BUTTON_CLASS, "hidden md:inline-flex")}
+              onClick={onToggleSide}
+              aria-label={moveSideLabel}
+            >
+              {side === "left" ? (
+                <IconLayoutSidebarRight className="size-3.5" />
+              ) : (
+                <IconLayoutSidebar className="size-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="text-xs">{moveSideLabel}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
+import { useLocalStorage } from "usehooks-ts";
 import type { Id } from "@eva/backend";
 import { Button, Spinner } from "@eva/ui";
 import { IconRefresh } from "@tabler/icons-react";
@@ -13,6 +14,7 @@ import { fileViewerPathParser } from "@/lib/search-params";
 import { FileViewerPanel } from "./FileViewerPanel";
 import { SandboxFileTree } from "./_components/SandboxFileTree";
 import { ViewerNotice } from "./_components/ViewerNotice";
+import { fileTreeSideFromStorage } from "./_utils/-fileTreeSide";
 
 interface FilesPanelProps {
   sandboxId: string | undefined;
@@ -53,6 +55,16 @@ export function FilesPanel({
   // to move you to the file — otherwise the tap looks like it did nothing.
   const [showContentSignal, setShowContentSignal] = useState(0);
 
+  // Reading order is a per-device habit, like the pane width beside it, so it
+  // lives in localStorage rather than Convex. Stored as the raw string and
+  // parsed on the way out, so an unexpected value degrades to the default
+  // instead of being trusted as a side.
+  const [storedSide, setStoredSide] = useLocalStorage<string>(
+    "eva:file-tree-side",
+    "left",
+  );
+  const side = fileTreeSideFromStorage(storedSide);
+
   const handleSelectFile = (relativePath: string) => {
     if (!root) return;
     // TanStack search object — not nuqs `setFile`. Nuqs concatenates
@@ -74,6 +86,7 @@ export function FilesPanel({
       storageKey="sandbox-file-tree"
       mobilePaneLabels={{ left: "Files", right: "Viewer" }}
       showContentSignal={showContentSignal}
+      side={side}
       // The 160/320 defaults add up to a 481px floor, which overflows the
       // sandbox pane on a tablet (and on a narrow desktop pane). Both sides
       // scroll their own content, so they can go narrower than the default.
@@ -108,6 +121,10 @@ export function FilesPanel({
             onRefresh={refresh}
             onSelectFile={handleSelectFile}
             rootLabel={rootLabel}
+            side={side}
+            onToggleSide={() => {
+              setStoredSide(side === "left" ? "right" : "left");
+            }}
           />
         )
       }
