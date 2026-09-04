@@ -59,6 +59,14 @@ function rubberbandSidebarWidth(width: number): number {
 interface SidebarContextType {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  /**
+   * Whether the below-`lg` drawer is showing. Owned here rather than by
+   * `Sidebar` because the drawer is the only way to reach a list on a phone,
+   * so pages whose whole content is "select something from the sidebar" have
+   * to be able to open it (`OpenNavigationButton`).
+   */
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
   /** Sticky entry point for Sessions: rail → global list, in-repo nav → per-repo list. */
   sessionsNavMode: SessionsNavMode;
   setSessionsNavMode: (mode: SessionsNavMode) => void;

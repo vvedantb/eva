@@ -81,14 +81,21 @@ export function ReviewHeader({
         // state of the pull request is read before its name. `mt-0.5` optically
         // centres a 20px pill on the title's first line rather than on the block,
         // which is what `items-center` would do once the title wraps.
-        <div className="flex min-w-0 items-start gap-2">
+        //
+        // Below `sm` the row wraps and the action cluster takes a second line of
+        // its own: sharing one line, the buttons left the title ~48px and it
+        // wrapped a word per line. `sm:contents` on the wrapper means the desktop
+        // row keeps the exact three-child box model it always had.
+        <div className="flex min-w-0 items-start gap-2 max-sm:flex-wrap">
           <PrStatusPill
             status={overview.status}
             draft={overview.draft}
             className="mt-0.5"
           />
           <div className="min-w-0 flex-1">{title}</div>
-          {actions}
+          <div className="max-sm:flex max-sm:basis-full max-sm:justify-end sm:contents">
+            {actions}
+          </div>
         </div>
       )}
 

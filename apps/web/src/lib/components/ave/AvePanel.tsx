@@ -13,6 +13,7 @@ import {
 } from "@eva/ui";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { PANEL_POSITION_STYLE } from "@/lib/components/ave/useAveLauncherPosition";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 const AvePanelBody = lazy(() =>
   import("@/lib/components/ave/AvePanelBody").then((m) => ({
@@ -39,6 +40,12 @@ const HEADER_BUTTON_CLASS =
  *
  * The chrome is eager so the first click can play this spring immediately. The
  * session tree stays lazy — it is what used to delay the whole surface.
+ *
+ * Below `lg` there is no launcher to anchor to — the summon button lives in the
+ * mobile header — so the popover becomes a sheet filling the space under that
+ * header. It cannot keep `PANEL_POSITION_STYLE`: that style carries the panel's
+ * width and height as well as its offsets, and a 26rem box hung off a
+ * non-existent launcher lands half off a phone screen.
  */
 export function AvePanel({
   visible,
@@ -47,6 +54,8 @@ export function AvePanel({
   visible: boolean;
   onMinimize: () => void;
 }) {
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+
   return (
     <m.div
       role="dialog"
@@ -64,11 +73,14 @@ export function AvePanel({
             }
       }
       transition={motionSpring}
-      style={PANEL_POSITION_STYLE}
+      style={isDesktop ? PANEL_POSITION_STYLE : undefined}
       className={cn(
         "fixed z-50",
         "flex flex-col overflow-hidden",
-        "origin-bottom-right rounded-surface bg-popover/95 text-popover-foreground backdrop-blur-md smooth-shadow-ring-xl",
+        "rounded-surface bg-popover/95 text-popover-foreground backdrop-blur-md smooth-shadow-ring-xl",
+        isDesktop
+          ? "origin-bottom-right"
+          : "inset-x-2 top-[calc(var(--eva-mobile-header-height)+0.5rem)] bottom-[calc(0.5rem+env(safe-area-inset-bottom))] origin-top",
         visible ? null : "pointer-events-none",
       )}
     >

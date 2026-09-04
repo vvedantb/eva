@@ -1,34 +1,14 @@
 "use client";
 
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
 import { IconX } from "@tabler/icons-react";
+import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import {
   LAUNCHER_POSITION_STYLE,
   type AveLauncherDragHandlers,
 } from "@/lib/components/ave/useAveLauncherPosition";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
-
-/**
- * A dot, not a count: there is only ever one Manager Ave, so the question is
- * "is its sandbox up", not "how many". Same semantics the rail tile used before
- * the launcher took the query over.
- */
-function AveActiveDot() {
-  const orchestrator = useQuery(api.sessions.getOrchestratorSession, {});
-  if (orchestrator?.status !== "active") return null;
-  return (
-    <>
-      <span
-        className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-success ring-2 ring-background"
-        aria-hidden
-      />
-      <span className="sr-only">Sandbox active</span>
-    </>
-  );
-}
 
 const GLYPH_LAYER =
   "pointer-events-none absolute inset-0 flex items-center justify-center transition-[opacity,scale] duration-[var(--motion-fast)]";
@@ -38,6 +18,11 @@ const GLYPH_LAYER =
  * drags it elsewhere. Closed, it *is* Eva's mark — Ave is Eva herself, so the
  * launcher is the app icon, not a toolbar glyph on glass. Open, the same circle
  * becomes the close control.
+ *
+ * Desktop only. On a phone the bottom-right corner is where the chat composer's
+ * send button, the plan-question action row and row-level actions all live, and
+ * a 48px disc floating over them makes them untappable — so below `lg` the
+ * summon affordance is `AveHeaderButton` in the mobile header instead.
  */
 export function AveLauncherButton({
   isOpen,
@@ -73,7 +58,7 @@ export function AveLauncherButton({
           style={LAUNCHER_POSITION_STYLE}
           className={cn(
             "motion-press fixed z-50",
-            "flex size-12 items-center justify-center rounded-full",
+            "hidden lg:flex size-12 items-center justify-center rounded-full",
             "smooth-shadow-ring-lg active:scale-[0.94]",
             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40",
             // Touch drags must not scroll the page out from under the pointer.
