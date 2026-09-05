@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useMatches } from "@tanstack/react-router";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { decodeRepoParam, KNOWN_REPO_SUB_PAGES } from "@/lib/utils/repoUrl";
 import { useUser } from "@clerk/clerk-react";
@@ -133,6 +133,19 @@ export function Sidebar() {
     commitSidebarWidth,
   } = useSidebar();
   const { pageTitle } = usePageTitle();
+  // Entity pages (a session, a project, a pull request) title themselves with
+  // a breadcrumb rather than a string, so `pageTitle` is empty there and the
+  // header used to fall back to the logo — no "where am I" on a phone. The
+  // route's section label (the same `staticData.title` the browser tab uses)
+  // fills that gap; the logo is only for routes that declare neither.
+  const routeTitle = useMatches({
+    select: (matches) =>
+      matches.reduce<string>(
+        (deepest, match) => match.staticData.title ?? deepest,
+        "",
+      ),
+  });
+  const mobileHeaderTitle = pageTitle || routeTitle;
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   // The drawer lives above the router, so navigating does not unmount it. Close
@@ -367,9 +380,9 @@ export function Sidebar() {
         >
           <IconMenu2 size={20} className="text-muted-foreground" />
         </Button>
-        {pageTitle ? (
+        {mobileHeaderTitle ? (
           <h1 className="mx-auto max-sm:min-w-0 truncate text-base font-semibold tracking-[-0.02em] text-foreground text-balance">
-            {pageTitle}
+            {mobileHeaderTitle}
           </h1>
         ) : (
           <Link
