@@ -62,17 +62,19 @@ function GatewaySpeechButton({
   const { isListening, isConnecting, toggle } = useGatewayDictation(setInput);
   const { isPolishing, handleToggle } = useTranscriptPolish({ value, setInput });
 
+  const label = isPolishing
+    ? "Polishing…"
+    : isConnecting
+      ? "Connecting…"
+      : isListening
+        ? "Stop recording"
+        : "Voice input";
+
   return (
     <PromptInputButton
-      tooltip={
-        isPolishing
-          ? "Polishing…"
-          : isConnecting
-            ? "Connecting…"
-            : isListening
-              ? "Stop recording"
-              : "Voice input"
-      }
+      tooltip={label}
+      // The tooltip is hover-only, so on touch this is the button's only name.
+      aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
       disabled={disabled || isConnecting || isPolishing}
       className={isListening && !isConnecting ? "text-destructive" : undefined}
@@ -100,15 +102,16 @@ function WebSpeechButton({
   const { isListening, toggle } = useSpeechRecognition(setInput);
   const { isPolishing, handleToggle } = useTranscriptPolish({ value, setInput });
 
+  const label = isPolishing
+    ? "Polishing…"
+    : isListening
+      ? "Stop recording"
+      : "Voice input";
+
   return (
     <PromptInputButton
-      tooltip={
-        isPolishing
-          ? "Polishing…"
-          : isListening
-            ? "Stop recording"
-            : "Voice input"
-      }
+      tooltip={label}
+      aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
       disabled={disabled || isPolishing}
       className={isListening ? "text-destructive" : undefined}
