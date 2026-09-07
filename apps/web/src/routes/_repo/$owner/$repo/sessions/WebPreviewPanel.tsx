@@ -26,12 +26,15 @@ import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
 import { PreviewViewportFrame } from "./_components/PreviewViewportFrame";
 import {
   FILL_PREVIEW_VIEWPORT,
+  framedPreviewViewport,
   parsePreviewContainSize,
   parsePreviewViewport,
   readStoredPreviewViewport,
   serializePreviewContainSize,
   serializePreviewViewport,
-  snapshotFillViewport,
+  togglePreviewContain,
+  togglePreviewDevice,
+  type PreviewFramingChange,
   type PreviewViewport,
 } from "./_utils/previewViewport";
 
@@ -161,12 +164,11 @@ export function WebPreviewPanel({
       deserializer: parsePreviewContainSize,
     },
   );
-  const framedViewport: PreviewViewport =
-    viewport.mode !== "fill"
-      ? viewport
-      : contain
-        ? { mode: "freeform", ...containSize }
-        : FILL_PREVIEW_VIEWPORT;
+  const framedViewport: PreviewViewport = framedPreviewViewport(
+    viewport,
+    contain,
+    containSize,
+  );
   const previewPath = normalizePreviewPath(stickyPath ?? localPath);
 
   // iframeSrc is recomputed only at remount points (previewInfo change,
@@ -224,39 +226,25 @@ export function WebPreviewPanel({
     );
   }
 
+  function applyFraming(next: PreviewFramingChange) {
+    setViewport(next.viewport);
+    setContain(next.contain);
+    setContainSize(next.containSize);
+    if (next.resetAspectRatio) setAspectRatio(null);
+  }
+
   function handleToggleDevice() {
-    if (viewport.mode !== "fill") {
-      setViewport(FILL_PREVIEW_VIEWPORT);
-      setAspectRatio(null);
-      setContain(false);
-      return;
-    }
-    setContain(false);
     const rect = iframeElement?.getBoundingClientRect();
-    setViewport(
-      snapshotFillViewport({
-        width: rect?.width ?? 1280,
-        height: rect?.height ?? 800,
-      }),
+    applyFraming(
+      togglePreviewDevice(
+        { viewport, contain, containSize },
+        rect ? { width: rect.width, height: rect.height } : null,
+      ),
     );
   }
 
   function handleToggleContain() {
-    if (viewport.mode !== "fill") {
-      setContainSize({ width: viewport.width, height: viewport.height });
-      setViewport(FILL_PREVIEW_VIEWPORT);
-      setAspectRatio(null);
-      setContain(true);
-      return;
-    }
-    if (contain) {
-      setContain(false);
-      return;
-    }
-    // Keep the stored box (default 1280×800) so the pane letterboxes
-    // immediately — snapshotting the fill rect would match the panel and
-    // look like a no-op until the splitter moved.
-    setContain(true);
+    applyFraming(togglePreviewContain({ viewport, contain, containSize }));
   }
 
   // Manual pop-out: the pane hands its anchor to the mini-player and shows a
