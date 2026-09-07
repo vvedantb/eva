@@ -428,3 +428,100 @@ export function serializePreviewContainSize(size: {
 }): string {
   return JSON.stringify(clampPreviewViewportSize(size));
 }
+
+export interface PreviewContainSize {
+  width: number;
+  height: number;
+}
+
+/** The three pieces of pane state the two toolbar toggles move between. */
+export interface PreviewFraming {
+  viewport: PreviewViewport;
+  /** Fill mode only: letterbox `containSize` instead of reflowing the guest. */
+  contain: boolean;
+  containSize: PreviewContainSize;
+}
+
+export interface PreviewFramingChange extends PreviewFraming {
+  /** An aspect lock belongs to one box; a new box has to drop it. */
+  resetAspectRatio: boolean;
+}
+
+/**
+ * The viewport the pane actually paints.
+ *
+ * Contain applies to `fill` only. A device viewport is already a locked box
+ * that the frame letterboxes on its own, so honouring a leftover `contain`
+ * flag there would paint the stored contain size instead of the chosen
+ * device — a phone preview silently rendering at 1280×800.
+ */
+export function framedPreviewViewport(
+  viewport: PreviewViewport,
+  contain: boolean,
+  containSize: PreviewContainSize,
+): PreviewViewport {
+  if (viewport.mode !== "fill") return viewport;
+  if (!contain) return FILL_PREVIEW_VIEWPORT;
+  return { mode: "freeform", ...containSize };
+}
+
+/**
+ * Device toggle: a sized viewport goes back to fill, and fill snapshots the
+ * live pane rect so the guest keeps its current size while gaining a frame.
+ *
+ * Either way contain drops. Leaving it set is what makes the pane letterbox
+ * to a box the user never chose the next time they land in fill mode.
+ */
+export function togglePreviewDevice(
+  current: PreviewFraming,
+  fillRect: { width: number; height: number } | null,
+): PreviewFramingChange {
+  if (current.viewport.mode !== "fill") {
+    return {
+      viewport: FILL_PREVIEW_VIEWPORT,
+      contain: false,
+      containSize: current.containSize,
+      resetAspectRatio: true,
+    };
+  }
+  return {
+    viewport: snapshotFillViewport({
+      width: fillRect?.width ?? DEFAULT_CONTAIN_SIZE.width,
+      height: fillRect?.height ?? DEFAULT_CONTAIN_SIZE.height,
+    }),
+    contain: false,
+    containSize: current.containSize,
+    resetAspectRatio: false,
+  };
+}
+
+/**
+ * Contain toggle. From a device viewport this hands the device's box over to
+ * contain and drops back to fill, so the same pixels keep being shown — the
+ * device size would otherwise be lost the moment the frame came off.
+ *
+ * From fill it is a plain flip that keeps the stored box (default 1280×800)
+ * rather than snapshotting the pane: a snapshot matches the pane exactly and
+ * looks like a dead button until the splitter moves.
+ */
+export function togglePreviewContain(
+  current: PreviewFraming,
+): PreviewFramingChange {
+  if (current.viewport.mode !== "fill") {
+    return {
+      viewport: FILL_PREVIEW_VIEWPORT,
+      contain: true,
+      containSize: {
+        width: current.viewport.width,
+        height: current.viewport.height,
+      },
+      resetAspectRatio: true,
+    };
+  }
+  return {
+    viewport: current.viewport,
+    contain: !current.contain,
+    containSize: current.containSize,
+    resetAspectRatio: false,
+  };
+}
