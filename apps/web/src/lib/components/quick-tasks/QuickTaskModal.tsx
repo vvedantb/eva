@@ -77,6 +77,11 @@ import { ProjectPicker } from "./_components/ProjectPicker";
 import { TaskFilesSection } from "./_components/TaskFilesSection";
 import { useTaskAttachments } from "./useTaskAttachments";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
+import {
+  draftCountAfterRemove,
+  draftsAfterRemove,
+  visibleDrafts,
+} from "./_utils/draftVisibility";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import {
   requestConfirm,
@@ -184,7 +189,7 @@ export function QuickTaskModal({
         localStore.setQuery(
           api.agentTasks.listDrafts,
           { repoId: repo._id },
-          current.filter((draft) => draft._id !== args.id),
+          draftsAfterRemove(current, args.id),
         );
       }
       const count = localStore.getQuery(api.agentTasks.countDrafts, {
@@ -194,7 +199,7 @@ export function QuickTaskModal({
         localStore.setQuery(
           api.agentTasks.countDrafts,
           { repoId: repo._id },
-          Math.max(0, count - 1),
+          draftCountAfterRemove(count),
         );
       }
     },
@@ -202,7 +207,7 @@ export function QuickTaskModal({
   const draftRows = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
   // `remove` only sets `deletedAt`; until listDrafts is deployed with that
   // index range, the query still returns the row and the trash looks broken.
-  const drafts = draftRows?.filter((draft) => draft.deletedAt === undefined);
+  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
 
   const attachments = useTaskAttachments();
   // Files already saved on the open draft, so reopening it keeps them.
