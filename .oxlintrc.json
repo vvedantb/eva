@@ -22,6 +22,10 @@
     "react/static-components": "warn",
     "react/purity": "warn",
     "import/no-duplicates": "error",
+    "no-underscore-dangle": [
+      "warn",
+      { "allow": ["_tag", "_id", "_creationTime"] }
+    ],
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "off",
     "anti-slop/no-known-value-widening": "off",

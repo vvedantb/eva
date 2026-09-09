@@ -5,9 +5,7 @@ import { describe, expect, test } from "vitest";
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
 
-const executionSource = readSource(
-  "../convex/_sandbox_runtime/execution.ts",
-);
+const executionSource = readSource("../convex/_sandbox_runtime/execution.ts");
 const taskChatSource = readSource("../convex/agentTaskChatWorkflow.ts");
 const projectChatSource = readSource("../convex/projectChatWorkflow.ts");
 const streamRouterSource = readSource("../callback-src/parse/streamRouter.ts");
@@ -20,9 +18,7 @@ describe("warm daemons stream to the UI's entity key", () => {
     expect(executionSource).toContain(
       "const streamingEntityId = args.streamingEntityId ?? entityIdStr;",
     );
-    expect(executionSource).toContain(
-      "STREAMING_ENTITY_ID: streamingEntityId",
-    );
+    expect(executionSource).toContain("STREAMING_ENTITY_ID: streamingEntityId");
     expect(executionSource).toContain(
       "streamingEntityId: v.optional(v.string())",
     );
@@ -71,12 +67,12 @@ test("the generated callback preserves Cursor text delta semantics", () => {
     generatedCallbackSource,
     "function cursorEventToCanonical(",
   );
-  expect(cursorParser).toContain(
-    'events.push({ kind: "stream_text_delta", text: block.text });',
+  // Assistant text must flow through the streaming destination, whatever the
+  // local holding the text is called (the Schema decode names it `text`).
+  expect(cursorParser).toMatch(
+    /events\.push\(\{ kind: "stream_text_delta", text(?:: [\w.]+)? \}\)/,
   );
-  expect(cursorParser).not.toContain(
-    'events.push({ kind: "append_text", text: block.text });',
-  );
+  expect(cursorParser).not.toContain('kind: "append_text"');
 });
 
 function readSource(relativePath: string): string {

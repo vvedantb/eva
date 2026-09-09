@@ -32,6 +32,10 @@ import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import {
+  errorToneClassName,
+  type ConvexErrorPresentation,
+} from "@/lib/utils/convexErrorMessage";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -45,7 +49,8 @@ interface TaskFooterProps {
   latestPrUrl: string | undefined;
   latestPrError: string | undefined;
   latestDeployment: RunDoc | undefined;
-  executionError: string | null;
+  /** Carries its own tone: not every failed action is a failure. */
+  executionError: ConvexErrorPresentation | null;
   isStarting: boolean;
   canStartSandbox: boolean;
   isSandboxActive: boolean;
@@ -127,6 +132,10 @@ export function TaskFooter({
     Boolean(latestDeployment?.deploymentStatus) ||
     Boolean(latestPrUrl);
   const hasSecondaryContent = isHeader || showStopSandbox || showMoreMenu;
+  // A run's own stored `prError` predates tagged errors, so it stays a failure.
+  const shownError: ConvexErrorPresentation | null =
+    executionError ??
+    (latestPrError ? { message: latestPrError, tone: "error" } : null);
 
   return (
     <div
@@ -136,9 +145,11 @@ export function TaskFooter({
           : "space-y-2 w-full"
       }
     >
-      {!isHeader && (executionError || latestPrError) ? (
-        <p className="text-xs text-destructive text-right">
-          {executionError ?? latestPrError}
+      {!isHeader && shownError ? (
+        <p
+          className={`text-xs text-right ${errorToneClassName(shownError.tone)}`}
+        >
+          {shownError.message}
         </p>
       ) : null}
       <div
@@ -148,9 +159,13 @@ export function TaskFooter({
             : "flex items-center gap-3 flex-wrap justify-end"
         }
       >
-        {isHeader && (executionError || latestPrError) ? (
-          <p className="text-xs text-destructive max-w-[min(240px,40vw)] truncate">
-            {executionError ?? latestPrError}
+        {isHeader && shownError ? (
+          // Truncated here, so the full prose lives on the title.
+          <p
+            title={shownError.message}
+            className={`text-xs max-w-[min(240px,40vw)] truncate ${errorToneClassName(shownError.tone)}`}
+          >
+            {shownError.message}
           </p>
         ) : null}
         {showRunButton && (

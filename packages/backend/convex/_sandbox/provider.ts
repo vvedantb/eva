@@ -16,6 +16,8 @@
  * separate follow-up, not part of the provider removal.
  */
 
+import { Data } from "effect";
+
 /** Which backend fulfils sandbox operations. Vercel is the only implementation. */
 export type SandboxProviderKind = "vercel";
 
@@ -287,23 +289,16 @@ export type SandboxCredentials = {
  * makes it impossible for in-sandbox command output to be read as "the sandbox
  * is gone". See `_sandbox_runtime/sandboxErrors.ts`.
  */
-export class SandboxProviderError extends Error {
+export class SandboxProviderError extends Data.TaggedError(
+  "SandboxProviderError",
+)<{
+  message: string;
   /** HTTP status from the provider API, when it reported one. */
-  readonly httpStatus: number | undefined;
+  httpStatus?: number;
   /**
    * The provider's own error text (API response body / SDK message). Never
    * command stdout/stderr and never a caller-supplied command string — those
    * belong in {@link Error.message}, which is not pattern-matched.
    */
-  readonly detail: string;
-
-  constructor(
-    message: string,
-    options: { httpStatus?: number; detail: string },
-  ) {
-    super(message);
-    this.name = "SandboxProviderError";
-    this.httpStatus = options.httpStatus;
-    this.detail = options.detail;
-  }
-}
+  detail: string;
+}> {}

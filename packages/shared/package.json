@@ -11,7 +11,8 @@
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
-    "./user-initials": "./src/components/user-initials.tsx"
+    "./user-initials": "./src/components/user-initials.tsx",
+    "./convexErrorPayload": "./src/convexErrorPayload.ts"
   },
   "peerDependencies": {
     "@eva/backend": "workspace:*",

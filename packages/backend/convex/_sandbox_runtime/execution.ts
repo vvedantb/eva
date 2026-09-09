@@ -56,6 +56,8 @@ import {
   isSandboxGoneError,
   isSandboxUnresponsiveError,
 } from "./sandboxErrors";
+import { previewProxyFailed, visiblePreviewFailure } from "./previewErrors";
+import { runActionEffect } from "../_effect/action";
 import {
   shouldDeferDaemonRespawn,
   type DaemonTurnSnapshot,
@@ -881,161 +883,182 @@ export const getPreviewUrl = action({
     port: v.number(),
     ready: v.boolean(),
   }),
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
+  handler: async (ctx, args) =>
+    runActionEffect(
+      visiblePreviewFailure(
+        async (): Promise<{ url: string; port: number; ready: boolean }> => {
+          const identity = await ctx.auth.getUserIdentity();
+          if (!identity) {
+            throw new Error("Not authenticated");
+          }
 
-    await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+          await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
-    // Validates that the repo has Vercel sandbox credentials configured;
-    // throws before touching the sandbox if it does not.
-    await resolveSandboxCredentials(ctx, args.repoId);
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
-    // Services listen on internal ports and the auth proxy owns the exposed
-    // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
-    // the upstream service port for readiness, not the proxy port.
-    const upstreamPort =
-      args.port === 6080
-        ? VERCEL_DESKTOP_INTERNAL_PORT
-        : args.port === 8080
-          ? VERCEL_EDITOR_INTERNAL_PORT
-          : vercelAppListenPort(args.port);
-
-    let ready = true;
-    if (args.checkReady) {
-      // Never probe or restart the dev server on a sandbox that is not
-      // running. Every exec goes through the SDK's withResume: on a
-      // stopped sandbox it RESUMES it, and on a stopping/snapshotting one it
-      // waits the stop out and then revives it — so the preview poll loop was
-      // waking sandboxes the user had just stopped. Report not-ready without
-      // touching the VM; polling recovers once the sandbox is started again.
-      // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
-      if (handle.state !== "running") {
-        return { url: "", port: args.port, ready: false };
-      }
-      // Background daemons (e.g. `npx convex dev`) only relaunch on sandbox
-      // start/resume. If they die while status stays active, Preview would
-      // keep loading a frontend with a dead backend — the app port can serve
-      // while a backend daemon is down, so this heal must NOT be gated on the
-      // readiness probe. It IS rate-limited: the poll fires every ~2s per
-      // open page and each heal execs a pid check per background command
-      // inside the sandbox, which flooded prod logs and burned action time.
-      // sandboxHeal.claim grants the slot to one caller per interval across
-      // all concurrent viewers.
-      const healClaimed = await ctx.runMutation(internal.sandboxHeal.claim, {
-        sandboxId: args.sandboxId,
-      });
-      if (healClaimed) {
-        try {
-          await ctx.runAction(internal.sandbox.runBackgroundCommands, {
-            sandboxId: args.sandboxId,
-            repoId: args.repoId,
-            onlyRestartDead: true,
-          });
-        } catch (e) {
-          console.warn(
-            `[sandbox] preview background heal failed sandbox=${args.sandboxId}: ${errorMessage(e, "heal failed")}`,
+          // Validates that the repo has Vercel sandbox credentials configured;
+          // throws before touching the sandbox if it does not.
+          await resolveSandboxCredentials(ctx, args.repoId);
+          const handle = await getSandboxHandle(
+            ctx,
+            args.repoId,
+            args.sandboxId,
           );
-        }
-      }
-      ready = await probePreviewReady(handle, upstreamPort);
-      // Preview never launches the app inline: Lifecycle owns Console
-      // (`launchPreviewDevServer` → tmux) as the single launcher. But nothing
-      // watches the dev server after launch — an OOM kill or a lazily-resumed
-      // VM (exec on a stopped sandbox restores no services) leaves the app
-      // port dead while the sandbox runs, and only this poll notices. So on a
-      // claimed heal with a failed probe, schedule recovery THROUGH the
-      // Console launcher (visible in Console, port-busy idempotent). Reusing
-      // the heal claim rate-limits recovery attempts to one per interval.
-      // Desktop (6080) and editor (8080) have their own lifecycles.
-      if (!ready && healClaimed && args.port !== 6080 && args.port !== 8080) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.sandbox.ensureSessionPreviewServices,
-          {
-            sandboxId: args.sandboxId,
-            repoId: args.repoId,
-            expectedPort: upstreamPort,
-          },
-        );
-      }
-    }
 
-    // Always front the service with the in-sandbox auth proxy so open-in-new-tab
-    // is gated the same way for Preview, Computer, and Editor.
-    //
-    // Vercel exposes a fixed 4-port set. Map:
-    //   app/dev → proxy on 3000 (upstream = listen port; 54321 left for Supabase)
-    //   editor  → proxy on 8080  (upstream 18080)
-    //   desktop → proxy on 6080  (upstream 16080)
-    const previewPublicJwk = getPreviewGrantPublicJwk();
-    const isVercelDesktopOrEditor = args.port === 6080 || args.port === 8080;
-    const fixedVercelProxyPort = isVercelDesktopOrEditor
-      ? args.port
-      : VERCEL_PREVIEW_PROXY_PORT;
-    // Public route port: on Vercel app/dev previews this is always 3000, never
-    // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
-    let previewPort = fixedVercelProxyPort ?? args.port;
-    // Same upstream mapping used for the readiness probe above.
-    const proxyTargetPort = upstreamPort;
-    const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
-    if (ready && shouldStartPreviewProxy) {
-      try {
-        previewPort = await ensurePreviewNavigationProxy(
-          handle,
-          proxyTargetPort,
-          {
-            publicKeyJwk: previewPublicJwk,
-            sandboxId: args.sandboxId,
-            repoId: args.repoId,
-            webAppUrl: process.env.WEB_APP_URL ?? "",
-            inject: args.navigationSync === true,
-            // Browser-facing port for /preview-auth (public proxy, not listen).
-            authPort: fixedVercelProxyPort ?? args.port,
-          },
-          fixedVercelProxyPort,
-        );
-      } catch (e) {
-        const proxyErrorMessage = errorMessage(e, "proxy startup failed");
-        console.warn(
-          `[sandbox] preview navigation proxy unavailable for sandbox=${args.sandboxId} port=${args.port}: ${proxyErrorMessage}`,
-        );
-        // Vercel only exposes a fixed, small port set (VERCEL_DEFAULT_EXPOSED_PORTS).
-        // If the reserved proxy port fails to start while a preview grant
-        // key is configured, silently falling back to the unproxied service
-        // port would serve with no auth gate at all. Fail loudly instead.
-        if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
-          throw new Error(
-            `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
-          );
-        }
-      }
-    }
+          // Services listen on internal ports and the auth proxy owns the exposed
+          // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
+          // the upstream service port for readiness, not the proxy port.
+          const upstreamPort =
+            args.port === 6080
+              ? VERCEL_DESKTOP_INTERNAL_PORT
+              : args.port === 8080
+                ? VERCEL_EDITOR_INTERNAL_PORT
+                : vercelAppListenPort(args.port);
 
-    const signedPreview = await handle.previewUrl(previewPort, 86400);
-    const parsedUrl = new URL(signedPreview.url);
-    parsedUrl.protocol = "https:";
+          let ready = true;
+          if (args.checkReady) {
+            // Never probe or restart the dev server on a sandbox that is not
+            // running. Every exec goes through the SDK's withResume: on a
+            // stopped sandbox it RESUMES it, and on a stopping/snapshotting one it
+            // waits the stop out and then revives it — so the preview poll loop was
+            // waking sandboxes the user had just stopped. Report not-ready without
+            // touching the VM; polling recovers once the sandbox is started again.
+            // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
+            if (handle.state !== "running") {
+              return { url: "", port: args.port, ready: false };
+            }
+            // Background daemons (e.g. `npx convex dev`) only relaunch on sandbox
+            // start/resume. If they die while status stays active, Preview would
+            // keep loading a frontend with a dead backend — the app port can serve
+            // while a backend daemon is down, so this heal must NOT be gated on the
+            // readiness probe. It IS rate-limited: the poll fires every ~2s per
+            // open page and each heal execs a pid check per background command
+            // inside the sandbox, which flooded prod logs and burned action time.
+            // sandboxHeal.claim grants the slot to one caller per interval across
+            // all concurrent viewers.
+            const healClaimed = await ctx.runMutation(
+              internal.sandboxHeal.claim,
+              {
+                sandboxId: args.sandboxId,
+              },
+            );
+            if (healClaimed) {
+              try {
+                await ctx.runAction(internal.sandbox.runBackgroundCommands, {
+                  sandboxId: args.sandboxId,
+                  repoId: args.repoId,
+                  onlyRestartDead: true,
+                });
+              } catch (e) {
+                console.warn(
+                  `[sandbox] preview background heal failed sandbox=${args.sandboxId}: ${errorMessage(e, "heal failed")}`,
+                );
+              }
+            }
+            ready = await probePreviewReady(handle, upstreamPort);
+            // Preview never launches the app inline: Lifecycle owns Console
+            // (`launchPreviewDevServer` → tmux) as the single launcher. But nothing
+            // watches the dev server after launch — an OOM kill or a lazily-resumed
+            // VM (exec on a stopped sandbox restores no services) leaves the app
+            // port dead while the sandbox runs, and only this poll notices. So on a
+            // claimed heal with a failed probe, schedule recovery THROUGH the
+            // Console launcher (visible in Console, port-busy idempotent). Reusing
+            // the heal claim rate-limits recovery attempts to one per interval.
+            // Desktop (6080) and editor (8080) have their own lifecycles.
+            if (
+              !ready &&
+              healClaimed &&
+              args.port !== 6080 &&
+              args.port !== 8080
+            ) {
+              await ctx.scheduler.runAfter(
+                0,
+                internal.sandbox.ensureSessionPreviewServices,
+                {
+                  sandboxId: args.sandboxId,
+                  repoId: args.repoId,
+                  expectedPort: upstreamPort,
+                },
+              );
+            }
+          }
 
-    // Append a fresh short-lived grant so the in-app iframe (and the authed
-    // user's "open in new tab") loads without a login round-trip. The proxy
-    // exchanges it for a session cookie on first load. Only when gating is
-    // configured — otherwise the URL stays a plain proxied URL.
-    if (previewPublicJwk && ready) {
-      const grant = await signPreviewGrant({
-        sandboxId: args.sandboxId,
-        // Grant must match AUTH_PORT (public proxy on Vercel app previews).
-        port: fixedVercelProxyPort ?? args.port,
-        sub: identity.subject,
-      });
-      parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
-    }
+          // Always front the service with the in-sandbox auth proxy so open-in-new-tab
+          // is gated the same way for Preview, Computer, and Editor.
+          //
+          // Vercel exposes a fixed 4-port set. Map:
+          //   app/dev → proxy on 3000 (upstream = listen port; 54321 left for Supabase)
+          //   editor  → proxy on 8080  (upstream 18080)
+          //   desktop → proxy on 6080  (upstream 16080)
+          const previewPublicJwk = getPreviewGrantPublicJwk();
+          const isVercelDesktopOrEditor =
+            args.port === 6080 || args.port === 8080;
+          const fixedVercelProxyPort = isVercelDesktopOrEditor
+            ? args.port
+            : VERCEL_PREVIEW_PROXY_PORT;
+          // Public route port: on Vercel app/dev previews this is always 3000, never
+          // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
+          let previewPort = fixedVercelProxyPort ?? args.port;
+          // Same upstream mapping used for the readiness probe above.
+          const proxyTargetPort = upstreamPort;
+          const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
+          if (ready && shouldStartPreviewProxy) {
+            try {
+              previewPort = await ensurePreviewNavigationProxy(
+                handle,
+                proxyTargetPort,
+                {
+                  publicKeyJwk: previewPublicJwk,
+                  sandboxId: args.sandboxId,
+                  repoId: args.repoId,
+                  webAppUrl: process.env.WEB_APP_URL ?? "",
+                  inject: args.navigationSync === true,
+                  // Browser-facing port for /preview-auth (public proxy, not listen).
+                  authPort: fixedVercelProxyPort ?? args.port,
+                },
+                fixedVercelProxyPort,
+              );
+            } catch (e) {
+              const proxyErrorMessage = errorMessage(e, "proxy startup failed");
+              console.warn(
+                `[sandbox] preview navigation proxy unavailable for sandbox=${args.sandboxId} port=${args.port}: ${proxyErrorMessage}`,
+              );
+              // Vercel only exposes a fixed, small port set (VERCEL_DEFAULT_EXPOSED_PORTS).
+              // If the reserved proxy port fails to start while a preview grant
+              // key is configured, silently falling back to the unproxied service
+              // port would serve with no auth gate at all. Fail loudly instead.
+              if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
+                throw previewProxyFailed(
+                  fixedVercelProxyPort,
+                  proxyErrorMessage,
+                  e,
+                );
+              }
+            }
+          }
 
-    const url = parsedUrl.toString();
-    return { url, port: args.port, ready };
-  },
+          const signedPreview = await handle.previewUrl(previewPort, 86400);
+          const parsedUrl = new URL(signedPreview.url);
+          parsedUrl.protocol = "https:";
+
+          // Append a fresh short-lived grant so the in-app iframe (and the authed
+          // user's "open in new tab") loads without a login round-trip. The proxy
+          // exchanges it for a session cookie on first load. Only when gating is
+          // configured — otherwise the URL stays a plain proxied URL.
+          if (previewPublicJwk && ready) {
+            const grant = await signPreviewGrant({
+              sandboxId: args.sandboxId,
+              // Grant must match AUTH_PORT (public proxy on Vercel app previews).
+              port: fixedVercelProxyPort ?? args.port,
+              sub: identity.subject,
+            });
+            parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
+          }
+
+          const url = parsedUrl.toString();
+          return { url, port: args.port, ready };
+        },
+      ),
+      `sandbox.getPreviewUrl sandbox=${args.sandboxId} port=${args.port}`,
+    ),
 });
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;

@@ -16,6 +16,7 @@ import {
   toast,
 } from "@eva/ui";
 import { verdictSuccessTitle } from "./prVerdict";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 export type PrVerdict = "APPROVE" | "REQUEST_CHANGES";
 
@@ -76,11 +77,7 @@ export function PrVerdictDialog({
       onSubmitted();
       onClose();
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "GitHub rejected the review.",
-      );
+      setError(convexErrorMessage(cause, "GitHub rejected the review."));
     }
     setWorking(false);
   };

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { Data, Effect } from "effect";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   authAction,
@@ -38,6 +39,7 @@ import {
   resolveCodebaseDocsRepoId,
 } from "./_githubRepos/helpers";
 import { isEvaOwnedPullRequest } from "./_github/evaPrOwnership";
+import { runActionEffect } from "./_effect/action";
 
 const docValidator = v.object({
   _id: v.id("docs"),
@@ -875,6 +877,26 @@ export const reviseRecapFromFeedback = authMutation({
   },
 });
 
+/**
+ * The three reasons the panel's Generate button refuses, as tagged errors so
+ * `runActionEffect` can put them on `ConvexError.data` — a plain `Error` is
+ * redacted to "Server Error" in production, which left the panel showing
+ * nothing to act on. Anything else that can go wrong here (the metadata fetch,
+ * starting the workflow) stays a defect and stays redacted: those are outages
+ * or bugs, not answers to the user's request.
+ */
+class RecapNotAuthorized extends Data.TaggedError("RecapNotAuthorized")<{
+  message: string;
+}> {}
+
+class RecapPrUrlInvalid extends Data.TaggedError("RecapPrUrlInvalid")<{
+  message: string;
+}> {}
+
+class RecapAuthorNotRecapped extends Data.TaggedError(
+  "RecapAuthorNotRecapped",
+)<{ message: string }> {}
+
 /** Panel Generate/Regenerate — the only path to a recap. Allows drafts (explicit intent). */
 export const generatePrRecap = authAction({
   args: {
@@ -890,55 +912,70 @@ export const generatePrRecap = authAction({
   handler: async (
     ctx,
     args,
-  ): Promise<{ docId: Id<"docs">; workflowId: string }> => {
-    const context = await ctx.runQuery(
-      internal._prRecapWorkflow.start.getManualRecapContext,
-      { repoId: args.repoId, userId: ctx.userId },
-    );
-    if (!context) {
-      throw new Error("Not authorized");
-    }
-
-    const prNumber = extractPrNumberFromUrl(args.prUrl);
-    if (prNumber === null) {
-      throw new Error("Invalid pull request URL");
-    }
-
-    const metadata = await ctx.runAction(
-      internal._github.prRecapService.fetchPrMetadata,
-      {
-        installationId: context.installationId,
-        owner: context.owner,
-        repo: context.name,
-        prNumber,
-      },
-    );
-
-    const authorLogin = metadata.authorLogin?.toLowerCase() ?? "";
-    if (
-      authorLogin.startsWith("dependabot") ||
-      authorLogin.startsWith("renovate")
-    ) {
-      throw new Error("Bot-authored pull requests are not recapped");
-    }
-
-    const result: { docId: Id<"docs">; workflowId: string } =
-      await ctx.runMutation(internal.docs.startPrRecap, {
-        repoId: context.workflowRepoId,
-        userId: ctx.userId,
-        installationId: context.installationId,
-        owner: context.owner,
-        name: context.name,
-        prUrl: metadata.prUrl,
-        prNumber: metadata.prNumber,
-        prTitle: metadata.prTitle,
-        headSha: metadata.headSha,
-        model: args.model,
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-      });
-    return result;
-  },
+  ): Promise<{ docId: Id<"docs">; workflowId: string }> =>
+    runActionEffect(
+      Effect.promise(() =>
+        ctx.runQuery(internal._prRecapWorkflow.start.getManualRecapContext, {
+          repoId: args.repoId,
+          userId: ctx.userId,
+        }),
+      ).pipe(
+        Effect.flatMap((context) =>
+          context === null
+            ? Effect.fail(new RecapNotAuthorized({ message: "Not authorized" }))
+            : Effect.succeed(context),
+        ),
+        Effect.flatMap((context) => {
+          const prNumber = extractPrNumberFromUrl(args.prUrl);
+          return prNumber === null
+            ? Effect.fail(
+                new RecapPrUrlInvalid({ message: "Invalid pull request URL" }),
+              )
+            : Effect.succeed({ context, prNumber });
+        }),
+        Effect.flatMap(({ context, prNumber }) =>
+          Effect.promise(() =>
+            ctx.runAction(internal._github.prRecapService.fetchPrMetadata, {
+              installationId: context.installationId,
+              owner: context.owner,
+              repo: context.name,
+              prNumber,
+            }),
+          ).pipe(Effect.map((metadata) => ({ context, metadata }))),
+        ),
+        Effect.flatMap(({ context, metadata }) => {
+          const authorLogin = metadata.authorLogin?.toLowerCase() ?? "";
+          if (
+            authorLogin.startsWith("dependabot") ||
+            authorLogin.startsWith("renovate")
+          ) {
+            return Effect.fail(
+              new RecapAuthorNotRecapped({
+                message: "Bot-authored pull requests are not recapped",
+              }),
+            );
+          }
+          return Effect.promise(
+            (): Promise<{ docId: Id<"docs">; workflowId: string }> =>
+              ctx.runMutation(internal.docs.startPrRecap, {
+                repoId: context.workflowRepoId,
+                userId: ctx.userId,
+                installationId: context.installationId,
+                owner: context.owner,
+                name: context.name,
+                prUrl: metadata.prUrl,
+                prNumber: metadata.prNumber,
+                prTitle: metadata.prTitle,
+                headSha: metadata.headSha,
+                model: args.model,
+                reasoningLevel: args.reasoningLevel,
+                thinkingEnabled: args.thinkingEnabled,
+                use1mContext: args.use1mContext,
+                fastMode: args.fastMode,
+              }),
+          );
+        }),
+      ),
+      `docs.generatePrRecap pr=${args.prUrl}`,
+    ),
 });

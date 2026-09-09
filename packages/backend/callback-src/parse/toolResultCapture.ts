@@ -1,3 +1,5 @@
+import { Option, Schema } from "effect";
+import { NonEmptyText } from "./schemaHelpers.js";
 import type {
   JsonObject,
   JsonValue,
@@ -6,6 +8,154 @@ import type {
   ToolCompleteResult,
 } from "../types.js";
 import { headCap, STEP_FIELD_CAPS, tailCap } from "./stepBudget.js";
+
+/** A string with at least one non-whitespace character, kept as written. */
+const NonBlankStringSchema = Schema.String.pipe(
+  Schema.filter((value) => value.trim().length > 0),
+);
+
+/** A non-blank string, trimmed on the way out. */
+export const TrimmedStringSchema = Schema.Trim.pipe(Schema.nonEmptyString());
+
+/** Claude `Edit` input: the pair only counts when both sides are strings. */
+const ClaudeEditPairSchema = Schema.Struct({
+  old_string: Schema.String,
+  new_string: Schema.String,
+});
+
+/** OpenCode part timing: a duration needs both stamps, end no earlier than start. */
+const OpencodeTimeSchema = Schema.Struct({
+  start: Schema.Number,
+  end: Schema.Number,
+}).pipe(Schema.filter((time) => time.end >= time.start));
+
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+const decodeNonEmptyString = Schema.decodeUnknownOption(NonEmptyText);
+const decodeNonBlankString = Schema.decodeUnknownOption(NonBlankStringSchema);
+const decodeTrimmedString = Schema.decodeUnknownOption(TrimmedStringSchema);
+const decodeFiniteNumber = Schema.decodeUnknownOption(Schema.Finite);
+const decodeTrue = Schema.decodeUnknownOption(Schema.Literal(true));
+const decodeClaudeEditPair = Schema.decodeUnknownOption(ClaudeEditPairSchema);
+const decodeOpencodeTime = Schema.decodeUnknownOption(OpencodeTimeSchema);
+
+/** First key holding a string; empty strings count. */
+export function readString(
+  obj: JsonObject,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = decodeString(obj[key]);
+    if (Option.isSome(value)) return value.value;
+  }
+  return undefined;
+}
+
+/** First key holding a string with at least one character. */
+export function readNonEmptyString(
+  obj: JsonObject,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = decodeNonEmptyString(obj[key]);
+    if (Option.isSome(value)) return value.value;
+  }
+  return undefined;
+}
+
+/** First key holding a non-blank string, returned as written. */
+export function readNonBlankString(
+  obj: JsonObject,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = decodeNonBlankString(obj[key]);
+    if (Option.isSome(value)) return value.value;
+  }
+  return undefined;
+}
+
+/** First key holding a non-blank string, trimmed. */
+export function readTrimmedString(
+  obj: JsonObject,
+  keys: readonly string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = decodeTrimmedString(obj[key]);
+    if (Option.isSome(value)) return value.value;
+  }
+  return undefined;
+}
+
+/** First key holding a finite number. */
+function readFiniteNumber(
+  obj: JsonObject,
+  keys: readonly string[],
+): number | undefined {
+  for (const key of keys) {
+    const value = decodeFiniteNumber(obj[key]);
+    if (Option.isSome(value)) return value.value;
+  }
+  return undefined;
+}
+
+/** True when one of `keys` holds the boolean `true`. */
+export function readTrueFlag(
+  obj: JsonObject,
+  keys: readonly string[],
+): boolean {
+  for (const key of keys) {
+    if (Option.isSome(decodeTrue(obj[key]))) return true;
+  }
+  return false;
+}
+
+/**
+ * First key holding a plain (non-array) JSON object. Narrows the JsonValue
+ * union directly so nested reads keep their JSON types.
+ */
+export function readObject(
+  obj: JsonObject,
+  keys: readonly string[],
+): JsonObject | undefined {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+const EDIT_OLD_KEYS = ["old_string", "oldText", "old_text"] as const;
+const EDIT_NEW_KEYS = ["new_string", "newText", "new_text"] as const;
+const TOOL_CALL_ID_KEYS = [
+  "call_id",
+  "callId",
+  "tool_use_id",
+  "toolUseId",
+  "tool_call_id",
+  "toolCallId",
+  "id",
+] as const;
+const RESULT_TEXT_KEYS = [
+  "aggregated_output",
+  "aggregatedOutput",
+  "output",
+  "stdout",
+  "stderr",
+  "content",
+] as const;
+const NESTED_RESULT_TEXT_KEYS = [
+  "output",
+  "stdout",
+  "stderr",
+  "content",
+] as const;
+const RESULT_EXIT_CODE_KEYS = ["exit_code", "exitCode", "exit"] as const;
+const RESULT_ERROR_FLAG_KEYS = ["is_error", "isError"] as const;
+const CODEX_EXIT_CODE_KEYS = ["exit_code", "exitCode"] as const;
+const OPENCODE_EXIT_CODE_KEYS = ["exit", "exit_code", "exitCode"] as const;
+const CHANGE_PATH_KEYS = ["path", "file_path"] as const;
 
 /** Caps a command string for ProgressStep.command. */
 export function capCommand(command: string): string {
@@ -46,33 +196,20 @@ export function extractClaudeEdits(input: JsonObject): StepEdit[] | undefined {
     });
   };
 
-  if (
-    typeof input.old_string === "string" &&
-    typeof input.new_string === "string"
-  ) {
-    pushEdit(input.old_string, input.new_string);
+  const pair = decodeClaudeEditPair(input);
+  if (Option.isSome(pair)) {
+    pushEdit(pair.value.old_string, pair.value.new_string);
   }
 
-  if (Array.isArray(input.edits)) {
-    for (const item of input.edits) {
+  const items = input.edits;
+  if (Array.isArray(items)) {
+    for (const item of items) {
       if (edits.length >= STEP_FIELD_CAPS.editsMax) break;
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const oldText =
-        typeof item.old_string === "string"
-          ? item.old_string
-          : typeof item.oldText === "string"
-            ? item.oldText
-            : typeof item.old_text === "string"
-              ? item.old_text
-              : "";
-      const newText =
-        typeof item.new_string === "string"
-          ? item.new_string
-          : typeof item.newText === "string"
-            ? item.newText
-            : typeof item.new_text === "string"
-              ? item.new_text
-              : "";
+      if (item === null || typeof item !== "object" || Array.isArray(item)) {
+        continue;
+      }
+      const oldText = readString(item, EDIT_OLD_KEYS) ?? "";
+      const newText = readString(item, EDIT_NEW_KEYS) ?? "";
       if (oldText || newText) {
         pushEdit(oldText, newText);
       }
@@ -82,38 +219,9 @@ export function extractClaudeEdits(input: JsonObject): StepEdit[] | undefined {
   return edits.length > 0 ? edits : undefined;
 }
 
-function readStringField(obj: JsonObject, keys: string[]): string {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
-}
-
-function readNumberField(obj: JsonObject, keys: string[]): number | undefined {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
 /** First non-empty string call id from a flat object. */
 export function pickToolCallId(obj: JsonObject): string | undefined {
-  const id = readStringField(obj, [
-    "call_id",
-    "callId",
-    "tool_use_id",
-    "toolUseId",
-    "tool_call_id",
-    "toolCallId",
-    "id",
-  ]);
-  return id.trim() ? id.trim() : undefined;
+  return readTrimmedString(obj, TOOL_CALL_ID_KEYS);
 }
 
 /**
@@ -123,61 +231,48 @@ export function pickToolCallId(obj: JsonObject): string | undefined {
 export function probeToolCompleteResult(
   source: JsonValue,
 ): ToolCompleteResult | undefined {
-  if (source === null || source === undefined) {
-    return undefined;
-  }
-
-  if (typeof source === "string") {
-    const output = buildStepOutput(source);
+  const direct = decodeString(source);
+  if (Option.isSome(direct)) {
+    const output = buildStepOutput(direct.value);
     return output ? { output } : undefined;
   }
 
-  if (typeof source !== "object" || Array.isArray(source)) {
+  if (source === null || typeof source !== "object" || Array.isArray(source)) {
     return undefined;
   }
 
   const obj = source;
-  const nestedResult =
-    obj.result && typeof obj.result === "object" && !Array.isArray(obj.result)
-      ? obj.result
-      : null;
+  const nestedResult = readObject(obj, ["result"]);
 
   const textCandidates: string[] = [];
-  const pushText = (value: JsonValue | undefined): void => {
-    if (typeof value === "string" && value.trim()) {
-      textCandidates.push(value);
+  const collectText = (from: JsonObject, keys: readonly string[]): void => {
+    for (const key of keys) {
+      const text = decodeNonBlankString(from[key]);
+      if (Option.isSome(text)) textCandidates.push(text.value);
     }
   };
 
-  pushText(obj.aggregated_output);
-  pushText(obj.aggregatedOutput);
-  pushText(obj.output);
-  pushText(obj.stdout);
-  pushText(obj.stderr);
-  pushText(obj.content);
+  collectText(obj, RESULT_TEXT_KEYS);
   if (nestedResult) {
-    pushText(nestedResult.output);
-    pushText(nestedResult.stdout);
-    pushText(nestedResult.stderr);
-    pushText(nestedResult.content);
+    collectText(nestedResult, NESTED_RESULT_TEXT_KEYS);
   }
-  if (typeof obj.result === "string") {
-    textCandidates.push(obj.result);
+  const stringResult = decodeString(obj.result);
+  if (Option.isSome(stringResult)) {
+    textCandidates.push(stringResult.value);
   }
 
   const exitCode =
-    readNumberField(obj, ["exit_code", "exitCode", "exit"]) ??
+    readFiniteNumber(obj, RESULT_EXIT_CODE_KEYS) ??
     (nestedResult
-      ? readNumberField(nestedResult, ["exit_code", "exitCode", "exit"])
+      ? readFiniteNumber(nestedResult, RESULT_EXIT_CODE_KEYS)
       : undefined);
 
   const combined = textCandidates.join("\n").trim();
   const output = buildStepOutput(combined, exitCode);
 
   const isError =
-    obj.is_error === true ||
-    obj.isError === true ||
-    (typeof obj.error === "string" && obj.error.trim().length > 0) ||
+    readTrueFlag(obj, RESULT_ERROR_FLAG_KEYS) ||
+    readNonBlankString(obj, ["error"]) !== undefined ||
     (exitCode !== undefined && exitCode !== 0);
 
   const files = extractFilePaths(obj);
@@ -206,19 +301,28 @@ export function extractFilePaths(obj: JsonObject): string[] {
     paths.push(trimmed);
   };
 
-  if (Array.isArray(obj.files)) {
-    for (const item of obj.files) {
-      if (typeof item === "string") add(item);
+  const files = obj.files;
+  if (Array.isArray(files)) {
+    for (const item of files) {
+      const path = decodeString(item);
+      if (Option.isSome(path)) add(path.value);
     }
   }
 
-  if (Array.isArray(obj.changes)) {
-    for (const change of obj.changes) {
-      if (!change || typeof change !== "object" || Array.isArray(change)) {
+  const changes = obj.changes;
+  if (Array.isArray(changes)) {
+    for (const change of changes) {
+      if (
+        change === null ||
+        typeof change !== "object" ||
+        Array.isArray(change)
+      ) {
         continue;
       }
-      if (typeof change.path === "string") add(change.path);
-      if (typeof change.file_path === "string") add(change.file_path);
+      for (const key of CHANGE_PATH_KEYS) {
+        const path = decodeString(change[key]);
+        if (Option.isSome(path)) add(path.value);
+      }
     }
   }
 
@@ -232,7 +336,7 @@ export function probeCodexItemResult(
 ): ToolCompleteResult | undefined {
   const probed = probeToolCompleteResult(item);
   const files = extractFilePaths(item);
-  const exitCode = readNumberField(item, ["exit_code", "exitCode"]);
+  const exitCode = readFiniteNumber(item, CODEX_EXIT_CODE_KEYS);
   const isError =
     failed ||
     (exitCode !== undefined && exitCode !== 0) ||
@@ -253,41 +357,22 @@ export function probeCodexItemResult(
 export function probeOpencodeStateResult(
   state: JsonObject,
 ): ToolCompleteResult | undefined {
-  const status = typeof state.status === "string" ? state.status : "";
-  const outputText =
-    typeof state.output === "string"
-      ? state.output
-      : typeof state.error === "string"
-        ? state.error
-        : "";
+  const status = readString(state, ["status"]) ?? "";
+  const outputText = readString(state, ["output", "error"]) ?? "";
 
-  const metadata =
-    state.metadata &&
-    typeof state.metadata === "object" &&
-    !Array.isArray(state.metadata)
-      ? state.metadata
-      : null;
+  const metadata = readObject(state, ["metadata"]);
   const exitCode = metadata
-    ? readNumberField(metadata, ["exit", "exit_code", "exitCode"])
+    ? readFiniteNumber(metadata, OPENCODE_EXIT_CODE_KEYS)
     : undefined;
 
-  const time =
-    state.time && typeof state.time === "object" && !Array.isArray(state.time)
-      ? state.time
-      : null;
-  let durationMs: number | undefined;
-  if (
-    time &&
-    typeof time.start === "number" &&
-    typeof time.end === "number" &&
-    time.end >= time.start
-  ) {
-    durationMs = time.end - time.start;
-  }
+  const time = decodeOpencodeTime(state.time);
+  const durationMs = Option.isSome(time)
+    ? time.value.end - time.value.start
+    : undefined;
 
   const isError =
     status === "error" ||
-    (typeof state.error === "string" && state.error.trim().length > 0) ||
+    readNonBlankString(state, ["error"]) !== undefined ||
     (exitCode !== undefined && exitCode !== 0);
 
   const output = buildStepOutput(outputText, exitCode);

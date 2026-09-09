@@ -2,7 +2,6 @@
 
 import { v } from "convex/values";
 import { App, Octokit } from "octokit";
-import { z } from "zod";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 import type { ActionCtx } from "../_generated/server";
@@ -10,6 +9,7 @@ import type { Id } from "../_generated/dataModel";
 import { decryptValue, encryptValue } from "../encryption";
 import { getGitHubCredentials } from "../githubAuth";
 import { GITHUB_AUTH_REQUIRED } from "./authErrors";
+import { classifyGitHubFailure } from "./githubErrors";
 
 /** Refresh once the access token is this close to expiring. */
 const EXPIRY_SKEW_MS = 60 * 1000;
@@ -19,8 +19,39 @@ const EXPIRY_SKEW_MS = 60 * 1000;
 // the refresh path never triggers for it.
 const NON_EXPIRING_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
-/** Octokit throws RequestError, which carries the HTTP status as a property. */
-const octokitErrorSchema = z.object({ status: z.number() });
+/** Shown when the installation really is not this caller's to inspect. */
+export const INSTALLATION_NOT_AUTHORIZED =
+  "Not authorized to inspect this installation";
+
+/**
+ * Shown when GitHub throttled the lookup. Deliberately says nothing about
+ * authorization: the web decides whether to offer the authorize hop by matching
+ * {@link GITHUB_AUTH_REQUIRED} in the message, and a retryable outcome must not
+ * read as a credentials problem.
+ */
+export const GITHUB_RATE_LIMITED =
+  "GitHub rate limit reached — try again in a minute";
+
+/**
+ * What a refused installation-repositories lookup means to the caller.
+ *
+ * Throttling is not an access verdict — the credentials are fine and the same
+ * call works once the window resets — so it is kept apart from the 403/404 that
+ * really do mean "this installation is not yours".
+ */
+export function classifyInstallationReposFailure(
+  error: unknown,
+): "rate-limited" | "not-authorized" | "rethrow" {
+  switch (classifyGitHubFailure(error)._tag) {
+    case "GitHubRateLimited":
+      return "rate-limited";
+    case "GitHubForbidden":
+    case "GitHubNotFound":
+      return "not-authorized";
+    default:
+      return "rethrow";
+  }
+}
 
 interface ResolvedToken {
   accessToken: string;
@@ -196,14 +227,14 @@ export async function listInstallationReposForUser(
       per_page: 100,
     })
     .catch((error: unknown) => {
-      const parsed = octokitErrorSchema.safeParse(error);
-      if (
-        parsed.success &&
-        (parsed.data.status === 403 || parsed.data.status === 404)
-      ) {
-        throw new Error("Not authorized to inspect this installation");
+      switch (classifyInstallationReposFailure(error)) {
+        case "rate-limited":
+          throw new Error(GITHUB_RATE_LIMITED);
+        case "not-authorized":
+          throw new Error(INSTALLATION_NOT_AUTHORIZED);
+        case "rethrow":
+          throw error;
       }
-      throw error;
     });
   return repos.map((repo) => ({
     id: repo.id,

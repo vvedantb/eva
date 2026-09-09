@@ -16,6 +16,7 @@ import {
 import { IconCheck, IconMessage, IconX } from "@tabler/icons-react";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { verdictSuccessTitle } from "@/lib/components/reviews/_components/prVerdict";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
@@ -97,8 +98,8 @@ export function SubmitReviewPopover({
               : "Posted to GitHub.",
         });
       })
-      .catch((cause: Error) => {
-        setError(cause.message || "GitHub rejected the review.");
+      .catch((cause: unknown) => {
+        setError(convexErrorMessage(cause, "GitHub rejected the review."));
       })
       .finally(() => setIsSubmitting(false));
   };

@@ -340,14 +340,16 @@ async function resumeReusedSandbox(
     // string prefix is exactly the signal that used to be forgeable by any
     // command output that happened to be quoted into a message.
     if (isSandboxGoneError(refreshErr)) {
-      throw new SandboxGoneError(
-        `sandbox gone on refresh: ${errorMessage(refreshErr, "refresh failed")}`,
-      );
+      throw new SandboxGoneError({
+        message: `sandbox gone on refresh: ${errorMessage(refreshErr, "refresh failed")}`,
+      });
     }
     throw refreshErr;
   }
   if (handle.state === "gone" || handle.state === "error") {
-    throw new SandboxGoneError(`sandbox unresumable state: ${handle.state}`);
+    throw new SandboxGoneError({
+      message: `sandbox unresumable state: ${handle.state}`,
+    });
   }
   await ensureSandboxRunning(handle, {
     timeoutSeconds: RESUME_READY_TIMEOUT_SECONDS,

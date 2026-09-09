@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect";
 import type { JsonObject, ProgressStep } from "../types.js";
 import { shortenPath } from "../utils.js";
 import {
@@ -6,37 +7,95 @@ import {
   extractClaudeEdits,
   extractFilePaths,
   pickToolCallId,
+  readNonBlankString,
+  readNonEmptyString,
+  readObject,
+  readString,
+  readTrimmedString,
+  readTrueFlag,
+  TrimmedStringSchema,
 } from "./toolResultCapture.js";
+
+/** Codex carries the thread id flat, or nested under a `thread` object. */
+const CodexThreadIdSchema = Schema.transform(
+  Schema.Union(
+    Schema.Struct({ thread_id: TrimmedStringSchema }),
+    Schema.Struct({ thread: Schema.Struct({ id: TrimmedStringSchema }) }),
+  ),
+  Schema.String,
+  {
+    strict: true,
+    decode: (event) =>
+      "thread_id" in event ? event.thread_id : event.thread.id,
+    encode: (threadId) => ({ thread_id: threadId }) as const,
+  },
+);
+
+/** Codex assistant prose arrives under either spelling of the item type. */
+const CodexAgentMessageSchema = Schema.Struct({
+  type: Schema.Literal("agent_message", "agentMessage"),
+});
+
+const decodeCodexThreadId = Schema.decodeUnknownOption(CodexThreadIdSchema);
+const decodeCodexAgentMessage = Schema.decodeUnknownOption(
+  CodexAgentMessageSchema,
+);
+
+const OPENCODE_PATH_KEYS = ["filePath", "file_path", "path"] as const;
+const CURSOR_PATH_KEYS = [
+  "path",
+  "file_path",
+  "filePath",
+  "target_file",
+  "targetFile",
+  "relativePath",
+  "relative_path",
+] as const;
+const CURSOR_COMMAND_KEYS = ["command", "cmd"] as const;
+const CURSOR_QUERY_KEYS = [
+  "query",
+  "pattern",
+  "url",
+  "glob_pattern",
+  "globPattern",
+] as const;
+const CURSOR_CONTENT_KEYS = [
+  "fileText",
+  "file_text",
+  "content",
+  "contents",
+] as const;
+const CURSOR_MCP_SERVER_KEYS = [
+  "server",
+  "serverName",
+  "server_name",
+  "toolName",
+  "tool_name",
+] as const;
+const CODEX_PATH_KEYS = [
+  "file_path",
+  "path",
+  "target_file",
+  "target_path",
+  "notebook_path",
+] as const;
+const CODEX_QUERY_KEYS = ["query", "pattern", "url"] as const;
+const CODEX_COMMAND_KEYS = ["command", "cmd"] as const;
+const CODEX_DESCRIPTION_KEYS = [
+  "description",
+  "name",
+  "tool",
+  "skill",
+] as const;
 
 /** Converts an opencode tool call event part into a UI progress step object. */
 export function opencodeToolToStep(part: JsonObject): ProgressStep {
-  const tool = typeof part.tool === "string" ? part.tool : "tool";
-  const stateObj =
-    part.state && typeof part.state === "object" && !Array.isArray(part.state)
-      ? part.state
-      : null;
-  const input =
-    stateObj &&
-    "input" in stateObj &&
-    stateObj.input &&
-    typeof stateObj.input === "object" &&
-    !Array.isArray(stateObj.input)
-      ? stateObj.input
-      : {};
-  const rawPath =
-    typeof input.filePath === "string"
-      ? input.filePath
-      : typeof input.file_path === "string"
-        ? input.file_path
-        : typeof input.path === "string"
-          ? input.path
-          : "";
+  const tool = readString(part, ["tool"]) ?? "tool";
+  const state = readObject(part, ["state"]);
+  const input: JsonObject = (state && readObject(state, ["input"])) ?? {};
+  const rawPath = readString(input, OPENCODE_PATH_KEYS) ?? "";
   const path = rawPath ? shortenPath(rawPath) : "";
-  const toolUseId =
-    pickToolCallId(part) ??
-    (typeof part.callID === "string" && part.callID.trim()
-      ? part.callID.trim()
-      : undefined);
+  const toolUseId = pickToolCallId(part) ?? readTrimmedString(part, ["callID"]);
 
   let step: ProgressStep;
   switch (tool) {
@@ -53,7 +112,7 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
       step = {
         type: "search_files",
         label: "Searching files...",
-        detail: typeof input.pattern === "string" ? input.pattern : undefined,
+        detail: readString(input, ["pattern"]),
         status: "active",
       };
       break;
@@ -61,13 +120,12 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
       step = {
         type: "search_code",
         label: "Searching code...",
-        detail: typeof input.pattern === "string" ? input.pattern : undefined,
+        detail: readString(input, ["pattern"]),
         status: "active",
       };
       break;
     case "write": {
-      const content =
-        typeof input.content === "string" ? input.content : undefined;
+      const content = readString(input, ["content"]);
       step = {
         type: "write",
         label: "Creating file...",
@@ -89,7 +147,7 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
       };
       break;
     case "bash": {
-      const rawCommand = typeof input.command === "string" ? input.command : "";
+      const rawCommand = readString(input, ["command"]) ?? "";
       step = {
         type: "bash",
         label: "Running command...",
@@ -103,7 +161,7 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
       step = {
         type: "web_fetch",
         label: "Fetching URL...",
-        detail: typeof input.url === "string" ? input.url : undefined,
+        detail: readString(input, ["url"]),
         status: "active",
       };
       break;
@@ -111,7 +169,7 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
       step = {
         type: "web_search",
         label: "Searching web...",
-        detail: typeof input.query === "string" ? input.query : undefined,
+        detail: readString(input, ["query"]),
         status: "active",
       };
       break;
@@ -119,8 +177,7 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
       step = {
         type: "subtask",
         label: "Running agent...",
-        detail:
-          typeof input.description === "string" ? input.description : undefined,
+        detail: readString(input, ["description"]),
         status: "active",
       };
       break;
@@ -151,33 +208,12 @@ export function cursorSdkToolToStep(
   name: string,
   args: JsonObject,
 ): ProgressStep {
-  const pickString = (keys: string[]): string => {
-    for (const key of keys) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return value;
-      }
-    }
-    return "";
-  };
-  const rawPath = pickString([
-    "path",
-    "file_path",
-    "filePath",
-    "target_file",
-    "targetFile",
-    "relativePath",
-    "relative_path",
-  ]);
+  const pickString = (keys: readonly string[]): string =>
+    readNonBlankString(args, keys) ?? "";
+  const rawPath = pickString(CURSOR_PATH_KEYS);
   const path = rawPath ? shortenPath(rawPath) : "";
-  const command = pickString(["command", "cmd"]);
-  const query = pickString([
-    "query",
-    "pattern",
-    "url",
-    "glob_pattern",
-    "globPattern",
-  ]);
+  const command = pickString(CURSOR_COMMAND_KEYS);
+  const query = pickString(CURSOR_QUERY_KEYS);
 
   switch (name) {
     case "read":
@@ -189,12 +225,7 @@ export function cursorSdkToolToStep(
         status: "active",
       };
     case "write": {
-      const fileText = pickString([
-        "fileText",
-        "file_text",
-        "content",
-        "contents",
-      ]);
+      const fileText = pickString(CURSOR_CONTENT_KEYS);
       return {
         type: "write",
         label: "Creating file...",
@@ -262,13 +293,7 @@ export function cursorSdkToolToStep(
     case "updateTodos":
       return { type: "tool", label: "Updating tasks...", status: "active" };
     case "mcp": {
-      const server = pickString([
-        "server",
-        "serverName",
-        "server_name",
-        "toolName",
-        "tool_name",
-      ]);
+      const server = pickString(CURSOR_MCP_SERVER_KEYS);
       return {
         type: "tool",
         label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
@@ -375,13 +400,7 @@ export function cursorSdkToolToStep(
     return { type: "tool", label: "Updating tasks...", status: "active" };
   }
   if (tool.includes("mcp")) {
-    const server = pickString([
-      "server",
-      "serverName",
-      "server_name",
-      "toolName",
-      "tool_name",
-    ]);
+    const server = pickString(CURSOR_MCP_SERVER_KEYS);
     return {
       type: "tool",
       label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
@@ -397,8 +416,7 @@ export function cursorSdkToolToStep(
 
 /** Converts a Claude tool call into a UI progress step object. */
 export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
-  const rawPath =
-    typeof input.file_path === "string" ? String(input.file_path) : "";
+  const rawPath = readString(input, ["file_path"]) ?? "";
   const path = rawPath ? shortenPath(rawPath) : "";
   switch (name) {
     case "Read":
@@ -413,21 +431,18 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
       return {
         type: "search_files",
         label: "Searching files...",
-        detail:
-          typeof input.pattern === "string" ? String(input.pattern) : undefined,
+        detail: readString(input, ["pattern"]),
         status: "active",
       };
     case "Grep":
       return {
         type: "search_code",
         label: "Searching code...",
-        detail:
-          typeof input.pattern === "string" ? String(input.pattern) : undefined,
+        detail: readString(input, ["pattern"]),
         status: "active",
       };
     case "Write": {
-      const content =
-        typeof input.content === "string" ? input.content : undefined;
+      const content = readString(input, ["content"]);
       return {
         type: "write",
         label: "Creating file...",
@@ -450,14 +465,12 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
     }
     case "Bash":
     case "bash": {
-      const rawCommand =
-        typeof input.command === "string" ? String(input.command) : "";
+      const rawCommand = readString(input, ["command"]) ?? "";
       return {
         type: "bash",
-        label:
-          input.run_in_background === true
-            ? "Running in background..."
-            : "Running command...",
+        label: readTrueFlag(input, ["run_in_background"])
+          ? "Running in background..."
+          : "Running command...",
         detail: rawCommand ? rawCommand.slice(0, 300) : undefined,
         command: rawCommand ? capCommand(rawCommand) : undefined,
         status: "active",
@@ -467,51 +480,41 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
       return {
         type: "bash",
         label: "Stopping background process...",
-        detail:
-          typeof input.shell_id === "string"
-            ? String(input.shell_id)
-            : typeof input.shellId === "string"
-              ? String(input.shellId)
-              : undefined,
+        detail: readString(input, ["shell_id", "shellId"]),
         status: "active",
       };
     case "Skill":
       return {
         type: "tool",
         label: "Using Skill...",
-        detail:
-          typeof input.skill === "string" ? String(input.skill) : undefined,
+        detail: readString(input, ["skill"]),
         status: "active",
       };
     case "WebFetch":
       return {
         type: "web_fetch",
         label: "Fetching URL...",
-        detail: typeof input.url === "string" ? String(input.url) : undefined,
+        detail: readString(input, ["url"]),
         status: "active",
       };
     case "WebSearch":
       return {
         type: "web_search",
         label: "Searching web...",
-        detail:
-          typeof input.query === "string" ? String(input.query) : undefined,
+        detail: readString(input, ["query"]),
         status: "active",
       };
-    case "NotebookEdit":
+    case "NotebookEdit": {
+      const notebookPath = readString(input, ["notebook_path"]);
       return {
         type: "notebook",
         label: "Editing notebook...",
         detail:
-          typeof input.notebook_path === "string"
-            ? shortenPath(String(input.notebook_path))
-            : undefined,
-        path:
-          typeof input.notebook_path === "string"
-            ? String(input.notebook_path)
-            : undefined,
+          notebookPath === undefined ? undefined : shortenPath(notebookPath),
+        path: notebookPath,
         status: "active",
       };
+    }
     // Subagent spawn. Named `Agent` since claude-code v2.1.63; older CLIs emit
     // `Task`. Match both so subagent runs are always recognised (a bare `Task`
     // previously fell through to the generic "Using Task..." row).
@@ -520,12 +523,7 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
       return {
         type: "subtask",
         label: "Running agent...",
-        detail:
-          typeof input.description === "string"
-            ? String(input.description)
-            : typeof input.subagent_type === "string"
-              ? String(input.subagent_type)
-              : undefined,
+        detail: readString(input, ["description", "subagent_type"]),
         status: "active",
       };
     case "TodoWrite":
@@ -547,90 +545,54 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
   }
 }
 
-function getCodexFieldValue(item: JsonObject, keys: string[]): string {
-  const sources: JsonObject[] = [item];
-  if (
-    item.input &&
-    typeof item.input === "object" &&
-    !Array.isArray(item.input)
-  ) {
-    sources.push(item.input);
+function getCodexFieldValue(item: JsonObject, keys: readonly string[]): string {
+  const direct = readTrimmedString(item, keys);
+  if (direct !== undefined) {
+    return direct;
   }
-  for (const source of sources) {
-    for (const key of keys) {
-      if (typeof source[key] === "string" && source[key].trim()) {
-        return source[key].trim();
-      }
-    }
-  }
-  return "";
+  const input = readObject(item, ["input"]);
+  return (input && readTrimmedString(input, keys)) ?? "";
 }
 
 export function getCodexThreadId(event: JsonObject): string {
-  if (typeof event.thread_id === "string" && event.thread_id.trim()) {
-    return event.thread_id.trim();
-  }
-  if (
-    event.thread &&
-    typeof event.thread === "object" &&
-    !Array.isArray(event.thread) &&
-    typeof event.thread.id === "string" &&
-    event.thread.id.trim()
-  ) {
-    return event.thread.id.trim();
-  }
-  return "";
+  return Option.getOrElse(decodeCodexThreadId(event), () => "");
 }
 
 export function getCodexAgentMessageText(item: JsonObject): string {
-  if (item.type !== "agent_message" && item.type !== "agentMessage") {
+  if (Option.isNone(decodeCodexAgentMessage(item))) {
     return "";
   }
-  if (typeof item.text === "string" && item.text) {
-    return item.text;
+  const direct = readNonEmptyString(item, ["text"]);
+  if (direct !== undefined) {
+    return direct;
   }
-  if (!Array.isArray(item.content)) {
+  const content = item.content;
+  if (!Array.isArray(content)) {
     return "";
   }
   const parts: string[] = [];
-  for (const block of item.content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    if (typeof block.text === "string" && block.text) {
-      parts.push(block.text);
+  for (const block of content) {
+    if (block === null || typeof block !== "object" || Array.isArray(block)) {
       continue;
     }
-    if (typeof block.content === "string" && block.content) {
-      parts.push(block.content);
+    const text = readNonEmptyString(block, ["text", "content"]);
+    if (text !== undefined) {
+      parts.push(text);
     }
   }
   return parts.join("");
 }
 
 export function codexItemToStep(item: JsonObject): ProgressStep {
-  const itemType =
-    item && typeof item.type === "string" && item.type.trim()
-      ? item.type.trim()
-      : "tool";
+  const itemType = readTrimmedString(item, ["type"]) ?? "tool";
   const normalizedType = itemType.toLowerCase();
-  const pathValue = getCodexFieldValue(item, [
-    "file_path",
-    "path",
-    "target_file",
-    "target_path",
-    "notebook_path",
-  ]);
-  const queryValue = getCodexFieldValue(item, ["query", "pattern", "url"]);
-  const commandValue = getCodexFieldValue(item, ["command", "cmd"]);
-  const descriptionValue = getCodexFieldValue(item, [
-    "description",
-    "name",
-    "tool",
-    "skill",
-  ]);
+  const pathValue = getCodexFieldValue(item, CODEX_PATH_KEYS);
+  const queryValue = getCodexFieldValue(item, CODEX_QUERY_KEYS);
+  const commandValue = getCodexFieldValue(item, CODEX_COMMAND_KEYS);
+  const descriptionValue = getCodexFieldValue(item, CODEX_DESCRIPTION_KEYS);
   const normalizedDescription = descriptionValue.toLowerCase();
-  const pathDetail = pathValue ? shortenPath(String(pathValue)) : "";
-  const itemId =
-    typeof item.id === "string" && item.id.trim() ? item.id.trim() : undefined;
+  const pathDetail = pathValue ? shortenPath(pathValue) : "";
+  const itemId = readTrimmedString(item, ["id"]);
 
   const withId = (step: ProgressStep): ProgressStep => {
     if (itemId) step.toolUseId = itemId;

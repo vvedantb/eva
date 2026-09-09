@@ -1501,9 +1501,7 @@ function createWarmAgentRunner(
     log("daemon: interrupt unavailable on SDK query handle");
   };
 
-  const setPermissionMode = async (
-    mode: "plan" | "default",
-  ): Promise<void> => {
+  const setPermissionMode = async (mode: "plan" | "default"): Promise<void> => {
     if (typeof query.setPermissionMode !== "function") {
       log("daemon: setPermissionMode unavailable on SDK query handle");
       return;

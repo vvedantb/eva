@@ -9,6 +9,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import {
   attachNormalBufferWheelScroll,
   buildTerminalHistoryKey,
@@ -445,11 +446,7 @@ export function TerminalPanel({
         await connectWebSocketRef.current(terminal, mounted, historyWriter);
       } catch (err) {
         if (mounted.current) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to initialize terminal",
-          );
+          setError(convexErrorMessage(err, "Failed to initialize terminal"));
           setIsLoading(false);
         }
       }

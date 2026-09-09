@@ -42,10 +42,16 @@ await esbuild.build({
 });
 
 const bundled = readFileSync(outJs, "utf8");
+// Control bytes (effect's source embeds a few) become \xNN escapes so the
+// generated file stays plain text for git and the sourceEncoding test; the
+// template literal evaluates them back to the original bytes at runtime.
 const escaped = bundled
   .replace(/\\/g, "\\\\")
   .replace(/`/g, "\\`")
-  .replace(/\$/g, "\\$");
+  .replace(/\$/g, "\\$")
+  .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, (ch) => {
+    return "\\x" + ch.charCodeAt(0).toString(16).padStart(2, "0");
+  });
 
 writeFileSync(
   outTs,

@@ -24,7 +24,9 @@
  */
 
 import { Sandbox } from "@vercel/sandbox";
+import { Effect } from "effect";
 import { z } from "zod";
+import { retryAfterDelays, runPromiseRethrowing } from "../_effect/retry";
 import { SandboxProviderError } from "./provider";
 import type {
   CreateSnapshotParams,
@@ -168,7 +170,8 @@ function vercelHttpStatus(e: unknown): number | undefined {
  */
 function providerError(message: string, e: unknown): SandboxProviderError {
   const detail = extractApiErrorDetail(e);
-  return new SandboxProviderError(`${message}: ${detail}`, {
+  return new SandboxProviderError({
+    message: `${message}: ${detail}`,
     httpStatus: vercelHttpStatus(e),
     detail,
   });
@@ -638,41 +641,56 @@ class VercelSandboxHandle implements SandboxHandle {
     // One refresh+retry on "stream was closed" — common after resume when the
     // SDK's command stream dies while the VM is still running.
     const maxAttempts = 2;
-    let lastError: Error | undefined;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const finished = await this.sandbox.runCommand({
-          cmd: "bash",
-          args: ["-lc", `${SOURCE_ENV} ${cmd}`],
-          ...(opts?.cwd ? { cwd: opts.cwd } : {}),
-          ...(opts?.env ? { env: opts.env } : {}),
-          ...(opts?.sudo ? { sudo: true } : {}),
-          ...(opts?.timeoutSeconds
-            ? { timeoutMs: opts.timeoutSeconds * 1000 }
-            : {}),
-        });
-        const output = await finished.output("both").catch(() => "");
-        return { exitCode: finished.exitCode, output };
-      } catch (e) {
+    let attempt = 0;
+    const runOnce = Effect.suspend(() => {
+      attempt += 1;
+      return Effect.tryPromise({
+        try: async () => {
+          const finished = await this.sandbox.runCommand({
+            cmd: "bash",
+            args: ["-lc", `${SOURCE_ENV} ${cmd}`],
+            ...(opts?.cwd ? { cwd: opts.cwd } : {}),
+            ...(opts?.env ? { env: opts.env } : {}),
+            ...(opts?.sudo ? { sudo: true } : {}),
+            ...(opts?.timeoutSeconds
+              ? { timeoutMs: opts.timeoutSeconds * 1000 }
+              : {}),
+          });
+          const output = await finished.output("both").catch(() => "");
+          return { exitCode: finished.exitCode, output };
+        },
         // The Vercel SDK throws APIError whose .json / .text fields carry the
         // actual API response body — surface them so 400/422 failures are
         // diagnosable in Convex logs instead of just "Status code 4xx is not ok".
-        const detail = extractApiErrorDetail(e);
-        lastError = providerError(
-          `vercel exec failed (cwd=${opts?.cwd ?? "(default)"}, cmd=${cmd.slice(0, 120)})`,
-          e,
-        );
-        if (attempt < maxAttempts && isVercelCommandStreamClosed(detail)) {
-          console.log(
-            `[vercel] exec stream closed on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts})`,
-          );
-          await this.refresh();
-          continue;
-        }
-        throw lastError;
-      }
-    }
-    throw lastError ?? new Error("vercel exec failed");
+        catch: (e) => ({
+          streamClosed: isVercelCommandStreamClosed(extractApiErrorDetail(e)),
+          error: providerError(
+            `vercel exec failed (cwd=${opts?.cwd ?? "(default)"}, cmd=${cmd.slice(0, 120)})`,
+            e,
+          ),
+        }),
+      });
+    });
+
+    return await runPromiseRethrowing(
+      runOnce.pipe(
+        Effect.tapError((failure) =>
+          failure.streamClosed && attempt < maxAttempts
+            ? Effect.promise(async () => {
+                console.log(
+                  `[vercel] exec stream closed on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts})`,
+                );
+                await this.refresh();
+              })
+            : Effect.void,
+        ),
+        Effect.retry({
+          schedule: retryAfterDelays([0]),
+          while: (failure) => failure.streamClosed,
+        }),
+        Effect.mapError((failure) => failure.error),
+      ),
+    );
   }
 
   async execDetached(cmd: string, opts?: SandboxExecOptions): Promise<void> {
@@ -799,13 +817,14 @@ class VercelSandboxHandle implements SandboxHandle {
       await new Promise((resolve) => setTimeout(resolve, 500));
       await this.refresh();
     }
-    throw new SandboxProviderError(
-      `vercel start: sandbox ${this.sandbox.name} did not reach running within ${timeoutSeconds}s (state: ${observed}${lastError ? `, last error: ${lastError}` : ""})`,
+    throw new SandboxProviderError({
+      message: `vercel start: sandbox ${this.sandbox.name} did not reach running within ${timeoutSeconds}s (state: ${observed}${lastError ? `, last error: ${lastError}` : ""})`,
+      httpStatus: lastErrorStatus,
       // No detail when no resume attempt actually failed: a bare deadline
       // (still `starting`) is not evidence the sandbox is gone, and an empty
       // detail cannot match anything.
-      { httpStatus: lastErrorStatus, detail: lastErrorDetail ?? "" },
-    );
+      detail: lastErrorDetail ?? "",
+    });
   }
   async extendTimeout(durationMs: number): Promise<void> {
     // Pushes the hard session deadline out (capped by the plan's max runtime).

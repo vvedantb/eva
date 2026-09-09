@@ -1,14 +1,25 @@
 "use node";
 
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { GenericActionCtx } from "convex/server";
+import { Effect } from "effect";
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "./githubAuth";
 import { extractPrNumber } from "./_github/helpers";
-import { isPullRequestAlreadyExistsError } from "./_github/prErrors";
+import {
+  GitHubBranchNotAhead,
+  type GitHubFailure,
+  githubRequest,
+  originalGitHubError,
+} from "./_github/githubErrors";
+import { classifyPrActionFailure } from "./_github/prErrors";
+import {
+  runActionEffect,
+  type UnexpectedActionFailure,
+} from "./_effect/action";
 import { getActionRepoWithAccess } from "./functions";
 import {
   buildPrBody,
@@ -16,6 +27,7 @@ import {
   buildProjectPrSections,
 } from "./prBody";
 import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_taskWorkflow/urls";
+import { retryAfterDelays, runPromiseRethrowing } from "./_effect/retry";
 import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
@@ -28,7 +40,8 @@ import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
 // Re-export URL builders for backwards compatibility
 export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
 
-const PR_READY_WAIT_DELAYS_MS = [0, 1000, 2000, 4000, 8000, 12000, 16000];
+/** Waits between the seven compare attempts, so six gaps. */
+const PR_READY_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 12000, 16000];
 
 type PullRequestCreateParams = {
   installationId: number;
@@ -42,6 +55,13 @@ type PullRequestCreateParams = {
   draft?: boolean;
 };
 
+/**
+ * A PR eva just created carries its number so labels can be added. One adopted
+ * after losing a create race does not: it already has the labels its own
+ * creation applied.
+ */
+type PullRequestOutcome = { url: string; createdNumber?: number };
+
 type PullRequestRefreshParams = {
   installationId: number;
   repoOwner: string;
@@ -49,12 +69,6 @@ type PullRequestRefreshParams = {
   branchName: string;
   body: string;
 };
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
 
 function buildTaskPullRequestBody(params: {
   repoOwner: string;
@@ -139,52 +153,60 @@ async function createPullRequestWithGitHub(
     baseBranch,
   });
 
-  let prNumber: number;
-  let prUrl: string;
-  try {
-    const pr = await octokit.rest.pulls.create({
-      owner: args.repoOwner,
-      repo: args.repoName,
-      title: `Eva: ${args.title}`,
-      body: args.body,
-      head: args.branchName,
-      base: baseBranch,
-      draft: args.draft ?? false,
-    });
-    prNumber = pr.data.number;
-    prUrl = pr.data.html_url;
-  } catch (error) {
-    // Concurrent create or list lag: adopt the existing PR instead of failing.
-    if (isPullRequestAlreadyExistsError(error)) {
-      for (const delayMs of [0, 1000, 2000]) {
-        if (delayMs > 0) {
-          await sleep(delayMs);
-        }
-        const raced = await findOpenPullRequestForBranch(args);
-        if (raced) {
-          return raced.url;
-        }
-      }
-    }
-    throw error;
-  }
+  const outcome = await runPromiseRethrowing(
+    githubRequest(() =>
+      octokit.rest.pulls.create({
+        owner: args.repoOwner,
+        repo: args.repoName,
+        title: `Eva: ${args.title}`,
+        body: args.body,
+        head: args.branchName,
+        base: baseBranch,
+        draft: args.draft ?? false,
+      }),
+    ).pipe(
+      Effect.map(
+        (pr): PullRequestOutcome => ({
+          url: pr.data.html_url,
+          createdNumber: pr.data.number,
+        }),
+      ),
+      // Concurrent create or list lag: adopt the existing PR instead of failing.
+      Effect.catchIf(
+        (failure) => failure._tag === "GitHubPullRequestAlreadyExists",
+        (failure) =>
+          // A single immediate re-lookup would hit the same stale list, so back
+          // off between tries. `fromNullable` turns "still not listed" into the
+          // failure the retry schedule waits on; a lookup that itself throws is
+          // a defect and surfaces straight away. Still not listed after the last
+          // try means there is nothing to adopt, so the create failure stands.
+          Effect.promise(() => findOpenPullRequestForBranch(args)).pipe(
+            Effect.flatMap(Effect.fromNullable),
+            Effect.retry(retryAfterDelays([1000, 2000])),
+            Effect.map((pr): PullRequestOutcome => ({ url: pr.url })),
+            Effect.orElseFail(() => failure),
+          ),
+      ),
+      Effect.mapError(originalGitHubError),
+    ),
+  );
 
-  if (args.labels.length > 0) {
+  if (outcome.createdNumber !== undefined && args.labels.length > 0) {
     try {
       await octokit.rest.issues.addLabels({
         owner: args.repoOwner,
         repo: args.repoName,
-        issue_number: prNumber,
+        issue_number: outcome.createdNumber,
         labels: args.labels,
       });
     } catch (labelError) {
       console.error(
-        `Failed to add labels to PR ${prUrl}: ${labelError instanceof Error ? labelError.message : String(labelError)}`,
+        `Failed to add labels to PR ${outcome.url}: ${labelError instanceof Error ? labelError.message : String(labelError)}`,
       );
     }
   }
 
-  return prUrl;
+  return outcome.url;
 }
 
 async function refreshPullRequestBodyWithGitHub(
@@ -215,60 +237,72 @@ async function waitForPullRequestHead(params: {
   baseBranch: string;
 }): Promise<void> {
   let lastError = "";
-  for (const delayMs of PR_READY_WAIT_DELAYS_MS) {
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    try {
-      const comparison =
-        await params.octokit.rest.repos.compareCommitsWithBasehead({
-          owner: params.repoOwner,
-          repo: params.repoName,
-          basehead: `${params.baseBranch}...${params.branchName}`,
-          per_page: 1,
-        });
-      if (comparison.data.ahead_by > 0) {
-        return;
-      }
-      // Compare succeeded: GitHub sees both tips and head is not ahead.
-      // Retrying won't create commits — fail immediately (plan-only turns).
-      throw new Error(
-        `${params.branchName} is not ahead of ${params.baseBranch}: every commit on it is already in ${params.baseBranch}, or the run committed locally and its push to GitHub failed`,
-      );
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("is not ahead of")) {
-        throw error;
-      }
-      // Branch may not be visible yet right after push — keep retrying.
-      lastError =
-        error instanceof Error ? error.message : "GitHub compare failed";
-    }
-  }
-  throw new Error(
-    `GitHub did not report ${params.branchName} as ready for a pull request after branch push: ${lastError}`,
+  const compareHead = githubRequest(() =>
+    params.octokit.rest.repos.compareCommitsWithBasehead({
+      owner: params.repoOwner,
+      repo: params.repoName,
+      basehead: `${params.baseBranch}...${params.branchName}`,
+      per_page: 1,
+    }),
+  ).pipe(
+    Effect.flatMap((comparison) =>
+      comparison.data.ahead_by > 0
+        ? Effect.void
+        : // Compare succeeded: GitHub sees both tips and head is not ahead.
+          // Retrying won't create commits — fail immediately (plan-only turns).
+          // The message is what callers past the action boundary match on, so
+          // it has to stay recognisable to `isBranchNotAheadError`.
+          Effect.fail(
+            new GitHubBranchNotAhead({
+              message: `${params.branchName} is not ahead of ${params.baseBranch}: every commit on it is already in ${params.baseBranch}, or the run committed locally and its push to GitHub failed`,
+              cause: undefined,
+            }),
+          ),
+    ),
+  );
+
+  await runPromiseRethrowing(
+    compareHead.pipe(
+      Effect.tapError((failure) =>
+        Effect.sync(() => {
+          if (failure._tag === "GitHubBranchNotAhead") return;
+          // Branch may not be visible yet right after push — keep retrying.
+          lastError = failure.message || "GitHub compare failed";
+        }),
+      ),
+      Effect.retry({
+        schedule: retryAfterDelays(PR_READY_RETRY_DELAYS_MS),
+        while: (failure) => failure._tag !== "GitHubBranchNotAhead",
+      }),
+      // Only the sentinel survives, and it is thrown as itself: it carries the
+      // message, and its cause is Eva rather than GitHub.
+      Effect.catchIf(
+        (failure) => failure._tag !== "GitHubBranchNotAhead",
+        () =>
+          Effect.fail(
+            new Error(
+              `GitHub did not report ${params.branchName} as ready for a pull request after branch push: ${lastError}`,
+            ),
+          ),
+      ),
+    ),
   );
 }
 
 /**
- * Runs a manual PR attempt and rethrows its failure as a `ConvexError`.
+ * Runs a manual PR attempt so its failure reaches the user.
  *
  * Production Convex redacts plain `Error` messages, so every reason a manual
  * "Create PR" can fail — branch not ahead, missing base branch, GitHub
  * rejection — reached the user as a bare "Server Error" with nothing to act on.
- * `ConvexError` data crosses the wire, so the UI shows the reason. The original
- * is logged first, because the rethrow drops its stack.
+ * {@link runActionEffect} rethrows as a `ConvexError`, whose data does cross the
+ * wire, and `classifyPrActionFailure` gives GitHub-shaped failures a tag the web
+ * can branch on instead of matching message text.
  */
-async function withVisiblePrFailure<T>(
-  label: string,
+function visiblePrAttempt<T>(
   attempt: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await attempt();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[pr] ${label} failed: ${message}`);
-    throw new ConvexError(message);
-  }
+): Effect.Effect<T, GitHubFailure | UnexpectedActionFailure> {
+  return Effect.tryPromise({ try: attempt, catch: classifyPrActionFailure });
 }
 
 /** Manually creates the PR for a task branch — used when the workflow's auto
@@ -278,61 +312,64 @@ export const createTaskPr = action({
   args: { taskId: v.id("agentTasks") },
   returns: v.object({ url: v.string() }),
   handler: async (ctx, args): Promise<{ url: string }> =>
-    withVisiblePrFailure(`createTaskPr task=${args.taskId}`, async () => {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) {
-        throw new Error("Not authenticated");
-      }
+    runActionEffect(
+      visiblePrAttempt(async (): Promise<{ url: string }> => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+          throw new Error("Not authenticated");
+        }
 
-      const data = await ctx.runQuery(
-        internal.taskWorkflow.getTaskPrCreationData,
-        { taskId: args.taskId },
-      );
-      await getActionRepoWithAccess(ctx, data.repoId);
+        const data = await ctx.runQuery(
+          internal.taskWorkflow.getTaskPrCreationData,
+          { taskId: args.taskId },
+        );
+        await getActionRepoWithAccess(ctx, data.repoId);
 
-      if (data.existingPrUrl) {
-        return { url: data.existingPrUrl };
-      }
+        if (data.existingPrUrl) {
+          return { url: data.existingPrUrl };
+        }
 
-      const body = buildTaskPullRequestBody({
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        taskId: args.taskId,
-        projectId: data.projectId,
-        taskDescription: data.taskDescription,
-        rootDirectory: data.rootDirectory,
-        changeRequests: data.changeRequests,
-      });
-
-      const labels = buildTaskPullRequestLabels({
-        rootDirectory: data.rootDirectory,
-        isQuickTask: data.isQuickTask,
-      });
-
-      const prUrl: string = await ctx.runAction(
-        internal.taskWorkflowActions.createPullRequest,
-        {
-          installationId: data.installationId,
+        const body = buildTaskPullRequestBody({
           repoOwner: data.repoOwner,
           repoName: data.repoName,
-          branchName: data.branchName,
-          baseBranch: data.baseBranch,
-          title: data.taskTitle,
-          body,
-          labels,
-          draft: data.isQuickTask,
-        },
-      );
-
-      if (data.latestRunId) {
-        await ctx.runMutation(internal.taskWorkflow.setRunPrUrl, {
-          runId: data.latestRunId,
-          prUrl,
+          taskId: args.taskId,
+          projectId: data.projectId,
+          taskDescription: data.taskDescription,
+          rootDirectory: data.rootDirectory,
+          changeRequests: data.changeRequests,
         });
-      }
 
-      return { url: prUrl };
-    }),
+        const labels = buildTaskPullRequestLabels({
+          rootDirectory: data.rootDirectory,
+          isQuickTask: data.isQuickTask,
+        });
+
+        const prUrl: string = await ctx.runAction(
+          internal.taskWorkflowActions.createPullRequest,
+          {
+            installationId: data.installationId,
+            repoOwner: data.repoOwner,
+            repoName: data.repoName,
+            branchName: data.branchName,
+            baseBranch: data.baseBranch,
+            title: data.taskTitle,
+            body,
+            labels,
+            draft: data.isQuickTask,
+          },
+        );
+
+        if (data.latestRunId) {
+          await ctx.runMutation(internal.taskWorkflow.setRunPrUrl, {
+            runId: data.latestRunId,
+            prUrl,
+          });
+        }
+
+        return { url: prUrl };
+      }),
+      `pr createTaskPr task=${args.taskId}`,
+    ),
 });
 
 /** Manually creates the PR for a project branch — used when the workflow's
@@ -345,9 +382,8 @@ export const createProjectPr = action({
   args: { projectId: v.id("projects") },
   returns: v.object({ url: v.string() }),
   handler: async (ctx, args): Promise<{ url: string }> =>
-    withVisiblePrFailure(
-      `createProjectPr project=${args.projectId}`,
-      async () => {
+    runActionEffect(
+      visiblePrAttempt(async (): Promise<{ url: string }> => {
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) {
           throw new Error("Not authenticated");
@@ -402,7 +438,8 @@ export const createProjectPr = action({
         });
 
         return { url: prUrl };
-      },
+      }),
+      `pr createProjectPr project=${args.projectId}`,
     ),
 });
 
