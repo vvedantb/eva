@@ -12,22 +12,13 @@ import {
   sendCompletionEvent,
 } from "./_taskWorkflow/helpers";
 import { buildPrBody } from "./prBody";
+import { buildTestGenBranchName } from "./_git/branchNames";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 
 const testGenCompleteEvent = defineEvent({
   name: "testGenComplete",
   validator: workflowCompleteValidator,
 });
-
-/** Converts text to a URL-safe lowercase slug, truncated to 50 characters. */
-function slugify(text: string): string {
-  const slug = text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
-  return slug || "untitled";
-}
 
 /** Replaces double quotes with single quotes in a commit title for shell safety. */
 function sanitizeCommitTitle(title: string): string {
@@ -226,7 +217,7 @@ export const getDocData = internalQuery({
       };
     }
 
-    const branchName = `tests/doc-${slugify(doc.title)}`;
+    const branchName = buildTestGenBranchName(doc.title);
     const commitTitle = sanitizeCommitTitle(doc.title);
 
     const prompt = `You are a test engineer. Generate tests for the feature described below.
