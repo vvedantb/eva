@@ -37,6 +37,9 @@ test("isUsageLimitError matches Claude usage/rate limit copy", () => {
   expect(isUsageLimitError("You've hit your individual spend limit")).toBe(
     true,
   );
+  expect(
+    isUsageLimitError("You've hit your session limit · resets 12pm (UTC)"),
+  ).toBe(true);
   expect(isUsageLimitError("sandbox timed out")).toBe(false);
 });
 
