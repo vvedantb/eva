@@ -30,6 +30,7 @@ import {
   PROJECT_CHAT_STREAM_PREFIX,
 } from "./workflowWatchdog";
 import { buildProjectChatPrompt } from "./_projects/chatPrompt";
+import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import {
   buildProjectBranchName,
   getProjectGeneratedSpec,
@@ -97,6 +98,14 @@ async function buildProjectChatTurnPrompt(
     project.branchName ??
     buildProjectBranchName(args.projectId, project.branchVersion);
 
+  // Sibling repositories this sandbox's git credentials can read (owner is the
+  // project owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    project.userId,
+    repo._id,
+  );
+
   let prompt = buildProjectChatPrompt({
     repoOwner: repo.owner,
     repoName: repo.name,
@@ -109,6 +118,7 @@ async function buildProjectChatTurnPrompt(
     customInstructionsBlock,
     systemPrompt: repo.systemPrompt,
     devPort: project.devPort ?? repo.devPort,
+    readableRepos,
   });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;

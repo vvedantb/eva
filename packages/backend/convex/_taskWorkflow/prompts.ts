@@ -5,6 +5,7 @@ import {
   detectUiImplementationTask,
 } from "./uiImplementationPrompt";
 import {
+  buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
 } from "../prompts";
@@ -70,6 +71,7 @@ export function buildImplementationPrompt(
   projectContext?: { title: string; description?: string },
   systemPrompt?: string,
   previousRunSummary?: string,
+  readableRepos: ReadonlyArray<{ owner: string; name: string }> = [],
 ): string {
   const commitScope = isQuickTask
     ? "feat"
@@ -127,7 +129,7 @@ ${buildSummarySection(uiTask)}
 - Prefix shell commands with timeouts: \`timeout 180 npm install\`, \`timeout 30 gh ...\`
 - For gh: \`GH_PROMPT_DISABLED=1 timeout 30 gh ...\`
 - Do NOT pipe long-running validation commands through \`tail\`; redirect output to a log file, wait for the command to exit, then tail the log.
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}`;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}`;
 }
 
 /** Builds a prompt for resolving merge conflicts against the base branch. */
