@@ -40,8 +40,11 @@ export interface SandboxTabDescriptor {
    `relative z-1` and the active text colour, and the active *fill* is the
    `TabsList` sliding pill gliding underneath. Only the resting/hover tones and
    the tighter panel density belong here. */
+/* `max-sm:h-10`: the phone strip is the only place these are tapped, and 32px
+   sits under the comfortable-tap floor. `hit-target` is the wrong tool here —
+   its 8px bleed would overlap the neighbouring chip across the 4px gap. */
 const TAB_CLASS =
-  "h-8 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground md:w-8 md:justify-center md:px-0";
+  "h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground md:w-8 md:justify-center md:px-0";
 
 const ICON_CLASS = "size-4 shrink-0";
 

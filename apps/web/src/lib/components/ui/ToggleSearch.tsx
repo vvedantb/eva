@@ -37,10 +37,12 @@ export function ToggleSearch({
       onClear={() => onChange(null)}
       placeholder={placeholder}
       // `max-sm:min-w-0` + `sm:shrink-0`: on a phone the field yields to its toolbar
-      // siblings instead of forcing the row (and the page) to overflow.
+      // siblings instead of forcing the row (and the page) to overflow. The large
+      // field also takes the whole first row there (`max-sm:basis-full`): shared
+      // with the view toggle it left two stray buttons wrapped onto a second line.
       className={cn(
         "max-w-none max-sm:min-w-0 sm:shrink-0",
-        isLarge ? "w-52 sm:w-64 md:w-72" : "w-36 sm:w-44",
+        isLarge ? "w-52 max-sm:basis-full sm:w-64 md:w-72" : "w-36 sm:w-44",
       )}
       // Match neighboring h-8 toolbar chips (view toggle, filter buttons).
       inputClassName="h-8"
