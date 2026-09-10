@@ -5,13 +5,10 @@ import {
   api,
   getAIModelProvider,
   parseUsageLimitResetTime,
-  type AIModel,
   type Id,
 } from "@eva/backend";
-import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import type { ModelAccount } from "@eva/ui";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
@@ -22,7 +19,8 @@ import {
   usageLimitRetryCandidates,
 } from "./usageLimitBanner";
 import { UsageLimitAccountOption } from "./UsageLimitAccountOption";
-import type { SessionMessage } from "./useSessionSend";
+import type { SandboxChatSurface } from "./sandboxChatSurface";
+import { useRetryLastTurnWithAccount } from "./useRetryLastTurnWithAccount";
 
 /** A candidate whose id has been checked against the live account docs. */
 interface ResolvedCandidate {
@@ -34,71 +32,54 @@ interface ResolvedCandidate {
   accountId: Id<"userProviderAccounts"> | null;
 }
 
-interface UsageLimitRecoveryBannerProps {
-  sessionId: Id<"sessions">;
-  repoId: Id<"githubRepos">;
-  messages: SessionMessage[];
-  model: AIModel;
-  accounts: ReadonlyArray<ModelAccount>;
-  /** Maps a picker id string back to the branded id from the live docs. */
-  resolveAccountId: (
-    id: string | null,
-  ) => Id<"userProviderAccounts"> | undefined;
-  /** undefined while the session query loads; null = Team credential. */
-  currentAccountId: Id<"userProviderAccounts"> | null | undefined;
-  /** Persists the sticky account and waits for the daemon handoff. */
-  onSwitchAccount: (id: Id<"userProviderAccounts"> | null) => Promise<void>;
-  isSandboxActive: boolean;
-  isExecuting: boolean;
-}
-
 /**
- * One-click recovery for a turn that failed on the provider's usage limit.
- * Shown only while that failed reply is the newest message: the retry stages a
- * fresh assistant placeholder, which becomes the newest message and dismisses
- * the card without any extra state.
+ * One-click recovery for a turn that failed on the provider's usage limit, in
+ * any sandbox chat. Shown only while that failed reply is the newest message:
+ * the retry stages a fresh assistant placeholder, which becomes the newest
+ * message and dismisses the card without any extra state.
  *
  * Each account is a row with its own headroom, because the choice between them
  * is exactly the number the rows carry — switching to an account that is also
  * out costs another failed turn.
  */
 export function UsageLimitRecoveryBanner({
-  sessionId,
-  repoId,
-  messages,
-  model,
-  accounts,
-  resolveAccountId,
-  currentAccountId,
-  onSwitchAccount,
-  isSandboxActive,
-  isExecuting,
-}: UsageLimitRecoveryBannerProps) {
+  surface,
+}: {
+  surface: SandboxChatSurface;
+}) {
+  const recovery = surface.usageLimitRecovery;
   const [inFlightKey, setInFlightKey] = useState<string | null>(null);
-  const retryLastTurn = useMutation(
-    api.sessionWorkflow.retryLastTurnWithAccount,
-  );
+  const retryLastTurn = useRetryLastTurnWithAccount(surface.entity);
   const now = useMinuteNow();
+  const newest = recovery?.messages.at(-1);
+  // Its own const so the narrowing below survives: `undefined` here is either
+  // "no recovery" or "entity still loading", and `showsCard` rules out both.
+  const currentAccountId = recovery?.currentAccountId;
+  // Whether the card renders at all, decided before the query so a chat that
+  // never hit a limit does not subscribe to usage readings it will not show.
+  const showsCard =
+    recovery !== undefined &&
+    newest !== undefined &&
+    newest.role === "assistant" &&
+    newest.isSystemAlert !== true &&
+    newest.errorType === "rate_limit" &&
+    // Until the entity lands we do not know which account to exclude, and
+    // offering a switch to the account already in use is worse than waiting.
+    currentAccountId !== undefined;
   // Same query and same quantised clock as the composer's usage chip, so the
   // cache serves both and the two surfaces cannot disagree by a tick.
-  const entries = useQuery(api.usageLimits.getForViewer, { repoId, now });
+  const entries = useQuery(
+    api.usageLimits.getForViewer,
+    showsCard ? { repoId: surface.repoId, now } : "skip",
+  );
 
-  const newest = messages.at(-1);
-  if (
-    newest === undefined ||
-    newest.role !== "assistant" ||
-    newest.isSystemAlert === true ||
-    newest.errorType !== "rate_limit" ||
-    // Until the session lands we do not know which account to exclude, and
-    // offering a switch to the account already in use is worse than waiting.
-    currentAccountId === undefined
-  ) {
-    return null;
-  }
+  if (!showsCard) return null;
 
+  const { accounts, resolveAccountId, onSwitchAccount, isSandboxActive } =
+    recovery;
   const candidates = usageLimitRetryCandidates({
     accounts,
-    provider: getAIModelProvider(model),
+    provider: getAIModelProvider(surface.model),
     currentAccountId,
   }).flatMap<ResolvedCandidate>((candidate) => {
     if (candidate.accountId === null) {
@@ -136,13 +117,10 @@ export function UsageLimitRecoveryBanner({
     // `finally`: React Compiler cannot compile a `finally`.
     void catchMutationError(
       onSwitchAccount(candidate.accountId).then(() =>
-        retryLastTurn({
-          sessionId,
-          providerAccountId: candidate.accountId,
-        }),
+        retryLastTurn(candidate.accountId),
       ),
       "Couldn't retry on that account",
-      "session-usage-limit-retry",
+      "chat-usage-limit-retry",
     )
       .then(() => setInFlightKey(null))
       .catch(() => setInFlightKey(null));
@@ -182,7 +160,9 @@ export function UsageLimitRecoveryBanner({
               isOwn={candidate.isOwn}
               entry={entryFor(candidate.accountId)}
               now={now}
-              disabled={!isSandboxActive || isExecuting || inFlightKey !== null}
+              disabled={
+                !isSandboxActive || surface.isExecuting || inFlightKey !== null
+              }
               inFlight={inFlightKey === candidate.key}
               onSelect={() => handleRetry(candidate)}
             />

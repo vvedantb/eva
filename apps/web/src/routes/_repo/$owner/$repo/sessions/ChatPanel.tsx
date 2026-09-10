@@ -16,7 +16,6 @@ import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
-import { UsageLimitRecoveryBanner } from "./_components/UsageLimitRecoveryBanner";
 import { SessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
 import {
@@ -227,6 +226,16 @@ export function ChatPanel({
     // A stopped session sandbox still gets the offer: sending wakes it.
     compactionReadOnly: isReadOnly,
     backgroundAgents,
+    usageLimitRecovery: isReadOnly
+      ? undefined
+      : {
+          messages,
+          accounts,
+          resolveAccountId,
+          currentAccountId: stickyProviderAccountId,
+          onSwitchAccount: setStickyProviderAccountId,
+          isSandboxActive,
+        },
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
     onSendCommand: (command) => {
@@ -354,25 +363,11 @@ export function ChatPanel({
             <BackgroundProcessesPanel sessionId={sessionId} />
           )}
           {!isReadOnly ? (
-            <>
-              <PublishRecoveryBanner
-                sessionId={sessionId}
-                messages={messages}
-                isSandboxActive={isSandboxActive}
-              />
-              <UsageLimitRecoveryBanner
-                sessionId={sessionId}
-                repoId={repo._id}
-                messages={messages}
-                model={model}
-                accounts={accounts}
-                resolveAccountId={resolveAccountId}
-                currentAccountId={stickyProviderAccountId}
-                onSwitchAccount={setStickyProviderAccountId}
-                isSandboxActive={isSandboxActive}
-                isExecuting={isExecuting}
-              />
-            </>
+            <PublishRecoveryBanner
+              sessionId={sessionId}
+              messages={messages}
+              isSandboxActive={isSandboxActive}
+            />
           ) : null}
           <PendingReviewCommentChips />
         </>
