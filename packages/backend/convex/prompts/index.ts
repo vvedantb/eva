@@ -1,6 +1,7 @@
 export {
   buildRootDirectoryInstruction,
   buildCustomInstructionsBlock,
+  buildReadableReposBlock,
   buildSystemPromptBlock,
   RESPONSE_LENGTH_INSTRUCTION,
 } from "./shared";

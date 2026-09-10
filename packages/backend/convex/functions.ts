@@ -22,7 +22,7 @@ import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
 
 /** Checks a loaded repo against connector ownership or team membership. */
-async function userCanAccessRepo(
+export async function userCanAccessRepo(
   db: GenericDatabaseReader<DataModel>,
   repo: Doc<"githubRepos">,
   userId: Id<"users">,
