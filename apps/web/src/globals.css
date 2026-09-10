@@ -1140,9 +1140,14 @@ html[data-blur-pid] [data-pii] {
  * The halo's blur sits on the static parent, and the parent's
  * `overflow: hidden` rounded clip shapes the glow: the clip applies to the
  * child before the parent's own filter runs, so the blur still spills
- * outward past the border. `steps(90)` on the halo's spin caps blur
- * re-execution at ~30Hz — between steps nothing is damaged, so GPU
- * compositors reuse the cached filtered render pass.
+ * outward past the border.
+ *
+ * Each square is sized to its clip's diagonal — `hypot()` of the container
+ * units the clip exposes — not 150% of the width: the smallest square that
+ * covers a rotating rounded rect at every angle. On the composer (~760×112)
+ * each cached texture drops from 1143² to ~783² px, −53% of texture memory
+ * and one-off raster (×4 at 2× DPR), and the picture is unchanged because a
+ * conic gradient depends only on angle.
  *
  * Color stops live on `.beam-root` as `--beam-stops`; both layers bake them
  * into a `from 0deg` gradient, since the angle is the `rotate`.
@@ -1173,58 +1178,45 @@ html[data-blur-pid] [data-pii] {
   pointer-events: none;
 }
 
-.beam {
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  overflow: hidden;
-}
-
-/* Spinning gradient square. Sized off the host's width so it covers the
- * clip's diagonal on any surface at least as wide as it is tall — every
- * beam host is. */
-.beam::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 150%;
-  aspect-ratio: 1;
-  margin: -75% 0 0 -75%;
-  background-image: conic-gradient(from 0deg, var(--beam-stops));
-  animation: beam-rotate var(--beam-duration) linear infinite;
-}
-
-/* The `steps(90)` cap below does NOT hold at 60Hz+, and layer isolation does
- * not rescue it. The ring damages the frame every vsync, and the halo's blurred
- * render pass is re-drawn with it: traced 720 `DirectRenderer::DrawRenderPass`
- * over 360 frames with the ring on, versus 360 over 180 for the halo alone.
- * `will-change: filter` on this layer plus `will-change: transform` on the
- * spinning child was measured and rejected — the ratio stayed at 2 passes per
- * frame on Chrome's GPU (SkiaRenderer) path, so cc never reused the undamaged
- * filtered pass, and in software rendering the extra layers cost ~6% more
- * compositor time. The remaining options all change how the glow looks
- * (dropping it, or blurring inside the clip so it stops spilling outward), so
- * this stays as-is pending a visual decision rather than being churned. */
+/* Both layers are the same static rounded clip over the same spinning square;
+ * the halo only adds its blur. `container-type: size` is what gives the
+ * square `cqw`/`cqh` for its diagonal. */
+.beam,
 .beam-halo {
   position: absolute;
   inset: -1px;
   border-radius: inherit;
   overflow: hidden;
-  filter: blur(var(--beam-glow));
-  opacity: 0.5;
+  container-type: size;
 }
 
+/* Spinning gradient square, centred on the clip and sized to its diagonal.
+ * +12px so `.beam-inset`'s 3px padding, which shrinks the container's content
+ * box, still leaves the padding box covered. */
+.beam::before,
 .beam-halo::before {
   content: "";
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 150%;
+  width: calc(hypot(100cqw, 100cqh) + 12px);
   aspect-ratio: 1;
-  margin: -75% 0 0 -75%;
+  translate: -50% -50%;
   background-image: conic-gradient(from 0deg, var(--beam-stops));
-  animation: beam-rotate var(--beam-duration) steps(90) infinite;
+  animation: beam-rotate var(--beam-duration) linear infinite;
+}
+
+/* The blur runs when the halo's render pass is drawn into the frame, and the
+ * crisp ring damages that frame every vsync, so it re-runs per frame whatever
+ * the halo's own cadence: a `steps(90)` (30Hz) spin and a `linear` one traced
+ * the same compositor cost (2 passes per frame either way), so the halo spins
+ * linear and tracks the ring without a 30Hz stutter. Layer isolation
+ * (`will-change` on either layer) was measured and rejected — more layers
+ * cost more and the passes stayed at two. Replacing the filter with stacked
+ * hard-edged bands traced slower still, so the glow stays a blur. */
+.beam-halo {
+  filter: blur(var(--beam-glow));
+  opacity: 0.5;
 }
 
 .beam-sm {
@@ -1885,17 +1877,44 @@ html[data-blur-pid] [data-pii] {
   }
 }
 
-/* <Shimmer/> (packages/ui) — the highlight sweep across text. Same start and
- * end positions the motion/react version animated between, so the movement is
- * unchanged; it just no longer costs a rAF callback and an inline style write
- * per frame. `background-position` is still a paint property, so this repaints
- * each frame — inherent to a background-clipped text sweep. */
-@keyframes shimmer-sweep {
+/* <Shimmer/> (packages/ui) — highlight sweep across text, on the compositor.
+ * `.shimmer-overlay` clips a copy of the text in the highlight colour;
+ * `.shimmer-band` masks that copy to a soft band and translates one way while
+ * `.shimmer-copy` inside it translates the other by the same amount, so the
+ * copy stays put over the base text and only the mask moves. Nothing
+ * repaints — two transform animations and a static mask — where the old
+ * `background-clip: text` sweep repainted the glyphs every frame. The band
+ * centre travels −0.25w → 1.25w, the path the old 250%-wide background swept
+ * from position 100% to 0%, over the same duration. */
+.shimmer-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+.shimmer-band {
+  position: absolute;
+  inset: 0;
+  mask-image: linear-gradient(
+    90deg,
+    transparent calc(50% - var(--shimmer-spread)),
+    #000,
+    transparent calc(50% + var(--shimmer-spread))
+  );
+  animation: shimmer-band var(--shimmer-duration) linear infinite;
+}
+.shimmer-copy {
+  display: block;
+  color: rgb(var(--background));
+  animation: shimmer-band var(--shimmer-duration) linear infinite reverse;
+}
+@keyframes shimmer-band {
   from {
-    background-position: 100% center;
+    translate: -75% 0;
   }
   to {
-    background-position: 0% center;
+    translate: 75% 0;
   }
 }
 
