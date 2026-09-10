@@ -16,6 +16,7 @@ import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
+import { UsageLimitRecoveryBanner } from "./_components/UsageLimitRecoveryBanner";
 import { SessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
 import {
@@ -168,7 +169,7 @@ export function ChatPanel({
     onTraitsPersist: setTraits,
     providerAccountId: stickyProviderAccountId,
     onProviderAccountChange: (next: string | null) => {
-      setStickyProviderAccountId(
+      void setStickyProviderAccountId(
         next === null ? null : (resolveAccountId(next) ?? null),
       );
     },
@@ -353,11 +354,25 @@ export function ChatPanel({
             <BackgroundProcessesPanel sessionId={sessionId} />
           )}
           {!isReadOnly ? (
-            <PublishRecoveryBanner
-              sessionId={sessionId}
-              messages={messages}
-              isSandboxActive={isSandboxActive}
-            />
+            <>
+              <PublishRecoveryBanner
+                sessionId={sessionId}
+                messages={messages}
+                isSandboxActive={isSandboxActive}
+              />
+              <UsageLimitRecoveryBanner
+                sessionId={sessionId}
+                repoId={repo._id}
+                messages={messages}
+                model={model}
+                accounts={accounts}
+                resolveAccountId={resolveAccountId}
+                currentAccountId={stickyProviderAccountId}
+                onSwitchAccount={setStickyProviderAccountId}
+                isSandboxActive={isSandboxActive}
+                isExecuting={isExecuting}
+              />
+            </>
           ) : null}
           <PendingReviewCommentChips />
         </>

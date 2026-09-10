@@ -232,6 +232,7 @@ import type * as _taskWorkflow_scheduling from "../_taskWorkflow/scheduling.js";
 import type * as _taskWorkflow_staleness from "../_taskWorkflow/staleness.js";
 import type * as _taskWorkflow_uiImplementationPrompt from "../_taskWorkflow/uiImplementationPrompt.js";
 import type * as _taskWorkflow_urls from "../_taskWorkflow/urls.js";
+import type * as _taskWorkflow_usageLimitReset from "../_taskWorkflow/usageLimitReset.js";
 import type * as _taskWorkflow_watchdog from "../_taskWorkflow/watchdog.js";
 import type * as _taskWorkflow_workflowDefinition from "../_taskWorkflow/workflowDefinition.js";
 import type * as _usageLimits_claudeUsage from "../_usageLimits/claudeUsage.js";
@@ -623,6 +624,7 @@ declare const fullApi: ApiFromModules<{
   "_taskWorkflow/staleness": typeof _taskWorkflow_staleness;
   "_taskWorkflow/uiImplementationPrompt": typeof _taskWorkflow_uiImplementationPrompt;
   "_taskWorkflow/urls": typeof _taskWorkflow_urls;
+  "_taskWorkflow/usageLimitReset": typeof _taskWorkflow_usageLimitReset;
   "_taskWorkflow/watchdog": typeof _taskWorkflow_watchdog;
   "_taskWorkflow/workflowDefinition": typeof _taskWorkflow_workflowDefinition;
   "_usageLimits/claudeUsage": typeof _usageLimits_claudeUsage;
