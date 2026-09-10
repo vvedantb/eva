@@ -22,7 +22,6 @@ import {
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
-import { normalizeAIModel } from "../validators";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
@@ -828,27 +827,23 @@ export const runTestQuery = internalAction({
   },
 });
 
-const mcpClaudeModelValidator = v.union(
-  v.literal("opus"),
-  v.literal("sonnet"),
-  v.literal("haiku"),
-  v.literal("fable"),
-);
-
+// Task and session creation deliberately take no model: the mutations behind
+// them fall back to `repo.defaultModel`, and that per-repo choice (provider,
+// cost, plan limits) is the one the MCP surface must not override. Per-turn
+// sends (orchestratorSendMessage) keep their model override.
 export const createTask = internalAction({
   args: {
     clerkUserId: v.string(),
     repoId: v.string(),
     title: v.string(),
     description: v.string(),
-    model: v.optional(mcpClaudeModelValidator),
     baseBranch: v.optional(v.string()),
     projectId: v.optional(v.string()),
   },
   returns: v.string(),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, title, description, model, baseBranch, projectId },
+    { clerkUserId, repoId, title, description, baseBranch, projectId },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
     const mutationArgs: Record<string, JsonValue> = {
@@ -856,7 +851,6 @@ export const createTask = internalAction({
       title,
       description,
     };
-    if (model) mutationArgs.model = normalizeAIModel(model);
     if (baseBranch) mutationArgs.baseBranch = baseBranch;
     if (projectId) mutationArgs.projectId = projectId;
 
@@ -901,13 +895,12 @@ export const createTasksBatch = internalAction({
       }),
     ),
     projectTitle: v.optional(v.string()),
-    model: v.optional(mcpClaudeModelValidator),
     baseBranch: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, tasks, projectTitle, model, baseBranch },
+    { clerkUserId, repoId, tasks, projectTitle, baseBranch },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
     const mutationArgs: Record<string, JsonValue> = {
@@ -919,7 +912,6 @@ export const createTasksBatch = internalAction({
       })),
     };
     if (projectTitle) mutationArgs.projectTitle = projectTitle;
-    if (model) mutationArgs.model = normalizeAIModel(model);
     if (baseBranch) mutationArgs.baseBranch = baseBranch;
 
     const result = await runMutationAsUser(
@@ -2013,19 +2005,20 @@ export const orchestratorCreateSession = internalAction({
     repoId: v.string(),
     title: v.optional(v.string()),
     message: v.string(),
-    model: v.optional(v.string()),
     baseBranch: v.optional(v.string()),
     masterSessionId: v.optional(v.string()),
   },
   returns: v.object({ sessionId: v.string(), numId: v.number() }),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, title, message, model, baseBranch, masterSessionId },
+    { clerkUserId, repoId, title, message, baseBranch, masterSessionId },
   ) => {
+    // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
+    // Passing normalizeAIModel(undefined) here used to force claude:sonnet on
+    // every MCP-created session regardless of the repo's configured default.
     const createArgs: Record<string, JsonValue> = {
       repoId,
       message,
-      model: normalizeAIModel(model),
       sentViaOrchestrator: true,
     };
     if (title) createArgs.title = title;

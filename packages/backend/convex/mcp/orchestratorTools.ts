@@ -231,12 +231,7 @@ export function registerFleetTools(
         .optional()
         .describe("Session title. A title is generated if omitted."),
       message: z.string().describe("The first message to run in the session."),
-      model: z
-        .enum(MCP_CLAUDE_MODELS)
-        .optional()
-        .describe(
-          'Claude model ("opus", "sonnet", "haiku", or "fable"). Defaults to the platform default (sonnet).',
-        ),
+      // No `model`: the session runs on the repo's configured default model.
       baseBranch: z
         .string()
         .optional()
@@ -244,7 +239,7 @@ export function registerFleetTools(
           "Branch to base work off of. If omitted, uses the repo's default base branch.",
         ),
     },
-    async ({ repoName, app, title, message, model, baseBranch }) => {
+    async ({ repoName, app, title, message, baseBranch }) => {
       const { userId } = await mcpGetContext(ctx, clerkUserId);
       const repos = await mcpListUserRepos(ctx, userId);
       const matched = matchRepoByName(repos, repoName, app);
@@ -258,7 +253,6 @@ export function registerFleetTools(
           repoId: repo.id,
           title,
           message,
-          model,
           baseBranch,
           masterSessionId: tokenMasterSessionId,
         },
