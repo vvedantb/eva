@@ -615,6 +615,9 @@ export const githubRepoFields = {
   defaultFastMode: v.optional(v.boolean()),
   sessionsVncEnabled: v.optional(v.boolean()),
   sessionsVscodeEnabled: v.optional(v.boolean()),
+  // Opt-out: when true, other sandboxes may not mint read tokens for this
+  // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
+  sandboxReadExcluded: v.optional(v.boolean()),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),

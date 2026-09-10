@@ -85,6 +85,7 @@ import type * as _github_userTokens from "../_github/userTokens.js";
 import type * as _githubRepos_helpers from "../_githubRepos/helpers.js";
 import type * as _githubRepos_mutations from "../_githubRepos/mutations.js";
 import type * as _githubRepos_queries from "../_githubRepos/queries.js";
+import type * as _githubRepos_sandboxRead from "../_githubRepos/sandboxRead.js";
 import type * as _githubRepos_sandboxRepoPick from "../_githubRepos/sandboxRepoPick.js";
 import type * as _githubRepos_sync from "../_githubRepos/sync.js";
 import type * as _harnessSkills_filter from "../_harnessSkills/filter.js";
@@ -476,6 +477,7 @@ declare const fullApi: ApiFromModules<{
   "_githubRepos/helpers": typeof _githubRepos_helpers;
   "_githubRepos/mutations": typeof _githubRepos_mutations;
   "_githubRepos/queries": typeof _githubRepos_queries;
+  "_githubRepos/sandboxRead": typeof _githubRepos_sandboxRead;
   "_githubRepos/sandboxRepoPick": typeof _githubRepos_sandboxRepoPick;
   "_githubRepos/sync": typeof _githubRepos_sync;
   "_harnessSkills/filter": typeof _harnessSkills_filter;

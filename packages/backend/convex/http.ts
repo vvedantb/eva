@@ -278,6 +278,15 @@ function extractBearerSecret(request: Request): string | null {
   return secret.length > 0 ? secret : null;
 }
 
+/** The repository git asked about, sent by the in-sandbox credential helper. */
+const gitCredentialsBodySchema = z.object({ path: z.string().optional() });
+
+/** Reads the requested repository path from the helper's body, if any. */
+function parseGitCredentialsPath(body: unknown): string | undefined {
+  const parsed = gitCredentialsBodySchema.safeParse(body);
+  return parsed.success ? parsed.data.path : undefined;
+}
+
 http.route({
   path: "/api/git-credentials",
   method: "POST",
@@ -286,16 +295,35 @@ http.route({
     if (!secret) {
       return new Response("Unauthorized", { status: 401 });
     }
-    const installationId: number | null = await ctx.runQuery(
-      internal.sandboxGitCredentials.lookupInstallationBySecret,
-      { secret },
+    const body: unknown = await request.json().catch(() => null);
+    const resolved = await ctx.runQuery(
+      internal.sandboxGitCredentials.resolveCredentialRequest,
+      { secret, path: parseGitCredentialsPath(body) },
     );
-    if (installationId === null) {
-      return new Response("Unauthorized", { status: 401 });
+    if (resolved.kind === "denied") {
+      console.warn(`[git-credentials][denied] ${resolved.reason}`);
+      return new Response("Forbidden", { status: 403 });
+    }
+    if (resolved.kind === "sibling") {
+      console.log(
+        `[git-credentials][sibling-read] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+      );
+      const siblingToken: string = await ctx.runAction(
+        internal.githubAuth.mintReadOnlyRepoToken,
+        {
+          installationId: resolved.installationId,
+          githubId: resolved.githubId,
+          name: resolved.name,
+        },
+      );
+      return Response.json({
+        username: "x-access-token",
+        token: siblingToken,
+      });
     }
     const token: string = await ctx.runAction(
       internal.githubAuth.mintInstallationToken,
-      { installationId },
+      { installationId: resolved.installationId },
     );
     return Response.json({ username: "x-access-token", token });
   }),
