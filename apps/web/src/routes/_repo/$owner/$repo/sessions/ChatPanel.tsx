@@ -168,7 +168,7 @@ export function ChatPanel({
     onTraitsPersist: setTraits,
     providerAccountId: stickyProviderAccountId,
     onProviderAccountChange: (next: string | null) => {
-      setStickyProviderAccountId(
+      void setStickyProviderAccountId(
         next === null ? null : (resolveAccountId(next) ?? null),
       );
     },
@@ -226,6 +226,16 @@ export function ChatPanel({
     // A stopped session sandbox still gets the offer: sending wakes it.
     compactionReadOnly: isReadOnly,
     backgroundAgents,
+    usageLimitRecovery: isReadOnly
+      ? undefined
+      : {
+          messages,
+          accounts,
+          resolveAccountId,
+          currentAccountId: stickyProviderAccountId,
+          onSwitchAccount: setStickyProviderAccountId,
+          isSandboxActive,
+        },
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
     onSendCommand: (command) => {
