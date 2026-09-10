@@ -21,6 +21,7 @@ import {
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,
@@ -84,7 +85,8 @@ function SessionPrIcon({
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
 }) {
-  if (!prUrl) return null;
+  const simpleView = useSimpleView();
+  if (simpleView || !prUrl) return null;
   return (
     <IconGitPullRequest
       size={12}
