@@ -16,6 +16,7 @@ import {
   buildConflictResolutionPrompt,
 } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
+import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 
 const MONTH_NAMES = [
   "January",
@@ -229,6 +230,14 @@ export const getTaskData = internalQuery({
 
     const rootDirectory = repo.rootDirectory ?? "";
 
+    // Sibling repositories this sandbox's git credentials can read (owner is
+    // the task owner, whose access the credential helper mints tokens against).
+    const readableRepos = await listReadableSiblingRepos(
+      ctx.db,
+      task.createdBy,
+      repo._id,
+    );
+
     const prompt =
       args.mode === "resolve_conflicts"
         ? buildConflictResolutionPrompt(
@@ -254,6 +263,7 @@ export const getTaskData = internalQuery({
             projectContext,
             repo.systemPrompt,
             previousRunSummary,
+            readableRepos,
           );
 
     return {

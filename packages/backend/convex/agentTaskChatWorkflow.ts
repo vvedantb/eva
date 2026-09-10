@@ -34,6 +34,7 @@ import {
   TASK_CHAT_STREAM_PREFIX,
 } from "./workflowWatchdog";
 import { buildAgentTaskChatPrompt } from "./_agentTasks/chatPrompt";
+import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
@@ -107,6 +108,14 @@ async function buildTaskChatTurnPrompt(
 
   const branchName = await resolveTaskBranchName(ctx.db, task);
 
+  // Sibling repositories this sandbox's git credentials can read (owner is the
+  // task owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    task.createdBy,
+    repo._id,
+  );
+
   let prompt = buildAgentTaskChatPrompt({
     repoOwner: repo.owner,
     repoName: repo.name,
@@ -121,6 +130,7 @@ async function buildTaskChatTurnPrompt(
     customInstructionsBlock,
     systemPrompt: repo.systemPrompt,
     devPort: task.devPort ?? repo.devPort,
+    readableRepos,
   });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
