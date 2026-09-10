@@ -2855,7 +2855,7 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
 function captureClaudeUsageLimitError(error) {
   if (!error) return;
   const message = error.toLowerCase();
-  if (!message.includes("out of extra usage") && !message.includes("rate limit") && !message.includes("usage limit") && !message.includes("spend limit") && !message.includes("token limit exceeded")) {
+  if (!message.includes("out of extra usage") && !message.includes("rate limit") && !message.includes("usage limit") && !message.includes("session limit") && !message.includes("spend limit") && !message.includes("token limit exceeded")) {
     return;
   }
   const snapshot = ensureSnapshot();
@@ -7959,7 +7959,9 @@ function sleep4(ms) {
 function cursorTurnWorkerEntryPath() {
   const entryPath = process.argv[1];
   if (!entryPath) {
-    throw new Error("Cursor turn worker could not resolve the callback entrypoint");
+    throw new Error(
+      "Cursor turn worker could not resolve the callback entrypoint"
+    );
   }
   return entryPath;
 }

@@ -5,13 +5,19 @@
  * added here would put the whole workflow module graph in the browser bundle.
  */
 
-/** Checks whether an error message indicates a Claude API usage limit. */
+/**
+ * Checks whether an error message indicates a Claude API usage limit.
+ * Covers the wordings Claude ships today: "You're out of extra usage",
+ * "You've hit your session limit", "You've hit your individual spend limit",
+ * plus generic rate-limit, usage-limit and token-limit copy.
+ */
 export function isUsageLimitError(errorMsg: string): boolean {
   const message = errorMsg.toLowerCase();
   return (
     message.includes("out of extra usage") ||
     message.includes("rate limit") ||
     message.includes("usage limit") ||
+    message.includes("session limit") ||
     message.includes("spend limit") ||
     message.includes("token limit exceeded")
   );
