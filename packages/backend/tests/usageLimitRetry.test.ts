@@ -31,15 +31,43 @@ test("applyChatTurnResult stamps errorType from isUsageLimitError", () => {
   expect(chatResult).toContain('from "../_taskWorkflow/recovery"');
 });
 
+/**
+ * `functionBody` above ends at the first `\n}`, which is not how a
+ * `export const x = authMutation({ … });` definition closes.
+ */
+function mutationBody(source: string, name: string): string {
+  const startAt = source.indexOf(`export const ${name} =`);
+  expect(startAt, `${name} moved or was renamed`).toBeGreaterThan(-1);
+  const endAt = source.indexOf("\n});", startAt);
+  return source.slice(startAt, endAt < 0 ? undefined : endAt);
+}
+
 /** Nobody should re-implement turn staging by hand inside the retry path. */
-test("retryLastTurnWithAccount reuses the shared staging helpers", () => {
-  const execution = readSource("_sessions/execution.ts");
-  const startAt = execution.indexOf("export const retryLastTurnWithAccount =");
-  expect(startAt, "retryLastTurnWithAccount moved").toBeGreaterThan(-1);
-  const endAt = execution.indexOf("\n});", startAt);
-  const body = execution.slice(startAt, endAt < 0 ? undefined : endAt);
-  expect(body).toContain("stageAndStartSessionTurn(");
+function expectRetryReusesStaging(relative: string, stagingHelper: string) {
+  const body = mutationBody(readSource(relative), "retryLastTurnWithAccount");
+  expect(body).toContain(stagingHelper);
   expect(body).toContain("resultTargetMessage(");
   expect(body).toContain('"rate_limit"');
   expect(body).not.toContain("notifyChatMentions(");
+}
+
+test("retryLastTurnWithAccount reuses the shared staging helpers", () => {
+  expectRetryReusesStaging(
+    "_sessions/execution.ts",
+    "stageAndStartSessionTurn(",
+  );
+});
+
+test("task chat's retryLastTurnWithAccount reuses the shared staging helper", () => {
+  expectRetryReusesStaging(
+    "agentTaskChatWorkflow.ts",
+    "stageAndStartTaskChatTurn(",
+  );
+});
+
+test("project chat's retryLastTurnWithAccount reuses the shared staging helper", () => {
+  expectRetryReusesStaging(
+    "projectChatWorkflow.ts",
+    "stageAndStartProjectChatTurn(",
+  );
 });

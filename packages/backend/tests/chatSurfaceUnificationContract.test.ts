@@ -82,6 +82,26 @@ test("all three chat surface adapters are registered together in chatSurfaceAdap
   expect(body).toContain("projectChatAdapter");
 });
 
+/**
+ * The usage-limit retry shipped for sessions only (#734) because nothing
+ * pinned the three chat surfaces to the same mutation set. This does.
+ */
+test("every chat surface's workflow module exposes the same user-facing recovery mutations", () => {
+  for (const module of [
+    "convex/sessionWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+    "convex/projectChatWorkflow.ts",
+  ]) {
+    const source = readSource(module);
+    expect(source, `${module} is missing retryLastTurnWithAccount`).toContain(
+      "retryLastTurnWithAccount",
+    );
+    expect(source, `${module} is missing requestStopBackgroundAgent`).toContain(
+      "requestStopBackgroundAgent",
+    );
+  }
+});
+
 /** Comments name the very calls these rules rule out, so they have to go first. */
 function readSource(relativePath: string): string {
   return stripComments(

@@ -675,15 +675,17 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
     );
   });
 
-  test("startExecute does not prewarm a closed or stopping preview sandbox", () => {
-    const startExecute = taskChat.slice(
-      taskChat.indexOf("export const startExecute"),
-      taskChat.indexOf("export const enqueueMessage"),
+  test("turn staging does not prewarm a closed or stopping preview sandbox", () => {
+    // The guard sits with the prewarm, in the helper both startExecute and
+    // retryLastTurnWithAccount stage their turn through.
+    const staging = taskChat.slice(
+      taskChat.indexOf("async function stageAndStartTaskChatTurn"),
+      taskChat.indexOf("export const agentTaskChatCompleteEvent"),
     );
-    expect(startExecute).toContain(
+    expect(staging).toContain(
       'task.reviewTaskSandboxStatus !== "closed"',
     );
-    expect(startExecute).toContain(
+    expect(staging).toContain(
       'task.reviewTaskSandboxStatus !== "stopping"',
     );
   });

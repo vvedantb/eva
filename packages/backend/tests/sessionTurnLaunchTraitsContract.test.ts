@@ -291,18 +291,28 @@ describe("every chat workflow start normalises its launch traits", () => {
  * The send path prewarms the daemon itself, one scheduler tick before the
  * workflow starts and prewarms it again. Both have to agree with the page-open
  * prewarm's sig, so this call site needs the same normalisation the workflow
- * args got — otherwise the turn's own prewarm kills the page-open daemon.
+ * args got — otherwise the turn's own prewarm kills the page-open daemon. Task
+ * and project chat stage every turn (composer send and usage-limit retry)
+ * through one helper each, so that helper is where the normalisation lives.
  */
-describe("each chat startExecute prewarms with normalised traits", () => {
-  const handlers: Array<{ label: string; path: string }> = [
-    { label: "task chat", path: "../convex/agentTaskChatWorkflow.ts" },
-    { label: "project chat", path: "../convex/projectChatWorkflow.ts" },
+describe("each chat staging helper prewarms with normalised traits", () => {
+  const handlers: Array<{ label: string; path: string; helper: string }> = [
+    {
+      label: "task chat",
+      path: "../convex/agentTaskChatWorkflow.ts",
+      helper: "async function stageAndStartTaskChatTurn(",
+    },
+    {
+      label: "project chat",
+      path: "../convex/projectChatWorkflow.ts",
+      helper: "async function stageAndStartProjectChatTurn(",
+    },
   ];
 
-  for (const { label, path } of handlers) {
+  for (const { label, path, helper } of handlers) {
     describe(label, () => {
       const text = source(path);
-      const handlerAt = text.indexOf("export const startExecute");
+      const handlerAt = text.indexOf(helper);
       const nextExportAt = text.indexOf("\nexport ", handlerAt + 1);
       const body = text.slice(
         handlerAt,
@@ -312,10 +322,8 @@ describe("each chat startExecute prewarms with normalised traits", () => {
       const prewarmAt = body.indexOf("internal.sandbox.prewarmEntityDaemon");
       const workflowStartAt = body.indexOf("workflow.start(");
 
-      test("startExecute still prewarms and starts a workflow", () => {
-        expect(handlerAt, "startExecute moved or was renamed").toBeGreaterThan(
-          -1,
-        );
+      test("the staging helper still prewarms and starts a workflow", () => {
+        expect(handlerAt, `${helper} moved or was renamed`).toBeGreaterThan(-1);
         expect(
           prewarmAt,
           "the turn prewarm scheduler call moved",
@@ -335,7 +343,7 @@ describe("each chat startExecute prewarms with normalised traits", () => {
       test("the prewarm spreads the normalised traits, raw args reach neither", () => {
         const prewarmArgs = braceBlock(body, prewarmAt);
         expect(prewarmArgs).toContain("...launchTraits");
-        for (const arg of RAW_COMPOSER_ARGS) {
+        for (const arg of [...RAW_COMPOSER_ARGS, ...RAW_TRAIT_ARGS]) {
           expect(
             prewarmArgs,
             `${arg} reaches the turn prewarm unnormalised`,

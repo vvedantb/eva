@@ -238,6 +238,20 @@ export function ProjectSandboxChatPanel({
     // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
     compactionReadOnly: !isSandboxActive,
     backgroundAgents: project?.backgroundAgents,
+    // Owner-only, like the account picker: project chat is owner-sticky. The
+    // account list is `accounts`, not `displayAccounts` — the synthetic owner
+    // row exists only for non-owners, who never see the card.
+    usageLimitRecovery:
+      isOwner && project
+        ? {
+            messages: messages ?? [],
+            accounts,
+            resolveAccountId,
+            currentAccountId: project.providerAccountId ?? null,
+            onSwitchAccount: switchProviderAccount,
+            isSandboxActive,
+          }
+        : undefined,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
     onSendCommand: (command) => {
