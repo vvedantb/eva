@@ -7,6 +7,59 @@ export const TURN_STARTUP_LEASE_MS = 15 * 60 * 1000;
 export const TURN_RUNNING_LEASE_MS = 2 * 60 * 1000;
 export const TURN_FINALIZING_LEASE_MS = 10 * 60 * 1000;
 
+/**
+ * How long an expired lease is tolerated while the sandbox probe still reports
+ * the agent process alive (or the probe itself is unreachable) before the turn
+ * is finalised anyway. A frozen-but-alive daemon — a VM swapping hard under
+ * parallel sub agents — used to lose its turn the moment its 2-minute lease
+ * lapsed. The absolute 2h `RUN_TIMEOUT_MS` cap still applies via
+ * `turnLeaseExpiry`, so grace can never extend a turn past it.
+ */
+export const TURN_SILENT_ALIVE_GRACE_MS = 10 * 60 * 1000;
+
+export type ExpiredTurnLeaseCause =
+  | "sandbox_stopped"
+  | "process_dead"
+  | "silent_timeout";
+
+export type ExpiredTurnLeaseDecision =
+  | { action: "grace" }
+  | { action: "finalize"; cause: ExpiredTurnLeaseCause };
+
+/**
+ * Decides what the lease reconciler does with one open turn whose lease
+ * expired. A confirmed-dead (or unprobeable-because-absent) sandbox is
+ * finalised immediately; a process the probe still sees running is granted
+ * grace until it has been silent for `TURN_SILENT_ALIVE_GRACE_MS`.
+ *
+ * `liveness === null` means the turn has no sandbox to probe, so nothing can
+ * still be running for it.
+ */
+export function expiredTurnLeaseDecision(input: {
+  liveness: { alive: boolean; reason: string } | null;
+  silentSince: number | undefined;
+  now: number;
+}): ExpiredTurnLeaseDecision {
+  if (input.liveness === null) {
+    return { action: "finalize", cause: "process_dead" };
+  }
+  if (input.liveness.reason === "sandbox_not_started") {
+    return { action: "finalize", cause: "sandbox_stopped" };
+  }
+  if (!input.liveness.alive) {
+    return { action: "finalize", cause: "process_dead" };
+  }
+  // Alive, or the probe could not reach the sandbox to say otherwise — both
+  // get grace, bounded so a permanently wedged process still settles.
+  if (
+    input.silentSince !== undefined &&
+    input.now - input.silentSince >= TURN_SILENT_ALIVE_GRACE_MS
+  ) {
+    return { action: "finalize", cause: "silent_timeout" };
+  }
+  return { action: "grace" };
+}
+
 export function isTerminalTurnState(
   state: TurnState,
 ): state is TerminalTurnState {

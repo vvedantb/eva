@@ -206,6 +206,12 @@ export const turnFields = {
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  /**
+   * Set by the lease reconciler the first time it finds the lease expired
+   * while the sandbox process was still alive; cleared by the next successful
+   * lease renewal. Bounds how long a silent-but-alive turn is tolerated.
+   */
+  silentSince: v.optional(v.number()),
 };
 
 export const pendingTurnFields = {

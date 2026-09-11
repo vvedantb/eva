@@ -189,7 +189,11 @@ export async function renewTurnLease(
   }
   const state = turn.state === "finalizing" ? "finalizing" : "running";
   const durationMs = turnLeaseDurationMs(state);
+  // A turn the reconciler marked silent must always write, even when the
+  // renewal-throttle would skip it: the write is what clears `silentSince`,
+  // and without it a recovered daemon stays on the grace clock.
   if (
+    turn.silentSince === undefined &&
     !shouldWriteTurnLeaseRenewal({
       currentState: turn.state,
       nextState: state,
@@ -209,8 +213,41 @@ export async function renewTurnLease(
     turnStartedAt: turn.turnStartedAt,
     now,
   });
-  await ctx.db.patch(turn._id, { state, leaseExpiresAt });
+  await ctx.db.patch(turn._id, {
+    state,
+    leaseExpiresAt,
+    silentSince: undefined,
+  });
   return { status: "renewed", leaseExpiresAt, durationMs };
+}
+
+/**
+ * Extends an expired lease for a turn whose sandbox process the watchdog can
+ * still see running. Stamps `silentSince` on the first grace cycle so the
+ * reconciler can bound how long it keeps waiting; later cycles keep the
+ * original stamp. The absolute 2-hour limit is enforced exactly as
+ * `renewTurnLease` does.
+ */
+export async function graceExpiredTurnLease(
+  ctx: MutationCtx,
+  turn: Doc<"turns">,
+  now: number,
+): Promise<void> {
+  if (!turn.open || isTerminalTurnState(turn.state)) return;
+  if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
+    await closeTurn(ctx, turn, "error", {
+      error: "Turn exceeded the 2-hour limit",
+    });
+    return;
+  }
+  await ctx.db.patch(turn._id, {
+    leaseExpiresAt: turnLeaseExpiry({
+      state: turn.state,
+      turnStartedAt: turn.turnStartedAt,
+      now,
+    }),
+    silentSince: turn.silentSince ?? now,
+  });
 }
 
 export async function resolveCompletionTurn(
