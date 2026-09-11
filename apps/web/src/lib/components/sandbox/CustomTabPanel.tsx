@@ -25,14 +25,22 @@ interface CustomTabPanelProps {
    * (parent hides this panel) but pauses readiness polling.
    */
   isForeground?: boolean;
+  /**
+   * App Preview port; custom tabs are served through the Preview's auth proxy
+   * under /__tab/<port>/ because Vercel exposes a single public app slot.
+   */
+  previewPort: number;
   repoId: Id<"githubRepos">;
 }
 
 const MAX_ATTEMPTS = 40;
 
 /**
- * Renders a user-defined custom tab: a fixed sandbox port resolved through the
- * same auth proxy as the Preview tab and shown in an iframe. Unlike the Editor /
+ * Renders a user-defined custom tab: a fixed sandbox port shown in an iframe.
+ * Vercel sandboxes expose a single public app slot, so the tab is not given its
+ * own public origin — it is served by the Preview's auth proxy under
+ * `/__tab/<port>/`, which is why this asks for the Preview port and passes the
+ * tab's own port as `customTabPort`. Unlike the Editor /
  * Desktop panels there is no start/stop gate — the service (Supabase, Convex,
  * ...) is started by the app's own dev / startup commands, so this auto-polls
  * `getPreviewUrl` until the port is reachable.
@@ -46,6 +54,7 @@ export function CustomTabPanel({
   sandboxId,
   isActive,
   isForeground = true,
+  previewPort,
   repoId,
 }: CustomTabPanelProps) {
   const [url, setUrl] = useState<string | null>(null);
@@ -84,7 +93,7 @@ export function CustomTabPanel({
     setError(null);
     setState("loading");
     return stopPolling;
-  }, [isActive, sandboxId, port, retryNonce]);
+  }, [isActive, sandboxId, port, previewPort, retryNonce]);
 
   // Poll only while the sandbox is up and this tab is foreground; keep iframe
   // state when the user switches away.
@@ -108,7 +117,8 @@ export function CustomTabPanel({
       try {
         const data = await getPreviewUrl({
           sandboxId,
-          port,
+          port: previewPort,
+          customTabPort: port,
           checkReady: true,
           repoId,
         });
@@ -145,6 +155,7 @@ export function CustomTabPanel({
     isActive,
     sandboxId,
     port,
+    previewPort,
     isForeground,
     url,
     state,
