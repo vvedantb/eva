@@ -8,7 +8,10 @@ import { Slide06Automerge } from "./06-automerge";
 import { Slide07Sandbox } from "./07-sandbox";
 import { Slide08More } from "./08-more";
 import { Slide09Team } from "./09-team";
-import { Slide10Closing } from "./10-closing";
+import { Slide10CodeReviews } from "./10-code-reviews";
+import { Slide11WhatsNext } from "./11-whats-next";
+import { Slide12Future } from "./12-future";
+import { Slide13Closing } from "./13-closing";
 
 export interface DeckSlide {
   /** Stable id, mirrors the file name. */
@@ -58,5 +61,23 @@ export const SLIDES: DeckSlide[] = [
   { id: "08-more", title: "And more", Component: Slide08More, steps: 0 },
   // End TODO(slide-agents).
   { id: "09-team", title: "The team", Component: Slide09Team, steps: 4 },
-  { id: "10-closing", title: "Closing", Component: Slide10Closing, steps: 0 },
+  {
+    id: "10-code-reviews",
+    title: "Code reviews",
+    Component: Slide10CodeReviews,
+    steps: 3,
+  },
+  {
+    id: "11-whats-next",
+    title: "What's next",
+    Component: Slide11WhatsNext,
+    steps: 2,
+  },
+  {
+    id: "12-future",
+    title: "Where this is heading",
+    Component: Slide12Future,
+    steps: 3,
+  },
+  { id: "13-closing", title: "Closing", Component: Slide13Closing, steps: 0 },
 ];

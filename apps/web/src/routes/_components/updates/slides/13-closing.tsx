@@ -3,7 +3,7 @@ import { LogoMark } from "@/lib/components/LogoMark";
 import { BlurWordsTitle } from "../_components/BlurWordsTitle";
 import { BRAND, Body, Reveal, Shell } from "../_components/DeckPrimitives";
 
-export function Slide10Closing() {
+export function Slide13Closing() {
   return (
     <Shell center>
       <BlurWordsTitle size="xl" lines={["Built in Eva,", "by Eva."]} />
