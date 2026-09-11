@@ -566,7 +566,9 @@ describe("which tokens get which tools", () => {
 
     const entityRef = convexSource("mcp/entityRef.ts");
     const target = entityRef.indexOf("resolveChatTargetForUser");
-    const check = entityRef.indexOf("assertRepoAccess(target.repoId");
+    // The per-user check (not the sandbox token's repo pin — chats are
+    // reachable across every repo the user can open in Eva).
+    const check = entityRef.indexOf("assertUserRepoAccess(target.repoId");
     expect(check).toBeGreaterThan(target);
   });
 
