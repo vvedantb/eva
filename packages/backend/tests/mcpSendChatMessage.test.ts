@@ -566,7 +566,9 @@ describe("which tokens get which tools", () => {
 
     const entityRef = convexSource("mcp/entityRef.ts");
     const target = entityRef.indexOf("resolveChatTargetForUser");
-    const check = entityRef.indexOf("assertRepoAccess(target.repoId");
+    // The per-user check (not the sandbox token's repo pin — chats are
+    // reachable across every repo the user can open in Eva).
+    const check = entityRef.indexOf("assertUserRepoAccess(target.repoId");
     expect(check).toBeGreaterThan(target);
   });
 
@@ -813,10 +815,9 @@ describe("MCP sends are badged; composer-typed messages are not", () => {
   });
 });
 
-describe("user MCP accepts fable and runs it as Eva's Fable model", () => {
+describe("user MCP accepts fable on per-turn sends and runs it as Eva's Fable model", () => {
   const tools = convexSource("mcp/tools.ts");
   const orchestratorTools = convexSource("mcp/orchestratorTools.ts");
-  const nodeActions = convexSource("mcp/nodeActions.ts");
   const schema = z.enum(MCP_CLAUDE_MODELS);
 
   test("the shared MCP model enum accepts fable and rejects grok", () => {
@@ -827,43 +828,19 @@ describe("user MCP accepts fable and runs it as Eva's Fable model", () => {
     expect(schema.safeParse("claude:claude-fable-5").success).toBe(false);
   });
 
-  test("every MCP tool with a Claude model picker uses that enum", () => {
+  test("only the per-turn send tools carry a model picker, and they use that enum", () => {
     expect(tools).not.toContain('.enum(["opus", "sonnet", "haiku"])');
     expect(orchestratorTools).not.toContain('.enum(["opus", "sonnet", "haiku"])');
-    expect((tools.match(/enum\(MCP_CLAUDE_MODELS\)/g) ?? []).length).toBe(3);
+    // send_chat_message
+    expect((tools.match(/enum\(MCP_CLAUDE_MODELS\)/g) ?? []).length).toBe(1);
+    // modelArg, shared by send_agent_message
     expect((orchestratorTools.match(/enum\(MCP_CLAUDE_MODELS\)/g) ?? []).length).toBe(
-      2,
+      1,
     );
   });
 
-  test("create_and_run_task persists fable as claude:claude-fable-5-1, not the repo default", () => {
-    const validator = nodeActions.slice(
-      nodeActions.indexOf("const mcpClaudeModelValidator"),
-      nodeActions.indexOf("export const createTask"),
-    );
-    const createTask = nodeActions.slice(
-      nodeActions.indexOf("export const createTask"),
-      nodeActions.indexOf("export const startTaskExecution"),
-    );
-    const createBatch = nodeActions.slice(
-      nodeActions.indexOf("export const createTasksBatch"),
-      nodeActions.indexOf("export const createEvaDoc"),
-    );
-    expect(validator).toContain('v.literal("fable")');
-    expect(createTask).toContain("mcpClaudeModelValidator");
-    expect(createTask).toContain("normalizeAIModel(model)");
-    expect(createTask).not.toContain("mutationArgs.model = model;");
-    expect(createBatch).toContain("normalizeAIModel(model)");
-    expect(createBatch).not.toContain("mutationArgs.model = model;");
+  test("send_chat_message canonicalizes fable", () => {
     expect(normalizeAIModel("fable")).toBe("claude:claude-fable-5-1");
-  });
-
-  test("create_session and send_chat_message also canonicalize fable", () => {
-    const createSession = nodeActions.slice(
-      nodeActions.indexOf("export const orchestratorCreateSession"),
-      nodeActions.indexOf("export const orchestratorSetWatch"),
-    );
-    expect(createSession).toContain("normalizeAIModel(model)");
     expect(
       resolveAgentDelivery({
         isBusy: false,
@@ -871,5 +848,70 @@ describe("user MCP accepts fable and runs it as Eva's Fable model", () => {
         storedModel: "cursor:grok-4.6",
       }).model,
     ).toBe("claude:claude-fable-5-1");
+  });
+});
+
+/**
+ * 2026-09-10: carepulse-ts runs cursor:grok-4.6 by default, and every task
+ * created through the MCP arrived as Claude because the tool offered a
+ * Claude-only `model` enum that agents filled in. `create_session` was worse:
+ * it always sent `normalizeAIModel(undefined)` (claude:sonnet), so the repo
+ * default never applied even when the caller omitted the model. Creation now
+ * takes no model at all; the mutations resolve `repo.defaultModel`.
+ */
+describe("MCP task and session creation always run on the repo default model", () => {
+  const tools = convexSource("mcp/tools.ts");
+  const orchestratorTools = convexSource("mcp/orchestratorTools.ts");
+  const nodeActions = convexSource("mcp/nodeActions.ts");
+
+  // Code only: the comments explaining the absence of a model mention it.
+  const between = (source: string, start: string, end: string): string =>
+    source
+      .slice(source.indexOf(start), source.indexOf(end))
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n");
+
+  test("the task tools expose no model argument", () => {
+    const taskArgs = between(tools, "const taskArgs = {", "type TaskInput = {");
+    const batch = between(tools, '"create_tasks_batch"', '"send_chat_message"');
+    expect(taskArgs).not.toMatch(/\bmodel\b/);
+    expect(batch).not.toMatch(/\bmodel\b/);
+    expect(between(tools, "type TaskInput = {", "async function createTaskForRepo")).not.toMatch(
+      /\bmodel\b/,
+    );
+  });
+
+  test("create_session exposes no model argument", () => {
+    const createSession = between(
+      orchestratorTools,
+      '"create_session"',
+      '"watch_agent"',
+    );
+    expect(createSession).not.toMatch(/\bmodel\b/);
+  });
+
+  test("the backing actions never send a model to the create mutations", () => {
+    const createTask = between(
+      nodeActions,
+      "export const createTask",
+      "export const startTaskExecution",
+    );
+    const createBatch = between(
+      nodeActions,
+      "export const createTasksBatch",
+      "export const createEvaDoc",
+    );
+    const createSession = between(
+      nodeActions,
+      "export const orchestratorCreateSession",
+      "export const orchestratorSetWatch",
+    );
+    for (const action of [createTask, createBatch, createSession]) {
+      expect(action).not.toMatch(/\bmodel:/);
+      expect(action).not.toContain("mutationArgs.model");
+      expect(action).not.toContain("normalizeAIModel(");
+    }
+    expect(nodeActions).not.toContain("mcpClaudeModelValidator");
   });
 });
