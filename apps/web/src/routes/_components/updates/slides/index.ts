@@ -12,7 +12,8 @@ import { Slide10CodeReviews } from "./10-code-reviews";
 import { Slide11WhatsNext } from "./11-whats-next";
 import { Slide12Future } from "./12-future";
 import { Slide13Developer } from "./13-developer";
-import { Slide14Closing } from "./14-closing";
+import { Slide14Personal } from "./14-personal";
+import { Slide15Closing } from "./15-closing";
 
 export interface DeckSlide {
   /** Stable id, mirrors the file name. */
@@ -86,5 +87,11 @@ export const SLIDES: DeckSlide[] = [
     Component: Slide13Developer,
     steps: 3,
   },
-  { id: "14-closing", title: "Closing", Component: Slide14Closing, steps: 0 },
+  {
+    id: "14-personal",
+    title: "Eva and everyone else",
+    Component: Slide14Personal,
+    steps: 3,
+  },
+  { id: "15-closing", title: "Closing", Component: Slide15Closing, steps: 0 },
 ];
