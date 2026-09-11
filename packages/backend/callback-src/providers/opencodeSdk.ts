@@ -9,10 +9,11 @@ import {
 } from "../config.js";
 import { evaMcpServers } from "../evaMcp.js";
 import { updateThinkingStep } from "../parse/canonical.js";
-import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
+import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import {
   appendToRawLogFile,
-  appendToRawOutput,
+  recordSdkAttemptFailure,
+  recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { callbackState as S, resetAttemptState } from "../runtime/state.js";
@@ -22,6 +23,7 @@ import {
 } from "../session/opencodeSession.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
 import { log } from "../utils.js";
+import { buildStandardSdkAttemptResult } from "./attemptResult.js";
 import { resolvePinnedSdkEntry } from "./claudeSdk.js";
 import {
   ensureOpencodeServer,
@@ -397,9 +399,7 @@ export async function runOpencodeSdkAttempt(
           sessionMode.sessionId +
           " unknown to the server — starting a fresh session",
       );
-      appendToRawLogFile(
-        "[sdk-retry] resume session not found: " + sessionMode.sessionId + "\n",
-      );
+      recordSdkRetry("resume session not found: " + sessionMode.sessionId);
       sessionId = await createFreshSession();
     }
   } else {
@@ -434,10 +434,8 @@ export async function runOpencodeSdkAttempt(
   let lastIdleProbeAt = 0;
 
   const pushLine = (line: string): void => {
-    appendToRawLogFile(line);
+    emitParsedStreamLine(line);
     attemptOutput = trimBufferHead(attemptOutput + line);
-    appendToRawOutput(line);
-    processRealtimeStdoutChunk(line);
   };
 
   const emitPart = (part: OpencodePart): void => {
@@ -635,14 +633,9 @@ export async function runOpencodeSdkAttempt(
     const messageText = error instanceof Error ? error.message : String(error);
     attemptErrorMessage = messageText;
     log("runOpencodeSdkAttempt: turn failed — " + messageText);
-    appendToRawLogFile("[sdk-error] " + messageText + "\n");
-    S.stderrOutput = trimBufferHead(
-      S.stderrOutput +
-        messageText +
-        "\n" +
-        readOpencodeServerLogTail(1_000) +
-        "\n",
-    );
+    recordSdkAttemptFailure(messageText, {
+      extraStderr: readOpencodeServerLogTail(1_000),
+    });
   } finally {
     clearInterval(healthTimer);
     markTerminal();
@@ -674,16 +667,10 @@ export async function runOpencodeSdkAttempt(
       (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") +
       ")",
   );
-  return {
+  return buildStandardSdkAttemptResult({
     code,
-    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
-    timedOutForFirstEvent: false,
-    timedOutForFirstAssistant: false,
-    timedOutAfterFirstText: false,
-    timedOutForZombie: false,
-    toolStallErrorMessage: "",
-  };
+  });
 }

@@ -13,6 +13,7 @@ import {
   messageMediaStorageIds,
   messageNeedsUrlResolution,
 } from "./_messages/media";
+import { resolveStorageEntries } from "./_chat/storageUrls";
 
 const parentIdValidator = messageFields.parentId;
 
@@ -68,42 +69,34 @@ async function resolveMessageUrls(
         return m;
       }
       const attachmentEntries = m.attachmentStorageIds
-        ? await Promise.all(
-            m.attachmentStorageIds.map(async (id) => {
-              const [url, meta] = await Promise.all([
-                ctx.storage.getUrl(id),
-                ctx.storage.getMetadata(id),
-              ]);
-              return {
-                url,
-                contentType: meta?.contentType ?? null,
-              };
-            }),
+        ? await resolveStorageEntries(
+            (id) => ctx.storage.getUrl(id),
+            (id) => ctx.storage.getMetadata(id),
+            m.attachmentStorageIds,
           )
         : undefined;
       const mediaIds = messageMediaStorageIds(m);
-      const media =
+      const mediaEntries =
         mediaIds.length > 0
-          ? await Promise.all(
-              mediaIds.map(async (id) => {
-                const [url, meta] = await Promise.all([
-                  ctx.storage.getUrl(id),
-                  ctx.storage.getMetadata(id),
-                ]);
-                return {
-                  url,
-                  contentType: meta?.contentType ?? null,
-                };
-              }),
+          ? await resolveStorageEntries(
+              (id) => ctx.storage.getUrl(id),
+              (id) => ctx.storage.getMetadata(id),
+              mediaIds,
             )
           : undefined;
       return {
         ...m,
-        media,
+        media: mediaEntries?.map((entry) => ({
+          url: entry.url,
+          contentType: entry.contentType,
+        })),
         attachmentUrls: attachmentEntries
           ? attachmentEntries.map((entry) => entry.url)
           : undefined,
-        attachments: attachmentEntries,
+        attachments: attachmentEntries?.map((entry) => ({
+          url: entry.url,
+          contentType: entry.contentType,
+        })),
       };
     }),
   );

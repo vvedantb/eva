@@ -22,6 +22,7 @@ import {
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
+import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
 import {
   COREPACK_SANDBOX_ENV,
   renderEvaEnvFile,
@@ -355,7 +356,7 @@ export const launchSeedRun = internalAction({
       // ffmpeg for agent-browser WebM recording, baked into the seeded
       // snapshot. Shared with the desktop-start repair so the two cannot drift.
       FFMPEG_INSTALL_SCRIPT,
-      'docker info >/dev/null 2>&1 || sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 & for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done; sudo chmod 666 /var/run/docker.sock 2>/dev/null || true; docker info >/dev/null 2>&1 || { echo "SEEDRUN-FAILED:docker-start"; exit 1; }',
+      buildSeedRunDockerStartCommand(),
       'corepack enable || sudo corepack enable || { echo "SEEDRUN-FAILED:corepack"; exit 1; }',
       'corepack prepare pnpm@10.33.4 --activate || { echo "SEEDRUN-FAILED:pnpm"; exit 1; }',
       // Classic yarn for yarn.lock repos. Soft-fail: yarn installs are best-effort.

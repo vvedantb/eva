@@ -3,7 +3,7 @@ import { existsSync } from "fs";
 import { createInterface } from "readline";
 import { CODEX_BIN_PATH, CODEX_RUNTIME_HOME_DIR, WORK_DIR } from "../config.js";
 import type { JsonObject, JsonValue } from "../types.js";
-import { log, tryParseJson } from "../utils.js";
+import { asJsonObject, log, tryParseJson } from "../utils.js";
 
 export type AppServerNotification = {
   method: string;
@@ -16,14 +16,8 @@ type PendingRequest = {
   timeout: ReturnType<typeof setTimeout>;
 };
 
-function objectValue(value: JsonValue | undefined): JsonObject {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
-
 function responseErrorMessage(message: JsonObject): string {
-  const error = objectValue(message.error);
+  const error = asJsonObject(message.error);
   return typeof error.message === "string"
     ? error.message
     : "Codex App Server request failed";
@@ -141,7 +135,7 @@ export class CodexAppServerClient {
     }
     this.notifications.push({
       method: message.method,
-      params: objectValue(message.params),
+      params: asJsonObject(message.params),
     });
   }
 

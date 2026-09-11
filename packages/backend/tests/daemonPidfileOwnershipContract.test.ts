@@ -9,8 +9,12 @@ const daemonSource = readFileSync(
   join(testsDir, "../callback-src/providers/claudeSdkDaemon.ts"),
   "utf8",
 );
+const helperSource = readFileSync(
+  join(testsDir, "../callback-src/runtime/daemonProcess.ts"),
+  "utf8",
+);
 
-const OWNERSHIP_GATE = "if (readDaemonPidFile() === process.pid) {";
+const OWNERSHIP_GATE = "if (readPidFromFile(params.paths.pid) !== currentPid)";
 
 /**
  * The pidfile IS the single-daemon fence: whoever owns it is the daemon for the
@@ -20,60 +24,43 @@ const OWNERSHIP_GATE = "if (readDaemonPidFile() === process.pid) {";
  * rival reads owner=none, and the entity is left with zero daemons (fix
  * f48e06fe: failTurnAndExit and exitWithoutCompletion both did exactly this).
  *
- * The failure is silent and remote — a turn that simply never gets picked up —
- * so the only cheap guard is structural: every teardown path that removes a
- * marker file must sit directly inside the ownership gate. New exit paths are
- * added to this file regularly, which is precisely the regression risk.
+ * Teardown now lives in cleanOwnedDaemonMarkers so Claude/Cursor/Codex cannot
+ * drift. New exit paths must call that helper (or a wrapper around it).
  */
 describe("daemon marker files are only removed by their owner", () => {
-  const unlinks = [
-    ...daemonSource.matchAll(/unlinkSync\(DAEMON_(?:PID|ENTITY|OPTS)_FILE\)/g),
-  ];
-
-  test("the teardown paths this pins still exist", () => {
-    // Boot claim, deposition fence, failTurnAndExit, exitWithoutCompletion and
-    // the runSdkDaemon finally block — a drop here means a path was removed,
-    // not that the contract got easier.
-    expect(unlinks.length).toBeGreaterThanOrEqual(3);
-    expect(daemonSource).toContain("async function failTurnAndExit(");
-    expect(daemonSource).toContain("async function exitWithoutCompletion(");
-  });
-
-  test.each(unlinks.map((match, index) => [index, match.index] as const))(
-    "unlink #%i is wrapped in the ownership gate",
-    (_index, at) => {
-      const gateAt = daemonSource.lastIndexOf(OWNERSHIP_GATE, at);
-      expect(
-        gateAt,
-        "this unlink can run while a rival owns the pidfile, taking the healthy daemon down with it",
-      ).toBeGreaterThan(-1);
-      // Directly inside the gate: only a `try {`, comments, and sibling marker
-      // unlinks sharing the same try may sit between. A wider gap means the
-      // gate closed before the unlink, or another branch snuck in.
-      const between = daemonSource
-        .slice(gateAt + OWNERSHIP_GATE.length, at)
-        .replace(/^\s*\/[/*].*$/gm, "")
-        .replace(/unlinkSync\(DAEMON_(?:PID|ENTITY|OPTS)_FILE\);/g, "")
-        .trim();
-      expect(
-        between,
-        "the unlink is no longer directly under the ownership gate",
-      ).toBe("try {");
-    },
+  const unlinks = [...helperSource.matchAll(/unlinkSync\(path\)/g)];
+  const helperBody = functionBody(
+    helperSource,
+    "export function cleanOwnedDaemonMarkers(",
   );
 
-  /**
-   * The legacy session-scoped markers are pre-entity-id leftovers cleaned up on
-   * the same path. They name a fixed path shared across daemons, so they are
-   * subject to the identical rival-deletion hazard.
-   */
-  test("legacy session markers are cleaned up under the same gate", () => {
-    const legacyAt = daemonSource.indexOf("resolveLegacySessionDaemonPaths()");
-    expect(legacyAt).toBeGreaterThan(-1);
-    expect(
-      daemonSource.lastIndexOf(OWNERSHIP_GATE, legacyAt),
-      "legacy marker cleanup must not run from a deposed daemon either",
-    ).toBeGreaterThan(-1);
+  test("the teardown paths this pins still exist", () => {
+    expect(unlinks.length).toBeGreaterThanOrEqual(1);
+    expect(daemonSource).toContain("async function failTurnAndExit(");
+    expect(daemonSource).toContain("async function exitWithoutCompletion(");
+    expect(daemonSource).toContain("cleanOwnedMarkers(");
+  });
+
+  test("the shared helper gates every unlink on pidfile ownership", () => {
+    const gateAt = helperBody.indexOf(OWNERSHIP_GATE);
+    const unlinkAt = helperBody.indexOf("unlinkSync(path)");
+    expect(gateAt, "the ownership gate moved").toBeGreaterThan(-1);
+    expect(unlinkAt, "the marker unlink moved").toBeGreaterThan(-1);
+    expect(gateAt).toBeLessThan(unlinkAt);
+    expect(helperBody).toContain("return;");
+  });
+
+  test.each([
+    "failTurnAndExit",
+    "exitWithoutCompletion",
+    "runSdkDaemon",
+  ] as const)("%s tears down through the owned-marker helper", (name) => {
+    const body =
+      name === "runSdkDaemon"
+        ? functionBody(daemonSource, "export async function runSdkDaemon(")
+        : functionBody(daemonSource, `async function ${name}(`);
+    expect(body).toContain("cleanOwnedMarkers(");
+    expect(body).not.toContain("unlinkSync(");
   });
 
   /**
@@ -82,16 +69,27 @@ describe("daemon marker files are only removed by their owner", () => {
    * same entity and flip-flop the shared streaming row.
    */
   test("the boot claim checks for a live rival before writing the pidfile", () => {
-    const rivalAt = daemonSource.indexOf("const rivalPid = readDaemonPidFile()");
-    const writeAt = daemonSource.indexOf(
-      "writeFileSync(DAEMON_PID_FILE, String(process.pid))",
+    const claim = functionBody(
+      helperSource,
+      "export function claimDaemonPidfileBoot(",
     );
+    const rivalAt = claim.indexOf("const rivalPid = readPidFromFile(");
+    const writeAt = claim.indexOf("writeFileSync(params.paths.pid");
     expect(rivalAt, "the boot claim's rival probe moved").toBeGreaterThan(-1);
     expect(writeAt).toBeGreaterThan(-1);
     expect(
       rivalAt,
       "claiming the pidfile before probing lets two daemons own one entity",
     ).toBeLessThan(writeAt);
-    expect(daemonSource.slice(rivalAt, writeAt)).toContain("pidAlive(rivalPid)");
+    expect(claim.slice(rivalAt, writeAt)).toContain("pidAlive(rivalPid)");
+    expect(daemonSource).toContain("claimDaemonPidfileBoot(");
   });
 });
+
+function functionBody(source: string, declaration: string): string {
+  const startAt = source.indexOf(declaration);
+  expect(startAt, `${declaration} moved or was renamed`).toBeGreaterThan(-1);
+  const rest = source.slice(startAt + declaration.length);
+  const nextAt = rest.search(/\nexport /);
+  return declaration + (nextAt < 0 ? rest : rest.slice(0, nextAt));
+}

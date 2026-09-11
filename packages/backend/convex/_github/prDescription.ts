@@ -4,7 +4,8 @@ import { v } from "convex/values";
 import { quote } from "shell-quote";
 import { internalAction } from "../_generated/server";
 import { getInstallationOctokit } from "../githubAuth";
-import { extractPrNumber } from "./helpers";
+import { extractPrNumber } from "./prUrl";
+import { getPullRequest, patchPullRequest } from "./pullRequestWrite";
 import { resolveEnvVars } from "../envVarResolver";
 import { getAIProviderAvailability } from "../_validators/aiModels";
 import { execHandle, getSandboxHandle } from "../_sandbox_runtime/helpers";
@@ -112,17 +113,20 @@ export const generatePrDescription = internalAction({
       // Re-read the body right before writing: a later push may have refreshed
       // the static sections while the model was working, and we must not
       // overwrite them with the copy we read at the start.
-      const { data: latest } = await octokit.rest.pulls.get({
+      const latest = await getPullRequest(octokit, {
         owner: target.owner,
         repo: target.repo,
         pull_number: target.prNumber,
       });
-      await octokit.rest.pulls.update({
-        owner: target.owner,
-        repo: target.repo,
-        pull_number: target.prNumber,
-        body: insertPrDescription(latest.body ?? "", description),
-      });
+      await patchPullRequest(
+        octokit,
+        {
+          owner: target.owner,
+          repo: target.repo,
+          pull_number: target.prNumber,
+        },
+        { body: insertPrDescription(latest.body ?? "", description) },
+      );
     } catch (error) {
       console.error(
         `[pr-description] ${label} failed: ${error instanceof Error ? error.message : String(error)}`,

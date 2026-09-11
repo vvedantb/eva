@@ -33,12 +33,11 @@ import {
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
-
-/** Extracts the PR number from a GitHub PR URL. */
-function extractPrNumber(prUrl: string): number | null {
-  const match = prUrl.match(/\/pull\/(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
-}
+import { extractPrNumber } from "../_github/prUrl";
+import {
+  schedulePrLifecycleActions,
+  selectPrLifecycleTransition,
+} from "../_github/prLifecycleActions";
 
 /** Highest taskNumber among a project's tasks, or 0 if none are numbered. */
 function maxTaskNumberOf(tasks: Doc<"agentTasks">[]): number {
@@ -388,38 +387,24 @@ export const updateStatus = authMutation({
       const prUrl = run?.prUrl;
       const prNumber = prUrl ? extractPrNumber(prUrl) : null;
       const repo = prNumber ? await ctx.db.get(task.repoId) : null;
-      if (prNumber && repo) {
-        const baseArgs = {
-          installationId: repo.installationId,
-          repoOwner: repo.owner,
-          repoName: repo.name,
-          prNumber,
-        };
-        if (enteringCancelled) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.closePullRequest,
-            baseArgs,
-          );
-        } else if (leavingCancelled) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.reopenPullRequest,
-            { ...baseArgs, asReady: args.status === "code_review" },
-          );
-        } else if (enteringCodeReview) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.markPrReadyForReview,
-            baseArgs,
-          );
-        } else if (leavingCodeReview) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.convertPrToDraft,
-            baseArgs,
-          );
-        }
+      const transition = selectPrLifecycleTransition({
+        enteringCancelled,
+        leavingCancelled,
+        enteringCodeReview,
+        leavingCodeReview,
+        asReadyOnReopen: args.status === "code_review",
+      });
+      if (prNumber && repo && transition) {
+        await schedulePrLifecycleActions(
+          ctx,
+          {
+            installationId: repo.installationId,
+            repoOwner: repo.owner,
+            repoName: repo.name,
+            prNumber,
+          },
+          transition,
+        );
       }
     }
 

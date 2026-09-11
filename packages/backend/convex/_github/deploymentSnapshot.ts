@@ -14,6 +14,7 @@ export type DeploymentStatusItem = {
   state: string;
   environment_url?: string | null;
   target_url?: string | null;
+  created_at?: string;
 };
 
 /** Narrow Octokit `rest.repos` surface used by deployment polling. */
@@ -36,6 +37,22 @@ export type GitHubReposDeploymentApi = {
     per_page: number;
   }) => Promise<{ data: DeploymentStatusItem[] }>;
 };
+
+/** Latest status row for one deployment, or null when GitHub has none yet. */
+export async function fetchLatestDeploymentStatus(params: {
+  repos: Pick<GitHubReposDeploymentApi, "listDeploymentStatuses">;
+  owner: string;
+  repo: string;
+  deploymentId: number;
+}): Promise<DeploymentStatusItem | null> {
+  const { data: statuses } = await params.repos.listDeploymentStatuses({
+    owner: params.owner,
+    repo: params.repo,
+    deployment_id: params.deploymentId,
+    per_page: 1,
+  });
+  return statuses[0] ?? null;
+}
 
 export type GitHubDeploymentSnapshot =
   | { kind: "no_deployments"; commitSha: string }
@@ -105,14 +122,14 @@ export async function fetchGitHubDeploymentSnapshot(params: {
     return { kind: "no_deployments", commitSha };
   }
 
-  const { data: statuses } = await params.repos.listDeploymentStatuses({
+  const latestStatus = await fetchLatestDeploymentStatus({
+    repos: params.repos,
     owner: params.owner,
     repo: params.repo,
-    deployment_id: targetDeployment.id,
-    per_page: 1,
+    deploymentId: targetDeployment.id,
   });
 
-  if (statuses.length === 0) {
+  if (latestStatus === null) {
     return {
       kind: "no_status",
       commitSha,
@@ -121,7 +138,6 @@ export async function fetchGitHubDeploymentSnapshot(params: {
     };
   }
 
-  const latestStatus = statuses[0];
   const perCommitUrl =
     latestStatus.environment_url || latestStatus.target_url || undefined;
   return {

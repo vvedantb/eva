@@ -23,17 +23,27 @@ const queueHelpers = readSource("convex/_queues/helpers.ts");
  * message until the real reply arrived (fix 60a9b977).
  */
 describe("no streaming write after completion is delivered", () => {
-  test.each([
-    ["daemon source", daemonSource],
-    ["deployed bundle", bundledScript],
-  ])("finalizeTurn reconciles before completing (%s)", (_label, source) => {
-    const body = functionBody(source, "async function finalizeTurn(");
+  test("daemon source reconciles through the shared helper before completing", () => {
+    const body = functionBody(daemonSource, "async function finalizeTurn(");
+    const reconcileAt = body.indexOf("await reconcileStreamingAndPersist()");
+    const completionAt = body.indexOf("await deliverCompletionWithMedia(");
+    expect(reconcileAt, "the final reconcile moved").toBeGreaterThan(-1);
+    expect(completionAt, "the completion call moved").toBeGreaterThan(-1);
+    expect(reconcileAt).toBeLessThan(completionAt);
+    const afterCompletion = body.slice(completionAt);
+    expect(afterCompletion).not.toContain("setFinalizingState");
+    expect(afterCompletion).not.toContain("reconcileStreamingAndPersist");
+    expect(afterCompletion).not.toContain("sendStreamingHeartbeatUpdate");
+    expect(afterCompletion).not.toContain("flushStreaming(");
+  });
+
+  test("deployed bundle still reconciles before completing", () => {
+    const body = functionBody(bundledScript, "async function finalizeTurn(");
     const reconcileAt = body.indexOf("await setFinalizingState()");
     const completionAt = body.indexOf("await deliverCompletionWithMedia(");
     expect(reconcileAt, "the final reconcile moved").toBeGreaterThan(-1);
     expect(completionAt, "the completion call moved").toBeGreaterThan(-1);
     expect(reconcileAt).toBeLessThan(completionAt);
-
     const afterCompletion = body.slice(completionAt);
     expect(afterCompletion).not.toContain("setFinalizingState");
     expect(afterCompletion).not.toContain("sendStreamingHeartbeatUpdate");

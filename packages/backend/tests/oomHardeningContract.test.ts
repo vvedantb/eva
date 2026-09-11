@@ -46,7 +46,10 @@ describe("the OOM kill order protects the reporter", () => {
   test("the callback keeps its unprivileged best-effort lowering", () => {
     // Belt for environments where the launcher's sudo is unavailable but the
     // process happens to have the capability.
-    expect(callbackIndex).toContain('"/proc/self/oom_score_adj"');
+    expect(callbackIndex).toContain('writeOomScoreAdj("self", "-600")');
+    expect(readSource("callback-src/runtime/daemonProcess.ts")).toContain(
+      '"/proc/self/oom_score_adj"',
+    );
   });
 
   test("the opencode server subtree is re-raised to killable", () => {
@@ -54,9 +57,7 @@ describe("the OOM kill order protects the reporter", () => {
     // is deleted, and every opencode tool process descends from it. Children
     // inherit the callback's protected score; raising our own child is always
     // permitted, and tool processes (tsc, builds) inherit the raised score.
-    const raise = opencodeServer.match(
-      /\/proc\/" \+ String\(pid\) \+ "\/oom_score_adj", "(\d+)"/,
-    );
+    const raise = opencodeServer.match(/writeOomScoreAdj\(pid, "(\d+)"\)/);
     expect(raise, "the opencode server re-raise moved").not.toBeNull();
     expect(Number(raise?.[1])).toBeGreaterThanOrEqual(200);
   });

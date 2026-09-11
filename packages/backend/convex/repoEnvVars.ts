@@ -6,7 +6,13 @@ import {
 } from "./_generated/server";
 import { type Id } from "./_generated/dataModel";
 import { authQuery, authMutation, getRepoWithAccess } from "./functions";
-import { MASKED_ENV_VAR_VALUE } from "./_envVars/listDisplay";
+import {
+  maskEnvVarEntries,
+  removeEnvVarEntry,
+  sandboxEligibleEnvVars,
+  toggleEnvVarSandboxExclude,
+  upsertEnvVarEntry,
+} from "./_envVars/documentStore";
 
 /** Loads the single env var document for a repo, or null if none exists. */
 function findByRepo(db: DatabaseReader, repoId: Id<"githubRepos">) {
@@ -30,11 +36,7 @@ export const list = authQuery({
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return [];
-    return doc.vars.map((entry) => ({
-      key: entry.key,
-      value: MASKED_ENV_VAR_VALUE,
-      sandboxExclude: entry.sandboxExclude ?? false,
-    }));
+    return maskEnvVarEntries(doc.vars);
   },
 });
 
@@ -62,9 +64,7 @@ export const getForSandbox = internalQuery({
   handler: async (ctx, args) => {
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return [];
-    return doc.vars
-      .filter((entry) => !entry.sandboxExclude)
-      .map((entry) => ({ key: entry.key, value: entry.value }));
+    return sandboxEligibleEnvVars(doc.vars);
   },
 });
 
@@ -85,9 +85,10 @@ export const upsertVarInternal = internalMutation({
       sandboxExclude: args.sandboxExclude ?? false,
     };
     if (doc) {
-      const vars = doc.vars.filter((entry) => entry.key !== args.key);
-      vars.push(newEntry);
-      await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
+      await ctx.db.patch(doc._id, {
+        vars: upsertEnvVarEntry(doc.vars, newEntry),
+        updatedAt: Date.now(),
+      });
     } else {
       await ctx.db.insert("repoEnvVars", {
         repoId: args.repoId,
@@ -110,7 +111,7 @@ export const removeVar = authMutation({
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return null;
-    const vars = doc.vars.filter((entry) => entry.key !== args.key);
+    const vars = removeEnvVarEntry(doc.vars, args.key);
     await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     return null;
   },
@@ -128,10 +129,10 @@ export const toggleSandboxExclude = authMutation({
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return null;
-    const vars = doc.vars.map((entry) =>
-      entry.key === args.key
-        ? { ...entry, sandboxExclude: args.sandboxExclude }
-        : entry,
+    const vars = toggleEnvVarSandboxExclude(
+      doc.vars,
+      args.key,
+      args.sandboxExclude,
     );
     await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     return null;

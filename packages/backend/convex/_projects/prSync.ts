@@ -1,12 +1,12 @@
-import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { extractPrNumberFromUrl } from "../_github/prUrl";
+import {
+  schedulePrLifecycleActions,
+  selectPrLifecycleTransition,
+} from "../_github/prLifecycleActions";
 
-/** Extracts the PR number from a GitHub pull request URL. */
-export function extractPrNumberFromUrl(prUrl: string): number | null {
-  const match = prUrl.match(/\/pull\/(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
-}
+export { extractPrNumberFromUrl };
 
 type ProjectPhase = Doc<"projects">["phase"];
 
@@ -50,44 +50,31 @@ export async function scheduleProjectPrSync(
     return;
   }
 
+  const transition = selectPrLifecycleTransition({
+    enteringCancelled,
+    leavingCancelled,
+    enteringCodeReview,
+    leavingCodeReview,
+    asReadyOnReopen: newPhase === "code_review",
+  });
+  if (!transition) return;
+
   const prNumber = extractPrNumberFromUrl(project.prUrl);
   if (!prNumber) return;
 
   const repo = await ctx.db.get(project.repoId);
   if (!repo) return;
 
-  const baseArgs = {
-    installationId: repo.installationId,
-    repoOwner: repo.owner,
-    repoName: repo.name,
-    prNumber,
-  };
-
-  if (enteringCancelled) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.closePullRequest,
-      baseArgs,
-    );
-  } else if (leavingCancelled) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.reopenPullRequest,
-      { ...baseArgs, asReady: newPhase === "code_review" },
-    );
-  } else if (enteringCodeReview) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.markPrReadyForReview,
-      baseArgs,
-    );
-  } else if (leavingCodeReview) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.convertPrToDraft,
-      baseArgs,
-    );
-  }
+  await schedulePrLifecycleActions(
+    ctx,
+    {
+      installationId: repo.installationId,
+      repoOwner: repo.owner,
+      repoName: repo.name,
+      prNumber,
+    },
+    transition,
+  );
 }
 
 /** Maps GitHub PR webhook actions to project review phases (inbound sync). */

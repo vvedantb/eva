@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   HttpResponseError,
   shouldRetryHttpError,
+  unwrapConvexMutationPayload,
 } from "../http/convexClient.js";
 
 describe("signed callback retries", () => {
@@ -12,6 +13,17 @@ describe("signed callback retries", () => {
     expect(
       shouldRetryHttpError(new HttpResponseError("catalog", 401, "no")),
     ).toBe(false);
+  });
+
+  it("unwraps Convex mutation envelopes and bare objects", () => {
+    expect(unwrapConvexMutationPayload({ value: { answer: "yes" } })).toEqual({
+      answer: "yes",
+    });
+    expect(unwrapConvexMutationPayload({ answer: "yes" })).toEqual({
+      answer: "yes",
+    });
+    expect(unwrapConvexMutationPayload(null)).toBeNull();
+    expect(unwrapConvexMutationPayload([])).toBeNull();
   });
 
   it("retries network failures and server failures", () => {

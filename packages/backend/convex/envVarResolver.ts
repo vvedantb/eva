@@ -3,7 +3,7 @@
 import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { decryptValue } from "./encryption";
+import { decryptCredentialMap } from "./_envVars/encryptedEntries";
 import { getAIModelProvider } from "./validators";
 import type { SandboxCredentials } from "./_sandbox/provider";
 import {
@@ -30,18 +30,13 @@ export async function resolveAllEnvVars(
     const vars = await ctx.runQuery(internal.teamEnvVars.getAllInternal, {
       teamId,
     });
-    for (const v of vars) {
-      teamEnvVars[v.key] = decryptValue(v.value);
-    }
+    Object.assign(teamEnvVars, decryptCredentialMap(vars));
   }
 
   const repoVars = await ctx.runQuery(internal.repoEnvVars.getAllInternal, {
     repoId,
   });
-  const repoEnvVars: Record<string, string> = {};
-  for (const v of repoVars) {
-    repoEnvVars[v.key] = decryptValue(v.value);
-  }
+  const repoEnvVars = decryptCredentialMap(repoVars);
 
   return { ...teamEnvVars, ...repoEnvVars };
 }
@@ -60,18 +55,13 @@ export async function resolveEnvVars(
     const vars = await ctx.runQuery(internal.teamEnvVars.getForSandbox, {
       teamId,
     });
-    for (const v of vars) {
-      teamEnvVars[v.key] = decryptValue(v.value);
-    }
+    Object.assign(teamEnvVars, decryptCredentialMap(vars));
   }
 
   const repoVars = await ctx.runQuery(internal.repoEnvVars.getForSandbox, {
     repoId,
   });
-  const repoEnvVars: Record<string, string> = {};
-  for (const v of repoVars) {
-    repoEnvVars[v.key] = decryptValue(v.value);
-  }
+  const repoEnvVars = decryptCredentialMap(repoVars);
 
   return { ...teamEnvVars, ...repoEnvVars };
 }
@@ -281,11 +271,7 @@ export async function resolveProviderAccountCredentials(
       error,
     );
   }
-  const resolved: Record<string, string> = {};
-  for (const entry of account.credentials) {
-    resolved[entry.key] = decryptValue(entry.value);
-  }
-  return resolved;
+  return decryptCredentialMap(account.credentials);
 }
 
 /**

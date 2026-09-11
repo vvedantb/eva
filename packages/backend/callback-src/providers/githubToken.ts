@@ -1,3 +1,4 @@
+import { CONVEX_TOKEN, CONVEX_URL, REPO_ID } from "../config.js";
 import { fetchWithTimeout } from "../http/convexClient.js";
 import type { JsonValue } from "../types.js";
 import { readResponseJson } from "../utils.js";
@@ -92,4 +93,15 @@ export async function ensureGithubToken(params: {
   if (result.token === null) return { refreshed: false };
   applyGithubTokenToEnv(params.env ?? process.env, result.token);
   return { refreshed: true };
+}
+
+/** Refreshes the in-sandbox GitHub token from the daemon's Convex env. */
+export async function refreshDaemonGithubTokenFromEnv(): Promise<{
+  refreshed: boolean;
+}> {
+  return ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID,
+  });
 }

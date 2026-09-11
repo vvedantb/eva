@@ -14,6 +14,13 @@ import {
   SandboxExecTimeoutError,
 } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
+import {
+  buildDockerdBackgroundStart,
+  buildDockerdProcessCleanup,
+  buildDockerdStaleRuntimeCleanup,
+  buildDockerInfoWaitLoop,
+  buildDockerSockPerms,
+} from "./dockerBootstrap";
 import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
 import { ensureSwapFile } from "./swap";
@@ -202,14 +209,13 @@ export async function ensureDockerDaemon(
       [
         "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker 2>/dev/null || true",
         "command -v docker >/dev/null 2>&1 || exit 1",
-        "sudo pkill -9 containerd 2>/dev/null",
-        "sudo pkill -9 dockerd 2>/dev/null",
+        ...buildDockerdProcessCleanup(),
         "sleep 1",
-        "sudo rm -f /var/run/docker.pid /var/run/docker.sock /run/docker/containerd/containerd.pid /run/docker/containerd/containerd.sock /run/docker/containerd/containerd.sock.ttrpc /run/docker/containerd/containerd-debug.sock 2>/dev/null",
+        buildDockerdStaleRuntimeCleanup(),
         "sudo systemctl start docker 2>/dev/null || true",
-        "sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 &",
-        "for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done",
-        "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+        buildDockerdBackgroundStart(),
+        buildDockerInfoWaitLoop(60),
+        buildDockerSockPerms(),
         "docker info >/dev/null 2>&1",
       ].join("; "),
       90,
@@ -247,16 +253,12 @@ export async function bootstrapVercelDocker(
     'echo "bootstrap-docker:start"',
     "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker",
     "command -v docker >/dev/null 2>&1 || { echo \"bootstrap-docker:no-binary\"; exit 1; }",
-    "sudo pkill -9 dockerd 2>/dev/null || true",
-    "sudo pkill -9 containerd 2>/dev/null || true",
-    "sudo rm -f /var/run/docker.pid /var/run/docker.sock /run/docker/containerd/containerd.pid /run/docker/containerd/containerd.sock /run/docker/containerd/containerd.sock.ttrpc /run/docker/containerd/containerd-debug.sock 2>/dev/null || true",
+    ...buildDockerdProcessCleanup(true),
+    buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",
-    "sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 &",
-    "for i in $(seq 1 90); do",
-    "  docker info >/dev/null 2>&1 && break",
-    "  sleep 1",
-    "done",
-    "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+    buildDockerdBackgroundStart(),
+    buildDockerInfoWaitLoop(90),
+    buildDockerSockPerms(),
     "docker info >/dev/null 2>&1 || { tail -30 /tmp/dockerd.log 2>/dev/null || true; exit 1; }",
     'echo "bootstrap-docker:ok"',
   ].join("\n");

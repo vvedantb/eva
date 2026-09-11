@@ -6,6 +6,7 @@ import { aiModelValidator, taskStatusValidator } from "../validators";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
+import { resolveStorageEntries } from "../_chat/storageUrls";
 
 /** Validator for a task document enriched with its latest run start time. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -106,19 +107,16 @@ export const listAttachments = authQuery({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return [];
-    return Promise.all(
-      (task.attachmentStorageIds ?? []).map(async (storageId) => {
-        const [url, meta] = await Promise.all([
-          ctx.storage.getUrl(storageId),
-          ctx.db.system.get("_storage", storageId),
-        ]);
-        return {
-          storageId,
-          url: url ?? null,
-          contentType: meta?.contentType ?? null,
-        };
-      }),
+    const entries = await resolveStorageEntries(
+      (id) => ctx.storage.getUrl(id),
+      (id) => ctx.db.system.get("_storage", id),
+      task.attachmentStorageIds,
     );
+    return entries.map((entry) => ({
+      storageId: entry.id,
+      url: entry.url,
+      contentType: entry.contentType,
+    }));
   },
 });
 
