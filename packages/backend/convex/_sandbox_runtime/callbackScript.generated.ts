@@ -66,11 +66,14 @@ var CLAUDE_PRICING_PER_MILLION = {
 };
 var CODEX_PRICING_PER_MILLION = {
   // OpenAI API list prices (per 1M tokens).
+  // GPT-6 Astra — third-party report of the OpenAI pricing page, read
+  // 2026-09-11; verify against https://developers.openai.com/api/docs/pricing.
+  "gpt-6-astra": { input: 10, cached: 1, output: 50 },
   "gpt-5.6-sol": { input: 5, cached: 0.5, output: 30 },
   "gpt-5.6-terra": { input: 2, cached: 0.2, output: 12 },
   "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
-  "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
   // Legacy — kept so in-flight sandboxes still cost-account correctly.
+  "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
   "gpt-5.5-pro": { input: 30, cached: 30, output: 180 },
   "gpt-5.4": { input: 1.25, cached: 0.125, output: 10 },
   "gpt-5.4-mini": { input: 0.25, cached: 0.025, output: 2 },
@@ -232,7 +235,8 @@ var AI_FAST_MODE = process.env.AI_FAST_MODE || "";
 var CLAUDE_EFFORT_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh", "max"]);
 var claudeEffort = PROVIDER === "claude" && CLAUDE_EFFORT_LEVELS.has(REASONING_EFFORT) ? REASONING_EFFORT : "";
 var CODEX_REASONING_EFFORT = {
-  // GPT-5.5: none/low/medium/high/xhigh. GPT-5.6 also accepts \`max\`.
+  // GPT-5.6 Sol/Terra/Luna: none through \`max\`. GPT-6 Astra accepts
+  // low through \`max\` — the picker never offers "off" for it.
   off: "none",
   low: "low",
   medium: "medium",

@@ -28,18 +28,25 @@ export const aiModelValidator = v.union(
   // Legacy Fable 5 — still accepted so existing sessions can load;
   // normalizeAIModel maps it to claude-fable-5-1.
   v.literal("claude:claude-fable-5"),
+  v.literal("codex:gpt-6-astra"),
   v.literal("codex:gpt-5.6-sol"),
   v.literal("codex:gpt-5.6-terra"),
   v.literal("codex:gpt-5.6-luna"),
-  v.literal("codex:gpt-5.5"),
   // Legacy Codex — still accepted so existing sessions can load;
-  // normalizeAIModel maps them to gpt-5.5 (or gpt-5.6-sol for the bare 5.6 alias).
+  // normalizeAIModel maps them to gpt-5.6-sol (the bare 5.6 alias included).
   v.literal("codex:gpt-5.6"),
+  v.literal("codex:gpt-5.5"),
   v.literal("codex:gpt-5.5-pro"),
   v.literal("codex:gpt-5.4"),
   v.literal("codex:gpt-5.4-mini"),
   v.literal("codex:gpt-5.3-codex"),
   v.literal("codex:gpt-5.2-codex"),
+  v.literal("opencode:openai/gpt-6-astra"),
+  v.literal("opencode:openai/gpt-5.6-sol"),
+  v.literal("opencode:openai/gpt-5.6-terra"),
+  v.literal("opencode:openai/gpt-5.6-luna"),
+  // Legacy opencode — still accepted so existing sessions can load;
+  // normalizeAIModel maps them to openai/gpt-5.6-sol.
   v.literal("opencode:openai/gpt-5-codex"),
   v.literal("opencode:openai/gpt-5.2"),
   v.literal("opencode:openai/gpt-5.3-codex"),
@@ -47,7 +54,7 @@ export const aiModelValidator = v.union(
   v.literal("opencode:openai/gpt-5.4-mini"),
   v.literal("cursor:grok-4.6"),
   v.literal("cursor:grok-4.5"),
-  v.literal("cursor:gpt-5.5"),
+  v.literal("cursor:gpt-6-astra"),
   v.literal("cursor:gemini-3.1-pro"),
   v.literal("cursor:composer-2.5"),
   // Legacy — still accepted so existing sessions with these lastModel values
@@ -60,6 +67,7 @@ export const aiModelValidator = v.union(
   v.literal("cursor:grok-4.5-low"),
   v.literal("cursor:grok-4.5-medium"),
   v.literal("cursor:grok-4.5-high"),
+  v.literal("cursor:gpt-5.5"),
   v.literal("cursor:gpt-5.5-low"),
   v.literal("cursor:gpt-5.5-high"),
   v.literal("cursor:composer-2"),
@@ -145,13 +153,13 @@ const CLAUDE_REASONING_OPUS_46: ModelReasoningTraits = {
   ultrathink: true,
 };
 
-/** GPT-5.5: none/off, low, medium (default), high, xhigh. */
-const CODEX_REASONING: ModelReasoningTraits = {
-  levels: ["off", "low", "medium", "high", "xhigh"],
+/** GPT-6 Astra: no none/minimal level; low is the floor. */
+const CODEX_REASONING_ASTRA: ModelReasoningTraits = {
+  levels: ["low", "medium", "high", "xhigh", "max"],
   default: "medium",
 };
 
-/** GPT-5.6 Sol/Terra/Luna also support `max` above xhigh. */
+/** GPT-5.6 Sol/Terra/Luna: none/off through `max` above xhigh. */
 const CODEX_REASONING_56: ModelReasoningTraits = {
   levels: ["off", "low", "medium", "high", "xhigh", "max"],
   default: "medium",
@@ -173,10 +181,10 @@ const CURSOR_REASONING_GROK46: ModelReasoningTraits = {
   default: "high",
 };
 
-/** GPT-5.5 on cursor previously shipped as the "Low" variant — keep that default. */
-const CURSOR_REASONING_GPT55: ModelReasoningTraits = {
-  levels: ["low", "medium", "high"],
-  default: "low",
+/** GPT-6 Astra on Cursor: no `max` (config.ts clamps max → high). */
+const CURSOR_REASONING_ASTRA: ModelReasoningTraits = {
+  levels: ["low", "medium", "high", "xhigh"],
+  default: "medium",
 };
 
 export type LegacyClaudeModel = "opus" | "sonnet" | "haiku";
@@ -188,18 +196,17 @@ export type AIModel =
   | "claude:claude-opus-4-5-20251101"
   | "claude:claude-opus-4-6"
   | "claude:claude-fable-5-1"
+  | "codex:gpt-6-astra"
   | "codex:gpt-5.6-sol"
   | "codex:gpt-5.6-terra"
   | "codex:gpt-5.6-luna"
-  | "codex:gpt-5.5"
-  | "opencode:openai/gpt-5-codex"
-  | "opencode:openai/gpt-5.2"
-  | "opencode:openai/gpt-5.3-codex"
-  | "opencode:openai/gpt-5.4"
-  | "opencode:openai/gpt-5.4-mini"
+  | "opencode:openai/gpt-6-astra"
+  | "opencode:openai/gpt-5.6-sol"
+  | "opencode:openai/gpt-5.6-terra"
+  | "opencode:openai/gpt-5.6-luna"
   | "cursor:grok-4.6"
   | "cursor:grok-4.5"
-  | "cursor:gpt-5.5"
+  | "cursor:gpt-6-astra"
   | "cursor:gemini-3.1-pro"
   | "cursor:composer-2.5";
 export type PersistedAIModel =
@@ -207,11 +214,17 @@ export type PersistedAIModel =
   | LegacyClaudeModel
   | "claude:claude-fable-5"
   | "codex:gpt-5.6"
+  | "codex:gpt-5.5"
   | "codex:gpt-5.5-pro"
   | "codex:gpt-5.4"
   | "codex:gpt-5.4-mini"
   | "codex:gpt-5.3-codex"
   | "codex:gpt-5.2-codex"
+  | "opencode:openai/gpt-5-codex"
+  | "opencode:openai/gpt-5.2"
+  | "opencode:openai/gpt-5.3-codex"
+  | "opencode:openai/gpt-5.4"
+  | "opencode:openai/gpt-5.4-mini"
   | "cursor:grok-4.6-low"
   | "cursor:grok-4.6-medium"
   | "cursor:grok-4.6-high"
@@ -219,6 +232,7 @@ export type PersistedAIModel =
   | "cursor:grok-4.5-low"
   | "cursor:grok-4.5-medium"
   | "cursor:grok-4.5-high"
+  | "cursor:gpt-5.5"
   | "cursor:gpt-5.5-low"
   | "cursor:gpt-5.5-high"
   | "cursor:composer-2";
@@ -245,6 +259,14 @@ export interface AIProviderAvailability {
 export const DEFAULT_AI_MODEL: AIModel = "claude:sonnet";
 
 export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
+  {
+    id: "claude:claude-fable-5-1",
+    provider: "claude",
+    label: "Fable 5.1",
+    requiresAuth: true,
+    reasoning: CLAUDE_REASONING_FULL,
+    contextWindow1m: true,
+  },
   {
     id: "claude:opus",
     provider: "claude",
@@ -290,12 +312,12 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     contextWindow1m: true,
   },
   {
-    id: "claude:claude-fable-5-1",
-    provider: "claude",
-    label: "Fable 5.1",
+    id: "codex:gpt-6-astra",
+    provider: "codex",
+    label: "GPT-6 Astra",
     requiresAuth: true,
-    reasoning: CLAUDE_REASONING_FULL,
-    contextWindow1m: true,
+    reasoning: CODEX_REASONING_ASTRA,
+    fastMode: true,
   },
   {
     id: "codex:gpt-5.6-sol",
@@ -322,41 +344,27 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     fastMode: true,
   },
   {
-    id: "codex:gpt-5.5",
-    provider: "codex",
-    label: "GPT 5.5",
-    requiresAuth: true,
-    reasoning: CODEX_REASONING,
-    fastMode: true,
-  },
-  {
-    id: "opencode:openai/gpt-5-codex",
+    id: "opencode:openai/gpt-6-astra",
     provider: "opencode",
-    label: "GPT-5 Codex",
+    label: "GPT-6 Astra",
     requiresAuth: true,
   },
   {
-    id: "opencode:openai/gpt-5.4",
+    id: "opencode:openai/gpt-5.6-sol",
     provider: "opencode",
-    label: "GPT-5.4",
+    label: "GPT-5.6 Sol",
     requiresAuth: true,
   },
   {
-    id: "opencode:openai/gpt-5.4-mini",
+    id: "opencode:openai/gpt-5.6-terra",
     provider: "opencode",
-    label: "GPT-5.4 mini",
+    label: "GPT-5.6 Terra",
     requiresAuth: true,
   },
   {
-    id: "opencode:openai/gpt-5.3-codex",
+    id: "opencode:openai/gpt-5.6-luna",
     provider: "opencode",
-    label: "GPT-5.3 Codex",
-    requiresAuth: true,
-  },
-  {
-    id: "opencode:openai/gpt-5.2",
-    provider: "opencode",
-    label: "GPT-5.2",
+    label: "GPT-5.6 Luna",
     requiresAuth: true,
   },
   {
@@ -376,11 +384,11 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     fastMode: true,
   },
   {
-    id: "cursor:gpt-5.5",
+    id: "cursor:gpt-6-astra",
     provider: "cursor",
-    label: "GPT-5.5",
+    label: "GPT-6 Astra",
     requiresAuth: true,
-    reasoning: CURSOR_REASONING_GPT55,
+    reasoning: CURSOR_REASONING_ASTRA,
     contextWindow1m: true,
     contextWindowDefaultLabel: "272K",
   },
@@ -478,32 +486,39 @@ export function normalizeAIModel(model: string | null | undefined): AIModel {
     case "claude-fable-5-1":
     case "claude:claude-fable-5-1":
       return "claude:claude-fable-5-1";
+    case "codex:gpt-6-astra":
+      return "codex:gpt-6-astra";
     case "codex:gpt-5.6-sol":
       return "codex:gpt-5.6-sol";
     case "codex:gpt-5.6-terra":
       return "codex:gpt-5.6-terra";
     case "codex:gpt-5.6-luna":
       return "codex:gpt-5.6-luna";
-    // Bare gpt-5.6 alias routes to Sol (OpenAI's flagship alias).
+    // Bare gpt-5.6 alias routes to Sol (OpenAI's flagship alias), and retired
+    // Codex generations collapse onto the current flagship.
     case "codex:gpt-5.6":
-      return "codex:gpt-5.6-sol";
     case "codex:gpt-5.5":
     case "codex:gpt-5.5-pro":
     case "codex:gpt-5.4":
     case "codex:gpt-5.4-mini":
     case "codex:gpt-5.3-codex":
     case "codex:gpt-5.2-codex":
-      return "codex:gpt-5.5";
+      return "codex:gpt-5.6-sol";
+    case "opencode:openai/gpt-6-astra":
+      return "opencode:openai/gpt-6-astra";
+    case "opencode:openai/gpt-5.6-sol":
+      return "opencode:openai/gpt-5.6-sol";
+    case "opencode:openai/gpt-5.6-terra":
+      return "opencode:openai/gpt-5.6-terra";
+    case "opencode:openai/gpt-5.6-luna":
+      return "opencode:openai/gpt-5.6-luna";
+    // Retired opencode models collapse onto the current flagship.
     case "opencode:openai/gpt-5-codex":
-      return "opencode:openai/gpt-5-codex";
     case "opencode:openai/gpt-5.2":
-      return "opencode:openai/gpt-5.2";
     case "opencode:openai/gpt-5.3-codex":
-      return "opencode:openai/gpt-5.3-codex";
     case "opencode:openai/gpt-5.4":
-      return "opencode:openai/gpt-5.4";
     case "opencode:openai/gpt-5.4-mini":
-      return "opencode:openai/gpt-5.4-mini";
+      return "opencode:openai/gpt-5.6-sol";
     // Effort lives on the reasoning selector now — suffixed variants collapse
     // to one base model (the stored reasoning level carries the distinction).
     case "cursor:claude-4.6-sonnet-medium-thinking":
@@ -524,10 +539,11 @@ export function normalizeAIModel(model: string | null | undefined): AIModel {
       return "cursor:grok-4.6";
     case "cursor:gpt-5.3-codex-high":
       return "cursor:composer-2.5";
+    case "cursor:gpt-6-astra":
     case "cursor:gpt-5.5":
     case "cursor:gpt-5.5-high":
     case "cursor:gpt-5.5-low":
-      return "cursor:gpt-5.5";
+      return "cursor:gpt-6-astra";
     case "cursor:gemini-3.1-pro":
       return "cursor:gemini-3.1-pro";
     case "cursor:composer-2":
@@ -778,13 +794,14 @@ const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
   "claude:claude-fable-5-1",
   "claude:opus",
   "claude:sonnet",
+  "codex:gpt-6-astra",
   "codex:gpt-5.6-sol",
   "codex:gpt-5.6-terra",
   "codex:gpt-5.6-luna",
   "cursor:grok-4.6",
   "cursor:grok-4.5",
   "cursor:composer-2.5",
-  "opencode:openai/gpt-5.4",
+  "opencode:openai/gpt-6-astra",
 ]);
 
 /**
