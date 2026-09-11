@@ -19,11 +19,19 @@ describe("splitNotificationTitle", () => {
       }),
     ).toEqual({
       subject: "Delegate to Opus sub-agents",
-      event: "PR #678 merged · archived",
+      event: "PR #678 merged · session archived",
     });
     expect(
       splitNotificationTitle({ title: 'PR closed — "Fix login" moved to done' }),
     ).toEqual({ subject: "Fix login", event: "PR closed · moved to done" });
+    expect(
+      splitNotificationTitle({
+        title: 'PR #664 closed — "Fix login" archived',
+      }),
+    ).toEqual({
+      subject: "Fix login",
+      event: "PR #664 closed · session archived",
+    });
   });
 
   test("drops the colon after a leading event word", () => {
