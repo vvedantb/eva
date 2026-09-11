@@ -322,7 +322,7 @@ function logEventLoopStall(now: number): void {
       mb(memory.heapUsed) +
       "MB freemem=" +
       mb(freemem()) +
-      "MB swapfree unknown, loadavg=" +
+      "MB loadavg=" +
       loadavg()
         .map((n) => n.toFixed(2))
         .join(",") +

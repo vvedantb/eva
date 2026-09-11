@@ -4734,7 +4734,7 @@ function logEventLoopStall(now) {
   const mb = (bytes) => String(Math.round(bytes / 1024 / 1024));
   const memory = process.memoryUsage();
   log(
-    "event loop stalled for " + stalledMs + "ms (rss=" + mb(memory.rss) + "MB heapUsed=" + mb(memory.heapUsed) + "MB freemem=" + mb(freemem()) + "MB swapfree unknown, loadavg=" + loadavg().map((n) => n.toFixed(2)).join(",") + ")"
+    "event loop stalled for " + stalledMs + "ms (rss=" + mb(memory.rss) + "MB heapUsed=" + mb(memory.heapUsed) + "MB freemem=" + mb(freemem()) + "MB loadavg=" + loadavg().map((n) => n.toFixed(2)).join(",") + ")"
   );
 }
 function startStreamingLoops() {

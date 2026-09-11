@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -204,8 +204,6 @@ describe("turn lifecycle integration", () => {
     const { t, turnId } = await createSessionFixture();
     const expireLease = async () =>
       await t.run(async (ctx) => {
-        const turn = await ctx.db.get(turnId);
-        if (!turn) throw new Error("missing turn");
         await ctx.db.patch(turnId, {
           state: "running",
           leaseExpiresAt: Date.now() - 1,
@@ -238,8 +236,6 @@ describe("turn lifecycle integration", () => {
       if (!turn) throw new Error("missing turn");
       const identity = await acquireTurnLease(ctx, turn, "running");
       if (!identity) throw new Error("lease not acquired");
-      const claimed = await ctx.db.get(turnId);
-      if (!claimed) throw new Error("missing turn");
       await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
       const expired = await ctx.db.get(turnId);
       if (!expired) throw new Error("missing turn");
@@ -274,10 +270,18 @@ describe("turn lifecycle integration", () => {
       });
     });
 
-    await t.mutation(internal.turns.finalizeExpired, {
-      turnId,
-      cause: "silent_timeout",
-    });
+    // finalizeExpired schedules the one-shot stall retry; drain it inside the
+    // test so it never fires against a later test's database.
+    vi.useFakeTimers();
+    try {
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: "silent_timeout",
+      });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+    } finally {
+      vi.useRealTimers();
+    }
 
     const rows = await t.run(async (ctx) => ({
       turn: await ctx.db.get(turnId),
