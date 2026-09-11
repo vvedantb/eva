@@ -18,9 +18,9 @@ import { useThemeMode } from "@/lib/hooks/useThemeMode";
  */
 export function DiffEntriesDialogBody({
   entries,
-  additions = entries.reduce((sum, entry) => sum + entry.additions, 0),
-  deletions = entries.reduce((sum, entry) => sum + entry.deletions, 0),
-  changedFiles = entries.length,
+  additions: additionsProp,
+  deletions: deletionsProp,
+  changedFiles: changedFilesProp,
   truncatedNotice,
 }: {
   entries: readonly DiffFileEntry[];
@@ -31,6 +31,13 @@ export function DiffEntriesDialogBody({
   truncatedNotice: ReactNode;
 }) {
   const { resolvedTheme } = useThemeMode();
+  // Computed as statements rather than parameter defaults: React Compiler
+  // cannot reorder calls/member access in a default initialiser and bails.
+  const additions =
+    additionsProp ?? entries.reduce((sum, entry) => sum + entry.additions, 0);
+  const deletions =
+    deletionsProp ?? entries.reduce((sum, entry) => sum + entry.deletions, 0);
+  const changedFiles = changedFilesProp ?? entries.length;
 
   return (
     <DialogBody className="space-y-3">
