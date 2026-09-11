@@ -7,7 +7,8 @@ import { Slide05SimpleMode } from "./05-simple-mode";
 import { Slide06Automerge } from "./06-automerge";
 import { Slide07Sandbox } from "./07-sandbox";
 import { Slide08More } from "./08-more";
-import { Slide09Closing } from "./09-closing";
+import { Slide09Team } from "./09-team";
+import { Slide10Closing } from "./10-closing";
 
 export interface DeckSlide {
   /** Stable id, mirrors the file name. */
@@ -56,5 +57,6 @@ export const SLIDES: DeckSlide[] = [
   { id: "07-sandbox", title: "Sandboxes", Component: Slide07Sandbox, steps: 1 },
   { id: "08-more", title: "And more", Component: Slide08More, steps: 0 },
   // End TODO(slide-agents).
-  { id: "09-closing", title: "Closing", Component: Slide09Closing, steps: 0 },
+  { id: "09-team", title: "The team", Component: Slide09Team, steps: 4 },
+  { id: "10-closing", title: "Closing", Component: Slide10Closing, steps: 0 },
 ];
