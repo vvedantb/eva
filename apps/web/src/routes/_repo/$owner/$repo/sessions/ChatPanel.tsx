@@ -290,6 +290,7 @@ export function ChatPanel({
     permalinkPath,
     chatOnly,
     hideTitle,
+    simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,

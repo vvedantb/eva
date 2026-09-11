@@ -28,6 +28,7 @@ import {
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
@@ -94,6 +95,7 @@ export function TaskFooter({
   onResolveConfirm,
   variant = "footer",
 }: TaskFooterProps) {
+  const simpleView = useSimpleView();
   const isHeader = variant === "header";
   const buttonSize = isHeader ? "sm" : "default";
   const iconSize = isHeader ? 16 : 18;
@@ -109,23 +111,30 @@ export function TaskFooter({
   // in the queue is no reason to refuse to sleep a sandbox. A main run has its
   // own confirmed Stop; blocking this during one is a separate call.
   const sleepBlockedMidTurn = Boolean(task?.activeChatWorkflowId);
+  // Simple view hides the git/sandbox plumbing: conflict resolution, the
+  // startup/dev/background command runners, PR creation and links, and the
+  // deployment item. The footer menu then has nothing left and drops out
+  // entirely; the header menu stays for Copy link.
   const showResolveConflicts =
-    !hasActiveRun && (status === "code_review" || status === "business_review");
-  const showRunDevServer = isSandboxActive && canStartSandbox;
-  const showRunBackgroundCommands = isSandboxActive && canStartSandbox;
+    !simpleView &&
+    !hasActiveRun &&
+    (status === "code_review" || status === "business_review");
+  const showRunStartupCommands = !simpleView && canStartSandbox;
+  const showRunDevServer = !simpleView && isSandboxActive && canStartSandbox;
+  const showRunBackgroundCommands =
+    !simpleView && isSandboxActive && canStartSandbox;
   const hasSandboxCommandItems =
-    canStartSandbox || showRunDevServer || showRunBackgroundCommands;
-  const hasPrLinkItems =
-    canCreatePr ||
-    Boolean(latestPrUrl) ||
-    Boolean(latestDeployment?.deploymentStatus);
+    showRunStartupCommands || showRunDevServer || showRunBackgroundCommands;
+  const showCreatePr = !simpleView && canCreatePr;
+  const showViewPr = !simpleView && Boolean(latestPrUrl);
+  const showViewPreview =
+    !simpleView && Boolean(latestDeployment?.deploymentStatus);
+  const hasPrLinkItems = showCreatePr || showViewPr || showViewPreview;
   const showMoreMenu =
     isHeader ||
-    canStartSandbox ||
-    canCreatePr ||
     showResolveConflicts ||
-    Boolean(latestDeployment?.deploymentStatus) ||
-    Boolean(latestPrUrl);
+    hasSandboxCommandItems ||
+    hasPrLinkItems;
   const hasSecondaryContent = isHeader || showStopSandbox || showMoreMenu;
 
   return (
@@ -202,7 +211,7 @@ export function TaskFooter({
                 {showResolveConflicts && hasSandboxCommandItems ? (
                   <DropdownMenuSeparator />
                 ) : null}
-                {canStartSandbox && (
+                {showRunStartupCommands && (
                   <DropdownMenuItem
                     onClick={onRunStartupCommands}
                     disabled={isRetryingStartupCommands}
@@ -249,7 +258,7 @@ export function TaskFooter({
                 hasPrLinkItems ? (
                   <DropdownMenuSeparator />
                 ) : null}
-                {canCreatePr && (
+                {showCreatePr && (
                   <DropdownMenuItem
                     onClick={onCreatePr}
                     disabled={isCreatingPr}
@@ -262,7 +271,7 @@ export function TaskFooter({
                     Create PR
                   </DropdownMenuItem>
                 )}
-                {latestPrUrl ? (
+                {showViewPr && latestPrUrl ? (
                   <DropdownMenuItem asChild>
                     <a
                       href={latestPrUrl}
@@ -274,7 +283,7 @@ export function TaskFooter({
                     </a>
                   </DropdownMenuItem>
                 ) : null}
-                {latestDeployment?.deploymentStatus && (
+                {showViewPreview && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div>

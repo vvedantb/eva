@@ -13,6 +13,7 @@ import {
   stripPreviewGrant,
   carryPreviewGrant,
 } from "@/lib/utils/previewGrant";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import { normalizePreviewPath } from "./previewPathHistory";
 
@@ -123,6 +124,7 @@ export function PreviewNavBar({
   function currentIframe(): HTMLIFrameElement | null {
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
   }
+  const simpleView = useSimpleView();
   const [portInput, setPortInput] = useState(String(port));
   const [pathInput, setPathInput] = useState(path ?? defaultPath);
   // Tracks the last value emitted via onPathChange so the three event sources
@@ -304,16 +306,20 @@ export function PreviewNavBar({
         onValueChange={setPathInput}
         onCommit={commitPath}
       />
-      <Input
-        className="h-8 w-14 max-sm:shrink-0 text-base text-center px-1 sm:w-16 sm:text-xs"
-        value={portInput}
-        onChange={(e) => setPortInput(e.target.value)}
-        onBlur={commitPort}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commitPort();
-        }}
-        aria-label="Preview port"
-      />
+      {/* The port is developer plumbing; simple view keeps path, reload,
+          open-in-tab and fullscreen. */}
+      {simpleView ? null : (
+        <Input
+          className="h-8 w-14 max-sm:shrink-0 text-base text-center px-1 sm:w-16 sm:text-xs"
+          value={portInput}
+          onChange={(e) => setPortInput(e.target.value)}
+          onBlur={commitPort}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitPort();
+          }}
+          aria-label="Preview port"
+        />
+      )}
       <WebPreviewNavigationButton
         tooltip="Open in new tab"
         disabled={!previewUrl}

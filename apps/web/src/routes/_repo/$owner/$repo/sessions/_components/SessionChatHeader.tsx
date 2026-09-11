@@ -53,6 +53,11 @@ interface SessionChatHeaderProps {
   chatOnly?: boolean;
   /** Popover already titles the surface — omit the duplicate "Manager Ave". */
   hideTitle?: boolean;
+  /**
+   * Hides Send for Review, View Preview and View PR — git/PR plumbing simple
+   * view does not surface.
+   */
+  simpleView: boolean;
   /** Active model + sticky credential — only the chip bar cares. */
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
@@ -80,6 +85,7 @@ export function SessionChatHeader({
   permalinkPath,
   chatOnly = false,
   hideTitle = false,
+  simpleView,
   model,
   providerAccountId,
   usageAccountLabel,
@@ -89,11 +95,15 @@ export function SessionChatHeader({
   onOpenResetChatDialog,
 }: SessionChatHeaderProps) {
   // `chatOnly` is Manager Ave, i.e. `session.isOrchestrator`.
-  const showSendForReview = canSendSessionForReview({
-    branchName,
-    prState,
-    isOrchestrator: chatOnly,
-  });
+  const showSendForReview =
+    !simpleView &&
+    canSendSessionForReview({
+      branchName,
+      prState,
+      isOrchestrator: chatOnly,
+    });
+  const showViewPreview = !simpleView && Boolean(deploymentStatus);
+  const showViewPr = !simpleView && Boolean(prUrl);
 
   // Manager Ave is one fixed session at its own URL, so there is nothing to
   // switch to and no repo to navigate up into — the switcher's dropdown would
@@ -160,7 +170,7 @@ export function SessionChatHeader({
             {hasSummary ? "Regenerate Summary" : "Summarise Session"}
             <ConfirmSkipHint />
           </DropdownMenuItem>
-          {(showSendForReview || deploymentStatus || prUrl) && (
+          {(showSendForReview || showViewPreview || showViewPr) && (
             <DropdownMenuSeparator />
           )}
           {showSendForReview && (
@@ -173,7 +183,7 @@ export function SessionChatHeader({
               <ConfirmSkipHint />
             </DropdownMenuItem>
           )}
-          {deploymentStatus && (
+          {showViewPreview && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div>
@@ -189,7 +199,7 @@ export function SessionChatHeader({
               </TooltipContent>
             </Tooltip>
           )}
-          {prUrl && (
+          {showViewPr && prUrl && (
             <DropdownMenuItem
               onClick={() => {
                 window.open(prUrl, "_blank", "noopener,noreferrer");
