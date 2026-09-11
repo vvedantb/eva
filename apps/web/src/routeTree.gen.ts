@@ -14,6 +14,7 @@ import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
 import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
+import { Route as UpdatesToEvaRouteImport } from './routes/updates-to-eva'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -154,6 +155,11 @@ const AgentCallbackRoute = AgentCallbackRouteImport.update({
 const PreviewAuthRoute = PreviewAuthRouteImport.update({
   id: '/preview-auth',
   path: '/preview-auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UpdatesToEvaRoute = UpdatesToEvaRouteImport.update({
+  id: '/updates-to-eva',
+  path: '/updates-to-eva',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
@@ -847,6 +853,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/updates-to-eva': typeof UpdatesToEvaRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -970,6 +977,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/updates-to-eva': typeof UpdatesToEvaRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -1072,6 +1080,7 @@ export interface FileRoutesById {
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/updates-to-eva': typeof UpdatesToEvaRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1197,6 +1206,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
+    | '/updates-to-eva'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1320,6 +1330,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
+    | '/updates-to-eva'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1421,6 +1432,7 @@ export interface FileRouteTypes {
     | '/_repo'
     | '/agent-callback'
     | '/preview-auth'
+    | '/updates-to-eva'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1547,6 +1559,7 @@ export interface RootRouteChildren {
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
+  UpdatesToEvaRoute: typeof UpdatesToEvaRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1585,6 +1598,13 @@ declare module '@tanstack/react-router' {
       path: '/preview-auth'
       fullPath: '/preview-auth'
       preLoaderRoute: typeof PreviewAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/updates-to-eva': {
+      id: '/updates-to-eva'
+      path: '/updates-to-eva'
+      fullPath: '/updates-to-eva'
+      preLoaderRoute: typeof UpdatesToEvaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -3044,6 +3064,7 @@ const rootRouteChildren: RootRouteChildren = {
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
   PreviewAuthRoute: PreviewAuthRoute,
+  UpdatesToEvaRoute: UpdatesToEvaRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport
