@@ -24,7 +24,7 @@ import { SessionSwitcher } from "./SessionSwitcher";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
-interface SessionChatHeaderProps {
+interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
   sessionId: Id<"sessions">;
   title: string;
@@ -64,7 +64,12 @@ interface SessionChatHeaderProps {
   onOpenResetChatDialog?: () => void;
 }
 
-export function SessionChatHeader({
+/**
+ * Builds the session chat header slots. Named `use*` because ChatPanel invokes
+ * it during render: a PascalCase helper would look pure to React Compiler,
+ * which then skips the call on a cache hit and drops `usePrLinkMenuItems`.
+ */
+export function useSessionChatHeader({
   repoId,
   sessionId,
   title,
@@ -88,7 +93,7 @@ export function SessionChatHeader({
   onOpenSummaryModal,
   onOpenReviewModal,
   onOpenResetChatDialog,
-}: SessionChatHeaderProps) {
+}: SessionChatHeaderArgs) {
   // `chatOnly` is Manager Ave, i.e. `session.isOrchestrator`.
   const showSendForReview =
     !simpleView &&

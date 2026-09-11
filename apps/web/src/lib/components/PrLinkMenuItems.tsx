@@ -41,9 +41,6 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
   const showViewPr = !simpleView && args.prUrl !== undefined;
   const showViewPreview = !simpleView && args.hasDeployment;
   const hasItems = showCreatePr || showViewPr || showViewPreview;
-
-  if (!hasItems) return { hasItems, items: null };
-
   const createPr = args.createPr;
 
   return {
