@@ -7,6 +7,7 @@ export {
   captureDiagnosticsAndStopSandbox,
   archiveSandbox,
   verifySandboxLiveness,
+  captureStalledTurnDiagnostics,
   getSandboxProviderKind,
   getSnapshotSandboxProviderKind,
 } from "./_sandbox_runtime/lifecycle";

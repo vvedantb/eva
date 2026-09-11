@@ -20,9 +20,15 @@ import {
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
 import { log } from "../utils.js";
 import { writeFileSync } from "fs";
+import { freemem, loadavg } from "os";
 import { callbackState as S } from "./state.js";
 import { flushBackgroundShellQueue } from "./backgroundShells.js";
 import { serializeSteps } from "../parse/stepBudget.js";
+import {
+  EVENT_LOOP_STALL_LOG_MS,
+  measureTickStallMs,
+} from "./eventLoopStall.js";
+import { persistTurnWork } from "./turnPersist.js";
 import {
   canSendTurnHeartbeat,
   decideTurnLeaseExit,
@@ -71,15 +77,17 @@ function noteHeartbeatFailure(error: Error | string): void {
   if (S.consecutiveHeartbeatFailures === 1) {
     S.heartbeatFailureStreakStartedAt = Date.now();
   }
-  console.error(
-    "Heartbeat failed (consecutive: " + S.consecutiveHeartbeatFailures + "):",
-    message,
+  log(
+    "Heartbeat failed (consecutive: " +
+      S.consecutiveHeartbeatFailures +
+      "): " +
+      message,
   );
   if (
     S.consecutiveHeartbeatFailures === 2 ||
     S.consecutiveHeartbeatFailures === 4
   ) {
-    console.error(
+    log(
       "[streaming-heartbeat] degraded: " +
         S.consecutiveHeartbeatFailures +
         " consecutive post-retry failures (burstFatal>=" +
@@ -286,13 +294,51 @@ async function initialHeartbeat(): Promise<void> {
   }
 }
 
+const HEARTBEAT_TICK_MS = 10_000;
+let lastHeartbeatTickAt = 0;
+
+/**
+ * A starved process (VM swap thrash, CPU starvation) cannot heartbeat, so its
+ * lease expires server-side and the turn is finalised as stalled. This line is
+ * the daemon-side evidence that the process was frozen rather than dead.
+ */
+function logEventLoopStall(now: number): void {
+  const stalledMs = measureTickStallMs({
+    previousTickAt: lastHeartbeatTickAt,
+    now,
+    intervalMs: HEARTBEAT_TICK_MS,
+    toleranceMs: EVENT_LOOP_STALL_LOG_MS,
+  });
+  lastHeartbeatTickAt = now;
+  if (stalledMs === 0) return;
+  const mb = (bytes: number): string => String(Math.round(bytes / 1024 / 1024));
+  const memory = process.memoryUsage();
+  log(
+    "event loop stalled for " +
+      stalledMs +
+      "ms (rss=" +
+      mb(memory.rss) +
+      "MB heapUsed=" +
+      mb(memory.heapUsed) +
+      "MB freemem=" +
+      mb(freemem()) +
+      "MB swapfree unknown, loadavg=" +
+      loadavg()
+        .map((n) => n.toFixed(2))
+        .join(",") +
+      ")",
+  );
+}
+
 export function startStreamingLoops(): void {
   flushInterval = setInterval(() => {
     void flushStreaming().then(enforceTurnLease);
   }, 150);
+  lastHeartbeatTickAt = Date.now();
   heartbeatInterval = setInterval(() => {
+    logEventLoopStall(Date.now());
     void heartbeatPing().then(enforceTurnLease);
-  }, 10000);
+  }, HEARTBEAT_TICK_MS);
 }
 
 export async function stopStreamingLoops(): Promise<void> {
@@ -318,6 +364,20 @@ function enforceTurnLease(): boolean {
   if (flushInterval) clearInterval(flushInterval);
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   S.streamingLoopsStopped = true;
+  if (decision.reason !== "superseded") {
+    // The server already finalised this turn (stalled, cancelled or timed out),
+    // so nothing downstream will publish what the agent wrote: this daemon holds
+    // the only copy of those edits. persistTurnWork is synchronous, bounded by
+    // its own git timeouts, best-effort, and skips task runs itself.
+    // "superseded" is excluded on purpose: a rival daemon owns the same
+    // worktree, and a commit from the loser could race the winner's work.
+    log(
+      "persisting turn work before lease-terminal exit (" +
+        decision.reason +
+        ")",
+    );
+    persistTurnWork();
+  }
   setTimeout(() => process.exit(0), LEASE_EXIT_GRACE_MS).unref();
   return true;
 }
