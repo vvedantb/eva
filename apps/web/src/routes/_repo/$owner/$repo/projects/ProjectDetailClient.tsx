@@ -51,17 +51,16 @@ import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 
 import {
-  IconGitPullRequest,
   IconHammer,
   IconPlayerStop,
   IconTerminal2,
   IconLoader2,
   IconChevronDown,
   IconCalendarClock,
-  IconBrandVercel,
   IconDots,
   IconRefresh,
   IconFileText,
@@ -239,6 +238,25 @@ export function ProjectDetailClient({
     setIsCreatingPr(false);
   };
 
+  // Written with optional chaining so the hook can run above the early
+  // returns below (both read `project` / `latestDeployment`, which load late).
+  const hasDeployedPreview =
+    latestDeployment?.deploymentStatus === "deployed" &&
+    Boolean(latestDeployment.deploymentUrl);
+  const canCreatePr =
+    !project?.prUrl &&
+    !project?.activeBuildWorkflowId &&
+    (project?.phase === "business_review" || project?.phase === "in_progress");
+  const prLinks = usePrLinkMenuItems({
+    createPr: {
+      enabled: canCreatePr,
+      isCreating: isCreatingPr,
+      onCreate: handleCreatePr,
+    },
+    prUrl: project?.prUrl,
+    hasDeployment: hasDeployedPreview,
+  });
+
   const handleResolveConflicts = async () => {
     setPrError(null);
     setIsResolvingConflicts(true);
@@ -270,13 +288,6 @@ export function ProjectDetailClient({
     project.phase === "draft" || project.phase === "finalized";
   const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
 
-  const hasDeployedPreview =
-    latestDeployment?.deploymentStatus === "deployed" &&
-    Boolean(latestDeployment.deploymentUrl);
-  const canCreatePr =
-    !project.prUrl &&
-    !project.activeBuildWorkflowId &&
-    (project.phase === "business_review" || project.phase === "in_progress");
   const showRetryStartupCommands =
     canStartSandbox && !isSandboxStarting && !isSandboxStopping;
   const showRunBackgroundCommands = isSandboxActive;
@@ -295,8 +306,6 @@ export function ProjectDetailClient({
   const hasPlanContext = Boolean(parsedSpec);
   const hasSandboxCommandItems =
     showRetryStartupCommands || showRunBackgroundCommands;
-  const hasPrLinkItems =
-    canCreatePr || Boolean(project.prUrl) || hasDeployedPreview;
 
   const tab = sandboxTab ?? "preview";
   // Always mount the sandbox panel when the project can have one so tabs
@@ -491,55 +500,15 @@ export function ProjectDetailClient({
                     </DropdownMenuItem>
                   )}
                   {(showResolveConflicts || hasSandboxCommandItems) &&
-                  hasPrLinkItems ? (
+                  prLinks.hasItems ? (
                     <DropdownMenuSeparator />
                   ) : null}
-                  {canCreatePr && (
-                    <DropdownMenuItem
-                      onClick={handleCreatePr}
-                      disabled={isCreatingPr}
-                    >
-                      {isCreatingPr ? (
-                        <IconLoader2 size={14} className="animate-spin" />
-                      ) : (
-                        <IconGitPullRequest size={14} />
-                      )}
-                      Create PR
-                    </DropdownMenuItem>
-                  )}
-                  {project.prUrl ? (
-                    <DropdownMenuItem asChild>
-                      <a
-                        href={project.prUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <IconGitPullRequest size={14} />
-                        View PR
-                      </a>
-                    </DropdownMenuItem>
-                  ) : null}
-                  {hasDeployedPreview && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <DropdownMenuItem disabled>
-                            <IconBrandVercel size={14} />
-                            View Preview
-                          </DropdownMenuItem>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Please start sandbox and view changes through the
-                        preview tab there instead
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                  {prLinks.items}
                   {hasPlanContext && (
                     <>
                       {(showResolveConflicts ||
                         hasSandboxCommandItems ||
-                        hasPrLinkItems) && <DropdownMenuSeparator />}
+                        prLinks.hasItems) && <DropdownMenuSeparator />}
                       <DropdownMenuItem onClick={() => setShowPlanModal(true)}>
                         <IconFileText size={14} />
                         View Plan
@@ -552,7 +521,7 @@ export function ProjectDetailClient({
                   )}
                   {(showResolveConflicts ||
                     hasSandboxCommandItems ||
-                    hasPrLinkItems ||
+                    prLinks.hasItems ||
                     hasPlanContext) && <DropdownMenuSeparator />}
                   <CopyLinkMenuItem />
                 </DropdownMenuContent>
