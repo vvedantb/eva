@@ -16,7 +16,7 @@ import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
-import { SessionChatHeader } from "./_components/SessionChatHeader";
+import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
 import {
   SessionSummaryModal,
@@ -274,7 +274,7 @@ export function ChatPanel({
         : (accounts.find((account) => account.id === stickyProviderAccountId)
             ?.label ?? "Selected account");
 
-  const { headerLeft, headerRight } = SessionChatHeader({
+  const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
     sessionId,
     title,
