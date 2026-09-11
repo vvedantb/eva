@@ -783,6 +783,13 @@ async function runDeploymentPollAttempt(
       deploymentProjectName: args.deploymentProjectName,
     });
 
+    if (snapshot.kind === "missing_branch") {
+      console.log(
+        `${opts.logPrefix} Branch not found for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt} — not yet published or already deleted`,
+      );
+      await maybeReschedule();
+      return;
+    }
     if (snapshot.kind === "no_deployments") {
       console.log(
         `${opts.logPrefix} No deployment found for ${args.repoOwner}/${args.repoName} branch=${args.branchName} sha=${snapshot.commitSha} attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
