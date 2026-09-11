@@ -15,6 +15,7 @@
   },
   "rules": {
     "react/rules-of-hooks": "error",
+    "react/capitalized-calls": "error",
     "react/exhaustive-deps": "warn",
     "react/react-in-jsx-scope": "off",
     "react/set-state-in-effect": "warn",

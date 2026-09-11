@@ -9,6 +9,9 @@ import {
   type ProposedPlanRow,
 } from "./proposedPlanLogic";
 import type { Id } from "@eva/backend";
+import { z } from "zod";
+
+const proposedPlanId = z.custom<Id<"proposedPlans">>();
 
 test("proposed plan title is the first heading", () => {
   expect(proposedPlanTitle("# Checkout rework\n\nSteps")).toBe(
@@ -25,13 +28,13 @@ test("buildPlanImplementationPrompt prefixes the plan", () => {
 
 describe("proposed plan selection", () => {
   const older: ProposedPlanRow = {
-    _id: "plan_old" as Id<"proposedPlans">,
+    _id: proposedPlanId.parse("plan_old"),
     planMarkdown: "# Old",
     createdAt: 1,
     updatedAt: 1,
   };
   const newer: ProposedPlanRow = {
-    _id: "plan_new" as Id<"proposedPlans">,
+    _id: proposedPlanId.parse("plan_new"),
     planMarkdown: "# New",
     createdAt: 2,
     updatedAt: 3,

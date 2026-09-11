@@ -38,7 +38,7 @@ export function SandboxAutoStopSettingsClient() {
     );
   }
 
-  const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const browserTimeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const saveSettings = (args: {
     enabled: boolean;
