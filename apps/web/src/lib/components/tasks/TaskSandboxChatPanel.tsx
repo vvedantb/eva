@@ -280,6 +280,18 @@ export function TaskSandboxChatPanel({
     // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
     compactionReadOnly: !isSandboxActive,
     backgroundAgents: task?.backgroundAgents,
+    // Owner-only, like the account picker: task chat is owner-sticky.
+    usageLimitRecovery:
+      isOwner && task
+        ? {
+            messages: messages ?? [],
+            accounts,
+            resolveAccountId,
+            currentAccountId: task.providerAccountId ?? null,
+            onSwitchAccount: switchProviderAccount,
+            isSandboxActive,
+          }
+        : undefined,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
     onSendCommand: (command) => {

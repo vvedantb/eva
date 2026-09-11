@@ -387,7 +387,9 @@ function TestingArenaDetail({ doc }: { doc: ArenaDoc }) {
           <BranchSelect
             value={branch}
             onValueChange={setBranch}
-            className="h-7 w-24 text-xs max-sm:h-10 sm:w-36"
+            // `shrink-0` + a wider floor below `sm`: as a flex child next to
+            // "Run Test" it otherwise shrank until the branch read as one letter.
+            className="h-7 w-24 text-xs max-sm:h-10 max-sm:w-32 max-sm:shrink-0 sm:w-36"
           />
           <Button
             size="sm"

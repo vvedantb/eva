@@ -165,7 +165,7 @@ function SyncSettingsRoute() {
           className="motion-press border-border text-muted-foreground hover:scale-[1.01] active:scale-[0.96]"
         >
           <IconRefresh size={16} className={fetching ? "animate-spin" : ""} />
-          <span className="hidden sm:inline">Refresh</span>
+          <span className="max-sm:sr-only">Refresh</span>
         </Button>
       }
     >

@@ -615,6 +615,9 @@ export const githubRepoFields = {
   defaultFastMode: v.optional(v.boolean()),
   sessionsVncEnabled: v.optional(v.boolean()),
   sessionsVscodeEnabled: v.optional(v.boolean()),
+  // Opt-out: when true, other sandboxes may not mint read tokens for this
+  // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
+  sandboxReadExcluded: v.optional(v.boolean()),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -815,6 +818,10 @@ export const messageFields = {
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
   errorDetail: v.optional(v.string()),
+  // Assistant rows: why the turn failed, when the client needs to react to the
+  // class of failure (the usage-limit recovery banner). Only "rate_limit" is
+  // stamped today; unclassified failures leave it unset.
+  errorType: v.optional(errorTypeValidator),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),

@@ -26,6 +26,18 @@ export function buildSystemPromptBlock(
   return `\n\n## System Prompt\n${systemPrompt}`;
 }
 
+/** Lists sibling repositories the sandbox's git credentials can read; empty when there are none. */
+export function buildReadableReposBlock(
+  repos: ReadonlyArray<{ owner: string; name: string }>,
+): string {
+  const [first] = repos;
+  if (first === undefined) return "";
+  const list = repos.map((repo) => `${repo.owner}/${repo.name}`).join(", ");
+  return `\n\n## Other repositories you may read
+Your git credentials can also read these repositories (clone/fetch only, no push): ${list}.
+Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
+}
+
 /** Builds an instruction string directing the agent to work inside a specific root directory. */
 export function buildRootDirectoryInstruction(rootDirectory: string): string {
   if (!rootDirectory) return "";

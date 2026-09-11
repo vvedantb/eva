@@ -183,11 +183,18 @@ export function ChatComposer({
 
   const mutedBar = (stashButton: ReactNode) => (
     <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
+      {/* On a phone the bar is ~340px wide and the model name is long, so a
+          `shrink-0` picker left the leading control (the base branch) one
+          letter. Both sides give width there: the leading control takes a share
+          of the free space, the picker shrinks and truncates. Desktop keeps the
+          picker at its natural width. */}
       {underCardLeading ? (
-        <div className="min-w-0">{underCardLeading}</div>
+        <div className="min-w-0 max-sm:flex-1 max-sm:basis-0">
+          {underCardLeading}
+        </div>
       ) : null}
       {stashButton}
-      <div className="ml-auto min-w-0 shrink-0">
+      <div className="ml-auto min-w-0 max-sm:shrink sm:shrink-0">
         <ModelSelectWithTraits
           value={model}
           options={modelOptions}

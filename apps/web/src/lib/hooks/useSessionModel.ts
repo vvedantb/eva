@@ -33,9 +33,10 @@ export function useSessionModel(
   setTraits: (partial: Partial<StoredModelTraits>) => void;
   /** undefined while session loading — treat as Team until the query lands. */
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
+  /** Resolves once the replacement daemon is warm. */
   setProviderAccountId: (
     providerAccountId: Id<"userProviderAccounts"> | null,
-  ) => void;
+  ) => Promise<void>;
   isSwitchingAccount: boolean;
 } {
   const session = useQuery(api.sessions.get, { id: sessionId });

@@ -28,7 +28,7 @@ export const VERCEL_EDITOR_INTERNAL_PORT = 18080;
 const HEALTH_PATH = "/__eva_preview_proxy/health";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v18";
+const SCRIPT_VERSION = "stream-v19";
 
 /** Values injected into the generated proxy script to drive the auth gate. */
 interface PreviewProxyAuthParams {
@@ -438,6 +438,52 @@ function resolveRoute(url) {
   return { port: targetPort, path: u, injects: INJECT_ENABLED };
 }
 
+// Upstream apps set their session cookies with the browser's SameSite=Lax
+// default, which cross-site iframes (Eva web app → *.vercel.run preview
+// origin) silently drop — so signing in to the previewed app only worked when
+// opened top-level in a new tab. Rewrite Set-Cookie with the same attributes
+// the proxy's own session cookie uses (SameSite=None; Secure; Partitioned) so
+// the app's sign-in works inside the preview iframe. Domain= is stripped: the
+// upstream only knows its localhost host, which would pin the cookie to a
+// host the browser never sees. Every rewrite is paired with an
+// unpartitionedCookieDeletion of the same cookie (see below).
+function rewriteSetCookie(value) {
+  const parts = String(value).split(";");
+  const kept = [parts[0]];
+  for (let i = 1; i < parts.length; i += 1) {
+    const attr = parts[i].trim();
+    if (!attr) continue;
+    const lower = attr.toLowerCase();
+    if (lower.startsWith("samesite")) continue;
+    if (lower.startsWith("domain")) continue;
+    if (lower === "secure" || lower === "partitioned") continue;
+    kept.push(attr);
+  }
+  return kept.join("; ") + "; Secure; SameSite=None; Partitioned";
+}
+
+// Same-name partitioned and unpartitioned cookies are distinct cookies to the
+// browser (CHIPS) and are both sent in the Cookie header. A cookie the app
+// wrote client-side via document.cookie is unpartitioned; once the proxy
+// rewrites the server copy to Partitioned the two coexist and the upstream sees
+// two values under one name (stale logouts, wrong account). Every rewritten
+// Set-Cookie is therefore preceded by an expiry of the unpartitioned copy with
+// the same name and path. Emitted FIRST so browsers without CHIPS (which
+// ignore Partitioned and share one jar) delete then set, never set then delete.
+function unpartitionedCookieDeletion(value) {
+  const parts = String(value).split(";");
+  const eq = parts[0].indexOf("=");
+  const name = (eq === -1 ? parts[0] : parts[0].slice(0, eq)).trim();
+  let path = "/";
+  for (let i = 1; i < parts.length; i += 1) {
+    const attr = parts[i].trim();
+    if (attr.toLowerCase().startsWith("path=")) {
+      path = attr.slice(5).trim();
+    }
+  }
+  return name + "=; Path=" + path + "; Max-Age=0; Secure; SameSite=None";
+}
+
 const injectedScript = "(" + function () {
   const flag = "__evaPreviewNavigationSync";
   if (window[flag]) return;
@@ -625,11 +671,49 @@ const convexRewriteScript = "(" + function () {
   rewriteTree(document);
 }.toString() + ")();";
 
+// Cookies the app writes client-side never pass through responseHeaders, so
+// without this patch they keep the browser's unpartitioned default while the
+// proxy's rewrite makes the server copies Partitioned — two same-name cookies
+// in the Cookie header (see unpartitionedCookieDeletion). document.cookie
+// therefore applies the very same attribute rules, deletion first so
+// non-CHIPS browsers (one jar) end up with the rewritten cookie, not none.
+function installPartitionedDocumentCookie(rewrite, deletion) {
+  const flag = "__evaPartitionedDocumentCookie";
+  if (window[flag]) return;
+  window[flag] = true;
+  // Mirrors the proxy's loopback exemption: in-sandbox browsers are not
+  // behind the cookie rewrite, so their client-side cookies must stay as-is.
+  const host = window.location.hostname;
+  if (host === "127.0.0.1" || host === "localhost" || host === "[::1]") return;
+  const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  if (!descriptor || typeof descriptor.set !== "function" || typeof descriptor.get !== "function") return;
+  Object.defineProperty(Document.prototype, "cookie", {
+    configurable: true,
+    enumerable: descriptor.enumerable,
+    get: descriptor.get,
+    set: function (value) {
+      const text = String(value);
+      descriptor.set.call(this, deletion(text));
+      descriptor.set.call(this, rewrite(text));
+    },
+  });
+}
+
+const cookiePatchScript =
+  "(" + installPartitionedDocumentCookie.toString() + ")(" +
+  rewriteSetCookie.toString() + ", " + unpartitionedCookieDeletion.toString() + ");";
+
 const ANNOTATION_SCRIPT = ${JSON.stringify(PREVIEW_ANNOTATION_SCRIPT)};
 
 function buildInjectionTag() {
   const combined =
-    convexRewriteScript + "\n" + injectedScript + "\n" + ANNOTATION_SCRIPT;
+    cookiePatchScript +
+    "\n" +
+    convexRewriteScript +
+    "\n" +
+    injectedScript +
+    "\n" +
+    ANNOTATION_SCRIPT;
   const safeScript = combined.replace(/<\/script/gi, "<\\/script");
   return "<script data-eva-preview-nav-sync>" + safeScript + "</scr" + "ipt>";
 }
@@ -716,29 +800,6 @@ function rewriteLocationHeader(value) {
   }
 }
 
-// Upstream apps set their session cookies with the browser's SameSite=Lax
-// default, which cross-site iframes (Eva web app → *.vercel.run preview
-// origin) silently drop — so signing in to the previewed app only worked when
-// opened top-level in a new tab. Rewrite Set-Cookie with the same attributes
-// the proxy's own session cookie uses (SameSite=None; Secure; Partitioned) so
-// the app's sign-in works inside the preview iframe. Domain= is stripped: the
-// upstream only knows its localhost host, which would pin the cookie to a
-// host the browser never sees.
-function rewriteSetCookie(value) {
-  const parts = String(value).split(";");
-  const kept = [parts[0]];
-  for (let i = 1; i < parts.length; i += 1) {
-    const attr = parts[i].trim();
-    if (!attr) continue;
-    const lower = attr.toLowerCase();
-    if (lower.startsWith("samesite")) continue;
-    if (lower.startsWith("domain")) continue;
-    if (lower === "secure" || lower === "partitioned") continue;
-    kept.push(attr);
-  }
-  return kept.join("; ") + "; Secure; SameSite=None; Partitioned";
-}
-
 function responseHeaders(upstreamHeaders, injectsHtml, addCors, rewriteCookies) {
   const headers = {};
   for (const name of Object.keys(upstreamHeaders)) {
@@ -760,11 +821,13 @@ function responseHeaders(upstreamHeaders, injectsHtml, addCors, rewriteCookies) 
     }
 
     if (lower === "set-cookie" && rewriteCookies) {
-      if (Array.isArray(value)) {
-        headers[name] = value.map(rewriteSetCookie);
-      } else {
-        headers[name] = rewriteSetCookie(String(value));
+      const cookies = Array.isArray(value) ? value : [String(value)];
+      const out = [];
+      for (const cookie of cookies) {
+        out.push(unpartitionedCookieDeletion(String(cookie)));
+        out.push(rewriteSetCookie(String(cookie)));
       }
+      headers[name] = out;
       continue;
     }
 

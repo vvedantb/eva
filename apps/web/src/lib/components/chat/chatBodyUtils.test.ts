@@ -8,6 +8,7 @@ import {
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
   otherUserIdsInChat,
+  stripErrorPrefix,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
 
@@ -225,6 +226,30 @@ describe("otherUserIdsInChat", () => {
         "me",
       ),
     ).toEqual(["ann", "zoe"]);
+  });
+});
+
+/**
+ * The failed-turn notice states the error itself, so the stamp the harness
+ * writes in front of the text would be said twice.
+ */
+describe("stripErrorPrefix", () => {
+  test("drops the harness stamp", () => {
+    expect(
+      stripErrorPrefix(
+        "Error: You've hit your session limit · resets 12pm (UTC)",
+      ),
+    ).toBe("You've hit your session limit · resets 12pm (UTC)");
+  });
+
+  test("leaves text that never had one", () => {
+    expect(stripErrorPrefix("  Claude usage limit reached  ")).toBe(
+      "Claude usage limit reached",
+    );
+  });
+
+  test("only the leading stamp goes", () => {
+    expect(stripErrorPrefix("Error: Error: twice")).toBe("Error: twice");
   });
 });
 
