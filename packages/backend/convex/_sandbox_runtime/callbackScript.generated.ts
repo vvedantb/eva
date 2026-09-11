@@ -837,9 +837,8 @@ async function withRetries(label, maxRetries, run, shouldRetry = () => true) {
       attempt++;
       if (attempt > maxRetries || !shouldRetry(error)) throw e;
       const delayMs = buildRetryDelayMs(attempt);
-      console.error(
-        label + " attempt " + attempt + " failed, retrying in " + delayMs + "ms:",
-        String(e)
+      log(
+        label + " attempt " + attempt + " failed, retrying in " + delayMs + "ms: " + String(e)
       );
       await new Promise((r) => setTimeout(r, delayMs));
     }
@@ -4357,6 +4356,177 @@ function appendStreamedContent(text, isBlockBoundary = false) {
 
 // callback-src/runtime/heartbeats.ts
 import { writeFileSync as writeFileSync7 } from "fs";
+import { freemem, loadavg } from "os";
+
+// callback-src/runtime/eventLoopStall.ts
+var EVENT_LOOP_STALL_LOG_MS = 3e4;
+function measureTickStallMs(input) {
+  const lateBy = input.now - input.previousTickAt - input.intervalMs;
+  return lateBy > input.toleranceMs ? lateBy : 0;
+}
+
+// callback-src/runtime/turnPersist.ts
+import { spawnSync as spawnSync3 } from "child_process";
+var GIT_STEP_TIMEOUT_MS = 2e4;
+var PUSH_TIMEOUT_MS = 6e4;
+var COMMIT_ADD_ARGS = [
+  "add",
+  "-A",
+  "--",
+  ":!*.png",
+  ":!*.jpg",
+  ":!*.jpeg",
+  ":!*.gif",
+  ":!*.webp",
+  ":!*.webm",
+  ":!*.mp4",
+  ":!*.mov",
+  ":!screenshots/",
+  ":!recordings/",
+  ":!plan.md"
+];
+function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
+  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  const out = ((result.stdout || "") + (result.stderr || "")).trim();
+  return { ok: result.status === 0, out };
+}
+function localBranchRewroteOwnHistory(branch, remoteRef) {
+  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
+  const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
+  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
+  return reflog.out.split("\\n").map((line) => line.trim()).includes(remoteTip.out);
+}
+function isMissingRemoteRef(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
+}
+function isNonFastForwardPush(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
+}
+function synchronizeForPush(branch) {
+  const remoteRef = \`refs/remotes/origin/\${branch}\`;
+  const fetch2 = git(
+    [
+      "fetch",
+      "--no-tags",
+      "origin",
+      \`+refs/heads/\${branch}:\${remoteRef}\`
+    ],
+    PUSH_TIMEOUT_MS
+  );
+  if (!fetch2.ok) {
+    if (isMissingRemoteRef(fetch2.out)) {
+      git(["update-ref", "-d", remoteRef]);
+      return { status: "ready", remoteExists: false };
+    }
+    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
+    return { status: "failed" };
+  }
+  const divergence = git([
+    "rev-list",
+    "--left-right",
+    "--count",
+    \`\${remoteRef}...refs/heads/\${branch}\`
+  ]);
+  if (!divergence.ok) {
+    log(
+      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
+    );
+    return { status: "failed" };
+  }
+  if (/^0\\s+\\d+\$/.test(divergence.out)) {
+    return { status: "ready", remoteExists: true };
+  }
+  if (/^[1-9]\\d*\\s+0\$/.test(divergence.out)) {
+    const fastForward = git(["merge", "--ff-only", remoteRef]);
+    if (fastForward.ok) {
+      return { status: "ready", remoteExists: true };
+    }
+    log(
+      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
+    );
+    return { status: "failed" };
+  }
+  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.out)) {
+    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
+      log(
+        \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
+      );
+      return { status: "failed" };
+    }
+    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
+    if (merge.ok) {
+      return { status: "ready", remoteExists: true };
+    }
+    git(["merge", "--abort"]);
+    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
+    return { status: "failed" };
+  }
+  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
+  return { status: "failed" };
+}
+function tipAlreadyPublished(exclusion) {
+  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
+  return unpushed.ok && unpushed.out === "0";
+}
+function persistTurnWork() {
+  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  const startedAt = Date.now();
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch.ok || !branch.out.startsWith("eva/")) {
+    if (branch.ok && branch.out) {
+      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
+    }
+    return;
+  }
+  const dirty = git(["status", "--porcelain"]);
+  if (dirty.ok && dirty.out.length > 0) {
+    git(COMMIT_ADD_ARGS);
+    const staged = git(["diff", "--cached", "--quiet"]);
+    if (!staged.ok) {
+      const commit = git([
+        "commit",
+        "-m",
+        "task: checkpoint uncommitted work at turn end"
+      ]);
+      log(
+        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
+      );
+    }
+  }
+  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
+  const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const sync = synchronizeForPush(branch.out);
+    if (sync.status === "failed") return;
+    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
+    if (tipAlreadyPublished(exclusion)) return;
+    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
+    if (push.ok) {
+      log(
+        \`persistTurnWork: push ok branch=\${branch.out} in \${Date.now() - startedAt}ms\`
+      );
+      return;
+    }
+    if (attempt < 2 && isNonFastForwardPush(push.out)) {
+      log(
+        \`persistTurnWork: remote moved during push; refetching branch=\${branch.out}\`
+      );
+      continue;
+    }
+    log(
+      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
+    );
+    return;
+  }
+}
+
+// callback-src/runtime/heartbeats.ts
 var flushInterval = null;
 var heartbeatInterval = null;
 var activeFlush = null;
@@ -4390,12 +4560,11 @@ function noteHeartbeatFailure(error) {
   if (callbackState.consecutiveHeartbeatFailures === 1) {
     callbackState.heartbeatFailureStreakStartedAt = Date.now();
   }
-  console.error(
-    "Heartbeat failed (consecutive: " + callbackState.consecutiveHeartbeatFailures + "):",
-    message
+  log(
+    "Heartbeat failed (consecutive: " + callbackState.consecutiveHeartbeatFailures + "): " + message
   );
   if (callbackState.consecutiveHeartbeatFailures === 2 || callbackState.consecutiveHeartbeatFailures === 4) {
-    console.error(
+    log(
       "[streaming-heartbeat] degraded: " + callbackState.consecutiveHeartbeatFailures + " consecutive post-retry failures (burstFatal>=" + HEARTBEAT_FATAL_BURST + " or slowFatal>=" + HEARTBEAT_FATAL_SLOW_COUNT + " over " + HEARTBEAT_FATAL_SLOW_WINDOW_MS + "ms)"
     );
   }
@@ -4551,13 +4720,32 @@ async function initialHeartbeat() {
     }
   }
 }
+var HEARTBEAT_TICK_MS = 1e4;
+var lastHeartbeatTickAt = 0;
+function logEventLoopStall(now) {
+  const stalledMs = measureTickStallMs({
+    previousTickAt: lastHeartbeatTickAt,
+    now,
+    intervalMs: HEARTBEAT_TICK_MS,
+    toleranceMs: EVENT_LOOP_STALL_LOG_MS
+  });
+  lastHeartbeatTickAt = now;
+  if (stalledMs === 0) return;
+  const mb = (bytes) => String(Math.round(bytes / 1024 / 1024));
+  const memory = process.memoryUsage();
+  log(
+    "event loop stalled for " + stalledMs + "ms (rss=" + mb(memory.rss) + "MB heapUsed=" + mb(memory.heapUsed) + "MB freemem=" + mb(freemem()) + "MB loadavg=" + loadavg().map((n) => n.toFixed(2)).join(",") + ")"
+  );
+}
 function startStreamingLoops() {
   flushInterval = setInterval(() => {
     void flushStreaming().then(enforceTurnLease);
   }, 150);
+  lastHeartbeatTickAt = Date.now();
   heartbeatInterval = setInterval(() => {
+    logEventLoopStall(Date.now());
     void heartbeatPing().then(enforceTurnLease);
-  }, 1e4);
+  }, HEARTBEAT_TICK_MS);
 }
 async function stopStreamingLoops() {
   if (callbackState.streamingLoopsStopped) return;
@@ -4580,6 +4768,12 @@ function enforceTurnLease() {
   if (flushInterval) clearInterval(flushInterval);
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   callbackState.streamingLoopsStopped = true;
+  if (decision.reason !== "superseded") {
+    log(
+      "persisting turn work before lease-terminal exit (" + decision.reason + ")"
+    );
+    persistTurnWork();
+  }
   setTimeout(() => process.exit(0), LEASE_EXIT_GRACE_MS).unref();
   return true;
 }
@@ -5143,167 +5337,6 @@ async function materializeTurnAttachments(turn) {
   }
   if (paths2.length === 0) return;
   turn.prompt += "\\n\\n---\\nThe user attached the following file(s). Read them with your file-reading tool before responding:\\n" + paths2.map((path3) => \`- \${path3}\`).join("\\n");
-}
-
-// callback-src/runtime/turnPersist.ts
-import { spawnSync as spawnSync3 } from "child_process";
-var GIT_STEP_TIMEOUT_MS = 2e4;
-var PUSH_TIMEOUT_MS = 6e4;
-var COMMIT_ADD_ARGS = [
-  "add",
-  "-A",
-  "--",
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md"
-];
-function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
-  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
-  });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
-function localBranchRewroteOwnHistory(branch, remoteRef) {
-  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
-  const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
-  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
-  return reflog.out.split("\\n").map((line) => line.trim()).includes(remoteTip.out);
-}
-function isMissingRemoteRef(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
-}
-function isNonFastForwardPush(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
-}
-function synchronizeForPush(branch) {
-  const remoteRef = \`refs/remotes/origin/\${branch}\`;
-  const fetch2 = git(
-    [
-      "fetch",
-      "--no-tags",
-      "origin",
-      \`+refs/heads/\${branch}:\${remoteRef}\`
-    ],
-    PUSH_TIMEOUT_MS
-  );
-  if (!fetch2.ok) {
-    if (isMissingRemoteRef(fetch2.out)) {
-      git(["update-ref", "-d", remoteRef]);
-      return { status: "ready", remoteExists: false };
-    }
-    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  const divergence = git([
-    "rev-list",
-    "--left-right",
-    "--count",
-    \`\${remoteRef}...refs/heads/\${branch}\`
-  ]);
-  if (!divergence.ok) {
-    log(
-      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^0\\s+\\d+\$/.test(divergence.out)) {
-    return { status: "ready", remoteExists: true };
-  }
-  if (/^[1-9]\\d*\\s+0\$/.test(divergence.out)) {
-    const fastForward = git(["merge", "--ff-only", remoteRef]);
-    if (fastForward.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    log(
-      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.out)) {
-    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
-      log(
-        \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
-      );
-      return { status: "failed" };
-    }
-    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
-    if (merge.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    git(["merge", "--abort"]);
-    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
-  return { status: "failed" };
-}
-function tipAlreadyPublished(exclusion) {
-  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
-  return unpushed.ok && unpushed.out === "0";
-}
-function persistTurnWork() {
-  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
-  const startedAt = Date.now();
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch.ok || !branch.out.startsWith("eva/")) {
-    if (branch.ok && branch.out) {
-      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
-    }
-    return;
-  }
-  const dirty = git(["status", "--porcelain"]);
-  if (dirty.ok && dirty.out.length > 0) {
-    git(COMMIT_ADD_ARGS);
-    const staged = git(["diff", "--cached", "--quiet"]);
-    if (!staged.ok) {
-      const commit = git([
-        "commit",
-        "-m",
-        "task: checkpoint uncommitted work at turn end"
-      ]);
-      log(
-        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
-      );
-    }
-  }
-  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
-  const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const sync = synchronizeForPush(branch.out);
-    if (sync.status === "failed") return;
-    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
-    if (tipAlreadyPublished(exclusion)) return;
-    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
-    if (push.ok) {
-      log(
-        \`persistTurnWork: push ok branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-      );
-      return;
-    }
-    if (attempt < 2 && isNonFastForwardPush(push.out)) {
-      log(
-        \`persistTurnWork: remote moved during push; refetching branch=\${branch.out}\`
-      );
-      continue;
-    }
-    log(
-      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-    );
-    return;
-  }
 }
 
 // callback-src/providers/githubToken.ts
