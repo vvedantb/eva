@@ -914,4 +914,20 @@ describe("MCP task and session creation always run on the repo default model", (
     }
     expect(nodeActions).not.toContain("mcpClaudeModelValidator");
   });
+
+  test("createSession queues the resolved repo default, not args.model", () => {
+    // Prod (2026-09-11): sessions:create Uncaught "model is required when
+    // queuing a message" — MCP create_session always sends a message and never
+    // a model, so checking args.model rolled the mutation back.
+    const source = convexSource("_sessions/mutations.ts");
+    const createFn = source.slice(
+      source.indexOf("export async function createSession"),
+      source.indexOf("export const create ="),
+    );
+    expect(createFn).toContain("const model = args.model ?? repo.defaultModel");
+    expect(createFn).toContain("if (!model)");
+    expect(createFn).not.toContain("if (!args.model)");
+    expect(createFn).not.toContain("model: args.model");
+  });
 });
+
