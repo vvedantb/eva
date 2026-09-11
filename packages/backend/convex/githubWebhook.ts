@@ -100,12 +100,12 @@ export function sessionPrArchiveNotificationCopy(args: {
   if (args.merged) {
     return {
       title: `${prRef} merged — "${args.sessionTitle}" archived`,
-      message: `Your session was archived because GitHub merged ${args.prUrl}.`,
+      message: `${prRef} was merged on GitHub (${args.prUrl}). Your session was archived.`,
     };
   }
   return {
     title: `${prRef} closed — "${args.sessionTitle}" archived`,
-    message: `Your session was archived because GitHub closed ${args.prUrl} without merging.`,
+    message: `${prRef} was closed on GitHub without merging (${args.prUrl}). Your session was archived.`,
   };
 }
 
