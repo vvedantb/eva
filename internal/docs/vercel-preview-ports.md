@@ -103,6 +103,12 @@ No customer repo changes. Custom Eva `devCommand` overrides still fall back to P
 - Grant + `authPort` use the **public** proxy port on Vercel so `/preview-auth` aligns with the iframe host.
 - Vercel: do **not** `launchDevServerInBackground` from Preview poll (Console is sole launcher).
 
+### Custom tabs: `/__tab/<port>`
+
+User-defined tabs (Supabase Studio on 54323, a mail catcher, …) listen on ports Vercel never exposes, and the one public slot is already the app's auth proxy. Each tab therefore rides that same proxy: `getPreviewUrl({ port, customTabPort })` ensures the proxy on the **app's** target (so Preview and tabs cannot clobber each other) and returns a URL whose path is `/__tab/<customTabPort>/`. The proxy forwards that prefix to `127.0.0.1:<customTabPort>`.
+
+For tab routes the proxy also rewrites `Location` headers and root-relative `href`/`src`/`action`/`srcset` back under the prefix, and falls back to the `Referer` for root-absolute asset requests (Next.js `/_next/…`). Tab routes never get the nav-sync/annotation injection. Readiness for a tab probes the tab's own port and never heals or restarts the dev server.
+
 ### Expose list
 
 `VERCEL_DEFAULT_EXPOSED_PORTS = [3000, 8080, 6080, 54321]` in `vercelProvider.ts`. Unchanged by UI port.
