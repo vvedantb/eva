@@ -132,7 +132,7 @@ ${buildSummarySection(uiTask)}
 export function buildConflictResolutionPrompt(
   branchName: string,
   baseBranch: string,
-  rootDirectory: string,
+  _rootDirectory: string,
   _repoOwner: string,
   _repoName: string,
   systemPrompt?: string,
