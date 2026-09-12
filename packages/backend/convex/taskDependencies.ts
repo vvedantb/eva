@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { authQuery, authMutation, getTaskWithAccess } from "./functions";
+import {
+  authQuery,
+  authMutation,
+  getTaskWithAccess,
+  hasTaskAccess,
+} from "./functions";
 
 const dependencyValidator = v.object({
   _id: v.id("taskDependencies"),
@@ -54,14 +59,15 @@ export const getDependencies = authQuery({
     const result = [];
     for (const dep of dependencies) {
       const task = await ctx.db.get(dep.dependsOnId);
-      if (task) {
-        result.push({
-          _id: task._id,
-          title: task.title,
-          status: task.status,
-          taskNumber: task.taskNumber,
-        });
+      if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+        continue;
       }
+      result.push({
+        _id: task._id,
+        title: task.title,
+        status: task.status,
+        taskNumber: task.taskNumber,
+      });
     }
     return result;
   },
@@ -79,7 +85,11 @@ export const isBlocked = authQuery({
       .collect();
     for (const dep of dependencies) {
       const dependsOnTask = await ctx.db.get(dep.dependsOnId);
-      if (dependsOnTask && dependsOnTask.status !== "done") {
+      if (!dependsOnTask) continue;
+      if (!(await hasTaskAccess(ctx.db, dependsOnTask, ctx.userId))) {
+        return true;
+      }
+      if (dependsOnTask.status !== "done") {
         return true;
       }
     }

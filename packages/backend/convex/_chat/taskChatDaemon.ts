@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation, getTaskWithAccess, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -286,6 +286,7 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await getTaskWithAccess(ctx.db, args.taskId, ctx.userId);
     await clearStreamingActivity(ctx, taskChatStreamEntityId(args.taskId));
 
     const message = await ctx.db.get(args.messageId);

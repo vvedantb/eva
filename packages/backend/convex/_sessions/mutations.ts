@@ -197,7 +197,11 @@ export const create = authMutation({
     sessionId: v.id("sessions"),
     numId: v.number(),
   }),
-  handler: async (ctx, args) => await createSession(ctx, args),
+  handler: async (ctx, args) => {
+    // Orchestrator flag is server-set only (`ensureOrchestratorSession`).
+    const { isOrchestrator: _ignored, ...safeArgs } = args;
+    return await createSession(ctx, safeArgs);
+  },
 });
 
 /** Adds a message to a session conversation. */

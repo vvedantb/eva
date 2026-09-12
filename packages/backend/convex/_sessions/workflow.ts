@@ -4,7 +4,7 @@ import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation, getSessionWithAccess, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -1447,6 +1447,7 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
     const turnResolution = await resolveCompletionTurn(ctx, {
       sessionId: args.sessionId,
       turnId: args.turnId,

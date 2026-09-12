@@ -4,7 +4,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, getProjectWithAccess } from "./functions";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackProjectWorkflow } from "./workflowWatchdog";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
@@ -389,6 +389,7 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeWorkflowId) return null;
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
 
     await sendCompletionEvent(
       ctx,
@@ -429,8 +430,11 @@ export const startInterview = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.activeWorkflowId) return null;
 
     const repo = await ctx.db.get(project.repoId);
@@ -465,8 +469,11 @@ export const startSpec = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.activeWorkflowId) return null;
 
     const repo = await ctx.db.get(project.repoId);
@@ -596,6 +603,7 @@ export const handleSpecCompletion = authMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeWorkflowId) return null;
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
 
     await sendCompletionEvent(
       ctx,

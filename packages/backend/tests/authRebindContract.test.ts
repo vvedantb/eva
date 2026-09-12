@@ -17,8 +17,10 @@ describe("ensureUserExists identity recovery", () => {
     expect(emailLookupAt).toBeGreaterThan(clerkLookupAt);
   });
 
-  test("never performs the fallback for an identity without an email", () => {
-    const emailGuardAt = body.indexOf("if (email) {");
+  test("never performs the fallback for an identity without a verified email", () => {
+    const emailGuardAt = body.indexOf(
+      "if (email && identity.emailVerified === true) {",
+    );
     const emailLookupAt = body.indexOf('withIndex("by_email"');
     expect(emailGuardAt).toBeGreaterThan(-1);
     expect(emailLookupAt).toBeGreaterThan(emailGuardAt);

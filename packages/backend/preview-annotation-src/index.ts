@@ -115,13 +115,16 @@ function evaPreviewAnnotationScript(): void {
   }
   root.setAttribute(ATTR, "1");
 
-  let parentOrigin = "*";
+  let parentOrigin = "";
   try {
-    if (document.referrer) {
+    const ancestor = window.location.ancestorOrigins?.[0];
+    if (ancestor) {
+      parentOrigin = new URL(ancestor).origin;
+    } else if (document.referrer) {
       parentOrigin = new URL(document.referrer).origin;
     }
   } catch {
-    /* keep "*" */
+    parentOrigin = "";
   }
 
   let modeActive = false;
@@ -164,6 +167,7 @@ function evaPreviewAnnotationScript(): void {
           message: string;
         },
   ): void {
+    if (!parentOrigin) return;
     window.parent.postMessage(payload, parentOrigin);
   }
 
@@ -693,7 +697,7 @@ function evaPreviewAnnotationScript(): void {
   }
 
   window.addEventListener("message", (event) => {
-    if (parentOrigin !== "*" && event.origin !== parentOrigin) return;
+    if (!parentOrigin || event.origin !== parentOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const type = Reflect.get(data, "type");

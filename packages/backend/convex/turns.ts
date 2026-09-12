@@ -15,6 +15,7 @@ import {
   upsertStreamingActivity,
 } from "./streaming";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { assertEntityAccess } from "./_auth/entityAccess";
 import {
   acquireTurnLease,
   advanceTurn,
@@ -171,9 +172,10 @@ export const heartbeat = internalMutation({
 export const heartbeatFromCallback = authMutation({
   args: heartbeatArgs,
   returns: v.object({ lease: leaseVerdictValidator }),
-  handler: async (ctx, args) => ({
-    lease: await applyFencedHeartbeat(ctx, args),
-  }),
+  handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
+    return { lease: await applyFencedHeartbeat(ctx, args) };
+  },
 });
 
 /** Legacy callbacks may write only while no durable Turn owns the session. */
@@ -196,6 +198,7 @@ export const legacyHeartbeatFromCallback = authMutation({
     ctx,
     args,
   ): Promise<Infer<typeof legacyHeartbeatResultValidator>> => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const accepted = await applyLegacyHeartbeat(ctx, args);
     return {
       accepted,

@@ -47,6 +47,13 @@ async function collectSiblingConfigFiles(
     .collect();
   const files: Array<Doc<"sandboxConfigFiles">> = [];
   for (const sibling of siblings) {
+    const sameTeam =
+      sibling._id === anchorRepo._id ||
+      (anchorRepo.teamId !== undefined &&
+        sibling.teamId === anchorRepo.teamId) ||
+      (anchorRepo.teamId === undefined &&
+        sibling.connectedBy === anchorRepo.connectedBy);
+    if (!sameTeam) continue;
     const siblingFiles = await ctx.db
       .query("sandboxConfigFiles")
       .withIndex("by_repo", (q) => q.eq("repoId", sibling._id))

@@ -455,6 +455,9 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     await sendCompletionEvent(ctx, evalCompleteEvent, report.activeWorkflowId, {
       success: args.success,
@@ -597,6 +600,9 @@ export const handleFixCompletion = authMutation({
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     await sendCompletionEvent(ctx, fixCompleteEvent, report.activeWorkflowId, {
       success: args.success,

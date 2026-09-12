@@ -2103,10 +2103,18 @@ const supabaseTokenCache = new Map<
 >();
 
 export const resolveSupabaseToken = internalAction({
-  args: { clerkUserId: v.string() },
+  args: {
+    clerkUserId: v.string(),
+    scopedRepoId: v.optional(v.string()),
+  },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { clerkUserId }): Promise<string | null> => {
-    const cached = supabaseTokenCache.get(clerkUserId);
+  handler: async (
+    ctx,
+    { clerkUserId, scopedRepoId },
+  ): Promise<string | null> => {
+    const cacheKey =
+      scopedRepoId !== undefined ? `${clerkUserId}:${scopedRepoId}` : clerkUserId;
+    const cached = supabaseTokenCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.token;
     }
@@ -2115,47 +2123,26 @@ export const resolveSupabaseToken = internalAction({
     const userId = await resolveUserByClerkId(deployKey, clerkUserId);
     if (!userId) return null;
 
-    // Get repos and search for SUPABASE_ACCESS_TOKEN
-    const convexUrl = getEvaConvexCloudUrl();
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teamRepoResults = await Promise.all(memberships.map(m => ctx.db.query("githubRepos").withIndex("by_team", q => q.eq("teamId", m.teamId)).collect()));
-      const connectedRepos = await ctx.db.query("githubRepos").withIndex("by_connected_by", q => q.eq("connectedBy", userId)).collect();
-      const seen = new Set();
-      const result = [];
-      for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        result.push(repo._id);
-      }
-      return result;`,
-    );
-    const result = await runTestQueryRemote(convexUrl, deployKey, source);
-    const repoIds = z.array(z.string()).parse(result.value);
+    if (scopedRepoId === undefined) return null;
 
-    // Search for Supabase token in each repo's env vars
-    for (const repoId of repoIds) {
-      try {
-        const vars: EnvVar[] = await ctx.runAction(
-          internal.mcp.routes.getDecryptedRepoEnvVars,
-          { repoId },
-        );
-        const match: EnvVar | undefined = vars.find(
-          (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
-        );
-        if (match) {
-          supabaseTokenCache.set(clerkUserId, {
-            token: match.value,
-            expiresAt: Date.now() + CACHE_TTL_MS,
-          });
-          return match.value;
-        }
-      } catch {
-        // Skip failed repos
+    try {
+      const vars: EnvVar[] = await ctx.runAction(
+        internal.mcp.routes.getDecryptedRepoEnvVars,
+        { repoId: scopedRepoId },
+      );
+      const match: EnvVar | undefined = vars.find(
+        (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
+      );
+      if (match) {
+        supabaseTokenCache.set(cacheKey, {
+          token: match.value,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
+        return match.value;
       }
+    } catch {
+      return null;
     }
-
     return null;
   },
 });

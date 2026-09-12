@@ -60,12 +60,17 @@ function getLocalParts(
  */
 export const getSandboxAutoStopSettings = authQuery({
   args: {},
-  returns: v.object({
-    enabled: v.boolean(),
-    time: v.string(),
-    timeZone: v.string(),
-  }),
+  returns: v.union(
+    v.object({
+      enabled: v.boolean(),
+      time: v.string(),
+      timeZone: v.string(),
+    }),
+    v.null(),
+  ),
   handler: async (ctx) => {
+    const user = await ctx.db.get(ctx.userId);
+    if (user?.isAdmin !== true) return null;
     const doc = await ctx.db.query("appSettings").first();
     return {
       enabled: doc?.sandboxAutoStopEnabled ?? false,
@@ -89,6 +94,10 @@ export const setSandboxAutoStopSettings = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const user = await ctx.db.get(ctx.userId);
+    if (user?.isAdmin !== true) {
+      throw new Error("Not authorized");
+    }
     const existing = await ctx.db.query("appSettings").first();
     if (existing) {
       await ctx.db.patch(existing._id, {

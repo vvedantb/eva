@@ -322,8 +322,12 @@ http.route({
       });
     }
     const token: string = await ctx.runAction(
-      internal.githubAuth.mintInstallationToken,
-      { installationId: resolved.installationId },
+      internal.githubAuth.mintRepoScopedWriteToken,
+      {
+        installationId: resolved.installationId,
+        githubId: resolved.githubId,
+        name: resolved.name,
+      },
     );
     return Response.json({ username: "x-access-token", token });
   }),
@@ -629,6 +633,8 @@ http.route({
           prUrl,
           merged,
           branchName: branchName ?? undefined,
+          repoOwner: parsed.data.repository?.owner?.login ?? undefined,
+          repoName: parsed.data.repository?.name ?? undefined,
         });
       }
     }

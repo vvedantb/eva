@@ -301,6 +301,13 @@ export const resolveChatTargetForUser = internalQuery({
     const repoId = await targetRepoId(ctx, hit);
     if (!repoId) return null;
     if (!(await hasRepoAccess(ctx.db, repoId, userId))) return null;
+    if (
+      hit.kind === "session" &&
+      hit.doc.isOrchestrator === true &&
+      hit.doc.userId !== userId
+    ) {
+      return null;
+    }
 
     const repo = await ctx.db.get(repoId);
     if (!repo) return null;
@@ -591,6 +598,9 @@ export const listEntitiesForUser = internalQuery({
             openSessionIdsForRepo(ctx.db, repoId),
           ]);
           for (const doc of docs) {
+            if (doc.isOrchestrator === true && doc.userId !== userId) {
+              continue;
+            }
             rows.push({
               kind,
               id: doc._id,

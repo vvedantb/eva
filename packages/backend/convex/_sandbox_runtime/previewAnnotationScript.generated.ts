@@ -58,12 +58,16 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       return;
     }
     root.setAttribute(ATTR, "1");
-    let parentOrigin = "*";
+    let parentOrigin = "";
     try {
-      if (document.referrer) {
+      const ancestor = window.location.ancestorOrigins?.[0];
+      if (ancestor) {
+        parentOrigin = new URL(ancestor).origin;
+      } else if (document.referrer) {
         parentOrigin = new URL(document.referrer).origin;
       }
     } catch {
+      parentOrigin = "";
     }
     let modeActive = false;
     let selectedEl = null;
@@ -71,6 +75,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     let labelEl = null;
     let rectRaf = 0;
     function post(payload) {
+      if (!parentOrigin) return;
       window.parent.postMessage(payload, parentOrigin);
     }
     function ensureOverlay() {
@@ -527,7 +532,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
     }
     window.addEventListener("message", (event) => {
-      if (parentOrigin !== "*" && event.origin !== parentOrigin) return;
+      if (!parentOrigin || event.origin !== parentOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       const type = Reflect.get(data, "type");

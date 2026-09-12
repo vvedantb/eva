@@ -58,6 +58,28 @@ export async function getInstallationToken(
 }
 
 /**
+ * Installation token limited to one repository. Write is for the sandbox's
+ * home repo (push); read is for sibling clones.
+ */
+export async function getRepoScopedInstallationToken(
+  installationId: number,
+  repo: { githubId: number | undefined; name: string },
+  contents: "read" | "write",
+): Promise<string> {
+  const creds = getGitHubCredentials();
+  const auth = createAppAuth(creds);
+  const installationAuth = await auth({
+    type: "installation",
+    installationId,
+    permissions: { contents, metadata: "read" },
+    ...(repo.githubId !== undefined
+      ? { repositoryIds: [repo.githubId] }
+      : { repositoryNames: [repo.name] }),
+  });
+  return installationAuth.token;
+}
+
+/**
  * Read-only token for exactly one repository in an installation (contents +
  * metadata read). Used when a sandbox asks for credentials for a repository
  * other than its own, so the token cannot write and cannot reach the rest of
@@ -68,17 +90,7 @@ export async function getReadOnlyRepoInstallationToken(
   installationId: number,
   repo: { githubId: number | undefined; name: string },
 ): Promise<string> {
-  const creds = getGitHubCredentials();
-  const auth = createAppAuth(creds);
-  const installationAuth = await auth({
-    type: "installation",
-    installationId,
-    permissions: { contents: "read", metadata: "read" },
-    ...(repo.githubId !== undefined
-      ? { repositoryIds: [repo.githubId] }
-      : { repositoryNames: [repo.name] }),
-  });
-  return installationAuth.token;
+  return getRepoScopedInstallationToken(installationId, repo, "read");
 }
 
 /** Creates an Octokit client authenticated as a specific GitHub App installation. */
@@ -104,6 +116,23 @@ export const mintInstallationToken = internalAction({
   returns: v.string(),
   handler: async (_ctx, args) => {
     return await getInstallationToken(args.installationId);
+  },
+});
+
+/** Single-repo write token for a sandbox's home repository. */
+export const mintRepoScopedWriteToken = internalAction({
+  args: {
+    installationId: v.number(),
+    githubId: v.optional(v.number()),
+    name: v.string(),
+  },
+  returns: v.string(),
+  handler: async (_ctx, args) => {
+    return await getRepoScopedInstallationToken(
+      args.installationId,
+      { githubId: args.githubId, name: args.name },
+      "write",
+    );
   },
 });
 

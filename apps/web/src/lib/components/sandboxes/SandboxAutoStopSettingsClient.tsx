@@ -39,6 +39,17 @@ export function SandboxAutoStopSettingsClient() {
     );
   }
 
+  if (settings === null) {
+    return (
+      <SettingsPage title="Sandboxes">
+        <SettingsSection
+          title="Daily auto-stop"
+          description="Only admins can change the app-wide sandbox auto-stop schedule."
+        />
+      </SettingsPage>
+    );
+  }
+
   const browserTimeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const saveSettings = (args: {

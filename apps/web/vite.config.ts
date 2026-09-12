@@ -17,7 +17,18 @@ function agentLoginPlugin(): Plugin {
     configureServer(server) {
       env = loadEnv("development", server.config.root, "");
 
-      server.middlewares.use("/api/auth/agent-login", async (_req, res) => {
+      server.middlewares.use("/api/auth/agent-login", async (req, res) => {
+        const addr = req.socket?.remoteAddress ?? "";
+        const isLoopback =
+          addr === "127.0.0.1" ||
+          addr === "::1" ||
+          addr === "::ffff:127.0.0.1";
+        if (!isLoopback) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Forbidden" }));
+          return;
+        }
+
         const secretKey = env.CLERK_SECRET_KEY;
         const agentUserId = env.AGENT_CLERK_USER_ID;
 

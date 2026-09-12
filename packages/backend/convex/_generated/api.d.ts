@@ -20,6 +20,7 @@ import type * as _agentTasks_queries from "../_agentTasks/queries.js";
 import type * as _agentTasks_runSummary from "../_agentTasks/runSummary.js";
 import type * as _agentTasks_sandbox from "../_agentTasks/sandbox.js";
 import type * as _auth_currentUser from "../_auth/currentUser.js";
+import type * as _auth_entityAccess from "../_auth/entityAccess.js";
 import type * as _auth_experimentalFlags from "../_auth/experimentalFlags.js";
 import type * as _automationWorkflow_deliverable from "../_automationWorkflow/deliverable.js";
 import type * as _automationWorkflow_findings from "../_automationWorkflow/findings.js";
@@ -413,6 +414,7 @@ declare const fullApi: ApiFromModules<{
   "_agentTasks/runSummary": typeof _agentTasks_runSummary;
   "_agentTasks/sandbox": typeof _agentTasks_sandbox;
   "_auth/currentUser": typeof _auth_currentUser;
+  "_auth/entityAccess": typeof _auth_entityAccess;
   "_auth/experimentalFlags": typeof _auth_experimentalFlags;
   "_automationWorkflow/deliverable": typeof _automationWorkflow_deliverable;
   "_automationWorkflow/findings": typeof _automationWorkflow_findings;

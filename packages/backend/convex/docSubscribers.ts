@@ -111,6 +111,12 @@ export const setSubscription = authMutation({
     if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
       throw new Error("Document not found");
     const targetUserId = args.userId ?? ctx.userId;
+    if (
+      targetUserId !== ctx.userId &&
+      !(await hasRepoAccess(ctx.db, doc.repoId, targetUserId))
+    ) {
+      throw new Error("Not authorized");
+    }
     const existing = await ctx.db
       .query("docSubscribers")
       .withIndex("by_doc_and_user", (q) =>

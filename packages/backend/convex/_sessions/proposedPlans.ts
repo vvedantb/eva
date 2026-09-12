@@ -39,6 +39,9 @@ export const capture = authMutation({
     if (!sessionId) return null;
     const session = await ctx.db.get(sessionId);
     if (!session) return null;
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     const captureKey = exitPlanCaptureKey({
       toolUseId: args.toolUseId,

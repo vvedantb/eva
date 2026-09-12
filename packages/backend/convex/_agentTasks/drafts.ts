@@ -4,6 +4,7 @@ import { internal } from "../_generated/api";
 import {
   authQuery,
   authMutation,
+  getProjectWithAccess,
   hasRepoAccess,
   recomputeProjectPhase,
 } from "../functions";
@@ -83,7 +84,17 @@ export const saveDraft = authMutation({
 
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
+    let project = null;
+    if (args.projectId) {
+      project = await getProjectWithAccess(
+        ctx.db,
+        args.projectId,
+        ctx.userId,
+      );
+      if (project.repoId !== args.repoId) {
+        throw new Error("Not authorized");
+      }
+    }
 
     const now = Date.now();
 

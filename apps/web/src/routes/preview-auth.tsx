@@ -3,15 +3,10 @@ import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
 import { useAction } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@eva/backend";
+import { parseAllowedReturn } from "@/lib/utils/previewAuthReturn";
 
 // Must match PREVIEW_GRANT_PARAM in packages/backend/convex/previewGrantConfig.ts.
 const GRANT_PARAM = "__eva_grant";
-
-// Open-redirect guard: only ever redirect back to a Vercel sandbox preview
-// origin over https. The proxy builds the `return` from its own Host, but
-// this is the trust boundary on the eva side, so we re-validate rather than
-// trust input.
-const VERCEL_PREVIEW_SUFFIX = ".vercel.run";
 
 const validateSearch = (search: Record<string, string>) => ({
   sandbox: typeof search.sandbox === "string" ? search.sandbox : "",
@@ -24,17 +19,6 @@ export const Route = createFileRoute("/preview-auth")({
   validateSearch,
   component: PreviewAuth,
 });
-
-function parseAllowedReturn(url: string): URL | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return null;
-    if (!parsed.hostname.endsWith(VERCEL_PREVIEW_SUFFIX)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Handshake route for cold/shared preview links. The in-sandbox proxy redirects
@@ -52,8 +36,12 @@ function PreviewAuth() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || ran.current) return;
 
-    const parsedReturn = parseAllowedReturn(search.return);
     const port = Number(search.port);
+    const parsedReturn = parseAllowedReturn(
+      search.return,
+      search.sandbox,
+      port,
+    );
     if (
       !parsedReturn ||
       !search.repo ||

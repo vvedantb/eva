@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { DatabaseWriter } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
+import { assertEntityAccess, hasEntityAccess } from "./_auth/entityAccess";
 
 /**
  * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
@@ -10,9 +11,8 @@ import { authQuery, authMutation } from "./functions";
  * turn. `entityId` is the generic session/project/task id, matching how
  * `streaming.ts` keys its state, so this is not tied to any one entity type.
  *
- * Auth mirrors `streaming.ts`: a valid identity (the sandbox CONVEX_TOKEN for
- * post/claim, the signed-in user for answer/getActive) — no per-entity check,
- * since the row only carries the model's own question text.
+ * Auth mirrors `streaming.ts`: sandbox CONVEX_TOKEN or the signed-in user,
+ * plus `assertEntityAccess` so a guessed entity id is not enough.
  */
 
 /**
@@ -58,6 +58,7 @@ export const post = authMutation({
   args: { entityId: v.string(), toolUseId: v.string(), payload: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const stale = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
@@ -80,6 +81,9 @@ export const getActive = authQuery({
   args: { entityId: v.string() },
   returns: activeQuestionValidator,
   handler: async (ctx, args) => {
+    if (!(await hasEntityAccess(ctx.db, args.entityId, ctx.userId))) {
+      return null;
+    }
     const rows = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
@@ -97,6 +101,7 @@ export const answer = authMutation({
   args: { entityId: v.string(), toolUseId: v.string(), answer: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const existing = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity_tool", (q) =>
@@ -117,6 +122,7 @@ export const claimAnswer = authMutation({
   args: { entityId: v.string(), toolUseId: v.string() },
   returns: v.object({ answer: v.union(v.string(), v.null()) }),
   handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const existing = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity_tool", (q) =>

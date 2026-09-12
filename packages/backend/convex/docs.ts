@@ -614,6 +614,13 @@ export const update = authMutation({
     if (!doc) {
       throw new Error("Doc not found");
     }
+    if (doc.kind === "pr-recap") {
+      if (!(await hasCodebaseRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+        throw new Error("Not authorized");
+      }
+    } else if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     const updates: {
       title?: string;
       content?: string;
@@ -638,10 +645,12 @@ export const getBySession = authQuery({
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    return await ctx.db
-      .query("docs")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-      .first();
+    return entityVisible(
+      await ctx.db
+        .query("docs")
+        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+        .first(),
+    );
   },
 });
 
@@ -759,6 +768,9 @@ export const addInterviewMessage = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Doc not found");
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     const history = doc.interviewHistory ?? [];
     history.push({
       role: args.role,
@@ -778,6 +790,9 @@ export const clearInterview = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Doc not found");
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     await ctx.db.patch(args.id, {
       interviewHistory: undefined,
       sandboxId: undefined,

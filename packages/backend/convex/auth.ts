@@ -131,7 +131,7 @@ export const ensureUserExists = mutation({
     // addresses unique per instance, so within one instance this can only fire
     // after an account is deleted and recreated, where reclaiming the record is
     // also what you want.
-    if (email) {
+    if (email && identity.emailVerified === true) {
       const userWithSameEmail = await ctx.db
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", email))

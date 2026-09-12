@@ -35,12 +35,12 @@ export const updateSandbox = authMutation({
   handler: async (ctx, args) => {
     await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
-      sandboxId?: string;
       branchName?: string;
       prUrl?: string;
       updatedAt: number;
     } = { updatedAt: Date.now() };
-    if (args.sandboxId !== undefined) updates.sandboxId = args.sandboxId;
+    // sandboxId is bound only by internal.sessionWorkflow.updateSandboxId —
+    // a client-supplied id would pair this session with another tenant's VM.
     if (args.branchName !== undefined) updates.branchName = args.branchName;
     if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
     await ctx.db.patch(args.id, updates);
@@ -150,6 +150,11 @@ export const forcePushBranch = authMutation({
         `Refusing to force-push non-session branch ${session.branchName}`,
       );
     }
+    const bound = await ctx.runQuery(internal.sandboxHeal.isBoundToRepo, {
+      repoId: session.repoId,
+      sandboxId: session.sandboxId,
+    });
+    if (!bound) throw new Error("Not authorized to access this sandbox");
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
     await ctx.scheduler.runAfter(0, internal.sandbox.performForcePushBranch, {

@@ -4,7 +4,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, getSessionWithAccess } from "./functions";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import {
@@ -162,9 +162,12 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session || !session.activeWorkflowId) return null;
-    if (session.userId !== ctx.userId) throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
+    if (!session.activeWorkflowId) return null;
 
     await sendCompletionEvent(
       ctx,
@@ -197,9 +200,11 @@ export const startSummarize = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (session.userId !== ctx.userId) throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");

@@ -185,6 +185,7 @@ export async function registerSupabaseTools(
   try {
     token = await ctx.runAction(internal.mcp.nodeActions.resolveSupabaseToken, {
       clerkUserId,
+      scopedRepoId: credentials.scopedRepoId,
     });
   } catch (err) {
     console.error("Supabase: failed to resolve token:", err);
@@ -230,7 +231,7 @@ export async function registerSupabaseTools(
         // Re-resolve token in case it expired
         const currentToken = await ctx.runAction(
           internal.mcp.nodeActions.resolveSupabaseToken,
-          { clerkUserId },
+          { clerkUserId, scopedRepoId: credentials.scopedRepoId },
         );
         if (!currentToken) {
           return errorResult("SUPABASE_ACCESS_TOKEN is no longer available.");

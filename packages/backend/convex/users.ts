@@ -4,6 +4,7 @@ import { roleUserValidator } from "./validators";
 import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { collectDirectoryUserIds } from "./_users/directory";
+import { isDirectoryPeer } from "./_auth/entityAccess";
 
 /** Returns the Clerk ID for a user (internal use only). */
 export const getInternal = internalQuery({
@@ -49,6 +50,7 @@ export const get = authQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
+    if (!(await isDirectoryPeer(ctx.db, ctx.userId, args.id))) return null;
     const user = await ctx.db.get(args.id);
     if (!user) return null;
     const seen = mergeLastSeen(
@@ -59,7 +61,7 @@ export const get = authQuery({
       firstName: user.firstName,
       lastName: user.lastName,
       fullName: user.fullName,
-      email: user.email,
+      email: args.id === ctx.userId ? user.email : undefined,
       role: user.role,
       lastSeenAt: seen.lastSeenAt,
       lastSeenPath: seen.lastSeenPath,
@@ -237,6 +239,7 @@ export const getMany = authQuery({
     const uniqueIds = [...new Set(args.ids)];
     const profiles = [];
     for (const id of uniqueIds) {
+      if (!(await isDirectoryPeer(ctx.db, ctx.userId, id))) continue;
       const user = await ctx.db.get(id);
       if (!user) continue;
       profiles.push({

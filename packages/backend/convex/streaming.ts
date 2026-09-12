@@ -7,6 +7,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
+import { assertEntityAccess, hasEntityAccess } from "./_auth/entityAccess";
 import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 
 /**
@@ -122,7 +123,12 @@ export async function upsertStreamingActivity(
 export const get = authQuery({
   args: { entityId: v.string() },
   returns: activityStateValidator,
-  handler: async (ctx, args) => readStreamingActivity(ctx, args.entityId),
+  handler: async (ctx, args) => {
+    if (!(await hasEntityAccess(ctx.db, args.entityId, ctx.userId))) {
+      return null;
+    }
+    return readStreamingActivity(ctx, args.entityId);
+  },
 });
 
 /** Updates or creates streaming activity state for an entity, only writing on actual changes. */
@@ -130,6 +136,7 @@ export const set = authMutation({
   args: setArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     await upsertStreamingActivity(ctx, args);
     return null;
   },
@@ -171,7 +178,10 @@ export async function touchStreamingEntity(
 export const touch = authMutation({
   args: { entityId: v.string() },
   returns: v.boolean(),
-  handler: async (ctx, args) => touchStreamingEntity(ctx, args.entityId),
+  handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
+    return touchStreamingEntity(ctx, args.entityId);
+  },
 });
 
 /** Internal touch for HTTP heartbeat route and liveness probe refresh. */
@@ -196,6 +206,7 @@ export const clear = authMutation({
   args: { entityId: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const existing = await ctx.db
       .query("streamingActivity")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
