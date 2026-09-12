@@ -7,7 +7,7 @@ import {
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { authMutation, hasRepoAccess, hasTaskAccess } from "../functions";
+import { authMutation, hasTaskAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
 import {
@@ -53,7 +53,7 @@ export const startTaskSandbox = authMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     const branchName = `eva/task-${args.taskId}`;
@@ -141,7 +141,7 @@ export const retryStartupCommands = authMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     const branchName = `eva/task-${args.taskId}`;

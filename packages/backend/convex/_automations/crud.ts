@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { aiModelValidator, automationFields } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
+import { CHANGELOG_AUTOMATION_TITLE } from "../changelog";
 import { allocateNumId, entityVisible } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import type { Doc } from "../_generated/dataModel";
@@ -95,6 +96,9 @@ export const create = authMutation({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    if (args.title.trim() === CHANGELOG_AUTOMATION_TITLE) {
+      throw new Error("That automation title is reserved");
+    }
     const now = Date.now();
     const numId = await allocateNumId(ctx.db, args.repoId, "automations");
     return await ctx.db.insert("automations", {
@@ -132,6 +136,13 @@ export const update = authMutation({
     if (!automation) throw new Error("Automation not found");
     if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
       throw new Error("Not authorized");
+    }
+    if (
+      args.title !== undefined &&
+      args.title.trim() === CHANGELOG_AUTOMATION_TITLE &&
+      automation.title !== CHANGELOG_AUTOMATION_TITLE
+    ) {
+      throw new Error("That automation title is reserved");
     }
 
     // A system automation's definition is code-owned, but everything else —

@@ -31,7 +31,7 @@ export async function resolveCodebaseDocsRepoId(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Id<"githubRepos">> {
-  const siblings = await findSiblingRepos(db, repoId);
+  const siblings = await findSameTeamSiblingRepos(db, repoId);
   if (siblings.length === 0) return repoId;
 
   const root = siblings.find((repo) => repo.rootDirectory === undefined);
@@ -43,13 +43,44 @@ export async function resolveCodebaseDocsRepoId(
   return repoId;
 }
 
-/** True when the user can access any repo row for the same GitHub owner/name codebase. */
+/** Same Eva team (or same connector when unteamed), including the anchor itself. */
+export function isSameTeamSibling(
+  anchor: Pick<Doc<"githubRepos">, "_id" | "teamId" | "connectedBy">,
+  sibling: Pick<Doc<"githubRepos">, "_id" | "teamId" | "connectedBy">,
+): boolean {
+  if (sibling._id === anchor._id) return true;
+  if (anchor.teamId !== undefined) return sibling.teamId === anchor.teamId;
+  return sibling.connectedBy === anchor.connectedBy;
+}
+
+/** Sibling rows that share the caller's Eva team, not just GitHub owner/name. */
+export async function findSameTeamSiblingRepos(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<Array<Doc<"githubRepos">>> {
+  const repo = await db.get(repoId);
+  if (!repo) return [];
+  const siblings = await findSiblingRepos(db, repoId);
+  return siblings.filter((sibling) => isSameTeamSibling(repo, sibling));
+}
+
+/** Ids for same-team siblings; falls back to the requested id when the row is gone. */
+export async function findSameTeamSiblingRepoIds(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<Array<Id<"githubRepos">>> {
+  const siblings = await findSameTeamSiblingRepos(db, repoId);
+  if (siblings.length === 0) return [repoId];
+  return siblings.map((sibling) => sibling._id);
+}
+
+/** True when the user can access a same-team sibling of this GitHub codebase. */
 export async function hasCodebaseRepoAccess(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
   userId: Id<"users">,
 ): Promise<boolean> {
-  const siblingIds = await findAllSiblingRepoIds(db, repoId);
+  const siblingIds = await findSameTeamSiblingRepoIds(db, repoId);
   for (const siblingId of siblingIds) {
     if (await hasRepoAccess(db, siblingId, userId)) return true;
   }

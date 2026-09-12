@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { authQuery } from "./functions";
+import { authQuery, sessionVisibleToUser } from "./functions";
 import {
   gatherAccessibleRepos,
   repoBasePath,
@@ -299,6 +299,7 @@ export const search = authQuery({
           }
 
           for (const session of filterActiveEntities(sessions)) {
+            if (!sessionVisibleToUser(session, ctx.userId)) continue;
             if (session.archived === true) continue;
             if (session.numId === undefined) continue;
             if (!matchesQuery(session.title, query)) continue;

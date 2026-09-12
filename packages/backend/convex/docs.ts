@@ -33,8 +33,8 @@ import { markdownToDocJson } from "./_docEditor/markdown";
 import { workflow } from "./workflowManager";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import {
-  findAllSiblingRepoIds,
-  findSiblingRepos,
+  findSameTeamSiblingRepoIds,
+  findSameTeamSiblingRepos,
   hasCodebaseRepoAccess,
   resolveCodebaseDocsRepoId,
 } from "./_githubRepos/helpers";
@@ -136,7 +136,7 @@ export const list = authQuery({
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
 
-    const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
+    const siblingIds = await findSameTeamSiblingRepoIds(ctx.db, args.repoId);
     const seen = new Set<string>();
     const docs: Doc<"docs">[] = [];
 
@@ -258,7 +258,7 @@ export const getByNumId = authQuery({
     const visibleOwn = entityVisible(own);
     if (visibleOwn) return visibleOwn;
 
-    const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
+    const siblingIds = await findSameTeamSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {
       if (siblingId === args.repoId) continue;
       const doc = await ctx.db
@@ -747,7 +747,7 @@ export const startPrRecap = internalMutation({
     args,
   ): Promise<{ docId: Id<"docs">; workflowId: string }> => {
     const docsRepoId = await resolveCodebaseDocsRepoId(ctx.db, args.repoId);
-    const siblings = await findSiblingRepos(ctx.db, args.repoId);
+    const siblings = await findSameTeamSiblingRepos(ctx.db, args.repoId);
     const workflowRepo =
       siblings.find((repo) => repo.rootDirectory === undefined) ??
       (await ctx.db.get(args.repoId));
@@ -857,7 +857,7 @@ export const reviseRecapFromFeedback = authMutation({
         content: comment.content,
       }));
 
-    const siblings = await findSiblingRepos(ctx.db, doc.repoId);
+    const siblings = await findSameTeamSiblingRepos(ctx.db, doc.repoId);
     const workflowRepo =
       siblings.find((repo) => repo.rootDirectory === undefined) ?? siblings[0];
     if (!workflowRepo) {

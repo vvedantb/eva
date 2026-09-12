@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "../functions";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+  sessionVisibleToUser,
+} from "../functions";
 import { entityVisible } from "../numId";
 import {
   DATA_MENTION_BADGE,
@@ -100,6 +105,7 @@ export const listData = authQuery({
       .order("desc")
       .take(MENTION_LIST_CAP);
     for (const session of sessions) {
+      if (!sessionVisibleToUser(session, ctx.userId)) continue;
       items.push({
         kind: "session",
         id: session._id,
@@ -194,7 +200,11 @@ export const getEntity = authQuery({
     if (sessionId) {
       const session = await ctx.db.get(sessionId);
       const visible = entityVisible(session);
-      if (visible && visible.repoId === args.repoId) {
+      if (
+        visible &&
+        visible.repoId === args.repoId &&
+        sessionVisibleToUser(visible, ctx.userId)
+      ) {
         const item: DataMentionItem = {
           kind: "session",
           id: visible._id,
@@ -228,7 +238,11 @@ export const getEntity = authQuery({
     if (taskId) {
       const task = await ctx.db.get(taskId);
       const visible = entityVisible(task);
-      if (visible && visible.repoId === args.repoId) {
+      if (
+        visible &&
+        visible.repoId === args.repoId &&
+        (await hasTaskAccess(ctx.db, visible, ctx.userId))
+      ) {
         const description = visible.description?.trim();
         const item: DataMentionItem = {
           kind: "quickTask",

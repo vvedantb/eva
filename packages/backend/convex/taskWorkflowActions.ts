@@ -3,7 +3,7 @@
 import { ConvexError, v } from "convex/values";
 import type { GenericActionCtx } from "convex/server";
 import { action, internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "./githubAuth";
@@ -282,6 +282,13 @@ export const createTaskPr = action({
       const identity = await ctx.auth.getUserIdentity();
       if (!identity) {
         throw new Error("Not authenticated");
+      }
+
+      const task = await ctx.runQuery(api.agentTasks.get, {
+        id: args.taskId,
+      });
+      if (!task) {
+        throw new Error("Not authorized");
       }
 
       const data = await ctx.runQuery(

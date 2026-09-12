@@ -1,7 +1,13 @@
 import { v } from "convex/values";
+import type { GenericDatabaseReader } from "convex/server";
 import { internalMutation } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import { authQuery, hasRepoAccess } from "./functions";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasSessionAccess,
+  hasTaskAccess,
+} from "./functions";
 import {
   buildTaskProjectIdLookup,
   resolveLogProjectId,
@@ -35,6 +41,26 @@ function toLogDto(entry: Doc<"logs">, projectId: Id<"projects"> | undefined) {
     createdAt: entry.createdAt,
     ...usageOf(entry),
   };
+}
+
+async function canReadLogEntity(
+  ctx: { db: GenericDatabaseReader<DataModel> },
+  userId: Id<"users">,
+  entry: Doc<"logs">,
+): Promise<boolean> {
+  if (entry.entityType === "session") {
+    const sessionId = ctx.db.normalizeId("sessions", entry.entityId);
+    if (!sessionId) return false;
+    const session = await ctx.db.get(sessionId);
+    return session ? hasSessionAccess(ctx.db, session, userId) : false;
+  }
+  if (entry.entityType === "quickTask" || entry.entityType === "task-chat") {
+    const taskId = ctx.db.normalizeId("agentTasks", entry.entityId);
+    if (!taskId) return false;
+    const task = await ctx.db.get(taskId);
+    return task ? hasTaskAccess(ctx.db, task, userId) : false;
+  }
+  return true;
 }
 
 const logDtoValidator = v.object({
@@ -94,7 +120,11 @@ export const getByEntityId = authQuery({
       .order("desc")
       .collect();
 
-    return logs.map((entry) => toLogDto(entry, entry.projectId));
+    const visible: Doc<"logs">[] = [];
+    for (const entry of logs) {
+      if (await canReadLogEntity(ctx, ctx.userId, entry)) visible.push(entry);
+    }
+    return visible.map((entry) => toLogDto(entry, entry.projectId));
   },
 });
 
@@ -151,11 +181,13 @@ export const getByProjectId = authQuery({
     const combined = [...tagged, ...untagged];
     const projectByTaskId = await buildTaskProjectIdLookup(ctx, combined);
 
-    const resolved = combined.flatMap((entry) => {
+    const resolved = [];
+    for (const entry of combined) {
+      if (!(await canReadLogEntity(ctx, ctx.userId, entry))) continue;
       const projectId = resolveLogProjectId(ctx, entry, projectByTaskId);
-      if (projectId !== args.projectId) return [];
-      return [toLogDto(entry, projectId)];
-    });
+      if (projectId !== args.projectId) continue;
+      resolved.push(toLogDto(entry, projectId));
+    }
 
     return resolved.sort((a, b) => b.createdAt - a.createdAt);
   },
@@ -186,9 +218,14 @@ export const listByRepo = authQuery({
 
     const projectByTaskId = await buildTaskProjectIdLookup(ctx, all);
 
-    return all.map((entry) =>
-      toLogDto(entry, resolveLogProjectId(ctx, entry, projectByTaskId)),
-    );
+    const visible = [];
+    for (const entry of all) {
+      if (!(await canReadLogEntity(ctx, ctx.userId, entry))) continue;
+      visible.push(
+        toLogDto(entry, resolveLogProjectId(ctx, entry, projectByTaskId)),
+      );
+    }
+    return visible;
   },
 });
 
@@ -234,6 +271,7 @@ export const listByProject = authQuery({
     >();
 
     for (const entry of all) {
+      if (!(await canReadLogEntity(ctx, ctx.userId, entry))) continue;
       const projectId = resolveLogProjectId(ctx, entry, projectByTaskId);
       if (projectId === undefined) continue;
       const pidStr = String(projectId);

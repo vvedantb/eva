@@ -126,7 +126,12 @@ export const authorizeGet = httpAction(async (ctx, request) => {
     return Response.redirect(target.toString(), 302);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Authorization failed";
-    return new Response(`<h1>Error</h1><p>${message}</p>`, {
+    const safe = message
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+    return new Response(`<h1>Error</h1><p>${safe}</p>`, {
       status: 400,
       headers: { "Content-Type": "text/html" },
     });

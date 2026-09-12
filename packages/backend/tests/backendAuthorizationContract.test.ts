@@ -16,7 +16,6 @@ describe("backend authorization boundaries", () => {
     "_github/prReview.ts",
     "_github/pullRequests.ts",
     "linearActions.ts",
-    "pty.ts",
     "repoEnvVarsActions.ts",
     "taskWorkflowActions.ts",
   ];
@@ -430,5 +429,42 @@ describe("backend authorization boundaries", () => {
     );
     expect(resolve).toContain("isOrchestrator === true");
     expect(resolve).toContain("hit.doc.userId !== userId");
+    expect(resolve).toContain("hasTaskAccess");
+  });
+
+  it("PTY connections require sandbox visibility, not just repo access", () => {
+    expect(convexSource("pty.ts")).toContain("assertActionSandboxAccess");
+    expect(convexSource("pty.ts")).not.toContain("getActionRepoWithAccess");
+  });
+
+  it("session daemon claims use hasSessionAccess for non-owners", () => {
+    const workflow = convexSource("_sessions/workflow.ts");
+    const claim = workflow.slice(workflow.indexOf("export const claimPendingTurn"));
+    expect(claim).toContain("hasSessionAccess");
+    expect(claim).not.toContain("hasRepoAccess");
+  });
+
+  it("task sandbox start and PR creation honor draft access", () => {
+    expect(convexSource("_agentTasks/sandbox.ts")).toContain("hasTaskAccess");
+    expect(convexSource("_agentTasks/sandbox.ts")).not.toContain("hasRepoAccess");
+    expect(convexSource("taskWorkflowActions.ts")).toContain("api.agentTasks.get");
+  });
+
+  it("PR recaps stay on the same Eva team as the caller repo", () => {
+    expect(convexSource("_githubRepos/helpers.ts")).toContain("isSameTeamSibling");
+    expect(convexSource("docs.ts")).toContain("findSameTeamSiblingRepoIds");
+  });
+
+  it("changelog title is reserved and oldest match wins", () => {
+    expect(convexSource("changelog.ts")).toContain("_creationTime < oldest._creationTime");
+    expect(convexSource("_automations/crud.ts")).toContain(
+      "That automation title is reserved",
+    );
+  });
+
+  it("team updateRole cannot demote the last owner", () => {
+    const source = convexSource("teamMembers.ts");
+    const update = source.slice(source.indexOf("export const updateRole"));
+    expect(update).toContain("Cannot remove the last owner from the team");
   });
 });

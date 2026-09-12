@@ -2,7 +2,7 @@ import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
 } from "convex/server";
-import { hasRepoAccess, hasSessionAccess } from "../functions";
+import { hasRepoAccess, hasSessionAccess, hasTaskAccess } from "../functions";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { Infer } from "convex/values";
 import { type draftTarget } from "../validators";
@@ -92,7 +92,7 @@ export async function resolveTarget(
       throw new Error("Task has no repo or project");
     }
 
-    if (!(await hasRepoAccess(db, repoId, userId))) {
+    if (!(await hasTaskAccess(db, task, userId))) {
       throw new Error("Not authorized");
     }
 
@@ -121,7 +121,7 @@ export async function resolveTarget(
       throw new Error("Task has no repo or project");
     }
 
-    if (!(await hasRepoAccess(db, repoId, userId))) {
+    if (!(await hasTaskAccess(db, task, userId))) {
       throw new Error("Not authorized");
     }
 

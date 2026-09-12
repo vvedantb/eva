@@ -18,8 +18,13 @@ async function findChangelogAutomation(
   db: GenericDatabaseReader<DataModel>,
 ): Promise<Doc<"automations"> | null> {
   const allAutomations = await db.query("automations").collect();
-  return (
-    allAutomations.find((a) => a.title === CHANGELOG_AUTOMATION_TITLE) ?? null
+  const matches = allAutomations.filter(
+    (automation) => automation.title === CHANGELOG_AUTOMATION_TITLE,
+  );
+  if (matches.length === 0) return null;
+  // Newest title clones must not steal the platform feed from the original.
+  return matches.reduce((oldest, row) =>
+    row._creationTime < oldest._creationTime ? row : oldest,
   );
 }
 

@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "../functions";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasSessionAccess,
+  hasTaskAccess,
+} from "../functions";
 import { draftFields, draftTarget } from "../validators";
 import { resolveTarget } from "./helpers";
 import type { Id, Doc } from "../_generated/dataModel";
@@ -59,7 +64,7 @@ export const listForRepo = authQuery({
         draft.taskId
       ) {
         const task = await ctx.db.get(draft.taskId);
-        if (!task) continue; // surface gone — skip
+        if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) continue;
         contextTitle = task.title || "Untitled";
         taskProjectId = task.projectId;
       } else if (draft.kind === "projectChat" && draft.projectId) {
@@ -68,7 +73,8 @@ export const listForRepo = authQuery({
         contextTitle = project.title || "Untitled";
       } else if (draft.kind === "sessionChat" && draft.sessionId) {
         const session = await ctx.db.get(draft.sessionId);
-        if (!session) continue;
+        if (!session || !(await hasSessionAccess(ctx.db, session, ctx.userId)))
+          continue;
         contextTitle = session.title || "Untitled";
       }
 

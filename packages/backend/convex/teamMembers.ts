@@ -257,6 +257,21 @@ export const updateRole = authMutation({
       throw new Error("User is not a member of this team");
     }
 
+    if (
+      targetMembership.role === "owner" &&
+      args.role !== "owner"
+    ) {
+      const allOwners = await ctx.db
+        .query("teamMembers")
+        .withIndex("by_team_and_role", (q) =>
+          q.eq("teamId", args.teamId).eq("role", "owner"),
+        )
+        .collect();
+      if (allOwners.length === 1) {
+        throw new Error("Cannot remove the last owner from the team");
+      }
+    }
+
     await ctx.db.patch(targetMembership._id, { role: args.role });
     return null;
   },

@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "./functions";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+  sessionVisibleToUser,
+} from "./functions";
 import { isEntityDeleted } from "./numId";
 import { repoEntityTypeValidator } from "./validators";
 
@@ -31,6 +36,18 @@ export const resolveNumId = authQuery({
 
     const doc = await ctx.db.get(id);
     if (!doc || doc.repoId !== args.repoId || isEntityDeleted(doc)) return null;
+    if (args.entityType === "sessions") {
+      const sessionId = ctx.db.normalizeId("sessions", args.docId);
+      if (!sessionId) return null;
+      const session = await ctx.db.get(sessionId);
+      if (!session || !sessionVisibleToUser(session, ctx.userId)) return null;
+    }
+    if (args.entityType === "agentTasks") {
+      const taskId = ctx.db.normalizeId("agentTasks", args.docId);
+      if (!taskId) return null;
+      const task = await ctx.db.get(taskId);
+      if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return null;
+    }
     return doc.numId ?? null;
   },
 });

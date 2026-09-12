@@ -2,7 +2,7 @@ import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { listAutomationsForRepo } from "../_automations/helpers";
-import { hasRepoAccess } from "../functions";
+import { hasRepoAccess, hasSessionAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import {
   openSessionIdsForRepo,
@@ -305,6 +305,12 @@ export const resolveChatTargetForUser = internalQuery({
       hit.kind === "session" &&
       hit.doc.isOrchestrator === true &&
       hit.doc.userId !== userId
+    ) {
+      return null;
+    }
+    if (
+      hit.kind === "task" &&
+      !(await hasTaskAccess(ctx.db, hit.doc, userId))
     ) {
       return null;
     }
@@ -624,6 +630,7 @@ export const listEntitiesForUser = internalQuery({
         if (kind === "task") {
           const docs = await scanTasks(ctx, repoId, args.status, take);
           for (const doc of docs) {
+            if (!(await hasTaskAccess(ctx.db, doc, userId))) continue;
             rows.push({
               kind,
               id: doc._id,
@@ -875,34 +882,23 @@ export const getDocument = internalQuery({
     const taskId = ctx.db.normalizeId("agentTasks", id);
     if (taskId) {
       const task = await ctx.db.get(taskId);
-      if (task && task.repoId) {
-        // Verify access via repo
-        const hasAccess = await ctx.db
-          .query("teamMembers")
-          .withIndex("by_user", (q) => q.eq("userId", userId))
-          .first();
-        const repo = await ctx.db.get(task.repoId);
-        if (repo && (repo.connectedBy === userId || hasAccess)) {
-          return task;
-        }
+      if (task && (await hasTaskAccess(ctx.db, task, userId))) {
+        return task;
       }
     }
 
     const sessionId = ctx.db.normalizeId("sessions", id);
     if (sessionId) {
       const session = await ctx.db.get(sessionId);
-      if (session) {
-        const repo = await ctx.db.get(session.repoId);
-        if (repo && repo.connectedBy === userId) {
-          return session;
-        }
+      if (session && (await hasSessionAccess(ctx.db, session, userId))) {
+        return session;
       }
     }
 
     const repoId = ctx.db.normalizeId("githubRepos", id);
     if (repoId) {
       const repo = await ctx.db.get(repoId);
-      if (repo && repo.connectedBy === userId) {
+      if (repo && (await hasRepoAccess(ctx.db, repoId, userId))) {
         return repo;
       }
     }

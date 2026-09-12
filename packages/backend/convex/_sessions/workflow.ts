@@ -7,7 +7,6 @@ import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxStep
 import {
   authMutation,
   getSessionWithAccess,
-  hasRepoAccess,
   hasSessionAccess,
 } from "../functions";
 import {
@@ -1020,7 +1019,8 @@ export const claimPendingTurn = authMutation({
     // The normal owner path now reads only this small row, not the session's
     // plan, terminal history, panes, and other UI state on every 50ms poll.
     if (daemonState.userId !== ctx.userId) {
-      if (!(await hasRepoAccess(ctx.db, daemonState.repoId, ctx.userId)))
+      const session = await ctx.db.get(args.sessionId);
+      if (!session || !(await hasSessionAccess(ctx.db, session, ctx.userId)))
         throw new Error("Not authorized");
     }
 
