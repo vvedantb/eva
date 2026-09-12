@@ -1,7 +1,7 @@
 import { v, type Infer } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
-import { hasRepoAccess, hasTaskAccess } from "../functions";
+import { hasRepoAccess, hasSessionAccess, hasTaskAccess } from "../functions";
 
 /**
  * One sandbox owner contract shared by view state, PTYs, panes, and runtime
@@ -56,7 +56,7 @@ export async function resolveSandboxOwnerForUser(
 ): Promise<ResolvedSandboxOwner | null> {
   if (owner.kind === "session") {
     const session = await db.get(owner.sessionId);
-    if (!session || !(await hasRepoAccess(db, session.repoId, userId))) {
+    if (!session || !(await hasSessionAccess(db, session, userId))) {
       return null;
     }
     return {

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { getCurrentUserId } from "./_auth/currentUser";
 
 /** Proves that a sandbox is attached to an entity in the supplied repository. */
 export const isBoundToRepo = internalQuery({
@@ -23,6 +24,40 @@ export const isBoundToRepo = internalQuery({
       .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
       .first();
     return task?.repoId === args.repoId;
+  },
+});
+
+/** Bind check plus Ave/draft visibility for the authenticated action caller. */
+export const isBoundAndVisible = internalQuery({
+  args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    if (!userId) return false;
+
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (session) {
+      const visible =
+        session.isOrchestrator !== true || session.userId === userId;
+      return session.repoId === args.repoId && visible;
+    }
+
+    const project = await ctx.db
+      .query("projects")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (project) return project.repoId === args.repoId;
+
+    const task = await ctx.db
+      .query("agentTasks")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (!task || task.repoId !== args.repoId) return false;
+    if (task.status === "draft" && task.createdBy !== userId) return false;
+    return true;
   },
 });
 

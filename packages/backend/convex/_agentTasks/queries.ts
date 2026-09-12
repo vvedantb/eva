@@ -71,7 +71,12 @@ export const listByProject = authQuery({
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect(),
     );
-    const sorted = tasks.sort(
+    const visible = [];
+    for (const task of tasks) {
+      if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) continue;
+      visible.push(task);
+    }
+    const sorted = visible.sort(
       (a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0),
     );
     return enrichTasksWithLastRun(ctx.db, sorted);

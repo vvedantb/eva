@@ -4,7 +4,7 @@ import { ActionCache } from "@convex-dev/action-cache";
 import { generateText } from "ai";
 import { isTitleRegenerating, parseGeneratedTags } from "@eva/shared";
 import { v } from "convex/values";
-import { components, internal } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { getActionRepoWithAccess } from "./functions";
 import { buildTitleDigest } from "./_sessions/prompts";
@@ -79,6 +79,10 @@ export const regenerateSessionTitle = action({
   handler: async (ctx, args): Promise<{ title: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    const session = await ctx.runQuery(api.sessions.get, {
+      id: args.sessionId,
+    });
+    if (!session) throw new Error("Not authorized");
     const context = await ctx.runQuery(internal.sessions.getTitleContext, {
       sessionId: args.sessionId,
     });

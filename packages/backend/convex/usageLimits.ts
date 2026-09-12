@@ -1,6 +1,12 @@
 import { v, type Infer } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  hasRepoAccess,
+  hasSessionAccess,
+  hasTaskAccess,
+} from "./functions";
 import { internalQuery, type QueryCtx } from "./_generated/server";
 import {
   agentUsageLimitFields,
@@ -451,7 +457,7 @@ export const getRefreshSurface = internalQuery({
       if (!session || session.repoId !== args.repoId) {
         throw new Error("Session not found");
       }
-      if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
+      if (!(await hasSessionAccess(ctx.db, session, args.userId))) {
         throw new Error("Not authorized");
       }
       if (!session.sandboxId || isStoppedSandbox(session.status)) {
@@ -479,7 +485,7 @@ export const getRefreshSurface = internalQuery({
     if (!task || task.repoId !== args.repoId) {
       throw new Error("Task not found");
     }
-    if (!(await hasRepoAccess(ctx.db, task.repoId, args.userId))) {
+    if (!(await hasTaskAccess(ctx.db, task, args.userId))) {
       throw new Error("Not authorized");
     }
     if (!task.sandboxId || isStoppedSandbox(task.reviewTaskSandboxStatus)) {
@@ -508,7 +514,7 @@ export const requestRefresh = authMutation({
       if (!session || session.repoId !== args.repoId) {
         throw new Error("Session not found");
       }
-      if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
         throw new Error("Not authorized");
       }
       if (!session.sandboxId || isStoppedSandbox(session.status)) {
@@ -541,7 +547,7 @@ export const requestRefresh = authMutation({
     if (!task || task.repoId !== args.repoId) {
       throw new Error("Task not found");
     }
-    if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Not authorized");
     }
     if (!task.sandboxId || isStoppedSandbox(task.reviewTaskSandboxStatus)) {
@@ -565,7 +571,7 @@ export const clearRefresh = authMutation({
     if (target.kind === "session") {
       const session = await ctx.db.get(target.sessionId);
       if (!session) throw new Error("Session not found");
-      if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
         throw new Error("Not authorized");
       }
       await ensureSessionDaemonState(ctx, session);
@@ -587,7 +593,7 @@ export const clearRefresh = authMutation({
     }
     const task = await ctx.db.get(target.taskId);
     if (!task || !task.repoId) throw new Error("Task not found");
-    if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Not authorized");
     }
     await ctx.db.patch(target.taskId, { usageRefreshRequestedAt: undefined });

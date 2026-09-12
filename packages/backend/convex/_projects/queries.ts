@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { taskSandboxStatusValidator } from "../_validators/enums";
@@ -108,7 +108,11 @@ export const getTaskCount = authQuery({
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect(),
     );
-    return tasks.length;
+    let count = 0;
+    for (const task of tasks) {
+      if (await hasTaskAccess(ctx.db, task, ctx.userId)) count += 1;
+    }
+    return count;
   },
 });
 
@@ -268,7 +272,11 @@ export const getTaskProgress = authQuery({
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect(),
     );
-    return computeTaskProgress(tasks);
+    const visible = [];
+    for (const task of tasks) {
+      if (await hasTaskAccess(ctx.db, task, ctx.userId)) visible.push(task);
+    }
+    return computeTaskProgress(visible);
   },
 });
 
@@ -296,7 +304,11 @@ export const listTaskProgress = authQuery({
             .withIndex("by_project", (q) => q.eq("projectId", project._id))
             .collect(),
         );
-        return { projectId: project._id, ...computeTaskProgress(tasks) };
+        const visible = [];
+        for (const task of tasks) {
+          if (await hasTaskAccess(ctx.db, task, ctx.userId)) visible.push(task);
+        }
+        return { projectId: project._id, ...computeTaskProgress(visible) };
       }),
     );
   },

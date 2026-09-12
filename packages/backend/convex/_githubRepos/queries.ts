@@ -367,12 +367,16 @@ export const listSiblingApps = authQuery({
       )
       .collect();
 
-    return siblings
-      .filter((s) => s._id !== args.repoId && s.rootDirectory)
-      .map((s) => ({
-        _id: s._id,
-        appName: s.rootDirectory?.split("/").pop() ?? "",
-      }));
+    const visible = [];
+    for (const sibling of siblings) {
+      if (sibling._id === args.repoId || !sibling.rootDirectory) continue;
+      if (!(await userCanAccessRepo(ctx.db, ctx.userId, sibling))) continue;
+      visible.push({
+        _id: sibling._id,
+        appName: sibling.rootDirectory.split("/").pop() ?? "",
+      });
+    }
+    return visible;
   },
 });
 

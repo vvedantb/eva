@@ -6,7 +6,7 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { decideSandboxStartPlan } from "./mcp/orchestratorDelivery";
-import { authAction, authMutation, hasRepoAccess } from "./functions";
+import { authAction, authMutation, hasTaskAccess } from "./functions";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -304,7 +304,7 @@ export const addMessage = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -364,7 +364,7 @@ export const startExecute = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -430,7 +430,7 @@ export const retryLastTurnWithAccount = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -534,7 +534,7 @@ export const enqueueMessage = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -609,7 +609,7 @@ export const cancelExecution = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -1140,7 +1140,7 @@ export const handleCompletion = authMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task || !task.activeChatWorkflowId) return null;
     if (!task.repoId) return null;
-    if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Not authorized");
     }
 
@@ -1197,7 +1197,7 @@ export const prewarmChatDaemon = authMutation({
     ) {
       return null;
     }
-    if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const normalizedModel = normalizeAIModel(task.lastChatModel ?? task.model);
@@ -1299,7 +1299,7 @@ export const getChatPrewarmData = internalQuery({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, args.userId))
+      !(await hasTaskAccess(ctx.db, task, args.userId))
     ) {
       throw new Error("Not authorized");
     }

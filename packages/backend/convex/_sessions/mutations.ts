@@ -6,6 +6,7 @@ import {
   authMutation,
   getSessionWithAccess,
   hasRepoAccess,
+  hasSessionAccess,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import {
@@ -271,7 +272,7 @@ export const setModel = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const providerAccountId = await reconcileProviderAccountForModel(
@@ -303,7 +304,7 @@ export const setProviderAccountId = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const ownerUserId = session.createdBy ?? session.userId;
@@ -333,7 +334,7 @@ export const setTraits = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     if (
@@ -476,7 +477,7 @@ export const archive = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     await archiveSessionDoc(ctx, session);
@@ -491,7 +492,7 @@ export const unarchive = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
 
@@ -528,7 +529,7 @@ export const updatePlanContent = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     await ctx.db.patch(args.id, {

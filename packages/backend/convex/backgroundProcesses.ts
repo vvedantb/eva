@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { GenericDatabaseWriter } from "convex/server";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { authMutation, authQuery, hasSessionAccess } from "./functions";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { backgroundProcessFields } from "./validators";
@@ -38,7 +38,7 @@ export const listRunning = authQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return [];
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       return [];
     }
     return await ctx.db
@@ -66,7 +66,7 @@ export const register = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const command = args.command.slice(0, COMMAND_MAX_CHARS);
@@ -106,7 +106,7 @@ export const markExitedByShellId = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const rows = await ctx.db

@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
-import { authQuery, hasRepoAccess, sessionVisibleToUser } from "../functions";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasSessionAccess,
+  sessionVisibleToUser,
+} from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
 import {
@@ -172,7 +177,7 @@ export const getFirstMessagePreview = authQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) return null;
     if (!sessionVisibleToUser(session, ctx.userId)) return null;
     return await firstUserMessagePreview(ctx.db, args.id);
   },
@@ -193,7 +198,9 @@ export const countActive = authQuery({
         .filter((q) => q.neq(q.field("archived"), true))
         .collect(),
     );
-    return sessions.length;
+    return sessions.filter((session) =>
+      sessionVisibleToUser(session, ctx.userId),
+    ).length;
   },
 });
 
@@ -204,7 +211,7 @@ export const get = authQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) return null;
     if (!sessionVisibleToUser(session, ctx.userId)) return null;
     return entityVisible(session);
   },

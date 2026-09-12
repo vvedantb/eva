@@ -7,7 +7,7 @@ import {
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation, hasRepoAccess, hasTaskAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
 import {
@@ -202,7 +202,7 @@ export const runDevServer = authMutation({
       );
     }
 
-    const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await ctx.scheduler.runAfter(
@@ -240,7 +240,7 @@ export const runBackgroundCommands = authMutation({
       throw new Error("Start the sandbox before running background commands");
     }
 
-    const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await ctx.scheduler.runAfter(0, internal.sandbox.runBackgroundCommands, {
@@ -343,7 +343,7 @@ export const stopTaskSandbox = authMutation({
 
     if (!task.repoId) throw new Error("Task has no associated repository");
 
-    const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await requestTaskSandboxStop(ctx, args.taskId);

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { authMutation, getTaskWithAccess, hasRepoAccess } from "../functions";
+import { authMutation, getTaskWithAccess, hasTaskAccess } from "../functions";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -63,7 +63,7 @@ export const claimPendingTurn = authMutation({
     if (!task.repoId) throw new Error("Not authorized");
     // Daemon polls ~20×/s — skip team-membership join for the task creator.
     if (task.createdBy !== ctx.userId) {
-      if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
+      if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
         throw new Error("Not authorized");
       }
     }
@@ -181,7 +181,7 @@ export const updateBackgroundAgents = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -216,7 +216,7 @@ export const requestStopBackgroundAgent = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }
@@ -244,7 +244,7 @@ export const openSyntheticTurn = authMutation({
     if (!task) throw new Error("Task not found");
     if (
       !task.repoId ||
-      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
     ) {
       throw new Error("Not authorized");
     }

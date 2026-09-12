@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation, internalQuery, type MutationCtx } from "../_generated/server";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
-import { authAction, authMutation, hasRepoAccess } from "../functions";
+import { authAction, authMutation, hasSessionAccess } from "../functions";
 import {
   aiModelValidator,
   launchTraitsFromStored,
@@ -250,7 +250,7 @@ export const retryLastTurnWithAccount = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
     if (
       session.activeWorkflowId !== undefined ||
@@ -327,7 +327,7 @@ export const startExecute = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
 
     // Notify before the turn runs or queues so a mention fires either way.
@@ -402,7 +402,7 @@ export const prewarmDaemon = authMutation({
     // on mount) wakes the VM behind the user's back.
     if (session.status === "closed" || session.status === "stopping")
       return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
     // Match the turn path's launch options so the first real message does not
     // immediately optsmismatch-kill this daemon (which races with
@@ -494,7 +494,7 @@ export const getDaemonPrewarmData = internalQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, args.userId))) {
       throw new Error("Not authorized");
     }
     if (
@@ -551,7 +551,7 @@ export const enqueueMessage = authMutation({
 
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
 
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -616,7 +616,7 @@ export const cancelExecution = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
 
     // Snapshot what this cancel owns. A concurrent startExecute may stage a

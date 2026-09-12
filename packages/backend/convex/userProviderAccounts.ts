@@ -3,8 +3,8 @@ import { internalQuery, internalMutation } from "./_generated/server";
 import {
   authQuery,
   authMutation,
-  hasRepoAccess,
   hasTaskAccess,
+  hasSessionAccess,
 } from "./functions";
 import { aiProviderValidator } from "./validators";
 import {
@@ -83,7 +83,7 @@ export const listForSessionOwner = authQuery({
     const session = await ctx.db.get(args.sessionId);
     if (
       !session ||
-      !(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))
+      !(await hasSessionAccess(ctx.db, session, ctx.userId))
     ) {
       return [];
     }

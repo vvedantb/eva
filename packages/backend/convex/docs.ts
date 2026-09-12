@@ -5,6 +5,7 @@ import {
   authQuery,
   authMutation,
   hasRepoAccess,
+  hasSessionAccess,
 } from "./functions";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
 import {
@@ -349,7 +350,7 @@ export const getBySession = authQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) return null;
     return entityVisible(
       await ctx.db
         .query("docs")
@@ -366,7 +367,7 @@ export const createFromSession = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const planContent = session.planContent?.trim();

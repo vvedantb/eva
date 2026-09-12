@@ -2,7 +2,7 @@ import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
 } from "convex/server";
-import { hasRepoAccess } from "../functions";
+import { hasRepoAccess, hasSessionAccess } from "../functions";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { Infer } from "convex/values";
 import { type draftTarget } from "../validators";
@@ -149,7 +149,7 @@ export async function resolveTarget(
   if (target.kind === "sessionChat") {
     const session = await db.get(target.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(db, session.repoId, userId))) {
+    if (!(await hasSessionAccess(db, session, userId))) {
       throw new Error("Not authorized");
     }
     const { repoId } = session;

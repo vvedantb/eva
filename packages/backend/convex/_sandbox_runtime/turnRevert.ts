@@ -3,7 +3,7 @@
 import { v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
 import { action } from "../_generated/server";
-import { internal } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { getActionRepoWithAccess } from "../functions";
 import { pushBranchToOrigin } from "./git";
 import { errorMessage, execHandle, workspaceDirShell } from "./helpers";
@@ -38,6 +38,10 @@ export const revertSessionToTurn = action({
   },
   returns: revertResultValidator,
   handler: async (ctx, args): Promise<RevertResult> => {
+    const session = await ctx.runQuery(api.sessions.get, {
+      id: args.sessionId,
+    });
+    if (!session) throw new Error("Not authorized");
     const context = await ctx.runQuery(internal.sessions.getRevertContext, {
       sessionId: args.sessionId,
       messageId: args.messageId,

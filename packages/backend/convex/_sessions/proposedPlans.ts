@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { authMutation, authQuery, hasRepoAccess } from "../functions";
+import { authMutation, authQuery, hasSessionAccess } from "../functions";
 import { proposedPlanFields } from "../validators";
 import { findOpenSessionTurn } from "../_chat/turnStore";
 
@@ -39,7 +39,7 @@ export const capture = authMutation({
     if (!sessionId) return null;
     const session = await ctx.db.get(sessionId);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
 
@@ -98,7 +98,7 @@ export const listBySession = authQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return [];
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) return [];
     return await ctx.db
       .query("proposedPlans")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
@@ -117,7 +117,7 @@ export const markImplemented = authMutation({
     if (!plan) return null;
     const session = await ctx.db.get(plan.sessionId);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
     }
     const now = Date.now();

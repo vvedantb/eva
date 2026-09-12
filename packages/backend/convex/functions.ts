@@ -82,11 +82,11 @@ export async function assertActionSandboxAccess(
   sandboxId: string,
 ): Promise<void> {
   await getActionRepoWithAccess(ctx, repoId);
-  const isBound = await ctx.runQuery(internal.sandboxHeal.isBoundToRepo, {
+  const visible = await ctx.runQuery(internal.sandboxHeal.isBoundAndVisible, {
     repoId,
     sandboxId,
   });
-  if (!isBound) throw new Error("Not authorized to access this sandbox");
+  if (!visible) throw new Error("Not authorized to access this sandbox");
 }
 
 /** Verifies team membership from an action through the access-controlled public query. */
@@ -153,6 +153,22 @@ export function sessionVisibleToUser(
   userId: Id<"users">,
 ): boolean {
   return session.isOrchestrator !== true || session.userId === userId;
+}
+
+/** Repo membership plus orchestrator visibility. */
+export async function hasSessionAccess(
+  db: GenericDatabaseReader<DataModel>,
+  session: {
+    repoId: Id<"githubRepos">;
+    isOrchestrator?: boolean;
+    userId: Id<"users">;
+  },
+  userId: Id<"users">,
+): Promise<boolean> {
+  return (
+    sessionVisibleToUser(session, userId) &&
+    (await hasRepoAccess(db, session.repoId, userId))
+  );
 }
 
 /** Loads a session and verifies access through its repository. */

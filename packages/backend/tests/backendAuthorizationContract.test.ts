@@ -365,6 +365,30 @@ describe("backend authorization boundaries", () => {
     expect(getByNum.indexOf("hasTaskAccess")).toBeGreaterThan(-1);
   });
 
+  it("session writes use hasSessionAccess and sandbox bind checks visibility", () => {
+    expect(convexSource("functions.ts")).toContain("hasSessionAccess");
+    expect(convexSource("_sessions/execution.ts")).toContain("hasSessionAccess");
+    expect(convexSource("_sessions/mutations.ts")).toContain("hasSessionAccess");
+    expect(convexSource("sandboxHeal.ts")).toContain("isBoundAndVisible");
+    expect(convexSource("functions.ts")).toContain(
+      "internal.sandboxHeal.isBoundAndVisible",
+    );
+  });
+
+  it("task chat and project lists hide other users' drafts", () => {
+    expect(convexSource("_chat/taskChatDaemon.ts")).toContain("hasTaskAccess");
+    expect(convexSource("agentTaskChatWorkflow.ts")).toContain("hasTaskAccess");
+    const list = convexSource("_agentTasks/queries.ts");
+    const byProject = list.slice(list.indexOf("export const listByProject"));
+    expect(byProject.indexOf("hasTaskAccess")).toBeGreaterThan(-1);
+  });
+
+  it("listSiblingApps only returns siblings the caller can access", () => {
+    const source = convexSource("_githubRepos/queries.ts");
+    const list = source.slice(source.indexOf("export const listSiblingApps"));
+    expect(list).toContain("userCanAccessRepo(ctx.db, ctx.userId, sibling)");
+  });
+
   it("orchestrator sessions are owner-only", () => {
     expect(convexSource("functions.ts")).toContain("sessionVisibleToUser");
     const sessions = convexSource("_sessions/queries.ts");

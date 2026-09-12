@@ -14,7 +14,7 @@ import {
   touchStreamingEntity,
   upsertStreamingActivity,
 } from "./streaming";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { authMutation, authQuery, hasSessionAccess } from "./functions";
 import { assertEntityAccess } from "./_auth/entityAccess";
 import {
   acquireTurnLease,
@@ -49,7 +49,7 @@ export const getSessionStatus = authQuery({
   ): Promise<Infer<typeof sessionTurnStatusValidator> | null> => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) return null;
     const turn = await findOpenSessionTurn(ctx, args.sessionId);
     if (!turn) {
       return isLegacySessionExecuting(session) ? { source: "legacy" } : null;

@@ -4,7 +4,12 @@ import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
-import { authMutation, getSessionWithAccess, hasRepoAccess } from "../functions";
+import {
+  authMutation,
+  getSessionWithAccess,
+  hasRepoAccess,
+  hasSessionAccess,
+} from "../functions";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -1170,7 +1175,7 @@ export const updateBackgroundAgents = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
     if (args.agents.length === 0) return null;
 
@@ -1203,7 +1208,7 @@ export const requestStopBackgroundAgent = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
 
     const pending = session.pendingTaskStops ?? [];
@@ -1389,7 +1394,7 @@ export const openSyntheticTurn = authMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
 
     const turnModel = normalizeAIModel(args.model ?? session.lastModel);
@@ -1602,7 +1607,7 @@ export const handleCompletion = authMutation({
     const completionStartedAt = Date.now();
     const session = await ctx.db.get(args.sessionId);
     if (!session || !session.activeWorkflowId) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
       throw new Error("Not authorized");
 
     const turnResolution = await resolveCompletionTurn(ctx, {
