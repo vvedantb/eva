@@ -7,8 +7,10 @@ import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { IconFile } from "@tabler/icons-react";
 import {
   SessionSourceEmpty,
+  SessionSourceList,
   SessionSourceRow,
 } from "@/lib/components/sandbox/SessionSourcePane";
 import { docSourceLabel } from "./_source";
@@ -30,13 +32,14 @@ export function DocumentList({
   if (docs.length === 0) {
     return (
       <SessionSourceEmpty
+        icon={<IconFile size={20} />}
         title="No documents yet"
         description={emptyDescription}
       />
     );
   }
   return (
-    <div className="flex flex-col">
+    <SessionSourceList>
       {docs.map((doc) => {
         const segment = entityPathSegment(doc);
         if (!segment) return null;
@@ -53,10 +56,11 @@ export function DocumentList({
             title={doc.title}
             preview={preview}
             timeLabel={compactRelativeTime(doc.updatedAt)}
+            icon={<IconFile size={16} />}
             link={<Link to={href} search={(prev) => prev} />}
           />
         );
       })}
-    </div>
+    </SessionSourceList>
   );
 }

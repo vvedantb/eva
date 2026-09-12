@@ -39,13 +39,8 @@ export function SessionArtifactsPanel({
 
   return (
     <SessionSourcePane
-      countLabel={
-        count === undefined
-          ? "Artifacts"
-          : count === 1
-            ? "1 artifact"
-            : `${count} artifacts`
-      }
+      title="Artifacts"
+      count={count}
       viewAll={
         <Link to="/artifacts" className={sessionSourceViewAllClass}>
           View all

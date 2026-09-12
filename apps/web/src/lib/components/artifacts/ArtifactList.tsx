@@ -26,6 +26,7 @@ export function ArtifactList({
     if (compact) {
       return (
         <SessionSourceEmpty
+          icon={<IconLayoutDashboard size={20} />}
           title="No artifacts yet"
           description={emptyDescription}
         />
@@ -47,7 +48,7 @@ export function ArtifactList({
     <div
       className={
         compact
-          ? "flex flex-col"
+          ? "flex flex-col gap-1.5 p-2"
           : "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
       }
     >

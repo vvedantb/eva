@@ -39,13 +39,8 @@ export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
 
   return (
     <SessionSourcePane
-      countLabel={
-        count === undefined
-          ? "Documents"
-          : count === 1
-            ? "1 document"
-            : `${count} documents`
-      }
+      title="Documents"
+      count={count}
       viewAll={
         <Link
           to={toInternalRepoHref(`${basePath}/docs`)}

@@ -143,6 +143,7 @@ export function ArtifactCard({
               title={artifact.name}
               preview={compactPreview}
               timeLabel={compactRelativeTime(artifact.createdAt)}
+              icon={<IconLayoutDashboard size={16} />}
               link={
                 <Link
                   to="/artifacts/$artifactId"
