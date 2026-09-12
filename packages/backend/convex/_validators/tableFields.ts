@@ -971,6 +971,15 @@ export const docFields = {
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
+  // Chat that created this doc (`create_eva_doc` from a sandbox token, or
+  // Save-as-document from a session plan). Manual New Document leaves these
+  // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.

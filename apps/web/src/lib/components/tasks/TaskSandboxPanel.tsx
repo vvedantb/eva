@@ -21,6 +21,10 @@ import {
   SessionArtifactsPanel,
   useSourceArtifacts,
 } from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 
 interface TaskSandboxPanelProps {
   taskId: Id<"agentTasks">;
@@ -86,6 +90,7 @@ export function TaskSandboxPanel({
   // panel already subscribes to (same entity ids).
   const artifactSource = { kind: "task" as const, taskId };
   const { hasArtifacts } = useSourceArtifacts(artifactSource);
+  const { hasDocuments } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: taskId,
     streamingEntityId: `task-chat-${taskIdStr}`,
@@ -147,6 +152,7 @@ export function TaskSandboxPanel({
         showAgentsTab={hasAgents}
         hasRunningAgents={hasRunningAgents}
         hasArtifactsContent={hasArtifacts}
+        hasDocumentsContent={hasDocuments}
         agentBrowsingAt={viewState?.agentBrowsingAt}
         fileList={fileList}
         consoleDock={panes.consoleDock}
@@ -163,6 +169,15 @@ export function TaskSandboxPanel({
           }
         >
           <SessionArtifactsPanel source={artifactSource} />
+        </div>
+        <div
+          className={
+            tabBarValue === "documents"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionDocumentsPanel source={artifactSource} />
         </div>
         <div className={!simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"}>
           <FilesPanel

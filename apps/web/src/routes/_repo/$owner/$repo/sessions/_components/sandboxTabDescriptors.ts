@@ -3,6 +3,7 @@ import {
   IconCode,
   IconDeviceDesktop,
   IconFileText,
+  IconFile,
   IconLayoutDashboard,
   IconPalette,
   IconRobot,
@@ -28,6 +29,8 @@ interface BuildSandboxTabDescriptorsArgs {
   hasDesignsContent: boolean;
   showArtifactsTab: boolean;
   hasArtifactsContent: boolean;
+  showDocumentsTab: boolean;
+  hasDocumentsContent: boolean;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
 }
 
@@ -52,6 +55,8 @@ export function buildSandboxTabDescriptors({
   hasDesignsContent,
   showArtifactsTab,
   hasArtifactsContent,
+  showDocumentsTab,
+  hasDocumentsContent,
   customTabs,
 }: BuildSandboxTabDescriptorsArgs): SandboxTabDescriptor[] {
   const descriptors: SandboxTabDescriptor[] = baseTabs.map((tab) => {
@@ -129,6 +134,18 @@ export function buildSandboxTabDescriptors({
       indicator: hasArtifactsContent ? "content" : undefined,
       indicatorLabel: hasArtifactsContent
         ? "Artifacts generated in this chat"
+        : undefined,
+    });
+  }
+
+  if (showDocumentsTab) {
+    descriptors.push({
+      value: "documents",
+      label: "Documents",
+      icon: { kind: "component", Icon: IconFile },
+      indicator: hasDocumentsContent ? "content" : undefined,
+      indicatorLabel: hasDocumentsContent
+        ? "Documents generated in this chat"
         : undefined,
     });
   }

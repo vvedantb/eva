@@ -20,6 +20,10 @@ import {
   SessionArtifactsPanel,
   useSourceArtifacts,
 } from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 import { FilesPanel } from "./FilesPanel";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
@@ -138,6 +142,7 @@ export function SandboxPanel({
   const hasDesignsContent = latestVariations.length > 0;
   const artifactSource = { kind: "session" as const, sessionId };
   const { hasArtifacts } = useSourceArtifacts(artifactSource);
+  const { hasDocuments } = useSourceDocuments(artifactSource);
   const isDesignExecuting = isAssistantTurnInProgress(messages);
   // Streaming payloads can outlive their turn; only fold them in while one runs.
   const agents = deriveSubagents({
@@ -210,6 +215,7 @@ export function SandboxPanel({
           showDesignsTab={hasDesignsContent}
           hasDesignsContent={hasDesignsContent}
           hasArtifactsContent={hasArtifacts}
+          hasDocumentsContent={hasDocuments}
           showFilesTab
           showAgentsTab={hasAgents}
           hasRunningAgents={hasRunningAgents}
@@ -305,6 +311,15 @@ export function SandboxPanel({
           }
         >
           <SessionArtifactsPanel source={artifactSource} />
+        </div>
+        <div
+          className={
+            activeTab === "documents"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionDocumentsPanel source={artifactSource} />
         </div>
         <div
           className={

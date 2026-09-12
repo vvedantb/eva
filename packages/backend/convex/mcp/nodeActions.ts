@@ -938,14 +938,30 @@ export const createEvaDoc = internalAction({
     repoId: v.string(),
     title: v.string(),
     content: v.string(),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.string(),
-  handler: async (_ctx, { clerkUserId, repoId, title, content }) => {
+  handler: async (
+    _ctx,
+    { clerkUserId, repoId, title, content, sourceKind, sourceId },
+  ) => {
+    const createArgs: Record<string, JsonValue> = { repoId, title, content };
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const docId = await runMutationAsUser(
       getEvaConvexCloudUrl(),
       clerkUserId,
       "docs:create",
-      { repoId, title, content },
+      createArgs,
     );
     if (typeof docId !== "string") {
       throw new Error("Unexpected response from docs:create");

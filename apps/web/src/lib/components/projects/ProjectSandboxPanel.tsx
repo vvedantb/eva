@@ -29,6 +29,10 @@ import {
   SessionArtifactsPanel,
   useSourceArtifacts,
 } from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -90,6 +94,7 @@ export function ProjectSandboxPanel({
   // chat panel already subscribes to (same entity ids).
   const artifactSource = { kind: "project" as const, projectId };
   const { hasArtifacts } = useSourceArtifacts(artifactSource);
+  const { hasDocuments } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: projectId,
     streamingEntityId: `project-chat-${projectIdStr}`,
@@ -171,6 +176,7 @@ export function ProjectSandboxPanel({
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
             hasArtifactsContent={hasArtifacts}
+            hasDocumentsContent={hasDocuments}
             agentBrowsingAt={viewState?.agentBrowsingAt}
             fileList={fileList}
             consoleDock={panes.consoleDock}
@@ -187,6 +193,15 @@ export function ProjectSandboxPanel({
             }
           >
             <SessionArtifactsPanel source={artifactSource} />
+          </div>
+          <div
+            className={
+              activeTab === "documents"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            <SessionDocumentsPanel source={artifactSource} />
           </div>
           <div className={!simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"}>
             <FilesPanel

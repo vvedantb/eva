@@ -15,9 +15,10 @@ const SIMPLE_VIEW_SANDBOX_TABS = new Set([
   "prd",
   "designs",
   "artifacts",
+  "documents",
 ]);
 
-/** Anything outside Preview / Browser / Plan / Designs / Artifacts bounces to Preview. */
+/** Anything outside Preview / Browser / Plan / Designs / Artifacts / Documents bounces to Preview. */
 export function isSimpleViewHiddenSandboxTab(tab: string): boolean {
   return !SIMPLE_VIEW_SANDBOX_TABS.has(tab);
 }
