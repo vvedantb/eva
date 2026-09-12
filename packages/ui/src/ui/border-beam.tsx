@@ -30,7 +30,11 @@ export type BorderBeamProps = ComponentPropsWithRef<"div"> & {
   active: boolean;
   size?: BorderBeamSize;
   colorVariant?: BorderBeamColorVariant;
-  /** Blurred outward glow. On for the composer; off for list/grid cards. */
+  /**
+   * Unused. The blurred halo was removed — live `filter: blur()` on the
+   * spinning conic was the leftover GPU floor. Call sites may still pass
+   * `glow={false}`; `true` is ignored.
+   */
   glow?: boolean;
   /**
    * Wrapper classes. Give it the same radius as the child (e.g. `rounded-control`)
@@ -66,7 +70,7 @@ export function BorderBeam({
   active,
   size = "md",
   colorVariant = "mono",
-  glow = true,
+  glow: _glow = false,
   className,
   ref,
   ...rest
@@ -96,7 +100,6 @@ export function BorderBeam({
             transition={motionSlow}
           >
             <span className="beam" />
-            {glow ? <span className="beam-halo" /> : null}
           </m.span>
         ) : null}
       </AnimatePresence>

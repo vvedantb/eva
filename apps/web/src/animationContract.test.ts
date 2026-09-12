@@ -160,6 +160,15 @@ describe("infinite animations pause when the user cannot see them", () => {
     expect(cssRules).toContain(".shimmer-text");
     expect(cssRules).toContain(".landing-pulse-dot");
   });
+
+  it("does not blur the beam halo", () => {
+    expect(cssRules).not.toMatch(/\.beam-halo\s*\{[^}]*filter:\s*blur/);
+    const beam = readFileSync(
+      join(uiSrc, "ui", "border-beam.tsx"),
+      "utf8",
+    );
+    expect(beam).not.toContain("beam-halo");
+  });
 });
 
 describe("reduced motion is not gated for", () => {

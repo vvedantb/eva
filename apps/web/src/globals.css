@@ -1206,16 +1206,11 @@ html[data-blur-pid] [data-pii] {
   animation: beam-rotate var(--beam-duration) linear infinite;
 }
 
-/* The blur runs when the halo's render pass is drawn into the frame, and the
- * crisp ring damages that frame every vsync, so it re-runs per frame whatever
- * the halo's own cadence: a `steps(90)` (30Hz) spin and a `linear` one traced
- * the same compositor cost (2 passes per frame either way), so the halo spins
- * linear and tracks the ring without a 30Hz stutter. Layer isolation
- * (`will-change` on either layer) was measured and rejected — more layers
- * cost more and the passes stayed at two. Replacing the filter with stacked
- * hard-edged bands traced slower still, so the glow stays a blur. */
+/* Halo blur was removed. A live `filter: blur()` on this spinning conic
+ * re-ran every vsync (composer ~3.3 GPU cores, browser-lock pane ~6.6).
+ * `BorderBeam` no longer mounts `.beam-halo`; these rules stay so a stray
+ * node still clips and pauses like the ring. */
 .beam-halo {
-  filter: blur(var(--beam-glow));
   opacity: 0.5;
 }
 
