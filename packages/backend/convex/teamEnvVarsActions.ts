@@ -20,6 +20,9 @@ export const revealValue = action({
       throw new Error("Not authenticated");
     }
     await assertActionTeamAccess(ctx, args.teamId);
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const vars: Array<{
       key: string;
       value: string;
@@ -29,9 +32,6 @@ export const revealValue = action({
     });
     const entry = vars.find((v) => v.key === args.key);
     if (!entry) return null;
-    if (isSandboxIdentity(identity) && entry.sandboxExclude === true) {
-      throw new Error("Not authorized");
-    }
     return decryptValue(entry.value);
   },
 });

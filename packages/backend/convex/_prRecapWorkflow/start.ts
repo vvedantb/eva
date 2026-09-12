@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
 import {
-  findSiblingRepos,
+  findSameTeamSiblingRepos,
   hasCodebaseRepoAccess,
 } from "../_githubRepos/helpers";
 
@@ -34,7 +34,7 @@ export const getManualRecapContext = internalQuery({
     if (!(await hasCodebaseRepoAccess(ctx.db, args.repoId, args.userId))) {
       return null;
     }
-    const siblings = await findSiblingRepos(ctx.db, args.repoId);
+    const siblings = await findSameTeamSiblingRepos(ctx.db, args.repoId);
     const workflowRepo = pickWorkflowRepo(siblings);
     if (!workflowRepo) return null;
     return {

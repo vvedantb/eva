@@ -49,6 +49,9 @@ export const update = authMutation({
       queuedMessage.parentId,
       ctx.userId,
     );
+    if (queuedMessage.userId !== ctx.userId) {
+      throw new Error("Not authorized");
+    }
 
     const content = args.content.trim();
     if (!content) {
@@ -85,6 +88,9 @@ export const remove = authMutation({
         ctx.userId,
       );
     } catch {
+      throw new Error("Not authorized");
+    }
+    if (queuedMessage.userId !== ctx.userId) {
       throw new Error("Not authorized");
     }
 

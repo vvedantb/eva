@@ -156,6 +156,8 @@ export const activateDraft = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || task.createdBy !== ctx.userId || task.status !== "draft")
       throw new Error("Draft not found");
+    if (!task.repoId || !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId)))
+      throw new Error("Draft not found");
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;
     const project = task.projectId ? await ctx.db.get(task.projectId) : null;

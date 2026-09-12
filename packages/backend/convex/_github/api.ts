@@ -11,6 +11,7 @@ import {
 } from "../githubAuth";
 import { detectAppsForRepo } from "./helpers";
 import { authAction, getActionRepoWithAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 import { assertUserCanUseRepo, listInstallationReposForUser } from "./userAuth";
 
 const listAccessibleReposRef = makeFunctionReference<
@@ -160,6 +161,10 @@ export const connectRepo = authAction({
   // Explicit annotation: the handler reaches back into `internal`, so inference
   // would have to resolve this action's own type to type itself.
   handler: async (ctx, args): Promise<Id<"githubRepos">> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const accessState = await ctx.runQuery(installationAccessStateRef, {
       installationId: args.installationId,
     });

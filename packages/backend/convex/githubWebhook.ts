@@ -47,7 +47,7 @@ async function entityRepoMatchesGithub(
   owner: string | undefined,
   name: string | undefined,
 ): Promise<boolean> {
-  if (owner === undefined || name === undefined) return true;
+  if (owner === undefined || name === undefined) return false;
   const repo = await ctx.db.get(repoId);
   return (
     repo !== null &&

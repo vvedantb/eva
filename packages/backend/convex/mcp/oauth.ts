@@ -8,6 +8,7 @@ import {
   isAllowedOAuthRedirectUri,
   redirectUriMatchesRegistered,
 } from "../_mcp/redirectUri";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 const CODE_TTL_MS = 5 * 60 * 1000;
 const CLIENT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -32,6 +33,9 @@ export const authorize = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
     }
     const clerkUserId = identity.subject;
 

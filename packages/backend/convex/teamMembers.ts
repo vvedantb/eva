@@ -2,6 +2,7 @@ import type { GenericDatabaseReader } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { teamMemberRoleValidator } from "./validators";
 
@@ -151,6 +152,7 @@ export const add = authMutation({
   },
   returns: v.id("teamMembers"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -196,6 +198,7 @@ export const remove = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -240,6 +243,7 @@ export const updateRole = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,

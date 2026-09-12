@@ -8,6 +8,7 @@ import {
   deploymentStatusValidator,
 } from "../validators";
 import { createNotification } from "../notifications";
+import { assertPrUrlForRepo } from "../_github/prUrl";
 import {
   authMutation,
   hasTaskAccess,
@@ -121,13 +122,18 @@ export const complete = authMutation({
     const { run, task } = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
     if (run.status === "success" || run.status === "error")
       throw new Error("Run already completed");
+    let prUrl = args.prUrl;
+    if (prUrl) {
+      if (!task.repoId) throw new Error("Invalid pull request URL");
+      prUrl = await assertPrUrlForRepo(ctx.db, task.repoId, prUrl);
+    }
     const now = Date.now();
     await ctx.db.patch(args.id, {
       status: args.success ? "success" : "error",
       finalizingAt: undefined,
       finishedAt: now,
       resultSummary: args.resultSummary,
-      prUrl: args.prUrl,
+      prUrl,
       error: args.error,
     });
 

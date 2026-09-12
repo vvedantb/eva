@@ -7,6 +7,7 @@ import {
 } from "./_generated/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { authQuery, authMutation } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { teamFields } from "./_validators/tableFields";
 
 /** Team doc fields plus resolved media URLs and membership role for list/get. */
@@ -190,6 +191,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const membership = await ctx.db
       .query("teamMembers")
       .withIndex("by_team_and_user", (q) =>
@@ -292,6 +294,7 @@ export const remove = authMutation({
   args: { id: v.id("teams") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const team = await ctx.db.get(args.id);
     if (!team) throw new Error("Team not found");
 

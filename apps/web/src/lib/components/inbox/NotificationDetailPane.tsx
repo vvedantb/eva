@@ -29,6 +29,7 @@ function NotificationPagePreview({ href }: { href: string }) {
   const [initialHref] = useState(href);
 
   useEffect(() => {
+    if (!isInternalAppHref(href)) return;
     const frame = frameRef.current;
     if (!frame) return;
     if (readyRef.current && frame.contentWindow) {

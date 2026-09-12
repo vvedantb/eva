@@ -4,6 +4,7 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
 import type { DatabaseWriter } from "../_generated/server";
 import { authMutation, getRepoWithAccess, hasTeamAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 import { findAllSiblingRepoIds } from "./helpers";
@@ -34,6 +35,7 @@ export const assignToTeam = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const membership = await ctx.db
       .query("teamMembers")
       .withIndex("by_team_and_user", (q) =>
@@ -80,6 +82,7 @@ export const removeFromTeam = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const membership = await ctx.db
       .query("teamMembers")
       .withIndex("by_team_and_user", (q) =>
@@ -307,6 +310,7 @@ export const updateConfig = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 

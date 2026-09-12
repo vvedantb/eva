@@ -10,6 +10,7 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { artifactFields } from "./validators";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
@@ -341,6 +342,10 @@ export const callTool = authAction({
     isError: v.optional(v.boolean()),
   }),
   handler: async (ctx, { toolName, args }): Promise<ToolResult> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const name = bareToolName(toolName);
     if (!isReadOnlyTool(name)) {
       return errorResult(

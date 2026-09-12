@@ -43,12 +43,12 @@ function toLogDto(entry: Doc<"logs">, projectId: Id<"projects"> | undefined) {
   };
 }
 
-async function canReadLogEntity(
+export async function canReadLogEntity(
   ctx: { db: GenericDatabaseReader<DataModel> },
   userId: Id<"users">,
   entry: Doc<"logs">,
 ): Promise<boolean> {
-  if (entry.entityType === "session") {
+  if (entry.entityType === "session" || entry.entityType === "summarize") {
     const sessionId = ctx.db.normalizeId("sessions", entry.entityId);
     if (!sessionId) return false;
     const session = await ctx.db.get(sessionId);

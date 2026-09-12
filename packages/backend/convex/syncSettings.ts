@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { internalQuery } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { syncSettingFields } from "./validators";
 import type { Id } from "./_generated/dataModel";
 
@@ -18,10 +19,12 @@ async function assertCodebaseAccess(
       q.eq("owner", owner).eq("name", name),
     )
     .collect();
+  if (repos.length === 0) throw new Error("Not authorized");
   for (const repo of repos) {
-    if (await hasRepoAccess(ctx.db, repo._id, userId)) return;
+    if (!(await hasRepoAccess(ctx.db, repo._id, userId))) {
+      throw new Error("Not authorized");
+    }
   }
-  throw new Error("Not authorized");
 }
 
 /** Creates the sync setting for an owner/name pair, or patches its enabled flag if it already exists. */
@@ -114,6 +117,7 @@ export const set = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await assertCodebaseAccess(ctx, args.owner, args.name, ctx.userId);
     await upsertSyncSetting(ctx, args.owner, args.name, args.enabled);
     return null;
@@ -128,6 +132,7 @@ export const bulkSet = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     for (const repo of args.repos) {
       await assertCodebaseAccess(ctx, args.owner, repo.name, ctx.userId);
       await upsertSyncSetting(ctx, args.owner, repo.name, repo.enabled);

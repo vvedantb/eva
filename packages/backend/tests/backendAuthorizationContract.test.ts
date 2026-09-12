@@ -471,7 +471,11 @@ describe("backend authorization boundaries", () => {
   it("session and project PR webhooks bind to the GitHub repository", () => {
     const webhook = convexSource("githubWebhook.ts");
     expect(webhook).toContain("entityRepoMatchesGithub");
+    expect(webhook).toContain(
+      "if (owner === undefined || name === undefined) return false",
+    );
     const http = convexSource("http.ts");
+    expect(http).toContain("repoOwner && repoName");
     const sessionEvent = http.slice(
       http.indexOf("internal.githubWebhook.handleSessionPrEvent"),
     );
@@ -483,6 +487,9 @@ describe("backend authorization boundaries", () => {
     expect(convexSource("_sessions/mutations.ts")).toContain("assertPrUrlForRepo");
     expect(convexSource("_sessions/sandbox.ts")).toContain("assertPrUrlForRepo");
     expect(convexSource("_projects/mutations.ts")).toContain("assertPrUrlForRepo");
+    expect(convexSource("_agentRuns/mutations.ts")).toContain(
+      "assertPrUrlForRepo",
+    );
   });
 
   it("sandbox env GitHub tokens are repo-scoped", () => {
@@ -505,5 +512,32 @@ describe("backend authorization boundaries", () => {
     expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
       "SANDBOX_JWT_ISSUER",
     );
+    expect(convexSource("teamMembers.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("teams.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("_githubRepos/mutations.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_github/userTokens.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("mcp/oauth.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("artifacts.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("syncSettings.ts")).toContain("rejectSandboxCaller");
+  });
+
+  it("summarize logs honor session visibility", () => {
+    const logs = convexSource("logs.ts");
+    expect(logs).toContain('entry.entityType === "summarize"');
+    expect(logs).toContain("hasSessionAccess");
+    expect(convexSource("usage.ts")).toContain("canReadLogEntity");
+  });
+
+  it("project sandbox bind cannot steal another entity's VM", () => {
+    const projects = convexSource("_projects/mutations.ts");
+    const bind = projects.slice(
+      projects.indexOf("export const updateProjectSandbox"),
+    );
+    expect(bind).toContain('withIndex("by_sandbox"');
+    expect(bind).toContain('throw new Error("Not authorized")');
   });
 });

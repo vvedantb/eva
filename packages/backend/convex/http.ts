@@ -603,7 +603,9 @@ http.route({
         "converted_to_draft",
         "closed",
       ]);
-      if (STATE_ACTIONS.has(action)) {
+      const repoOwner = parsed.data.repository?.owner?.login;
+      const repoName = parsed.data.repository?.name;
+      if (STATE_ACTIONS.has(action) && repoOwner && repoName) {
         await ctx.scheduler.runAfter(
           0,
           internal.githubWebhook.handleSessionPrEvent,
@@ -614,8 +616,8 @@ http.route({
             merged: merged ?? undefined,
             prNumber: pullRequest.number ?? undefined,
             mergeCommitSha: pullRequest.merge_commit_sha ?? undefined,
-            repoOwner: parsed.data.repository?.owner?.login ?? undefined,
-            repoName: parsed.data.repository?.name ?? undefined,
+            repoOwner,
+            repoName,
           },
         );
         await ctx.scheduler.runAfter(
@@ -625,8 +627,8 @@ http.route({
             prUrl,
             action,
             draft: draft ?? undefined,
-            repoOwner: parsed.data.repository?.owner?.login ?? undefined,
-            repoName: parsed.data.repository?.name ?? undefined,
+            repoOwner,
+            repoName,
           },
         );
       }

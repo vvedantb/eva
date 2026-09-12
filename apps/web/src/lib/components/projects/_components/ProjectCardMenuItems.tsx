@@ -145,7 +145,7 @@ export function ProjectCardMenuItems({
       {href ? (
         <Item
           onClick={() => {
-            window.open(href, "_blank");
+            window.open(href, "_blank", "noopener,noreferrer");
           }}
         >
           <IconExternalLink className="size-4" />

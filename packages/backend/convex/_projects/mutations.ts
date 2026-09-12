@@ -256,6 +256,7 @@ export const deleteCascade = authMutation({
       .withIndex("by_project", (q) => q.eq("projectId", args.id))
       .collect();
     for (const task of tasks) {
+      if (task.status === "draft" && task.createdBy !== ctx.userId) continue;
       await softDeleteAgentTask(ctx, task._id);
     }
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
@@ -300,7 +301,8 @@ export const setProjectPrUrl = internalMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
-    await ctx.db.patch(args.projectId, { prUrl: args.prUrl });
+    const prUrl = await assertPrUrlForRepo(ctx.db, project.repoId, args.prUrl);
+    await ctx.db.patch(args.projectId, { prUrl });
     return null;
   },
 });
@@ -314,6 +316,23 @@ export const updateProjectSandbox = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    const boundSession = await ctx.db
+      .query("sessions")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (boundSession) throw new Error("Not authorized");
+    const boundTask = await ctx.db
+      .query("agentTasks")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (boundTask) throw new Error("Not authorized");
+    const boundProject = await ctx.db
+      .query("projects")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (boundProject && boundProject._id !== args.id) {
+      throw new Error("Not authorized");
+    }
     await ctx.db.patch(args.id, {
       sandboxId: args.sandboxId,
       lastSandboxActivity: Date.now(),
@@ -332,10 +351,20 @@ export const clearProjectSandbox = authMutation({
       sandboxId: project.sandboxId,
     });
     if (deleteId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-        sandboxId: deleteId,
-        repoId: project.repoId,
-      });
+      const boundSession = await ctx.db
+        .query("sessions")
+        .withIndex("by_sandbox", (q) => q.eq("sandboxId", deleteId))
+        .first();
+      const boundTask = await ctx.db
+        .query("agentTasks")
+        .withIndex("by_sandbox", (q) => q.eq("sandboxId", deleteId))
+        .first();
+      if (!boundSession && !boundTask) {
+        await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+          sandboxId: deleteId,
+          repoId: project.repoId,
+        });
+      }
     }
     await ctx.db.patch(args.id, {
       sandboxId: undefined,
@@ -391,16 +420,19 @@ export const setChatModel = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const providerAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      project.userId,
-      args.model,
-      project.providerAccountId,
-    );
-    await ctx.db.patch(args.id, {
-      lastChatModel: args.model,
-      providerAccountId,
-    });
+    const patch: {
+      lastChatModel: typeof args.model;
+      providerAccountId?: typeof project.providerAccountId;
+    } = { lastChatModel: args.model };
+    if (ctx.userId === project.userId) {
+      patch.providerAccountId = await reconcileProviderAccountForModel(
+        ctx.db,
+        project.userId,
+        args.model,
+        project.providerAccountId,
+      );
+    }
+    await ctx.db.patch(args.id, patch);
     return null;
   },
 });

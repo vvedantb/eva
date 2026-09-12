@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { authQuery, hasRepoAccess } from "./functions";
+import { canReadLogEntity } from "./logs";
 import {
   DAY_MS,
   HOUR_MS,
@@ -88,7 +89,19 @@ export const summary = authQuery({
       .order("desc")
       .take(MAX_ROWS);
 
-    const aggregated = summariseUsage(rows, {
+    const visible = [];
+    const accessCache = new Map<string, boolean>();
+    for (const row of rows) {
+      const cacheKey = `${row.entityType}:${row.entityId}`;
+      let allowed = accessCache.get(cacheKey);
+      if (allowed === undefined) {
+        allowed = await canReadLogEntity(ctx, ctx.userId, row);
+        accessCache.set(cacheKey, allowed);
+      }
+      if (allowed) visible.push(row);
+    }
+
+    const aggregated = summariseUsage(visible, {
       bucketMs: args.bucket === "hour" ? HOUR_MS : DAY_MS,
       tzOffsetMs: (args.tzOffsetMinutes ?? 0) * 60_000,
     });

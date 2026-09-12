@@ -5,6 +5,7 @@ import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
+import { isSameTeamSibling } from "../_githubRepos/helpers";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 
 /** Converts a schedule string to a cron expression, returning null for "manual". */
@@ -40,6 +41,7 @@ export async function findSnapshotForRepo(
 
   for (const sibling of siblings) {
     if (sibling._id === repoId) continue;
+    if (!isSameTeamSibling(repo, sibling)) continue;
     const siblingSnapshot = await db
       .query("repoSnapshots")
       .withIndex("by_repo", (q) => q.eq("repoId", sibling._id))
@@ -148,7 +150,10 @@ export async function findSeedableAppRepos(
     if (r.parentRepoId) parentIds.add(r.parentRepoId);
   }
   return siblings.filter(
-    (r) => (r.stopCommands?.length ?? 0) > 0 && !parentIds.has(r._id),
+    (r) =>
+      isSameTeamSibling(configRepo, r) &&
+      (r.stopCommands?.length ?? 0) > 0 &&
+      !parentIds.has(r._id),
   );
 }
 

@@ -14,7 +14,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { components, internal } from "./_generated/api";
-import { extractPrNumberFromUrl } from "./_projects/prSync";
+import { parseGithubPrUrl } from "./_github/prUrl";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -915,10 +915,15 @@ export const generatePrRecap = authAction({
       throw new Error("Not authorized");
     }
 
-    const prNumber = extractPrNumberFromUrl(args.prUrl);
-    if (prNumber === null) {
+    const parsedPr = parseGithubPrUrl(args.prUrl);
+    if (
+      !parsedPr ||
+      parsedPr.owner.toLowerCase() !== context.owner.toLowerCase() ||
+      parsedPr.name.toLowerCase() !== context.name.toLowerCase()
+    ) {
       throw new Error("Invalid pull request URL");
     }
+    const prNumber = parsedPr.number;
 
     const metadata = await ctx.runAction(
       internal._github.prRecapService.fetchPrMetadata,
