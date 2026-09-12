@@ -137,6 +137,7 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return null;
     return entityVisible(task);
   },
 });
@@ -315,13 +316,18 @@ export const getDependentTasks = authQuery({
     const depTasks = await Promise.all(
       dependents.map((dep) => ctx.db.get(dep.taskId)),
     );
-    return filterActiveEntities(
+    const visible = [];
+    for (const depTask of filterActiveEntities(
       depTasks.filter((t): t is Exclude<typeof t, null> => t !== null),
-    ).map((t) => ({
-      _id: t._id,
-      title: t.title,
-      taskNumber: t.taskNumber,
-    }));
+    )) {
+      if (!(await hasTaskAccess(ctx.db, depTask, ctx.userId))) continue;
+      visible.push({
+        _id: depTask._id,
+        title: depTask.title,
+        taskNumber: depTask.taskNumber,
+      });
+    }
+    return visible;
   },
 });
 

@@ -1,7 +1,11 @@
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
 import type { GenericDatabaseReader } from "convex/server";
-import { authMutation, hasRepoAccess, hasTaskAccess } from "./functions";
+import {
+  authMutation,
+  getSessionWithAccess,
+  hasTaskAccess,
+} from "./functions";
 
 /**
  * Resolves the orchestrator session a watch registration points at. Only the
@@ -35,11 +39,7 @@ export const setSessionWatchedBy = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
     const watchedByOrchestrator = await assertOwnOrchestratorSession(
       ctx.db,
       args.masterSessionId,

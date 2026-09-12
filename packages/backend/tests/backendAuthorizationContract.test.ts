@@ -356,6 +356,49 @@ describe("backend authorization boundaries", () => {
     );
   });
 
+  it("drafts stay owner-only through hasTaskAccess", () => {
+    const access = convexSource("functions.ts");
+    expect(access).toContain('task.status === "draft"');
+    expect(access).toContain("task.createdBy !== userId");
+    const byNum = convexSource("_agentTasks/queries.ts");
+    const getByNum = byNum.slice(byNum.indexOf("export const getByNumId"));
+    expect(getByNum.indexOf("hasTaskAccess")).toBeGreaterThan(-1);
+  });
+
+  it("orchestrator sessions are owner-only", () => {
+    expect(convexSource("functions.ts")).toContain("sessionVisibleToUser");
+    const sessions = convexSource("_sessions/queries.ts");
+    expect(sessions).toContain("sessionVisibleToUser");
+    const get = sessions.slice(sessions.indexOf("export const get ="));
+    expect(get.indexOf("sessionVisibleToUser")).toBeGreaterThan(-1);
+  });
+
+  it("unscoped MCP Supabase resolve does not walk every repo", () => {
+    const resolve = convexSource("mcp/nodeActions.ts");
+    const fn = resolve.slice(resolve.indexOf("export const resolveSupabaseToken"));
+    expect(fn).toContain("scopedRepoId === undefined");
+    expect(fn).not.toContain("by_connected_by");
+  });
+
+  it("repo create cannot bind a new GitHub repo onto another team as a member", () => {
+    const mutations = convexSource("_githubRepos/mutations.ts");
+    expect(mutations).toContain(
+      "Only team owners can assign a repository to a team",
+    );
+  });
+
+  it("snapshot config files stay on the same team", () => {
+    const source = convexSource("sandboxConfigFiles.ts");
+    expect(source).toContain("sibling.teamId === anchorRepo.teamId");
+  });
+
+  it("preview nav-sync fails closed without a parent origin", () => {
+    const proxy = convexSource("_sandbox_runtime/previewProxy.ts");
+    expect(proxy).toContain("ancestorOrigins");
+    expect(proxy).toContain("if (!parentOrigin) return");
+    expect(proxy).toContain("event.origin !== parentOrigin");
+  });
+
   it("MCP chat resolve hides another user's orchestrator session", () => {
     const queries = convexSource("mcp/queries.ts");
     const resolve = queries.slice(

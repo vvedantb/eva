@@ -163,8 +163,27 @@ async function insertRepo(
   }
 
   let teamId = args.teamId;
-  if (teamId && !(await hasTeamAccess(ctx.db, teamId, userId))) {
-    throw new Error("Not authorized to add repositories to this team");
+  const requestedTeamId = teamId;
+  if (requestedTeamId) {
+    const membership = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team_and_user", (q) =>
+        q.eq("teamId", requestedTeamId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) {
+      throw new Error("Not authorized to add repositories to this team");
+    }
+    // Members may only keep a sibling on a team they already share. Binding a
+    // new GitHub repo (or moving a sibling) onto another team is owner-only.
+    if (membership.role !== "owner") {
+      const siblingOnTeam = candidates.some(
+        (repo) => repo.teamId === requestedTeamId,
+      );
+      if (!siblingOnTeam) {
+        throw new Error("Only team owners can assign a repository to a team");
+      }
+    }
   }
   if (!teamId) {
     const teams = await ctx.db

@@ -1,5 +1,9 @@
 import { v } from "convex/values";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  assertMessageParentAccess,
+} from "./functions";
 import { queuedMessageFields } from "./validators";
 
 const parentIdValidator = queuedMessageFields.parentId;
@@ -15,11 +19,9 @@ export const listByParent = authQuery({
   args: { parentId: parentIdValidator },
   returns: v.array(queuedMessageValidator),
   handler: async (ctx, args) => {
-    const parent = await ctx.db.get(args.parentId);
-    if (!parent || !parent.repoId) {
-      return [];
-    }
-    if (!(await hasRepoAccess(ctx.db, parent.repoId, ctx.userId))) {
+    try {
+      await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    } catch {
       return [];
     }
     return await ctx.db
@@ -42,13 +44,11 @@ export const update = authMutation({
     if (!queuedMessage) {
       throw new Error("Queued message not found");
     }
-    const parent = await ctx.db.get(queuedMessage.parentId);
-    if (!parent || !parent.repoId) {
-      throw new Error("Queued message parent not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, parent.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await assertMessageParentAccess(
+      ctx.db,
+      queuedMessage.parentId,
+      ctx.userId,
+    );
 
     const content = args.content.trim();
     if (!content) {
@@ -78,11 +78,13 @@ export const remove = authMutation({
     if (!queuedMessage) {
       return null;
     }
-    const parent = await ctx.db.get(queuedMessage.parentId);
-    if (!parent || !parent.repoId) {
-      return null;
-    }
-    if (!(await hasRepoAccess(ctx.db, parent.repoId, ctx.userId))) {
+    try {
+      await assertMessageParentAccess(
+        ctx.db,
+        queuedMessage.parentId,
+        ctx.userId,
+      );
+    } catch {
       throw new Error("Not authorized");
     }
 
@@ -108,13 +110,7 @@ export const reorder = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const parent = await ctx.db.get(args.parentId);
-    if (!parent || !parent.repoId) {
-      throw new Error("Queued message parent not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, parent.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
 
     let index = 0;
     for (const id of args.orderedIds) {

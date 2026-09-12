@@ -572,9 +572,13 @@ const injectedScript = "(" + function () {
   if (window[flag]) return;
   window[flag] = true;
 
-  let parentOrigin = "*";
+  let parentOrigin = "";
   try {
-    if (document.referrer) {
+    const ancestor =
+      window.location.ancestorOrigins && window.location.ancestorOrigins[0];
+    if (ancestor) {
+      parentOrigin = new URL(ancestor).origin;
+    } else if (document.referrer) {
       parentOrigin = new URL(document.referrer).origin;
     }
   } catch {}
@@ -582,6 +586,7 @@ const injectedScript = "(" + function () {
   let lastHref = "";
 
   function sendLocation() {
+    if (!parentOrigin) return;
     const href = window.location.href;
     if (href === lastHref) return;
     lastHref = href;
@@ -615,6 +620,7 @@ const injectedScript = "(" + function () {
   }, true);
 
   window.addEventListener("message", function (event) {
+    if (!parentOrigin || event.origin !== parentOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "eva-preview-history-back") {

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess, sessionVisibleToUser } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
 import {
@@ -131,6 +131,7 @@ export const list = authQuery({
     ]);
     const sessions = sessionGroups.flat();
     return sessions
+      .filter((session) => sessionVisibleToUser(session, ctx.userId))
       .sort(byMostRecentlyUpdated)
       .map((session) => toSessionListItem(session, openSessionIds));
   },
@@ -155,6 +156,7 @@ export const listArchived = authQuery({
       openSessionIdsForRepo(ctx.db, args.repoId),
     ]);
     return sessions
+      .filter((session) => sessionVisibleToUser(session, ctx.userId))
       .sort(byMostRecentlyUpdated)
       .map((session) => toSessionListItem(session, openSessionIds));
   },
@@ -171,6 +173,7 @@ export const getFirstMessagePreview = authQuery({
     const session = await ctx.db.get(args.id);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
+    if (!sessionVisibleToUser(session, ctx.userId)) return null;
     return await firstUserMessagePreview(ctx.db, args.id);
   },
 });
@@ -202,6 +205,7 @@ export const get = authQuery({
     const session = await ctx.db.get(args.id);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
+    if (!sessionVisibleToUser(session, ctx.userId)) return null;
     return entityVisible(session);
   },
 });
@@ -221,6 +225,7 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
+    if (!session || !sessionVisibleToUser(session, ctx.userId)) return null;
     return entityVisible(session);
   },
 });

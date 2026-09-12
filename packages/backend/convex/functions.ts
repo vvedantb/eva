@@ -116,9 +116,15 @@ export async function hasTeamAccess(
 /** Checks if a user can access a task by verifying access to its parent repo or project. */
 export async function hasTaskAccess(
   db: GenericDatabaseReader<DataModel>,
-  task: { repoId?: Id<"githubRepos">; projectId?: Id<"projects"> },
+  task: {
+    repoId?: Id<"githubRepos">;
+    projectId?: Id<"projects">;
+    status?: string;
+    createdBy?: Id<"users">;
+  },
   userId: Id<"users">,
 ): Promise<boolean> {
+  if (task.status === "draft" && task.createdBy !== userId) return false;
   if (task.repoId) return hasRepoAccess(db, task.repoId, userId);
   if (task.projectId) {
     const project = await db.get(task.projectId);
@@ -141,6 +147,14 @@ export async function getTaskWithAccess(
   return task;
 }
 
+/** Manager Ave is owner-only; other sessions follow repo membership. */
+export function sessionVisibleToUser(
+  session: { isOrchestrator?: boolean; userId: Id<"users"> },
+  userId: Id<"users">,
+): boolean {
+  return session.isOrchestrator !== true || session.userId === userId;
+}
+
 /** Loads a session and verifies access through its repository. */
 export async function getSessionWithAccess(
   db: GenericDatabaseReader<DataModel>,
@@ -150,6 +164,9 @@ export async function getSessionWithAccess(
   const session = await db.get(sessionId);
   if (!session) throw new Error("Session not found");
   if (!(await hasRepoAccess(db, session.repoId, userId))) {
+    throw new Error("Not authorized");
+  }
+  if (!sessionVisibleToUser(session, userId)) {
     throw new Error("Not authorized");
   }
   return session;
