@@ -1206,10 +1206,10 @@ html[data-blur-pid] [data-pii] {
   animation: beam-rotate var(--beam-duration) linear infinite;
 }
 
-/* Halo blur was removed. A live `filter: blur()` on this spinning conic
- * re-ran every vsync (composer ~3.3 GPU cores, browser-lock pane ~6.6).
- * `BorderBeam` no longer mounts `.beam-halo`; these rules stay so a stray
- * node still clips and pauses like the ring. */
+/* Halo blur is banned (CLAUDE.md / AGENTS.md / docs/eva-ui.md). A live
+ * `filter: blur()` on this spinning conic re-ran every vsync. Do not put
+ * it back. `BorderBeam` no longer mounts `.beam-halo`; these rules stay so
+ * a stray node still clips and pauses like the ring. */
 .beam-halo {
   opacity: 0.5;
 }

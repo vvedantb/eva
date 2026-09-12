@@ -161,12 +161,19 @@ describe("infinite animations pause when the user cannot see them", () => {
     expect(cssRules).toContain(".landing-pulse-dot");
   });
 
-  it("does not blur the beam halo", () => {
-    expect(cssRules).not.toMatch(/\.beam-halo\s*\{[^}]*filter:\s*blur/);
-    const beam = readFileSync(
-      join(uiSrc, "ui", "border-beam.tsx"),
-      "utf8",
+});
+
+/**
+ * Recorded as a do-not-reintroduce in CLAUDE.md, AGENTS.md, docs/eva-ui.md,
+ * and globals.css. A live blur on the spinning beam was the leftover GPU
+ * floor; do not put it back.
+ */
+describe("beam halo blur is banned", () => {
+  it("does not mount a halo or blur the beam", () => {
+    expect(cssRules).not.toMatch(
+      /\.beam[\w-]*(?:::[a-z-]+)?\s*\{[^}]*filter:\s*(?:blur|drop-shadow)/,
     );
+    const beam = readFileSync(join(uiSrc, "ui", "border-beam.tsx"), "utf8");
     expect(beam).not.toContain("beam-halo");
   });
 });
