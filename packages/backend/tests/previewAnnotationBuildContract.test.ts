@@ -54,6 +54,7 @@ describe("preview annotation bundle", () => {
     expect(generatedSource.length).toBeGreaterThan(10_000);
     expect(generatedSource).toContain("eva-preview-annotate-ready");
     expect(generatedSource).toContain("eva-preview-screenshot-capture");
+    expect(generatedSource).toContain("eva-preview-snapshot-capture");
     expect(generatedSource).toContain("/__eva_preview_proxy/html2canvas.js");
     expect(generatedSource).not.toMatch(
       /\b(__name|__defProp|__spreadValues|__async)\b/,

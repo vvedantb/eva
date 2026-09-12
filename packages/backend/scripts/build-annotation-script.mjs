@@ -68,6 +68,10 @@ if (!bundled.includes("eva-preview-screenshot-capture")) {
   console.error("Bundle is missing the screenshot protocol; refusing to write");
   process.exit(1);
 }
+if (!bundled.includes("eva-preview-snapshot-capture")) {
+  console.error("Bundle is missing the snapshot protocol; refusing to write");
+  process.exit(1);
+}
 if (!bundled.includes("/__eva_preview_proxy/html2canvas.js")) {
   console.error("Bundle is missing the lazy html2canvas loader; refusing to write");
   process.exit(1);

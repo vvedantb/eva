@@ -132,6 +132,8 @@ interface ChatMessageProps {
    * on assistant turns that carry checkpoint shas.
    */
   turnCheckpoint?: TurnCheckpointContext;
+  /** Flash the row after a citation chip jumps here. */
+  citeHighlight?: boolean;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -155,6 +157,7 @@ export const ChatMessage = memo(function ChatMessage({
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
+  citeHighlight = false,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -229,6 +232,9 @@ export const ChatMessage = memo(function ChatMessage({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={motionFast}
+          className={
+            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
+          }
         >
           <AIMessage
             from={message.role}
@@ -323,9 +329,11 @@ export const ChatMessage = memo(function ChatMessage({
                       />
                       {agentSpawnRow}
                       {streamingContent ? (
-                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
-                          {streamingContent}
-                        </MessageResponse>
+                        <div data-assistant-cite-source={message._id}>
+                          <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
+                            {streamingContent}
+                          </MessageResponse>
+                        </div>
                       ) : null}
                     </>
                   ) : (
@@ -352,9 +360,11 @@ export const ChatMessage = memo(function ChatMessage({
                       ) : (
                         /* wrap-anywhere: without it a long unbreakable token is
                           silently clipped by MessageContent's overflow-hidden. */
-                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                          {message.content}
-                        </MessageResponse>
+                        <div data-assistant-cite-source={message._id}>
+                          <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+                            {message.content}
+                          </MessageResponse>
+                        </div>
                       )}
                       {showChangedFiles && changedFiles.length > 0 ? (
                         <ChangedFilesCard

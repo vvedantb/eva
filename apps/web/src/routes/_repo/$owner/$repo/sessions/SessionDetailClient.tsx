@@ -12,6 +12,7 @@ import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -245,13 +246,16 @@ export function SessionDetailClient({
   if (chatOnly) {
     return (
       <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
-        <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+        <PendingPreviewSnapshotsProvider>
+          <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+        </PendingPreviewSnapshotsProvider>
       </PendingReviewCommentsProvider>
     );
   }
 
   return (
     <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
+      <PendingPreviewSnapshotsProvider>
       <SandboxWorkspace
         ownerKind="session"
         ownerId={sessionId}
@@ -320,6 +324,7 @@ export function SessionDetailClient({
           />
         )}
       </SandboxWorkspace>
+      </PendingPreviewSnapshotsProvider>
     </PendingReviewCommentsProvider>
   );
 }

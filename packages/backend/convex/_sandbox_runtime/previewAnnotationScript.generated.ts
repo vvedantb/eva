@@ -58,6 +58,53 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       return;
     }
     root.setAttribute(ATTR, "1");
+    const RING_MAX = 40;
+    const CONSOLE_RING = [];
+    const NETWORK_RING = [];
+    function pushRing(ring, entry) {
+      ring.push(entry);
+      if (ring.length > RING_MAX) {
+        ring.splice(0, ring.length - RING_MAX);
+      }
+    }
+    function stringifyConsoleArg(value) {
+      if (typeof value === "string") return value;
+      if (value instanceof Error) return value.message;
+      try {
+        return JSON.stringify(value) ?? String(value);
+      } catch {
+        return String(value);
+      }
+    }
+    function wrapConsole(level) {
+      const original = console[level].bind(console);
+      console[level] = (...args) => {
+        pushRing(CONSOLE_RING, {
+          level,
+          text: args.map(stringifyConsoleArg).join(" ").slice(0, 400),
+          at: Date.now()
+        });
+        original(...args);
+      };
+    }
+    wrapConsole("log");
+    wrapConsole("info");
+    wrapConsole("warn");
+    wrapConsole("error");
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      return originalFetch(input, init).then((response) => {
+        if (response.status >= 400) {
+          pushRing(NETWORK_RING, {
+            url: url.slice(0, 300),
+            status: response.status,
+            at: Date.now()
+          });
+        }
+        return response;
+      });
+    };
     let parentOrigin = "*";
     try {
       if (document.referrer) {
@@ -465,6 +512,109 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       if (!modeActive || !selectedEl) return;
       scheduleRectReport();
     }
+    function implicitRole(element) {
+      const explicit = element.getAttribute("role");
+      if (explicit) return explicit;
+      const tag = element.tagName.toLowerCase();
+      if (tag === "a") return "link";
+      if (tag === "button") return "button";
+      if (tag === "main") return "main";
+      if (tag === "nav") return "navigation";
+      if (tag === "header") return "banner";
+      if (tag === "footer") return "contentinfo";
+      if (tag === "aside") return "complementary";
+      if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6") {
+        return "heading";
+      }
+      if (tag === "select") return "combobox";
+      if (tag === "textarea") return "textbox";
+      if (tag === "input") {
+        const type = (element.getAttribute("type") || "text").toLowerCase();
+        if (type === "checkbox" || type === "radio") return type;
+        if (type === "submit" || type === "button" || type === "reset") {
+          return "button";
+        }
+        return "textbox";
+      }
+      if (element.isContentEditable) return "textbox";
+      return tag;
+    }
+    function accessibleName(element) {
+      const labelled = element.getAttribute("aria-label");
+      if (labelled) return labelled.replace(/\\s+/g, " ").trim().slice(0, 80);
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        const fromLabel = element.labels?.item(0)?.textContent;
+        if (fromLabel) return fromLabel.replace(/\\s+/g, " ").trim().slice(0, 80);
+        const placeholder = element.getAttribute("placeholder");
+        if (placeholder) return placeholder.slice(0, 80);
+        return (element.value || "").slice(0, 80);
+      }
+      if (element instanceof HTMLImageElement) {
+        return (element.alt || "").slice(0, 80);
+      }
+      return (element.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 80);
+    }
+    function isVisibleBox(element) {
+      const rect = element.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return false;
+      const styles = window.getComputedStyle(element);
+      if (styles.visibility === "hidden" || styles.display === "none") {
+        return false;
+      }
+      if (styles.opacity === "0") return false;
+      return true;
+    }
+    function collectInteractive() {
+      const selector = "a[href], button, input, select, textarea, [role='button'], [role='link'], [role='tab'], [contenteditable='true']";
+      const nodes = document.querySelectorAll(selector);
+      const out = [];
+      for (let i = 0; i < nodes.length && out.length < 80; i++) {
+        const node = nodes.item(i);
+        if (!(node instanceof HTMLElement)) continue;
+        if (node.getAttribute("aria-hidden") === "true") continue;
+        if (!isVisibleBox(node)) continue;
+        const rect = node.getBoundingClientRect();
+        out.push({
+          role: implicitRole(node),
+          name: accessibleName(node),
+          selector: generateSelector(node),
+          bbox: {
+            x: Math.round(rect.left),
+            y: Math.round(rect.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          }
+        });
+      }
+      return out;
+    }
+    function collectA11yTree() {
+      const selector = "main, nav, header, footer, aside, h1, h2, h3, h4, h5, h6, [role='main'], [role='navigation'], [role='banner'], [role='contentinfo'], [role='complementary']";
+      const nodes = document.querySelectorAll(selector);
+      const out = [];
+      for (let i = 0; i < nodes.length && out.length < 40; i++) {
+        const node = nodes.item(i);
+        if (!(node instanceof HTMLElement)) continue;
+        out.push({
+          role: implicitRole(node),
+          name: accessibleName(node)
+        });
+      }
+      return out;
+    }
+    function collectSnapshot() {
+      const bodyText = (document.body?.innerText || "").replace(/\\s+/g, " ").trim();
+      return {
+        url: window.location.href,
+        title: document.title || "",
+        loading: document.readyState !== "complete",
+        visibleText: bodyText.slice(0, 4e3),
+        interactiveElements: collectInteractive(),
+        accessibilityTree: collectA11yTree(),
+        consoleEntries: CONSOLE_RING.slice(),
+        networkEntries: NETWORK_RING.slice()
+      };
+    }
     function restoreCaptureChrome() {
       if (overlay) overlay.style.display = overlayDisplayForCapture;
       if (labelEl) labelEl.style.display = labelDisplayForCapture;
@@ -552,6 +702,24 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
             message: error instanceof Error ? error.message : "Couldn't render this page as an image"
           });
         });
+        return;
+      }
+      if (type === "eva-preview-snapshot-capture") {
+        const requestId = Reflect.get(data, "requestId");
+        if (typeof requestId !== "string") return;
+        try {
+          post({
+            type: "eva-preview-snapshot",
+            requestId,
+            snapshot: collectSnapshot()
+          });
+        } catch (error) {
+          post({
+            type: "eva-preview-snapshot-error",
+            requestId,
+            message: error instanceof Error ? error.message : "Couldn't snapshot this page"
+          });
+        }
       }
     });
     document.addEventListener("mousemove", onMouseMove, true);
