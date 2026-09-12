@@ -7,7 +7,7 @@ import { api, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "./githubAuth";
-import { extractPrNumber } from "./_github/helpers";
+import { parseGithubPrUrl } from "./_github/prUrl";
 import { isPullRequestAlreadyExistsError } from "./_github/prErrors";
 import { getActionRepoWithAccess } from "./functions";
 import {
@@ -521,8 +521,15 @@ export const updatePrTitle = internalAction({
   },
   returns: v.null(),
   handler: async (_ctx, args) => {
-    const prNumber = extractPrNumber(args.prUrl);
-    if (prNumber === null) return null;
+    const parsed = parseGithubPrUrl(args.prUrl);
+    if (
+      !parsed ||
+      parsed.owner.toLowerCase() !== args.repoOwner.toLowerCase() ||
+      parsed.name.toLowerCase() !== args.repoName.toLowerCase()
+    ) {
+      return null;
+    }
+    const prNumber = parsed.number;
     try {
       const octokit = await getInstallationOctokit(args.installationId);
       const pr = await octokit.rest.pulls.get({

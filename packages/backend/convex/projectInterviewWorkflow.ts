@@ -603,6 +603,7 @@ export const handleSpecCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeWorkflowId) return null;
     await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { action } from "./_generated/server";
 import { resolveAllEnvVars } from "./envVarResolver";
 import { getActionRepoWithAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 
 const LINEAR_API_URL = "https://api.linear.app/graphql";
 
@@ -44,6 +45,9 @@ export const fetchIssues = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
     }
     await getActionRepoWithAccess(ctx, args.repoId);
     const envVars = await resolveAllEnvVars(ctx, args.repoId);

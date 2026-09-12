@@ -8,7 +8,13 @@ import type { DataModel, Id } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { internal } from "../_generated/api";
 import { resolveSandboxCredentials } from "../envVarResolver";
-import { execHandle, getSandboxHandle, workspaceDirShell } from "./helpers";
+import {
+  execHandle,
+  getSandboxHandle,
+  LEGACY_WORKSPACE_DIR,
+  WORKSPACE_DIR,
+  workspaceDirShell,
+} from "./helpers";
 import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
 import { assertActionSandboxAccess } from "../functions";
@@ -325,6 +331,9 @@ export const readSandboxFile = action({
     v.object({ status: v.literal("binary") }),
   ),
   handler: async (ctx, args) => {
+    if (!isValidSandboxViewerPath(args.path)) {
+      return { status: "not_found" as const };
+    }
     const handle = await authorizedRunningHandle(
       ctx,
       args.repoId,
@@ -341,8 +350,9 @@ export const readSandboxFile = action({
     const p = quote([args.path]);
     const script =
       `p=${p}; ` +
-      `if [ -L "$p" ] || [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
-      `else wc -c < "$p" | tr -d ' '; head -c ${MAX_FILE_VIEWER_BYTES} "$p"; fi`;
+      viewerCanonicalGuard() +
+      `if [ -L "$p" ] || [ ! -f "$canonical" ]; then echo ${NOT_FOUND_MARKER}; ` +
+      `else wc -c < "$canonical" | tr -d ' '; head -c ${MAX_FILE_VIEWER_BYTES} "$canonical"; fi`;
     const out = await execHandle(handle, script, 30);
 
     const newlineIndex = out.indexOf("\n");
@@ -378,6 +388,36 @@ export function isValidSandboxWritePath(path: string): boolean {
   return !path.split("/").includes("..");
 }
 
+const VIEWER_ROOTS = [
+  WORKSPACE_DIR,
+  LEGACY_WORKSPACE_DIR,
+  "/vercel/sandbox",
+] as const;
+
+const VIEWER_DENIED_NAMES = new Set([".eva-env.sh", "git-credentials.env"]);
+
+/** File Viewer reads/writes stay inside the workspace, never home/config paths. */
+export function isValidSandboxViewerPath(path: string): boolean {
+  if (!isValidSandboxWritePath(path)) return false;
+  const parts = path.split("/").filter((segment) => segment.length > 0);
+  if (parts.some((segment) => VIEWER_DENIED_NAMES.has(segment))) {
+    return false;
+  }
+  return VIEWER_ROOTS.some((root) => path === root || path.startsWith(`${root}/`));
+}
+
+/** Resolve + confine a viewer path so directory symlinks cannot escape the workspace. */
+function viewerCanonicalGuard(): string {
+  return (
+    `canonical=$(readlink -f -- "$p" 2>/dev/null) || { echo ${NOT_FOUND_MARKER}; exit 0; }; ` +
+    `case "$canonical" in ` +
+    `/tmp/repo/*|/workspace/repo/*|/vercel/sandbox/*) ;; ` +
+    `*) echo ${NOT_FOUND_MARKER}; exit 0 ;; esac; ` +
+    `case "$canonical" in ` +
+    `*/.eva-env.sh|*/git-credentials.env) echo ${NOT_FOUND_MARKER}; exit 0 ;; esac; `
+  );
+}
+
 /**
  * Writes a file back into a running sandbox — the File Viewer's save path.
  *
@@ -402,7 +442,7 @@ export const writeSandboxFile = action({
     v.object({ status: v.literal("too_large"), size: v.number() }),
   ),
   handler: async (ctx, args) => {
-    if (!isValidSandboxWritePath(args.path)) {
+    if (!isValidSandboxViewerPath(args.path)) {
       throw new Error("Invalid file path");
     }
 
@@ -426,7 +466,8 @@ export const writeSandboxFile = action({
 
     const linkProbe = await execHandle(
       handle,
-      `p=${quote([args.path])}; if [ -L "$p" ]; then echo ${NOT_FOUND_MARKER}; fi`,
+      `p=${quote([args.path])}; ${viewerCanonicalGuard()}` +
+        `if [ -L "$p" ]; then echo ${NOT_FOUND_MARKER}; fi`,
       10,
     );
     if (linkProbe.trim() === NOT_FOUND_MARKER) {
@@ -466,6 +507,9 @@ export const readSandboxMediaFile = action({
     v.object({ status: v.literal("too_large"), size: v.number() }),
   ),
   handler: async (ctx, args) => {
+    if (!isValidSandboxViewerPath(args.path)) {
+      return { status: "not_found" as const };
+    }
     const handle = await authorizedRunningHandle(
       ctx,
       args.repoId,
@@ -482,10 +526,11 @@ export const readSandboxMediaFile = action({
     const p = quote([args.path]);
     const script =
       `p=${p}; ` +
-      `if [ -L "$p" ] || [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
-      `else sz=$(wc -c < "$p" | tr -d ' '); ` +
+      viewerCanonicalGuard() +
+      `if [ -L "$p" ] || [ ! -f "$canonical" ]; then echo ${NOT_FOUND_MARKER}; ` +
+      `else sz=$(wc -c < "$canonical" | tr -d ' '); ` +
       `if [ "$sz" -gt ${MAX_MEDIA_VIEWER_BYTES} ]; then echo ${TOO_LARGE_MARKER}; echo "$sz"; ` +
-      `else echo "$sz"; base64 "$p" | tr -d '\\n'; fi; fi`;
+      `else echo "$sz"; base64 "$canonical" | tr -d '\\n'; fi; fi`;
     const out = await execHandle(handle, script, 30);
 
     const newlineIndex = out.indexOf("\n");

@@ -13,6 +13,7 @@ import {
   snapshotBuildFields,
 } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { sanitizeSeededApps } from "./sanitizeSeededApps";
 
@@ -244,6 +245,7 @@ export const startBuild = authMutation({
   },
   returns: v.id("snapshotBuilds"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const sharedConfig = await ctx.db.get(args.repoSnapshotId);
     if (!sharedConfig) throw new Error("Snapshot config not found");
     await getRepoWithAccess(ctx.db, sharedConfig.repoId, ctx.userId);
@@ -467,6 +469,7 @@ export const cancelBuild = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const build = await ctx.db.get(args.buildId);
     if (!build) throw new Error("Build not found");
     const config = await ctx.db.get(build.repoSnapshotId);

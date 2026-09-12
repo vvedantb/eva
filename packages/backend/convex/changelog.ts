@@ -4,6 +4,7 @@ import type { DataModel, Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { getCurrentUserId } from "./_auth/currentUser";
 import { authMutation } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 export const CHANGELOG_AUTOMATION_TITLE = "Eva Weekly Changelog";
 
@@ -124,6 +125,7 @@ export const dismissChangelog = authMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, {
       lastChangelogDismissedAt: Date.now(),
     });

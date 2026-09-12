@@ -12,6 +12,7 @@ import {
   SKILL_FILE_NAME,
 } from "./skillMarkdown";
 import { decodeGitHubContent } from "./decodeGitHubContent";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 const SKILLS_ROOT_PATHS = [".agents/skills", ".claude/skills"];
 
@@ -231,6 +232,10 @@ export const syncFromGithub = action({
   args: { repoId: v.id("githubRepos") },
   returns: syncOutcomeValidator,
   handler: async (ctx, args): Promise<SyncOutcome> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const userId: Id<"users"> | null = await ctx.runQuery(
       internal.auth.getUserIdFromIdentity,
       {},

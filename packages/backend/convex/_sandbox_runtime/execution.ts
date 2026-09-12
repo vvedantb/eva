@@ -52,6 +52,7 @@ import { ensureSwapFile } from "./swap";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
 import { isDaytonaNetworkIssue } from "../_taskWorkflow/recovery";
 import { assertActionSandboxAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 import {
   isSandboxGoneError,
   isSandboxUnresponsiveError,
@@ -897,6 +898,9 @@ export const getPreviewUrl = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
 
     const customTabPort = args.customTabPort;
     if (customTabPort !== undefined) {
@@ -924,6 +928,12 @@ export const getPreviewUrl = action({
     // throws before touching the sandbox if it does not.
     await resolveSandboxCredentials(ctx, args.repoId);
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    // File Viewer already refuses to resume a stopped VM. Preview must do the
+    // same: getSandboxHandle fetches with resume:false, but later exec/proxy
+    // calls go through withResume and would revive a sandbox the user stopped.
+    if (handle.state !== "running") {
+      return { url: "", port: responsePort, ready: false };
+    }
 
     // Services listen on internal ports and the auth proxy owns the exposed
     // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe

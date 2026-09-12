@@ -4,6 +4,7 @@ import type { Doc } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../validators";
 import { authMutation, hasRepoAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { workflow } from "../workflowManager";
 import { buildAutomationRunBranchName } from "./helpers";
 import { resolveAutomationDoc } from "./systemAutomations";
@@ -96,6 +97,7 @@ export const runNow = authMutation({
   args: { automationId: v.id("automations") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const stored = await ctx.db.get(args.automationId);
     if (!stored) throw new Error("Automation not found");
     if (!(await hasRepoAccess(ctx.db, stored.repoId, ctx.userId))) {

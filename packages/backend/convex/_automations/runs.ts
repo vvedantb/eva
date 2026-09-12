@@ -9,7 +9,10 @@ import {
   turnCheckpointArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import { cancelTrackedWorkflow } from "../workflowManager";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
@@ -250,6 +253,7 @@ export const cancelRun = authMutation({
   args: { runId: v.id("automationRuns") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const { run } = await loadRunWithAccess(ctx.db, ctx.userId, args.runId);
 
     await cancelTrackedWorkflow(ctx, run.activeWorkflowId);

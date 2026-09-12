@@ -20,6 +20,7 @@ import {
   scheduleTaskSandboxGraceDelete,
 } from "./sandboxCleanup";
 import { createNotification } from "./notifications";
+import { parseGithubPrUrl } from "./_github/prUrl";
 
 const QUICK_TASK_BRANCH_PREFIX = "eva/task-";
 const PROJECT_BRANCH_PREFIX = "eva/project-";
@@ -355,7 +356,14 @@ export const handlePrClosed = internalMutation({
         (await runMatchesGithubRepo(ctx, byBranch, repoOwner, repoName))
       ) {
         run = byBranch;
-        await ctx.db.patch(run._id, { prUrl: args.prUrl });
+        const parsedPr = parseGithubPrUrl(args.prUrl);
+        if (
+          parsedPr &&
+          parsedPr.owner.toLowerCase() === repoOwner.toLowerCase() &&
+          parsedPr.name.toLowerCase() === repoName.toLowerCase()
+        ) {
+          await ctx.db.patch(run._id, { prUrl: parsedPr.canonical });
+        }
       }
     }
 

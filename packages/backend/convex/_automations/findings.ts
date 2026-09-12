@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { authMutation, hasRepoAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import { workflow } from "../workflowManager";
@@ -24,6 +25,7 @@ export const createTasksFromFindings = authMutation({
   },
   returns: v.array(v.id("agentTasks")),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const run = await ctx.db.get(args.runId);
     if (!run) throw new Error("Run not found");
     if (!run.findings) throw new Error("Run has no findings");

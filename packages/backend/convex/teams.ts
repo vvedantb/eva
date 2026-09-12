@@ -104,6 +104,7 @@ export const create = authMutation({
   },
   returns: v.id("teams"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!args.name.trim()) {
       throw new Error("Team name is required");
     }
@@ -216,6 +217,7 @@ export const generateLogoUploadUrl = authMutation({
   args: { teamId: v.id("teams") },
   returns: v.string(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
     await assertTeamMember(ctx.db, args.teamId, ctx.userId);
@@ -234,6 +236,7 @@ export const setLogo = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
     await assertTeamMember(ctx.db, args.teamId, ctx.userId);
@@ -255,6 +258,7 @@ export const generateBackgroundUploadUrl = authMutation({
   args: { teamId: v.id("teams") },
   returns: v.string(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
     await assertTeamMember(ctx.db, args.teamId, ctx.userId);
@@ -273,6 +277,7 @@ export const setBackground = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const team = await ctx.db.get(args.teamId);
     if (!team) throw new Error("Team not found");
     await assertTeamMember(ctx.db, args.teamId, ctx.userId);

@@ -1,4 +1,5 @@
 import { v, type Infer } from "convex/values";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import type { GenericDatabaseReader } from "convex/server";
 import {
   authMutation,
@@ -612,7 +613,8 @@ export const noteRefreshAttempt = authMutation({
     detail: v.string(),
   },
   returns: v.null(),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     console.log(
       `[usageLimits] daemon refresh captured=${args.captured} available=${String(args.available ?? "omitted")} ${args.detail}`,
     );

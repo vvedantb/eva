@@ -82,8 +82,13 @@ function formatDate(timestamp: number): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+function isInternalAppHref(href: string): boolean {
+  return href.startsWith("/") && !href.startsWith("//") && !href.includes("://");
+}
+
 /** Joins the app base URL with a notification path, tolerating slashes on either side. */
-function buildLink(appUrl: string, href: string): string {
+function buildLink(appUrl: string, href: string): string | null {
+  if (!isInternalAppHref(href)) return null;
   const base = stripTrailingSlash(appUrl);
   const path = href.startsWith("/") ? href : `/${href}`;
   return `${base}${path}`;
@@ -147,8 +152,9 @@ function renderNotification(n: DigestNotification, appUrl: string): string {
   const message = n.message
     ? `<p style="margin:4px 0 0;font-size:14px;line-height:20px;color:${MUTED};">${escapeHtml(n.message)}</p>`
     : "";
-  const link = n.href
-    ? `<a href="${escapeHtml(buildLink(appUrl, n.href))}" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:600;color:${BRAND};text-decoration:none;">View &rarr;</a>`
+  const href = n.href ? buildLink(appUrl, n.href) : null;
+  const link = href
+    ? `<a href="${escapeHtml(href)}" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:600;color:${BRAND};text-decoration:none;">View &rarr;</a>`
     : "";
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;background-color:${SURFACE};border-radius:10px;">
     <tr>
@@ -186,7 +192,7 @@ export function buildNotificationDigestHtml(opts: DigestEmailOptions): string {
     <h1 style="margin:0 0 ${opts.subtext ? "6px" : "20px"};font-size:20px;line-height:28px;font-weight:700;color:${TEXT};">${heading}</h1>
     ${subtext}
     ${rows}
-    <a href="${escapeHtml(buildLink(opts.appUrl, "/inbox"))}" style="display:inline-block;margin-top:8px;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">View all notifications</a>
+    <a href="${escapeHtml(buildLink(opts.appUrl, "/inbox") ?? `${stripTrailingSlash(opts.appUrl)}/inbox`)}" style="display:inline-block;margin-top:8px;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">View all notifications</a>
   `;
 
   return wrapEmailLayout({ title: heading, bodyHtml, appUrl: opts.appUrl });

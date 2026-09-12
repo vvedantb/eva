@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { GenericDatabaseWriter } from "convex/server";
 import { authMutation, authQuery, hasSessionAccess } from "./functions";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { backgroundProcessFields } from "./validators";
@@ -64,6 +65,7 @@ export const register = authMutation({
   },
   returns: v.id("backgroundProcesses"),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
@@ -104,6 +106,7 @@ export const markExitedByShellId = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {

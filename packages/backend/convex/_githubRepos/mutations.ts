@@ -266,7 +266,15 @@ export const create = authMutation({
         "Not authorized to add repositories from this installation",
       );
     }
-    return await insertRepo(ctx, args, ctx.userId);
+    await rejectSandboxCaller(ctx);
+    const verifiedGithubId = sameGithub.find(
+      (repo) => repo.githubId !== undefined,
+    )?.githubId;
+    return await insertRepo(
+      ctx,
+      { ...args, githubId: verifiedGithubId },
+      ctx.userId,
+    );
   },
 });
 

@@ -2,9 +2,18 @@ import { mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 /** Validates the provided admin key against the expected environment variable. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
 function validateAdminKey(key: string): void {
   const expected = process.env.EXTENSION_ADMIN_KEY;
-  if (!expected || key !== expected) {
+  if (!expected || !timingSafeEqual(key, expected)) {
     throw new Error("Unauthorized");
   }
 }

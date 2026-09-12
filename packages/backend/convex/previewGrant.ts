@@ -10,6 +10,7 @@ import {
   PREVIEW_GRANT_TTL_SECONDS,
 } from "./previewGrantConfig";
 import { assertActionSandboxAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 
 /**
  * Reads the ES256 preview-grant keypair from the env. The grant is asymmetric
@@ -77,6 +78,9 @@ export const mintPreviewGrant = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
     }
 
     // `githubRepos.getByIdString` returns the repo only for the connector or a team

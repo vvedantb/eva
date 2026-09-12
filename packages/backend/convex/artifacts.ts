@@ -10,7 +10,10 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { artifactFields } from "./validators";
-import { isSandboxIdentity } from "./_auth/sandboxIdentity";
+import {
+  isSandboxIdentity,
+  rejectSandboxCaller,
+} from "./_auth/sandboxIdentity";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
@@ -65,7 +68,10 @@ function textResult(
 export const generateUploadUrl = authMutation({
   args: {},
   returns: v.string(),
-  handler: async (ctx) => ctx.storage.generateUploadUrl(),
+  handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
+    return ctx.storage.generateUploadUrl();
+  },
 });
 
 // Tools a hosted artifact is allowed to invoke through the bridge. Read-only
@@ -99,6 +105,7 @@ export const create = authMutation({
   },
   returns: v.id("artifacts"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasTeamAccess(ctx.db, args.boundTeamId, ctx.userId))) {
       throw new Error("Not authorized: you are not a member of this team.");
     }

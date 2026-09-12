@@ -113,6 +113,15 @@ export const updatePath = authMutation({
   args: { path: v.string() },
   returns: v.null(),
   handler: async (ctx, { path }) => {
+    if (
+      !path.startsWith("/") ||
+      path.startsWith("//") ||
+      path.includes("://") ||
+      path.includes("\\") ||
+      /[\0-\x1f\x7f]/.test(path)
+    ) {
+      throw new Error("Invalid path");
+    }
     const row = await getUserPresenceRow(ctx.db, ctx.userId);
     if (row?.lastSeenPath !== path) {
       await upsertUserPresence(ctx.db, ctx.userId, { lastSeenPath: path });

@@ -67,6 +67,7 @@ export const updateStatus = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const { run, task } = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
     if (run.status === "success" || run.status === "error")
       throw new Error("Cannot update completed run");
@@ -93,6 +94,7 @@ export const appendLog = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const { run } = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
     if (run.status === "success" || run.status === "error")
       throw new Error("Cannot append to completed run");

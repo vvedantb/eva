@@ -179,6 +179,7 @@ export const updateBackgroundAgents = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (

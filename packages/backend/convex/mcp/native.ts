@@ -1,7 +1,10 @@
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { z } from "zod";
-import { isAllowedOAuthRedirectUri } from "../_mcp/redirectUri";
+import {
+  isAllowedOAuthRedirectUri,
+  redirectUriMatchesRegistered,
+} from "../_mcp/redirectUri";
 
 function getWebAppUrl(): string {
   const url = process.env.WEB_APP_URL;
@@ -113,6 +116,15 @@ export const authorizeGet = httpAction(async (ctx, request) => {
 
     if (!client) {
       return new Response("<h1>Error</h1><p>Unknown client_id</p>", {
+        status: 400,
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+    if (
+      !isAllowedOAuthRedirectUri(params.redirect_uri) ||
+      !redirectUriMatchesRegistered(params.redirect_uri, client.redirectUris)
+    ) {
+      return new Response("<h1>Error</h1><p>Invalid redirect_uri</p>", {
         status: 400,
         headers: { "Content-Type": "text/html" },
       });

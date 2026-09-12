@@ -11,6 +11,7 @@ import {
 } from "./validators";
 import { decryptValue } from "./encryption";
 import { resolveAllEnvVars } from "./envVarResolver";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import https from "node:https";
 import {
   claudeUsageBodyFromUnifiedHeaders,
@@ -386,6 +387,10 @@ export const refreshAll = authAction({
   // Annotated because the handler calls back into `internal.usageLimits`, and
   // an inferred return type would make this module's type depend on itself.
   handler: async (ctx, args): Promise<{ results: RefreshResult[] }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     await getActionRepoWithAccess(ctx, args.repoId);
     const targets: RefreshTarget[] = await ctx.runQuery(
       internal.usageLimits.listRefreshTargetsInternal,

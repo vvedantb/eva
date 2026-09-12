@@ -535,6 +535,27 @@ describe("backend authorization boundaries", () => {
       "rejectSandboxCaller",
     );
     expect(convexSource("transcription.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("artifacts.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("changelog.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("textGen.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("linearActions.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("usageLimitsActions.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("previewGrant.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_sandbox_runtime/execution.ts")).toContain(
+      "isSandboxIdentity",
+    );
+    expect(convexSource("teamEnvVars.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("repoEnvVars.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_automations/triggers.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_automations/findings.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_repoSnapshots/builds.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_repoSkills/sync.ts")).toContain("isSandboxIdentity");
   });
 
   it("sandbox-only callbacks reject Clerk callers", () => {
@@ -559,6 +580,22 @@ describe("backend authorization boundaries", () => {
     expect(convexSource("_sessions/mutations.ts")).toContain(
       "requireSandboxCaller",
     );
+    expect(convexSource("_sessions/proposedPlans.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("backgroundProcesses.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("_sessions/workflow.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("_agentRuns/mutations.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("projectInterviewWorkflow.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("usageLimits.ts")).toContain("requireSandboxCaller");
   });
 
   it("sandbox installation tokens must be bound to the launch VM", () => {

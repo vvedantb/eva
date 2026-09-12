@@ -9,6 +9,7 @@ import {
   getSessionWithAccess,
   hasSessionAccess,
 } from "../functions";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -1173,6 +1174,7 @@ export const updateBackgroundAgents = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
@@ -1392,6 +1394,7 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { authMutation, authQuery, hasSessionAccess } from "../functions";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import { proposedPlanFields } from "../validators";
 import { findOpenSessionTurn } from "../_chat/turnStore";
 
@@ -32,6 +33,7 @@ export const capture = authMutation({
   },
   returns: v.union(v.id("proposedPlans"), v.null()),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const planMarkdown = args.planMarkdown.trim();
     if (!planMarkdown) return null;
     // ENTITY_ID is the session Convex id on session daemons.

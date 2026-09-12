@@ -8,6 +8,7 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Button } from "@eva/ui";
 import { useFollow } from "@/lib/contexts/FollowContext";
+import { isInternalAppHref } from "@/lib/embed/embedded";
 
 export function FollowOverlay() {
   const { following, stopFollowing } = useFollow();
@@ -54,7 +55,7 @@ function FollowOverlayInner({
   const lastSeenPath = userData?.lastSeenPath;
 
   useEffect(() => {
-    if (!lastSeenPath) return;
+    if (!lastSeenPath || !isInternalAppHref(lastSeenPath)) return;
 
     if (lastPathRef.current === undefined) {
       lastPathRef.current = lastSeenPath;

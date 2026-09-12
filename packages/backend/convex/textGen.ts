@@ -7,6 +7,7 @@ import { v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { getActionRepoWithAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import { buildTitleDigest } from "./_sessions/prompts";
 
 /** Cheap gateway model for session titles — one-line change later. */
@@ -79,6 +80,7 @@ export const regenerateSessionTitle = action({
   handler: async (ctx, args): Promise<{ title: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
     const session = await ctx.runQuery(api.sessions.get, {
       id: args.sessionId,
     });
@@ -281,6 +283,7 @@ export const completeText = action({
   handler: async (ctx, args): Promise<string> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
     return await completionCache.fetch(ctx, {
       text: args.text.slice(-MAX_COMPLETION_INPUT),
       contextHint: args.contextHint,
@@ -311,6 +314,7 @@ export const polishTranscript = action({
   handler: async (ctx, args): Promise<string> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
     try {
       const { text } = await generateText({
         model: TEXT_GEN_MODEL,

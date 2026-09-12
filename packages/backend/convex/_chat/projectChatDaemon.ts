@@ -182,6 +182,7 @@ export const updateBackgroundAgents = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
