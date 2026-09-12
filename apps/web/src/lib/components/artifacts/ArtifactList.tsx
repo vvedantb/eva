@@ -4,6 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { IconLayoutDashboard } from "@tabler/icons-react";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { SessionSourceEmpty } from "@/lib/components/sandbox/SessionSourcePane";
 import { ArtifactCard } from "./ArtifactCard";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
@@ -22,6 +23,14 @@ export function ArtifactList({
   compact?: boolean;
 }) {
   if (artifacts.length === 0) {
+    if (compact) {
+      return (
+        <SessionSourceEmpty
+          title="No artifacts yet"
+          description={emptyDescription}
+        />
+      );
+    }
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center py-16">
         <EmptyState

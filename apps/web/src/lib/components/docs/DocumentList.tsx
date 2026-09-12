@@ -3,13 +3,14 @@
 import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { ListRow } from "@eva/ui";
-import { IconFile } from "@tabler/icons-react";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { entityPathSegment } from "@/lib/numId";
-import { compactRelativeTime } from "@eva/shared/dates";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import {
+  SessionSourceEmpty,
+  SessionSourceRow,
+} from "@/lib/components/sandbox/SessionSourcePane";
 import { docSourceLabel } from "./_source";
 
 type DocRow = FunctionReturnType<typeof api.docs.listForSource>[number];
@@ -28,13 +29,10 @@ export function DocumentList({
 }) {
   if (docs.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center py-16">
-        <EmptyState
-          icon={<IconFile size={24} className="text-muted-foreground" />}
-          title="No documents yet"
-          description={emptyDescription}
-        />
-      </div>
+      <SessionSourceEmpty
+        title="No documents yet"
+        description={emptyDescription}
+      />
     );
   }
   return (
@@ -46,38 +44,17 @@ export function DocumentList({
           `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
         );
         const source = showSource ? doc.source : null;
+        const preview = source
+          ? docSourceLabel(source)
+          : (doc.contentPreview ?? null);
         return (
-          <ListRow
+          <SessionSourceRow
             key={doc._id}
-            className="bg-transparent hover:bg-muted"
-            aria-label={doc.title}
+            title={doc.title}
+            preview={preview}
+            timeLabel={compactRelativeTime(doc.updatedAt)}
             link={<Link to={href} search={(prev) => prev} />}
-            contentClassName="flex items-start gap-3 py-2.5"
-          >
-            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-              <IconFile size={16} className="text-muted-foreground" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {doc.title}
-                </span>
-                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                  {compactRelativeTime(doc.updatedAt)}
-                </span>
-              </span>
-              {doc.contentPreview ? (
-                <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                  {doc.contentPreview}
-                </p>
-              ) : null}
-              {source ? (
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {docSourceLabel(source)}
-                </p>
-              ) : null}
-            </span>
-          </ListRow>
+          />
         );
       })}
     </div>

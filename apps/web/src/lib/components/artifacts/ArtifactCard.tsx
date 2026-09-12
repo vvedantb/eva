@@ -20,10 +20,11 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   Button,
-  ListRow,
   LIST_ROW_CONTROL_CLASS,
 } from "@eva/ui";
 import { IconDots, IconLayoutDashboard } from "@tabler/icons-react";
+import { compactRelativeTime } from "@eva/shared/dates";
+import { SessionSourceRow } from "@/lib/components/sandbox/SessionSourcePane";
 import { relativeTime } from "./_format";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ArtifactCardMenuItems } from "./ArtifactCardMenuItems";
@@ -116,64 +117,40 @@ export function ArtifactCard({
 
   const meta = (
     <>
-      {compact && artifact.description ? (
-        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-          {artifact.description}
-        </p>
-      ) : null}
-      {!compact && artifact.description ? (
+      {artifact.description ? (
         <p className="line-clamp-2 text-sm text-muted-foreground">
           {artifact.description}
         </p>
       ) : null}
       {source ? (
-        <p
-          className={cn(
-            "truncate text-muted-foreground",
-            compact ? "mt-0.5 text-[11px]" : "text-xs",
-          )}
-        >
+        <p className="truncate text-xs text-muted-foreground">
           {artifactSourceLabel(source)}
         </p>
       ) : null}
     </>
   );
 
+  const compactPreview = source
+    ? artifactSourceLabel(source)
+    : (artifact.description ?? null);
+
   return (
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           {compact ? (
-            <ListRow
-              className="bg-transparent hover:bg-muted"
-              aria-label={artifact.name}
+            <SessionSourceRow
+              title={artifact.name}
+              preview={compactPreview}
+              timeLabel={compactRelativeTime(artifact.createdAt)}
               link={
                 <Link
                   to="/artifacts/$artifactId"
                   params={{ artifactId: artifact._id }}
                 />
               }
-              contentClassName="flex items-start gap-3 py-2.5"
-            >
-              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                <IconLayoutDashboard
-                  size={16}
-                  className="text-muted-foreground"
-                />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                    {artifact.name}
-                  </span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                    {relativeTime(artifact.createdAt)}
-                  </span>
-                  {kebab}
-                </span>
-                {meta}
-              </span>
-            </ListRow>
+              trailing={kebab}
+            />
           ) : (
           <div className="relative h-full">
             <Link

@@ -4,10 +4,13 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Skeleton } from "@eva/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import {
+  SessionSourcePane,
+  sessionSourceViewAllClass,
+} from "@/lib/components/sandbox/SessionSourcePane";
 import { DocumentList } from "./DocumentList";
 
 export type DocSourceArg =
@@ -35,44 +38,32 @@ export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
   const count = docs?.length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
-        <p className="truncate text-xs font-medium text-muted-foreground">
-          {count === undefined
-            ? "Documents"
-            : count === 1
-              ? "1 document"
-              : `${count} documents`}
-        </p>
+    <SessionSourcePane
+      countLabel={
+        count === undefined
+          ? "Documents"
+          : count === 1
+            ? "1 document"
+            : `${count} documents`
+      }
+      viewAll={
         <Link
           to={toInternalRepoHref(`${basePath}/docs`)}
           search={(prev) => prev}
-          className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className={sessionSourceViewAllClass}
         >
           View all
           <IconArrowUpRight size={14} />
         </Link>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-        {docs === undefined ? (
-          <div
-            className="flex flex-col gap-1"
-            aria-busy="true"
-            aria-label="Loading documents"
-          >
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 rounded-surface" />
-            ))}
-          </div>
-        ) : (
-          <DocumentList
-            docs={docs}
-            basePath={basePath}
-            showSource={false}
-            emptyDescription="Documents created in this chat with create_eva_doc appear here and in the Documents sidebar."
-          />
-        )}
-      </div>
-    </div>
+      }
+      loading={docs === undefined}
+    >
+      <DocumentList
+        docs={docs ?? []}
+        basePath={basePath}
+        showSource={false}
+        emptyDescription="Documents created in this chat appear here and in the Documents sidebar."
+      />
+    </SessionSourcePane>
   );
 }
