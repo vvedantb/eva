@@ -20,6 +20,7 @@ import {
 import { readSignedInHint } from "./lib/authHint";
 import { saveMcpOauthParamsFromUrl } from "./lib/mcpOauthStorage";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
+import { applyPageMotionDataset } from "./lib/pageMotion";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
@@ -34,6 +35,7 @@ saveMcpOauthParamsFromUrl();
 // run before React mounts so the hooks reading these keys see migrated values on
 // first render. Remove once the legacy prefix is safely extinct.
 migrateLegacyStorageKeys();
+applyPageMotionDataset();
 
 /**
  * Handles stale deployment detection: closes the Convex WebSocket to prevent

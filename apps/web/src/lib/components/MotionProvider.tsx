@@ -2,6 +2,7 @@
 
 import { LazyMotion, domMax } from "motion/react";
 import type { ReactNode } from "react";
+import { PageMotionProvider } from "@/lib/components/PageMotionProvider";
 
 /**
  * Single app-wide Motion feature bundle. Consumers should import `m` from
@@ -16,7 +17,7 @@ import type { ReactNode } from "react";
 export function MotionProvider({ children }: { children: ReactNode }) {
   return (
     <LazyMotion features={domMax} strict>
-      {children}
+      <PageMotionProvider>{children}</PageMotionProvider>
     </LazyMotion>
   );
 }

@@ -4,7 +4,7 @@ import { Suspense, use } from "react";
 import { Widget } from "@/lib/components/Widget";
 import dayjs from "@eva/shared/dates";
 import { cssColor } from "@/lib/utils/cssColor";
-import { CHART_ANIMATION } from "./chartMotion";
+import { useChartAnimation } from "./chartMotion";
 
 /** Lazy chart.js + react-chartjs-2 so stats pages don't pay the cost up front. */
 const lineChartModules = Promise.all([
@@ -60,7 +60,7 @@ function ActivityLineChart({
   options: {
     responsive: boolean;
     maintainAspectRatio: boolean;
-    animation: { duration: number; easing: string };
+    animation: { duration: number; easing: string } | false;
     plugins: { legend: { display: boolean } };
     scales: { y: { beginAtZero: boolean; ticks: { stepSize: number } } };
   };
@@ -72,6 +72,7 @@ function ActivityLineChart({
 export function ActivityTimelineChart({
   timeline,
 }: ActivityTimelineChartProps) {
+  const animation = useChartAnimation();
   const labels = timeline.map((e) => dayjs(e.date).format("M/D"));
   const chartData = {
     labels,
@@ -97,7 +98,7 @@ export function ActivityTimelineChart({
   const options = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: CHART_ANIMATION,
+    animation,
     plugins: { legend: { display: false } },
     scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
   };

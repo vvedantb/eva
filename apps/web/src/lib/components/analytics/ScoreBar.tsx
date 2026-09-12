@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@eva/ui";
+import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
 
 const SEGMENTS = 32;
 
@@ -20,12 +21,17 @@ export function ScoreBar({
   tone?: "default" | "top" | "risk";
 }) {
   const ratio = max > 0 ? Math.min(value / max, 1) : 0;
-  const [shownRatio, setShownRatio] = useState(0);
+  const skipMotion = useDisablePageMotion();
+  const [shownRatio, setShownRatio] = useState(skipMotion ? ratio : 0);
 
   useEffect(() => {
+    if (skipMotion) {
+      setShownRatio(ratio);
+      return;
+    }
     const id = requestAnimationFrame(() => setShownRatio(ratio));
     return () => cancelAnimationFrame(id);
-  }, [ratio]);
+  }, [ratio, skipMotion]);
 
   const fillClass =
     tone === "top"
@@ -43,7 +49,7 @@ export function ScoreBar({
         />
       ))}
       <div
-        className="absolute inset-0 flex items-center gap-[2px] transition-[clip-path] duration-[var(--motion-base)]"
+        className="score-bar-fill absolute inset-0 flex items-center gap-[2px] transition-[clip-path] duration-[var(--motion-base)]"
         style={{
           clipPath: `inset(0 ${((1 - shownRatio) * 100).toFixed(2)}% 0 0)`,
         }}

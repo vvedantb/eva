@@ -2,6 +2,7 @@
 
 import { animate } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
 
 /** Suffixes we will count; compound durations like "1h 12m" stay static. */
 const COUNTABLE_SUFFIX = /^(?:%|h|k|m|s|ms)?$/i;
@@ -37,8 +38,14 @@ export function useCountUpDisplay(value: string | number): string | number {
   const parsed = parseCountable(value);
   const [display, setDisplay] = useState(value);
   const lastAmount = useRef<number | null>(null);
+  const skipMotion = useDisablePageMotion();
 
   useEffect(() => {
+    if (skipMotion) {
+      lastAmount.current = parsed?.amount ?? null;
+      setDisplay(value);
+      return;
+    }
     if (!parsed) {
       lastAmount.current = null;
       setDisplay(value);
@@ -67,6 +74,7 @@ export function useCountUpDisplay(value: string | number): string | number {
     parsed?.prefix,
     parsed?.suffix,
     parsed?.decimals,
+    skipMotion,
     value,
   ]);
 
