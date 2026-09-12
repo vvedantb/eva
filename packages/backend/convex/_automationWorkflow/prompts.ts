@@ -1,3 +1,4 @@
+import { buildRootDirectoryInstruction } from "../prompts/shared";
 import { READ_ONLY_DELIVERABLE_MARKER } from "./deliverable";
 
 const WORKSPACE_DIR = "/tmp/repo";
@@ -43,14 +44,15 @@ After committing, output 3–5 bullet lines (plain text, each starting with "- "
 - Use lockfile for package manager.
 - Prefix shell commands with timeouts: \`timeout 120 npm install\`, \`timeout 30 gh ...\`
 - For gh: \`GH_PROMPT_DISABLED=1 timeout 30 gh ...\`
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\``;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`
+${buildRootDirectoryInstruction(rootDirectory)}`;
 }
 
 /** Builds a read-only prompt for automations that analyze the codebase without modifying files. */
 export function buildReadOnlyPrompt(
   title: string,
   description: string,
-  _rootDirectory: string,
+  rootDirectory: string,
 ): string {
   return `You are in READ-ONLY / REPORT MODE. Do NOT modify any files, do NOT commit, do NOT push, do NOT create branches or PRs.
 
@@ -79,14 +81,15 @@ Deliverable rules:
 - Do NOT run git add, git commit, git push, or any git commands that modify state
 - Do NOT use agent-browser, take screenshots, or record videos
 - Prefix shell commands with timeouts: \`timeout 60 npm test\`
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\``;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`
+${buildRootDirectoryInstruction(rootDirectory)}`;
 }
 
 /** Builds a read-only prompt that produces structured JSON findings for actionable follow-up. */
 export function buildActionableReportPrompt(
   title: string,
   description: string,
-  _rootDirectory: string,
+  rootDirectory: string,
 ): string {
   return `You are in READ-ONLY / REPORT MODE with STRUCTURED FINDINGS. Do NOT modify any files, do NOT commit, do NOT push, do NOT create branches or PRs.
 
@@ -130,5 +133,6 @@ You may include narrative text before the JSON block for context, but the JSON b
 - Do NOT run git add, git commit, git push, or any git commands that modify state
 - Do NOT use agent-browser, take screenshots, or record videos
 - Prefix shell commands with timeouts: \`timeout 60 npm test\`
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\``;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`
+${buildRootDirectoryInstruction(rootDirectory)}`;
 }

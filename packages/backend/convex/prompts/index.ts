@@ -1,4 +1,5 @@
 export {
+  buildRootDirectoryInstruction,
   buildCustomInstructionsBlock,
   buildReadableReposBlock,
   buildSystemPromptBlock,

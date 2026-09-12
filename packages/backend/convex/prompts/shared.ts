@@ -38,6 +38,16 @@ Your git credentials can also read these repositories (clone/fetch only, no push
 Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
 }
 
+/**
+ * Monorepo scope: which app this session/task is for. A default, not a write
+ * fence — shared packages and backend stay in scope when the change belongs
+ * there. Sibling apps under `apps/` stay out unless the user asks.
+ */
+export function buildRootDirectoryInstruction(rootDirectory: string): string {
+  if (!rootDirectory) return "";
+  return `\nMonorepo: this session is for "${rootDirectory}". Start there. Change shared packages and backend when the task needs them. Leave other apps alone unless asked.`;
+}
+
 /** Reply-length constraint appended to every session turn prompt. */
 export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
