@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { authMutation, authAction } from "./functions";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Generates a temporary upload URL for storing screenshot/video files. */
 export const generateUploadUrl = authMutation({
@@ -22,6 +23,7 @@ export const attachMedia = authAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await ctx.runQuery(api.messages.assertParentAccess, {
       parentId: args.parentId,
     });

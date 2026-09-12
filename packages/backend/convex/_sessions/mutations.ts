@@ -19,6 +19,7 @@ import {
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { assertPrUrlForRepo } from "../_github/prUrl";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
@@ -556,6 +557,7 @@ export const updateLastMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const last = await ctx.db
       .query("messages")

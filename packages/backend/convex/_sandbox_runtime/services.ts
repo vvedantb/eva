@@ -341,7 +341,7 @@ export const readSandboxFile = action({
     const p = quote([args.path]);
     const script =
       `p=${p}; ` +
-      `if [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
+      `if [ -L "$p" ] || [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
       `else wc -c < "$p" | tr -d ' '; head -c ${MAX_FILE_VIEWER_BYTES} "$p"; fi`;
     const out = await execHandle(handle, script, 30);
 
@@ -424,6 +424,15 @@ export const writeSandboxFile = action({
       return { status: "not_running" as const };
     }
 
+    const linkProbe = await execHandle(
+      handle,
+      `p=${quote([args.path])}; if [ -L "$p" ]; then echo ${NOT_FOUND_MARKER}; fi`,
+      10,
+    );
+    if (linkProbe.trim() === NOT_FOUND_MARKER) {
+      throw new Error("Invalid file path");
+    }
+
     // Goes through the provider's writeFile, never a shell command — see
     // MAX_INLINE_EXEC_CONTENT_BYTES in sandboxFiles.ts for why content must
     // never be interpolated into an exec argument.
@@ -473,7 +482,7 @@ export const readSandboxMediaFile = action({
     const p = quote([args.path]);
     const script =
       `p=${p}; ` +
-      `if [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
+      `if [ -L "$p" ] || [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
       `else sz=$(wc -c < "$p" | tr -d ' '); ` +
       `if [ "$sz" -gt ${MAX_MEDIA_VIEWER_BYTES} ]; then echo ${TOO_LARGE_MARKER}; echo "$sz"; ` +
       `else echo "$sz"; base64 "$p" | tr -d '\\n'; fi; fi`;

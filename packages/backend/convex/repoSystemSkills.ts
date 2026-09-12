@@ -4,6 +4,7 @@ import type { GenericDatabaseReader } from "convex/server";
 import { internalQuery } from "./_generated/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { resolveCanonicalRepoId } from "./_githubRepos/helpers";
 import {
   buildStubMarkdown,
@@ -105,6 +106,7 @@ export const install = authMutation({
   args: { repoId: v.id("githubRepos"), name: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!isSystemSkillName(args.name)) {
       throw new Error(`Unknown system skill "${args.name}"`);
     }
@@ -128,6 +130,7 @@ export const uninstall = authMutation({
   args: { repoId: v.id("githubRepos"), name: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }

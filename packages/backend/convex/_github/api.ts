@@ -40,14 +40,15 @@ export const getInstallationTokenAction = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
-    if (isSandboxIdentity(identity)) {
-      if (!args.sandboxId) throw new Error("Not authorized");
-      const bound = await ctx.runQuery(internal.sandboxHeal.isBoundToRepo, {
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-      });
-      if (!bound) throw new Error("Not authorized");
+    if (!isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
     }
+    if (!args.sandboxId) throw new Error("Not authorized");
+    const bound = await ctx.runQuery(internal.sandboxHeal.isBoundToRepo, {
+      sandboxId: args.sandboxId,
+      repoId: args.repoId,
+    });
+    if (!bound) throw new Error("Not authorized");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
     const token = await getRepoScopedInstallationToken(
       repo.installationId,
@@ -184,7 +185,7 @@ export const connectRepo = authAction({
         "Not authorized to add repositories from this installation",
       );
     }
-    await assertUserCanUseRepo(
+    const match = await assertUserCanUseRepo(
       ctx,
       ctx.userId,
       args.installationId,
@@ -193,7 +194,7 @@ export const connectRepo = authAction({
     );
     return await ctx.runMutation(
       internal._githubRepos.mutations.createForInstallation,
-      { ...args, userId: ctx.userId },
+      { ...args, githubId: match.id, userId: ctx.userId },
     );
   },
 });

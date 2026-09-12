@@ -59,7 +59,11 @@ test("writeSandboxFile never interpolates content into a shell command", () => {
   expect(handler).toContain(
     "writeFileToSandbox(handle, args.path, args.content)",
   );
-  expect(handler).not.toContain("execHandle(");
+  expect(handler).toContain('[ -L "$p" ]');
+  const probe = handler.slice(handler.indexOf("execHandle("));
+  expect(probe.slice(0, probe.indexOf("writeFileToSandbox"))).not.toContain(
+    "args.content",
+  );
 });
 
 test("sandbox.ts re-exports writeSandboxFile", () => {

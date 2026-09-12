@@ -3,6 +3,7 @@
 import { gateway } from "@ai-sdk/gateway";
 import { v } from "convex/values";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 
@@ -92,6 +93,9 @@ export const mintTranscriptionToken = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
     }
 
     const user = await ctx.runQuery(internal.auth.getUserByClerkId, {

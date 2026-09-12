@@ -724,7 +724,7 @@ function logTranscriptStats(sessionId, label) {
   }
 }
 function buildClaudeTranscriptPath(projectDir, sessionId) {
-  if (!/^[a-zA-Z0-9._-]+\$/.test(sessionId)) {
+  if (!/^[a-zA-Z0-9._-]+\$/.test(sessionId) || sessionId === "." || sessionId === "..") {
     throw new Error("Invalid Claude session id");
   }
   return projectDir + "/" + sessionId + ".jsonl";
