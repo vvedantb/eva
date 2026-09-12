@@ -36,6 +36,7 @@ import {
   TASK_STATUSES,
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import { isTaskAgentActive, QuickTaskCard } from "./QuickTaskCard";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
@@ -77,6 +78,7 @@ export function QuickTasksListView({
   onOpenTask,
 }: QuickTasksListViewProps) {
   const { repoId, basePath, owner, name } = useRepo();
+  const firstPaint = useFirstPaintGate();
   const currentUserId = useQuery(api.auth.me);
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
@@ -304,6 +306,10 @@ export function QuickTasksListView({
                                   parent={status}
                                   className="pb-1.5"
                                 >
+                                  <ListEnter
+                                    index={index}
+                                    firstPaint={firstPaint.current}
+                                  >
                                   <QuickTaskCard
                                     id={task._id}
                                     title={task.title}
@@ -363,6 +369,7 @@ export function QuickTasksListView({
                                     currentUserId={currentUserId ?? undefined}
                                     projects={projectsList ?? undefined}
                                   />
+                                  </ListEnter>
                                 </ListItem>
                               );
                             }}

@@ -6,6 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { Button, Checkbox, Spinner, cn } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -108,15 +109,16 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
         </div>
       )}
 
-      {findings.map((finding) => (
-        <FindingRow
-          key={finding.id}
-          finding={finding}
-          selected={selected.has(finding.id)}
-          onToggle={() => toggleFinding(finding.id)}
-          repoOwner={repoOwner}
-          repoName={repoName}
-        />
+      {findings.map((finding, index) => (
+        <ListEnter key={finding.id} index={index}>
+          <FindingRow
+            finding={finding}
+            selected={selected.has(finding.id)}
+            onToggle={() => toggleFinding(finding.id)}
+            repoOwner={repoOwner}
+            repoName={repoName}
+          />
+        </ListEnter>
       ))}
 
       {selectableFindings.length > 0 && (

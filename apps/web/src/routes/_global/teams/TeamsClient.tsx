@@ -18,6 +18,7 @@ import {
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
@@ -139,20 +140,21 @@ export function TeamsClient() {
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {teams.map((team) => (
-            <TeamCard
-              key={team._id}
-              team={team}
-              onDelete={(target) =>
-                requestConfirm(
-                  altHeld,
-                  () => setDeleteTarget(target),
-                  () => {
-                    void handleDelete(target);
-                  },
-                )
-              }
-            />
+          {teams.map((team, index) => (
+            <ListEnter key={team._id} index={index}>
+              <TeamCard
+                team={team}
+                onDelete={(target) =>
+                  requestConfirm(
+                    altHeld,
+                    () => setDeleteTarget(target),
+                    () => {
+                      void handleDelete(target);
+                    },
+                  )
+                }
+              />
+            </ListEnter>
           ))}
         </div>
       )}

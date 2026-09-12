@@ -4,6 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { IconLayoutDashboard } from "@tabler/icons-react";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { ArtifactCard } from "./ArtifactCard";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
@@ -31,8 +32,10 @@ export function ArtifactList({
   }
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {artifacts.map((artifact) => (
-        <ArtifactCard key={artifact._id} artifact={artifact} />
+      {artifacts.map((artifact, index) => (
+        <ListEnter key={artifact._id} index={index}>
+          <ArtifactCard artifact={artifact} />
+        </ListEnter>
       ))}
     </div>
   );
