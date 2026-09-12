@@ -964,6 +964,19 @@
     }
   }
 
+  @keyframes t-heatmap-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .t-heatmap-cell {
+    animation: t-heatmap-fade var(--motion-base) var(--motion-ease-out) both;
+  }
+
   @keyframes t-anchor-flash {
     0%,
     35% {

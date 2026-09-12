@@ -4,6 +4,7 @@ import { Suspense, use } from "react";
 import { Widget } from "@/lib/components/Widget";
 import dayjs from "@eva/shared/dates";
 import { cssColor } from "@/lib/utils/cssColor";
+import { CHART_ANIMATION } from "./chartMotion";
 
 /** Lazy chart.js + react-chartjs-2 so stats pages don't pay the cost up front. */
 const barChartModules = Promise.all([
@@ -43,6 +44,7 @@ function PRsBarChart({
   options: {
     responsive: boolean;
     maintainAspectRatio: boolean;
+    animation: { duration: number; easing: string };
     plugins: { legend: { display: boolean } };
     scales: { y: { beginAtZero: boolean; ticks: { stepSize: number } } };
   };
@@ -69,6 +71,7 @@ export function PRsOverTimeChart({ timeline }: PRsOverTimeChartProps) {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: CHART_ANIMATION,
     plugins: { legend: { display: false } },
     scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
   };

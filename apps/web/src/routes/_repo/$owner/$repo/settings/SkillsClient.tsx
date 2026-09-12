@@ -7,7 +7,8 @@ import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SkillRow } from "./skills/_components/SkillRow";
 import { SystemSkillRow } from "./skills/_components/SystemSkillRow";
-import { Button } from "@eva/ui";
+import { Button, motionBase, motionStagger } from "@eva/ui";
+import { m } from "motion/react";
 import { IconRefresh, IconSparkles } from "@tabler/icons-react";
 import { useState } from "react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
@@ -118,9 +119,14 @@ export function SkillsClient() {
         bodyVariant="list"
       >
         <div className="divide-y divide-border/50">
-          {(systemSkills ?? []).map((skill) => (
-            <SystemSkillRow
+          {(systemSkills ?? []).map((skill, index) => (
+            <m.div
               key={skill.name}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...motionBase, delay: motionStagger(index) }}
+            >
+            <SystemSkillRow
               repoId={repoId}
               skill={skill}
               onInstall={(name) =>
@@ -140,6 +146,7 @@ export function SkillsClient() {
                 )
               }
             />
+            </m.div>
           ))}
         </div>
       </SettingsSection>
@@ -157,11 +164,15 @@ export function SkillsClient() {
       >
         {skills.length > 0 ? (
           <div className="divide-y divide-border/50">
-            {availableSkills.map((skill) => (
-              <SkillRow key={skill._id} skill={skill} />
-            ))}
-            {staleSkills.map((skill) => (
-              <SkillRow key={skill._id} skill={skill} />
+            {[...availableSkills, ...staleSkills].map((skill, index) => (
+              <m.div
+                key={skill._id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...motionBase, delay: motionStagger(index) }}
+              >
+                <SkillRow skill={skill} />
+              </m.div>
             ))}
           </div>
         ) : (

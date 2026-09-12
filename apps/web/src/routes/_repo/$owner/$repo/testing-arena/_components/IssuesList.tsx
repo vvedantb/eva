@@ -5,7 +5,16 @@ import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Button, Checkbox, Spinner, cn } from "@eva/ui";
+import {
+  Button,
+  Checkbox,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  CrossfadeIcon,
+  Spinner,
+  cn,
+} from "@eva/ui";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -168,29 +177,29 @@ function IssueRow({
     taskSegment !== null ? `${basePath}/quick-tasks/${taskSegment}` : null;
 
   return (
-    <div className="rounded-surface bg-muted/40 overflow-hidden">
+    <Collapsible
+      open={expanded}
+      onOpenChange={setExpanded}
+      className="rounded-surface bg-muted/40 overflow-hidden"
+    >
       <div className="group flex items-center gap-3 px-3 py-2.5">
         <Checkbox
           checked={hasTaskCreated ? true : selected}
           disabled={hasTaskCreated}
           onCheckedChange={onToggle}
         />
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          className="flex flex-1 items-center gap-2 text-left min-w-0"
-        >
-          {expanded ? (
-            <IconChevronDown
-              size={14}
-              className="shrink-0 text-muted-foreground"
-            />
-          ) : (
-            <IconChevronRight
-              size={14}
-              className="shrink-0 text-muted-foreground"
-            />
-          )}
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left min-w-0">
+          <CrossfadeIcon
+            show={expanded}
+            whenTrue={
+              <IconChevronDown size={14} className="text-muted-foreground" />
+            }
+            whenFalse={
+              <IconChevronRight size={14} className="text-muted-foreground" />
+            }
+            variant="soft"
+            className="relative flex size-3.5 shrink-0 items-center justify-center"
+          />
           <span
             className={cn(
               "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium",
@@ -202,7 +211,7 @@ function IssueRow({
           <MarqueeOnHover className="min-w-0 text-sm font-medium">
             {issue.title}
           </MarqueeOnHover>
-        </button>
+        </CollapsibleTrigger>
         {hasTaskCreated && taskUrl && (
           <a
             href={taskUrl}
@@ -213,8 +222,7 @@ function IssueRow({
           </a>
         )}
       </div>
-      {expanded && (
-        <div className="px-3 pb-3 pl-10 space-y-2">
+      <CollapsibleContent className="px-3 pb-3 pl-10 space-y-2">
           <p className="text-sm text-muted-foreground whitespace-pre-wrap">
             {issue.description}
           </p>
@@ -245,8 +253,7 @@ function IssueRow({
               </p>
             </div>
           )}
-        </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

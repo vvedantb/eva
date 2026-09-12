@@ -10,6 +10,7 @@ import {
   type UsageBucketSize,
   type UsageChartBucket,
 } from "../_utils";
+import { CHART_ANIMATION } from "@/lib/components/analytics/chartMotion";
 
 /** Lazy chart.js + react-chartjs-2 so the settings bundle does not pay for it up front. */
 const barChartModules = Promise.all([
@@ -55,6 +56,7 @@ function StackedBar({ labels, datasets }: StackedBarProps) {
       options={{
         responsive: true,
         maintainAspectRatio: false,
+        animation: CHART_ANIMATION,
         plugins: {
           legend: { display: datasets.length > 1, position: "bottom" },
           tooltip: {
