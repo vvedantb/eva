@@ -25,6 +25,7 @@ import {
 } from "@/lib/hooks/useSimpleView";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { cn, Tabs, TabsList } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SandboxTabTrigger } from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
@@ -255,19 +256,25 @@ export function SandboxTabBar({
           onValueChange={handleTabChange}
         >
           <TabsList className={TAB_LIST_CLASS}>
-            {tabDescriptors.map((tab) => (
-              <SandboxTabTrigger
+            {tabDescriptors.map((tab, index) => (
+              <ListEnter
                 key={tab.value}
-                tab={tab}
-                onReselect={
-                  collapsed && tab.value === resolvedTab
-                    ? expandIfCollapsed
-                    : undefined
-                }
-                labelHidden={
-                  iconOnly || (collapseLabels && tab.value !== resolvedTab)
-                }
-              />
+                index={index}
+                fast
+                className="inline-flex"
+              >
+                <SandboxTabTrigger
+                  tab={tab}
+                  onReselect={
+                    collapsed && tab.value === resolvedTab
+                      ? expandIfCollapsed
+                      : undefined
+                  }
+                  labelHidden={
+                    iconOnly || (collapseLabels && tab.value !== resolvedTab)
+                  }
+                />
+              </ListEnter>
             ))}
           </TabsList>
         </Tabs>

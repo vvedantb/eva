@@ -3,6 +3,7 @@
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { Separator, Surface, cn } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { CommentActivityItem } from "./CommentActivityItem";
 import { CommentReplyComposer } from "./CommentReplyComposer";
 import type { TaskComment } from "../_utils/commentThread";
@@ -40,8 +41,8 @@ function ReplyThreads({
 
   return (
     <div className="space-y-3 pl-4">
-      {replies.map((reply) => (
-        <div key={reply._id} className="space-y-3">
+      {replies.map((reply, index) => (
+        <ListEnter key={reply._id} index={index} fast className="space-y-3">
           <Separator className={THREAD_SEPARATOR_CLASS} />
           <CommentThread
             comment={reply}
@@ -51,7 +52,7 @@ function ReplyThreads({
             onDeleteRequest={onDeleteRequest}
             depth={depth + 1}
           />
-        </div>
+        </ListEnter>
       ))}
     </div>
   );

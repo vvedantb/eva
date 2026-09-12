@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, type RefObject } from "react";
-import { Input, Spinner, WebPreviewNavigationButton } from "@eva/ui";
+import {
+  CrossfadeIcon,
+  Input,
+  Spinner,
+  WebPreviewNavigationButton,
+} from "@eva/ui";
 import {
   IconArrowLeft,
   IconArrowRight,
@@ -295,11 +300,15 @@ export function PreviewNavBar({
         onClick={isLoading && onRefresh ? onRefresh : reload}
         disabled={isLoading}
       >
-        {isLoading ? (
-          <Spinner size="sm" />
-        ) : (
-          <IconRefresh className="w-3.5 h-3.5" />
-        )}
+        <CrossfadeIcon
+          show={isLoading}
+          trueKey="loading"
+          falseKey="idle"
+          variant="soft"
+          className="relative flex size-3.5 items-center justify-center"
+          whenTrue={<Spinner size="sm" />}
+          whenFalse={<IconRefresh className="w-3.5 h-3.5" />}
+        />
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}

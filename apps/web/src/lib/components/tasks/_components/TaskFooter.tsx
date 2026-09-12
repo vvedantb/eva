@@ -13,7 +13,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  motionFast,
+  CrossfadeIconSlot,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
   IconPlayerPlay,
@@ -147,11 +150,20 @@ export function TaskFooter({
           : "space-y-2 w-full"
       }
     >
-      {!isHeader && (executionError || latestPrError) ? (
-        <p className="text-xs text-destructive text-right">
-          {executionError ?? latestPrError}
-        </p>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {!isHeader && (executionError || latestPrError) ? (
+          <m.p
+            key="footer-error"
+            className="text-xs text-destructive text-right"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            {executionError ?? latestPrError}
+          </m.p>
+        ) : null}
+      </AnimatePresence>
       <div
         className={
           isHeader
@@ -159,20 +171,39 @@ export function TaskFooter({
             : "flex items-center gap-3 flex-wrap justify-end"
         }
       >
-        {isHeader && (executionError || latestPrError) ? (
-          <p className="text-xs text-destructive max-w-[min(240px,40vw)] truncate">
-            {executionError ?? latestPrError}
-          </p>
-        ) : null}
-        {showRunButton && (
-          <SplitRunButton
-            taskId={taskId}
-            scheduledAt={task?.scheduledAt}
-            isStarting={isStarting}
-            onStartExecution={onStartExecution}
-            size={buttonSize}
-          />
-        )}
+        <AnimatePresence initial={false}>
+          {isHeader && (executionError || latestPrError) ? (
+            <m.p
+              key="header-error"
+              className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {executionError ?? latestPrError}
+            </m.p>
+          ) : null}
+        </AnimatePresence>
+        <AnimatePresence initial={false} mode="popLayout">
+          {showRunButton ? (
+            <m.div
+              key="run-eva"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <SplitRunButton
+                taskId={taskId}
+                scheduledAt={task?.scheduledAt}
+                isStarting={isStarting}
+                onStartExecution={onStartExecution}
+                size={buttonSize}
+              />
+            </m.div>
+          ) : null}
+        </AnimatePresence>
         {showRunButton && hasSecondaryContent && (
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
@@ -272,14 +303,24 @@ export function TaskFooter({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {showStopSandbox ? (
-            <SleepEvaButton
-              onStop={onStopSandbox}
-              isStopping={isSandboxStopping}
-              blockedMidTurn={sleepBlockedMidTurn}
-              size={buttonSize}
-            />
-          ) : null}
+          <AnimatePresence initial={false} mode="popLayout">
+            {showStopSandbox ? (
+              <m.div
+                key="stop-sandbox"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <SleepEvaButton
+                  onStop={onStopSandbox}
+                  isStopping={isSandboxStopping}
+                  blockedMidTurn={sleepBlockedMidTurn}
+                  size={buttonSize}
+                />
+              </m.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -326,13 +367,20 @@ function SplitRunButton({
               disabled={isStarting}
               className={`rounded-r-none ${SPLIT_BUTTON_HALF}`}
             >
-              {isStarting ? (
-                <IconLoader2 size={iconSize} className="animate-spin" />
-              ) : isScheduled ? (
-                <IconCalendarClock size={iconSize} />
-              ) : (
-                <IconPlayerPlay size={iconSize} />
-              )}
+              <CrossfadeIconSlot
+                iconKey={
+                  isStarting ? "loading" : isScheduled ? "scheduled" : "run"
+                }
+                className="relative flex size-[18px] items-center justify-center"
+              >
+                {isStarting ? (
+                  <IconLoader2 size={iconSize} className="animate-spin" />
+                ) : isScheduled ? (
+                  <IconCalendarClock size={iconSize} />
+                ) : (
+                  <IconPlayerPlay size={iconSize} />
+                )}
+              </CrossfadeIconSlot>
               {isScheduled
                 ? dayjs(scheduledAt).format("MMM D, h:mm A")
                 : "Run Eva"}

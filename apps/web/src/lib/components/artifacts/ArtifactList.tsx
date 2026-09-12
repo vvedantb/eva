@@ -5,6 +5,7 @@ import { type api } from "@eva/backend";
 import { IconLayoutDashboard } from "@tabler/icons-react";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { SessionSourceEmpty } from "@/lib/components/sandbox/SessionSourcePane";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { ArtifactCard } from "./ArtifactCard";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
@@ -52,13 +53,14 @@ export function ArtifactList({
           : "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
       }
     >
-      {artifacts.map((artifact) => (
-        <ArtifactCard
-          key={artifact._id}
-          artifact={artifact}
-          showSource={showSource}
-          compact={compact}
-        />
+      {artifacts.map((artifact, index) => (
+        <ListEnter key={artifact._id} index={index} fast={compact}>
+          <ArtifactCard
+            artifact={artifact}
+            showSource={showSource}
+            compact={compact}
+          />
+        </ListEnter>
       ))}
     </div>
   );

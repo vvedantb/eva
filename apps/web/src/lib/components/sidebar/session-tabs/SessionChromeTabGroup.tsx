@@ -5,7 +5,8 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Spinner, cn } from "@eva/ui";
+import { Spinner, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
   repoBasePaths,
@@ -151,9 +152,23 @@ export function SessionChromeTabGroup({
             width: `${visibleTabs.length * TAB_PREFERRED_WIDTH_REM}rem`,
           }}
         >
+          <AnimatePresence initial={false} mode="popLayout">
           {visibleTabs.map(({ session, href, isSelected }, index) => (
-            <SessionChromeTab
+            <m.div
               key={session._id}
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+              className="flex min-w-8"
+              style={{
+                flexBasis: `${TAB_PREFERRED_WIDTH_REM}rem`,
+                flexGrow: 1,
+                flexShrink: 1,
+              }}
+            >
+            <SessionChromeTab
               session={session}
               href={href}
               isSelected={isSelected}
@@ -178,7 +193,9 @@ export function SessionChromeTabGroup({
                 navigate({ to: `${baseUrl}/${segment}` });
               }}
             />
+            </m.div>
           ))}
+          </AnimatePresence>
         </div>
       )}
     </div>

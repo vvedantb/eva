@@ -1,6 +1,6 @@
 "use client";
 
-import { LazyMotion, domMax } from "motion/react";
+import { LazyMotion, MotionConfig, domMax } from "motion/react";
 import type { ReactNode } from "react";
 
 /**
@@ -12,11 +12,15 @@ import type { ReactNode } from "react";
  * `layoutId` transitions (SharedLayoutNav); layout animations live only in the
  * `domMax` feature set. Under `strict`, a missing feature silently no-ops the
  * animation, so `domAnimation` here would kill the sliding nav highlight.
+ *
+ * `reducedMotion: never` is the app default (the animation contract forbids
+ * OS `prefers-reduced-motion`). Signed-in users can override via the Convex
+ * `disablePageMotion` flag, applied by `PageMotionProvider` inside Convex.
  */
 export function MotionProvider({ children }: { children: ReactNode }) {
   return (
     <LazyMotion features={domMax} strict>
-      {children}
+      <MotionConfig reducedMotion="never">{children}</MotionConfig>
     </LazyMotion>
   );
 }

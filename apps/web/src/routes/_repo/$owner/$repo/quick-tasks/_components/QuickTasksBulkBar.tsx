@@ -23,6 +23,7 @@ import {
   IconDots,
   IconX,
 } from "@tabler/icons-react";
+import { CountPop } from "@/lib/components/ui/CountPop";
 import {
   ConfirmSkipHint,
   requestConfirm,
@@ -173,9 +174,10 @@ export function QuickTasksBulkBar({
             <div className="flex max-w-[calc(100vw-2rem)] items-center gap-1 overflow-x-auto rounded-surface bg-popover/95 px-2.5 py-2 backdrop-blur-md smooth-shadow-ring-lg scrollbar-none">
               {/* Prefix: selection count */}
               <div className="flex shrink-0 items-center gap-2 pl-1 pr-0.5">
-                <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums">
-                  {selectedCount}
-                </span>
+                <CountPop
+                  label={String(selectedCount)}
+                  className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums"
+                />
                 <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
                   selected
                 </span>

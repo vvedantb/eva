@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, cn } from "@eva/ui";
+import { Badge, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconLoader2, IconClock } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
@@ -507,15 +508,31 @@ export function TaskDetailInline({
         ? createPortal(quickTaskSurfaceTabs, titleSlotElement)
         : null}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {isSandboxViewActive ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {sandboxContent}
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {detailContent}
-          </div>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isSandboxViewActive ? (
+            <m.div
+              key="sandbox"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {sandboxContent}
+            </m.div>
+          ) : (
+            <m.div
+              key="task"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {detailContent}
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
       <StopConfirmDialog
         open={showStopConfirm}

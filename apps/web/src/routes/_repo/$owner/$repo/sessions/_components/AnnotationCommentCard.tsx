@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { m } from "motion/react";
 import {
   Button,
   CodeBlock,
@@ -9,6 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Textarea,
+  motionSpring,
 } from "@eva/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
@@ -84,12 +86,19 @@ export function AnnotationCommentCard({
   }
 
   return (
-    <div
+    <m.div
       ref={cardRef}
       // `w-80` is exactly a 320px viewport, so the card hung off the edge with
       // no gutter. The expression matches `CARD_WIDTH` clamping in
       // `PreviewAnnotationLayer` — keep the two in step.
-      className="pointer-events-auto absolute z-20 w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-popover p-3 smooth-shadow-ring-lg"
+      // `fixed` + viewport left/top: this is the AnimatePresence child, so it
+      // cannot sit inside a full-screen wrapper (that would scale from the
+      // viewport origin). z-50 keeps it above the hosted iframe overlay.
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={motionSpring}
+      className="pointer-events-auto fixed z-50 w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-popover p-3 smooth-shadow-ring-lg"
       style={{ left: position.left, top: position.top }}
     >
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -191,6 +200,6 @@ export function AnnotationCommentCard({
           Send to Eva
         </Button>
       </div>
-    </div>
+    </m.div>
   );
 }

@@ -38,10 +38,14 @@ Your git credentials can also read these repositories (clone/fetch only, no push
 Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
 }
 
-/** Builds an instruction string directing the agent to work inside a specific root directory. */
+/**
+ * Monorepo scope: which app this session/task is for. A default, not a write
+ * fence — shared packages and backend stay in scope when the change belongs
+ * there. Sibling apps under `apps/` stay out unless the user asks.
+ */
 export function buildRootDirectoryInstruction(rootDirectory: string): string {
   if (!rootDirectory) return "";
-  return `\nIMPORTANT: Unless the user mentions otherwise, all changes must be made inside the app at "${rootDirectory}".`;
+  return `\nMonorepo: this session is for "${rootDirectory}". Start there. Change shared packages and backend when the task needs them. Leave other apps alone unless asked.`;
 }
 
 /** Reply-length constraint appended to every session turn prompt. */
