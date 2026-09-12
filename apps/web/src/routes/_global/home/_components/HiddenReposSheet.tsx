@@ -10,6 +10,7 @@ import {
   Surface,
 } from "@eva/ui";
 import { IconEye, IconBrandGithub } from "@tabler/icons-react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 interface HiddenReposSheetProps {
@@ -53,44 +54,45 @@ export function HiddenReposSheet({
               No hidden codebases
             </p>
           ) : (
-            hiddenRepos.map((repo) => (
-              <Surface
-                key={repo._id}
-                density="tight"
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <IconBrandGithub
-                    size={18}
-                    className="shrink-0 text-muted-foreground"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {repo.rootDirectory
-                        ? repo.rootDirectory.split("/").pop()
-                        : repo.name}
-                    </p>
-                    <p className="max-sm:truncate text-xs text-muted-foreground">
-                      {repo.owner}/{repo.name}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    void catchMutationError(
-                      toggleHidden({ repoId: repo._id, hidden: false }),
-                      "Couldn't show codebase",
-                      "repo-unhide",
-                    )
-                  }
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
+            hiddenRepos.map((repo, index) => (
+              <ListEnter key={repo._id} index={index}>
+                <Surface
+                  density="tight"
+                  className="flex items-center justify-between"
                 >
-                  <IconEye size={16} />
-                  Show
-                </Button>
-              </Surface>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <IconBrandGithub
+                      size={18}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {repo.rootDirectory
+                          ? repo.rootDirectory.split("/").pop()
+                          : repo.name}
+                      </p>
+                      <p className="max-sm:truncate text-xs text-muted-foreground">
+                        {repo.owner}/{repo.name}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      void catchMutationError(
+                        toggleHidden({ repoId: repo._id, hidden: false }),
+                        "Couldn't show codebase",
+                        "repo-unhide",
+                      )
+                    }
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <IconEye size={16} />
+                    Show
+                  </Button>
+                </Surface>
+              </ListEnter>
             ))
           )}
         </div>

@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  CrossfadeIcon,
   Spinner,
   toast,
 } from "@eva/ui";
@@ -99,11 +100,15 @@ export function PrHeaderActions({
             className="size-7 p-0 max-sm:size-10"
             aria-label="More actions"
           >
-            {refreshing || closing ? (
-              <Spinner size="sm" />
-            ) : (
-              <IconDots size={16} aria-hidden />
-            )}
+            <CrossfadeIcon
+              show={refreshing || closing}
+              trueKey="loading"
+              falseKey="idle"
+              variant="soft"
+              className="relative flex size-4 items-center justify-center"
+              whenTrue={<Spinner size="sm" />}
+              whenFalse={<IconDots size={16} aria-hidden />}
+            />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

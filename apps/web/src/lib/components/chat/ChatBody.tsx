@@ -3,9 +3,11 @@ import {
   ConversationContent,
   ConversationEmptyState,
   ConversationScrollButton,
+  motionBase,
   type ModelOption,
   type ModelAccount,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
@@ -368,44 +370,64 @@ export function ChatBody({
         <ConversationScrollButton resetKey={conversationId} />
         <ChatJumpRail messages={jumpRailMessages} />
       </Conversation>
-      {isArchived ? null : dockedQuestions ? (
-        <ChatQuestionDock
-          questions={dockedQuestions}
-          onAnswer={handleQuestionAnswer}
-          {...(blockingQuestions
-            ? { onAnswerStructured: handleBlockingAnswer }
-            : {})}
-          isLoading={isAnsweringQuestion}
-        />
-      ) : (
-        <ChatComposer
-          repoId={repoId}
-          repoBasePath={repoBasePath}
-          conversationId={conversationId}
-          queuedMessages={queuedMessages}
-          messageHistory={messageHistory}
-          isExecuting={isExecuting}
-          isInputDisabled={isInputDisabled}
-          placeholder={placeholder}
-          model={model}
-          setModel={setModel}
-          modelOptions={modelOptions}
-          accounts={accounts}
-          accountId={accountId}
-          onAccountChange={onAccountChange}
-          displayTraits={displayTraits}
-          onTraitsChange={onTraitsChange}
-          onSend={onSend}
-          onCancel={onCancel}
-          beforeQueuedContent={beforeQueuedContent}
-          preInputContent={preInputContent}
-          streamingActivity={streamingActivity}
-          streamingTurnId={streamingTargetId}
-          draft={draft}
-          isDraftLoading={isDraftLoading}
-          hasPendingContext={hasPendingContext}
-          allowEmptySubmit={allowEmptySubmit}
-        />
+      {isArchived ? null : (
+        <AnimatePresence mode="wait" initial={false}>
+          {dockedQuestions ? (
+            <m.div
+              key="question-dock"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionBase}
+            >
+              <ChatQuestionDock
+                questions={dockedQuestions}
+                onAnswer={handleQuestionAnswer}
+                {...(blockingQuestions
+                  ? { onAnswerStructured: handleBlockingAnswer }
+                  : {})}
+                isLoading={isAnsweringQuestion}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="composer"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionBase}
+            >
+              <ChatComposer
+                repoId={repoId}
+                repoBasePath={repoBasePath}
+                conversationId={conversationId}
+                queuedMessages={queuedMessages}
+                messageHistory={messageHistory}
+                isExecuting={isExecuting}
+                isInputDisabled={isInputDisabled}
+                placeholder={placeholder}
+                model={model}
+                setModel={setModel}
+                modelOptions={modelOptions}
+                accounts={accounts}
+                accountId={accountId}
+                onAccountChange={onAccountChange}
+                displayTraits={displayTraits}
+                onTraitsChange={onTraitsChange}
+                onSend={onSend}
+                onCancel={onCancel}
+                beforeQueuedContent={beforeQueuedContent}
+                preInputContent={preInputContent}
+                streamingActivity={streamingActivity}
+                streamingTurnId={streamingTargetId}
+                draft={draft}
+                isDraftLoading={isDraftLoading}
+                hasPendingContext={hasPendingContext}
+                allowEmptySubmit={allowEmptySubmit}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       )}
     </>
   );

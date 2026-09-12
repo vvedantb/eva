@@ -9,7 +9,8 @@ import { useQueryState } from "nuqs";
 import { PageHeader } from "@/lib/components/PageHeader";
 import { usePageTitleSync } from "@/lib/contexts/PageTitleContext";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
-import { Button, Skeleton } from "@eva/ui";
+import { Button, Skeleton, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconChecks, IconInbox } from "@tabler/icons-react";
 import { inboxFilterParser, inboxSelectedParser } from "@/lib/search-params";
 import { type Notification } from "@/lib/components/notifications/notification-config";
@@ -188,26 +189,37 @@ export function InboxClient() {
               title="Inbox"
               headerRight={
                 <>
-                  {unreadCount > 0 ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        void catchMutationError(
-                          markAllAsRead(),
-                          "Couldn't mark all as read",
-                          "inbox-mark-all-read",
-                        );
-                      }}
-                      title="Mark all as read"
-                      aria-label="Mark all as read"
-                      className="h-7 text-xs text-muted-foreground"
-                    >
-                      <IconChecks size={14} />
-                      {/* The label is noise on narrow screens; the icon carries it. */}
-                      <span className="hidden sm:inline">Mark all read</span>
-                    </Button>
-                  ) : null}
+                  <AnimatePresence>
+                    {unreadCount > 0 ? (
+                      <m.div
+                        key="mark-all-read"
+                        className="inline-flex"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={motionFast}
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            void catchMutationError(
+                              markAllAsRead(),
+                              "Couldn't mark all as read",
+                              "inbox-mark-all-read",
+                            );
+                          }}
+                          title="Mark all as read"
+                          aria-label="Mark all as read"
+                          className="h-7 text-xs text-muted-foreground"
+                        >
+                          <IconChecks size={14} />
+                          {/* The label is noise on narrow screens; the icon carries it. */}
+                          <span className="hidden sm:inline">Mark all read</span>
+                        </Button>
+                      </m.div>
+                    ) : null}
+                  </AnimatePresence>
                   <InboxFilterMenu
                     filter={filter}
                     unreadCount={unreadCount}

@@ -6,7 +6,8 @@ export type ExperimentalFlagKey =
   | "voiceDictation"
   | "composerAutocomplete"
   | "simpleView"
-  | "replyChime";
+  | "replyChime"
+  | "disablePageMotion";
 
 export type ResolvedExperimentalFlags = {
   sessionTabs: boolean;
@@ -15,6 +16,7 @@ export type ResolvedExperimentalFlags = {
   composerAutocomplete: boolean;
   simpleView: boolean;
   replyChime: boolean;
+  disablePageMotion: boolean;
 };
 
 /** Resolves experimental flags for a user. Missing / unset keys are false. */
@@ -29,5 +31,6 @@ export function resolveExperimentalFlags(
     composerAutocomplete: flags?.composerAutocomplete ?? false,
     simpleView: flags?.simpleView ?? false,
     replyChime: flags?.replyChime ?? false,
+    disablePageMotion: flags?.disablePageMotion ?? false,
   };
 }

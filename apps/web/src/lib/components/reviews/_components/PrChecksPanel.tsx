@@ -1,18 +1,12 @@
 "use client";
 
-import { Button, Spinner, Surface } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner, Surface, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IconRefresh } from "@tabler/icons-react";
-import {
-  checksHeadline,
-  checksOverallTone,
-  countChecks,
-} from "./prMergeState";
+import { checksHeadline, checksOverallTone, countChecks } from "./prMergeState";
 import { PrCheckRow } from "./PrCheckRow";
-import {
-  NOTICE_CLASS,
-  ToneIcon,
-  type PrOverview,
-} from "./prOverviewMeta";
+import { NOTICE_CLASS, ToneIcon, type PrOverview } from "./prOverviewMeta";
 
 /**
  * The Checks tab: every check run and commit status on the head commit, under
@@ -35,17 +29,31 @@ export function PrChecksPanel({
   onRefresh: () => void;
 }) {
   const counts = countChecks(overview.checks);
+  const tone = checksOverallTone(counts);
+  const headline =
+    counts.total === 0 ? "Nothing has reported yet" : checksHeadline(counts);
 
   return (
     <div className="h-full overflow-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4">
         <div className="flex items-center gap-2">
-          <ToneIcon tone={checksOverallTone(counts)} size={15} />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {counts.total === 0
-              ? "Nothing has reported yet"
-              : checksHeadline(counts)}
-          </span>
+          <div className="flex min-w-0 flex-1 items-center">
+            <AnimatePresence mode="wait" initial={false}>
+              <m.span
+                key={`${headline}-${tone}`}
+                className="flex min-w-0 w-full items-center gap-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <ToneIcon tone={tone} size={15} />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {headline}
+                </span>
+              </m.span>
+            </AnimatePresence>
+          </div>
           <Button
             size="sm"
             variant="ghost"
@@ -55,11 +63,15 @@ export function PrChecksPanel({
             title="Refresh checks"
             className="size-7 shrink-0 p-0 text-muted-foreground"
           >
-            {refreshing ? (
-              <Spinner size="sm" />
-            ) : (
-              <IconRefresh size={14} aria-hidden />
-            )}
+            <CrossfadeIcon
+              show={refreshing}
+              trueKey="loading"
+              falseKey="idle"
+              variant="soft"
+              className="relative flex size-3.5 items-center justify-center"
+              whenTrue={<Spinner size="sm" />}
+              whenFalse={<IconRefresh size={14} aria-hidden />}
+            />
           </Button>
         </div>
 
@@ -71,9 +83,11 @@ export function PrChecksPanel({
         ) : (
           <Surface density="none" className="overflow-hidden p-1.5">
             <ul className="space-y-0.5">
-              {overview.checks.map((check) => (
+              {overview.checks.map((check, index) => (
                 <li key={`${check.kind}-${check.name}`}>
-                  <PrCheckRow check={check} />
+                  <ListEnter index={index} fast>
+                    <PrCheckRow check={check} />
+                  </ListEnter>
                 </li>
               ))}
             </ul>

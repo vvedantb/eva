@@ -6,7 +6,9 @@ import {
   Button,
   cn,
   MessageResponse,
+  motionBase,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCode,
@@ -102,12 +104,16 @@ export function ProposedPlanCard({
   };
 
   return (
-    <div
-      className={cn(
-        "rounded-surface border border-border bg-card/70 p-4",
-        className,
-      )}
-    >
+    <AnimatePresence>
+      <m.div
+        className={cn(
+          "rounded-surface border border-border bg-card/70 p-4",
+          className,
+        )}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={motionBase}
+      >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge
@@ -246,6 +252,7 @@ export function ProposedPlanCard({
         )}
       </div>
       ) : null}
-    </div>
+      </m.div>
+    </AnimatePresence>
   );
 }

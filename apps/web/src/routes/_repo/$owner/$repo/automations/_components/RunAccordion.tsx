@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnimatePresence, m } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -11,7 +12,9 @@ import {
   formatElapsed,
   Spinner as UISpinner,
   Surface,
+  motionFast,
 } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconAlertTriangle,
   IconCheck,
@@ -117,15 +120,16 @@ export function RunHistory({
       density="none"
       className="overflow-hidden divide-y divide-border/50"
     >
-      {runs.map((run) => (
-        <RunAccordion
-          key={run._id}
-          run={run}
-          actionsEnabled={actionsEnabled}
-          repoOwner={repoOwner}
-          repoName={repoName}
-          onAcknowledge={() => acknowledgeRun({ runId: run._id })}
-        />
+      {runs.map((run, index) => (
+        <ListEnter key={run._id} index={index}>
+          <RunAccordion
+            run={run}
+            actionsEnabled={actionsEnabled}
+            repoOwner={repoOwner}
+            repoName={repoName}
+            onAcknowledge={() => acknowledgeRun({ runId: run._id })}
+          />
+        </ListEnter>
       ))}
     </Surface>
   );
@@ -227,114 +231,158 @@ function RunAccordion({
             {duration}
           </span>
         )}
-        {isActive && (
-          <Button
-            size="sm"
-            variant="destructive"
-            className="shrink-0 h-7 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              void withMutationToast(
-                cancelRun({ runId: run._id }),
-                "Run stopped",
-                "Couldn't stop run",
-                "automation-run-stop",
-              );
-            }}
-          >
-            <IconPlayerStop size={12} />
-            Stop
-          </Button>
-        )}
-        {!run.acknowledged &&
-          run.status !== "queued" &&
-          run.status !== "running" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="shrink-0 h-7 text-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAcknowledge();
-              }}
+        <AnimatePresence initial={false} mode="popLayout">
+          {isActive ? (
+            <m.span
+              key="stop"
+              className="inline-flex shrink-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
             >
-              <IconCheck size={12} />
+              <Button
+                size="sm"
+                variant="destructive"
+                className="shrink-0 h-7 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void withMutationToast(
+                    cancelRun({ runId: run._id }),
+                    "Run stopped",
+                    "Couldn't stop run",
+                    "automation-run-stop",
+                  );
+                }}
+              >
+                <IconPlayerStop size={12} />
+                Stop
+              </Button>
+            </m.span>
+          ) : !run.acknowledged &&
+            run.status !== "queued" &&
+            run.status !== "running" ? (
+            <m.span
+              key="read"
+              className="inline-flex shrink-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 h-7 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAcknowledge();
+                }}
+              >
+                <IconCheck size={12} />
+                Read
+              </Button>
+            </m.span>
+          ) : run.acknowledged ? (
+            <m.span
+              key="acknowledged"
+              className="shrink-0 text-xs text-success"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
               Read
-            </Button>
-          )}
-        {run.acknowledged && (
-          <span className="shrink-0 text-xs text-success">Read</span>
-        )}
+            </m.span>
+          ) : null}
+        </AnimatePresence>
       </button>
-      {expanded && (
-        <div className="px-4 py-3 space-y-3">
-          {isActive && liveSteps && (
-            <ActivityTasks steps={liveSteps} isStreaming />
-          )}
-          {!isActive && completedSteps && (
-            <ActivityTasks
-              steps={completedSteps}
-              finalText={showsFindings ? undefined : run.resultSummary}
-            />
-          )}
-          {showsFindings ? (
-            <FindingsList run={run} repoOwner={repoOwner} repoName={repoName} />
-          ) : (
-            <>
-              {actionsEnabled &&
-                run.resultSummary &&
-                !run.findings &&
-                run.status === "success" && (
-                  <div className="flex items-center gap-2 rounded-surface bg-warning/10 px-3 py-2">
-                    <IconAlertTriangle
-                      size={14}
-                      className="shrink-0 text-warning"
-                    />
-                    <p className="text-xs text-warning">
-                      Could not parse findings from report
-                    </p>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <m.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+            className="px-4 py-3 space-y-3"
+          >
+            {isActive && liveSteps && (
+              <ActivityTasks steps={liveSteps} isStreaming />
+            )}
+            {!isActive && completedSteps && (
+              <ActivityTasks
+                steps={completedSteps}
+                finalText={showsFindings ? undefined : run.resultSummary}
+              />
+            )}
+            {showsFindings ? (
+              <FindingsList
+                run={run}
+                repoOwner={repoOwner}
+                repoName={repoName}
+              />
+            ) : (
+              <>
+                {actionsEnabled &&
+                  run.resultSummary &&
+                  !run.findings &&
+                  run.status === "success" && (
+                    <div className="flex items-center gap-2 rounded-surface bg-warning/10 px-3 py-2">
+                      <IconAlertTriangle
+                        size={14}
+                        className="shrink-0 text-warning"
+                      />
+                      <p className="text-xs text-warning">
+                        Could not parse findings from report
+                      </p>
+                    </div>
+                  )}
+                {run.resultSummary && (
+                  <div>
+                    <Streamdown
+                      className="text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                      plugins={summaryPlugins}
+                    >
+                      {run.resultSummary}
+                    </Streamdown>
                   </div>
                 )}
-              {run.resultSummary && (
-                <div>
-                  <Streamdown
-                    className="text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                    plugins={summaryPlugins}
-                  >
-                    {run.resultSummary}
-                  </Streamdown>
-                </div>
+              </>
+            )}
+            {run.error && (
+              <div>
+                <p className="text-xs font-medium text-destructive mb-1">
+                  Error
+                </p>
+                <p className="text-sm text-destructive whitespace-pre-wrap max-sm:wrap-break-word">
+                  {run.error}
+                </p>
+              </div>
+            )}
+            {run.prUrl && (
+              <div>
+                <a
+                  href={run.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="max-sm:hit-target inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                >
+                  <IconExternalLink size={14} />
+                  View Pull Request
+                </a>
+              </div>
+            )}
+            {!isActive &&
+              !run.resultSummary &&
+              !run.error &&
+              !completedSteps && (
+                <p className="text-sm text-muted-foreground">
+                  No details available.
+                </p>
               )}
-            </>
-          )}
-          {run.error && (
-            <div>
-              <p className="text-xs font-medium text-destructive mb-1">Error</p>
-              <p className="text-sm text-destructive whitespace-pre-wrap max-sm:wrap-break-word">
-                {run.error}
-              </p>
-            </div>
-          )}
-          {run.prUrl && (
-            <div>
-              <a
-                href={run.prUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="max-sm:hit-target inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-              >
-                <IconExternalLink size={14} />
-                View Pull Request
-              </a>
-            </div>
-          )}
-          {!isActive && !run.resultSummary && !run.error && !completedSteps && (
-            <p className="text-sm text-muted-foreground">
-              No details available.
-            </p>
-          )}
-        </div>
-      )}
+          </m.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

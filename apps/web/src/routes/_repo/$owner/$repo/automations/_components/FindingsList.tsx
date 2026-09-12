@@ -5,7 +5,19 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, Checkbox, Spinner, cn } from "@eva/ui";
+import {
+  Button,
+  Checkbox,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  CrossfadeIcon,
+  Spinner,
+  cn,
+  motionFast,
+} from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -94,52 +106,71 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
 
   return (
     <div className="space-y-2">
-      {selectableFindings.length > 0 && (
-        <div className="flex items-center gap-2 pb-1">
-          <Checkbox
-            className="max-sm:hit-target"
-            aria-label={`Select all ${selectableFindings.length} findings`}
-            checked={allSelected}
-            onCheckedChange={toggleAll}
-          />
-          <span className="text-xs text-muted-foreground">
-            Select all ({selectableFindings.length})
-          </span>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {selectableFindings.length > 0 ? (
+          <m.div
+            key="findings-select-all"
+            className="flex items-center gap-2 pb-1"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <Checkbox
+              className="max-sm:hit-target"
+              aria-label={`Select all ${selectableFindings.length} findings`}
+              checked={allSelected}
+              onCheckedChange={toggleAll}
+            />
+            <span className="text-xs text-muted-foreground">
+              Select all ({selectableFindings.length})
+            </span>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
-      {findings.map((finding) => (
-        <FindingRow
-          key={finding.id}
-          finding={finding}
-          selected={selected.has(finding.id)}
-          onToggle={() => toggleFinding(finding.id)}
-          repoOwner={repoOwner}
-          repoName={repoName}
-        />
+      {findings.map((finding, index) => (
+        <ListEnter key={finding.id} index={index}>
+          <FindingRow
+            finding={finding}
+            selected={selected.has(finding.id)}
+            onToggle={() => toggleFinding(finding.id)}
+            repoOwner={repoOwner}
+            repoName={repoName}
+          />
+        </ListEnter>
       ))}
 
-      {selectableFindings.length > 0 && (
-        <div className="flex max-sm:flex-wrap items-center gap-2 pt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={selected.size === 0 || isCreating}
-            onClick={() => handleCreate(false)}
+      <AnimatePresence initial={false}>
+        {selected.size > 0 ? (
+          <m.div
+            key="findings-bulk-bar"
+            className="flex max-sm:flex-wrap items-center gap-2 pt-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
           >
-            {isCreating && <Spinner size="sm" />}
-            Create Tasks ({selected.size})
-          </Button>
-          <Button
-            size="sm"
-            disabled={selected.size === 0 || isCreating}
-            onClick={() => handleCreate(true)}
-          >
-            {isCreating && <Spinner size="sm" />}
-            Create & Run ({selected.size})
-          </Button>
-        </div>
-      )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isCreating}
+              onClick={() => handleCreate(false)}
+            >
+              {isCreating && <Spinner size="sm" />}
+              Create Tasks ({selected.size})
+            </Button>
+            <Button
+              size="sm"
+              disabled={isCreating}
+              onClick={() => handleCreate(true)}
+            >
+              {isCreating && <Spinner size="sm" />}
+              Create & Run ({selected.size})
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -170,7 +201,11 @@ function FindingRow({
       : null;
 
   return (
-    <div className={cn("rounded-surface bg-muted/40 overflow-hidden")}>
+    <Collapsible
+      open={expanded}
+      onOpenChange={setExpanded}
+      className={cn("rounded-surface bg-muted/40 overflow-hidden")}
+    >
       <div className="group flex items-center gap-3 px-3 py-2.5">
         <Checkbox
           className="max-sm:hit-target"
@@ -179,23 +214,18 @@ function FindingRow({
           disabled={hasTaskCreated}
           onCheckedChange={onToggle}
         />
-        <button
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((prev) => !prev)}
-          className="flex flex-1 items-center gap-2 text-left min-w-0"
-        >
-          {expanded ? (
-            <IconChevronDown
-              size={14}
-              className="shrink-0 text-muted-foreground"
-            />
-          ) : (
-            <IconChevronRight
-              size={14}
-              className="shrink-0 text-muted-foreground"
-            />
-          )}
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left min-w-0">
+          <CrossfadeIcon
+            show={expanded}
+            whenTrue={
+              <IconChevronDown size={14} className="text-muted-foreground" />
+            }
+            whenFalse={
+              <IconChevronRight size={14} className="text-muted-foreground" />
+            }
+            variant="soft"
+            className="relative flex size-3.5 shrink-0 items-center justify-center"
+          />
           <span
             className={cn(
               "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium",
@@ -207,7 +237,7 @@ function FindingRow({
           <MarqueeOnHover className="min-w-0 text-sm font-medium">
             {finding.title}
           </MarqueeOnHover>
-        </button>
+        </CollapsibleTrigger>
         {hasTaskCreated && taskUrl && (
           <a
             href={taskUrl}
@@ -218,40 +248,38 @@ function FindingRow({
           </a>
         )}
       </div>
-      {expanded && (
-        <div className="px-3 pb-3 pl-10 space-y-2">
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap max-sm:wrap-break-word">
-            {finding.description}
-          </p>
-          {finding.filePaths && finding.filePaths.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Files
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {finding.filePaths.map((fp) => (
-                  <span
-                    key={fp}
-                    className="inline-block max-sm:max-w-full max-sm:break-all rounded bg-muted px-1.5 py-0.5 text-xs font-mono"
-                  >
-                    {fp}
-                  </span>
-                ))}
-              </div>
+      <CollapsibleContent className="px-3 pb-3 pl-10 space-y-2">
+        <p className="text-sm text-muted-foreground whitespace-pre-wrap max-sm:wrap-break-word">
+          {finding.description}
+        </p>
+        {finding.filePaths && finding.filePaths.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Files
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {finding.filePaths.map((fp) => (
+                <span
+                  key={fp}
+                  className="inline-block max-sm:max-w-full max-sm:break-all rounded bg-muted px-1.5 py-0.5 text-xs font-mono"
+                >
+                  {fp}
+                </span>
+              ))}
             </div>
-          )}
-          {finding.suggestedFix && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Suggested Fix
-              </p>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap max-sm:wrap-break-word">
-                {finding.suggestedFix}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+        {finding.suggestedFix && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Suggested Fix
+            </p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap max-sm:wrap-break-word">
+              {finding.suggestedFix}
+            </p>
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

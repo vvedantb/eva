@@ -13,6 +13,7 @@ import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { useAuth } from "@clerk/clerk-react";
 import { ConvexQueryCacheProvider } from "convex-helpers/react/cache/provider";
 import { BlurPidEffect } from "@/lib/components/BlurPidEffect";
+import { PageMotionProvider } from "@/lib/components/PageMotionProvider";
 import { FaviconController } from "@/lib/components/FaviconController";
 import { ThemeModeProvider } from "@/lib/components/ThemeModeProvider";
 import { useEffect, useRef, useState } from "react";
@@ -118,8 +119,10 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
       <ConvexQueryCacheProvider>
         <EnsureUser />
         <ThemeModeProvider>
-          {children}
-          <FaviconController />
+          <PageMotionProvider>
+            {children}
+            <FaviconController />
+          </PageMotionProvider>
         </ThemeModeProvider>
       </ConvexQueryCacheProvider>
     </ConvexProviderWithClerk>
