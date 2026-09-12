@@ -396,6 +396,9 @@ export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
 
 export const messagesScopes = ["mine", "team"] as const;
 export type MessagesScope = (typeof messagesScopes)[number];
+export function isMessagesScope(s: string): s is MessagesScope {
+  return messagesScopes.some((scope) => scope === s);
+}
 export const messagesScopeParser = parseAsStringLiteral(messagesScopes)
   .withDefault("mine")
   .withOptions(searchOptions);

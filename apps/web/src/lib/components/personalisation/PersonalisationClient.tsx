@@ -156,7 +156,7 @@ export function PersonalisationClient() {
 
       <SettingsSection
         title="Work profile"
-        description="What you own, so Eva can message you instead of dumping design or product questions in whoever opened the chat."
+        description="Eva uses this to route design and product questions to you."
         footer={
           <Button size="sm" onClick={() => void handleSaveProfile()}>
             Save profile

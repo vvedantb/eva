@@ -2,10 +2,14 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { Badge } from "@eva/ui";
 import { Link } from "@tanstack/react-router";
-import { IconMessage } from "@tabler/icons-react";
+import { IconChevronRight } from "@tabler/icons-react";
 import type { ChatEntityRef } from "@/lib/components/chat/sandboxChatSurface";
-import { statusLabel } from "@/lib/components/messages/status";
+import {
+  statusBadgeVariant,
+  statusLabel,
+} from "@/lib/components/messages/status";
 
 function sourceArgs(entity: ChatEntityRef): {
   sourceKind: "session" | "task" | "project";
@@ -26,23 +30,34 @@ export function RoutedThreadsBanner({ entity }: { entity: ChatEntityRef }) {
   if (!threads || threads.length === 0) return null;
 
   return (
-    <div className="mb-2 rounded-surface border border-border bg-muted/30 px-3 py-2">
-      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        <IconMessage size={12} />
+    <div className="mb-2 rounded-surface border border-border bg-card px-3 py-2">
+      <div className="mb-1.5 text-xs font-medium text-muted-foreground">
         Waiting on teammates
       </div>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-0.5">
         {threads.map((thread) => (
           <li key={thread._id}>
             <Link
               to="/messages"
               search={{ thread: thread._id }}
-              className="flex items-baseline justify-between gap-2 text-sm hover:underline"
+              className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-sm transition-colors hover:bg-muted/60"
             >
-              <span className="min-w-0 truncate">{thread.title}</span>
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                {thread.assigneeName} · {statusLabel(thread.status)}
+              <Badge
+                variant={statusBadgeVariant(thread.status)}
+                className="h-5 shrink-0 px-1.5 text-[10px] font-medium"
+              >
+                {statusLabel(thread.status)}
+              </Badge>
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {thread.title}
               </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {thread.assigneeName}
+              </span>
+              <IconChevronRight
+                size={14}
+                className="shrink-0 text-muted-foreground"
+              />
             </Link>
           </li>
         ))}
