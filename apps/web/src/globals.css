@@ -968,7 +968,7 @@
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
    * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.ui-skeleton`
-   * / `.shimmer-*` (loading UI), `.beam*` (composer glow), LoadingState WAAPI
+   * / `.shimmer-*` (loading UI), `.beam*` (composer beam), LoadingState WAAPI
    * (sessions sidebar Drive loader).
    */
   html[data-page-motion="off"] .animate-in,
@@ -1173,35 +1173,21 @@ html[data-blur-pid] [data-pii] {
  * wrapper owns the radius, the beam inherits it, and the child's opaque
  * background hides the gradient's interior so only the ring reads.
  *
- * Neither layer may animate the conic gradient's angle: a registered custom
- * property can't run on the compositor, so it repaints the gradient every
- * frame — real GPU burn at high refresh rates, and the halo paid for it
- * twice by re-rastering through its blur. Both layers instead spin an
- * oversized `from 0deg` gradient square under a static rounded clip via
- * `rotate`, a cached-texture compositor animation. Rotating the square and
- * clipping it gives the same image as rotating the gradient's own `from`
- * angle, so the visual is unchanged.
+ * Do not animate the conic gradient's angle: a registered custom property
+ * can't run on the compositor, so it repaints the gradient every frame.
+ * The ring spins an oversized `from 0deg` gradient square under a static
+ * rounded clip via `rotate` — a cached-texture compositor animation.
  *
- * The halo's blur sits on the static parent, and the parent's
- * `overflow: hidden` rounded clip shapes the glow: the clip applies to the
- * child before the parent's own filter runs, so the blur still spills
- * outward past the border.
+ * The square is sized to its clip's diagonal — `hypot()` of the container
+ * units the clip exposes — the smallest square that covers a rotating
+ * rounded rect at every angle.
  *
- * Each square is sized to its clip's diagonal — `hypot()` of the container
- * units the clip exposes — not 150% of the width: the smallest square that
- * covers a rotating rounded rect at every angle. On the composer (~760×112)
- * each cached texture drops from 1143² to ~783² px, −53% of texture memory
- * and one-off raster (×4 at 2× DPR), and the picture is unchanged because a
- * conic gradient depends only on angle.
+ * Color stops live on `.beam-root` as `--beam-stops`. Named `beam-*`, NOT
+ * `border-beam-*`: tailwind-merge (inside cn()) reads a `border-` prefix as
+ * a border-colour utility and would drop the class.
  *
- * Color stops live on `.beam-root` as `--beam-stops`; both layers bake them
- * into a `from 0deg` gradient, since the angle is the `rotate`.
- *
- * `.beam-root` carries the variant variables; `.beam` is the crisp ring;
- * `.beam-halo` the outward glow. Named `beam-*`, NOT `border-beam-*`:
- * tailwind-merge (inside cn()) reads a `border-` prefix as a border-colour
- * utility and drops `border-beam` as a conflict with `border-beam-colorful`,
- * leaving an unstyled span.
+ * No `.beam-halo`. A live `filter: blur()` on this spinning conic was the
+ * leftover GPU floor and is banned (CLAUDE.md / animationContract.test.ts).
  * ─────────────────────────────────────────────────────────────────── */
 @keyframes beam-rotate {
   to {
@@ -1212,7 +1198,6 @@ html[data-blur-pid] [data-pii] {
 .beam-root {
   --beam-duration: 3s;
   --beam-spread: 12%;
-  --beam-glow: 8px;
   --beam-stops:
     transparent 0%, rgb(var(--foreground) / 0.75) var(--beam-spread),
     transparent calc(var(--beam-spread) * 2);
@@ -1223,11 +1208,9 @@ html[data-blur-pid] [data-pii] {
   pointer-events: none;
 }
 
-/* Both layers are the same static rounded clip over the same spinning square;
- * the halo only adds its blur. `container-type: size` is what gives the
- * square `cqw`/`cqh` for its diagonal. */
-.beam,
-.beam-halo {
+/* Static rounded clip over the spinning square. `container-type: size`
+ * is what gives the square `cqw`/`cqh` for its diagonal. */
+.beam {
   position: absolute;
   inset: -1px;
   border-radius: inherit;
@@ -1238,8 +1221,7 @@ html[data-blur-pid] [data-pii] {
 /* Spinning gradient square, centred on the clip and sized to its diagonal.
  * +12px so `.beam-inset`'s 3px padding, which shrinks the container's content
  * box, still leaves the padding box covered. */
-.beam::before,
-.beam-halo::before {
+.beam::before {
   content: "";
   position: absolute;
   left: 50%;
@@ -1251,29 +1233,14 @@ html[data-blur-pid] [data-pii] {
   animation: beam-rotate var(--beam-duration) linear infinite;
 }
 
-/* The blur runs when the halo's render pass is drawn into the frame, and the
- * crisp ring damages that frame every vsync, so it re-runs per frame whatever
- * the halo's own cadence: a `steps(90)` (30Hz) spin and a `linear` one traced
- * the same compositor cost (2 passes per frame either way), so the halo spins
- * linear and tracks the ring without a 30Hz stutter. Layer isolation
- * (`will-change` on either layer) was measured and rejected — more layers
- * cost more and the passes stayed at two. Replacing the filter with stacked
- * hard-edged bands traced slower still, so the glow stays a blur. */
-.beam-halo {
-  filter: blur(var(--beam-glow));
-  opacity: 0.5;
-}
-
 .beam-sm {
   --beam-duration: 2.4s;
   --beam-spread: 8%;
-  --beam-glow: 5px;
 }
 
 .beam-lg {
   --beam-duration: 3.6s;
   --beam-spread: 18%;
-  --beam-glow: 12px;
 }
 
 .beam-progress {
@@ -1294,8 +1261,7 @@ html[data-blur-pid] [data-pii] {
  * gradient to a 3px inner frame so it can sit on top of the iframe the same
  * way `ring-inset` did — wrapping would paint the beam behind the child, and
  * the pane's overflow-hidden would clip BorderBeam's usual -1px outset. */
-.beam-inset .beam,
-.beam-inset .beam-halo {
+.beam-inset .beam {
   inset: 0;
   padding: 3px;
   -webkit-mask:
@@ -1921,6 +1887,9 @@ html[data-blur-pid] [data-pii] {
     background-position: -200% 0;
   }
 }
+.shimmer-text {
+  animation: shimmer-text 1.4s linear infinite;
+}
 
 /* <Shimmer/> (packages/ui) — highlight sweep across text, on the compositor.
  * `.shimmer-overlay` clips a copy of the text in the highlight colour;
@@ -1973,6 +1942,47 @@ html[data-blur-pid] [data-pii] {
   to {
     transform: translateX(100%);
   }
+}
+
+/*
+ * Infinite animations pause when the tab is in the background, a cached
+ * session shell is `aria-hidden`, or the animated node has scrolled off
+ * screen (`data-anim-offscreen` from IntersectionObserver). Playback
+ * resumes from the same offset — unchanged while the user is looking.
+ */
+html[data-page-hidden] .beam::before,
+html[data-page-hidden] .shimmer-band,
+html[data-page-hidden] .shimmer-copy,
+html[data-page-hidden] .shimmer-text,
+html[data-page-hidden] .ui-skeleton::after,
+html[data-page-hidden] .animate-spin,
+html[data-page-hidden] .animate-pulse,
+html[data-page-hidden] .animate-bounce,
+html[data-page-hidden] .animate-ping,
+html[data-page-hidden] .landing-pulse-dot,
+[aria-hidden="true"] .beam::before,
+[aria-hidden="true"] .shimmer-band,
+[aria-hidden="true"] .shimmer-copy,
+[aria-hidden="true"] .shimmer-text,
+[aria-hidden="true"] .ui-skeleton::after,
+[aria-hidden="true"] .animate-spin,
+[aria-hidden="true"] .animate-pulse,
+[aria-hidden="true"] .animate-bounce,
+[aria-hidden="true"] .animate-ping,
+[aria-hidden="true"] .landing-pulse-dot,
+[data-anim-offscreen] .beam::before,
+[data-anim-offscreen] .shimmer-band,
+[data-anim-offscreen] .shimmer-copy,
+[data-anim-offscreen] .shimmer-text,
+[data-anim-offscreen] .ui-skeleton::after,
+[data-anim-offscreen].shimmer-overlay .shimmer-band,
+[data-anim-offscreen].shimmer-overlay .shimmer-copy,
+[data-anim-offscreen] .animate-spin,
+[data-anim-offscreen] .animate-pulse,
+[data-anim-offscreen] .animate-bounce,
+[data-anim-offscreen] .animate-ping,
+[data-anim-offscreen] .landing-pulse-dot {
+  animation-play-state: paused;
 }
 
 /*

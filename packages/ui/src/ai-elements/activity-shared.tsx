@@ -19,7 +19,12 @@ import {
   IconAnchor,
   IconLoader2,
 } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+
+import {
+  quantizedSnapshot,
+  subscribeQuantized,
+} from "../utils/sharedClock";
 
 /** One item in a todo checklist step (type "todos"). */
 export interface TodoItem {
@@ -329,31 +334,58 @@ export function useSpinnerVerb(active: boolean): string {
   const [verb, setVerb] = useState(getRandomVerb);
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => {
-      setVerb(getRandomVerb());
-    }, 3000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      if (id !== undefined) return;
+      id = setInterval(() => {
+        setVerb(getRandomVerb());
+      }, 3000);
+    };
+    const stop = () => {
+      if (id === undefined) return;
+      clearInterval(id);
+      id = undefined;
+    };
+    const onVisibility = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        stop();
+        return;
+      }
+      start();
+    };
+    onVisibility();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    return () => {
+      stop();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+    };
   }, [active]);
   return verb;
 }
+
+const SECOND_MS = 1000;
+const noopSubscribe = () => () => {};
 
 export function useElapsedSeconds(
   startedAt: number | undefined,
   active: boolean,
 ) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!active || !startedAt) {
-      setElapsed(0);
-      return;
-    }
-    setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    const id = setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [active, startedAt]);
-  return elapsed;
+  const tick = useSyncExternalStore(
+    active && startedAt
+      ? (onChange) => subscribeQuantized(SECOND_MS, onChange)
+      : noopSubscribe,
+    () => quantizedSnapshot(SECOND_MS),
+    () => quantizedSnapshot(SECOND_MS),
+  );
+  if (!active || !startedAt) return 0;
+  return Math.max(0, Math.floor((tick - startedAt) / 1000));
 }
 
 export function formatElapsed(seconds: number): string {

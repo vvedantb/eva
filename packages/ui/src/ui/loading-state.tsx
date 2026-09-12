@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useSyncExternalStore } from "react";
+
+import { bindRuntimeAnimation } from "../utils/runtimeVisibility";
+import { quantizedSnapshot, subscribeQuantized } from "../utils/sharedClock";
 
 /* ─────────────────────────────────────────────────────────
  * LOADING STATE — pixel-grid loader for long-running work
@@ -87,7 +90,7 @@ function pulseRefs(delays: (number | null)[], dur: number): PulseRef[] {
             ],
             { duration: dur, delay: d, iterations: Infinity },
           );
-          return () => pulse.cancel();
+          return bindRuntimeAnimation(cell, pulse);
         },
   );
 }
@@ -104,14 +107,19 @@ const PULSE_REFS: Record<LoadingStateVariant, PulseRef[]> = {
   Orbit: pulseRefs(PATTERNS.Orbit.delays, PATTERNS.Orbit.dur),
 };
 
+const ELAPSED_MS = 100;
+const noopSubscribe = () => () => {};
+
 function useElapsed(enabled: boolean) {
-  const [ds, setDs] = useState(0);
-  useEffect(() => {
-    if (!enabled) return;
-    const t = setInterval(() => setDs((d) => d + 1), 100);
-    return () => clearInterval(t);
-  }, [enabled]);
-  const total = ds / 10;
+  const startedAt = useRef(Date.now());
+  const tick = useSyncExternalStore(
+    enabled
+      ? (onChange) => subscribeQuantized(ELAPSED_MS, onChange)
+      : noopSubscribe,
+    () => quantizedSnapshot(ELAPSED_MS),
+    () => quantizedSnapshot(ELAPSED_MS),
+  );
+  const total = enabled ? Math.max(0, (tick - startedAt.current) / 1000) : 0;
   if (total < 60) return `${total.toFixed(1)}s`;
   return `${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`;
 }
@@ -169,13 +177,12 @@ export function LoadingState({
     <div className="flex w-fit items-center gap-2.5">
       {grid}
       <span
-        className="bg-clip-text text-[13px] font-medium text-transparent"
+        className="shimmer-text bg-clip-text text-[13px] font-medium text-transparent"
         style={{
           // Eva tokens are `R G B` triplets — wrap with rgb() for gradients.
           backgroundImage:
             "linear-gradient(90deg, rgb(var(--muted-foreground)) 35%, rgb(var(--foreground)) 50%, rgb(var(--muted-foreground)) 65%)",
           backgroundSize: "200% 100%",
-          animation: "shimmer-text 1.4s linear infinite",
         }}
       >
         {label}

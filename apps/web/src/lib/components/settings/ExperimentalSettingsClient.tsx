@@ -65,7 +65,7 @@ export function ExperimentalSettingsClient() {
         <ListEnter index={0} fast staggerMax={6}>
           <SettingsToggleRow
             title="Disable page animations"
-            description="Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer glow, and the sessions sidebar working indicator stay on."
+            description="Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer beam, and the sessions sidebar working indicator stay on."
             action={
               <Switch
                 checked={flags.disablePageMotion === true}

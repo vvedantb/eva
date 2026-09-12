@@ -16,6 +16,7 @@ import type { SessionSendOptions } from "./useSessionSend";
 export function useSessionPlanImplementation({
   sessionId,
   handleSend,
+  isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
   handleSend: (
@@ -23,14 +24,15 @@ export function useSessionPlanImplementation({
     attachmentStorageIds?: Id<"_storage">[],
     options?: SessionSendOptions,
   ) => void | Promise<void>;
+  isRouteActive?: boolean;
 }) {
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
   const defaultModel = normalizeAIModel(repo.defaultModel);
   const { resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
   const { model, traits, providerAccountId: stickyProviderAccountId } =
-    useSessionModel(sessionId, defaultModel);
+    useSessionModel(sessionId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,

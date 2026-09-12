@@ -18,12 +18,15 @@ import { FaviconController } from "@/lib/components/FaviconController";
 import { ThemeModeProvider } from "@/lib/components/ThemeModeProvider";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
+import { ensureRuntimeVisibility } from "@eva/ui";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { AuthLoadingScreen } from "./AuthLoadingScreen";
 import { WelcomeSetupDialog } from "./onboarding/WelcomeSetupDialog";
 import { convex } from "@/lib/convex";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+
+ensureRuntimeVisibility();
 
 // Tracks whether the user has been signed in during this page session.
 // Used by useStableAuth to detect unexpected auth loss (stale deployment).

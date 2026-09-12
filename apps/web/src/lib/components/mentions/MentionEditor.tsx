@@ -611,7 +611,9 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
       setPopupPlacement(null);
       return;
     }
+    let attached = false;
     const update = () => {
+      if (document.visibilityState !== "visible") return;
       requestAnimationFrame(() => {
         const el = editorRef.current;
         if (!el) return;
@@ -625,12 +627,31 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         );
       });
     };
+    const syncLayoutListeners = () => {
+      const shouldAttach = document.visibilityState === "visible";
+      if (shouldAttach && !attached) {
+        window.addEventListener("scroll", update, true);
+        window.addEventListener("resize", update);
+        attached = true;
+      } else if (!shouldAttach && attached) {
+        window.removeEventListener("scroll", update, true);
+        window.removeEventListener("resize", update);
+        attached = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      syncLayoutListeners();
+      update();
+    };
     update();
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
+    syncLayoutListeners();
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (attached) {
+        window.removeEventListener("scroll", update, true);
+        window.removeEventListener("resize", update);
+      }
     };
   }, [trigger.isOpen, trigger.query, trigger.startIndex, value, isPanel]);
 
@@ -794,17 +815,38 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
 
   useEffect(() => {
     if ((!mentionHover && !contentChipHover) || !mentionHoverRect) return;
+    let attached = false;
     const updateRect = () => {
+      if (document.visibilityState !== "visible") return;
       const chip = mentionHoverChipRef.current;
       if (chip) {
         setMentionHoverRect(chip.getBoundingClientRect());
       }
     };
-    window.addEventListener("scroll", updateRect, true);
-    window.addEventListener("resize", updateRect);
+    const syncLayoutListeners = () => {
+      const shouldAttach = document.visibilityState === "visible";
+      if (shouldAttach && !attached) {
+        window.addEventListener("scroll", updateRect, true);
+        window.addEventListener("resize", updateRect);
+        attached = true;
+      } else if (!shouldAttach && attached) {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+        attached = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      syncLayoutListeners();
+      updateRect();
+    };
+    syncLayoutListeners();
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("scroll", updateRect, true);
-      window.removeEventListener("resize", updateRect);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (attached) {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+      }
     };
   }, [mentionHover, contentChipHover, mentionHoverRect]);
 

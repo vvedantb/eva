@@ -52,6 +52,31 @@ import { MessageResponse } from "./message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
 import { Task, TaskContent, TaskItem, TaskItemFile, TaskTrigger } from "./task";
 
+const ActivityStreamingHeader = memo(function ActivityStreamingHeader({
+  steps,
+  name,
+  startedAt,
+}: {
+  steps: ActivityStep[];
+  name?: string;
+  startedAt?: number;
+}) {
+  const verb = useSpinnerVerb(true);
+  const elapsed = useElapsedSeconds(startedAt, true);
+  const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
+  const headerText = `${
+    activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
+  }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <Spinner size="sm" />
+      <Shimmer as="span" duration={2.5} spread={1.5}>
+        {headerText}
+      </Shimmer>
+    </div>
+  );
+});
+
 /** Max timeline blocks shown before the overflow toggle appears. */
 const MAX_VISIBLE_ROWS = 8;
 
@@ -540,8 +565,6 @@ export const ActivityTasks = memo(
     onOpenFile,
     ...props
   }: ActivityTasksProps) => {
-    const verb = useSpinnerVerb(Boolean(isStreaming));
-    const elapsed = useElapsedSeconds(startedAt, Boolean(isStreaming));
     const rows = buildActivityRows(steps).filter(
       (row) => !HIDDEN_TYPES.has(row.step.type),
     );
@@ -549,16 +572,6 @@ export const ActivityTasks = memo(
     if (rows.length === 0 && !isStreaming) return null;
 
     void finalText;
-
-    // When real tool/file rows exist, they already shimmer their own titles —
-    // don't also show the random "Eva is inferring…" header above them.
-    const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
-    const headerText =
-      rows.length > 0
-        ? null
-        : `${
-            activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
-          }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
 
     if (!isStreaming && duration) {
       return (
@@ -584,13 +597,12 @@ export const ActivityTasks = memo(
 
     return (
       <div className={cn("space-y-1.5 text-sm", className)} {...props}>
-        {isStreaming && headerText ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Spinner size="sm" />
-            <Shimmer as="span" duration={2.5} spread={1.5}>
-              {headerText}
-            </Shimmer>
-          </div>
+        {isStreaming && rows.length === 0 ? (
+          <ActivityStreamingHeader
+            steps={steps}
+            name={name}
+            startedAt={startedAt}
+          />
         ) : null}
         <ActivityRowList
           rows={rows}

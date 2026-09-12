@@ -149,6 +149,37 @@ describe("measured-height panels", () => {
  * they had already drifted. Re-adding one gate looks like an accessibility
  * improvement, which is why this needs to be mechanical rather than a comment.
  */
+describe("infinite animations pause when the user cannot see them", () => {
+  it("pauses beams, shimmers and spins on a hidden tab", () => {
+    expect(cssRules).toContain("html[data-page-hidden]");
+    expect(cssRules).toContain("animation-play-state: paused");
+    expect(cssRules).toContain("[data-anim-offscreen]");
+    expect(cssRules).toContain("[aria-hidden=\"true\"] .beam::before");
+    expect(cssRules).toContain("[aria-hidden=\"true\"] .animate-pulse");
+    expect(cssRules).toContain("[data-anim-offscreen] .animate-pulse");
+    expect(cssRules).toContain(".shimmer-text");
+    expect(cssRules).toContain(".landing-pulse-dot");
+  });
+
+});
+
+/**
+ * Recorded as a do-not-reintroduce in CLAUDE.md, AGENTS.md, docs/eva-ui.md,
+ * and globals.css. A live blur on the spinning beam was the leftover GPU
+ * floor; do not put it back.
+ */
+describe("beam halo blur is banned", () => {
+  it("does not mount a halo or blur the beam", () => {
+    expect(cssRules).not.toMatch(
+      /\.beam[\w-]*(?:::[a-z-]+)?\s*\{[^}]*filter:\s*(?:blur|drop-shadow)/,
+    );
+    expect(cssRules).not.toContain("beam-halo");
+    const beam = readFileSync(join(uiSrc, "ui", "border-beam.tsx"), "utf8");
+    expect(beam).not.toContain("beam-halo");
+    expect(beam).not.toContain("glow");
+  });
+});
+
 describe("reduced motion is not gated for", () => {
   it("has no prefers-reduced-motion query in the stylesheet", () => {
     expect(cssRules).not.toContain("prefers-reduced-motion");
