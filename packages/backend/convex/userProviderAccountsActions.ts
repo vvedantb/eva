@@ -5,6 +5,7 @@ import { action } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { encryptValue, decryptValue } from "./encryption";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import { aiProviderValidator } from "./validators";
 import type { Id } from "./_generated/dataModel";
 
@@ -37,6 +38,10 @@ export const upsert = action({
   },
   returns: v.id("userProviderAccounts"),
   handler: async (ctx, args): Promise<Id<"userProviderAccounts">> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const userId = await requireUserId(ctx);
     const user = await ctx.runQuery(internal.users.getDisplayNameInternal, {
       userId,
@@ -80,6 +85,10 @@ export const revealValue = action({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args): Promise<string | null> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const userId = await requireUserId(ctx);
     const account = await ctx.runQuery(
       internal.userProviderAccounts.getByIdInternal,

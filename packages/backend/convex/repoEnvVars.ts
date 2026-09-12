@@ -7,6 +7,7 @@ import {
 import { type Id } from "./_generated/dataModel";
 import { authQuery, authMutation, getRepoWithAccess } from "./functions";
 import { MASKED_ENV_VAR_VALUE } from "./_envVars/listDisplay";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Loads the single env var document for a repo, or null if none exists. */
 function findByRepo(db: DatabaseReader, repoId: Id<"githubRepos">) {
@@ -125,6 +126,7 @@ export const toggleSandboxExclude = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return null;

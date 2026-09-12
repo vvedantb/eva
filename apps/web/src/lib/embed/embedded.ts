@@ -19,7 +19,12 @@ export const embedReadyMessage = z.object({
  */
 export const embedNavigateMessage = z.object({
   type: z.literal("eva:embed-navigate"),
-  href: z.string().startsWith("/"),
+  href: z
+    .string()
+    .startsWith("/")
+    .refine((href) => !href.startsWith("//") && !href.includes("://"), {
+      message: "href must be an app-internal path",
+    }),
 });
 
 function detectEmbedded(): boolean {

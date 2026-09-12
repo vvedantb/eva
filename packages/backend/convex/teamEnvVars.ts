@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import { MASKED_ENV_VAR_VALUE } from "./_envVars/listDisplay";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Lists team env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
@@ -151,6 +152,7 @@ export const toggleSandboxExclude = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const membership = await ctx.db
       .query("teamMembers")
       .withIndex("by_team_and_user", (q) =>

@@ -17,6 +17,7 @@ export function EmbedNavigationBridge() {
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
+      if (event.source !== window.parent) return;
       const parsed = embedNavigateMessage.safeParse(event.data);
       if (!parsed.success) return;
       // Split path from search: a comment notification's href carries

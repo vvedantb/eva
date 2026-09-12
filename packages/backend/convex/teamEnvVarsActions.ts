@@ -5,6 +5,7 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { encryptValue, decryptValue } from "./encryption";
 import { assertActionTeamAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 
 /** Decrypts and reveals the plaintext value of a specific team env var. */
 export const revealValue = action({
@@ -19,12 +20,19 @@ export const revealValue = action({
       throw new Error("Not authenticated");
     }
     await assertActionTeamAccess(ctx, args.teamId);
-    const vars: Array<{ key: string; value: string }> = await ctx.runQuery(
-      internal.teamEnvVars.getAllInternal,
-      { teamId: args.teamId },
-    );
+    const vars: Array<{
+      key: string;
+      value: string;
+      sandboxExclude?: boolean;
+    }> = await ctx.runQuery(internal.teamEnvVars.getAllInternal, {
+      teamId: args.teamId,
+    });
     const entry = vars.find((v) => v.key === args.key);
-    return entry ? decryptValue(entry.value) : null;
+    if (!entry) return null;
+    if (isSandboxIdentity(identity) && entry.sandboxExclude === true) {
+      throw new Error("Not authorized");
+    }
+    return decryptValue(entry.value);
   },
 });
 
@@ -43,6 +51,9 @@ export const upsertVar = action({
       throw new Error("Not authenticated");
     }
     await assertActionTeamAccess(ctx, args.teamId);
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const stored = encryptValue(args.value);
     await ctx.runMutation(internal.teamEnvVars.upsertVarInternal, {
       teamId: args.teamId,

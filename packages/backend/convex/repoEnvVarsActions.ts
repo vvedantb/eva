@@ -5,6 +5,7 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { encryptValue, decryptValue } from "./encryption";
 import { getActionRepoWithAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 
 /** Decrypts and reveals the plaintext value of a specific repo env var. */
 export const revealValue = action({
@@ -19,12 +20,19 @@ export const revealValue = action({
       throw new Error("Not authenticated");
     }
     await getActionRepoWithAccess(ctx, args.repoId);
-    const vars: Array<{ key: string; value: string }> = await ctx.runQuery(
-      internal.repoEnvVars.getAllInternal,
-      { repoId: args.repoId },
-    );
+    const vars: Array<{
+      key: string;
+      value: string;
+      sandboxExclude?: boolean;
+    }> = await ctx.runQuery(internal.repoEnvVars.getAllInternal, {
+      repoId: args.repoId,
+    });
     const entry = vars.find((entry) => entry.key === args.key);
-    return entry ? decryptValue(entry.value) : null;
+    if (!entry) return null;
+    if (isSandboxIdentity(identity) && entry.sandboxExclude === true) {
+      throw new Error("Not authorized");
+    }
+    return decryptValue(entry.value);
   },
 });
 
@@ -43,6 +51,9 @@ export const upsertVar = action({
       throw new Error("Not authenticated");
     }
     await getActionRepoWithAccess(ctx, args.repoId);
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const stored = encryptValue(args.value);
     await ctx.runMutation(internal.repoEnvVars.upsertVarInternal, {
       repoId: args.repoId,

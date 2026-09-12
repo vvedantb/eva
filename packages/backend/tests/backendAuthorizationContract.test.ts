@@ -490,4 +490,17 @@ describe("backend authorization boundaries", () => {
     expect(git).toContain("getRepoScopedInstallationToken");
     expect(git).not.toContain("getInstallationToken(");
   });
+
+  it("sandbox JWTs cannot reveal excluded env vars or personal credentials", () => {
+    expect(convexSource("repoEnvVarsActions.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("teamEnvVarsActions.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("userProviderAccountsActions.ts")).toContain(
+      "isSandboxIdentity",
+    );
+    expect(convexSource("repoEnvVars.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("teamEnvVars.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
+      "SANDBOX_JWT_ISSUER",
+    );
+  });
 });
