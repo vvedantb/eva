@@ -556,6 +556,21 @@ describe("backend authorization boundaries", () => {
       "rejectSandboxCaller",
     );
     expect(convexSource("_repoSkills/sync.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_github/api.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("pendingQuestions.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("usageLimits.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("_sessions/mutations.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_projects/mutations.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
+      "assertPublicChatMessageRole",
+    );
+    expect(convexSource("_automations/crud.ts")).toContain(
+      "Email broadcast is reserved for system automations",
+    );
   });
 
   it("sandbox-only callbacks reject Clerk callers", () => {

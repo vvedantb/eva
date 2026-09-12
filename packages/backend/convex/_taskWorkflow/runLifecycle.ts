@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { createNotification } from "../notifications";
+import { assertPrUrlForRepo } from "../_github/prUrl";
 import { runModeValidator } from "../validators";
 import type { Id } from "../_generated/dataModel";
 import {
@@ -116,8 +117,11 @@ export const setRunPrUrl = internalMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId);
     if (!run) return null;
+    const task = await ctx.db.get(run.taskId);
+    if (!task?.repoId) return null;
+    const prUrl = await assertPrUrlForRepo(ctx.db, task.repoId, args.prUrl);
     await ctx.db.patch(args.runId, {
-      prUrl: args.prUrl,
+      prUrl,
       prError: undefined,
     });
     return null;

@@ -68,6 +68,9 @@ export const listBranches = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
     const octokit = await getInstallationOctokit(repo.installationId);
     const allBranches = await octokit.paginate(
@@ -96,6 +99,10 @@ export const listRepos = authAction({
     }),
   ),
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const accessState = await ctx.runQuery(installationAccessStateRef, {
       installationId: args.installationId,
     });
@@ -129,6 +136,10 @@ export const detectMonorepoApps = authAction({
     }),
   ),
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const accessState = await ctx.runQuery(installationAccessStateRef, {
       installationId: args.installationId,
     });
@@ -214,6 +225,9 @@ export const listAllAvailableRepos = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
     }
 
     const repos = await ctx.runQuery(listAccessibleReposRef, {

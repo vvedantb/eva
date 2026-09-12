@@ -176,7 +176,13 @@ export function PreviewNavBar({
   });
 
   function postHistoryCommand(type: PreviewHistoryCommand) {
-    currentIframe()?.contentWindow?.postMessage({ type }, "*");
+    const iframe = currentIframe();
+    if (!iframe?.src || !iframe.contentWindow) return;
+    try {
+      iframe.contentWindow.postMessage({ type }, new URL(iframe.src).origin);
+    } catch {
+      // Ignore invalid iframe src — history commands stay no-op.
+    }
   }
 
   useEffect(() => {
@@ -192,8 +198,18 @@ export function PreviewNavBar({
     iframe?.addEventListener("load", onLoad);
 
     function handleMessage(event: MessageEvent) {
+      const iframe = currentIframeRef.current();
+      let expectedOrigin: string | null = null;
+      try {
+        expectedOrigin = iframe?.src ? new URL(iframe.src).origin : null;
+      } catch {
+        expectedOrigin = null;
+      }
       if (
-        event.source === currentIframeRef.current()?.contentWindow &&
+        iframe &&
+        event.source === iframe.contentWindow &&
+        expectedOrigin !== null &&
+        event.origin === expectedOrigin &&
         typeof event.data === "object" &&
         event.data !== null &&
         "type" in event.data &&

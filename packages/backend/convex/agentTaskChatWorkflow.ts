@@ -7,7 +7,10 @@ import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { decideSandboxStartPlan } from "./mcp/orchestratorDelivery";
 import { authAction, authMutation, hasTaskAccess } from "./functions";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import {
+  assertPublicChatMessageRole,
+  requireSandboxCaller,
+} from "./_auth/sandboxIdentity";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -310,6 +313,7 @@ export const addMessage = authMutation({
       throw new Error("Not authorized");
     }
     const role = args.role ?? "user";
+    assertPublicChatMessageRole({ role, content: args.content });
     const providerAccountId =
       role === "user"
         ? await resolveTurnProviderAccountId(ctx.db, {

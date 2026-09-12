@@ -19,7 +19,11 @@ import {
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { assertPrUrlForRepo } from "../_github/prUrl";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  assertPublicChatMessageRole,
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
@@ -224,6 +228,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    assertPublicChatMessageRole(args);
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const credentialSourceLabel =
       args.role === "user"
@@ -273,6 +278,7 @@ export const setModel = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionOrThrow(ctx.db, args.id);
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
@@ -305,6 +311,7 @@ export const setProviderAccountId = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionOrThrow(ctx.db, args.id);
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
@@ -484,6 +491,7 @@ export const archive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionOrThrow(ctx.db, args.id);
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");
@@ -499,6 +507,7 @@ export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionOrThrow(ctx.db, args.id);
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
       throw new Error("Not authorized");

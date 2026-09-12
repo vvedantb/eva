@@ -8,6 +8,7 @@ export const generateUploadUrl = authMutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
+    await requireSandboxCaller(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });

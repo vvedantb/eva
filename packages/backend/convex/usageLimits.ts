@@ -1,5 +1,8 @@
 import { v, type Infer } from "convex/values";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "./_auth/sandboxIdentity";
 import type { GenericDatabaseReader } from "convex/server";
 import {
   authMutation,
@@ -508,6 +511,7 @@ export const requestRefresh = authMutation({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const target = parseRefreshTarget(args);
     const now = Date.now();
     if (target.kind === "session") {
@@ -568,6 +572,7 @@ export const clearRefresh = authMutation({
   args: refreshTargetArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const target = parseRefreshTarget(args);
     if (target.kind === "session") {
       const session = await ctx.db.get(target.sessionId);

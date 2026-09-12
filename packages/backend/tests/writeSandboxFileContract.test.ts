@@ -46,6 +46,7 @@ test("file viewer paths stay inside the workspace", () => {
   expect(
     isValidSandboxViewerPath("/tmp/repo/nested/git-credentials.env"),
   ).toBe(false);
+  expect(isValidSandboxViewerPath("/tmp/repo/.git/config")).toBe(false);
 });
 
 test("writeSandboxFile rejects oversized content before touching the sandbox", () => {

@@ -345,17 +345,19 @@ function SettingsForm({
             }
           />
         ) : null}
-        <SettingsToggleRow
-          title="Send email"
-          description="Email this automation's run summary to all users when a run succeeds."
-          action={
-            <Switch
-              checked={automation.sendEmail === true}
-              onCheckedChange={(next) => commit({ sendEmail: next })}
-              aria-label="Send email"
-            />
-          }
-        />
+        {automation.systemKey !== undefined ? (
+          <SettingsToggleRow
+            title="Send email"
+            description="Email this automation's run summary to all users when a run succeeds."
+            action={
+              <Switch
+                checked={automation.sendEmail === true}
+                onCheckedChange={(next) => commit({ sendEmail: next })}
+                aria-label="Send email"
+              />
+            }
+          />
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Model">

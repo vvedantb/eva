@@ -321,7 +321,7 @@ function buildAuthBootstrapHtml() {
 // module fetches 401 and the page never leaves the default "Loading" status.
 // Static assets are public open-source files; HTML documents and WebSockets stay gated.
 const STATIC_ASSET_RE =
-  /\.(?:js|mjs|cjs|css|map|svg|png|jpe?g|gif|ico|webp|woff2?|ttf|otf|wasm)(?:\?|$)/i;
+  /\.(?:js|mjs|cjs|css|svg|png|jpe?g|gif|ico|webp|woff2?|ttf|otf|wasm)(?:\?|$)/i;
 
 // Returns true if the request is authorized and may proceed. Returns false when
 // it has already written a response (cookie-set redirect, login redirect, 401).

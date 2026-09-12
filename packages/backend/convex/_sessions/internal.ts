@@ -8,6 +8,7 @@ import {
 } from "../sandboxCleanup";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { findOpenSessionTurn } from "../_chat/turnStore";
+import { assertPrUrlForRepo } from "../_github/prUrl";
 
 const prStateValidator = v.union(
   v.literal("draft"),
@@ -69,8 +70,11 @@ export const setPrUrl = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) return null;
+    const prUrl = await assertPrUrlForRepo(ctx.db, session.repoId, args.prUrl);
     await ctx.db.patch(args.id, {
-      prUrl: args.prUrl,
+      prUrl,
       ...(args.prState !== undefined && { prState: args.prState }),
       updatedAt: Date.now(),
     });

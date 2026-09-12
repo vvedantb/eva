@@ -394,7 +394,11 @@ const VIEWER_ROOTS = [
   "/vercel/sandbox",
 ] as const;
 
-const VIEWER_DENIED_NAMES = new Set([".eva-env.sh", "git-credentials.env"]);
+const VIEWER_DENIED_NAMES = new Set([
+  ".eva-env.sh",
+  "git-credentials.env",
+  ".git",
+]);
 
 /** File Viewer reads/writes stay inside the workspace, never home/config paths. */
 export function isValidSandboxViewerPath(path: string): boolean {
@@ -414,7 +418,7 @@ function viewerCanonicalGuard(): string {
     `/tmp/repo/*|/workspace/repo/*|/vercel/sandbox/*) ;; ` +
     `*) echo ${NOT_FOUND_MARKER}; exit 0 ;; esac; ` +
     `case "$canonical" in ` +
-    `*/.eva-env.sh|*/git-credentials.env) echo ${NOT_FOUND_MARKER}; exit 0 ;; esac; `
+    `*/.eva-env.sh|*/git-credentials.env|*/.git|*/.git/*) echo ${NOT_FOUND_MARKER}; exit 0 ;; esac; `
   );
 }
 

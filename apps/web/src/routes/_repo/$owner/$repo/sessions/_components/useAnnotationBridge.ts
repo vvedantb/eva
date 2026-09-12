@@ -12,11 +12,23 @@ export interface AnnotationPending {
   rect: { top: number; left: number; width: number; height: number };
 }
 
+function expectedIframeOrigin(iframe: HTMLIFrameElement | null): string | null {
+  if (!iframe?.src) return null;
+  try {
+    return new URL(iframe.src).origin;
+  } catch {
+    return null;
+  }
+}
+
 function postAnnotateMessage(
   iframeRef: RefObject<HTMLIFrameElement | null>,
   payload: { type: string; active?: boolean },
 ): void {
-  iframeRef.current?.contentWindow?.postMessage(payload, "*");
+  const iframe = iframeRef.current;
+  const origin = expectedIframeOrigin(iframe);
+  if (!iframe || !origin) return;
+  iframe.contentWindow?.postMessage(payload, origin);
 }
 
 /**
@@ -53,7 +65,16 @@ export function useAnnotationBridge({
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.source !== iframeRef.current?.contentWindow) return;
+      const iframe = iframeRef.current;
+      const origin = expectedIframeOrigin(iframe);
+      if (
+        !iframe ||
+        event.source !== iframe.contentWindow ||
+        !origin ||
+        event.origin !== origin
+      ) {
+        return;
+      }
 
       if (
         typeof event.data === "object" &&

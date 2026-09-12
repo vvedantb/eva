@@ -175,7 +175,12 @@ export const update = authMutation({
     if (args.readOnly !== undefined) patch.readOnly = args.readOnly;
     if (args.actionsEnabled !== undefined)
       patch.actionsEnabled = args.actionsEnabled;
-    if (args.sendEmail !== undefined) patch.sendEmail = args.sendEmail;
+    if (args.sendEmail !== undefined) {
+      if (args.sendEmail === true && automation.systemKey === undefined) {
+        throw new Error("Email broadcast is reserved for system automations");
+      }
+      patch.sendEmail = args.sendEmail;
+    }
 
     if (args.shared !== undefined) {
       if (args.contextRepoId === undefined) {

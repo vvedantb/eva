@@ -1,4 +1,8 @@
 import { internal } from "../_generated/api";
+import {
+  assertPublicUserMessageRole,
+  rejectSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import {
@@ -218,6 +222,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    assertPublicUserMessageRole(args);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const conversation = await getProjectConversation(ctx.db, args.id);
     await setProjectConversation(ctx.db, args.id, [
@@ -239,6 +244,7 @@ export const remove = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
     return null;
@@ -250,6 +256,7 @@ export const deleteCascade = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const tasks = await ctx.db
       .query("agentTasks")
@@ -395,6 +402,7 @@ export const updateLastConversationMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const messages = [...(await getProjectConversation(ctx.db, args.id))];
     const last = messages[messages.length - 1];
@@ -419,6 +427,7 @@ export const setChatModel = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const patch: {
       lastChatModel: typeof args.model;

@@ -15,6 +15,7 @@ import {
 } from "./_generated/server";
 import { components, internal } from "./_generated/api";
 import { parseGithubPrUrl } from "./_github/prUrl";
+import { assertPublicUserMessageRole } from "./_auth/sandboxIdentity";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -470,6 +471,7 @@ export const addInterviewMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    assertPublicUserMessageRole(args);
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Doc not found");
     if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {

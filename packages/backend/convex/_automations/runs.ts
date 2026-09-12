@@ -226,7 +226,10 @@ export const updateRunStatus = internalMutation({
     if (args.status === "success") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
-      if (automation?.sendEmail === true) {
+      if (
+        automation?.sendEmail === true &&
+        automation.systemKey !== undefined
+      ) {
         await ctx.scheduler.runAfter(
           0,
           internal.automationEmail.sendAutomationEmail,

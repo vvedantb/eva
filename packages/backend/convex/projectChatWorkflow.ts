@@ -6,7 +6,10 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { authAction, authMutation, hasRepoAccess } from "./functions";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import {
+  assertPublicChatMessageRole,
+  requireSandboxCaller,
+} from "./_auth/sandboxIdentity";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -302,6 +305,7 @@ export const addMessage = authMutation({
       throw new Error("Not authorized");
     }
     const role = args.role ?? "user";
+    assertPublicChatMessageRole({ role, content: args.content });
     const providerAccountId =
       role === "user"
         ? await resolveTurnProviderAccountId(ctx.db, {
