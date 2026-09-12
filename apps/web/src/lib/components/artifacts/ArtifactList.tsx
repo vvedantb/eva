@@ -4,6 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { IconLayoutDashboard } from "@tabler/icons-react";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { SessionSourceEmpty } from "@/lib/components/sandbox/SessionSourcePane";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { ArtifactCard } from "./ArtifactCard";
 
@@ -13,11 +14,25 @@ type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 export function ArtifactList({
   artifacts,
   emptyDescription,
+  showSource = true,
+  compact = false,
 }: {
   artifacts: ArtifactRow[];
   emptyDescription: string;
+  showSource?: boolean;
+  /** Single column — the sandbox Artifacts pane is too narrow for the grid. */
+  compact?: boolean;
 }) {
   if (artifacts.length === 0) {
+    if (compact) {
+      return (
+        <SessionSourceEmpty
+          icon={<IconLayoutDashboard size={20} />}
+          title="No artifacts yet"
+          description={emptyDescription}
+        />
+      );
+    }
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center py-16">
         <EmptyState
@@ -31,10 +46,20 @@ export function ArtifactList({
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div
+      className={
+        compact
+          ? "flex flex-col gap-1.5 p-2"
+          : "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      }
+    >
       {artifacts.map((artifact, index) => (
-        <ListEnter key={artifact._id} index={index}>
-          <ArtifactCard artifact={artifact} />
+        <ListEnter key={artifact._id} index={index} fast={compact}>
+          <ArtifactCard
+            artifact={artifact}
+            showSource={showSource}
+            compact={compact}
+          />
         </ListEnter>
       ))}
     </div>

@@ -25,6 +25,14 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SessionArtifactsPanel,
+  useSourceArtifacts,
+} from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -84,6 +92,9 @@ export function ProjectSandboxPanel({
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
   // chat panel already subscribes to (same entity ids).
+  const artifactSource = { kind: "project" as const, projectId };
+  const { hasArtifacts } = useSourceArtifacts(artifactSource);
+  const { hasDocuments } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: projectId,
     streamingEntityId: `project-chat-${projectIdStr}`,
@@ -164,6 +175,8 @@ export function ProjectSandboxPanel({
             showFilesTab
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
+            hasArtifactsContent={hasArtifacts}
+            hasDocumentsContent={hasDocuments}
             agentBrowsingAt={viewState?.agentBrowsingAt}
             fileList={fileList}
             consoleDock={panes.consoleDock}
@@ -172,6 +185,24 @@ export function ProjectSandboxPanel({
         }
       >
         <div className="h-full overflow-hidden">
+          <div
+            className={
+              activeTab === "artifacts"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            <SessionArtifactsPanel source={artifactSource} />
+          </div>
+          <div
+            className={
+              activeTab === "documents"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            <SessionDocumentsPanel source={artifactSource} />
+          </div>
           <div className={!simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"}>
             <FilesPanel
               sandboxId={sandboxId}

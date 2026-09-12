@@ -3,6 +3,8 @@ import {
   IconCode,
   IconDeviceDesktop,
   IconFileText,
+  IconFile,
+  IconLayoutDashboard,
   IconPalette,
   IconRobot,
 } from "@tabler/icons-react";
@@ -25,6 +27,10 @@ interface BuildSandboxTabDescriptorsArgs {
   hasPrdContent: boolean;
   showDesignsTab: boolean;
   hasDesignsContent: boolean;
+  showArtifactsTab: boolean;
+  hasArtifactsContent: boolean;
+  showDocumentsTab: boolean;
+  hasDocumentsContent: boolean;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
 }
 
@@ -47,6 +53,10 @@ export function buildSandboxTabDescriptors({
   hasPrdContent,
   showDesignsTab,
   hasDesignsContent,
+  showArtifactsTab,
+  hasArtifactsContent,
+  showDocumentsTab,
+  hasDocumentsContent,
   customTabs,
 }: BuildSandboxTabDescriptorsArgs): SandboxTabDescriptor[] {
   const descriptors: SandboxTabDescriptor[] = baseTabs.map((tab) => {
@@ -112,6 +122,30 @@ export function buildSandboxTabDescriptors({
       indicator: hasDesignsContent ? "content" : undefined,
       indicatorLabel: hasDesignsContent
         ? "Design variations available"
+        : undefined,
+    });
+  }
+
+  if (showArtifactsTab) {
+    descriptors.push({
+      value: "artifacts",
+      label: "Artifacts",
+      icon: { kind: "component", Icon: IconLayoutDashboard },
+      indicator: hasArtifactsContent ? "content" : undefined,
+      indicatorLabel: hasArtifactsContent
+        ? "Artifacts generated in this chat"
+        : undefined,
+    });
+  }
+
+  if (showDocumentsTab) {
+    descriptors.push({
+      value: "documents",
+      label: "Documents",
+      icon: { kind: "component", Icon: IconFile },
+      indicator: hasDocumentsContent ? "content" : undefined,
+      indicatorLabel: hasDocumentsContent
+        ? "Documents generated in this chat"
         : undefined,
     });
   }

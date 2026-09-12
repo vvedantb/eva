@@ -22,7 +22,14 @@ import {
   Surface,
   Textarea,
 } from "@eva/ui";
-import { IconFile, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+import {
+  IconFile,
+  IconMessage,
+  IconPlus,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
+import { docSourceLabel, docSourceRoute } from "@/lib/components/docs/_source";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -338,8 +345,13 @@ export function DocsSidebar({
                             onClick={onNavigate}
                             className={sidebarNavLinkClass(isSelected)}
                           >
-                            <span className="min-w-0 flex-1 truncate">
-                              {doc.title}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">{doc.title}</span>
+                              {doc.source ? (
+                                <span className="block truncate text-[10px] text-muted-foreground">
+                                  {docSourceLabel(doc.source)}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                               {compactRelativeTime(doc.updatedAt)}
@@ -349,6 +361,27 @@ export function DocsSidebar({
                       </SharedLayoutNavSurface>
                     </ContextMenuTrigger>
                     <ContextMenuContent onClick={(e) => e.stopPropagation()}>
+                      {doc.source && docSourceRoute(doc.source) ? (
+                        <ContextMenuItem
+                          onClick={() => {
+                            const route = docSourceRoute(doc.source);
+                            if (!route) return;
+                            void navigate({
+                              to: route.to,
+                              params: route.params,
+                            });
+                            if (onNavigate) onNavigate();
+                          }}
+                        >
+                          <IconMessage size={16} />
+                          Open{" "}
+                          {doc.source.kind === "session"
+                            ? "session"
+                            : doc.source.kind === "task"
+                              ? "task"
+                              : "project"}
+                        </ContextMenuItem>
+                      ) : null}
                       {doc.kind !== "pr-recap" ? (
                         <ContextMenuItem
                           className="text-destructive"
