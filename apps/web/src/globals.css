@@ -1949,6 +1949,7 @@ html[data-page-hidden] .animate-spin,
 html[data-page-hidden] .animate-pulse,
 html[data-page-hidden] .animate-bounce,
 html[data-page-hidden] .animate-ping,
+html[data-page-hidden] .landing-pulse-dot,
 [aria-hidden="true"] .beam::before,
 [aria-hidden="true"] .beam-halo::before,
 [aria-hidden="true"] .shimmer-band,
@@ -1959,6 +1960,7 @@ html[data-page-hidden] .animate-ping,
 [aria-hidden="true"] .animate-pulse,
 [aria-hidden="true"] .animate-bounce,
 [aria-hidden="true"] .animate-ping,
+[aria-hidden="true"] .landing-pulse-dot,
 [data-anim-offscreen] .beam::before,
 [data-anim-offscreen] .beam-halo::before,
 [data-anim-offscreen] .shimmer-band,
@@ -1970,7 +1972,8 @@ html[data-page-hidden] .animate-ping,
 [data-anim-offscreen] .animate-spin,
 [data-anim-offscreen] .animate-pulse,
 [data-anim-offscreen] .animate-bounce,
-[data-anim-offscreen] .animate-ping {
+[data-anim-offscreen] .animate-ping,
+[data-anim-offscreen] .landing-pulse-dot {
   animation-play-state: paused;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import usePresence from "@convex-dev/presence/react";
 import { api } from "@eva/backend";
@@ -69,20 +69,50 @@ export function useLiveCursors(
 
   useEffect(() => {
     if (!hasRemoteOnline) return;
-    const id = setInterval(() => setNow(Date.now()), CURSOR_ACTIVE_MS / 2);
-    return () => clearInterval(id);
+    let intervalId = 0;
+    const start = () => {
+      if (intervalId !== 0) return;
+      intervalId = window.setInterval(
+        () => setNow(Date.now()),
+        CURSOR_ACTIVE_MS / 2,
+      );
+    };
+    const stop = () => {
+      if (intervalId === 0) return;
+      window.clearInterval(intervalId);
+      intervalId = 0;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setNow(Date.now());
+        start();
+        return;
+      }
+      stop();
+    };
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [hasRemoteOnline]);
 
-  const sendUpdate = (x: number, y: number) => {
+  const updateCursorRef = useRef(updateCursor);
+  updateCursorRef.current = updateCursor;
+
+  const sendUpdate = useCallback((x: number, y: number) => {
     if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
     lastPosRef.current = { x, y };
-    updateCursor({ roomId, x, y }).catch(console.error);
-  };
+    updateCursorRef.current({ roomId, x, y }).catch(console.error);
+  }, [roomId]);
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (document.visibilityState !== "visible") return;
+    if (!hasRemoteOnline) return;
 
+    let attached = false;
+
+    const handleMouseMove = (e: MouseEvent) => {
       const x = (e.clientX / window.innerWidth) * 100;
       const y = (e.clientY / window.innerHeight) * 100;
       const now = Date.now();
@@ -110,14 +140,29 @@ export function useLiveCursors(
       }
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
+    const syncMouseListener = () => {
+      const shouldAttach = document.visibilityState === "visible";
+      if (shouldAttach && !attached) {
+        window.addEventListener("mousemove", handleMouseMove);
+        attached = true;
+      } else if (!shouldAttach && attached) {
+        window.removeEventListener("mousemove", handleMouseMove);
+        attached = false;
+      }
+    };
+
+    syncMouseListener();
+    document.addEventListener("visibilitychange", syncMouseListener);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("visibilitychange", syncMouseListener);
+      if (attached) {
+        window.removeEventListener("mousemove", handleMouseMove);
+      }
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
     };
-  }, [sendUpdate]);
+  }, [hasRemoteOnline, sendUpdate]);
 
   if (!presenceState) return [];
   const cursors: RemoteCursor[] = [];

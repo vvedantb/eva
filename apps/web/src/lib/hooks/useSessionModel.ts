@@ -9,8 +9,8 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { useAction, useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 
 /**
  * Session composer prefs backed by Convex (`sessions.lastModel` / trait fields
@@ -20,11 +20,13 @@ import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff
  *
  * Changes go through sticky setters with optimistic patches. While the session
  * query is still loading the picker shows `defaultModel`, model-default traits,
- * and Team account.
+ * and Team account. Cached-hidden shells pass `active: false` so this does
+ * not keep a second `sessions.get` live after SessionDetailClient skips it.
  */
 export function useSessionModel(
   sessionId: Id<"sessions">,
   defaultModel: AIModel,
+  active = true,
 ): {
   model: AIModel;
   setModel: (model: AIModel) => void;
@@ -39,7 +41,10 @@ export function useSessionModel(
   ) => Promise<void>;
   isSwitchingAccount: boolean;
 } {
-  const session = useQuery(api.sessions.get, { id: sessionId });
+  const session = useHeldQuery(
+    api.sessions.get,
+    active ? { id: sessionId } : "skip",
+  );
   const prewarmDaemonNow = useAction(api.sessionWorkflow.prewarmDaemonNow);
   const setModelMutation = useMutation(
     api.sessions.setModel,

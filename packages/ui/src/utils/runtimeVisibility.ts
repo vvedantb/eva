@@ -18,11 +18,33 @@ type IntersectionListener = (intersecting: boolean) => void;
 const intersectionListeners = new WeakMap<Element, Set<IntersectionListener>>();
 let sharedObserver: IntersectionObserver | null = null;
 let pageVisibilityStarted = false;
+let ariaHiddenWatchStarted = false;
+const animationSyncs = new Set<() => void>();
 
 function pageIsHidden(): boolean {
   return (
     typeof document !== "undefined" && document.visibilityState === "hidden"
   );
+}
+
+function elementOrAncestorHidden(el: Element): boolean {
+  return el.closest('[aria-hidden="true"]') !== null;
+}
+
+function flushAnimationSyncs(): void {
+  for (const sync of animationSyncs) sync();
+}
+
+function ensureAriaHiddenWatch(): void {
+  if (ariaHiddenWatchStarted || typeof MutationObserver === "undefined") return;
+  if (typeof document === "undefined") return;
+  ariaHiddenWatchStarted = true;
+  const observer = new MutationObserver(flushAnimationSyncs);
+  observer.observe(document.documentElement, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["aria-hidden"],
+  });
 }
 
 function getSharedObserver(): IntersectionObserver | null {
@@ -55,7 +77,10 @@ export function ensureRuntimeVisibility(): void {
     document.documentElement.toggleAttribute("data-page-hidden", pageIsHidden());
   };
   sync();
-  document.addEventListener("visibilitychange", sync);
+  document.addEventListener("visibilitychange", () => {
+    sync();
+    flushAnimationSyncs();
+  });
 }
 
 /**
@@ -110,7 +135,8 @@ export function bindRuntimeAnimation(
   ensureRuntimeVisibility();
   let intersecting = true;
   const sync = () => {
-    const hidden = pageIsHidden() || !intersecting;
+    const hidden =
+      pageIsHidden() || !intersecting || elementOrAncestorHidden(el);
     if (hidden) {
       if (animation.playState === "running") animation.pause();
       return;
@@ -121,16 +147,12 @@ export function bindRuntimeAnimation(
     intersecting = next;
     sync();
   });
-  const onVisibility = () => sync();
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", onVisibility);
-  }
+  ensureAriaHiddenWatch();
+  animationSyncs.add(sync);
   sync();
   return () => {
+    animationSyncs.delete(sync);
     unobserve();
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", onVisibility);
-    }
     animation.cancel();
   };
 }

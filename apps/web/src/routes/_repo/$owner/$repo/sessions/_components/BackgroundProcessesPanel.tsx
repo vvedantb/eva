@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction } from "convex/react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
   Queue,
   QueueItem,
@@ -38,10 +38,15 @@ function formatElapsed(startedAt: number, now: number): string {
  */
 export function BackgroundProcessesPanel({
   sessionId,
+  isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
+  isRouteActive?: boolean;
 }) {
-  const rows = useQuery(api.backgroundProcesses.listRunning, { sessionId });
+  const rows = useHeldQuery(
+    api.backgroundProcesses.listRunning,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const reconcile = useAction(api.sandbox.reconcileBackgroundProcesses);
   const kill = useAction(api.sandbox.killBackgroundProcess);
   const [killingIds, setKillingIds] = useState<ReadonlySet<string>>(
@@ -50,9 +55,10 @@ export function BackgroundProcessesPanel({
   const [now, setNow] = useState(() => Date.now());
 
   const hasRows = (rows?.length ?? 0) > 0;
+  const live = isRouteActive && hasRows;
 
   useEffect(() => {
-    if (!hasRows) return;
+    if (!live) return;
     let intervalId = 0;
     const start = () => {
       if (intervalId !== 0) return;
@@ -80,10 +86,10 @@ export function BackgroundProcessesPanel({
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [hasRows]);
+  }, [live]);
 
   useEffect(() => {
-    if (!hasRows) return;
+    if (!live) return;
 
     const runReconcile = () => {
       if (document.visibilityState !== "visible") return;
@@ -97,7 +103,7 @@ export function BackgroundProcessesPanel({
     return () => {
       window.clearInterval(interval);
     };
-  }, [hasRows, reconcile, sessionId]);
+  }, [live, reconcile, sessionId]);
 
   if (!rows || rows.length === 0) return null;
 

@@ -30,4 +30,24 @@ describe("hidden session shells skip hot queries", () => {
     const source = sourceOf("_components/useSessionSend.ts");
     expect(source).toContain("isRouteActive ? { sessionId } : \"skip\"");
   });
+
+  it("useSessionModel holds sessions.get when the shell is inactive", () => {
+    const source = sourceOf("../../../../../lib/hooks/useSessionModel.ts");
+    expect(source).toContain("useHeldQuery");
+    expect(source).toContain("active ? { id: sessionId } : \"skip\"");
+  });
+
+  it("annotation send and sandbox plans skip when the shell is inactive", () => {
+    const annotation = sourceOf("_components/useSessionAnnotationSend.ts");
+    expect(annotation).toContain("isRouteActive ? { parentId: sessionId } : \"skip\"");
+    expect(annotation).toContain("isRouteActive ? { sessionId } : \"skip\"");
+
+    const sandbox = sourceOf("SandboxPanel.tsx");
+    expect(sandbox).toContain("useHeldQuery");
+    expect(sandbox).toContain("isRouteActive ? { sessionId } : \"skip\"");
+    expect(sandbox).toContain("useSessionAnnotationSend(sessionId, isRouteActive)");
+
+    const processes = sourceOf("_components/BackgroundProcessesPanel.tsx");
+    expect(processes).toContain("isRouteActive ? { sessionId } : \"skip\"");
+  });
 });

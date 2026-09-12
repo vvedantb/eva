@@ -149,7 +149,7 @@ export function ChatPanel({
   // The picker lists the session owner's accounts, not the viewer's — the turn
   // always runs on the owner's credentials.
   const { options: accounts, resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
   // Model + traits + account are owned by Convex.
   const {
     model,
@@ -159,7 +159,7 @@ export function ChatPanel({
     providerAccountId: stickyProviderAccountId,
     setProviderAccountId: setStickyProviderAccountId,
     isSwitchingAccount,
-  } = useSessionModel(sessionId, defaultModel);
+  } = useSessionModel(sessionId, defaultModel, isRouteActive);
   const {
     displayTraits,
     executionTraits,
@@ -217,6 +217,7 @@ export function ChatPanel({
     useSessionPlanImplementation({
       sessionId,
       handleSend,
+      isRouteActive,
     });
   const {
     savePlan,
@@ -370,7 +371,10 @@ export function ChatPanel({
       beforeBanner={
         <>
           {simpleView ? null : (
-            <BackgroundProcessesPanel sessionId={sessionId} />
+            <BackgroundProcessesPanel
+              sessionId={sessionId}
+              isRouteActive={isRouteActive}
+            />
           )}
           {!isReadOnly ? (
             <PublishRecoveryBanner

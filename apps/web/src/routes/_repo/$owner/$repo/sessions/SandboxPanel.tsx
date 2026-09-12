@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
   api,
   type BackgroundAgentEntry,
@@ -100,20 +101,22 @@ export function SandboxPanel({
 }: SandboxPanelProps) {
   const simpleView = useSimpleView();
   const sessionIdStr = String(sessionId);
-  const submitAnnotation = useSessionAnnotationSend(sessionId);
+  const submitAnnotation = useSessionAnnotationSend(sessionId, isRouteActive);
   const seedChatDraft = useSeedChatDraft({
     kind: "sessionChat",
     sessionId,
   });
-  const proposedPlans = useQuery(api.proposedPlans.listBySession, {
-    sessionId,
-  });
+  const proposedPlans = useHeldQuery(
+    api.proposedPlans.listBySession,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const { implementPlan, implementPlanContent, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
       handleSend: (content) => {
         void seedChatDraft(content);
       },
+      isRouteActive,
     });
   const {
     savePlan,
@@ -146,7 +149,10 @@ export function SandboxPanel({
   );
   // Sticky Preview path/port + console tail, keyed by the sandbox owner so all
   // three surfaces read and write this state through the same functions.
-  const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
+  const viewState = useHeldQuery(
+    api.sandboxPanes.getViewState,
+    isRouteActive ? { owner } : "skip",
+  );
   const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
   const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
   const setTerminalHistoryTail = useMutation(
@@ -165,7 +171,10 @@ export function SandboxPanel({
   });
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
   // User-defined tabs for this app, in display order, enabled only.
-  const allCustomTabs = useQuery(api.appTabs.list, { repoId });
+  const allCustomTabs = useHeldQuery(
+    api.appTabs.list,
+    isRouteActive ? { repoId } : "skip",
+  );
   const customTabs = (allCustomTabs ?? []).filter((tab) => tab.enabled);
   // If the URL points at a custom tab that no longer exists (deleted / disabled /
   // renamed), fall back to preview. Wait for the query to load before deciding.

@@ -158,6 +158,7 @@ describe("infinite animations pause when the user cannot see them", () => {
     expect(cssRules).toContain("[aria-hidden=\"true\"] .animate-pulse");
     expect(cssRules).toContain("[data-anim-offscreen] .animate-pulse");
     expect(cssRules).toContain(".shimmer-text");
+    expect(cssRules).toContain(".landing-pulse-dot");
   });
 });
 
