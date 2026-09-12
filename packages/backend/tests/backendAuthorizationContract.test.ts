@@ -467,4 +467,27 @@ describe("backend authorization boundaries", () => {
     const update = source.slice(source.indexOf("export const updateRole"));
     expect(update).toContain("Cannot remove the last owner from the team");
   });
+
+  it("session and project PR webhooks bind to the GitHub repository", () => {
+    const webhook = convexSource("githubWebhook.ts");
+    expect(webhook).toContain("entityRepoMatchesGithub");
+    const http = convexSource("http.ts");
+    const sessionEvent = http.slice(
+      http.indexOf("internal.githubWebhook.handleSessionPrEvent"),
+    );
+    expect(sessionEvent).toContain("repoOwner:");
+    expect(sessionEvent).toContain("repoName:");
+  });
+
+  it("client PR URLs must belong to the Eva repository", () => {
+    expect(convexSource("_sessions/mutations.ts")).toContain("assertPrUrlForRepo");
+    expect(convexSource("_sessions/sandbox.ts")).toContain("assertPrUrlForRepo");
+    expect(convexSource("_projects/mutations.ts")).toContain("assertPrUrlForRepo");
+  });
+
+  it("sandbox env GitHub tokens are repo-scoped", () => {
+    const git = convexSource("_sandbox_runtime/git.ts");
+    expect(git).toContain("getRepoScopedInstallationToken");
+    expect(git).not.toContain("getInstallationToken(");
+  });
 });

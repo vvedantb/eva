@@ -614,6 +614,8 @@ http.route({
             merged: merged ?? undefined,
             prNumber: pullRequest.number ?? undefined,
             mergeCommitSha: pullRequest.merge_commit_sha ?? undefined,
+            repoOwner: parsed.data.repository?.owner?.login ?? undefined,
+            repoName: parsed.data.repository?.name ?? undefined,
           },
         );
         await ctx.scheduler.runAfter(
@@ -623,6 +625,8 @@ http.route({
             prUrl,
             action,
             draft: draft ?? undefined,
+            repoOwner: parsed.data.repository?.owner?.login ?? undefined,
+            repoName: parsed.data.repository?.name ?? undefined,
           },
         );
       }

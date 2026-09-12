@@ -197,6 +197,7 @@ export const getLatestDeploymentByProject = authQuery({
       startedAt: number;
     } | null = null;
     for (const task of tasks) {
+      if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) continue;
       const runs = await ctx.db
         .query("agentRuns")
         .withIndex("by_task", (q) => q.eq("taskId", task._id))

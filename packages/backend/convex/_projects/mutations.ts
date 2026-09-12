@@ -15,6 +15,7 @@ import {
   softDeleteAgentTask,
 } from "../functions";
 import { allocateNumId } from "../numId";
+import { assertPrUrlForRepo } from "../_github/prUrl";
 import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import {
   getProjectConversation,
@@ -281,8 +282,9 @@ export const updatePrUrl = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { prUrl: args.prUrl });
+    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    const prUrl = await assertPrUrlForRepo(ctx.db, project.repoId, args.prUrl);
+    await ctx.db.patch(args.id, { prUrl });
     return null;
   },
 });

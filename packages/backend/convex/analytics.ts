@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { authQuery, hasRepoAccess } from "./functions";
+import { authQuery, hasRepoAccess, sessionVisibleToUser } from "./functions";
 import { filterActiveEntities } from "./numId";
 import { loadLastSeenAt } from "./_users/lastSeen";
 
@@ -113,7 +113,7 @@ export const getImpactStats = authQuery({
         ? args.previousStartTime
         : args.startTime;
 
-    const sessions =
+    const sessions = (
       rangeStart === undefined
         ? await ctx.db
             .query("sessions")
@@ -124,7 +124,8 @@ export const getImpactStats = authQuery({
             .withIndex("by_repo", (q) =>
               q.eq("repoId", args.repoId).gte("_creationTime", rangeStart),
             )
-            .collect();
+            .collect()
+    ).filter((session) => sessionVisibleToUser(session, ctx.userId));
 
     const allTasks =
       rangeStart === undefined
@@ -335,12 +336,14 @@ export const getActiveUsers = authQuery({
       return { count: 0 };
     }
     const fiveMinAgo = args.now - 300_000;
-    const activeSessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_repo_and_status", (q) =>
-        q.eq("repoId", args.repoId).eq("status", "active"),
-      )
-      .collect();
+    const activeSessions = (
+      await ctx.db
+        .query("sessions")
+        .withIndex("by_repo_and_status", (q) =>
+          q.eq("repoId", args.repoId).eq("status", "active"),
+        )
+        .collect()
+    ).filter((session) => sessionVisibleToUser(session, ctx.userId));
 
     const repoUserIds = [
       ...new Set<Id<"users">>(activeSessions.map((session) => session.userId)),
@@ -449,10 +452,12 @@ export const getActivityTimeline = authQuery({
         }
       }
     }
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-      .collect();
+    const sessions = (
+      await ctx.db
+        .query("sessions")
+        .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
+        .collect()
+    ).filter((session) => sessionVisibleToUser(session, ctx.userId));
     const usersInActiveSessions = new Set<Id<"users">>();
     for (const session of sessions) {
       if (session._creationTime >= args.startTime) {
@@ -614,10 +619,12 @@ export const getLeaderboard = authQuery({
       cur.prsCreated += filteredRuns.filter((r) => r.prUrl).length;
       userStats.set(task.createdBy, cur);
     }
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-      .collect();
+    const sessions = (
+      await ctx.db
+        .query("sessions")
+        .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
+        .collect()
+    ).filter((session) => sessionVisibleToUser(session, ctx.userId));
     const filteredSessions =
       startTime !== undefined
         ? sessions.filter((s) => s._creationTime >= startTime)

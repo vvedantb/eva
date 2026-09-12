@@ -38,8 +38,22 @@ async function runMatchesGithubRepo(
 ): Promise<boolean> {
   const task = await ctx.db.get(run.taskId);
   if (!task?.repoId) return false;
-  const repo = await ctx.db.get(task.repoId);
-  return repo?.owner === owner && repo?.name === name;
+  return entityRepoMatchesGithub(ctx, task.repoId, owner, name);
+}
+
+async function entityRepoMatchesGithub(
+  ctx: MutationCtx,
+  repoId: Doc<"sessions">["repoId"],
+  owner: string | undefined,
+  name: string | undefined,
+): Promise<boolean> {
+  if (owner === undefined || name === undefined) return true;
+  const repo = await ctx.db.get(repoId);
+  return (
+    repo !== null &&
+    repo.owner.toLowerCase() === owner.toLowerCase() &&
+    repo.name.toLowerCase() === name.toLowerCase()
+  );
 }
 
 async function findRunByBranchName(
@@ -152,20 +166,33 @@ export const handleProjectPrEvent = internalMutation({
     prUrl: v.string(),
     action: v.string(),
     draft: v.optional(v.boolean()),
+    repoOwner: v.optional(v.string()),
+    repoName: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const nextPhase = deriveProjectPhaseFromPrEvent(args.action, args.draft);
     if (!nextPhase) return null;
 
-    const project = await ctx.db
+    const projects = await ctx.db
       .query("projects")
       .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first();
-    if (!project || !isProjectReviewPhase(project.phase)) return null;
-    if (project.phase === nextPhase) return null;
-
-    await ctx.db.patch(project._id, { phase: nextPhase });
+      .collect();
+    for (const project of projects) {
+      if (
+        !(await entityRepoMatchesGithub(
+          ctx,
+          project.repoId,
+          args.repoOwner,
+          args.repoName,
+        ))
+      ) {
+        continue;
+      }
+      if (!isProjectReviewPhase(project.phase)) continue;
+      if (project.phase === nextPhase) continue;
+      await ctx.db.patch(project._id, { phase: nextPhase });
+    }
     return null;
   },
 });
@@ -179,6 +206,8 @@ export const handleSessionPrEvent = internalMutation({
     merged: v.optional(v.boolean()),
     prNumber: v.optional(v.number()),
     mergeCommitSha: v.optional(v.string()),
+    repoOwner: v.optional(v.string()),
+    repoName: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -189,11 +218,22 @@ export const handleSessionPrEvent = internalMutation({
     );
     if (!nextState) return null;
 
-    const session = await ctx.db
+    const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first();
-    if (!session) return null;
+      .collect();
+
+    for (const session of sessions) {
+      if (
+        !(await entityRepoMatchesGithub(
+          ctx,
+          session.repoId,
+          args.repoOwner,
+          args.repoName,
+        ))
+      ) {
+        continue;
+      }
 
     const isTerminal = nextState === "merged" || nextState === "closed";
     const needsArchive = isTerminal && session.archived !== true;
@@ -201,7 +241,7 @@ export const handleSessionPrEvent = internalMutation({
 
     // Already in sync (including archived flag for terminal PRs).
     if (session.prState === nextState && !needsArchive && !needsUnarchive) {
-      return null;
+      continue;
     }
 
     await ctx.db.patch(session._id, {
@@ -263,6 +303,7 @@ export const handleSessionPrEvent = internalMutation({
           mergeCommitSha: args.mergeCommitSha,
         },
       );
+    }
     }
     return null;
   },

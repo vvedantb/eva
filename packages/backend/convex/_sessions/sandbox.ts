@@ -22,6 +22,7 @@ import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+import { assertPrUrlForRepo } from "../_github/prUrl";
 
 /** Updates sandbox-related fields (sandbox ID, branch, PR URL) on a session. */
 export const updateSandbox = authMutation({
@@ -33,7 +34,7 @@ export const updateSandbox = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
       branchName?: string;
       prUrl?: string;
@@ -42,7 +43,13 @@ export const updateSandbox = authMutation({
     // sandboxId is bound only by internal.sessionWorkflow.updateSandboxId —
     // a client-supplied id would pair this session with another tenant's VM.
     if (args.branchName !== undefined) updates.branchName = args.branchName;
-    if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
+    if (args.prUrl !== undefined) {
+      updates.prUrl = await assertPrUrlForRepo(
+        ctx.db,
+        session.repoId,
+        args.prUrl,
+      );
+    }
     await ctx.db.patch(args.id, updates);
     return null;
   },

@@ -3,7 +3,7 @@
 import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
-import { getInstallationToken } from "../githubAuth";
+import { getRepoScopedInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
@@ -320,6 +320,7 @@ export async function createSandbox(
    * of `docker info` loops). Skip it.
    */
   skipDocker = false,
+  homeRepoName?: string,
 ): Promise<SandboxHandle> {
   const details = [
     `installation=${installationId}`,
@@ -338,7 +339,16 @@ export async function createSandbox(
     // post-create file write). Overlap token fetch with Sandbox.create, then
     // write the env file AFTER onSandboxAcquired so the UI goes active before
     // the first-command boot penalty.
-    const tokenPromise = getInstallationToken(installationId);
+    if (!homeRepoName) {
+      throw new Error(
+        "home repository name is required to mint a scoped GitHub token",
+      );
+    }
+    const tokenPromise = getRepoScopedInstallationToken(
+      installationId,
+      { name: homeRepoName, githubId: undefined },
+      "write",
+    );
 
     const sandbox = await client.create({
       snapshot: snapshotName,
@@ -1022,7 +1032,11 @@ export async function cloneAndSetupRepo(
   const details = `${owner}/${name}, installDeps=${shouldInstallDeps}`;
   await runLoggedGitStep("cloneAndSetupRepo", details, async () => {
     if (onProgress) await onProgress("Cloning repository...");
-    const githubToken = await getInstallationToken(installationId);
+    const githubToken = await getRepoScopedInstallationToken(
+      installationId,
+      { name, githubId: undefined },
+      "write",
+    );
     const repoUrl = `https://github.com/${owner}/${name}.git`;
 
     // SDK clone doesn't clean target dir — pre-clean workspace directories
@@ -1565,6 +1579,7 @@ export async function createSandboxAndPrepareRepo(
             onSandboxAcquired,
             image,
             skipDocker,
+            name,
           );
         } catch (err) {
           if (effectiveSnapshot && isSnapshotUnusableError(err)) {
@@ -1584,6 +1599,7 @@ export async function createSandboxAndPrepareRepo(
               onSandboxAcquired,
               image,
               skipDocker,
+              name,
             );
           } else {
             throw err;

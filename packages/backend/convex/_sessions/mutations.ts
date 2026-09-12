@@ -18,6 +18,7 @@ import {
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
+import { assertPrUrlForRepo } from "../_github/prUrl";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
@@ -393,7 +394,13 @@ export const update = authMutation({
     } = {};
     if (args.title !== undefined) updates.title = args.title;
     if (args.branchName !== undefined) updates.branchName = args.branchName;
-    if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
+    if (args.prUrl !== undefined) {
+      updates.prUrl = await assertPrUrlForRepo(
+        ctx.db,
+        session.repoId,
+        args.prUrl,
+      );
+    }
     await ctx.db.patch(args.id, updates);
 
     if (
