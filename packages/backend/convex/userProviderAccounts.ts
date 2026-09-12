@@ -12,6 +12,7 @@ import {
   listSelectableAccountsFor,
 } from "./_userProviderAccounts/listing";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 const credentialValidator = v.object({ key: v.string(), value: v.string() });
 
@@ -235,6 +236,7 @@ export const setShared = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.accountId);
     if (!doc || doc.userId !== ctx.userId) {
       throw new Error("Account not found");
@@ -249,6 +251,7 @@ export const remove = authMutation({
   args: { accountId: v.id("userProviderAccounts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.accountId);
     if (!doc || doc.userId !== ctx.userId) {
       throw new Error("Account not found");

@@ -108,6 +108,7 @@ export const removeVar = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return null;

@@ -105,7 +105,13 @@ export async function createNotification(
   const project = params.projectId ? await ctx.db.get(params.projectId) : null;
   const session = params.sessionId ? await ctx.db.get(params.sessionId) : null;
 
-  let href = params.href;
+  let href =
+    params.href &&
+    params.href.startsWith("/") &&
+    !params.href.startsWith("//") &&
+    !params.href.includes("://")
+      ? params.href
+      : undefined;
   if (!href && params.repoId) {
     const repo = await ctx.db.get(params.repoId);
     if (repo) {

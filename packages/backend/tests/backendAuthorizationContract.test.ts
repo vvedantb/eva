@@ -499,6 +499,9 @@ describe("backend authorization boundaries", () => {
     );
     expect(convexSource("repoEnvVars.ts")).toContain("rejectSandboxCaller");
     expect(convexSource("teamEnvVars.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("userProviderAccounts.ts")).toContain(
+      "rejectSandboxCaller",
+    );
     expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
       "SANDBOX_JWT_ISSUER",
     );

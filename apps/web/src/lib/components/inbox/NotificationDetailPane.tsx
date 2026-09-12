@@ -9,7 +9,7 @@ import {
   MarkdownMentionText,
   MARKDOWN_PROSE_CLASS,
 } from "@/lib/components/chat/MarkdownMentionText";
-import { embedReadyMessage } from "@/lib/embed/embedded";
+import { embedReadyMessage, isInternalAppHref } from "@/lib/embed/embedded";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
 
@@ -107,7 +107,7 @@ export function NotificationDetailPane({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-      {notification.href ? (
+      {notification.href && isInternalAppHref(notification.href) ? (
         <>
           {/* The one action the header used to hold, floated over the frame's
           corner. `bg-background` keeps it legible over whatever the embedded

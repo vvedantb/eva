@@ -17,14 +17,16 @@ export const embedReadyMessage = z.object({
  * app-internal path only — never a full URL — so a message cannot steer the
  * frame off-origin.
  */
+/** App-internal path only — rejects protocol-relative and absolute URLs. */
+export function isInternalAppHref(href: string): boolean {
+  return href.startsWith("/") && !href.startsWith("//") && !href.includes("://");
+}
+
 export const embedNavigateMessage = z.object({
   type: z.literal("eva:embed-navigate"),
-  href: z
-    .string()
-    .startsWith("/")
-    .refine((href) => !href.startsWith("//") && !href.includes("://"), {
-      message: "href must be an app-internal path",
-    }),
+  href: z.string().refine(isInternalAppHref, {
+    message: "href must be an app-internal path",
+  }),
 });
 
 function detectEmbedded(): boolean {

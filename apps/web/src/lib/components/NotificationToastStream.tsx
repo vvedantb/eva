@@ -11,6 +11,7 @@ import { AnimatePresence, m } from "motion/react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { playNotificationChime } from "@/lib/utils/notificationChime";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
+import { isInternalAppHref } from "@/lib/embed/embedded";
 import {
   NotificationIcon,
   getNotificationAppearance,
@@ -129,7 +130,7 @@ export function NotificationToastStream() {
       markAsRead({ id: notification._id }).catch(() => undefined);
     }
     dismissToast(notification._id);
-    if (notification.href) {
+    if (notification.href && isInternalAppHref(notification.href)) {
       // Same treatment as the inbox: the `repo--app` rewrite plus the search
       // split the router needs to see a comment anchor at all.
       navigate(hrefToNavigateOptions(notification.href));
