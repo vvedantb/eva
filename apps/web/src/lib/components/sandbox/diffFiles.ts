@@ -121,3 +121,130 @@ export function buildDiffFileEntries(diff: string): DiffFileEntry[] {
     };
   });
 }
+
+/** Collapse whitespace so `foo  bar` and `foo bar` compare equal. */
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, "");
+}
+
+function isMinusLine(line: string): boolean {
+  return line.startsWith("-") && !line.startsWith("---");
+}
+
+function isPlusLine(line: string): boolean {
+  return line.startsWith("+") && !line.startsWith("+++");
+}
+
+/**
+ * Pair deleted/added lines that differ only by whitespace and turn those
+ * pairs into context. Unmatched +/- lines stay as real changes — the same
+ * idea as `git diff --ignore-all-space`, applied to an already-fetched
+ * unified patch so the GitHub PR payload does not need a second fetch.
+ */
+function filterHunkLines(lines: string[]): {
+  lines: string[];
+  hasChanges: boolean;
+} {
+  const out: string[] = [];
+  let hasChanges = false;
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (!isMinusLine(line) && !isPlusLine(line)) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    const minus: string[] = [];
+    const plus: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined || !isMinusLine(current)) break;
+      minus.push(current);
+      index += 1;
+    }
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined || !isPlusLine(current)) break;
+      plus.push(current);
+      index += 1;
+    }
+    const usedPlus = new Set<number>();
+    for (const removed of minus) {
+      const normalized = collapseWhitespace(removed.slice(1));
+      const matchAt = plus.findIndex(
+        (added, plusIndex) =>
+          !usedPlus.has(plusIndex) &&
+          collapseWhitespace(added.slice(1)) === normalized,
+      );
+      if (matchAt >= 0) {
+        usedPlus.add(matchAt);
+        const kept = plus[matchAt];
+        out.push(` ${kept ? kept.slice(1) : removed.slice(1)}`);
+        continue;
+      }
+      out.push(removed);
+      hasChanges = true;
+    }
+    for (const [plusIndex, added] of plus.entries()) {
+      if (usedPlus.has(plusIndex)) continue;
+      out.push(added);
+      hasChanges = true;
+    }
+  }
+  return { lines: out, hasChanges };
+}
+
+/**
+ * Re-emit a unified patch with whitespace-only edits dropped. Binary patches
+ * and header-only files are left alone.
+ */
+export function ignoreWhitespaceInPatch(patch: string): string {
+  if (
+    /^GIT binary patch/m.test(patch) ||
+    /^Binary files .* differ$/m.test(patch)
+  ) {
+    return patch;
+  }
+  const lines = patch.split("\n");
+  const out: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (!line.startsWith("@@ ")) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    const header = line;
+    index += 1;
+    const hunk: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined) break;
+      if (current.startsWith("@@ ") || current.startsWith("diff --git ")) {
+        break;
+      }
+      hunk.push(current);
+      index += 1;
+    }
+    const filtered = filterHunkLines(hunk);
+    if (!filtered.hasChanges) continue;
+    out.push(header);
+    out.push(...filtered.lines);
+  }
+  return out.join("\n");
+}
+
+/** Apply ignore-whitespace to each file entry and recompute header stats. */
+export function applyIgnoreWhitespace(
+  entries: ReadonlyArray<DiffFileEntry>,
+): DiffFileEntry[] {
+  return entries.flatMap((entry) => {
+    if (entry.binary || !entry.hasHunks) return [entry];
+    const next = buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch));
+    return next.length > 0 ? next : [entry];
+  });
+}

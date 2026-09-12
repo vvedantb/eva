@@ -33,6 +33,9 @@ import {
 } from "@/lib/components/sandbox/SandboxWorkspace";
 import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -250,6 +253,9 @@ export function TaskDetailInline({
     );
 
   const sandboxContent = (
+    <PendingPreviewSnapshotsProvider>
+    <PendingWebMcpProvider>
+    <OpenSandboxFileProvider onOpenFile={openFile}>
     <SandboxWorkspace
       ownerKind="task"
       ownerId={taskId}
@@ -300,6 +306,9 @@ export function TaskDetailInline({
         />
       )}
     </SandboxWorkspace>
+    </OpenSandboxFileProvider>
+    </PendingWebMcpProvider>
+    </PendingPreviewSnapshotsProvider>
   );
 
   const detailContent = (

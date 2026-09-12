@@ -12,6 +12,9 @@ import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -245,13 +248,22 @@ export function SessionDetailClient({
   if (chatOnly) {
     return (
       <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
-        <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+        <PendingPreviewSnapshotsProvider>
+          <PendingWebMcpProvider>
+          <OpenSandboxFileProvider>
+            <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+          </OpenSandboxFileProvider>
+          </PendingWebMcpProvider>
+        </PendingPreviewSnapshotsProvider>
       </PendingReviewCommentsProvider>
     );
   }
 
   return (
     <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
+      <PendingPreviewSnapshotsProvider>
+      <PendingWebMcpProvider>
+      <OpenSandboxFileProvider onOpenFile={onOpenFile}>
       <SandboxWorkspace
         ownerKind="session"
         ownerId={sessionId}
@@ -320,6 +332,9 @@ export function SessionDetailClient({
           />
         )}
       </SandboxWorkspace>
+      </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
+      </PendingPreviewSnapshotsProvider>
     </PendingReviewCommentsProvider>
   );
 }

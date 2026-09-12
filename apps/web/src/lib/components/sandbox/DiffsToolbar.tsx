@@ -17,6 +17,7 @@ import {
   IconChevronsDown,
   IconChevronsUp,
   IconRefresh,
+  IconSpacingHorizontal,
   IconTextWrap,
 } from "@tabler/icons-react";
 import { isDiffView, type DiffView } from "@/lib/search-params";
@@ -33,6 +34,8 @@ interface DiffsToolbarProps {
   onDiffViewChange: (view: DiffView) => void;
   wrapLines: boolean;
   onWrapLinesChange: (wrap: boolean) => void;
+  ignoreWhitespace: boolean;
+  onIgnoreWhitespaceChange: (ignore: boolean) => void;
   allExpanded: boolean;
   onExpandAll: () => void;
   onCollapseAll: () => void;
@@ -60,6 +63,8 @@ export function DiffsToolbar({
   onDiffViewChange,
   wrapLines,
   onWrapLinesChange,
+  ignoreWhitespace,
+  onIgnoreWhitespaceChange,
   allExpanded,
   onExpandAll,
   onCollapseAll,
@@ -124,6 +129,30 @@ export function DiffsToolbar({
           </TooltipTrigger>
           <TooltipContent>
             {wrapLines ? "Stop wrapping lines" : "Wrap long lines"}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={ignoreWhitespace ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-pressed={ignoreWhitespace}
+              aria-label={
+                ignoreWhitespace
+                  ? "Show whitespace changes"
+                  : "Hide whitespace changes"
+              }
+              data-testid="ignore-whitespace-toggle"
+              onClick={() => onIgnoreWhitespaceChange(!ignoreWhitespace)}
+            >
+              <IconSpacingHorizontal className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {ignoreWhitespace
+              ? "Show whitespace changes"
+              : "Hide whitespace changes"}
           </TooltipContent>
         </Tooltip>
 

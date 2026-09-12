@@ -10,6 +10,29 @@ import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
+import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
+import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
+import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
+import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
+import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
+import { collectThreadFindDocuments } from "@/lib/components/chat/threadFind";
+import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import {
+  canForkMessage,
+  collectForkPrefix,
+  forkThreadTitle,
+  formatForkPrompt,
+} from "@/lib/components/chat/messageFork";
+import { tokenizedToDisplayText } from "@/lib/components/mentions";
+import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
+import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
+import { appendWebMcpToPrompt } from "@/lib/components/sandbox/previewWebMcp";
+import {
+  PendingCitationsProvider,
+  usePendingCitations,
+} from "@/lib/contexts/PendingCitationsContext";
+import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
@@ -145,9 +168,23 @@ interface ChatBodyProps {
   turnCheckpoint?: TurnCheckpointContext;
   allowEmptySubmit?: boolean;
   afterMessage?: (messageId: string) => ReactNode;
+  /** Sessions: create a new chat from the transcript through this message. */
+  onForkTranscript?: (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => Promise<void>;
 }
 
-export function ChatBody({
+export function ChatBody(props: ChatBodyProps) {
+  return (
+    <PendingCitationsProvider>
+      <ChatBodyInner {...props} />
+    </PendingCitationsProvider>
+  );
+}
+
+function ChatBodyInner({
   repoId,
   repoBasePath,
   conversationId,
@@ -188,7 +225,37 @@ export function ChatBody({
   turnCheckpoint,
   allowEmptySubmit,
   afterMessage,
+  onForkTranscript,
 }: ChatBodyProps) {
+  const citations = usePendingCitations();
+  const snapshots = usePendingPreviewSnapshots();
+  const webmcp = usePendingWebMcp();
+  const sendWithPendingContext = async (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => {
+    const withCitations = appendCitationsToPrompt(
+      content,
+      citations?.items ?? [],
+    );
+    const withSnapshots = appendSnapshotsToPrompt(
+      withCitations,
+      (snapshots?.items ?? []).map((item) => item.snapshot),
+    );
+    const withWebMcp = appendWebMcpToPrompt(
+      withSnapshots,
+      (webmcp?.items ?? []).map((item) => item.discovery),
+    );
+    await onSend(withWebMcp, attachmentStorageIds);
+    citations?.clear();
+    snapshots?.clear();
+    webmcp?.clear();
+  };
+  const hasComposerContext =
+    (hasPendingContext ?? false) ||
+    (citations?.items.length ?? 0) > 0 ||
+    (snapshots?.items.length ?? 0) > 0 ||
+    (webmcp?.items.length ?? 0) > 0;
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
@@ -212,6 +279,7 @@ export function ChatBody({
   // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
   // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
+  const [forkThroughId, setForkThroughId] = useState<string | null>(null);
   const pendingQuestionRaw =
     streamingPendingQuestion ??
     streamingTarget?.pendingQuestion ??
@@ -268,6 +336,19 @@ export function ChatBody({
 
   const jumpRailMessages = buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
+  const findDocuments = collectThreadFindDocuments(
+    displayMessages.map((message) => ({
+      id: message._id,
+      text: tokenizedToDisplayText(
+        message.content.trim().length > 0
+          ? message.content
+          : message._id === streamingTargetId
+            ? (streamingContent ?? "")
+            : "",
+      ),
+      skip: message.isSystemAlert === true,
+    })),
+  );
 
   const currentUserId = useQuery(api.auth.me);
 
@@ -334,6 +415,12 @@ export function ChatBody({
         backgroundAgents={backgroundAgents}
         sandboxRunning={sandboxRunning}
         turnCheckpoint={simpleView ? undefined : turnCheckpoint}
+        citeHighlight={citations?.highlightedMessageId === message._id}
+        onFork={
+          onForkTranscript && canForkMessage(message)
+            ? () => setForkThroughId(message._id)
+            : undefined
+        }
       />
       {afterMessage?.(message._id)}
       </div>
@@ -341,8 +428,12 @@ export function ChatBody({
   };
 
   return (
-    <>
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      data-chat-pane=""
+    >
       {preConversationContent}
+      <ThreadFindBar documents={findDocuments} />
       <Conversation className="flex-1 min-h-0">
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
@@ -367,6 +458,7 @@ export function ChatBody({
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
         <ChatJumpRail messages={jumpRailMessages} />
+        {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
       {isArchived ? null : dockedQuestions ? (
         <ChatQuestionDock
@@ -395,18 +487,55 @@ export function ChatBody({
           onAccountChange={onAccountChange}
           displayTraits={displayTraits}
           onTraitsChange={onTraitsChange}
-          onSend={onSend}
+          onSend={sendWithPendingContext}
           onCancel={onCancel}
           beforeQueuedContent={beforeQueuedContent}
-          preInputContent={preInputContent}
+          preInputContent={
+            <>
+              <PendingCitationChips />
+              <PendingSnapshotChips />
+              <PendingWebMcpChips />
+              {preInputContent}
+            </>
+          }
           streamingActivity={streamingActivity}
           streamingTurnId={streamingTargetId}
           draft={draft}
           isDraftLoading={isDraftLoading}
-          hasPendingContext={hasPendingContext}
+          hasPendingContext={hasComposerContext}
           allowEmptySubmit={allowEmptySubmit}
         />
       )}
-    </>
+      <MessageForkDialog
+        prefix={
+          forkThroughId
+            ? collectForkPrefix(
+                displayMessages.map((message) => ({
+                  id: message._id,
+                  role: message.role,
+                  content: message.content,
+                  isSystemAlert: message.isSystemAlert,
+                })),
+                forkThroughId,
+              )
+            : null
+        }
+        open={forkThroughId !== null}
+        onOpenChange={(open) => {
+          if (!open) setForkThroughId(null);
+        }}
+        onConfirm={
+          onForkTranscript
+            ? async (prefix) => {
+                await onForkTranscript({
+                  throughMessageId: prefix.throughMessageId,
+                  title: forkThreadTitle(prefix),
+                  prompt: formatForkPrompt(prefix),
+                });
+              }
+            : undefined
+        }
+      />
+    </div>
   );
 }
