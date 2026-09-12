@@ -17,6 +17,12 @@ import { DEMO_WEBMCP_DISCOVERY } from "@/lib/components/sandbox/previewWebMcp";
 import { PendingCitationsProvider } from "@/lib/contexts/PendingCitationsContext";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
+import {
+  collectThreadFindDocuments,
+  DEMO_THREAD_FIND_MESSAGES,
+  DEMO_THREAD_FIND_QUERY,
+} from "@/lib/components/chat/threadFind";
 
 const FEATURES = [
   "cite",
@@ -25,6 +31,7 @@ const FEATURES = [
   "ignore-whitespace",
   "context-meter",
   "webmcp",
+  "thread-find",
 ] as const;
 
 type FeaturePreview = (typeof FEATURES)[number];
@@ -52,6 +59,7 @@ function FeaturePreviewsPage() {
   if (feature === "ignore-whitespace") return <IgnoreWhitespacePreview />;
   if (feature === "context-meter") return <ContextMeterPreview />;
   if (feature === "webmcp") return <WebMcpPreview />;
+  if (feature === "thread-find") return <ThreadFindPreview />;
   return <CitePreview />;
 }
 
@@ -310,5 +318,50 @@ function SnapshotPreview() {
         </div>
       </div>
     </PendingPreviewSnapshotsProvider>
+  );
+}
+
+function ThreadFindPreview() {
+  const documents = collectThreadFindDocuments(
+    DEMO_THREAD_FIND_MESSAGES.map((message) => ({
+      id: message.id,
+      text: message.text,
+    })),
+  );
+  return (
+    <div
+      className="relative min-h-dvh bg-background px-10 py-12 text-foreground"
+      data-thread-find-scope=""
+    >
+      <ThreadFindBar
+        documents={documents}
+        defaultOpen
+        defaultQuery={DEMO_THREAD_FIND_QUERY}
+      />
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        In-thread find
+      </p>
+      <h1 className="mt-1 max-w-xl text-xl font-semibold">
+        Search this transcript
+      </h1>
+      <div className="mt-8 max-w-xl space-y-3">
+        {DEMO_THREAD_FIND_MESSAGES.map((message) => (
+          <div
+            key={message.id}
+            data-message-id={message.id}
+            className={
+              message.role === "user"
+                ? "ml-auto max-w-[85%] rounded-lg bg-primary/10 px-3 py-2 text-sm"
+                : "rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            }
+          >
+            <p className="text-[11px] text-muted-foreground">
+              {message.role === "user" ? "You" : "Eva"}
+            </p>
+            <p className="mt-1 leading-6">{message.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

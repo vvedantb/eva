@@ -14,6 +14,9 @@ import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
+import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
+import { collectThreadFindDocuments } from "@/lib/components/chat/threadFind";
+import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
 import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
 import { appendWebMcpToPrompt } from "@/lib/components/sandbox/previewWebMcp";
@@ -318,6 +321,19 @@ function ChatBodyInner({
 
   const jumpRailMessages = buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
+  const findDocuments = collectThreadFindDocuments(
+    displayMessages.map((message) => ({
+      id: message._id,
+      text: tokenizedToDisplayText(
+        message.content.trim().length > 0
+          ? message.content
+          : message._id === streamingTargetId
+            ? (streamingContent ?? "")
+            : "",
+      ),
+      skip: message.isSystemAlert === true,
+    })),
+  );
 
   const currentUserId = useQuery(api.auth.me);
 
@@ -392,8 +408,12 @@ function ChatBodyInner({
   };
 
   return (
-    <>
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      data-chat-pane=""
+    >
       {preConversationContent}
+      <ThreadFindBar documents={findDocuments} />
       <Conversation className="flex-1 min-h-0">
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
@@ -466,6 +486,6 @@ function ChatBodyInner({
           allowEmptySubmit={allowEmptySubmit}
         />
       )}
-    </>
+    </div>
   );
 }
