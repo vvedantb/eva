@@ -48,7 +48,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { TASK_CHAT_DAEMON_MUTATIONS } from "./_sandbox_runtime/daemonPaths";
 import {
   formatDelayedPublishFailureError,
-  resultTargetMessage,
+  selectUsageLimitRetryUserMessage,
 } from "./_sessions/resultTarget";
 import {
   applyChatTurnResult,
@@ -451,17 +451,7 @@ export const retryLastTurnWithAccount = authMutation({
       .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
       .order("desc")
       .take(20);
-    const reply = resultTargetMessage(recent);
-    if (
-      reply === undefined ||
-      reply.errorType !== "rate_limit" ||
-      reply.finishedAt === undefined
-    ) {
-      throw new Error("The last turn did not fail on a usage limit");
-    }
-
-    const userMessage = recent.find((message) => message.role === "user");
-    if (!userMessage) throw new Error("No message to retry");
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
 
     const model = normalizeAIModel(
       userMessage.model ?? task.lastChatModel ?? task.model,

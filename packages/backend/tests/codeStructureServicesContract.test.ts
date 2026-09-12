@@ -512,6 +512,25 @@ test("SDK attempts share buildStandardSdkAttemptResult", () => {
   }
 });
 
+test("usage-limit retries share selectUsageLimitRetryUserMessage", () => {
+  const helper = read("convex/_sessions/resultTarget.ts");
+  expect(helper).toContain("export function selectUsageLimitRetryUserMessage");
+  expect(helper).toContain('reply.errorType !== "rate_limit"');
+  for (const path of [
+    "convex/_sessions/execution.ts",
+    "convex/projectChatWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should select via the shared helper`).toContain(
+      "selectUsageLimitRetryUserMessage(",
+    );
+    expect(source, `${path} re-inlined the rate_limit retry gate`).not.toContain(
+      'reply.errorType !== "rate_limit"',
+    );
+  }
+});
+
 test("deployment status reads share fetchLatestDeploymentStatus", () => {
   const service = read("convex/_github/deploymentSnapshot.ts");
   expect(service).toContain("export async function fetchLatestDeploymentStatus(");

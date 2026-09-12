@@ -19,7 +19,7 @@ import { startNextQueuedSessionMessage } from "../_queues/helpers";
 import { buildSessionPrompt, sessionTurnTools } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { resultTargetMessage } from "./resultTarget";
+import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -264,17 +264,7 @@ export const retryLastTurnWithAccount = authMutation({
       .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
       .order("desc")
       .take(20);
-    const reply = resultTargetMessage(recent);
-    if (
-      reply === undefined ||
-      reply.errorType !== "rate_limit" ||
-      reply.finishedAt === undefined
-    ) {
-      throw new Error("The last turn did not fail on a usage limit");
-    }
-
-    const userMessage = recent.find((message) => message.role === "user");
-    if (!userMessage) throw new Error("No message to retry");
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
