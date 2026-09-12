@@ -149,6 +149,15 @@ describe("measured-height panels", () => {
  * they had already drifted. Re-adding one gate looks like an accessibility
  * improvement, which is why this needs to be mechanical rather than a comment.
  */
+describe("infinite animations pause when the user cannot see them", () => {
+  it("pauses beams, shimmers and spins on a hidden tab", () => {
+    expect(cssRules).toContain("html[data-page-hidden]");
+    expect(cssRules).toContain("animation-play-state: paused");
+    expect(cssRules).toContain("[data-anim-offscreen]");
+    expect(cssRules).toContain("[aria-hidden=\"true\"] .beam::before");
+  });
+});
+
 describe("reduced motion is not gated for", () => {
   it("has no prefers-reduced-motion query in the stylesheet", () => {
     expect(cssRules).not.toContain("prefers-reduced-motion");

@@ -3,6 +3,7 @@
 import type { CSSProperties, ElementType } from "react";
 
 import { cn } from "../utils/cn";
+import { useAnimOffscreenRef } from "../utils/runtimeVisibility";
 
 /** Inline style plus the custom properties the shimmer band reads. */
 interface ShimmerStyle extends CSSProperties {
@@ -40,6 +41,7 @@ export function Shimmer({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) {
+  const setOffscreen = useAnimOffscreenRef<HTMLElement>();
   const shimmerStyle: ShimmerStyle = {
     "--shimmer-spread": `${children.length * spread}px`,
     "--shimmer-duration": `${duration}s`,
@@ -47,6 +49,7 @@ export function Shimmer({
 
   return (
     <Component
+      ref={setOffscreen}
       className={cn("relative inline-block text-muted-foreground", className)}
       style={shimmerStyle}
     >

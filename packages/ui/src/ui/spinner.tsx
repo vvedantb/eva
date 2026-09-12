@@ -1,4 +1,5 @@
 import { cn } from "../utils/cn";
+import { bindRuntimeAnimation } from "../utils/runtimeVisibility";
 
 // Eva logo geometry (matches public/icon.svg).
 const PURPLE = "0,256 217,237 256,64 295,237 512,256";
@@ -25,7 +26,7 @@ function traceDash(polygon: SVGPolygonElement): () => void {
     [{ strokeDashoffset: 0 }, { strokeDashoffset: -1 }],
     { duration: 2000, iterations: Infinity },
   );
-  return () => trace.cancel();
+  return bindRuntimeAnimation(polygon, trace);
 }
 
 /**

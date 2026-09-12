@@ -187,6 +187,17 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
   );
 }
 
+let remeasureRaf = 0;
+
+/** Coalesce scroll/resize/RO into one measure per frame. */
+function scheduleRemeasure(): void {
+  if (remeasureRaf !== 0) return;
+  remeasureRaf = requestAnimationFrame(() => {
+    remeasureRaf = 0;
+    remeasureAll();
+  });
+}
+
 /** Re-reads every anchored placeholder's rect; notifies only on change. */
 function remeasureAll(): void {
   // Mid-gesture the anchor has already moved, so re-measuring it here would
@@ -213,16 +224,16 @@ let layoutListenerCount = 0;
 function acquireLayoutListeners(): void {
   layoutListenerCount += 1;
   if (layoutListenerCount > 1) return;
-  window.addEventListener("resize", remeasureAll);
-  window.addEventListener("scroll", remeasureAll, true);
-  document.addEventListener("fullscreenchange", remeasureAll);
+  window.addEventListener("resize", scheduleRemeasure);
+  window.addEventListener("scroll", scheduleRemeasure, true);
+  document.addEventListener("fullscreenchange", scheduleRemeasure);
 }
 function releaseLayoutListeners(): void {
   layoutListenerCount -= 1;
   if (layoutListenerCount > 0) return;
-  window.removeEventListener("resize", remeasureAll);
-  window.removeEventListener("scroll", remeasureAll, true);
-  document.removeEventListener("fullscreenchange", remeasureAll);
+  window.removeEventListener("resize", scheduleRemeasure);
+  window.removeEventListener("scroll", scheduleRemeasure, true);
+  document.removeEventListener("fullscreenchange", scheduleRemeasure);
 }
 
 function evictOverCap(): void {
@@ -319,14 +330,7 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
   }
 
   const observer = new ResizeObserver(() => {
-    const entry = entries.get(key);
-    if (entry === undefined || entry.anchor === null) return;
-    // See remeasureAll: a resize gesture already moves this rect by hand.
-    if (gesture !== null) return;
-    const rect = measure(entry.anchor);
-    if (sameRect(rect, entry.rect)) return;
-    entries.set(key, { ...entry, rect });
-    notify();
+    scheduleRemeasure();
   });
   observer.observe(options.anchor);
   acquireLayoutListeners();

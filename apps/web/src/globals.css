@@ -1931,6 +1931,38 @@ html[data-blur-pid] [data-pii] {
 }
 
 /*
+ * Infinite animations pause when the tab is in the background, a cached
+ * session shell is `aria-hidden`, or the animated node has scrolled off
+ * screen (`data-anim-offscreen` from IntersectionObserver). Playback
+ * resumes from the same offset — unchanged while the user is looking.
+ */
+html[data-page-hidden] .beam::before,
+html[data-page-hidden] .beam-halo::before,
+html[data-page-hidden] .shimmer-band,
+html[data-page-hidden] .shimmer-copy,
+html[data-page-hidden] .ui-skeleton::after,
+html[data-page-hidden] .animate-spin,
+html[data-page-hidden] .animate-pulse,
+html[data-page-hidden] .animate-bounce,
+html[data-page-hidden] .animate-ping,
+[aria-hidden="true"] .beam::before,
+[aria-hidden="true"] .beam-halo::before,
+[aria-hidden="true"] .shimmer-band,
+[aria-hidden="true"] .shimmer-copy,
+[aria-hidden="true"] .ui-skeleton::after,
+[aria-hidden="true"] .animate-spin,
+[data-anim-offscreen] .beam::before,
+[data-anim-offscreen] .beam-halo::before,
+[data-anim-offscreen] .shimmer-band,
+[data-anim-offscreen] .shimmer-copy,
+[data-anim-offscreen] .ui-skeleton::after,
+[data-anim-offscreen].shimmer-overlay .shimmer-band,
+[data-anim-offscreen].shimmer-overlay .shimmer-copy,
+[data-anim-offscreen] .animate-spin {
+  animation-play-state: paused;
+}
+
+/*
  * This app does not implement `prefers-reduced-motion`, globally or per
  * component. Motion here is feedback rather than decoration — press states,
  * scroll-fade masks and panel travel all carry meaning — and the per-component

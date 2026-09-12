@@ -53,8 +53,33 @@ export function BackgroundProcessesPanel({
 
   useEffect(() => {
     if (!hasRows) return;
-    const tick = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(tick);
+    let intervalId = 0;
+    const start = () => {
+      if (intervalId !== 0) return;
+      intervalId = window.setInterval(() => {
+        if (document.visibilityState !== "visible") return;
+        setNow(Date.now());
+      }, 1000);
+    };
+    const stop = () => {
+      if (intervalId === 0) return;
+      window.clearInterval(intervalId);
+      intervalId = 0;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setNow(Date.now());
+        start();
+        return;
+      }
+      stop();
+    };
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [hasRows]);
 
   useEffect(() => {

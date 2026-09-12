@@ -6,8 +6,8 @@ import {
 } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
@@ -97,6 +97,11 @@ interface ChatPanelProps {
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   backgroundAgents?: Doc<"sessions">["backgroundAgents"];
+  /**
+   * False while this session shell is cached-hidden. Skips chat-local
+   * subscriptions that would otherwise keep a background turn warm.
+   */
+  isRouteActive?: boolean;
 }
 
 export function ChatPanel({
@@ -128,6 +133,7 @@ export function ChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   backgroundAgents,
+  isRouteActive = true,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
   const simpleView = useSimpleView();
@@ -201,10 +207,12 @@ export function ChatPanel({
     resolveAccountId,
     accounts,
     messages,
+    isRouteActive,
   });
-  const proposedPlans = useQuery(api.proposedPlans.listBySession, {
-    sessionId,
-  });
+  const proposedPlans = useHeldQuery(
+    api.proposedPlans.listBySession,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const { implementPlan, implementPlanContent, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
@@ -243,9 +251,10 @@ export function ChatPanel({
     },
   };
 
-  const activeQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: sessionId,
-  });
+  const activeQuestion = useHeldQuery(
+    api.pendingQuestions.getActive,
+    isRouteActive ? { entityId: sessionId } : "skip",
+  );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const handleAnswerBlockingQuestion = async (
     toolUseId: string,

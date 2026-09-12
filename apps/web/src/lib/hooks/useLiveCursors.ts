@@ -63,11 +63,15 @@ export function useLiveCursors(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<{ x: number; y: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const hasRemoteOnline = Boolean(
+    presenceState?.some((member) => member.userId !== userId && member.online),
+  );
 
   useEffect(() => {
+    if (!hasRemoteOnline) return;
     const id = setInterval(() => setNow(Date.now()), CURSOR_ACTIVE_MS / 2);
     return () => clearInterval(id);
-  }, []);
+  }, [hasRemoteOnline]);
 
   const sendUpdate = (x: number, y: number) => {
     if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;

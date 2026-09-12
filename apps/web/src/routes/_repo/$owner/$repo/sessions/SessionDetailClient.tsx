@@ -3,6 +3,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
 import { Spinner } from "@eva/ui";
@@ -43,19 +44,29 @@ export function SessionDetailClient({
 }) {
   const { basePath, repo } = useRepo();
   const session = useQuery(api.sessions.get, { id: sessionId });
-  const messages = useQuery(api.messages.listByParent, {
-    parentId: sessionId,
-  });
-  const queuedMessages = useQuery(api.queuedMessages.listByParent, {
-    parentId: sessionId,
-  });
-  const streaming = useQuery(api.streaming.get, { entityId: sessionId });
-  const summaryStreaming = useQuery(api.streaming.get, {
-    entityId: `summary:${sessionId}`,
-  });
-  const startupStreaming = useQuery(api.streaming.get, {
-    entityId: `session-startup-${sessionId}`,
-  });
+  // Hidden cached shells keep the last paint so switching back does not flash.
+  // Skipping the hot streams is what stops a background turn from re-rendering
+  // a whole chat tree the user cannot see.
+  const messages = useHeldQuery(
+    api.messages.listByParent,
+    isRouteActive ? { parentId: sessionId } : "skip",
+  );
+  const queuedMessages = useHeldQuery(
+    api.queuedMessages.listByParent,
+    isRouteActive ? { parentId: sessionId } : "skip",
+  );
+  const streaming = useHeldQuery(
+    api.streaming.get,
+    isRouteActive ? { entityId: sessionId } : "skip",
+  );
+  const summaryStreaming = useHeldQuery(
+    api.streaming.get,
+    isRouteActive ? { entityId: `summary:${sessionId}` } : "skip",
+  );
+  const startupStreaming = useHeldQuery(
+    api.streaming.get,
+    isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
+  );
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
 
@@ -220,6 +231,7 @@ export function SessionDetailClient({
       }
       chatOnly={chatOnly}
       hideTitle={hideTitle}
+      isRouteActive={isRouteActive}
       onOpenFile={chatOnly ? undefined : onOpenFile}
       onViewDiff={chatOnly ? undefined : onViewDiff}
       onOpenPrdTab={

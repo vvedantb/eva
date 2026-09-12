@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { bindRuntimeAnimation } from "../utils/runtimeVisibility";
+
 /* ─────────────────────────────────────────────────────────
  * LOADING STATE — pixel-grid loader for long-running work
  *
@@ -87,7 +89,7 @@ function pulseRefs(delays: (number | null)[], dur: number): PulseRef[] {
             ],
             { duration: dur, delay: d, iterations: Infinity },
           );
-          return () => pulse.cancel();
+          return bindRuntimeAnimation(cell, pulse);
         },
   );
 }

@@ -1,10 +1,19 @@
 "use client";
 
-import type { ComponentPropsWithRef, ReactNode } from "react";
+import type { ComponentPropsWithRef, ReactNode, Ref } from "react";
 import { AnimatePresence, m } from "motion/react";
 
 import { cn } from "../utils/cn";
 import { motionSlow } from "../utils/motion";
+import { useAnimOffscreenRef } from "../utils/runtimeVisibility";
+
+function assignRef<T>(ref: Ref<T> | undefined, node: T | null): void {
+  if (typeof ref === "function") {
+    ref(node);
+    return;
+  }
+  if (ref) ref.current = node;
+}
 
 export type BorderBeamSize = "sm" | "md" | "lg";
 
@@ -59,10 +68,19 @@ export function BorderBeam({
   colorVariant = "mono",
   glow = true,
   className,
+  ref,
   ...rest
 }: BorderBeamProps) {
+  const setOffscreen = useAnimOffscreenRef<HTMLDivElement>();
   return (
-    <div className={cn("relative", className)} {...rest}>
+    <div
+      className={cn("relative", className)}
+      ref={(node) => {
+        setOffscreen(node);
+        assignRef(ref, node);
+      }}
+      {...rest}
+    >
       <AnimatePresence initial={false}>
         {active ? (
           <m.span
