@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
 import { Badge, cn, motionFast } from "@eva/ui";
@@ -59,6 +60,7 @@ export function TaskDetailInline({
   allTags = [],
   routing,
 }: TaskDetailInlineProps) {
+  const navigate = useNavigate();
   const [embeddedSandboxTab, setEmbeddedSandboxTab] =
     useState<SandboxTab>("preview");
   /** Which detail pane is on screen below `md`; both show at `md` and up. */
@@ -138,6 +140,8 @@ export function TaskDetailInline({
     void prewarmChatDaemon({ taskId });
   }, [taskId, isSandboxActive, sandboxId, prewarmChatDaemon]);
 
+  const [expandRightSignal, setExpandRightSignal] = useState(0);
+
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   // Must stay above early returns so hooks order is stable.
   const openFile = (path: string) => {
@@ -148,6 +152,23 @@ export function TaskDetailInline({
     }
     void setFileViewerPath(path);
     setEmbeddedSandboxTab("files");
+  };
+
+  const openDiffs = (repoRelativePath?: string) => {
+    if (simpleView) return;
+    if (routing?.mode === "quick-sandbox") {
+      routing.quick.onViewDiff(repoRelativePath);
+      setExpandRightSignal((n) => n + 1);
+      return;
+    }
+    if (repoRelativePath) {
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, diffFile: repoRelativePath }),
+      });
+    }
+    setEmbeddedSandboxTab("review");
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Must stay above early returns — same hooks-order constraint as openFile.
@@ -167,7 +188,6 @@ export function TaskDetailInline({
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const [expandRightSignal, setExpandRightSignal] = useState(0);
   const agentBrowsingAt = task?.agentBrowsingAt;
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
@@ -196,7 +216,9 @@ export function TaskDetailInline({
 
   // A quick task's settled first run renders as the opening chat turn in the
   // sandbox view instead of a timeline accordion (see firstRunChatTurn.ts).
-  const firstRunInChat = isQuickTask ? findFirstRunChatTurnRun(runs) : undefined;
+  const firstRunInChat = isQuickTask
+    ? findFirstRunChatTurnRun(runs)
+    : undefined;
   const timelineRuns = firstRunInChat
     ? runs?.filter((run) => run._id !== firstRunInChat._id)
     : runs;
@@ -275,6 +297,7 @@ export function TaskDetailInline({
               isSandboxActive={isSandboxActive}
               isSandboxToggling={isSandboxStarting || isSandboxStopping}
               onOpenFile={openFile}
+              onViewDiff={openDiffs}
               onOpenAgentsTab={() => {
                 handleSandboxTabChange("agents");
                 setExpandRightSignal((n) => n + 1);

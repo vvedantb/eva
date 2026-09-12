@@ -68,6 +68,26 @@ export function toRepoRelativePath(path: string): string {
   return path;
 }
 
+/**
+ * Changed-files rows open the Review diffs tab when that handler exists
+ * (the card is "what this turn changed"). Activity chips still use
+ * `onOpenFile` → Files. Prefer diffs so a row click and View diff land
+ * on the same surface.
+ */
+export function openChangedFile(
+  path: string,
+  handlers: {
+    onViewDiff?: (repoRelativePath?: string) => void;
+    onOpenFile?: (path: string) => void;
+  },
+): void {
+  if (handlers.onViewDiff) {
+    handlers.onViewDiff(toRepoRelativePath(path));
+    return;
+  }
+  handlers.onOpenFile?.(path);
+}
+
 /** Collects edit/write/notebook paths from a turn's activity, including subagent steps. */
 export function collectChangedFiles(steps: ActivityStep[]): ChangedFile[] {
   const seen = new Set<string>();
@@ -154,6 +174,7 @@ export function ChangedFilesCard({
           <FileList
             files={previewFiles}
             onOpenFile={onOpenFile}
+            onViewDiff={onViewDiff}
             className="px-1.5 pb-1.5"
             footer={
               previewFiles.length < files.length ? (
@@ -174,6 +195,7 @@ export function ChangedFilesCard({
           <FileList
             files={files}
             onOpenFile={onOpenFile}
+            onViewDiff={onViewDiff}
             className="px-1.5 pb-1.5"
           />
         </CollapsibleContent>
@@ -185,22 +207,27 @@ export function ChangedFilesCard({
 function FileList({
   files,
   onOpenFile,
+  onViewDiff,
   className,
   footer,
 }: {
   files: ChangedFile[];
   onOpenFile?: (path: string) => void;
+  onViewDiff?: (repoRelativePath?: string) => void;
   className: string;
   footer?: ReactNode;
 }) {
+  const clickable = Boolean(onViewDiff || onOpenFile);
   return (
     <ul className={cn("grid gap-0.5", className)}>
       {files.map((file, index) => (
         <ListEnter key={file.path} as="li" index={index} fast slide={false}>
-          {onOpenFile ? (
+          {clickable ? (
             <button
               type="button"
-              onClick={() => onOpenFile(file.path)}
+              onClick={() =>
+                openChangedFile(file.path, { onViewDiff, onOpenFile })
+              }
               className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
             >
               <FileRow file={file} />

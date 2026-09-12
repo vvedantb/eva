@@ -1,9 +1,4 @@
-import {
-  api,
-  normalizeAIModel,
-  type Doc,
-  type Id,
-} from "@eva/backend";
+import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
@@ -296,15 +291,23 @@ export function ChatPanel({
     usageAccountLabel,
     onSandboxToggle,
     onOpenSummaryModal: () =>
-      requestConfirm(altHeld, () => setShowSummaryModal(true), () => {
-        void startSummary();
-      }),
+      requestConfirm(
+        altHeld,
+        () => setShowSummaryModal(true),
+        () => {
+          void startSummary();
+        },
+      ),
     onOpenReviewModal: () =>
-      requestConfirm(altHeld, () => setShowReviewModal(true), () => {
-        void sendForReview().then((ok) => {
-          if (ok) toast.success("Sent to the team for review.");
-        });
-      }),
+      requestConfirm(
+        altHeld,
+        () => setShowReviewModal(true),
+        () => {
+          void sendForReview().then((ok) => {
+            if (ok) toast.success("Sent to the team for review.");
+          });
+        },
+      ),
     // Only Manager Ave can be reset: it is the one chat the user cannot simply
     // replace by opening a new session.
     onOpenResetChatDialog: chatOnly
@@ -343,7 +346,8 @@ export function ChatPanel({
   const lastAssistantMessageId = [...messages]
     .toReversed()
     .find(
-      (message) => message.role === "assistant" && message.isSystemAlert !== true,
+      (message) =>
+        message.role === "assistant" && message.isSystemAlert !== true,
     )?._id;
   const planContentMarkdown =
     typeof planContent === "string" && planContent.trim().length > 0
@@ -496,7 +500,7 @@ export function ChatPanel({
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}
-        onViewDiff={prUrl ? onViewDiff : undefined}
+        onViewDiff={onViewDiff}
         hasPendingContext={hasPendingReviewComments}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={backgroundAgents}

@@ -26,6 +26,7 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -172,22 +173,39 @@ export function ProjectDetailClient({
   const isSandboxSurface = surface === "sandbox";
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
+  const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
     if (simpleView) return;
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/files`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/files`,
+      ),
       search: (prev) => ({ ...prev, file: path }),
     });
+  };
+
+  const openDiffs = (repoRelativePath?: string) => {
+    if (simpleView) return;
+    if (!projectPathSegment) return;
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/review/diffs/unified`,
+      ),
+      search: (prev) => ({
+        ...prev,
+        ...(repoRelativePath ? { diffFile: repoRelativePath } : {}),
+      }),
+    });
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const [expandRightSignal, setExpandRightSignal] = useState(0);
   const agentBrowsingAt =
     project === null || project === undefined
       ? undefined
@@ -381,6 +399,7 @@ export function ProjectDetailClient({
               isSandboxActive={isSandboxActive}
               isSandboxToggling={isSandboxStarting || isSandboxStopping}
               onOpenFile={openFile}
+              onViewDiff={openDiffs}
               onOpenAgentsTab={openAgentsTab}
               onSandboxToggle={
                 canStartSandbox || isSandboxActive

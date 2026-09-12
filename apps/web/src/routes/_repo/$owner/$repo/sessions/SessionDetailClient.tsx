@@ -136,23 +136,25 @@ export function SessionDetailClient({
     }
   };
 
-  // Must stay above loading/null early returns — Phase 3 review comments
-  // introduced this hook after them and tripped React #310 on session resolve.
-  const openDiffsTab = () => {
-    if (simpleView || chatOnly) return;
-    if (onViewDiff) {
-      onViewDiff();
-      return;
-    }
-    onSandboxTabChange("review");
-  };
-
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Don't fight the user if they switch away mid-lock.
   // Skipped for chatOnly: there is no sandbox panel to switch, and the tab
   // change is a navigation — it would bounce Eva off its own `/eva` URL.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const [expandRightSignal, setExpandRightSignal] = useState(0);
+
+  // Must stay above loading/null early returns — Phase 3 review comments
+  // introduced this hook after them and tripped React #310 on session resolve.
+  const handleViewDiff = (repoRelativePath?: string) => {
+    if (simpleView || chatOnly) return;
+    if (onViewDiff) {
+      onViewDiff(repoRelativePath);
+    } else {
+      onSandboxTabChange("review");
+    }
+    setExpandRightSignal((n) => n + 1);
+  };
+
   const agentBrowsingAt =
     session === null || session === undefined
       ? undefined
@@ -221,7 +223,7 @@ export function SessionDetailClient({
       chatOnly={chatOnly}
       hideTitle={hideTitle}
       onOpenFile={chatOnly ? undefined : onOpenFile}
-      onViewDiff={chatOnly ? undefined : onViewDiff}
+      onViewDiff={chatOnly ? undefined : handleViewDiff}
       onOpenPrdTab={
         chatOnly
           ? undefined
@@ -244,14 +246,14 @@ export function SessionDetailClient({
 
   if (chatOnly) {
     return (
-      <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
+      <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
         <div className="flex min-h-0 flex-1">{chatPanel()}</div>
       </PendingReviewCommentsProvider>
     );
   }
 
   return (
-    <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
+    <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
       <SandboxWorkspace
         ownerKind="session"
         ownerId={sessionId}
