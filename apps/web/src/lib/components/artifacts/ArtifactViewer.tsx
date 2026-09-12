@@ -8,6 +8,11 @@ import { Spinner } from "@eva/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
 import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
+import {
+  artifactSourceLabel,
+  artifactSourceRoute,
+  type ArtifactSource,
+} from "./_source";
 
 type ArtifactHtmlResult =
   | { ok: true; html: string }
@@ -84,6 +89,9 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         <h1 className="min-w-0 truncate text-balance font-medium text-foreground">
           {artifact.name}
         </h1>
+        {artifact.source ? (
+          <SourceLink source={artifact.source} />
+        ) : null}
         <button
           type="button"
           onClick={() =>
@@ -121,6 +129,27 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+function SourceLink({ source }: { source: ArtifactSource }) {
+  const route = artifactSourceRoute(source);
+  const label = artifactSourceLabel(source);
+  if (!route) {
+    return (
+      <span className="hidden min-w-0 truncate text-sm text-muted-foreground sm:inline">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Link
+      to={route.to}
+      params={route.params}
+      className="hidden min-w-0 truncate text-sm text-muted-foreground hover:text-foreground sm:inline"
+    >
+      {label}
+    </Link>
   );
 }
 

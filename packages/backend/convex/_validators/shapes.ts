@@ -129,6 +129,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("composerAutocomplete"),
   v.literal("simpleView"),
   v.literal("replyChime"),
+  v.literal("disablePageMotion"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -139,6 +140,7 @@ export const experimentalFlagsFields = {
   composerAutocomplete: v.optional(v.boolean()),
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
+  disablePageMotion: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -151,6 +153,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   composerAutocomplete: v.boolean(),
   simpleView: v.boolean(),
   replyChime: v.boolean(),
+  disablePageMotion: v.boolean(),
 });
 
 /**

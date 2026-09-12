@@ -21,7 +21,9 @@ import {
   DialogBody,
   Spinner,
   toast,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
@@ -583,39 +585,75 @@ export function ProjectDetailClient({
       }
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        {isSandboxSurface ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {projectSandboxContent}
-          </div>
-        ) : mainTab === "overview" ? (
-          <ProjectOverviewTab
-            projectId={projectId}
-            title={project.title}
-            description={project.description}
-          />
-        ) : isDraftOrFinalized ? (
-          <ProjectTabs
-            projectId={projectId}
-            projectPhase={project.phase}
-            activeWorkflowId={project.activeWorkflowId}
-            rawInput={project.rawInput}
-            generatedSpec={project.generatedSpec}
-            conversationHistory={project.conversationHistory}
-            streamingActivity={streaming?.currentActivity}
-            sandboxStartupActivity={sandboxStartupActivity}
-            basePath={basePath}
-            repoId={repo._id}
-          />
-        ) : (
-          <ProjectActiveLayout
-            projectId={projectId}
-            project={project}
-            basePath={basePath}
-            selectedTaskId={selectedTaskId}
-            selectedTaskStatus={selectedTaskStatus}
-            detailTab={detailTab}
-          />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isSandboxSurface ? (
+            <m.div
+              key="sandbox"
+              className="min-h-0 flex-1 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {projectSandboxContent}
+            </m.div>
+          ) : mainTab === "overview" ? (
+            <m.div
+              key="overview"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectOverviewTab
+                projectId={projectId}
+                title={project.title}
+                description={project.description}
+              />
+            </m.div>
+          ) : isDraftOrFinalized ? (
+            <m.div
+              key="plan"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectTabs
+                projectId={projectId}
+                projectPhase={project.phase}
+                activeWorkflowId={project.activeWorkflowId}
+                rawInput={project.rawInput}
+                generatedSpec={project.generatedSpec}
+                conversationHistory={project.conversationHistory}
+                streamingActivity={streaming?.currentActivity}
+                sandboxStartupActivity={sandboxStartupActivity}
+                basePath={basePath}
+                repoId={repo._id}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="tasks"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectActiveLayout
+                projectId={projectId}
+                project={project}
+                basePath={basePath}
+                selectedTaskId={selectedTaskId}
+                selectedTaskStatus={selectedTaskStatus}
+                detailTab={detailTab}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Dialog

@@ -114,14 +114,11 @@ export function SessionChromeTab({
         <ContextMenuTrigger asChild>
           <HoverCardTrigger asChild>
             <div
-              style={{ flexBasis: `${TAB_PREFERRED_WIDTH_REM}rem` }}
               className={cn(
-                // Tabs shrink from the shared preferred width down to min-w-8,
-                // which is the sandbox status and nothing else. container-type
-                // makes the tab a query container for the detail ladder below,
-                // and drops its intrinsic width, so a long title cannot resist
-                // shrinking.
-                "group relative flex h-9 min-w-8 items-center rounded-t-[0.625rem] transition-colors @container",
+                // Width is owned by the motion wrapper in SessionChromeTabGroup
+                // (`flexBasis` + `layout`) so add/close can animate the chip
+                // without resizing the whole strip. min-w-8 is the squeezed floor.
+                "group relative flex h-9 w-full min-w-8 items-center rounded-t-[0.625rem] transition-colors @container",
                 isSelected
                   ? // Chrome stroke: left/top/right in the group accent — bottom
                     // stays open so the tab merges into the page; the sides meet

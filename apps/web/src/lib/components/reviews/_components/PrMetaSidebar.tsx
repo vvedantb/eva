@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Spinner } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner } from "@eva/ui";
 import { IconClock, IconRefresh } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { Id } from "@eva/backend";
@@ -155,11 +155,15 @@ export function PrMetaSidebar({
             title="Refresh checks"
             className="-my-1 size-6 p-0 text-muted-foreground"
           >
-            {refreshing ? (
-              <Spinner size="sm" />
-            ) : (
-              <IconRefresh size={13} aria-hidden />
-            )}
+            <CrossfadeIcon
+              show={refreshing}
+              trueKey="loading"
+              falseKey="idle"
+              variant="soft"
+              className="relative flex size-3.5 items-center justify-center"
+              whenTrue={<Spinner size="sm" />}
+              whenFalse={<IconRefresh size={13} aria-hidden />}
+            />
           </Button>
         }
       >

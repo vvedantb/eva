@@ -22,6 +22,7 @@ import {
   type SubagentTone,
   type SubagentView,
 } from "./agentActivity";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 const DOT_CLASS: Record<SubagentTone, string> = {
   active: "bg-primary animate-pulse ring-2 ring-primary/30",
@@ -187,13 +188,14 @@ export function AgentsPanel({
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-2 p-3 sm:p-4">
-        {agents.map((agent) => (
-          <AgentRow
-            key={agent.toolUseId}
-            agent={agent}
-            isReadOnly={isReadOnly}
-            onRequestStop={onRequestStop}
-          />
+        {agents.map((agent, index) => (
+          <ListEnter key={agent.toolUseId} index={index} fast>
+            <AgentRow
+              agent={agent}
+              isReadOnly={isReadOnly}
+              onRequestStop={onRequestStop}
+            />
+          </ListEnter>
         ))}
       </div>
     </div>

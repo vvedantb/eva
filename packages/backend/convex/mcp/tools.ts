@@ -761,7 +761,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
   server.tool(
     "create_eva_doc",
-    "Create a design document (PRD) stored on the Eva platform, attached to one of your repos. This is Eva's own document store — NOT a connected repo's database (use get_document for that).",
+    "Create a design document (PRD) stored on the Eva platform, attached to one of your repos. This is Eva's own document store — NOT a connected repo's database (use get_document for that). When called from a session, quick task, or project sandbox, the document is linked to that chat: it appears in the chat's Documents tab and in the repo Documents list.",
     {
       repoName: z
         .string()
@@ -788,6 +788,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         repoId: repo.id,
         title,
         content,
+        ...(entityKind !== undefined && entityId !== undefined
+          ? { sourceKind: entityKind, sourceId: entityId }
+          : {}),
       });
 
       return textResult({
@@ -936,6 +939,8 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
 Provide a self-contained HTML document (inline CSS/JS, or CDN links). Eva stores it and hosts it in a sandboxed iframe at the returned viewUrl. The link is viewable by members of the bound team while signed in to Eva.
 
+When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
+
 Do NOT use this for session walkthrough recordings, screen captures, or screenshots. For those, save the file under repo-root recordings/ or screenshots/ with agent-browser and leave it on disk — Eva attaches it to the chat message with the built-in video/image player.`,
     {
       name: z.string().describe("Artifact name/title"),
@@ -970,6 +975,9 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
           description,
           boundTeamId: resolved.teamId,
           declaredTools: declaredTools ?? [],
+          ...(entityKind !== undefined && entityId !== undefined
+            ? { sourceKind: entityKind, sourceId: entityId }
+            : {}),
         },
       );
 

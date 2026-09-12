@@ -34,6 +34,7 @@ import {
   TASK_STATUSES,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { IconGripVertical, IconPlus } from "@tabler/icons-react";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 
 type Task = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type TaskStatus = Task["status"];
@@ -45,6 +46,8 @@ function SortableTaskWrapper({
   hasError,
   basePath,
   projectNumId,
+  index,
+  firstPaint,
 }: {
   task: Task;
   selectedTaskId: Id<"agentTasks"> | null;
@@ -52,6 +55,8 @@ function SortableTaskWrapper({
   hasError: boolean;
   basePath: string;
   projectNumId?: number;
+  index: number;
+  firstPaint: boolean;
 }) {
   const {
     attributes,
@@ -83,6 +88,7 @@ function SortableTaskWrapper({
         <IconGripVertical size={14} aria-hidden />
       </button>
       <div className="flex-1 min-w-0">
+        <ListEnter index={index} firstPaint={firstPaint}>
         <QuickTaskCard
           id={task._id}
           title={task.title}
@@ -112,6 +118,7 @@ function SortableTaskWrapper({
           projectId={task.projectId}
           repoId={task.repoId}
         />
+        </ListEnter>
       </div>
     </div>
   );
@@ -133,6 +140,7 @@ export function ProjectTaskListPanel({
   projectNumId,
 }: ProjectTaskListPanelProps) {
   const { repoId, basePath } = useRepo();
+  const firstPaint = useFirstPaintGate();
   const [localTodoOrder, setLocalTodoOrder] = useState<
     Id<"agentTasks">[] | null
   >(null);
@@ -275,7 +283,7 @@ export function ProjectTaskListPanel({
                       items={statusTasks.map((t) => t._id)}
                       strategy={verticalListSortingStrategy}
                     >
-                      {statusTasks.map((task) => (
+                      {statusTasks.map((task, index) => (
                         <SortableTaskWrapper
                           key={task._id}
                           task={task}
@@ -284,6 +292,8 @@ export function ProjectTaskListPanel({
                           hasError={errorTaskIdSet.has(task._id)}
                           basePath={basePath}
                           projectNumId={projectNumId}
+                          index={index}
+                          firstPaint={firstPaint.current}
                         />
                       ))}
                     </SortableContext>
@@ -334,7 +344,11 @@ export function ProjectTaskListPanel({
                     itemContent={(index) => {
                       const task = statusTasks[index];
                       return (
-                        <div className="pb-2">
+                        <ListEnter
+                          index={index}
+                          firstPaint={firstPaint.current}
+                          className="pb-2"
+                        >
                           <QuickTaskCard
                             id={task._id}
                             title={task.title}
@@ -364,7 +378,7 @@ export function ProjectTaskListPanel({
                             projectId={task.projectId}
                             repoId={task.repoId}
                           />
-                        </div>
+                        </ListEnter>
                       );
                     }}
                   />

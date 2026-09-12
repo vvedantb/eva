@@ -20,6 +20,9 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "../utils/cn";
 import { Spinner } from "../ui/spinner";
+import { CrossfadeIconSlot } from "../ui/crossfade-icon";
+import { motionFast, motionStagger } from "../utils/motion";
+import { m } from "motion/react";
 import { Shimmer } from "./shimmer";
 import {
   type ActivityStep,
@@ -139,18 +142,20 @@ export interface ActivityTasksProps extends ComponentProps<"div"> {
 
 /** Status glyph for one todo row. */
 function TodoStatusIcon({ status }: { status: TodoItem["status"] }) {
-  if (status === "completed") {
-    return (
-      <IconCircleCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <IconLoader className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
-    );
-  }
   return (
-    <IconCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+    <CrossfadeIconSlot
+      iconKey={status}
+      variant="soft"
+      className="relative mt-0.5 flex size-3.5 shrink-0 items-center justify-center"
+    >
+      {status === "completed" ? (
+        <IconCircleCheck className="size-3.5 text-primary" />
+      ) : status === "in_progress" ? (
+        <IconLoader className="size-3.5 animate-spin text-primary" />
+      ) : (
+        <IconCircle className="size-3.5 text-muted-foreground" />
+      )}
+    </CrossfadeIconSlot>
   );
 }
 
@@ -317,7 +322,13 @@ function ActivityStepRow({
         step.isError ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      <Icon className="size-4 shrink-0" />
+      <CrossfadeIconSlot
+        iconKey={`${step.type}-${step.status}`}
+        variant="soft"
+        className="relative flex size-4 shrink-0 items-center justify-center"
+      >
+        <Icon className="size-4" />
+      </CrossfadeIconSlot>
       {label}
       {fileChip}
     </div>
@@ -401,7 +412,13 @@ function ActivityActionGroup({
           commands on purpose, so one non-zero exit should not paint the run red.
           The failed row itself is still red once the fold is open. */}
       <CollapsibleTrigger className="flex w-full items-center gap-2 text-left text-muted-foreground text-sm transition-colors hover:text-foreground">
-        <Icon className="size-4 shrink-0" />
+        <CrossfadeIconSlot
+          iconKey={isActive ? "group-active" : "group-idle"}
+          variant="soft"
+          className="relative flex size-4 shrink-0 items-center justify-center"
+        >
+          <Icon className="size-4" />
+        </CrossfadeIconSlot>
         <span className="min-w-0 truncate" title={summary}>
           {isActive ? (
             <Shimmer as="span" duration={2.5} spread={1.5}>
@@ -494,12 +511,18 @@ function ActivityRowList({
   return (
     <>
       {isStreaming && toggle}
-      {visible.map(({ segment, key }) => (
-        <ActivitySegmentBlock
+      {visible.map(({ segment, key }, index) => (
+        <m.div
           key={key}
-          segment={segment}
-          onOpenFile={onOpenFile}
-        />
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            ...motionFast,
+            delay: motionStagger(index, 0.02, 0.08),
+          }}
+        >
+          <ActivitySegmentBlock segment={segment} onOpenFile={onOpenFile} />
+        </m.div>
       ))}
       {!isStreaming && toggle}
     </>
