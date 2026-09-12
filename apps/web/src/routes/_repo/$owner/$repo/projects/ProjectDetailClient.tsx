@@ -216,7 +216,9 @@ export function ProjectDetailClient({
     if (agentBrowsingAt === undefined || prev !== undefined) return;
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/browser`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/browser`,
+      ),
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
@@ -229,7 +231,9 @@ export function ProjectDetailClient({
   const openAgentsTab = () => {
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/agents`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/agents`,
+      ),
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
