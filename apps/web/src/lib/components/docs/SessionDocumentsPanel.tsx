@@ -5,7 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Skeleton } from "@eva/ui";
-import { IconArrowUpRight, IconFile } from "@tabler/icons-react";
+import { IconArrowUpRight } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { DocumentList } from "./DocumentList";
@@ -32,32 +32,36 @@ export function useSourceDocuments(source: DocSourceArg) {
 export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
   const { docs } = useSourceDocuments(source);
   const { basePath } = useRepo();
+  const count = docs?.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-3 px-3 py-2 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <IconFile size={16} className="shrink-0 text-muted-foreground" />
-          <p className="truncate text-sm font-medium">Documents</p>
-        </div>
+      <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
+        <p className="truncate text-xs font-medium text-muted-foreground">
+          {count === undefined
+            ? "Documents"
+            : count === 1
+              ? "1 document"
+              : `${count} documents`}
+        </p>
         <Link
           to={toInternalRepoHref(`${basePath}/docs`)}
           search={(prev) => prev}
           className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          All documents
+          View all
           <IconArrowUpRight size={14} />
         </Link>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
         {docs === undefined ? (
           <div
-            className="flex flex-col gap-2"
+            className="flex flex-col gap-1"
             aria-busy="true"
             aria-label="Loading documents"
           >
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 rounded-surface" />
+              <Skeleton key={i} className="h-14 rounded-surface" />
             ))}
           </div>
         ) : (

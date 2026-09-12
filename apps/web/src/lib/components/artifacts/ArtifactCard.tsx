@@ -20,6 +20,8 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   Button,
+  ListRow,
+  LIST_ROW_CONTROL_CLASS,
 } from "@eva/ui";
 import { IconDots, IconLayoutDashboard } from "@tabler/icons-react";
 import { relativeTime } from "./_format";
@@ -35,9 +37,12 @@ type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 export function ArtifactCard({
   artifact,
   showSource = true,
+  compact = false,
 }: {
   artifact: ArtifactRow;
   showSource?: boolean;
+  /** Sandbox pane: a list row. The global Artifacts page keeps the tile. */
+  compact?: boolean;
 }) {
   const navigate = useNavigate();
   const remove = useMutation(api.artifacts.remove);
@@ -87,14 +92,89 @@ export function ArtifactCard({
       }),
   };
 
+  const kebab = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Artifact actions"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            compact
+              ? cn("max-sm:shrink-0", CARD_KEBAB_CLASS, LIST_ROW_CONTROL_CLASS)
+              : cn("absolute bottom-3 right-2 z-2", CARD_KEBAB_CLASS),
+          )}
+        >
+          <IconDots className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <ArtifactCardMenuItems variant="dropdown" {...menuProps} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const meta = (
+    <>
+      {compact && artifact.description ? (
+        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+          {artifact.description}
+        </p>
+      ) : null}
+      {!compact && artifact.description ? (
+        <p className="line-clamp-2 text-sm text-muted-foreground">
+          {artifact.description}
+        </p>
+      ) : null}
+      {source ? (
+        <p
+          className={cn(
+            "truncate text-muted-foreground",
+            compact ? "mt-0.5 text-[11px]" : "text-xs",
+          )}
+        >
+          {artifactSourceLabel(source)}
+        </p>
+      ) : null}
+    </>
+  );
+
   return (
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          {/* The tile is a single stretched <Link>, so the touch kebab cannot
-              live inside it (a button may not nest in an anchor). This wrapper
-              gives the kebab a positioning parent; `h-full` on both keeps the
-              tile stretching to the grid row as it did before. */}
+          {compact ? (
+            <ListRow
+              className="bg-transparent hover:bg-muted"
+              aria-label={artifact.name}
+              link={
+                <Link
+                  to="/artifacts/$artifactId"
+                  params={{ artifactId: artifact._id }}
+                />
+              }
+              contentClassName="flex items-start gap-3 py-2.5"
+            >
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                <IconLayoutDashboard
+                  size={16}
+                  className="text-muted-foreground"
+                />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                    {artifact.name}
+                  </span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                    {relativeTime(artifact.createdAt)}
+                  </span>
+                  {kebab}
+                </span>
+                {meta}
+              </span>
+            </ListRow>
+          ) : (
           <div className="relative h-full">
             <Link
               to="/artifacts/$artifactId"
@@ -110,44 +190,14 @@ export function ArtifactCard({
                   {artifact.name}
                 </span>
               </div>
-              {artifact.description ? (
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {artifact.description}
-                </p>
-              ) : null}
-              {source ? (
-                <p className="truncate text-xs text-muted-foreground">
-                  {artifactSourceLabel(source)}
-                </p>
-              ) : null}
+              {meta}
               <span className="mt-auto text-xs text-muted-foreground max-sm:pr-8">
                 {relativeTime(artifact.createdAt)}
               </span>
             </Link>
-            {/* Touch has no right-click, so below `sm` the same items get a
-                visible kebab, parked on the timestamp line. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Artifact actions"
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "absolute bottom-3 right-2 z-2",
-                    CARD_KEBAB_CLASS,
-                  )}
-                >
-                  <IconDots className="size-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ArtifactCardMenuItems variant="dropdown" {...menuProps} />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {kebab}
           </div>
+          )}
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ArtifactCardMenuItems variant="context" {...menuProps} />
