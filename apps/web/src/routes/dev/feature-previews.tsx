@@ -6,13 +6,17 @@ import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar
 import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
+import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
 import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
 import { ContextUsageDisplay } from "@/lib/components/context-usage";
 import { DiffsToolbar } from "@/lib/components/sandbox/DiffsToolbar";
 import { PreviewSnapshotButton } from "@/lib/components/sandbox/PreviewSnapshotButton";
+import { PreviewWebMcpButton } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import { DEMO_PREVIEW_SNAPSHOT } from "@/lib/components/sandbox/previewSnapshot";
+import { DEMO_WEBMCP_DISCOVERY } from "@/lib/components/sandbox/previewWebMcp";
 import { PendingCitationsProvider } from "@/lib/contexts/PendingCitationsContext";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
 
 const FEATURES = [
   "cite",
@@ -20,6 +24,7 @@ const FEATURES = [
   "diffs-files",
   "ignore-whitespace",
   "context-meter",
+  "webmcp",
 ] as const;
 
 type FeaturePreview = (typeof FEATURES)[number];
@@ -46,6 +51,7 @@ function FeaturePreviewsPage() {
   if (feature === "diffs-files") return <DiffsFilesPreview />;
   if (feature === "ignore-whitespace") return <IgnoreWhitespacePreview />;
   if (feature === "context-meter") return <ContextMeterPreview />;
+  if (feature === "webmcp") return <WebMcpPreview />;
   return <CitePreview />;
 }
 
@@ -230,6 +236,42 @@ function ContextMeterPreview() {
         />
       </div>
     </div>
+  );
+}
+
+function WebMcpPreview() {
+  return (
+    <PendingWebMcpProvider initialDiscoveries={[DEMO_WEBMCP_DISCOVERY]}>
+      <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          WebMCP page tools
+        </p>
+        <h1 className="mt-1 text-xl font-semibold">
+          Call the page, don&apos;t click it
+        </h1>
+        <div className="mt-8 max-w-2xl overflow-hidden rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="font-mono text-xs text-muted-foreground">
+              localhost:5173/billing
+            </span>
+            <PreviewWebMcpButton
+              iframeElement={null}
+              seedDiscovery={DEMO_WEBMCP_DISCOVERY}
+            />
+          </div>
+          <div className="p-6">
+            <h2 className="text-lg font-semibold">Billing</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Refund and retry are page tools, not buttons Eva has to hunt.
+            </p>
+          </div>
+        </div>
+        <div className="mt-8 max-w-2xl rounded-lg border border-border bg-card p-3">
+          <p className="mb-2 text-xs text-muted-foreground">Attached to send</p>
+          <PendingWebMcpChips />
+        </div>
+      </div>
+    </PendingWebMcpProvider>
   );
 }
 

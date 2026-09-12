@@ -13,13 +13,16 @@ import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
+import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
 import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
+import { appendWebMcpToPrompt } from "@/lib/components/sandbox/previewWebMcp";
 import {
   PendingCitationsProvider,
   usePendingCitations,
 } from "@/lib/contexts/PendingCitationsContext";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
@@ -209,6 +212,7 @@ function ChatBodyInner({
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
+  const webmcp = usePendingWebMcp();
   const sendWithPendingContext = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
@@ -221,14 +225,20 @@ function ChatBodyInner({
       withCitations,
       (snapshots?.items ?? []).map((item) => item.snapshot),
     );
-    await onSend(withSnapshots, attachmentStorageIds);
+    const withWebMcp = appendWebMcpToPrompt(
+      withSnapshots,
+      (webmcp?.items ?? []).map((item) => item.discovery),
+    );
+    await onSend(withWebMcp, attachmentStorageIds);
     citations?.clear();
     snapshots?.clear();
+    webmcp?.clear();
   };
   const hasComposerContext =
     (hasPendingContext ?? false) ||
     (citations?.items.length ?? 0) > 0 ||
-    (snapshots?.items.length ?? 0) > 0;
+    (snapshots?.items.length ?? 0) > 0 ||
+    (webmcp?.items.length ?? 0) > 0;
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
@@ -444,6 +454,7 @@ function ChatBodyInner({
             <>
               <PendingCitationChips />
               <PendingSnapshotChips />
+              <PendingWebMcpChips />
               {preInputContent}
             </>
           }
