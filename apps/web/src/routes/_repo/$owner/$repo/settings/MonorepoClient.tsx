@@ -7,7 +7,7 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { Button, Input, Spinner, Badge } from "@eva/ui";
+import { Badge, Button, CrossfadeIcon, Input, Spinner } from "@eva/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -273,7 +273,15 @@ export function MonorepoClient() {
                       onClick={() => void handleAdd(app.path)}
                       className="motion-press"
                     >
-                      {isAdding ? <Spinner size="sm" /> : <IconPlus size={14} />}
+                      <CrossfadeIcon
+                        show={isAdding}
+                        trueKey="loading"
+                        falseKey="idle"
+                        variant="soft"
+                        className="relative flex size-3.5 items-center justify-center"
+                        whenTrue={<Spinner size="sm" />}
+                        whenFalse={<IconPlus size={14} />}
+                      />
                       Add
                     </Button>
                   )}

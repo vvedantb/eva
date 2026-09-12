@@ -32,6 +32,7 @@ import {
   TabsList,
   TabsTrigger,
   motionFast,
+  CrossfadeIcon,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -203,11 +204,15 @@ export function DocRecapViewer({
                   handleCopy();
                 }}
               >
-                {copied ? (
-                  <IconCheck size={16} className="text-success" />
-                ) : (
-                  <IconCopy size={16} />
-                )}
+                <CrossfadeIcon
+                  show={copied}
+                  trueKey="copied"
+                  falseKey="copy"
+                  variant="soft"
+                  className="relative flex size-4 items-center justify-center"
+                  whenTrue={<IconCheck size={16} className="text-success" />}
+                  whenFalse={<IconCopy size={16} />}
+                />
                 Copy recap
               </DropdownMenuItem>
               <DropdownMenuItem onClick={toggleHistory}>
@@ -273,23 +278,32 @@ export function DocRecapViewer({
           ) : null}
         </div>
       ) : null}
-      {isRecapPending && !isRecapStalled && (
-        <div className="px-4 pb-3">
-          <Surface density="tight" className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Spinner size="sm" />
-              <span className="flex-1">Generating recap...</span>
-            </div>
-            {streamingSteps ? (
-              <ActivityTasks steps={streamingSteps} isStreaming />
-            ) : (
-              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                {streaming?.currentActivity ?? "Generating recap..."}
-              </p>
-            )}
-          </Surface>
-        </div>
-      )}
+      <AnimatePresence>
+        {isRecapPending && !isRecapStalled ? (
+          <m.div
+            key="recap-activity"
+            className="px-4 pb-3"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <Surface density="tight" className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Spinner size="sm" />
+                <span className="flex-1">Generating recap...</span>
+              </div>
+              {streamingSteps ? (
+                <ActivityTasks steps={streamingSteps} isStreaming />
+              ) : (
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  {streaming?.currentActivity ?? "Generating recap..."}
+                </p>
+              )}
+            </Surface>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <Tabs
         value={viewTab}

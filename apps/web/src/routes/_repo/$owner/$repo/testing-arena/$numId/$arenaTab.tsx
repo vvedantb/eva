@@ -90,6 +90,21 @@ function ReportCard({
 
   if (report.status !== "completed") return null;
 
+  const toolbarKey =
+    report.fixStatus === "fixing"
+      ? "fixing"
+      : report.fixStatus === "fix_error"
+        ? "retry"
+        : issues.length > 0 && report.fixStatus === undefined
+          ? "fix"
+          : report.prUrl
+            ? "pr"
+            : null;
+  const fixSteps =
+    report.fixStatus === "fixing"
+      ? parseActivitySteps(streamingActivity)
+      : null;
+
   return (
     <div className="space-y-3">
       <div className="flex max-sm:flex-wrap items-center justify-between gap-2">
@@ -99,46 +114,61 @@ function ReportCard({
             : `${issues.length} issue${issues.length === 1 ? "" : "s"} found`}
         </span>
         <div className="flex max-sm:flex-wrap items-center gap-2">
-          {issues.length > 0 && report.fixStatus === undefined && (
-            <Button size="sm" onClick={handleFix} disabled={isStartingFix}>
-              <IconTool size={14} />
-              {isStartingFix ? "Starting..." : "Fix issues"}
-            </Button>
-          )}
-          {report.fixStatus === "fixing" && (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Spinner size="sm" />
-              Fixing issues...
-            </span>
-          )}
-          {report.fixStatus === "fix_error" && (
-            <>
-              <span className="flex items-center gap-1.5 text-xs text-destructive">
-                <IconAlertTriangle size={14} />
-                Fix failed
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleFix}
-                disabled={isStartingFix}
+          <AnimatePresence mode="wait" initial={false}>
+            {toolbarKey ? (
+              <m.div
+                key={toolbarKey}
+                className="flex max-sm:flex-wrap items-center gap-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
               >
-                <IconTool size={14} />
-                {isStartingFix ? "Starting..." : "Retry fix"}
-              </Button>
-            </>
-          )}
-          {report.prUrl && (
-            <a
-              href={report.prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="max-sm:hit-target inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
-            >
-              <IconGitPullRequest size={14} aria-hidden />
-              View Fix PR
-            </a>
-          )}
+                {toolbarKey === "fix" ? (
+                  <Button
+                    size="sm"
+                    onClick={handleFix}
+                    disabled={isStartingFix}
+                  >
+                    <IconTool size={14} />
+                    {isStartingFix ? "Starting..." : "Fix issues"}
+                  </Button>
+                ) : toolbarKey === "fixing" ? (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Spinner size="sm" />
+                    Fixing issues...
+                  </span>
+                ) : toolbarKey === "retry" ? (
+                  <>
+                    <span className="flex items-center gap-1.5 text-xs text-destructive">
+                      <IconAlertTriangle size={14} />
+                      Fix failed
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleFix}
+                      disabled={isStartingFix}
+                    >
+                      <IconTool size={14} />
+                      {isStartingFix ? "Starting..." : "Retry fix"}
+                    </Button>
+                  </>
+                ) : null}
+                {report.prUrl ? (
+                  <a
+                    href={report.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="max-sm:hit-target inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+                  >
+                    <IconGitPullRequest size={14} aria-hidden />
+                    View Fix PR
+                  </a>
+                ) : null}
+              </m.div>
+            ) : null}
+          </AnimatePresence>
           <RelativeDateTime
             at={report.createdAt}
             className="text-sm text-muted-foreground"
@@ -146,29 +176,37 @@ function ReportCard({
         </div>
       </div>
 
-      {report.fixStatus === "fixing" &&
-        (() => {
-          const fixSteps = parseActivitySteps(streamingActivity);
-          return fixSteps ? (
-            <div className="rounded-surface border border-primary/20 bg-primary/5 px-4 py-3">
-              <div className="flex items-center gap-1.5 mb-2">
+      <AnimatePresence initial={false}>
+        {report.fixStatus === "fixing" ? (
+          <m.div
+            key="fix-progress"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            {fixSteps ? (
+              <div className="rounded-surface border border-primary/20 bg-primary/5 px-4 py-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <IconTool size={14} className="text-primary shrink-0" />
+                  <span className="text-xs font-medium text-primary">
+                    Fixing issues...
+                  </span>
+                </div>
+                <ActivityTasks steps={fixSteps} isStreaming />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-surface border border-primary/20 bg-primary/5 px-3 py-2">
                 <IconTool size={14} className="text-primary shrink-0" />
-                <span className="text-xs font-medium text-primary">
-                  Fixing issues...
+                <span className="text-sm text-primary">
+                  {streamingActivity ||
+                    "Eva is fixing the flagged issues and will create a PR automatically..."}
                 </span>
               </div>
-              <ActivityTasks steps={fixSteps} isStreaming />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-surface border border-primary/20 bg-primary/5 px-3 py-2">
-              <IconTool size={14} className="text-primary shrink-0" />
-              <span className="text-sm text-primary">
-                {streamingActivity ||
-                  "Eva is fixing the flagged issues and will create a PR automatically..."}
-              </span>
-            </div>
-          );
-        })()}
+            )}
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       {report.summary && (
         <p className="text-sm text-muted-foreground leading-relaxed">

@@ -231,44 +231,71 @@ function RunAccordion({
             {duration}
           </span>
         )}
-        {isActive && (
-          <Button
-            size="sm"
-            variant="destructive"
-            className="shrink-0 h-7 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              void withMutationToast(
-                cancelRun({ runId: run._id }),
-                "Run stopped",
-                "Couldn't stop run",
-                "automation-run-stop",
-              );
-            }}
-          >
-            <IconPlayerStop size={12} />
-            Stop
-          </Button>
-        )}
-        {!run.acknowledged &&
-          run.status !== "queued" &&
-          run.status !== "running" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="shrink-0 h-7 text-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAcknowledge();
-              }}
+        <AnimatePresence initial={false} mode="popLayout">
+          {isActive ? (
+            <m.span
+              key="stop"
+              className="inline-flex shrink-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
             >
-              <IconCheck size={12} />
+              <Button
+                size="sm"
+                variant="destructive"
+                className="shrink-0 h-7 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void withMutationToast(
+                    cancelRun({ runId: run._id }),
+                    "Run stopped",
+                    "Couldn't stop run",
+                    "automation-run-stop",
+                  );
+                }}
+              >
+                <IconPlayerStop size={12} />
+                Stop
+              </Button>
+            </m.span>
+          ) : !run.acknowledged &&
+            run.status !== "queued" &&
+            run.status !== "running" ? (
+            <m.span
+              key="read"
+              className="inline-flex shrink-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 h-7 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAcknowledge();
+                }}
+              >
+                <IconCheck size={12} />
+                Read
+              </Button>
+            </m.span>
+          ) : run.acknowledged ? (
+            <m.span
+              key="acknowledged"
+              className="shrink-0 text-xs text-success"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
               Read
-            </Button>
-          )}
-        {run.acknowledged && (
-          <span className="shrink-0 text-xs text-success">Read</span>
-        )}
+            </m.span>
+          ) : null}
+        </AnimatePresence>
       </button>
       <AnimatePresence initial={false}>
         {expanded && (

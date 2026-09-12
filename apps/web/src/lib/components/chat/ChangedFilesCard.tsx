@@ -8,6 +8,7 @@ import {
   CollapsibleTrigger,
   Surface,
 } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   selectChangedFilePreview,
   shouldAutoExpandChangedFiles,
@@ -194,8 +195,8 @@ function FileList({
 }) {
   return (
     <ul className={cn("grid gap-0.5", className)}>
-      {files.map((file) => (
-        <li key={file.path}>
+      {files.map((file, index) => (
+        <ListEnter key={file.path} as="li" index={index} fast slide={false}>
           {onOpenFile ? (
             <button
               type="button"
@@ -209,7 +210,7 @@ function FileList({
               <FileRow file={file} />
             </div>
           )}
-        </li>
+        </ListEnter>
       ))}
       {footer}
     </ul>

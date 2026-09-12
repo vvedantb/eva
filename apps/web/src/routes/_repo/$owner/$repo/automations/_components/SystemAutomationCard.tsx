@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Button, Surface, cn } from "@eva/ui";
+import { Button, Surface, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconArrowRight,
   IconBook,
@@ -114,37 +115,53 @@ export function SystemAutomationCard({
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/30 px-4 py-2.5">
-        {installed ? (
-          <>
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-success">
-              <IconCheck size={13} />
-              Installed
-            </span>
-            <div className="flex items-center gap-1">
-              {numId !== null && (
-                <Link
-                  to={href}
-                  className="max-sm:hit-target flex items-center gap-1 rounded-menu-item px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  Open
-                  <IconArrowRight size={12} />
-                </Link>
-              )}
-              <Button size="sm" variant="ghost" onClick={onUninstall}>
-                Uninstall
+        <AnimatePresence mode="wait" initial={false}>
+          {installed ? (
+            <m.div
+              key="installed"
+              className="flex w-full items-center justify-between gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-success">
+                <IconCheck size={13} />
+                Installed
+              </span>
+              <div className="flex items-center gap-1">
+                {numId !== null && (
+                  <Link
+                    to={href}
+                    className="max-sm:hit-target flex items-center gap-1 rounded-menu-item px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    Open
+                    <IconArrowRight size={12} />
+                  </Link>
+                )}
+                <Button size="sm" variant="ghost" onClick={onUninstall}>
+                  Uninstall
+                </Button>
+              </div>
+            </m.div>
+          ) : (
+            <m.div
+              key="available"
+              className="flex w-full items-center justify-between gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <span className="text-[11px] text-muted-foreground">
+                Not installed
+              </span>
+              <Button size="sm" onClick={onInstall}>
+                Install
               </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <span className="text-[11px] text-muted-foreground">
-              Not installed
-            </span>
-            <Button size="sm" onClick={onInstall}>
-              Install
-            </Button>
-          </>
-        )}
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
     </Surface>
   );

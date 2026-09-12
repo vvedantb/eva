@@ -12,6 +12,7 @@ import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconLoader2, IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
+import { CountPop } from "@/lib/components/ui/CountPop";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
 
@@ -80,7 +81,10 @@ export function BackgroundAgentsChip({
                 <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
                 <span>{label}</span>
                 <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                  {runningAgents.length}
+                  <CountPop
+                    label={String(runningAgents.length)}
+                    className="tabular-nums"
+                  />
                 </Badge>
               </button>
             </PopoverTrigger>

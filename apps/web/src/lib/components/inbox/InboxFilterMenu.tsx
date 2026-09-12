@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@eva/ui";
 import { IconChevronDown, IconFilter } from "@tabler/icons-react";
+import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import {
   inboxFilters,
   isInboxFilter,
@@ -66,9 +67,10 @@ export function InboxFilterMenu({
         >
           <IconFilter size={16} />
           {FILTER_LABELS[filter]}
-          {filter === "unread" && unreadCount > 0 ? (
-            <UnreadCountBadge count={unreadCount} />
-          ) : null}
+          <CountPop
+            label={filter === "unread" ? countLabel(unreadCount) : null}
+            className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/12 px-1 text-xs font-semibold tracking-[0.01em] text-primary"
+          />
           <IconChevronDown size={16} />
         </Button>
       </DropdownMenuTrigger>

@@ -8,6 +8,7 @@ import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { Button, Checkbox, Spinner, toast } from "@eva/ui";
 import { IconGitBranch, IconRefresh } from "@tabler/icons-react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type RepoEntry = {
@@ -201,17 +202,18 @@ function SyncSettingsRoute() {
             title="Repositories"
             description="Disabled repos are skipped during sync. New repos default to enabled."
           />
-          {owners.map((owner) => (
-            <OwnerGroup
-              key={owner}
-              owner={owner}
-              repos={groupedRepos[owner]}
-              allEnabled={isOwnerAllEnabled(owner)}
-              someEnabled={isOwnerSomeEnabled(owner)}
-              isRepoEnabled={isRepoEnabled}
-              onToggleOwner={() => handleToggleOwner(owner)}
-              onToggleRepo={handleToggleRepo}
-            />
+          {owners.map((owner, index) => (
+            <ListEnter key={owner} index={index} fast staggerMax={8}>
+              <OwnerGroup
+                owner={owner}
+                repos={groupedRepos[owner]}
+                allEnabled={isOwnerAllEnabled(owner)}
+                someEnabled={isOwnerSomeEnabled(owner)}
+                isRepoEnabled={isRepoEnabled}
+                onToggleOwner={() => handleToggleOwner(owner)}
+                onToggleRepo={handleToggleRepo}
+              />
+            </ListEnter>
           ))}
         </>
       )}
@@ -263,23 +265,29 @@ function OwnerGroup({
       // Rows carry their own padding so the hover fill spans the full width.
       bodyVariant="compact"
     >
-      {sorted.map((repo) => {
+      {sorted.map((repo, index) => {
         const enabled = isRepoEnabled(repo.owner, repo.name);
         return (
-          <label
-            key={repo.name}
-            // `py-2.5` below `sm` lifts the row to a 40px tap target; desktop
-            // keeps the tighter list rhythm.
-            className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-muted/60 sm:py-1.5"
+          <ListEnter
+            key={`${repo.owner}/${repo.name}`}
+            index={index}
+            fast
+            staggerMax={8}
           >
-            <Checkbox
-              checked={enabled}
-              onCheckedChange={(checked) =>
-                onToggleRepo(repo.owner, repo.name, checked === true)
-              }
-            />
-            <span className="max-sm:min-w-0 max-sm:truncate">{repo.name}</span>
-          </label>
+            <label
+              // `py-2.5` below `sm` lifts the row to a 40px tap target; desktop
+              // keeps the tighter list rhythm.
+              className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-muted/60 sm:py-1.5"
+            >
+              <Checkbox
+                checked={enabled}
+                onCheckedChange={(checked) =>
+                  onToggleRepo(repo.owner, repo.name, checked === true)
+                }
+              />
+              <span className="max-sm:min-w-0 max-sm:truncate">{repo.name}</span>
+            </label>
+          </ListEnter>
         );
       })}
     </SettingsSection>

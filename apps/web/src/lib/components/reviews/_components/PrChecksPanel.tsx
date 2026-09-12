@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Spinner, Surface, motionFast } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner, Surface, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IconRefresh } from "@tabler/icons-react";
@@ -63,11 +63,15 @@ export function PrChecksPanel({
             title="Refresh checks"
             className="size-7 shrink-0 p-0 text-muted-foreground"
           >
-            {refreshing ? (
-              <Spinner size="sm" />
-            ) : (
-              <IconRefresh size={14} aria-hidden />
-            )}
+            <CrossfadeIcon
+              show={refreshing}
+              trueKey="loading"
+              falseKey="idle"
+              variant="soft"
+              className="relative flex size-3.5 items-center justify-center"
+              whenTrue={<Spinner size="sm" />}
+              whenFalse={<IconRefresh size={14} aria-hidden />}
+            />
           </Button>
         </div>
 

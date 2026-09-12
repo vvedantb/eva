@@ -314,37 +314,50 @@ export function DocPrdViewer({
         onOpenChange={setTestGenConfirmOpen}
         onConfirm={handleGenerateTests}
       />
-      {streaming && (
-        <div className="px-4 pb-3">
-          <Surface density="tight" className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Spinner size="sm" />
-              <span className="flex-1">
-                {isGeneratingTests
-                  ? "Generating tests..."
-                  : "Processing PRD..."}
-              </span>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={handleStopTestGen}
-                disabled={isStopping}
-              >
-                {isStopping ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <IconPlayerStop size={14} />
-                )}
-                Stop
-              </Button>
-            </div>
-            {streamingSteps ? (
-              <ActivityTasks steps={streamingSteps} isStreaming />
-            ) : null}
-          </Surface>
-        </div>
-      )}
+      <AnimatePresence>
+        {streaming ? (
+          <m.div
+            key="prd-activity"
+            className="px-4 pb-3"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <Surface density="tight" className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Spinner size="sm" />
+                <span className="flex-1">
+                  {isGeneratingTests
+                    ? "Generating tests..."
+                    : "Processing PRD..."}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={handleStopTestGen}
+                  disabled={isStopping}
+                >
+                  <CrossfadeIcon
+                    show={isStopping}
+                    trueKey="loading"
+                    falseKey="idle"
+                    variant="soft"
+                    className="relative flex size-3.5 items-center justify-center"
+                    whenTrue={<Spinner size="sm" />}
+                    whenFalse={<IconPlayerStop size={14} />}
+                  />
+                  Stop
+                </Button>
+              </div>
+              {streamingSteps ? (
+                <ActivityTasks steps={streamingSteps} isStreaming />
+              ) : null}
+            </Surface>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <Tabs
         value={activeTab}

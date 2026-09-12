@@ -14,7 +14,9 @@ import {
   CrossfadeIcon,
   Spinner,
   cn,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconChevronDown,
@@ -104,19 +106,28 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
 
   return (
     <div className="space-y-2">
-      {selectableFindings.length > 0 && (
-        <div className="flex items-center gap-2 pb-1">
-          <Checkbox
-            className="max-sm:hit-target"
-            aria-label={`Select all ${selectableFindings.length} findings`}
-            checked={allSelected}
-            onCheckedChange={toggleAll}
-          />
-          <span className="text-xs text-muted-foreground">
-            Select all ({selectableFindings.length})
-          </span>
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {selectableFindings.length > 0 ? (
+          <m.div
+            key="findings-select-all"
+            className="flex items-center gap-2 pb-1"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <Checkbox
+              className="max-sm:hit-target"
+              aria-label={`Select all ${selectableFindings.length} findings`}
+              checked={allSelected}
+              onCheckedChange={toggleAll}
+            />
+            <span className="text-xs text-muted-foreground">
+              Select all ({selectableFindings.length})
+            </span>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       {findings.map((finding, index) => (
         <ListEnter key={finding.id} index={index}>
@@ -130,27 +141,36 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
         </ListEnter>
       ))}
 
-      {selectableFindings.length > 0 && (
-        <div className="flex max-sm:flex-wrap items-center gap-2 pt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={selected.size === 0 || isCreating}
-            onClick={() => handleCreate(false)}
+      <AnimatePresence initial={false}>
+        {selected.size > 0 ? (
+          <m.div
+            key="findings-bulk-bar"
+            className="flex max-sm:flex-wrap items-center gap-2 pt-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
           >
-            {isCreating && <Spinner size="sm" />}
-            Create Tasks ({selected.size})
-          </Button>
-          <Button
-            size="sm"
-            disabled={selected.size === 0 || isCreating}
-            onClick={() => handleCreate(true)}
-          >
-            {isCreating && <Spinner size="sm" />}
-            Create & Run ({selected.size})
-          </Button>
-        </div>
-      )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isCreating}
+              onClick={() => handleCreate(false)}
+            >
+              {isCreating && <Spinner size="sm" />}
+              Create Tasks ({selected.size})
+            </Button>
+            <Button
+              size="sm"
+              disabled={isCreating}
+              onClick={() => handleCreate(true)}
+            >
+              {isCreating && <Spinner size="sm" />}
+              Create & Run ({selected.size})
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

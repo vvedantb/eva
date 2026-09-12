@@ -8,11 +8,12 @@ import {
   PromptInputTools,
   toast,
   cn,
+  motionFast,
   motionSpring,
   type PromptInputMessage,
   usePromptInputController,
 } from "@eva/ui";
-import { LayoutGroup, m } from "motion/react";
+import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
 import {
   MAX_CHAT_ATTACHMENTS,
@@ -122,19 +123,30 @@ export function ComposerInputChrome({
       className="flex min-w-0 items-center gap-0.5"
     >
       <ComposerSpeechButton disabled={isInputDisabled} />
-      {isExecuting ? (
-        <Button
-          size="icon-sm"
-          type="button"
-          variant="destructive"
-          className="rounded-full"
-          onClick={onCancel}
-          aria-label="Stop Eva"
-          title="Stop Eva"
-        >
-          <IconPlayerStop className="size-4" />
-        </Button>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {isExecuting ? (
+          <m.div
+            key="composer-stop"
+            className="inline-flex"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={motionFast}
+          >
+            <Button
+              size="icon-sm"
+              type="button"
+              variant="destructive"
+              className="rounded-full"
+              onClick={onCancel}
+              aria-label="Stop Eva"
+              title="Stop Eva"
+            >
+              <IconPlayerStop className="size-4" />
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
       <ChatBodySubmit
         disabled={isInputDisabled}
         isExecuting={isExecuting}
@@ -152,62 +164,62 @@ export function ComposerInputChrome({
           colorVariant="colorful"
           className={compact ? "rounded-full" : "rounded-surface"}
         >
-        <PromptInput
-          data-mention-popup-anchor=""
-          onSubmit={onPromptSubmit}
-          accept={CHAT_ATTACHMENT_ACCEPT}
-          multiple
-          maxFiles={MAX_CHAT_ATTACHMENTS}
-          maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
-          onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
-          inputGroupClassName={cn(
-            // Height interpolates to/from `auto` so the conversation viewport
-            // grows with the composer instead of jumping when the pill snaps.
-            "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
-            compact
-              ? "h-12 items-center rounded-full py-1"
-              : "h-auto rounded-surface",
-          )}
-        >
-          <ChatAttachmentPreview />
-          {compact ? (
-            <InputGroupAddon
-              align="inline-start"
-              className="order-first gap-1 py-0 pl-1.5 pr-0 has-[>button]:ml-0"
-            >
-              {leftTools}
-            </InputGroupAddon>
-          ) : null}
-          <MentionTextarea
-            key="composer-editor"
-            ref={mentionRef}
-            repoBasePath={repoBasePath}
-            repoId={repoId}
-            skillItems={skillItems}
-            skillsSettingsHref={skillsSettingsHref}
-            placeholder={placeholder}
-            initialMentionMap={seedMentionMap}
-            initialSkillMap={seedSkillMap}
-            history={messageHistory}
-            enableAttachmentPaste
-            completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
-            className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
-          />
-          {compact ? (
-            <InputGroupAddon
-              align="inline-end"
-              className="order-last gap-1 py-0 pr-1.5 pl-1 has-[>button]:mr-0"
-            >
-              {rightTools}
-            </InputGroupAddon>
-          ) : (
-            <PromptInputFooter className="max-sm:gap-y-2 px-3 pb-3 pt-0">
-              <PromptInputTools>{leftTools}</PromptInputTools>
-              {rightTools}
-            </PromptInputFooter>
-          )}
-        </PromptInput>
-      </BorderBeam>
+          <PromptInput
+            data-mention-popup-anchor=""
+            onSubmit={onPromptSubmit}
+            accept={CHAT_ATTACHMENT_ACCEPT}
+            multiple
+            maxFiles={MAX_CHAT_ATTACHMENTS}
+            maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
+            onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
+            inputGroupClassName={cn(
+              // Height interpolates to/from `auto` so the conversation viewport
+              // grows with the composer instead of jumping when the pill snaps.
+              "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
+              compact
+                ? "h-12 items-center rounded-full py-1"
+                : "h-auto rounded-surface",
+            )}
+          >
+            <ChatAttachmentPreview />
+            {compact ? (
+              <InputGroupAddon
+                align="inline-start"
+                className="order-first gap-1 py-0 pl-1.5 pr-0 has-[>button]:ml-0"
+              >
+                {leftTools}
+              </InputGroupAddon>
+            ) : null}
+            <MentionTextarea
+              key="composer-editor"
+              ref={mentionRef}
+              repoBasePath={repoBasePath}
+              repoId={repoId}
+              skillItems={skillItems}
+              skillsSettingsHref={skillsSettingsHref}
+              placeholder={placeholder}
+              initialMentionMap={seedMentionMap}
+              initialSkillMap={seedSkillMap}
+              history={messageHistory}
+              enableAttachmentPaste
+              completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
+              className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
+            />
+            {compact ? (
+              <InputGroupAddon
+                align="inline-end"
+                className="order-last gap-1 py-0 pr-1.5 pl-1 has-[>button]:mr-0"
+              >
+                {rightTools}
+              </InputGroupAddon>
+            ) : (
+              <PromptInputFooter className="max-sm:gap-y-2 px-3 pb-3 pt-0">
+                <PromptInputTools>{leftTools}</PromptInputTools>
+                {rightTools}
+              </PromptInputFooter>
+            )}
+          </PromptInput>
+        </BorderBeam>
       </div>
     </LayoutGroup>
   );

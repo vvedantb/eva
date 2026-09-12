@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, cn, Spinner } from "@eva/ui";
+import { Button, cn, CrossfadeIconSlot, Spinner } from "@eva/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
@@ -48,13 +48,17 @@ export function SandboxStartStopButton({
         )}
         aria-label={label}
       >
-        {isToggling ? (
-          <Spinner size="sm" />
-        ) : isActive ? (
-          <IconPlayerStop className="w-4 h-4" />
-        ) : (
-          <IconPlayerPlay className="w-4 h-4" />
-        )}
+        <CrossfadeIconSlot
+          iconKey={isToggling ? "loading" : isActive ? "stop" : "play"}
+        >
+          {isToggling ? (
+            <Spinner size="sm" />
+          ) : isActive ? (
+            <IconPlayerStop className="w-4 h-4" />
+          ) : (
+            <IconPlayerPlay className="w-4 h-4" />
+          )}
+        </CrossfadeIconSlot>
       </Button>
     </SleepControlTooltip>
   );

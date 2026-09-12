@@ -385,11 +385,29 @@ export function StatusFieldsSection({
               <div
                 className={`flex items-center gap-1.5 ${!task?.assignedTo ? "text-muted-foreground" : ""}`}
               >
-                {assignedUser ? (
-                  <UserInitials user={assignedUser} size="sm" hideLastSeen />
-                ) : (
-                  <IconUserPlus size={14} className="text-muted-foreground" />
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                  <m.span
+                    key={assignedUser?._id ?? "unassigned"}
+                    className="inline-flex items-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={motionFast}
+                  >
+                    {assignedUser ? (
+                      <UserInitials
+                        user={assignedUser}
+                        size="sm"
+                        hideLastSeen
+                      />
+                    ) : (
+                      <IconUserPlus
+                        size={14}
+                        className="text-muted-foreground"
+                      />
+                    )}
+                  </m.span>
+                </AnimatePresence>
                 <span data-pii={Boolean(task?.assignedTo) || undefined}>
                   {task?.assignedTo ? assignedDisplayName : "Code Reviewer"}
                 </span>
@@ -456,52 +474,70 @@ export function StatusFieldsSection({
           ) : null}
         </div>
 
-        {!task?.projectId && (
-          <div className={FIELD_ROW_CLASS}>
-            {status === "todo" ? (
-              <BranchSelect
-                value={baseBranch}
-                onValueChange={(val) => {
-                  setBaseBranch(val);
-                  updateTask({ id: taskId, baseBranch: val });
-                }}
-                className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
-              />
-            ) : (
-              <div className="flex items-center gap-1.5 text-[13px]">
-                <IconGitBranch size={14} className="text-muted-foreground" />
-                <span>{baseBranch}</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <IconInfoCircle
-                      size={12}
-                      className="text-muted-foreground cursor-help"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Cannot be modified after task has run
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {!task?.projectId ? (
+            <m.div
+              key="base-branch"
+              className={FIELD_ROW_CLASS}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {status === "todo" ? (
+                <BranchSelect
+                  value={baseBranch}
+                  onValueChange={(val) => {
+                    setBaseBranch(val);
+                    updateTask({ id: taskId, baseBranch: val });
+                  }}
+                  className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 text-[13px]">
+                  <IconGitBranch size={14} className="text-muted-foreground" />
+                  <span>{baseBranch}</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <IconInfoCircle
+                        size={12}
+                        className="text-muted-foreground cursor-help"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Cannot be modified after task has run
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </m.div>
+          ) : null}
+        </AnimatePresence>
 
-        {latestDeployment?.deploymentStatus && (
-          <div className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}>
-            <IconBrandVercelFilled
-              size={14}
-              className={
-                DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
-                  ?.iconColor ?? "text-muted-foreground"
-              }
-            />
-            <span>
-              {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
-                ?.label ?? "Unknown"}
-            </span>
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {latestDeployment?.deploymentStatus ? (
+            <m.div
+              key="vercel-deployment"
+              className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <IconBrandVercelFilled
+                size={14}
+                className={
+                  DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+                    ?.iconColor ?? "text-muted-foreground"
+                }
+              />
+              <span>
+                {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+                  ?.label ?? "Unknown"}
+              </span>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
       </FieldsSection>
 
       <FieldsSection title="Labels">

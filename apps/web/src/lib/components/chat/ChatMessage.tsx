@@ -11,7 +11,7 @@ import {
   TooltipTrigger,
 } from "@eva/ui";
 import { memo } from "react";
-import { m } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -342,20 +342,38 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                       )}
                       {agentSpawnRow}
-                      {message.errorType === "rate_limit" ? (
-                        // A limit failure is not a reply: as markdown it read
-                        // as Eva answering "Error: …" in body copy.
-                        <TurnErrorNotice
-                          title="Claude usage limit reached"
-                          detail={stripErrorPrefix(message.content)}
-                        />
-                      ) : (
-                        /* wrap-anywhere: without it a long unbreakable token is
+                      <AnimatePresence mode="wait" initial={false}>
+                        {message.errorType === "rate_limit" ? (
+                          // A limit failure is not a reply: as markdown it read
+                          // as Eva answering "Error: …" in body copy.
+                          <m.div
+                            key="turn-error"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                          >
+                            <TurnErrorNotice
+                              title="Claude usage limit reached"
+                              detail={stripErrorPrefix(message.content)}
+                            />
+                          </m.div>
+                        ) : (
+                          /* wrap-anywhere: without it a long unbreakable token is
                           silently clipped by MessageContent's overflow-hidden. */
-                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                          {message.content}
-                        </MessageResponse>
-                      )}
+                          <m.div
+                            key="turn-content"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                          >
+                            <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+                              {message.content}
+                            </MessageResponse>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
                       {showChangedFiles && changedFiles.length > 0 ? (
                         <ChangedFilesCard
                           files={changedFiles}
@@ -471,15 +489,18 @@ function HandoffModelChip({
 }) {
   const option = findAIModelOption(model);
   return (
-    <span
+    <m.span
       className={cn(
         "inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground",
         className,
       )}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionFast}
     >
       <ProviderIcon provider={option.provider} size={10} />
       {formatModelDisplayLabel(option.provider, option.label)}
-    </span>
+    </m.span>
   );
 }
 

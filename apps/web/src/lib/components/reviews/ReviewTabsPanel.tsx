@@ -15,6 +15,7 @@ import {
 } from "@eva/ui";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { IconGitPullRequest } from "@tabler/icons-react";
+import { CountPop } from "@/lib/components/ui/CountPop";
 import { isReviewTab, type ReviewTab } from "@/lib/search-params";
 import { DiffsPanel } from "@/lib/components/sandbox/DiffsPanel";
 import {
@@ -171,16 +172,15 @@ export function ReviewTabsPanel({
                   />
                   {meta.label}
                   {count === null ? null : (
-                    <span
+                    <CountPop
+                      label={count.text}
                       className={cn(
                         "text-xs font-normal tabular-nums",
                         count.muted
                           ? "text-muted-foreground"
                           : "text-destructive",
                       )}
-                    >
-                      {count.text}
-                    </span>
+                    />
                   )}
                 </TabsTrigger>
               );

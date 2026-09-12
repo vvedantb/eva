@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DialogBody } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   DiffCountBar,
   FileStatusChip,
@@ -52,9 +53,12 @@ export function DiffEntriesDialogBody({
           drafted here would land on the wrong lines of the pull request diff. */}
       <NoPendingReviewComments>
         <div className="space-y-3">
-          {entries.map((entry) => (
-            <div
+          {entries.map((entry, index) => (
+            <ListEnter
               key={entry.path}
+              index={index}
+              fast
+              slide={false}
               className="overflow-hidden rounded-md border border-border"
             >
               <div className="flex min-w-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
@@ -86,7 +90,7 @@ export function DiffEntriesDialogBody({
                   hideFileHeader
                 />
               )}
-            </div>
+            </ListEnter>
           ))}
         </div>
       </NoPendingReviewComments>
