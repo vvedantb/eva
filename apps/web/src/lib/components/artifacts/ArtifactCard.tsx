@@ -25,17 +25,26 @@ import { IconDots, IconLayoutDashboard } from "@tabler/icons-react";
 import { relativeTime } from "./_format";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ArtifactCardMenuItems } from "./ArtifactCardMenuItems";
+import { artifactSourceLabel, artifactSourceRoute } from "./_source";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 
 /** A single artifact tile: left-click opens the viewer; right-click for actions. */
-export function ArtifactCard({ artifact }: { artifact: ArtifactRow }) {
+export function ArtifactCard({
+  artifact,
+  showSource = true,
+}: {
+  artifact: ArtifactRow;
+  showSource?: boolean;
+}) {
   const navigate = useNavigate();
   const remove = useMutation(api.artifacts.remove);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const altHeld = useAltHeld();
+  const source = showSource ? artifact.source : null;
+  const sourceRoute = source ? artifactSourceRoute(source) : null;
 
   const openInNewTab = () =>
     window.open(`/artifacts/${artifact._id}`, "_blank", "noopener");
@@ -57,6 +66,21 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactRow }) {
         params: { artifactId: artifact._id },
       }),
     onOpenInNewTab: openInNewTab,
+    ...(source && sourceRoute
+      ? {
+          onOpenSource: () =>
+            void navigate({
+              to: sourceRoute.to,
+              params: sourceRoute.params,
+            }),
+          sourceLabel:
+            source.kind === "session"
+              ? "session"
+              : source.kind === "task"
+                ? "task"
+                : "project",
+        }
+      : {}),
     onDelete: () =>
       requestConfirm(altHeld, () => setConfirmDeleteOpen(true), () => {
         void onDelete();
@@ -89,6 +113,11 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactRow }) {
               {artifact.description ? (
                 <p className="line-clamp-2 text-sm text-muted-foreground">
                   {artifact.description}
+                </p>
+              ) : null}
+              {source ? (
+                <p className="truncate text-xs text-muted-foreground">
+                  {artifactSourceLabel(source)}
                 </p>
               ) : null}
               <span className="mt-auto text-xs text-muted-foreground max-sm:pr-8">

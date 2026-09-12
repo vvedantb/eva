@@ -22,6 +22,7 @@ function getCyclableSandboxTabs(
   showComputerTab?: boolean,
   showEditorTab?: boolean,
   showAgentsTab?: boolean,
+  showArtifactsTab?: boolean,
 ): string[] {
   const tabs = enabledTabs
     ? SANDBOX_TAB_BAR_ORDER.filter((tab) => enabledTabs.includes(tab))
@@ -34,8 +35,11 @@ function getCyclableSandboxTabs(
   const withAgents = showAgentsTab ? [...withFiles, "agents"] : withFiles;
   const withPrd = showPrdTab ? [...withAgents, "prd"] : withAgents;
   const withDesigns = showDesignsTab ? [...withPrd, "designs"] : withPrd;
-  if (!customTabSlugs || customTabSlugs.length === 0) return withDesigns;
-  return [...withDesigns, ...customTabSlugs];
+  const withArtifacts = showArtifactsTab
+    ? [...withDesigns, "artifacts"]
+    : withDesigns;
+  if (!customTabSlugs || customTabSlugs.length === 0) return withArtifacts;
+  return [...withArtifacts, ...customTabSlugs];
 }
 
 /** Cycles the visible right-panel tabs with `cycleSandboxTab`. */
@@ -50,6 +54,7 @@ export function useCycleSandboxTabHotkey({
   showComputerTab,
   showEditorTab,
   showAgentsTab,
+  showArtifactsTab,
   enabled = true,
 }: {
   activeTab: string;
@@ -62,6 +67,7 @@ export function useCycleSandboxTabHotkey({
   showComputerTab?: boolean;
   showEditorTab?: boolean;
   showAgentsTab?: boolean;
+  showArtifactsTab?: boolean;
   enabled?: boolean;
 }) {
   const cyclableTabs = getCyclableSandboxTabs(
@@ -73,6 +79,7 @@ export function useCycleSandboxTabHotkey({
     showComputerTab,
     showEditorTab,
     showAgentsTab,
+    showArtifactsTab,
   );
 
   useShortcut(

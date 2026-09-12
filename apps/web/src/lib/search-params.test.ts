@@ -13,6 +13,7 @@ describe("isTaskRouteSandboxTab", () => {
     expect(isTaskRouteSandboxTab("pr")).toBe(false);
     expect(isTaskRouteSandboxTab("browser")).toBe(true);
     expect(isTaskRouteSandboxTab("files")).toBe(true);
+    expect(isTaskRouteSandboxTab("artifacts")).toBe(true);
     expect(isTaskRouteSandboxTab("terminal")).toBe(false);
   });
 
@@ -30,6 +31,7 @@ describe("isTaskRouteSandboxTab", () => {
 describe("isSessionSandboxTab", () => {
   it("keeps terminals out of the right-panel route vocabulary", () => {
     expect(isSessionSandboxTab("preview")).toBe(true);
+    expect(isSessionSandboxTab("artifacts")).toBe(true);
     expect(isSessionSandboxTab("terminal")).toBe(false);
   });
 });

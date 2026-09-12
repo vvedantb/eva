@@ -1137,6 +1137,14 @@ export const artifactFields = {
   htmlStorageId: v.id("_storage"),
   uploadedBy: v.id("users"),
   createdAt: v.number(),
+  // Chat that created this artifact (`create_artifact` from a sandbox token).
+  // Manual uploads leave these unset. Indexes skip rows with no source.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port

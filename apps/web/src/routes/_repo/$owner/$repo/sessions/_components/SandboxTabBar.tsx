@@ -70,6 +70,10 @@ interface SandboxTabBarProps {
   showDesignsTab?: boolean;
   /** When true, shows a content indicator on the Designs tab. */
   hasDesignsContent?: boolean;
+  /** Shows the Artifacts tab (session / task / project sandbox chats). */
+  showArtifactsTab?: boolean;
+  /** When true, shows a content indicator on the Artifacts tab. */
+  hasArtifactsContent?: boolean;
   /** Shows the File Viewer tab (sessions only). */
   showFilesTab?: boolean;
   /** Shows the Agents tab (content-keyed: the entity has spawned sub-agents). */
@@ -113,6 +117,8 @@ export function SandboxTabBar({
   hasPrdContent = false,
   showDesignsTab = false,
   hasDesignsContent = false,
+  showArtifactsTab = true,
+  hasArtifactsContent = false,
   showFilesTab = false,
   showAgentsTab = false,
   hasRunningAgents = false,
@@ -160,6 +166,8 @@ export function SandboxTabBar({
     hasPrdContent,
     showDesignsTab,
     hasDesignsContent,
+    showArtifactsTab,
+    hasArtifactsContent,
     customTabs: visibleCustomTabs,
   });
   const iconOnly = !isMobile;
@@ -185,6 +193,7 @@ export function SandboxTabBar({
     enabledTabs,
     showPrdTab,
     showDesignsTab,
+    showArtifactsTab,
     showFilesTab: showFiles,
     showAgentsTab: showAgents,
     customTabSlugs,
@@ -207,6 +216,7 @@ export function SandboxTabBar({
     showAgentsTab: showAgents,
     showPrdTab,
     showDesignsTab,
+    showArtifactsTab,
     showEditorItem,
     showDesktopItem,
     customTabs: visibleCustomTabs,

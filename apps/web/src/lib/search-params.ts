@@ -133,6 +133,7 @@ const sandboxTabs = [
   "agents",
   "prd",
   "designs",
+  "artifacts",
 ] as const;
 export type SandboxTab = (typeof sandboxTabs)[number];
 
@@ -176,6 +177,7 @@ const taskRouteSandboxTabs = [
   "review",
   "files",
   "agents",
+  "artifacts",
 ] as const;
 export type TaskRouteSandboxTab = (typeof taskRouteSandboxTabs)[number];
 

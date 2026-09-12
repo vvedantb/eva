@@ -14,6 +14,9 @@ export const RESERVED_APP_TAB_SLUGS = new Set([
   "review",
   "files",
   "prd",
+  "designs",
+  "agents",
+  "artifacts",
 ]);
 
 /**

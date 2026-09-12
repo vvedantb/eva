@@ -1044,11 +1044,24 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
   handler: async (
     _ctx,
-    { clerkUserId, name, html, description, boundTeamId, declaredTools },
+    {
+      clerkUserId,
+      name,
+      html,
+      description,
+      boundTeamId,
+      declaredTools,
+      sourceKind,
+      sourceId,
+    },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
 
@@ -1084,6 +1097,14 @@ export const createArtifact = internalAction({
       htmlStorageId: storageId,
     };
     if (description) createArgs.description = description;
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const artifactId = await runMutationAsUser(
       convexUrl,
       clerkUserId,

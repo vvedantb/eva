@@ -12,9 +12,14 @@ type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 export function ArtifactList({
   artifacts,
   emptyDescription,
+  showSource = true,
+  compact = false,
 }: {
   artifacts: ArtifactRow[];
   emptyDescription: string;
+  showSource?: boolean;
+  /** Single column — the sandbox Artifacts pane is too narrow for the grid. */
+  compact?: boolean;
 }) {
   if (artifacts.length === 0) {
     return (
@@ -30,9 +35,19 @@ export function ArtifactList({
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div
+      className={
+        compact
+          ? "grid grid-cols-1 gap-3"
+          : "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      }
+    >
       {artifacts.map((artifact) => (
-        <ArtifactCard key={artifact._id} artifact={artifact} />
+        <ArtifactCard
+          key={artifact._id}
+          artifact={artifact}
+          showSource={showSource}
+        />
       ))}
     </div>
   );

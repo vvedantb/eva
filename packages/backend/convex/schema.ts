@@ -64,7 +64,10 @@ const schema = defineSchema({
 
   artifacts: defineTable(artifactFields)
     .index("by_team", ["boundTeamId"])
-    .index("by_uploader", ["uploadedBy"]),
+    .index("by_uploader", ["uploadedBy"])
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"]),
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])

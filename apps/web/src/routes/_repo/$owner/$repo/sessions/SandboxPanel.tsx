@@ -16,6 +16,10 @@ import { useSessionPlanImplementation } from "./_components/useSessionPlanImplem
 import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
 import type { ProposedPlanRow } from "./_components/proposedPlanLogic";
 import { DesignVariationsPanel } from "./_components/DesignVariationsPanel";
+import {
+  SessionArtifactsPanel,
+  useSourceArtifacts,
+} from "@/lib/components/artifacts/SessionArtifactsPanel";
 import { FilesPanel } from "./FilesPanel";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
@@ -132,6 +136,8 @@ export function SandboxPanel({
     : null;
   const planImplemented = capturedPlan?.implementedAt !== undefined;
   const hasDesignsContent = latestVariations.length > 0;
+  const artifactSource = { kind: "session" as const, sessionId };
+  const { hasArtifacts } = useSourceArtifacts(artifactSource);
   const isDesignExecuting = isAssistantTurnInProgress(messages);
   // Streaming payloads can outlive their turn; only fold them in while one runs.
   const agents = deriveSubagents({
@@ -203,6 +209,7 @@ export function SandboxPanel({
           hasPrdContent={hasPlanContent}
           showDesignsTab={hasDesignsContent}
           hasDesignsContent={hasDesignsContent}
+          hasArtifactsContent={hasArtifacts}
           showFilesTab
           showAgentsTab={hasAgents}
           hasRunningAgents={hasRunningAgents}
@@ -289,6 +296,15 @@ export function SandboxPanel({
               void seedChatDraft(designVariationPrompt(letter, label));
             }}
           />
+        </div>
+        <div
+          className={
+            activeTab === "artifacts"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionArtifactsPanel source={artifactSource} />
         </div>
         <div
           className={

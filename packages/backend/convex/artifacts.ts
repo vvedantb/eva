@@ -1,24 +1,86 @@
 import { v } from "convex/values";
+import type { GenericDatabaseReader } from "convex/server";
 import { z } from "zod";
 import { internal } from "./_generated/api";
-import type { ActionCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { ActionCtx, QueryCtx } from "./_generated/server";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import {
   authQuery,
   authMutation,
   authAction,
+  hasRepoAccess,
+  hasTaskAccess,
   hasTeamAccess,
 } from "./functions";
+import { isEntityDeleted } from "./numId";
 import { artifactFields } from "./validators";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const artifactSourceSummary = v.union(
+  v.null(),
+  v.object({
+    kind: v.union(
+      v.literal("session"),
+      v.literal("task"),
+      v.literal("project"),
+    ),
+    id: v.string(),
+    title: v.string(),
+    numId: v.optional(v.number()),
+    owner: v.string(),
+    repo: v.string(),
+    rootDirectory: v.optional(v.string()),
+  }),
+);
+
+const artifactSourceRequired = v.union(
+  v.object({
+    kind: v.literal("session"),
+    sessionId: v.id("sessions"),
+  }),
+  v.object({
+    kind: v.literal("task"),
+    taskId: v.id("agentTasks"),
+  }),
+  v.object({
+    kind: v.literal("project"),
+    projectId: v.id("projects"),
+  }),
+);
+
+const artifactSourceArg = v.optional(artifactSourceRequired);
+
+type ArtifactSourceArg = {
+  kind: "session";
+  sessionId: Id<"sessions">;
+} | {
+  kind: "task";
+  taskId: Id<"agentTasks">;
+} | {
+  kind: "project";
+  projectId: Id<"projects">;
+};
+
+type ArtifactSourceSummary =
+  | null
+  | {
+      kind: "session" | "task" | "project";
+      id: string;
+      title: string;
+      numId?: number;
+      owner: string;
+      repo: string;
+      rootDirectory?: string;
+    };
+
 const artifactDoc = v.object({
   _id: v.id("artifacts"),
   _creationTime: v.number(),
   ...artifactFields,
+  source: artifactSourceSummary,
 });
 
 // get() resolves the stored HTML to a (time-limited, signed) storage URL.
@@ -26,8 +88,157 @@ const artifactWithUrl = v.object({
   _id: v.id("artifacts"),
   _creationTime: v.number(),
   ...artifactFields,
+  source: artifactSourceSummary,
   url: v.union(v.string(), v.null()),
 });
+
+type SourceFields = {
+  sourceKind?: "session" | "task" | "project";
+  sourceSessionId?: Id<"sessions">;
+  sourceTaskId?: Id<"agentTasks">;
+  sourceProjectId?: Id<"projects">;
+};
+
+/** Binds a create() source arg to stored fields, or skips a missing entity. */
+async function sourceFieldsFromArg(
+  ctx: { db: GenericDatabaseReader<DataModel>; userId: Id<"users"> },
+  source: ArtifactSourceArg | undefined,
+): Promise<SourceFields> {
+  if (source === undefined) return {};
+  if (source.kind === "session") {
+    const sessionId = ctx.db.normalizeId("sessions", String(source.sessionId));
+    if (!sessionId) return {};
+    const session = await ctx.db.get(sessionId);
+    if (!session) return {};
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      throw new Error(
+        "Not authorized to attach this artifact to that session.",
+      );
+    }
+    return { sourceKind: "session", sourceSessionId: sessionId };
+  }
+  if (source.kind === "task") {
+    const taskId = ctx.db.normalizeId("agentTasks", String(source.taskId));
+    if (!taskId) return {};
+    const task = await ctx.db.get(taskId);
+    if (!task) return {};
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+      throw new Error("Not authorized to attach this artifact to that task.");
+    }
+    return { sourceKind: "task", sourceTaskId: taskId };
+  }
+  const projectId = ctx.db.normalizeId("projects", String(source.projectId));
+  if (!projectId) return {};
+  const project = await ctx.db.get(projectId);
+  if (!project) return {};
+  if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
+    throw new Error(
+      "Not authorized to attach this artifact to that project.",
+    );
+  }
+  return { sourceKind: "project", sourceProjectId: projectId };
+}
+
+async function repoFromCache(
+  ctx: QueryCtx,
+  repoId: Id<"githubRepos">,
+  cache: Map<string, Doc<"githubRepos"> | null>,
+): Promise<Doc<"githubRepos"> | null> {
+  const key = String(repoId);
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  const repo = await ctx.db.get(repoId);
+  cache.set(key, repo);
+  return repo;
+}
+
+function sourceSummary(
+  kind: "session" | "task" | "project",
+  entity: { _id: string; title: string; numId?: number; deletedAt?: number },
+  repo: Doc<"githubRepos"> | null,
+): ArtifactSourceSummary {
+  if (isEntityDeleted(entity) || repo === null) return null;
+  return {
+    kind,
+    id: String(entity._id),
+    title: entity.title,
+    ...(entity.numId !== undefined ? { numId: entity.numId } : {}),
+    owner: repo.owner,
+    repo: repo.name,
+    ...(repo.rootDirectory !== undefined
+      ? { rootDirectory: repo.rootDirectory }
+      : {}),
+  };
+}
+
+async function resolveSource(
+  ctx: QueryCtx,
+  artifact: Doc<"artifacts">,
+  repoCache: Map<string, Doc<"githubRepos"> | null>,
+): Promise<ArtifactSourceSummary> {
+  if (artifact.sourceKind === "session" && artifact.sourceSessionId) {
+    const session = await ctx.db.get(artifact.sourceSessionId);
+    if (!session) return null;
+    return sourceSummary(
+      "session",
+      session,
+      await repoFromCache(ctx, session.repoId, repoCache),
+    );
+  }
+  if (artifact.sourceKind === "task" && artifact.sourceTaskId) {
+    const task = await ctx.db.get(artifact.sourceTaskId);
+    if (!task) return null;
+    const repoId = task.repoId
+      ? task.repoId
+      : task.projectId
+        ? (await ctx.db.get(task.projectId))?.repoId
+        : undefined;
+    if (!repoId) return null;
+    return sourceSummary(
+      "task",
+      task,
+      await repoFromCache(ctx, repoId, repoCache),
+    );
+  }
+  if (artifact.sourceKind === "project" && artifact.sourceProjectId) {
+    const project = await ctx.db.get(artifact.sourceProjectId);
+    if (!project) return null;
+    return sourceSummary(
+      "project",
+      project,
+      await repoFromCache(ctx, project.repoId, repoCache),
+    );
+  }
+  return null;
+}
+
+async function withSource(
+  ctx: QueryCtx,
+  artifact: Doc<"artifacts">,
+  repoCache: Map<string, Doc<"githubRepos"> | null> = new Map(),
+) {
+  return { ...artifact, source: await resolveSource(ctx, artifact, repoCache) };
+}
+
+async function callerCanSeeSource(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  source: ArtifactSourceArg,
+): Promise<boolean> {
+  if (source.kind === "session") {
+    const session = await ctx.db.get(source.sessionId);
+    return session
+      ? await hasRepoAccess(ctx.db, session.repoId, ctx.userId)
+      : false;
+  }
+  if (source.kind === "task") {
+    const task = await ctx.db.get(source.taskId);
+    return task ? await hasTaskAccess(ctx.db, task, ctx.userId) : false;
+  }
+  const project = await ctx.db.get(source.projectId);
+  return project
+    ? await hasRepoAccess(ctx.db, project.repoId, ctx.userId)
+    : false;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MCP CallToolResult envelope
@@ -95,16 +306,19 @@ export const create = authMutation({
     boundTeamId: v.id("teams"),
     declaredTools: v.array(v.string()),
     htmlStorageId: v.id("_storage"),
+    source: artifactSourceArg,
   },
   returns: v.id("artifacts"),
   handler: async (ctx, args) => {
     if (!(await hasTeamAccess(ctx.db, args.boundTeamId, ctx.userId))) {
       throw new Error("Not authorized: you are not a member of this team.");
     }
+    const { source, ...rest } = args;
     return ctx.db.insert("artifacts", {
-      ...args,
+      ...rest,
       uploadedBy: ctx.userId,
       createdAt: Date.now(),
+      ...(await sourceFieldsFromArg(ctx, source)),
     });
   },
 });
@@ -124,7 +338,7 @@ export const get = authQuery({
       return null;
     }
     return {
-      ...artifact,
+      ...(await withSource(ctx, artifact)),
       url: await ctx.storage.getUrl(artifact.htmlStorageId),
     };
   },
@@ -136,11 +350,13 @@ export const listForTeam = authQuery({
   returns: v.array(artifactDoc),
   handler: async (ctx, args) => {
     if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
-    return ctx.db
+    const rows = await ctx.db
       .query("artifacts")
       .withIndex("by_team", (q) => q.eq("boundTeamId", args.teamId))
       .order("desc")
       .collect();
+    const repoCache = new Map<string, Doc<"githubRepos"> | null>();
+    return Promise.all(rows.map((row) => withSource(ctx, row, repoCache)));
   },
 });
 
@@ -161,7 +377,53 @@ export const listAll = authQuery({
           .collect(),
       ),
     );
-    return perTeam.flat().sort((a, b) => b.createdAt - a.createdAt);
+    const repoCache = new Map<string, Doc<"githubRepos"> | null>();
+    const rows = await Promise.all(
+      perTeam.flat().map((row) => withSource(ctx, row, repoCache)),
+    );
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+/** Artifacts created from one session, quick task, or project sandbox. */
+export const listForSource = authQuery({
+  args: { source: artifactSourceRequired },
+  returns: v.array(artifactDoc),
+  handler: async (ctx, args) => {
+    if (!(await callerCanSeeSource(ctx, args.source))) return [];
+    const source = args.source;
+    const rows =
+      source.kind === "session"
+        ? await ctx.db
+            .query("artifacts")
+            .withIndex("by_source_session", (q) =>
+              q.eq("sourceSessionId", source.sessionId),
+            )
+            .order("desc")
+            .collect()
+        : source.kind === "task"
+          ? await ctx.db
+              .query("artifacts")
+              .withIndex("by_source_task", (q) =>
+                q.eq("sourceTaskId", source.taskId),
+              )
+              .order("desc")
+              .collect()
+          : await ctx.db
+              .query("artifacts")
+              .withIndex("by_source_project", (q) =>
+                q.eq("sourceProjectId", source.projectId),
+              )
+              .order("desc")
+              .collect();
+    const visible: Doc<"artifacts">[] = [];
+    for (const row of rows) {
+      if (await hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId)) {
+        visible.push(row);
+      }
+    }
+    const repoCache = new Map<string, Doc<"githubRepos"> | null>();
+    return Promise.all(visible.map((row) => withSource(ctx, row, repoCache)));
   },
 });
 
