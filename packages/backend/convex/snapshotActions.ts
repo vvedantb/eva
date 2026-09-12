@@ -8,7 +8,7 @@ import {
   resolveSandboxCredentials,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
-import { getInstallationToken } from "./githubAuth";
+import { getRepoScopedInstallationToken } from "./githubAuth";
 import {
   buildConfigFileDownloadCommands,
   filterDownloadableConfigFiles,
@@ -223,7 +223,11 @@ export const getImageFingerprint = internalAction({
     const branch = config.workflowRef ?? "main";
     const manifestShas: string[] = [];
     try {
-      const token = await getInstallationToken(repo.installationId);
+      const token = await getRepoScopedInstallationToken(
+        repo.installationId,
+        { githubId: undefined, name: repo.name },
+        "read",
+      );
       for (const manifest of FINGERPRINT_MANIFEST_FILES) {
         const resp = await fetch(
           `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,

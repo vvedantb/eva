@@ -6,7 +6,7 @@ import { z } from "zod";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
-import { extractPrNumber } from "./helpers";
+import { parseGithubPrUrl } from "./prUrl";
 import {
   decodeGitHubContent,
   decodeGitHubContentBytes,
@@ -162,13 +162,23 @@ export const getPrDiff = action({
   handler: async (ctx, args): Promise<PrDiffResult> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const prNumber =
       args.prNumber !== undefined
         ? args.prNumber
         : args.prUrl !== undefined
-          ? extractPrNumber(args.prUrl)
+          ? (() => {
+              const parsed = parseGithubPrUrl(args.prUrl);
+              if (
+                !parsed ||
+                parsed.owner.toLowerCase() !== repo.owner.toLowerCase() ||
+                parsed.name.toLowerCase() !== repo.name.toLowerCase()
+              ) {
+                return null;
+              }
+              return parsed.number;
+            })()
           : null;
     if (prNumber === null) {
       throw new Error(

@@ -16,3 +16,13 @@ export async function rejectSandboxCaller(ctx: {
     throw new Error("Not authorized");
   }
 }
+
+/** Callbacks that must come from a sandbox launch token, never a Clerk session. */
+export async function requireSandboxCaller(ctx: {
+  auth: { getUserIdentity: () => Promise<{ issuer?: string } | null> };
+}): Promise<void> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!isSandboxIdentity(identity)) {
+    throw new Error("Not authorized");
+  }
+}

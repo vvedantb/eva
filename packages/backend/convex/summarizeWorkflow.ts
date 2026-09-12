@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, getSessionWithAccess } from "./functions";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import {
@@ -162,6 +163,7 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const session = await getSessionWithAccess(
       ctx.db,
       args.sessionId,

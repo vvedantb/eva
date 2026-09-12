@@ -8,6 +8,7 @@ import {
 } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import { assertEntityAccess, hasEntityAccess } from "./_auth/entityAccess";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 
 /**
@@ -136,6 +137,7 @@ export const set = authMutation({
   args: setArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     await upsertStreamingActivity(ctx, args);
     return null;
@@ -179,6 +181,7 @@ export const touch = authMutation({
   args: { entityId: v.string() },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     return touchStreamingEntity(ctx, args.entityId);
   },
@@ -206,6 +209,7 @@ export const clear = authMutation({
   args: { entityId: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const existing = await ctx.db
       .query("streamingActivity")

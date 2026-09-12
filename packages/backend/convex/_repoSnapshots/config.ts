@@ -5,6 +5,7 @@ import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { isSameTeamSibling } from "../_githubRepos/helpers";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 
@@ -535,6 +536,7 @@ export const saveRepoSnapshot = authMutation({
   },
   returns: v.id("repoSnapshots"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     // Check for an app-specific config first (per-app model).
     // During transition, fall back to a shared root config and create an app-scoped row from it.
@@ -676,6 +678,7 @@ export const setSnapshotEnabled = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const config = await ctx.db.get(args.repoSnapshotId);
     if (!config) throw new Error("Snapshot config not found");
     await getRepoWithAccess(ctx.db, config.repoId, ctx.userId);
@@ -702,6 +705,7 @@ export const deleteRepoSnapshot = authMutation({
   args: { repoSnapshotId: v.id("repoSnapshots") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const config = await ctx.db.get(args.repoSnapshotId);
     if (!config) return null;
     await getRepoWithAccess(ctx.db, config.repoId, ctx.userId);

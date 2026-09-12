@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { aiModelValidator, automationFields } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { CHANGELOG_AUTOMATION_TITLE } from "../changelog";
 import { allocateNumId, entityVisible } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
@@ -93,6 +94,7 @@ export const create = authMutation({
   },
   returns: v.id("automations"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -132,6 +134,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const automation = await ctx.db.get(args.id);
     if (!automation) throw new Error("Automation not found");
     if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
@@ -210,6 +213,7 @@ export const remove = authMutation({
   args: { id: v.id("automations") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const automation = await ctx.db.get(args.id);
     if (!automation) return null;
     if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {

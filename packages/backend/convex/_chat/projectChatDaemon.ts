@@ -7,6 +7,7 @@ import {
   getProjectWithAccess,
   hasRepoAccess,
 } from "../functions";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -62,6 +63,7 @@ export const claimPendingTurn = authMutation({
     usageRefreshRequested: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) return emptyClaimReturn;
     // Daemon polls ~20×/s — skip team-membership join for the project owner.
@@ -238,6 +240,7 @@ export const openSyntheticTurn = authMutation({
   },
   returns: v.object({ messageId: v.id("messages") }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
@@ -284,6 +287,7 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
     await clearStreamingActivity(
       ctx,

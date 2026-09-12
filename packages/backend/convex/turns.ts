@@ -16,6 +16,7 @@ import {
 } from "./streaming";
 import { authMutation, authQuery, hasSessionAccess } from "./functions";
 import { assertEntityAccess } from "./_auth/entityAccess";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   acquireTurnLease,
   advanceTurn,
@@ -173,6 +174,7 @@ export const heartbeatFromCallback = authMutation({
   args: heartbeatArgs,
   returns: v.object({ lease: leaseVerdictValidator }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     return { lease: await applyFencedHeartbeat(ctx, args) };
   },
@@ -198,6 +200,7 @@ export const legacyHeartbeatFromCallback = authMutation({
     ctx,
     args,
   ): Promise<Infer<typeof legacyHeartbeatResultValidator>> => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const accepted = await applyLegacyHeartbeat(ctx, args);
     return {

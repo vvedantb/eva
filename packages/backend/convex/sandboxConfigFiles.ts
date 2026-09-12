@@ -6,6 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Regex for safe filenames: alphanumeric, dash, underscore, dot only. */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -68,6 +69,7 @@ export const generateUploadUrl = authMutation({
   args: { repoId: v.id("githubRepos") },
   returns: v.string(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -89,6 +91,7 @@ export const save = authMutation({
   },
   returns: v.id("sandboxConfigFiles"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -170,6 +173,7 @@ export const remove = authMutation({
   args: { id: v.id("sandboxConfigFiles") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const file = await ctx.db.get(args.id);
     if (!file) return null;
 

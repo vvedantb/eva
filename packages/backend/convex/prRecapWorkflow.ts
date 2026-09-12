@@ -4,6 +4,7 @@ import { internalQuery } from "./_generated/server";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   workflowCompleteValidator,
   aiModelValidator,
@@ -255,6 +256,7 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
     if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {

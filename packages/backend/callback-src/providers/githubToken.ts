@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "../http/convexClient.js";
+import { HARNESS_CATALOG_SANDBOX_ID } from "../config.js";
 import type { JsonValue } from "../types.js";
 import { readResponseJson } from "../utils.js";
 
@@ -45,7 +46,12 @@ export async function fetchInstallationToken(params: {
       },
       body: JSON.stringify({
         path: "github:getInstallationTokenAction",
-        args: { repoId: params.repoId },
+        args: {
+          repoId: params.repoId,
+          ...(HARNESS_CATALOG_SANDBOX_ID
+            ? { sandboxId: HARNESS_CATALOG_SANDBOX_ID }
+            : {}),
+        },
         format: "json",
       }),
     });

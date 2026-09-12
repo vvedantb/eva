@@ -6,6 +6,7 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { authMutation, authQuery } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { scheduleFinalizeStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { scheduleFinalizeStopProject } from "./_projects/sandbox";
@@ -94,6 +95,7 @@ export const setSandboxAutoStopSettings = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const user = await ctx.db.get(ctx.userId);
     if (user?.isAdmin !== true) {
       throw new Error("Not authorized");

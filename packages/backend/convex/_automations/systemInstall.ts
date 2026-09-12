@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { allocateNumId, filterActiveEntities } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
@@ -102,6 +103,7 @@ export const installSystemAutomation = authMutation({
   args: { repoId: v.id("githubRepos"), key: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const entry = await authorizeInstall(
       ctx.db,
       ctx.userId,
@@ -155,6 +157,7 @@ export const uninstallSystemAutomation = authMutation({
   args: { repoId: v.id("githubRepos"), key: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await authorizeInstall(ctx.db, ctx.userId, args.repoId, args.key);
     const install = await findInstall(ctx.db, args.repoId, args.key);
     if (!install || install.deletedAt !== undefined) return null;

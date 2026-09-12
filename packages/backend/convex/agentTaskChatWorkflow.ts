@@ -7,6 +7,7 @@ import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { decideSandboxStartPlan } from "./mcp/orchestratorDelivery";
 import { authAction, authMutation, hasTaskAccess } from "./functions";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -1137,6 +1138,7 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task || !task.activeChatWorkflowId) return null;
     if (!task.repoId) return null;

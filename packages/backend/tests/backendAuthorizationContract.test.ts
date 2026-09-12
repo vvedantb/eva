@@ -523,6 +523,41 @@ describe("backend authorization boundaries", () => {
     expect(convexSource("mcp/oauth.ts")).toContain("isSandboxIdentity");
     expect(convexSource("artifacts.ts")).toContain("isSandboxIdentity");
     expect(convexSource("syncSettings.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("auth.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("_automations/crud.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("appTabs.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("sandboxConfigFiles.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+  });
+
+  it("sandbox-only callbacks reject Clerk callers", () => {
+    expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("summarizeWorkflow.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("pendingQuestions.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("turns.ts")).toContain("requireSandboxCaller");
+    expect(convexSource("streaming.ts")).toContain("requireSandboxCaller");
+    expect(convexSource("_chat/projectChatDaemon.ts")).toContain(
+      "requireSandboxCaller",
+    );
+    expect(convexSource("_chat/taskChatDaemon.ts")).toContain(
+      "requireSandboxCaller",
+    );
+  });
+
+  it("sandbox installation tokens must be bound to the launch VM", () => {
+    const api = convexSource("_github/api.ts");
+    const mint = api.slice(api.indexOf("export const getInstallationTokenAction"));
+    expect(mint).toContain("isSandboxIdentity");
+    expect(mint).toContain("isBoundToRepo");
   });
 
   it("summarize logs honor session visibility", () => {

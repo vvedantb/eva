@@ -30,12 +30,23 @@ const installationAccessStateRef = makeFunctionReference<
 
 /** Returns a short-lived installation token for a given GitHub repo's app installation. */
 export const getInstallationTokenAction = action({
-  args: { repoId: v.id("githubRepos") },
+  args: {
+    repoId: v.id("githubRepos"),
+    sandboxId: v.optional(v.string()),
+  },
   returns: v.object({ token: v.string() }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+    if (isSandboxIdentity(identity)) {
+      if (!args.sandboxId) throw new Error("Not authorized");
+      const bound = await ctx.runQuery(internal.sandboxHeal.isBoundToRepo, {
+        sandboxId: args.sandboxId,
+        repoId: args.repoId,
+      });
+      if (!bound) throw new Error("Not authorized");
     }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
     const token = await getRepoScopedInstallationToken(

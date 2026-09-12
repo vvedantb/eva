@@ -11,6 +11,7 @@ import {
   shortcutOverridesValidator,
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { getCurrentUserId } from "./_auth/currentUser";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import type { ExperimentalFlagKey } from "./_auth/experimentalFlags";
@@ -186,6 +187,7 @@ export const setTheme = authMutation({
   args: { theme: themeValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, { theme: args.theme });
     return null;
   },
@@ -209,6 +211,7 @@ export const setEmailNotificationsEnabled = authMutation({
   args: { enabled: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, { emailNotificationsEnabled: args.enabled });
     return null;
   },
@@ -235,6 +238,7 @@ export const setExperimentalFlag = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const user = await ctx.db.get(ctx.userId);
     if (!user) {
       throw new Error("User not found");
@@ -274,6 +278,7 @@ export const setShortcutOverride = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     // The id vocabulary is derived from SHORTCUT_DEFS rather than repeated as a
     // validator union, so the check happens here instead of in `args`.
     if (!isShortcutId(args.id)) {
@@ -299,6 +304,7 @@ export const resetShortcutOverrides = authMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, { shortcutOverrides: {} });
     return null;
   },
@@ -319,6 +325,7 @@ export const setCustomTheme = authMutation({
   args: { customTheme: customThemeValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, { customTheme: args.customTheme });
     return null;
   },
@@ -345,6 +352,7 @@ export const setCustomInstructions = authMutation({
   args: { customInstructions: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, {
       customInstructions: args.customInstructions || undefined,
     });
@@ -357,6 +365,7 @@ export const setRole = authMutation({
   args: { role: v.union(roleUserValidator, v.null()) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, {
       role: args.role ?? undefined,
     });
@@ -382,6 +391,7 @@ export const completeOnboarding = authMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, { onboardingCompletedAt: Date.now() });
     return null;
   },
@@ -402,6 +412,7 @@ export const setToolbarVisible = authMutation({
   args: { visible: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await ctx.db.patch(ctx.userId, { toolbarVisible: args.visible });
     return null;
   },

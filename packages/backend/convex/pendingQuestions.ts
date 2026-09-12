@@ -3,6 +3,7 @@ import type { DatabaseWriter } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
 import { assertEntityAccess, hasEntityAccess } from "./_auth/entityAccess";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 
 /**
  * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
@@ -58,6 +59,7 @@ export const post = authMutation({
   args: { entityId: v.string(), toolUseId: v.string(), payload: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const stale = await ctx.db
       .query("pendingQuestions")
@@ -122,6 +124,7 @@ export const claimAnswer = authMutation({
   args: { entityId: v.string(), toolUseId: v.string() },
   returns: v.object({ answer: v.union(v.string(), v.null()) }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await assertEntityAccess(ctx.db, args.entityId, ctx.userId);
     const existing = await ctx.db
       .query("pendingQuestions")

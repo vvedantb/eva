@@ -724,6 +724,9 @@ function logTranscriptStats(sessionId, label) {
   }
 }
 function buildClaudeTranscriptPath(projectDir, sessionId) {
+  if (!/^[a-zA-Z0-9._-]+\$/.test(sessionId)) {
+    throw new Error("Invalid Claude session id");
+  }
   return projectDir + "/" + sessionId + ".jsonl";
 }
 function attemptElapsedMs() {
@@ -1942,12 +1945,14 @@ function appendTurnCheckpoint(args) {
 // callback-src/runtime/completion.ts
 import {
   existsSync as existsSync3,
+  lstatSync,
   mkdirSync as mkdirSync2,
   readFileSync as readFileSync2,
   readdirSync as readdirSync2,
   renameSync,
   writeFileSync as writeFileSync2
 } from "fs";
+import { resolve } from "path";
 import { createHash } from "crypto";
 function parseJsonObject(line) {
   const parsed = tryParseJson(line);
@@ -2259,10 +2264,26 @@ async function deliverCompletionWithMedia(completionArgs) {
   );
   await uploadAndAttachSandboxMedia({});
 }
+function safeHarvestPath(dir, file) {
+  if (file === "." || file === ".." || file.includes("/") || file.includes("\\\\")) {
+    return null;
+  }
+  const root = resolve(dir);
+  const resolved = resolve(dir, file);
+  if (resolved !== root && !resolved.startsWith(root + "/")) return null;
+  try {
+    if (!lstatSync(resolved).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return resolved;
+}
 function archivePostedFile(dir, file) {
+  const src = safeHarvestPath(dir, file);
+  if (!src) return;
   const postedDir = dir + "/.posted";
   mkdirSync2(postedDir, { recursive: true });
-  renameSync(dir + "/" + file, postedDir + "/" + file);
+  renameSync(src, postedDir + "/" + file);
 }
 async function uploadAndAttachSandboxMedia(target) {
   if (RUN_ID) return;
@@ -2279,7 +2300,8 @@ async function uploadAndAttachSandboxMedia(target) {
     if (!existsSync3(recDir)) continue;
     for (const file of readdirSync2(recDir)) {
       if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
+      const fp = safeHarvestPath(recDir, file);
+      if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
       try {
         if (!isDuplicate(fp)) {
@@ -2302,7 +2324,8 @@ async function uploadAndAttachSandboxMedia(target) {
     if (!existsSync3(ssDir)) continue;
     for (const file of readdirSync2(ssDir)) {
       if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
+      const fp = safeHarvestPath(ssDir, file);
+      if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
       const mimeType = mimeMap[ext] || "image/png";
       try {
@@ -2804,8 +2827,8 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
   try {
     const response = await Promise.race([
       readUsage(),
-      new Promise((resolve) => {
-        timer = setTimeout(() => resolve("timeout"), lookupTimeoutMs);
+      new Promise((resolve2) => {
+        timer = setTimeout(() => resolve2("timeout"), lookupTimeoutMs);
       })
     ]);
     if (response === "timeout") {
@@ -2943,8 +2966,8 @@ async function waitForPendingClaudeUsageReport() {
   let timer;
   await Promise.race([
     pending,
-    new Promise((resolve) => {
-      timer = setTimeout(resolve, USAGE_REPORT_EXIT_GRACE_MS);
+    new Promise((resolve2) => {
+      timer = setTimeout(resolve2, USAGE_REPORT_EXIT_GRACE_MS);
     })
   ]);
   if (timer !== void 0) clearTimeout(timer);
@@ -4688,7 +4711,7 @@ import { dirname } from "path";
 // callback-src/runtime/pendingQuestion.ts
 var POLL_INTERVAL_MS = 300;
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function readClaimedAnswer(result) {
   if (typeof result !== "object" || result === null || Array.isArray(result)) {
@@ -5328,7 +5351,10 @@ async function fetchInstallationToken(params) {
       },
       body: JSON.stringify({
         path: "github:getInstallationTokenAction",
-        args: { repoId: params.repoId },
+        args: {
+          repoId: params.repoId,
+          ...HARNESS_CATALOG_SANDBOX_ID ? { sandboxId: HARNESS_CATALOG_SANDBOX_ID } : {}
+        },
         format: "json"
       })
     });
@@ -5593,7 +5619,7 @@ function shouldParkClaimedTurn(input) {
 
 // callback-src/providers/claudeSdkDaemon.ts
 function sleep2(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function pidAlive(pid) {
   try {
@@ -5762,8 +5788,8 @@ function createPromptStream() {
       return {
         async next() {
           while (queue.length === 0) {
-            await new Promise((resolve) => {
-              notify = resolve;
+            await new Promise((resolve2) => {
+              notify = resolve2;
             });
           }
           const value = queue.shift();
@@ -6532,8 +6558,8 @@ function createWarmAgentRunner(sdk, options) {
   const waitMessage = async () => {
     while (pending.length === 0) {
       if (pumpFinished) return null;
-      await new Promise((resolve) => {
-        notify = resolve;
+      await new Promise((resolve2) => {
+        notify = resolve2;
       });
       if (pending.length === 0 && pumpFinished) return null;
     }
@@ -6756,12 +6782,12 @@ var CodexAppServerClient = class {
   request(method, params) {
     if (this.terminalError) return Promise.reject(this.terminalError);
     const id = this.nextId++;
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error("Codex App Server request timed out: " + method));
       }, 9e4);
-      this.pending.set(id, { resolve, reject, timeout });
+      this.pending.set(id, { resolve: resolve2, reject, timeout });
       this.write({ id, method, params });
     });
   }
@@ -6846,7 +6872,7 @@ var exitWithError = false;
 var threadTotalUsage = null;
 var turnStartUsage = null;
 function sleep3(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function objectValue2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -7775,7 +7801,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     const costUsd = await resolveCursorTurnCostUsd({
       before: await costBefore,
       fetchAfter: () => readCostSnapshot(activeAgent),
-      sleep: (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs))
+      sleep: (delayMs) => new Promise((resolve2) => setTimeout(resolve2, delayMs))
     });
     return {
       isError: result.status !== "finished",
@@ -7821,7 +7847,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
             "Retrying in " + Math.round(retryDelayMs / 1e3) + "s..."
           );
         },
-        sleep: (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs))
+        sleep: (delayMs) => new Promise((resolve2) => setTimeout(resolve2, delayMs))
       })
     );
   };
@@ -7958,7 +7984,7 @@ var cancelInFlight = false;
 var cancelRequestedAtMs = 0;
 var abortActiveTurn = null;
 function sleep4(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function cursorTurnWorkerEntryPath() {
   const entryPath = process.argv[1];
@@ -8006,12 +8032,12 @@ function cursorTurnWorkerFailureMessage(outcome) {
   return oom ? \`Cursor turn worker ran out of memory (\${exit}). The daemon remained healthy and is ready for the next message.\` : \`Cursor turn worker stopped unexpectedly (\${exit}). The daemon remained healthy and is ready for the next message.\`;
 }
 function waitForCursorTurnWorker(child) {
-  return new Promise((resolve) => {
+  return new Promise((resolve2) => {
     child.once("error", (error) => {
-      resolve({ status: "spawn_error", message: error.message });
+      resolve2({ status: "spawn_error", message: error.message });
     });
     child.once("exit", (code, signal) => {
-      resolve({ status: "exited", code, signal });
+      resolve2({ status: "exited", code, signal });
     });
   });
 }
@@ -8917,9 +8943,9 @@ var CodexExec = class {
       });
     }
     const exitPromise = new Promise(
-      (resolve) => {
+      (resolve2) => {
         child.once("exit", (code, signal) => {
-          resolve({ code, signal });
+          resolve2({ code, signal });
         });
       }
     );
@@ -9345,7 +9371,7 @@ var LOCK_STALE_MS = 9e4;
 var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 function sleep5(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
 function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
   try {
@@ -9716,8 +9742,8 @@ async function runOpencodeSdkAttempt(sessionMode) {
   let terminalReached = false;
   let resolveTerminal = () => {
   };
-  const terminal = new Promise((resolve) => {
-    resolveTerminal = resolve;
+  const terminal = new Promise((resolve2) => {
+    resolveTerminal = resolve2;
   });
   const markTerminal = () => {
     if (terminalReached) return;

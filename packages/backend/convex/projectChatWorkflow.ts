@@ -6,6 +6,7 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { authAction, authMutation, hasRepoAccess } from "./functions";
+import { requireSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -1004,6 +1005,7 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeChatWorkflowId) return null;
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {

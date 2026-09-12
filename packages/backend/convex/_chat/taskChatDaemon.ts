@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, getTaskWithAccess, hasTaskAccess } from "../functions";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -58,6 +59,7 @@ export const claimPendingTurn = authMutation({
     usageRefreshRequested: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) return emptyClaimReturn;
     if (!task.repoId) throw new Error("Not authorized");
@@ -240,6 +242,7 @@ export const openSyntheticTurn = authMutation({
   },
   returns: v.object({ messageId: v.id("messages") }),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (
@@ -286,6 +289,7 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     await getTaskWithAccess(ctx.db, args.taskId, ctx.userId);
     await clearStreamingActivity(ctx, taskChatStreamEntityId(args.taskId));
 

@@ -9,6 +9,7 @@ import {
   turnCheckpointArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import { cancelTrackedWorkflow } from "../workflowManager";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
@@ -284,6 +285,7 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const run = await ctx.db.get(args.automationRunId);
     if (!run || !run.activeWorkflowId) return null;
     if (!(await hasRepoAccess(ctx.db, run.repoId, ctx.userId))) {

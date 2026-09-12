@@ -27,12 +27,14 @@ import type { JsonObject, ResultEvent } from "../types.js";
 import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   renameSync,
   writeFileSync,
 } from "fs";
+import { resolve } from "path";
 import { createHash } from "crypto";
 
 function parseJsonObject(line: string): JsonObject | null {
@@ -545,10 +547,32 @@ export async function deliverCompletionWithMedia(
  * entry itself never matches the harvest's extension filters, so archived
  * files are not re-posted.
  */
+function safeHarvestPath(dir: string, file: string): string | null {
+  if (
+    file === "." ||
+    file === ".." ||
+    file.includes("/") ||
+    file.includes("\\")
+  ) {
+    return null;
+  }
+  const root = resolve(dir);
+  const resolved = resolve(dir, file);
+  if (resolved !== root && !resolved.startsWith(root + "/")) return null;
+  try {
+    if (!lstatSync(resolved).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return resolved;
+}
+
 function archivePostedFile(dir: string, file: string): void {
+  const src = safeHarvestPath(dir, file);
+  if (!src) return;
   const postedDir = dir + "/.posted";
   mkdirSync(postedDir, { recursive: true });
-  renameSync(dir + "/" + file, postedDir + "/" + file);
+  renameSync(src, postedDir + "/" + file);
 }
 
 export async function uploadAndAttachSandboxMedia(
@@ -579,7 +603,8 @@ export async function uploadAndAttachSandboxMedia(
     if (!existsSync(recDir)) continue;
     for (const file of readdirSync(recDir)) {
       if (!/\.(webm|mp4|mov|avi)$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
+      const fp = safeHarvestPath(recDir, file);
+      if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
       try {
         if (!isDuplicate(fp)) {
@@ -604,7 +629,8 @@ export async function uploadAndAttachSandboxMedia(
     if (!existsSync(ssDir)) continue;
     for (const file of readdirSync(ssDir)) {
       if (!/\.(png|jpg|jpeg|gif|webp)$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
+      const fp = safeHarvestPath(ssDir, file);
+      if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
       const mimeType = mimeMap[ext] || "image/png";
       try {

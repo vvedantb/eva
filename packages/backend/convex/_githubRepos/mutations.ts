@@ -420,6 +420,7 @@ export const generateLogoUploadUrl = authMutation({
   args: { repoId: v.id("githubRepos") },
   returns: v.string(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 
@@ -454,6 +455,7 @@ export const setLogo = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 
@@ -492,6 +494,7 @@ export const toggleHidden = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 
@@ -512,6 +515,7 @@ export const updateMcpRootPrompt = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 

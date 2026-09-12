@@ -12,6 +12,7 @@ import {
   hasRepoAccess,
   hasTaskAccess,
 } from "../functions";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import { aiModelValidator, turnCheckpointArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
@@ -70,6 +71,7 @@ export const handleCompletion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) {
       return ignoreStaleCompletionCallback(

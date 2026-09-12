@@ -9,6 +9,7 @@ import {
 } from "../validators";
 import { createNotification } from "../notifications";
 import { assertPrUrlForRepo } from "../_github/prUrl";
+import { requireSandboxCaller } from "../_auth/sandboxIdentity";
 import {
   authMutation,
   hasTaskAccess,
@@ -119,6 +120,7 @@ export const complete = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireSandboxCaller(ctx);
     const { run, task } = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
     if (run.status === "success" || run.status === "error")
       throw new Error("Run already completed");

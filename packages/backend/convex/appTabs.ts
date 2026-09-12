@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { appTabFields } from "./validators";
 import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "./appTabSlug";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -61,6 +62,7 @@ export const create = authMutation({
   },
   returns: v.id("appTabs"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -92,6 +94,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const tab = await ctx.db.get(args.id);
     if (!tab) throw new Error("Tab not found");
     if (!(await hasRepoAccess(ctx.db, tab.repoId, ctx.userId)))
@@ -115,6 +118,7 @@ export const toggleEnabled = authMutation({
   args: { id: v.id("appTabs"), enabled: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const tab = await ctx.db.get(args.id);
     if (!tab) throw new Error("Tab not found");
     if (!(await hasRepoAccess(ctx.db, tab.repoId, ctx.userId)))
@@ -129,6 +133,7 @@ export const remove = authMutation({
   args: { id: v.id("appTabs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const tab = await ctx.db.get(args.id);
     if (!tab) throw new Error("Tab not found");
     if (!(await hasRepoAccess(ctx.db, tab.repoId, ctx.userId)))
