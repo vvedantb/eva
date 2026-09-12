@@ -1876,6 +1876,9 @@ html[data-blur-pid] [data-pii] {
     background-position: -200% 0;
   }
 }
+.shimmer-text {
+  animation: shimmer-text 1.4s linear infinite;
+}
 
 /* <Shimmer/> (packages/ui) — highlight sweep across text, on the compositor.
  * `.shimmer-overlay` clips a copy of the text in the highlight colour;
@@ -1940,6 +1943,7 @@ html[data-page-hidden] .beam::before,
 html[data-page-hidden] .beam-halo::before,
 html[data-page-hidden] .shimmer-band,
 html[data-page-hidden] .shimmer-copy,
+html[data-page-hidden] .shimmer-text,
 html[data-page-hidden] .ui-skeleton::after,
 html[data-page-hidden] .animate-spin,
 html[data-page-hidden] .animate-pulse,
@@ -1949,16 +1953,24 @@ html[data-page-hidden] .animate-ping,
 [aria-hidden="true"] .beam-halo::before,
 [aria-hidden="true"] .shimmer-band,
 [aria-hidden="true"] .shimmer-copy,
+[aria-hidden="true"] .shimmer-text,
 [aria-hidden="true"] .ui-skeleton::after,
 [aria-hidden="true"] .animate-spin,
+[aria-hidden="true"] .animate-pulse,
+[aria-hidden="true"] .animate-bounce,
+[aria-hidden="true"] .animate-ping,
 [data-anim-offscreen] .beam::before,
 [data-anim-offscreen] .beam-halo::before,
 [data-anim-offscreen] .shimmer-band,
 [data-anim-offscreen] .shimmer-copy,
+[data-anim-offscreen] .shimmer-text,
 [data-anim-offscreen] .ui-skeleton::after,
 [data-anim-offscreen].shimmer-overlay .shimmer-band,
 [data-anim-offscreen].shimmer-overlay .shimmer-copy,
-[data-anim-offscreen] .animate-spin {
+[data-anim-offscreen] .animate-spin,
+[data-anim-offscreen] .animate-pulse,
+[data-anim-offscreen] .animate-bounce,
+[data-anim-offscreen] .animate-ping {
   animation-play-state: paused;
 }
 

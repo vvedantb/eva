@@ -19,8 +19,11 @@ describe("hidden session shells skip hot queries", () => {
   it("SessionDetailClient skips messages and streaming when inactive", () => {
     const source = sourceOf("SessionDetailClient.tsx");
     expect(source).toContain("useHeldQuery");
+    expect(source).toContain("isRouteActive ? { id: sessionId } : \"skip\"");
     expect(source).toContain("isRouteActive ? { parentId: sessionId } : \"skip\"");
     expect(source).toContain("isRouteActive ? { entityId: sessionId } : \"skip\"");
+    expect(source).toContain("if (!isRouteActive) return;");
+    expect(source).toContain("void prewarmDaemon({ sessionId })");
   });
 
   it("useSessionSend skips turn status when inactive", () => {

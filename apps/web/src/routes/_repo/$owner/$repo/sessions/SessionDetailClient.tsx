@@ -1,4 +1,3 @@
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -43,10 +42,13 @@ export function SessionDetailClient({
   hideTitle?: boolean;
 }) {
   const { basePath, repo } = useRepo();
-  const session = useQuery(api.sessions.get, { id: sessionId });
   // Hidden cached shells keep the last paint so switching back does not flash.
-  // Skipping the hot streams is what stops a background turn from re-rendering
-  // a whole chat tree the user cannot see.
+  // Skipping the hot streams — and the session doc itself — is what stops a
+  // background turn from re-rendering a whole chat tree the user cannot see.
+  const session = useHeldQuery(
+    api.sessions.get,
+    isRouteActive ? { id: sessionId } : "skip",
+  );
   const messages = useHeldQuery(
     api.messages.listByParent,
     isRouteActive ? { parentId: sessionId } : "skip",
@@ -86,13 +88,22 @@ export function SessionDetailClient({
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
   const sessionPrState = session?.prState;
   useEffect(() => {
+    // A hidden cached shell must not resume a VM the user is not looking at.
+    if (!isRouteActive) return;
     if (!sandboxId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
     // Don't prewarm (which resumes the VM) when the PR is already terminal —
     // auto-stop below owns teardown for merged/closed sessions.
     if (isSessionPrReadOnly(sessionPrState)) return;
     void prewarmDaemon({ sessionId });
-  }, [sessionId, sandboxId, sandboxStatus, sessionPrState, prewarmDaemon]);
+  }, [
+    isRouteActive,
+    sessionId,
+    sandboxId,
+    sandboxStatus,
+    sessionPrState,
+    prewarmDaemon,
+  ]);
 
   // Recover sandboxes left running after a PR merge/close (webhook may have
   // only patched prState before auto-stop existed, or the stop raced).

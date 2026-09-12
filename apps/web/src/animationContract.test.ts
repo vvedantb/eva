@@ -155,6 +155,9 @@ describe("infinite animations pause when the user cannot see them", () => {
     expect(cssRules).toContain("animation-play-state: paused");
     expect(cssRules).toContain("[data-anim-offscreen]");
     expect(cssRules).toContain("[aria-hidden=\"true\"] .beam::before");
+    expect(cssRules).toContain("[aria-hidden=\"true\"] .animate-pulse");
+    expect(cssRules).toContain("[data-anim-offscreen] .animate-pulse");
+    expect(cssRules).toContain(".shimmer-text");
   });
 });
 
