@@ -13,6 +13,7 @@ import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -247,7 +248,9 @@ export function SessionDetailClient({
     return (
       <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
         <PendingPreviewSnapshotsProvider>
-          <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+          <OpenSandboxFileProvider>
+            <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+          </OpenSandboxFileProvider>
         </PendingPreviewSnapshotsProvider>
       </PendingReviewCommentsProvider>
     );
@@ -256,6 +259,7 @@ export function SessionDetailClient({
   return (
     <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
       <PendingPreviewSnapshotsProvider>
+      <OpenSandboxFileProvider onOpenFile={onOpenFile}>
       <SandboxWorkspace
         ownerKind="session"
         ownerId={sessionId}
@@ -324,6 +328,7 @@ export function SessionDetailClient({
           />
         )}
       </SandboxWorkspace>
+      </OpenSandboxFileProvider>
       </PendingPreviewSnapshotsProvider>
     </PendingReviewCommentsProvider>
   );

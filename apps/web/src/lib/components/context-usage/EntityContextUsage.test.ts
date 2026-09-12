@@ -1,5 +1,10 @@
 import { expect, test } from "vitest";
-import { aggregateUsage } from "./EntityContextUsage";
+import {
+  CONTEXT_OVERLOAD_RATIO,
+  aggregateUsage,
+  contextCompactsAutomatically,
+  contextUsedRatio,
+} from "./EntityContextUsage";
 
 test("aggregateUsage uses latest occupancy, not summed cache reads", () => {
   const logs = [
@@ -52,4 +57,16 @@ test("aggregateUsage uses latest occupancy, not summed cache reads", () => {
   expect(aggregated.maxTokens).toBe(1_000_000);
   expect(aggregated.costs.totalUSD).toBeCloseTo(35.66);
   expect(aggregated.usedTokens / aggregated.maxTokens).toBeLessThan(1);
+});
+
+test("overload is the t3 90% threshold", () => {
+  expect(CONTEXT_OVERLOAD_RATIO).toBe(0.9);
+  expect(contextUsedRatio(91_000, 100_000)).toBeGreaterThan(
+    CONTEXT_OVERLOAD_RATIO,
+  );
+  expect(contextUsedRatio(80_000, 100_000)).toBeLessThan(
+    CONTEXT_OVERLOAD_RATIO,
+  );
+  expect(contextCompactsAutomatically("claude-opus-5")).toBe(true);
+  expect(contextCompactsAutomatically("gpt-4o")).toBe(false);
 });

@@ -42,6 +42,7 @@ import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
 import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -357,6 +358,7 @@ export function ProjectDetailClient({
 
   const projectSandboxContent = (
     <PendingPreviewSnapshotsProvider>
+    <OpenSandboxFileProvider onOpenFile={openFile}>
     <SandboxWorkspace
       ownerKind="project"
       ownerId={projectId}
@@ -404,6 +406,7 @@ export function ProjectDetailClient({
         />
       )}
     </SandboxWorkspace>
+    </OpenSandboxFileProvider>
     </PendingPreviewSnapshotsProvider>
   );
 

@@ -17,6 +17,7 @@ import { prNumberFromGithubUrl } from "@/lib/githubPr";
 import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
+import { applyIgnoreWhitespace } from "./diffFiles";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
@@ -49,6 +50,10 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
 
   // Wrapping is a reading preference, so it persists across PRs and surfaces.
   const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", false);
+  const [ignoreWhitespace, setIgnoreWhitespace] = useLocalStorage(
+    "eva:pr-diff-ignore-ws",
+    false,
+  );
   const [fileFilter, setFileFilter] = useState("");
   // Controlled accordion open set — independent of Viewed so a viewed file can
   // still be expanded to re-read without clearing the checkbox (GitHub UX).
@@ -74,7 +79,10 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
 
   // One entry per changed file: patch, path, status, and change counts. Parsed
   // once when the diff is fetched, not on every render.
-  const fileEntries = state.status === "ready" ? state.entries : [];
+  const rawEntries = state.status === "ready" ? state.entries : [];
+  const fileEntries = ignoreWhitespace
+    ? applyIgnoreWhitespace(rawEntries)
+    : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
   const totals = fileEntries.reduce(
     (sum, entry) => ({
@@ -250,6 +258,8 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
         onDiffViewChange={setDiffView}
         wrapLines={wrapLines}
         onWrapLinesChange={setWrapLines}
+        ignoreWhitespace={ignoreWhitespace}
+        onIgnoreWhitespaceChange={setIgnoreWhitespace}
         allExpanded={
           visiblePaths.length > 0 &&
           visiblePaths.every((path) => openPaths.includes(path))

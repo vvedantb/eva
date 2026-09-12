@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildDiffFileEntries } from "./diffFiles";
+import {
+  applyIgnoreWhitespace,
+  buildDiffFileEntries,
+  ignoreWhitespaceInPatch,
+} from "./diffFiles";
 
 const PROCUREMENTS = "apps/eprocurement/convex/procurements.ts";
 
@@ -40,5 +44,59 @@ describe("buildDiffFileEntries", () => {
     expect(entries[0].status).toBe("modified");
     expect(entries[0].additions).toBe(1);
     expect(entries[0].deletions).toBe(0);
+  });
+});
+
+describe("ignoreWhitespaceInPatch", () => {
+  it("drops a hunk that only changes spaces", () => {
+    const source = [
+      "diff --git a/app.ts b/app.ts",
+      "--- a/app.ts",
+      "+++ b/app.ts",
+      "@@ -1,2 +1,2 @@",
+      "-const x = 1;",
+      "+const  x  =  1;",
+      " const y = 2;",
+    ].join("\n");
+
+    const filtered = ignoreWhitespaceInPatch(source);
+    expect(filtered).not.toContain("-const x = 1;");
+    expect(filtered).not.toContain("+const  x  =  1;");
+    expect(filtered).not.toContain("@@ ");
+  });
+
+  it("keeps a real edit next to a whitespace-only pair", () => {
+    const source = [
+      "diff --git a/app.ts b/app.ts",
+      "--- a/app.ts",
+      "+++ b/app.ts",
+      "@@ -1,3 +1,3 @@",
+      "-const x = 1;",
+      "+const  x  =  1;",
+      "-return a;",
+      "+return b;",
+    ].join("\n");
+
+    const filtered = ignoreWhitespaceInPatch(source);
+    expect(filtered).toContain("@@ ");
+    expect(filtered).toContain("-return a;");
+    expect(filtered).toContain("+return b;");
+    expect(filtered).not.toContain("-const x = 1;");
+  });
+
+  it("recomputes +/- after ignore-whitespace", () => {
+    const source = [
+      "diff --git a/app.ts b/app.ts",
+      "--- a/app.ts",
+      "+++ b/app.ts",
+      "@@ -1,2 +1,2 @@",
+      "-const x = 1;",
+      "+const  x  =  1;",
+      "-return a;",
+      "+return b;",
+    ].join("\n");
+    const [entry] = applyIgnoreWhitespace(buildDiffFileEntries(source));
+    expect(entry.additions).toBe(1);
+    expect(entry.deletions).toBe(1);
   });
 });

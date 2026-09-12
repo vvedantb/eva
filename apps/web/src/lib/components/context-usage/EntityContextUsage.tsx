@@ -74,6 +74,7 @@ export function aggregateUsage(logs: AggregatableLog[] | undefined) {
   return {
     usedTokens: latest.contextUsedTokens,
     maxTokens,
+    model: latest.model,
     usage: {
       inputTokens: latest.inputTokens,
       outputTokens: latest.outputTokens,
@@ -86,22 +87,55 @@ export function aggregateUsage(logs: AggregatableLog[] | undefined) {
   };
 }
 
-function ContextUsageDisplay({
+/** t3 paints the donut red past 90% so a near-full window is obvious. */
+export const CONTEXT_OVERLOAD_RATIO = 0.9;
+
+export function contextUsedRatio(
+  usedTokens: number,
+  maxTokens: number,
+): number {
+  if (maxTokens <= 0) return 0;
+  return usedTokens / maxTokens;
+}
+
+export function contextCompactsAutomatically(model: string): boolean {
+  return model === "-" || model.includes("claude");
+}
+
+export function ContextUsageDisplay({
   aggregated,
+  defaultOpen = false,
+  onCompact,
 }: {
   aggregated: ReturnType<typeof aggregateUsage>;
+  defaultOpen?: boolean;
+  onCompact?: () => void;
 }) {
   if (!aggregated) return null;
+  const usedRatio = contextUsedRatio(
+    aggregated.usedTokens,
+    aggregated.maxTokens,
+  );
+  const overloaded = usedRatio > CONTEXT_OVERLOAD_RATIO;
+  const remaining = Math.max(0, aggregated.maxTokens - aggregated.usedTokens);
+  const remainingLabel = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+  }).format(remaining);
+  const autoCompact = contextCompactsAutomatically(aggregated.model);
 
   return (
     <Context
+      {...(defaultOpen ? { open: true } : {})}
       usedTokens={aggregated.usedTokens}
       maxTokens={aggregated.maxTokens}
       usage={aggregated.usage}
       costs={aggregated.costs}
     >
-      <ContextTrigger />
-      <ContextContent>
+      <ContextTrigger
+        data-testid="context-meter"
+        className={overloaded ? "text-destructive" : undefined}
+      />
+      <ContextContent data-testid="context-meter-popover">
         <ContextContentHeader />
         <ContextContentBody className="space-y-1">
           <ContextInputUsage />
@@ -109,6 +143,25 @@ function ContextUsageDisplay({
           <ContextCacheReadUsage />
           <ContextCacheWriteUsage />
         </ContextContentBody>
+        <div className="space-y-2 px-3 pb-3 text-[11px] leading-4 text-muted-foreground">
+          <p>
+            {remainingLabel} tokens left
+            {overloaded ? " · window is nearly full" : ""}
+          </p>
+          {autoCompact ? (
+            <p>Context compacts automatically when needed.</p>
+          ) : null}
+          {onCompact ? (
+            <button
+              type="button"
+              data-testid="context-meter-compact"
+              className="inline-flex h-7 w-full items-center justify-center rounded-md border border-border bg-background text-xs text-foreground hover:bg-muted"
+              onClick={onCompact}
+            >
+              Compact
+            </button>
+          ) : null}
+        </div>
         <ContextContentFooter />
       </ContextContent>
     </Context>
@@ -118,20 +171,33 @@ function ContextUsageDisplay({
 interface EntityContextUsageProps {
   repoId: Id<"githubRepos">;
   entityId: string;
+  /** Demo / screenshot seed — skips the logs query. */
+  seedAggregated?: NonNullable<ReturnType<typeof aggregateUsage>>;
+  defaultOpen?: boolean;
+  onCompact?: () => void;
 }
 
 export function EntityContextUsage({
   repoId,
   entityId,
+  seedAggregated,
+  defaultOpen,
+  onCompact,
 }: EntityContextUsageProps) {
   const simpleView = useSimpleView();
   const logs = useQuery(
     api.logs.getByEntityId,
-    simpleView ? "skip" : { repoId, entityId },
+    simpleView || seedAggregated ? "skip" : { repoId, entityId },
   );
   if (simpleView) return null;
-  const aggregated = aggregateUsage(logs);
-  return <ContextUsageDisplay aggregated={aggregated} />;
+  const aggregated = seedAggregated ?? aggregateUsage(logs);
+  return (
+    <ContextUsageDisplay
+      aggregated={aggregated}
+      defaultOpen={defaultOpen}
+      onCompact={onCompact}
+    />
+  );
 }
 
 interface ProjectContextUsageProps {
