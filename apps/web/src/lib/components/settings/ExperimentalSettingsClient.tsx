@@ -7,7 +7,6 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { useDisablePageMotionToggle } from "@/lib/components/PageMotionProvider";
 
 type ExperimentalFlagKey =
   | "sessionTabs"
@@ -15,10 +14,10 @@ type ExperimentalFlagKey =
   | "voiceDictation"
   | "composerAutocomplete"
   | "simpleView"
-  | "replyChime";
+  | "replyChime"
+  | "disablePageMotion";
 
 export function ExperimentalSettingsClient() {
-  const pageMotion = useDisablePageMotionToggle();
   const flags = useQuery(api.auth.getExperimentalFlags);
   const setFlag = useMutation(api.auth.setExperimentalFlag).withOptimisticUpdate(
     (localStore, args) => {
@@ -40,20 +39,6 @@ export function ExperimentalSettingsClient() {
     );
   };
 
-  const pageMotionRow = (
-    <SettingsToggleRow
-      title="Disable page animations"
-      description="Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer glow, and the sessions sidebar working indicator stay on."
-      action={
-        <Switch
-          checked={pageMotion.disabled}
-          onCheckedChange={pageMotion.setDisabled}
-          aria-label="Disable page animations"
-        />
-      }
-    />
-  );
-
   if (flags === undefined) {
     return (
       <SettingsPage title="Experimental">
@@ -61,9 +46,7 @@ export function ExperimentalSettingsClient() {
           title="Flags"
           description="Optional features. Off by default until you turn them on."
           bodyVariant="list"
-        >
-          {pageMotionRow}
-        </SettingsSection>
+        />
         <div className="flex items-center justify-center py-12">
           <Spinner />
         </div>
@@ -78,7 +61,19 @@ export function ExperimentalSettingsClient() {
         description="Optional features. Off by default until you turn them on."
         bodyVariant="list"
       >
-        {pageMotionRow}
+        <SettingsToggleRow
+          title="Disable page animations"
+          description="Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer glow, and the sessions sidebar working indicator stay on."
+          action={
+            <Switch
+              checked={flags.disablePageMotion === true}
+              onCheckedChange={(checked) =>
+                toggle("disablePageMotion", checked)
+              }
+              aria-label="Disable page animations"
+            />
+          }
+        />
         <SettingsToggleRow
           title="Chrome-style session tabs"
           description="Use horizontal tabs grouped by app. Archived and merged PRs move into an Archived menu."
