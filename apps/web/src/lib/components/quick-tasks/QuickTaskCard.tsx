@@ -382,7 +382,6 @@ export function QuickTaskCard({
     <BorderBeam
       active
       colorVariant="progress"
-      glow={false}
       className="rounded-surface"
     >
       {card}

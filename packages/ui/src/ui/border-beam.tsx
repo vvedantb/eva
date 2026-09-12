@@ -31,12 +31,6 @@ export type BorderBeamProps = ComponentPropsWithRef<"div"> & {
   size?: BorderBeamSize;
   colorVariant?: BorderBeamColorVariant;
   /**
-   * Unused. The blurred halo was removed — live `filter: blur()` on the
-   * spinning conic was the leftover GPU floor. Call sites may still pass
-   * `glow={false}`; `true` is ignored.
-   */
-  glow?: boolean;
-  /**
    * Wrapper classes. Give it the same radius as the child (e.g. `rounded-control`)
    * — the beam inherits the wrapper's radius.
    */
@@ -70,7 +64,6 @@ export function BorderBeam({
   active,
   size = "md",
   colorVariant = "mono",
-  glow: _glow = false,
   className,
   ref,
   ...rest

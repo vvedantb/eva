@@ -173,8 +173,10 @@ describe("beam halo blur is banned", () => {
     expect(cssRules).not.toMatch(
       /\.beam[\w-]*(?:::[a-z-]+)?\s*\{[^}]*filter:\s*(?:blur|drop-shadow)/,
     );
+    expect(cssRules).not.toContain("beam-halo");
     const beam = readFileSync(join(uiSrc, "ui", "border-beam.tsx"), "utf8");
     expect(beam).not.toContain("beam-halo");
+    expect(beam).not.toContain("glow");
   });
 });
 
