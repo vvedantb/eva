@@ -6,6 +6,7 @@ import {
 } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -130,6 +131,8 @@ export function ChatPanel({
   backgroundAgents,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
+  const navigate = useNavigate();
+  const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -191,6 +194,34 @@ export function ChatPanel({
 
   const review = usePendingReviewComments();
   const hasPendingReviewComments = (review?.comments.length ?? 0) > 0;
+
+  const handleForkTranscript = async (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => {
+    const accountId = resolveAccountId(providerAccountId) ?? null;
+    try {
+      const { numId } = await createSession({
+        repoId: repo._id,
+        title: input.title,
+        message: input.prompt,
+        model,
+        ...executionTraits,
+        reasoningLevel: displayTraits.effortLevel,
+        thinkingEnabled: displayTraits.thinkingEnabled,
+        use1mContext: displayTraits.use1mContext,
+        fastMode: displayTraits.fastMode,
+        providerAccountId: accountId,
+      });
+      await navigate({ to: `${basePath}/sessions/${numId}` });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Couldn't fork this chat";
+      toast.error(message);
+      throw error;
+    }
+  };
 
   const { isExecuting, handleSend, handleCancel } = useSessionSend({
     sessionId,
@@ -437,6 +468,7 @@ export function ChatPanel({
         onTraitsChange={onTraitsChange}
         onSend={handleSend}
         onCancel={handleCancel}
+        onForkTranscript={handleForkTranscript}
         afterMessage={(messageId) => {
           const plan = proposedPlanForMessage(capturedPlans, messageId);
           if (plan) {

@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@eva/ui";
-import { IconFileText } from "@tabler/icons-react";
+import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
@@ -23,6 +23,11 @@ import {
   DEMO_THREAD_FIND_MESSAGES,
   DEMO_THREAD_FIND_QUERY,
 } from "@/lib/components/chat/threadFind";
+import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import {
+  DEMO_FORK_MESSAGES,
+  DEMO_FORK_PREFIX,
+} from "@/lib/components/chat/messageFork";
 
 const FEATURES = [
   "cite",
@@ -32,6 +37,7 @@ const FEATURES = [
   "context-meter",
   "webmcp",
   "thread-find",
+  "message-fork",
 ] as const;
 
 type FeaturePreview = (typeof FEATURES)[number];
@@ -60,6 +66,7 @@ function FeaturePreviewsPage() {
   if (feature === "context-meter") return <ContextMeterPreview />;
   if (feature === "webmcp") return <WebMcpPreview />;
   if (feature === "thread-find") return <ThreadFindPreview />;
+  if (feature === "message-fork") return <MessageForkPreview />;
   return <CitePreview />;
 }
 
@@ -362,6 +369,58 @@ function ThreadFindPreview() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MessageForkPreview() {
+  return (
+    <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Message fork
+      </p>
+      <h1 className="mt-1 text-xl font-semibold">Branch a new chat here</h1>
+      <div className="mt-8 max-w-xl space-y-3">
+        {DEMO_FORK_MESSAGES.map((message) => {
+          const included = DEMO_FORK_PREFIX.turns.some(
+            (turn) => turn.messageId === message.id,
+          );
+          return (
+            <div
+              key={message.id}
+              data-message-id={message.id}
+              className={
+                message.role === "user"
+                  ? "ml-auto max-w-[85%] rounded-lg bg-primary/10 px-3 py-2 text-sm"
+                  : "rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              }
+            >
+              <p className="text-[11px] text-muted-foreground">
+                {message.role === "user" ? "You" : "Eva"}
+                {included ? "" : " · stays on original"}
+              </p>
+              <p className="mt-1 leading-6">{message.content}</p>
+              {message.id === DEMO_FORK_PREFIX.throughMessageId ? (
+                <button
+                  type="button"
+                  data-testid="message-fork-button"
+                  aria-label="Fork from here"
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground"
+                >
+                  <IconGitFork className="size-3.5" />
+                  Fork from here
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <MessageForkDialog
+        prefix={DEMO_FORK_PREFIX}
+        open
+        onOpenChange={() => {}}
+        onConfirm={() => undefined}
+      />
     </div>
   );
 }

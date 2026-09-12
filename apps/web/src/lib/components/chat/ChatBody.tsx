@@ -16,6 +16,13 @@ import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
 import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
 import { collectThreadFindDocuments } from "@/lib/components/chat/threadFind";
+import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import {
+  canForkMessage,
+  collectForkPrefix,
+  forkThreadTitle,
+  formatForkPrompt,
+} from "@/lib/components/chat/messageFork";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
 import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
@@ -161,6 +168,12 @@ interface ChatBodyProps {
   turnCheckpoint?: TurnCheckpointContext;
   allowEmptySubmit?: boolean;
   afterMessage?: (messageId: string) => ReactNode;
+  /** Sessions: create a new chat from the transcript through this message. */
+  onForkTranscript?: (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => Promise<void>;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -212,6 +225,7 @@ function ChatBodyInner({
   turnCheckpoint,
   allowEmptySubmit,
   afterMessage,
+  onForkTranscript,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -265,6 +279,7 @@ function ChatBodyInner({
   // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
   // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
+  const [forkThroughId, setForkThroughId] = useState<string | null>(null);
   const pendingQuestionRaw =
     streamingPendingQuestion ??
     streamingTarget?.pendingQuestion ??
@@ -401,6 +416,11 @@ function ChatBodyInner({
         sandboxRunning={sandboxRunning}
         turnCheckpoint={simpleView ? undefined : turnCheckpoint}
         citeHighlight={citations?.highlightedMessageId === message._id}
+        onFork={
+          onForkTranscript && canForkMessage(message)
+            ? () => setForkThroughId(message._id)
+            : undefined
+        }
       />
       {afterMessage?.(message._id)}
       </div>
@@ -486,6 +506,36 @@ function ChatBodyInner({
           allowEmptySubmit={allowEmptySubmit}
         />
       )}
+      <MessageForkDialog
+        prefix={
+          forkThroughId
+            ? collectForkPrefix(
+                displayMessages.map((message) => ({
+                  id: message._id,
+                  role: message.role,
+                  content: message.content,
+                  isSystemAlert: message.isSystemAlert,
+                })),
+                forkThroughId,
+              )
+            : null
+        }
+        open={forkThroughId !== null}
+        onOpenChange={(open) => {
+          if (!open) setForkThroughId(null);
+        }}
+        onConfirm={
+          onForkTranscript
+            ? async (prefix) => {
+                await onForkTranscript({
+                  throughMessageId: prefix.throughMessageId,
+                  title: forkThreadTitle(prefix),
+                  prompt: formatForkPrompt(prefix),
+                });
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }
