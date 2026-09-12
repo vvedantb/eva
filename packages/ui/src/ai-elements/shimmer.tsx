@@ -54,7 +54,7 @@ export function Shimmer({
       style={shimmerStyle}
     >
       {children}
-      <span aria-hidden="true" className="shimmer-overlay">
+      <span aria-hidden="true" data-anim-chrome="" className="shimmer-overlay">
         <span className="shimmer-band">
           <span className="shimmer-copy">{children}</span>
         </span>

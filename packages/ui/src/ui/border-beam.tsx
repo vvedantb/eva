@@ -82,6 +82,7 @@ export function BorderBeam({
         {active ? (
           <m.span
             aria-hidden="true"
+            data-anim-chrome=""
             className={cn(
               "beam-root",
               sizeClass[size],

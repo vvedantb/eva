@@ -143,6 +143,7 @@ export function LoadingState({
   const grid = (
     <span
       aria-hidden
+      data-anim-chrome=""
       className="grid grid-cols-3"
       style={{
         gap: gapPx,

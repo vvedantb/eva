@@ -1945,10 +1945,16 @@ html[data-blur-pid] [data-pii] {
 }
 
 /*
- * Infinite animations pause when the tab is in the background, a cached
- * session shell is `aria-hidden`, or the animated node has scrolled off
- * screen (`data-anim-offscreen` from IntersectionObserver). Playback
- * resumes from the same offset — unchanged while the user is looking.
+ * Infinite animations pause when the tab is in the background, a parked
+ * subtree is `aria-hidden` (cached session shell, minimized Ave), or the
+ * animated node has scrolled off screen (`data-anim-offscreen` from
+ * IntersectionObserver). Playback resumes from the same offset — unchanged
+ * while the user is looking.
+ *
+ * `:not([data-anim-chrome])` is load-bearing. BorderBeam's overlay, Shimmer's
+ * copy, and LoadingState's grid are `aria-hidden` so AT skips decorative
+ * chrome — a bare `[aria-hidden="true"] .beam` matches those hosts and froze
+ * every visible composer beam and session-row Drive grid (#764).
  */
 html[data-page-hidden] .beam::before,
 html[data-page-hidden] .shimmer-band,
@@ -1960,16 +1966,16 @@ html[data-page-hidden] .animate-pulse,
 html[data-page-hidden] .animate-bounce,
 html[data-page-hidden] .animate-ping,
 html[data-page-hidden] .landing-pulse-dot,
-[aria-hidden="true"] .beam::before,
-[aria-hidden="true"] .shimmer-band,
-[aria-hidden="true"] .shimmer-copy,
-[aria-hidden="true"] .shimmer-text,
-[aria-hidden="true"] .ui-skeleton::after,
-[aria-hidden="true"] .animate-spin,
-[aria-hidden="true"] .animate-pulse,
-[aria-hidden="true"] .animate-bounce,
-[aria-hidden="true"] .animate-ping,
-[aria-hidden="true"] .landing-pulse-dot,
+[aria-hidden="true"]:not([data-anim-chrome]) .beam::before,
+[aria-hidden="true"]:not([data-anim-chrome]) .shimmer-band,
+[aria-hidden="true"]:not([data-anim-chrome]) .shimmer-copy,
+[aria-hidden="true"]:not([data-anim-chrome]) .shimmer-text,
+[aria-hidden="true"]:not([data-anim-chrome]) .ui-skeleton::after,
+[aria-hidden="true"]:not([data-anim-chrome]) .animate-spin,
+[aria-hidden="true"]:not([data-anim-chrome]) .animate-pulse,
+[aria-hidden="true"]:not([data-anim-chrome]) .animate-bounce,
+[aria-hidden="true"]:not([data-anim-chrome]) .animate-ping,
+[aria-hidden="true"]:not([data-anim-chrome]) .landing-pulse-dot,
 [data-anim-offscreen] .beam::before,
 [data-anim-offscreen] .shimmer-band,
 [data-anim-offscreen] .shimmer-copy,

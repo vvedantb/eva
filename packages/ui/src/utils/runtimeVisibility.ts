@@ -6,12 +6,21 @@ import { useCallback, useEffect, useRef } from "react";
  * Page-visibility and on-screen budget for infinite animations.
  *
  * CSS animations pause via `html[data-page-hidden]` / `[data-anim-offscreen]`
- * in the host stylesheet. WAAPI (Spinner, LoadingState) has no CSS play-state
- * hook, so {@link bindRuntimeAnimation} pauses those directly.
+ * / parked `[aria-hidden="true"]` hosts in the host stylesheet. WAAPI
+ * (Spinner, LoadingState) has no CSS play-state hook, so
+ * {@link bindRuntimeAnimation} pauses those directly.
+ *
+ * Decorative animation chrome (`data-anim-chrome` on BorderBeam's overlay,
+ * Shimmer's copy, LoadingState's grid) is itself `aria-hidden` so AT skips
+ * it. That must not count as "the user cannot see this" — #764 paused every
+ * composer beam and session-row Drive grid by matching those hosts.
  *
  * Pausing is visually identical while the user is looking: playback resumes
  * from the same offset when the tab or element is shown again.
  */
+
+/** Parked subtree (cached session shell, minimized Ave). Skips decorative chrome. */
+const ARIA_HIDDEN_SUBTREE = '[aria-hidden="true"]:not([data-anim-chrome])';
 
 type IntersectionListener = (intersecting: boolean) => void;
 
@@ -28,7 +37,7 @@ function pageIsHidden(): boolean {
 }
 
 function elementOrAncestorHidden(el: Element): boolean {
-  return el.closest('[aria-hidden="true"]') !== null;
+  return el.closest(ARIA_HIDDEN_SUBTREE) !== null;
 }
 
 function flushAnimationSyncs(): void {
