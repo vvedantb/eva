@@ -13,4 +13,5 @@ test("sandbox MCP registers list_work_profiles and ask_teammate", () => {
   expect(source).toContain('server.tool(\n    "list_work_profiles"');
   expect(source).toContain('server.tool(\n    "ask_teammate"');
   expect(source).toContain("internal.routedThreads.askFromAgent");
+  expect(source).toContain("Background they need before answering");
 });

@@ -951,9 +951,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
   server.tool(
     "ask_teammate",
-    "Route a clarification to a teammate (Messages area). Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. Their reply is injected back into this session/task/project and wakes the run. Pass userId from list_work_profiles, or role when exactly one person matches. Defaults to the current chat as the source.",
+    "Route a clarification to a teammate (Messages area). Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. Their reply is injected back into this session/task/project and wakes the run. Pass userId from list_work_profiles, or role when exactly one person matches. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
     {
       question: z.string().describe("The question for the teammate."),
+      context: z
+        .string()
+        .describe(
+          "Background they need before answering: what is being built, why this decision matters, constraints or options already in play. Not just a restatement of the question.",
+        ),
       topicKey: z
         .string()
         .describe(
@@ -976,7 +981,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         .optional()
         .describe("Override the source chat id. Defaults to this sandbox."),
     },
-    async ({ question, topicKey, role, userId, sourceKind, sourceId }) => {
+    async ({ question, context, topicKey, role, userId, sourceKind, sourceId }) => {
       const { userId: actorId } = await getContext();
       const kind = sourceKind ?? entityKind;
       const id = sourceId ?? entityId;
@@ -990,6 +995,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         sourceKind: kind,
         sourceId: id,
         question,
+        context,
         topicKey,
         role,
         assigneeUserId: userId,

@@ -5,6 +5,8 @@ import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
+const ASK_CONTEXT =
+  "We are shipping the Messages empty state. Need a call on illustration vs ghost so the list can land.";
 const OWNER_CLERK = "clerk|routed-owner";
 const DESIGNER_CLERK = "clerk|routed-designer";
 const STRANGER_CLERK = "clerk|routed-stranger";
@@ -119,10 +121,19 @@ describe("ask_teammate", () => {
         owns: "empty states",
         askMeAbout: "copy",
       });
+      await f.t.run(async (ctx) => {
+        await ctx.db.insert("messages", {
+          role: "user",
+          content: "Ship the empty state this week",
+          timestamp: Date.now(),
+          parentId: f.sessionId,
+        });
+      });
       const result = await f.asOwner.mutation(api.routedThreads.ask, {
         sourceKind: "session",
         sourceId: f.sessionId,
         question: "Which empty-state illustration should we ship?",
+        context: ASK_CONTEXT,
         topicKey: "empty-state-copy",
         role: "designer",
       });
@@ -139,6 +150,11 @@ describe("ask_teammate", () => {
         threadId: result.threadId,
       });
       expect(messages[0]?.authorKind).toBe("eva");
+      expect(messages[0]?.context).toContain("Messages empty state");
+      expect(messages[0]?.context).toContain("Session 9");
+      expect(messages[0]?.context).toContain("Empty states");
+      expect(messages[0]?.context).toContain("Owen Owner");
+      expect(messages[0]?.context).toContain("Ship the empty state this week");
 
       const alerts = await f.t.run(async (ctx) => {
         return await ctx.db
@@ -168,6 +184,7 @@ describe("ask_teammate", () => {
         sourceKind: "session",
         sourceId: f.sessionId,
         question: "First ask",
+        context: ASK_CONTEXT,
         topicKey: "spacing",
         role: "designer",
       });
@@ -175,6 +192,7 @@ describe("ask_teammate", () => {
         sourceKind: "session",
         sourceId: f.sessionId,
         question: "Follow-up",
+        context: ASK_CONTEXT,
         topicKey: "spacing",
         role: "designer",
       });
@@ -198,12 +216,32 @@ describe("ask_teammate", () => {
         sourceKind: "session",
         sourceId: f.sessionId,
         question: "Who decides this?",
+        context: ASK_CONTEXT,
         topicKey: "decision",
         role: "designer",
       });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.error).toMatch(/Personal teams/i);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "rejects a question with no background",
+    async () => {
+      const f = await fixture();
+      const result = await f.asOwner.mutation(api.routedThreads.ask, {
+        sourceKind: "session",
+        sourceId: f.sessionId,
+        question: "Which illustration?",
+        context: "too short",
+        topicKey: "no-context",
+        role: "designer",
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toMatch(/Context is too thin/i);
     },
     TIMEOUT_MS,
   );
@@ -230,6 +268,7 @@ describe("ask_teammate", () => {
         sourceKind: "session",
         sourceId: f.sessionId,
         question: "Totally unrelated topic xyz",
+        context: ASK_CONTEXT,
         topicKey: "xyz",
         role: "designer",
       });
@@ -256,6 +295,7 @@ describe("reply wakes the source", () => {
         sourceKind: "session",
         sourceId: f.sessionId,
         question: "Use the ghost button?",
+        context: ASK_CONTEXT,
         topicKey: "ghost-button",
         role: "designer",
       });

@@ -60,6 +60,7 @@ const messageSummary = v.object({
   authorUserId: v.optional(v.id("users")),
   authorName: v.optional(v.string()),
   body: v.string(),
+  context: v.optional(v.string()),
   createdAt: v.number(),
 });
 
@@ -81,6 +82,58 @@ function previewOf(body: string): string {
 function titleOf(question: string): string {
   const trimmed = question.trim().replace(/\s+/g, " ");
   return trimmed.length > 120 ? `${trimmed.slice(0, 117)}…` : trimmed;
+}
+
+function sourceKindLabel(kind: SourceKind): string {
+  if (kind === "session") return "Session";
+  if (kind === "task") return "Task";
+  return "Project";
+}
+
+function clipContext(text: string, max: number): string {
+  const trimmed = text.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
+}
+
+/** Briefing the teammate sees above Eva's question. */
+function composeAskContext(
+  agentContext: string,
+  source: SourceRecord,
+  ownerName: string,
+  latestUser?: string,
+): string {
+  const kind = sourceKindLabel(source.sourceKind);
+  const ref =
+    source.numId !== undefined ? `${kind} ${source.numId}` : kind;
+  const sourceLine = `${ref} · ${source.title} · opened by ${ownerName}`;
+  const parts = [agentContext.trim(), sourceLine];
+  if (latestUser) {
+    parts.push(`What they asked Eva to do:\n${clipContext(latestUser, 400)}`);
+  }
+  return parts.join("\n\n");
+}
+
+async function latestUserRequest(
+  ctx: QueryCtx,
+  sourceId: string,
+): Promise<string | undefined> {
+  const parentId =
+    ctx.db.normalizeId("sessions", sourceId) ??
+    ctx.db.normalizeId("agentTasks", sourceId) ??
+    ctx.db.normalizeId("projects", sourceId);
+  if (!parentId) return undefined;
+  const rows = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .order("desc")
+    .take(30);
+  const user = rows.find(
+    (row) =>
+      row.role === "user" &&
+      row.isSystemAlert !== true &&
+      row.content.trim().length > 0,
+  );
+  return user?.content.trim();
 }
 
 function displayName(user: {
@@ -556,6 +609,7 @@ export const listMessages = authQuery({
         authorUserId: row.authorUserId,
         authorName: row.authorKind === "eva" ? "Eva" : displayName(author),
         body: row.body,
+        context: row.context,
         createdAt: row.createdAt,
       });
     }
@@ -687,6 +741,7 @@ async function askCore(
     sourceKind: SourceKind;
     sourceId: string;
     question: string;
+    context: string;
     topicKey: string;
     role?: "business" | "dev" | "designer";
     assigneeUserId?: Id<"users">;
@@ -694,6 +749,14 @@ async function askCore(
 ): Promise<Infer<typeof askResult>> {
   const question = args.question.trim();
   if (!question) return { ok: false, error: "Question cannot be empty." };
+  const agentContext = args.context.trim();
+  if (agentContext.length < 20) {
+    return {
+      ok: false,
+      error:
+        "Context is too thin. Explain what is being built and why this question matters.",
+    };
+  }
   const source = await loadSource(ctx, args.sourceKind, args.sourceId);
   if (!source) return { ok: false, error: "Source chat was not found." };
   if (source.deleted || source.archived) {
@@ -762,10 +825,18 @@ async function askCore(
       createdAt: now,
     });
   }
+  const owner = await ctx.db.get(source.ownerUserId);
+  const context = composeAskContext(
+    agentContext,
+    source,
+    displayName(owner),
+    await latestUserRequest(ctx, source.sourceId),
+  );
   await ctx.db.insert("routedMessages", {
     threadId,
     authorKind: "eva",
     body: question,
+    context,
     createdAt: now,
   });
   const roleLabel = assignee.role ? ` (${assignee.role})` : "";
@@ -778,7 +849,7 @@ async function askCore(
     userId: assignee.userId,
     type: "routed_question",
     title: `Eva asked about "${titleOf(question)}"`,
-    message: previewOf(question),
+    message: previewOf(context),
     href: `/messages?thread=${threadId}`,
     repoId: repo._id,
     ...notifyEntityArgs(source),
@@ -797,6 +868,7 @@ export const ask = authMutation({
     sourceKind: routedSourceKindValidator,
     sourceId: v.string(),
     question: v.string(),
+    context: v.string(),
     topicKey: v.string(),
     role: v.optional(roleUserValidator),
     assigneeUserId: v.optional(v.id("users")),
@@ -808,6 +880,7 @@ export const ask = authMutation({
       sourceKind: args.sourceKind,
       sourceId: args.sourceId,
       question: args.question,
+      context: args.context,
       topicKey: args.topicKey,
       role: args.role,
       assigneeUserId: args.assigneeUserId,
@@ -821,6 +894,7 @@ export const askFromAgent = internalMutation({
     sourceKind: routedSourceKindValidator,
     sourceId: v.string(),
     question: v.string(),
+    context: v.string(),
     topicKey: v.string(),
     role: v.optional(roleUserValidator),
     assigneeUserId: v.optional(v.string()),
@@ -842,6 +916,7 @@ export const askFromAgent = internalMutation({
       sourceKind: args.sourceKind,
       sourceId: args.sourceId,
       question: args.question,
+      context: args.context,
       topicKey: args.topicKey,
       role: args.role,
       assigneeUserId: assigneeUserId ?? undefined,

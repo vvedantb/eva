@@ -1266,6 +1266,8 @@ export const routedMessageFields = {
   authorKind: routedAuthorKindValidator,
   authorUserId: v.optional(v.id("users")),
   body: v.string(),
+  /** Why Eva is asking — source work + agent briefing. Absent on older rows. */
+  context: v.optional(v.string()),
   createdAt: v.number(),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   mirroredMessageId: v.optional(v.id("messages")),
