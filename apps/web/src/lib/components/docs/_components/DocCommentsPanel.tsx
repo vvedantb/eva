@@ -105,18 +105,27 @@ export function DocCommentsPanel({
       </div>
 
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto">
-        {composingAnchorId && (
-          <div className="border-b border-border p-3">
-            <DocNewCommentComposer
-              docId={docId}
-              anchorId={composingAnchorId}
-              anchorText={composingAnchorText ?? ""}
-              allowAskEva={allowAskEva}
-              onCancel={onCancelCompose}
-              onCreated={onCommentCreated}
-            />
-          </div>
-        )}
+        <AnimatePresence>
+          {composingAnchorId && (
+            <m.div
+              key={composingAnchorId}
+              className="border-b border-border p-3"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionFast}
+            >
+              <DocNewCommentComposer
+                docId={docId}
+                anchorId={composingAnchorId}
+                anchorText={composingAnchorText ?? ""}
+                allowAskEva={allowAskEva}
+                onCancel={onCancelCompose}
+                onCreated={onCommentCreated}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence mode="wait" initial={false}>
           <m.div

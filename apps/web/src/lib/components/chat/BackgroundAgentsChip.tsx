@@ -6,10 +6,13 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  motionFast,
 } from "@eva/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconLoader2, IconPlayerStop, IconRobot } from "@tabler/icons-react";
+import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
 
 type BackgroundAgent = BackgroundAgentEntry;
@@ -34,9 +37,6 @@ export function BackgroundAgentsChip({
   const runningAgents = (backgroundAgents ?? []).filter(
     isVisibleBackgroundAgent,
   );
-  if (runningAgents.length === 0) {
-    return null;
-  }
 
   const handleStop = async (toolUseId: string) => {
     setStoppingIds((prev) => new Set(prev).add(toolUseId));
@@ -63,62 +63,76 @@ export function BackgroundAgentsChip({
       : `${runningAgents.length} background agents`;
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="max-sm:hit-target mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+    <AnimatePresence initial={false}>
+      {runningAgents.length === 0 ? null : (
+        <m.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={motionFast}
         >
-          <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
-          <span>{label}</span>
-          <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-            {runningAgents.length}
-          </Badge>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
-        <ul className="divide-y divide-border">
-          {runningAgents.map((agent) => {
-            const isStopping = stoppingIds.has(agent.toolUseId);
-            return (
-              <li
-                key={agent.toolUseId}
-                className="flex items-start gap-2 px-3 py-2.5"
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="max-sm:hit-target mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground hover:bg-muted"
               >
-                <IconRobot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 grow">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {agent.description?.trim() || "Background agent"}
-                  </p>
-                  <p className="text-xs capitalize text-muted-foreground">
-                    {formatStatus(agent.status)}
-                    {agent.backgrounded ? " · backgrounded" : ""}
-                  </p>
-                </div>
-                {!isReadOnly ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    disabled={isStopping}
-                    onClick={() => {
-                      void handleStop(agent.toolUseId);
-                    }}
-                  >
-                    {isStopping ? (
-                      <IconLoader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <IconPlayerStop className="size-3.5" />
-                    )}
-                    Stop
-                  </Button>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </PopoverContent>
-    </Popover>
+                <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
+                <span>{label}</span>
+                <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                  {runningAgents.length}
+                </Badge>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-0" align="start">
+              <ul className="divide-y divide-border">
+                {runningAgents.map((agent, index) => {
+                  const isStopping = stoppingIds.has(agent.toolUseId);
+                  return (
+                    <ListEnter
+                      key={agent.toolUseId}
+                      as="li"
+                      index={index}
+                      fast
+                      className="flex items-start gap-2 px-3 py-2.5"
+                    >
+                        <IconRobot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 grow">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {agent.description?.trim() || "Background agent"}
+                          </p>
+                          <p className="text-xs capitalize text-muted-foreground">
+                            {formatStatus(agent.status)}
+                            {agent.backgrounded ? " · backgrounded" : ""}
+                          </p>
+                        </div>
+                        {!isReadOnly ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            disabled={isStopping}
+                            onClick={() => {
+                              void handleStop(agent.toolUseId);
+                            }}
+                          >
+                            {isStopping ? (
+                              <IconLoader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <IconPlayerStop className="size-3.5" />
+                            )}
+                            Stop
+                          </Button>
+                        ) : null}
+                    </ListEnter>
+                  );
+                })}
+              </ul>
+            </PopoverContent>
+          </Popover>
+        </m.div>
+      )}
+    </AnimatePresence>
   );
 }

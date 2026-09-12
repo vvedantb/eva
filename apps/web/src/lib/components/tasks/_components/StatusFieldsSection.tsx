@@ -22,7 +22,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconUserPlus,
   IconFolder,
@@ -266,16 +268,36 @@ export function StatusFieldsSection({
                     const config = statusConfig[status];
                     const Icon = config.icon;
                     return (
-                      <div
-                        className={`flex items-center gap-1.5 ${config.text}`}
-                      >
-                        <Icon size={14} />
-                        <span>{config.label}</span>
-                        {isBlocked && (
-                          <Badge variant="warning" className="ml-0.5">
-                            Blocked
-                          </Badge>
-                        )}
+                      <div className="flex items-center gap-1.5">
+                        <AnimatePresence mode="wait" initial={false}>
+                          <m.span
+                            key={status}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                            className={`flex items-center gap-1.5 ${config.text}`}
+                          >
+                            <Icon size={14} />
+                            <span>{config.label}</span>
+                          </m.span>
+                        </AnimatePresence>
+                        <AnimatePresence initial={false}>
+                          {isBlocked ? (
+                            <m.span
+                              key="blocked"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={motionFast}
+                              className="inline-flex"
+                            >
+                              <Badge variant="warning" className="ml-0.5">
+                                Blocked
+                              </Badge>
+                            </m.span>
+                          ) : null}
+                        </AnimatePresence>
                       </div>
                     );
                   })()
@@ -490,23 +512,33 @@ export function StatusFieldsSection({
           className={`${FIELD_ROW_CLASS} group/tags flex-wrap gap-1 cursor-text`}
         >
           <IconTags size={14} className="text-muted-foreground shrink-0" />
-          {task?.tags?.map((tag) => (
-            <Badge
-              key={tag}
-              variant="outline"
-              className="text-xs h-8 gap-0.5 pr-0.5 group/tag sm:h-5"
-            >
-              {tag}
-              <button
-                type="button"
-                aria-label={`Remove label ${tag}`}
-                className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
-                onClick={() => void removeTag(tag)}
+          <AnimatePresence initial={false} mode="popLayout">
+            {task?.tags?.map((tag) => (
+              <m.span
+                key={tag}
+                className="inline-flex"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
               >
-                ×
-              </button>
-            </Badge>
-          ))}
+                <Badge
+                  variant="outline"
+                  className="text-xs h-8 gap-0.5 pr-0.5 group/tag sm:h-5"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    aria-label={`Remove label ${tag}`}
+                    className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
+                    onClick={() => void removeTag(tag)}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              </m.span>
+            ))}
+          </AnimatePresence>
           <Input
             ref={tagDraftRef}
             value={tagDraft}

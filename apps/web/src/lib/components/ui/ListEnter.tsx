@@ -38,12 +38,12 @@ export function ListEnter({
   staggerMax?: number;
   /** Fade only — use on Gantt bars so the row does not shift. */
   slide?: boolean;
-  /** `tr` when the child is a table row — an `m.div` wrapper is invalid HTML. */
-  as?: "div" | "tr";
+  /** `tr` / `li` when the parent is a table or list — an `m.div` wrapper is invalid HTML. */
+  as?: "div" | "tr" | "li";
 }) {
   const skip = firstPaint === false;
   const transition = fast ? motionFast : motionBase;
-  const MotionTag = as === "tr" ? m.tr : m.div;
+  const MotionTag = as === "tr" ? m.tr : as === "li" ? m.li : m.div;
   return (
     <MotionTag
       className={className}

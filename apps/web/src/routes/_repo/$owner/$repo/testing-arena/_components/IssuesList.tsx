@@ -14,7 +14,10 @@ import {
   CrossfadeIcon,
   Spinner,
   cn,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -122,36 +125,46 @@ export function IssuesList({ report }: { report: EvaluationReport }) {
         </div>
       )}
 
-      {issues.map((issue) => (
-        <IssueRow
-          key={issue.id}
-          issue={issue}
-          selected={selected.has(issue.id)}
-          onToggle={() => toggleIssue(issue.id)}
-        />
+      {issues.map((issue, index) => (
+        <ListEnter key={issue.id} index={index} fast>
+          <IssueRow
+            issue={issue}
+            selected={selected.has(issue.id)}
+            onToggle={() => toggleIssue(issue.id)}
+          />
+        </ListEnter>
       ))}
 
-      {selectableIssues.length > 0 && (
-        <div className="flex max-sm:flex-wrap items-center gap-2 pt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={selected.size === 0 || isCreating}
-            onClick={() => handleCreate(false)}
+      <AnimatePresence initial={false}>
+        {selected.size > 0 ? (
+          <m.div
+            key="issues-bulk-bar"
+            className="flex max-sm:flex-wrap items-center gap-2 pt-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
           >
-            {isCreating && <Spinner size="sm" />}
-            Create Tasks ({selected.size})
-          </Button>
-          <Button
-            size="sm"
-            disabled={selected.size === 0 || isCreating}
-            onClick={() => handleCreate(true)}
-          >
-            {isCreating && <Spinner size="sm" />}
-            Create & Run ({selected.size})
-          </Button>
-        </div>
-      )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isCreating}
+              onClick={() => handleCreate(false)}
+            >
+              {isCreating && <Spinner size="sm" />}
+              Create Tasks ({selected.size})
+            </Button>
+            <Button
+              size="sm"
+              disabled={isCreating}
+              onClick={() => handleCreate(true)}
+            >
+              {isCreating && <Spinner size="sm" />}
+              Create & Run ({selected.size})
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

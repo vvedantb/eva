@@ -7,6 +7,7 @@ import { api, type Id } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   Button,
   Dialog,
@@ -101,9 +102,10 @@ export function AccountsClient() {
           />
         ) : (
           <div className="divide-y divide-border/50">
-            {accounts.map((account) => (
-              <div
+            {accounts.map((account, index) => (
+              <ListEnter
                 key={account._id}
+                index={index}
                 className="flex max-sm:flex-wrap items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
               >
                 {/* `basis-full` below `sm`: the share toggle plus two icon
@@ -176,7 +178,7 @@ export function AccountsClient() {
                 >
                   <IconTrash size={14} />
                 </Button>
-              </div>
+              </ListEnter>
             ))}
           </div>
         )}

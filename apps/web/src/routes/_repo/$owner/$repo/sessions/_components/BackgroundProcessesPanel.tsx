@@ -24,6 +24,7 @@ import {
 } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 function formatElapsed(startedAt: number, now: number): string {
   const sec = Math.max(0, Math.floor((now - startedAt) / 1000));
@@ -100,10 +101,11 @@ export function BackgroundProcessesPanel({
               </QueueSectionTrigger>
               <QueueSectionContent>
                 <QueueList>
-                  {rows.map((row) => {
+                  {rows.map((row, index) => {
                     const isKilling = killingIds.has(row._id);
                     return (
                       <QueueItem key={row._id}>
+                        <ListEnter index={index} fast>
                         <div className="flex items-start gap-2">
                           <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                           <div className="min-w-0 grow">
@@ -151,6 +153,7 @@ export function BackgroundProcessesPanel({
                             </QueueItemAction>
                           </QueueItemActions>
                         </div>
+                        </ListEnter>
                       </QueueItem>
                     );
                   })}

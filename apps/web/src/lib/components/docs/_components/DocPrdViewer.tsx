@@ -14,6 +14,7 @@ import { useCommentAnchorId } from "@/lib/hooks/useCommentAnchor";
 import {
   ActivityTasks,
   Button,
+  CrossfadeIcon,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -239,11 +240,14 @@ export function DocPrdViewer({
                   handleCopy();
                 }}
               >
-                {copied ? (
-                  <IconCheck size={16} className="text-success" />
-                ) : (
-                  <IconCopy size={16} />
-                )}
+                <CrossfadeIcon
+                  show={copied}
+                  trueKey="copied"
+                  falseKey="copy"
+                  className="relative flex size-4 items-center justify-center"
+                  whenTrue={<IconCheck size={16} className="text-success" />}
+                  whenFalse={<IconCopy size={16} />}
+                />
                 Copy PRD
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setInterviewOpen(true)}>

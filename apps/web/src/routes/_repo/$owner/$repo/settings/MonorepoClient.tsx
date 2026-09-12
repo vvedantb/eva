@@ -10,6 +10,7 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { Button, Input, Spinner, Badge } from "@eva/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconFolders,
   IconPlus,
@@ -137,9 +138,10 @@ export function MonorepoClient() {
           bodyVariant="list"
         >
           <div className="divide-y divide-border/50">
-            {connectedApps.map((app) => (
-              <div
+            {connectedApps.map((app, index) => (
+              <ListEnter
                 key={app._id}
+                index={index}
                 className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
               >
                 <IconFolders
@@ -181,7 +183,7 @@ export function MonorepoClient() {
                     </>
                   )}
                 </Button>
-              </div>
+              </ListEnter>
             ))}
           </div>
         </SettingsSection>
@@ -228,13 +230,14 @@ export function MonorepoClient() {
           />
         ) : (
           <div className="divide-y divide-border/50">
-            {detected.map((app) => {
+            {detected.map((app, index) => {
               const isConnected = connectedPaths.has(app.path);
               const isAdding = addingPath === app.path;
 
               return (
-                <div
+                <ListEnter
                   key={app.path}
+                  index={index}
                   className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
                 >
                   <IconFolders
@@ -274,7 +277,7 @@ export function MonorepoClient() {
                       Add
                     </Button>
                   )}
-                </div>
+                </ListEnter>
               );
             })}
           </div>

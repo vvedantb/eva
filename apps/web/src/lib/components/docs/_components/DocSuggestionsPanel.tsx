@@ -7,9 +7,11 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
-import { Button, cn, LIST_ROW_CONTROL_CLASS } from "@eva/ui";
+import { Button, cn, LIST_ROW_CONTROL_CLASS, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconX, IconCheck, IconArrowBackUp } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   collectSuggestions,
   acceptSuggestion,
@@ -102,9 +104,19 @@ export function DocSuggestionsPanel({
             changes.
           </p>
         ) : (
-          list.map((s) => (
-            <SuggestionRow key={s.id} editor={editor} suggestion={s} />
-          ))
+          <AnimatePresence initial={false}>
+            {list.map((s, index) => (
+              <m.div
+                key={s.id}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <ListEnter index={index} fast>
+                  <SuggestionRow editor={editor} suggestion={s} />
+                </ListEnter>
+              </m.div>
+            ))}
+          </AnimatePresence>
         )}
       </div>
     </div>
