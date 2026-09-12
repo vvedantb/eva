@@ -76,6 +76,10 @@ export const userFields = {
   // The user's single persistent orchestrator ("master") session. Absent until
   // first opened; repointed if the master is archived/deleted and recreated.
   orchestratorSessionId: v.optional(v.id("sessions")),
+  /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
+  grokBotWebhookUrl: v.optional(v.string()),
+  /** AES-GCM ciphertext of the routine bearer key (`enc:…`). Never returned. */
+  grokBotWebhookKey: v.optional(v.string()),
 };
 
 /** Heartbeat/path writes. Isolated so they do not invalidate `users` subscribers. */

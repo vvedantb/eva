@@ -6,6 +6,7 @@ import {
   IconKey,
   IconKeyboard,
   IconPalette,
+  IconRobot,
   IconServerBolt,
   IconUserCog,
 } from "@tabler/icons-react";
@@ -31,6 +32,11 @@ export const GLOBAL_SETTINGS_NAV = [
     name: "Accounts",
     href: "/settings/accounts",
     icon: IconKey,
+  },
+  {
+    name: "Grok Bot",
+    href: "/settings/grok-bot",
+    icon: IconRobot,
   },
   {
     name: "Notifications",
