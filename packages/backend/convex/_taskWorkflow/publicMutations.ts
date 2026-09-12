@@ -6,7 +6,12 @@ import {
   cancelTrackedWorkflow,
   toWorkflowId,
 } from "../workflowManager";
-import { authMutation, hasTaskAccess } from "../functions";
+import {
+  authMutation,
+  getProjectWithAccess,
+  hasRepoAccess,
+  hasTaskAccess,
+} from "../functions";
 import { aiModelValidator, turnCheckpointArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
@@ -70,6 +75,9 @@ export const handleCompletion = authMutation({
       return ignoreStaleCompletionCallback(
         `task ${String(args.taskId)} no longer exists`,
       );
+    }
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+      throw new Error("Not authorized");
     }
     if (!args.runId) {
       return ignoreStaleCompletionCallback(
@@ -215,6 +223,25 @@ export const triggerExecution = authMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
+    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    if (task.repoId && args.repoId !== task.repoId) {
+      throw new Error("Not authorized");
+    }
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    if (args.projectId) {
+      const project = await getProjectWithAccess(
+        ctx.db,
+        args.projectId,
+        ctx.userId,
+      );
+      if (project.repoId !== args.repoId) {
+        throw new Error("Not authorized");
+      }
+    }
 
     const run = await ctx.db.get(args.runId);
     if (!run || run.taskId !== args.taskId) {

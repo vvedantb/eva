@@ -3,7 +3,7 @@ import type { DataModel } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { ProsemirrorSync } from "@convex-dev/prosemirror-sync";
 import { getCurrentUserId } from "./_auth/currentUser";
-import { hasRepoAccess } from "./functions";
+import { assertDocAccess } from "./_auth/entityAccess";
 
 const prosemirrorSync = new ProsemirrorSync(components.prosemirrorSync);
 
@@ -88,11 +88,7 @@ async function assertDocRepoAccess(
   if (!userId) throw new Error("Not authenticated");
   const docId = ctx.db.normalizeId("docs", id);
   if (!docId) throw new Error("Invalid document ID");
-  const doc = await ctx.db.get(docId);
-  if (!doc) throw new Error("Document not found");
-  if (!(await hasRepoAccess(ctx.db, doc.repoId, userId))) {
-    throw new Error("Not authorized");
-  }
+  await assertDocAccess(ctx.db, docId, userId);
 }
 
 export const {

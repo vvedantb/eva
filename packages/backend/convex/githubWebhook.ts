@@ -30,6 +30,18 @@ const PROJECT_BRANCH_PREFIX = "eva/project-";
  * matching task (or any task in the project), or null if the branch doesn't
  * parse or the task/project no longer exists.
  */
+async function runMatchesGithubRepo(
+  ctx: MutationCtx,
+  run: Doc<"agentRuns">,
+  owner: string,
+  name: string,
+): Promise<boolean> {
+  const task = await ctx.db.get(run.taskId);
+  if (!task?.repoId) return false;
+  const repo = await ctx.db.get(task.repoId);
+  return repo?.owner === owner && repo?.name === name;
+}
+
 async function findRunByBranchName(
   ctx: MutationCtx,
   branchName: string,
@@ -262,6 +274,8 @@ export const handlePrClosed = internalMutation({
     prUrl: v.string(),
     merged: v.boolean(),
     branchName: v.optional(v.string()),
+    repoOwner: v.optional(v.string()),
+    repoName: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -274,6 +288,13 @@ export const handlePrClosed = internalMutation({
       createdAt: Date.now(),
     });
 
+    const repoOwner = args.repoOwner;
+    const repoName = args.repoName;
+    if (!repoOwner || !repoName) {
+      await ctx.db.patch(eventId, { status: "skipped" });
+      return null;
+    }
+
     let run = await ctx.db
       .query("agentRuns")
       .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
@@ -284,11 +305,24 @@ export const handlePrClosed = internalMutation({
     // branches are deterministically named — `eva/task-<taskId>` for quick
     // tasks and `eva/project-<projectId>[-vN]` for project tasks — so we can
     // recover the run by parsing the branch and heal the link for next time.
+    // The webhook repository must match the run's Eva repo or any Eva install
+    // could close another tenant's work by opening a same-named branch.
     if (!run && args.branchName) {
-      run = await findRunByBranchName(ctx, args.branchName);
-      if (run) {
+      const byBranch = await findRunByBranchName(ctx, args.branchName);
+      if (
+        byBranch &&
+        (await runMatchesGithubRepo(ctx, byBranch, repoOwner, repoName))
+      ) {
+        run = byBranch;
         await ctx.db.patch(run._id, { prUrl: args.prUrl });
       }
+    }
+
+    if (
+      run &&
+      !(await runMatchesGithubRepo(ctx, run, repoOwner, repoName))
+    ) {
+      run = null;
     }
 
     if (!run) {

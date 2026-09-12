@@ -89,29 +89,15 @@ export const listRepos = authAction({
     if (accessState === "denied") {
       throw new Error("Not authorized to inspect this installation");
     }
-    // No Eva row for this installation yet, so there is nothing on our side that
-    // could have authorized the caller. `installationId` arrives from the
-    // browser and GitHub warns it can be spoofed, so the only sound check is to
-    // ask GitHub what *this user's* token can see in that installation.
-    if (accessState === "unclaimed") {
-      return await listInstallationReposForUser(
-        ctx,
-        ctx.userId,
-        args.installationId,
-      );
-    }
-    const octokit = await getInstallationOctokit(args.installationId);
-    const repos = await octokit.rest.apps.listReposAccessibleToInstallation({
-      per_page: 100,
-    });
-    return repos.data.repositories.map((repo) => ({
-      id: repo.id,
-      name: repo.name,
-      fullName: repo.full_name,
-      owner: repo.owner.login,
-      private: repo.private,
-      url: repo.html_url,
-    }));
+    // `installationId` arrives from the browser and GitHub warns it can be
+    // spoofed. An installation Octokit sees every repo the App is installed
+    // on, including ones this user cannot access on GitHub. Always ask
+    // GitHub what *this user's* token can see.
+    return await listInstallationReposForUser(
+      ctx,
+      ctx.userId,
+      args.installationId,
+    );
   },
 });
 
@@ -136,17 +122,13 @@ export const detectMonorepoApps = authAction({
     if (accessState === "denied") {
       throw new Error("Not authorized to inspect this installation");
     }
-    // Same reasoning as listRepos: with no Eva row backing the installation, the
-    // caller's own GitHub token is the only thing that can vouch for them.
-    if (accessState === "unclaimed") {
-      await assertUserCanUseRepo(
-        ctx,
-        ctx.userId,
-        args.installationId,
-        args.owner,
-        args.name,
-      );
-    }
+    await assertUserCanUseRepo(
+      ctx,
+      ctx.userId,
+      args.installationId,
+      args.owner,
+      args.name,
+    );
     const octokit = await getInstallationOctokit(args.installationId);
     return detectAppsForRepo(octokit, args.owner, args.name);
   },
@@ -161,8 +143,9 @@ export const detectMonorepoApps = authAction({
  * user could bind a row to an arbitrary installation id and then mint
  * installation tokens for it through `getInstallationTokenAction`.
  *
- * Installations Eva already knows the caller can use skip the round trip, so
- * adding a second repo from an installation never re-prompts for authorization.
+ * Always proves GitHub-side access for `owner/name`, including installations
+ * Eva already knows — otherwise a teammate could bind any repo on that
+ * installation and mint write tokens for it.
  */
 export const connectRepo = authAction({
   args: {
@@ -185,15 +168,13 @@ export const connectRepo = authAction({
         "Not authorized to add repositories from this installation",
       );
     }
-    if (accessState === "unclaimed") {
-      await assertUserCanUseRepo(
-        ctx,
-        ctx.userId,
-        args.installationId,
-        args.owner,
-        args.name,
-      );
-    }
+    await assertUserCanUseRepo(
+      ctx,
+      ctx.userId,
+      args.installationId,
+      args.owner,
+      args.name,
+    );
     return await ctx.runMutation(
       internal._githubRepos.mutations.createForInstallation,
       { ...args, userId: ctx.userId },

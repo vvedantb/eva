@@ -5,6 +5,7 @@ import { api, internal } from "../_generated/api";
 import { action } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { execHandle, getSandboxHandle } from "./helpers";
+import { assertActionSandboxAccess } from "../functions";
 
 /** Static POSIX ps snapshot used for reconcile matching (no user input). */
 const PS_SNAPSHOT_CMD = "ps -wweo pid=,ppid=,etimes=,args=";
@@ -171,6 +172,7 @@ export const reconcileBackgroundProcesses = action({
       );
       return { running: 0 };
     }
+    await assertActionSandboxAccess(ctx, session.repoId, sandboxId);
 
     const handle = await getSandboxHandle(ctx, session.repoId, sandboxId);
     if (handle.state !== "running") {
@@ -247,6 +249,7 @@ export const killBackgroundProcess = action({
       });
       return { outcome: "sandbox_stopped" as const };
     }
+    await assertActionSandboxAccess(ctx, session.repoId, sandboxId);
 
     const handle = await getSandboxHandle(ctx, session.repoId, sandboxId);
     if (handle.state !== "running") {

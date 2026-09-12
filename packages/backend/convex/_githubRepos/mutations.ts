@@ -205,13 +205,9 @@ const createRepoArgs = {
 };
 
 /**
- * Adds a repo from an installation this user already connected.
- *
- * Deliberately refuses installations with no Eva rows: for those, nothing here
- * can tell whether the caller has any GitHub-side claim to the id they passed,
- * and binding a row to an installation is what unlocks `getInstallationToken`
- * for it. Fresh installations go through `github:connectRepo`, which verifies
- * against the user's own GitHub token first.
+ * Adds a sibling Eva app row for a GitHub repo the caller already has on this
+ * installation (same owner/name). A different GitHub repo must go through
+ * `github:connectRepo`, which proves GitHub-side access first.
  */
 export const create = authMutation({
   args: createRepoArgs,
@@ -223,7 +219,27 @@ export const create = authMutation({
         q.eq("installationId", args.installationId),
       )
       .collect();
-    if (!installationRepos.some((repo) => repo.connectedBy === ctx.userId)) {
+    // Sibling Eva apps only — same GitHub owner/name the caller already has
+    // on this installation. A different owner/name must go through
+    // github:connectRepo, which proves GitHub-side access.
+    const sameGithub = installationRepos.filter(
+      (repo) => repo.owner === args.owner && repo.name === args.name,
+    );
+    let allowed = false;
+    for (const repo of sameGithub) {
+      if (repo.connectedBy === ctx.userId) {
+        allowed = true;
+        break;
+      }
+      if (
+        repo.teamId &&
+        (await hasTeamAccess(ctx.db, repo.teamId, ctx.userId))
+      ) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) {
       throw new Error(
         "Not authorized to add repositories from this installation",
       );
@@ -299,6 +315,13 @@ export const updateConfig = authMutation({
 
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {
+      const sibling = await ctx.db.get(siblingId);
+      if (!sibling) continue;
+      try {
+        await assertRepoWriteAccess(ctx.db, ctx.userId, sibling);
+      } catch {
+        continue;
+      }
       await ctx.db.patch(siblingId, sharedPatch);
     }
 
@@ -473,6 +496,13 @@ export const updateMcpRootPrompt = authMutation({
 
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {
+      const sibling = await ctx.db.get(siblingId);
+      if (!sibling) continue;
+      try {
+        await assertRepoWriteAccess(ctx.db, ctx.userId, sibling);
+      } catch {
+        continue;
+      }
       await ctx.db.patch(siblingId, {
         mcpRootPrompt: args.mcpRootPrompt,
       });

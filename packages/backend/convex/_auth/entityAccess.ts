@@ -8,6 +8,7 @@ import {
   hasTaskAccess,
 } from "../functions";
 import { hasCodebaseRepoAccess } from "../_githubRepos/helpers";
+import { isEntityDeleted } from "../numId";
 
 const AUTOMATION_RUN_STREAM_PREFIX = "automation-run-";
 const PR_RECAP_STREAM_PREFIX = "pr-recap:";
@@ -121,6 +122,7 @@ export async function assertDocAccess(
 ): Promise<Doc<"docs">> {
   const doc = await db.get(docId);
   if (!doc) throw new Error("Doc not found");
+  if (isEntityDeleted(doc)) throw new Error("Not authorized");
   if (doc.kind === "pr-recap") {
     if (!(await hasCodebaseRepoAccess(db, doc.repoId, userId))) {
       throw new Error("Not authorized");

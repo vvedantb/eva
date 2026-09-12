@@ -11,6 +11,7 @@ import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
 import {
   authMutation,
+  getProjectWithAccess,
   hasRepoAccess,
   hasTaskAccess,
   softDeleteAgentTask,
@@ -86,6 +87,22 @@ export const update = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    if (args.repoId !== undefined && args.repoId !== task.repoId) {
+      if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
+        throw new Error("Not authorized");
+      }
+    }
+    if (args.projectId) {
+      const destProject = await getProjectWithAccess(
+        ctx.db,
+        args.projectId,
+        ctx.userId,
+      );
+      const destRepoId = args.repoId ?? task.repoId;
+      if (!destRepoId || destProject.repoId !== destRepoId) {
+        throw new Error("Not authorized");
+      }
+    }
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.title !== undefined) updates.title = args.title;
     if (args.description !== undefined) updates.description = args.description;
@@ -515,14 +532,22 @@ export const createQuickTask = authMutation({
     if (!repo) throw new Error("Repo not found");
     const now = Date.now();
     let taskNumber: number | undefined;
+    let project = null;
     if (args.projectId) {
+      project = await getProjectWithAccess(
+        ctx.db,
+        args.projectId,
+        ctx.userId,
+      );
+      if (project.repoId !== args.repoId) {
+        throw new Error("Not authorized");
+      }
       const existingTasks = await ctx.db
         .query("agentTasks")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect();
       taskNumber = maxTaskNumberOf(existingTasks) + 1;
     }
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
     const numId = await allocateNumId(ctx.db, args.repoId, "agentTasks");
     const model = args.model ?? repo.defaultModel;
     const providerAccountId =
@@ -660,7 +685,13 @@ export const assignToProject = authMutation({
     for (const taskId of args.taskIds) {
       if (existingProjectTaskIds.has(taskId)) continue;
       const task = await ctx.db.get(taskId);
-      if (!task) throw new Error(`Task ${taskId} not found`);
+      if (
+        !task ||
+        task.repoId !== project.repoId ||
+        !(await hasTaskAccess(ctx.db, task, ctx.userId))
+      ) {
+        throw new Error(`Task ${taskId} not found`);
+      }
       assigned++;
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
@@ -789,7 +820,14 @@ export const reorderProjectTasks = authMutation({
     const existingNumbers: number[] = [];
     for (const taskId of args.taskIds) {
       const task = await ctx.db.get(taskId);
-      existingNumbers.push(task?.taskNumber ?? 0);
+      if (
+        !task ||
+        task.projectId !== args.projectId ||
+        !(await hasTaskAccess(ctx.db, task, ctx.userId))
+      ) {
+        throw new Error("Task not found");
+      }
+      existingNumbers.push(task.taskNumber ?? 0);
     }
     const sortedNumbers = [...existingNumbers].sort((a, b) => a - b);
     for (let i = 0; i < args.taskIds.length; i++) {
@@ -825,6 +863,13 @@ export const deleteCascade = authMutation({
     };
     await collectDependents(args.id);
     for (const taskId of tasksToDelete) {
+      const dependent = await ctx.db.get(taskId);
+      if (
+        !dependent ||
+        !(await hasTaskAccess(ctx.db, dependent, ctx.userId))
+      ) {
+        throw new Error("Not authorized");
+      }
       await softDeleteAgentTask(ctx, taskId);
     }
     return null;

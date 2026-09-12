@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { DatabaseWriter } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
-import { authMutation } from "../functions";
+import { authMutation, getSessionWithAccess } from "../functions";
 import type { Id } from "../_generated/dataModel";
 
 /** Patches the PTY session ID on a session, throwing if it does not exist. */
@@ -28,7 +28,10 @@ export const updatePtySession = authMutation({
     ptySessionId: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: (ctx, args) => applyPtySession(ctx.db, args.id, args.ptySessionId),
+  handler: async (ctx, args) => {
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    return applyPtySession(ctx.db, args.id, args.ptySessionId);
+  },
 });
 
 /** Updates the PTY session ID on a session (internal use, no auth check). */

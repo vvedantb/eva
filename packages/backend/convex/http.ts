@@ -633,6 +633,8 @@ http.route({
           prUrl,
           merged,
           branchName: branchName ?? undefined,
+          repoOwner: parsed.data.repository?.owner?.login ?? undefined,
+          repoName: parsed.data.repository?.name ?? undefined,
         });
       }
     }
