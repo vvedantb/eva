@@ -531,6 +531,28 @@ test("usage-limit retries share selectUsageLimitRetryUserMessage", () => {
   }
 });
 
+test("composer last-* patches share composerTraitFields", () => {
+  const helper = read("convex/_shared/composerTraits.ts");
+  expect(helper).toContain("export function composerTraitFields(");
+  expect(helper).toContain("export function hasComposerTraitUpdate(");
+  for (const path of [
+    "convex/_sessions/execution.ts",
+    "convex/_sessions/mutations.ts",
+    "convex/projectChatWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+    "convex/_projects/mutations.ts",
+    "convex/_agentTasks/mutations.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should patch via the shared helper`).toContain(
+      "composerTraitFields(",
+    );
+    expect(source, `${path} re-inlined lastReasoningLevel`).not.toContain(
+      "lastReasoningLevel:",
+    );
+  }
+});
+
 test("deployment status reads share fetchLatestDeploymentStatus", () => {
   const service = read("convex/_github/deploymentSnapshot.ts");
   expect(service).toContain("export async function fetchLatestDeploymentStatus(");

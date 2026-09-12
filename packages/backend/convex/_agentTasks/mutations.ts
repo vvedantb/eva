@@ -38,6 +38,10 @@ import {
   schedulePrLifecycleActions,
   selectPrLifecycleTransition,
 } from "../_github/prLifecycleActions";
+import {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+} from "../_shared/composerTraits";
 
 /** Highest taskNumber among a project's tasks, or 0 if none are numbered. */
 function maxTaskNumberOf(tasks: Doc<"agentTasks">[]): number {
@@ -834,26 +838,10 @@ export const setTraits = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");
     }
-    if (
-      args.reasoningLevel === undefined &&
-      args.thinkingEnabled === undefined &&
-      args.use1mContext === undefined &&
-      args.fastMode === undefined
-    ) {
+    if (!hasComposerTraitUpdate(args)) {
       return null;
     }
-    await ctx.db.patch(args.id, {
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-    });
+    await ctx.db.patch(args.id, composerTraitFields(args));
     return null;
   },
 });

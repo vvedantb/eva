@@ -23,6 +23,7 @@ import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
+import { composerTraitFields } from "../_shared/composerTraits";
 import {
   bindTurnWorkflow,
   closeOpenSessionTurn,
@@ -116,16 +117,7 @@ async function stageAndStartSessionTurn(
     pendingTurn,
     providerAccountId: stickyProviderAccountId,
     lastModel: normalizedModel,
-    ...(params.reasoningLevel !== undefined
-      ? { lastReasoningLevel: params.reasoningLevel }
-      : {}),
-    ...(params.thinkingEnabled !== undefined
-      ? { lastThinkingEnabled: params.thinkingEnabled }
-      : {}),
-    ...(params.use1mContext !== undefined
-      ? { lastUse1mContext: params.use1mContext }
-      : {}),
-    ...(params.fastMode !== undefined ? { lastFastMode: params.fastMode } : {}),
+    ...composerTraitFields(params),
     updatedAt: Date.now(),
   });
   await syncSessionDaemonState(ctx, params.session, { pendingTurn });
@@ -576,16 +568,7 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.sessionId, {
       lastModel: args.model,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
     return null;

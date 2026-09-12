@@ -59,6 +59,7 @@ import {
   maybeInsertModelHandoffAlert,
   prependModelHandoffContext,
 } from "./_shared/modelHandoff";
+import { composerTraitFields } from "./_shared/composerTraits";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -214,16 +215,7 @@ async function stageAndStartTaskChatTurn(
       : { pendingTurn: undefined }),
     lastChatModel: normalizedModel,
     providerAccountId: params.providerAccountId,
-    ...(params.reasoningLevel !== undefined
-      ? { lastReasoningLevel: params.reasoningLevel }
-      : {}),
-    ...(params.thinkingEnabled !== undefined
-      ? { lastThinkingEnabled: params.thinkingEnabled }
-      : {}),
-    ...(params.use1mContext !== undefined
-      ? { lastUse1mContext: params.use1mContext }
-      : {}),
-    ...(params.fastMode !== undefined ? { lastFastMode: params.fastMode } : {}),
+    ...composerTraitFields(params),
     updatedAt: Date.now(),
   });
 
@@ -567,16 +559,7 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.taskId, {
       lastChatModel: normalizedModel,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
     return null;
