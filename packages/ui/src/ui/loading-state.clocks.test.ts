@@ -19,3 +19,16 @@ describe("LoadingState elapsed clock", () => {
     expect(source).not.toContain("setInterval");
   });
 });
+
+/**
+ * The 3×3 grid is `aria-hidden` because the parent `role="status"` names
+ * the loader. `bindRuntimeAnimation` pauses on parked `aria-hidden`
+ * ancestors; without `data-anim-chrome` the grid matches itself and the
+ * session-row Drive cells never pulse.
+ */
+describe("LoadingState decorative grid", () => {
+  it("opts the aria-hidden grid out of the parked-subtree pause", () => {
+    expect(source).toContain("data-anim-chrome");
+    expect(source).toMatch(/aria-hidden/);
+  });
+});
