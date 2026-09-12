@@ -281,11 +281,6 @@ export const getDocData = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const rootDirectory = repo.rootDirectory ?? "";
-    const rootDirInstruction = rootDirectory
-      ? `\nIMPORTANT: Unless the user mentions otherwise, focus your evaluation on the app at "${rootDirectory}".`
-      : "";
-
     // The document itself is the specification. The agent explores the codebase
     // and reports whatever issues it finds, ranked by severity — no fixed
     // checklist, so the result set may differ between runs.
@@ -308,7 +303,7 @@ Rules:
 - "filePaths" and "suggestedFix" are optional but helpful when known.
 - "summary": one-sentence overview of the codebase's state against the spec.
 
-No markdown, no explanation, no text outside the JSON.${rootDirInstruction}`;
+No markdown, no explanation, no text outside the JSON.`;
 
     return {
       repoOwner: repo.owner,
@@ -496,11 +491,6 @@ export const getFixData = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const rootDirectory = repo.rootDirectory ?? "";
-    const rootDirInstruction = rootDirectory
-      ? `\nIMPORTANT: Unless the user mentions otherwise, focus your changes on the app at "${rootDirectory}".`
-      : "";
-
     const issues = report.issues ?? [];
 
     const prompt = `You are a senior software engineer. Your task is to fix the issues flagged against this codebase.
@@ -521,7 +511,7 @@ Rules:
 - Make minimal, focused changes to fix only the flagged issues
 - Follow existing code patterns and conventions
 - Do not refactor unrelated code
-- Do NOT run git push or gh pr commands${rootDirInstruction}`;
+- Do NOT run git push or gh pr commands`;
 
     const prDescription = `## Evaluation Fix
 

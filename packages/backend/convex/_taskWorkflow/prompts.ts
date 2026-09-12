@@ -4,11 +4,7 @@ import {
   buildSummarySection,
   detectUiImplementationTask,
 } from "./uiImplementationPrompt";
-import {
-  buildReadableReposBlock,
-  buildRootDirectoryInstruction,
-  buildSystemPromptBlock,
-} from "../prompts";
+import { buildReadableReposBlock, buildSystemPromptBlock } from "../prompts";
 
 export const WORKSPACE_DIR = "/tmp/repo";
 
@@ -129,7 +125,7 @@ ${buildSummarySection(uiTask)}
 - Prefix shell commands with timeouts: \`timeout 180 npm install\`, \`timeout 30 gh ...\`
 - For gh: \`GH_PROMPT_DISABLED=1 timeout 30 gh ...\`
 - Do NOT pipe long-running validation commands through \`tail\`; redirect output to a log file, wait for the command to exit, then tail the log.
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}`;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}`;
 }
 
 /** Builds a prompt for resolving merge conflicts against the base branch. */
@@ -156,5 +152,5 @@ export function buildConflictResolutionPrompt(
 - Do NOT run git push or gh pr commands. Eva handles publishing and PR creation after your successful completion.
 - Use lockfile for package manager.
 - Prefix shell commands with \`timeout <seconds>\` (e.g. \`timeout 30 npm install\`)
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}`;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildSystemPromptBlock(systemPrompt)}`;
 }

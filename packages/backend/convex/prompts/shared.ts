@@ -38,12 +38,6 @@ Your git credentials can also read these repositories (clone/fetch only, no push
 Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
 }
 
-/** Builds an instruction string directing the agent to work inside a specific root directory. */
-export function buildRootDirectoryInstruction(rootDirectory: string): string {
-  if (!rootDirectory) return "";
-  return `\nIMPORTANT: Unless the user mentions otherwise, all changes must be made inside the app at "${rootDirectory}".`;
-}
-
 /** Reply-length constraint appended to every session turn prompt. */
 export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
