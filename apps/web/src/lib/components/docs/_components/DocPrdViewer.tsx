@@ -25,7 +25,9 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCopy,
@@ -390,34 +392,56 @@ export function DocPrdViewer({
           </TabsList>
         </TabsBar>
 
-        <TabsContent
-          value="content"
-          className="mt-3 min-h-0 flex-1 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col"
-        >
-          <DocContentTab
-            doc={doc}
-            commentsOpen={commentsOpen}
-            onToggleComments={toggleComments}
-            historyOpen={historyPanelOpen}
-            onToggleHistory={toggleHistory}
-            suggestionsOpen={suggestionsOpen}
-            onToggleSuggestions={toggleSuggestions}
-            onSuggestionCount={setSuggestionCount}
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="html"
-          className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
-        >
-          {doc.html ? (
-            <HtmlPreviewFrame html={doc.html} title="HTML preview" />
+        <AnimatePresence mode="wait" initial={false}>
+          {activeTab === "content" ? (
+            <m.div
+              key="content"
+              className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="content"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                <DocContentTab
+                  doc={doc}
+                  commentsOpen={commentsOpen}
+                  onToggleComments={toggleComments}
+                  historyOpen={historyPanelOpen}
+                  onToggleHistory={toggleHistory}
+                  suggestionsOpen={suggestionsOpen}
+                  onToggleSuggestions={toggleSuggestions}
+                  onSuggestionCount={setSuggestionCount}
+                />
+              </TabsContent>
+            </m.div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No HTML for this document yet.
-            </p>
+            <m.div
+              key="html"
+              className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="html"
+                className="mt-0 h-full min-h-0 overflow-hidden"
+              >
+                {doc.html ? (
+                  <HtmlPreviewFrame html={doc.html} title="HTML preview" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No HTML for this document yet.
+                  </p>
+                )}
+              </TabsContent>
+            </m.div>
           )}
-        </TabsContent>
+        </AnimatePresence>
       </Tabs>
     </div>
   );

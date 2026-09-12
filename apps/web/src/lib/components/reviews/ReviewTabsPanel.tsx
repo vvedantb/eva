@@ -3,7 +3,16 @@
 import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Tabs, TabsBar, TabsContent, TabsList, TabsTrigger, cn } from "@eva/ui";
+import { m } from "motion/react";
+import {
+  Tabs,
+  TabsBar,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  cn,
+  motionFast,
+} from "@eva/ui";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { IconGitPullRequest } from "@tabler/icons-react";
 import { isReviewTab, type ReviewTab } from "@/lib/search-params";
@@ -244,7 +253,15 @@ function ReviewTabContent({
         activeTab !== tab && "hidden",
       )}
     >
-      {children}
+      {/* Opacity only — remounting here would drop drafted comments and scroll. */}
+      <m.div
+        initial={false}
+        animate={{ opacity: activeTab === tab ? 1 : 0 }}
+        transition={motionFast}
+        className="h-full min-h-0"
+      >
+        {children}
+      </m.div>
     </TabsContent>
   );
 }

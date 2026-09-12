@@ -24,6 +24,7 @@ import {
 import { IconTrash, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   catchMutationError,
   withMutationToast,
@@ -181,70 +182,78 @@ export function TeamMembersTab({
             />
           </div>
         ) : (
-          members.map((member) => (
-            <Card key={member._id}>
-              <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
-                <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-                  <UserInitials userId={member.userId} hideLastSeen size="md" />
-                  <div className="min-w-0">
-                    <p data-pii className="truncate text-sm font-medium">
-                      {member.user?.fullName || member.user?.email || "Unknown"}
-                    </p>
-                    <p
-                      data-pii
-                      className="truncate text-xs text-muted-foreground"
-                    >
-                      {member.user?.email}
-                    </p>
+          members.map((member, index) => (
+            <ListEnter key={member._id} index={index}>
+              <Card>
+                <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
+                  <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                    <UserInitials
+                      userId={member.userId}
+                      hideLastSeen
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <p data-pii className="truncate text-sm font-medium">
+                        {member.user?.fullName ||
+                          member.user?.email ||
+                          "Unknown"}
+                      </p>
+                      <p
+                        data-pii
+                        className="truncate text-xs text-muted-foreground"
+                      >
+                        {member.user?.email}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {isOwner && member.userId !== currentUserId ? (
-                    <Select
-                      value={member.role}
-                      onValueChange={(role: "owner" | "member") =>
-                        void catchMutationError(
-                          updateRole({ teamId, userId: member.userId, role }),
-                          "Couldn't update member role",
-                          "team-member-role",
-                        )
-                      }
-                    >
-                      {/* 28px is under the comfortable tap floor, so the
+                  <div className="flex shrink-0 items-center gap-2">
+                    {isOwner && member.userId !== currentUserId ? (
+                      <Select
+                        value={member.role}
+                        onValueChange={(role: "owner" | "member") =>
+                          void catchMutationError(
+                            updateRole({ teamId, userId: member.userId, role }),
+                            "Couldn't update member role",
+                            "team-member-role",
+                          )
+                        }
+                      >
+                        {/* 28px is under the comfortable tap floor, so the
                           trigger grows to 40px on touch only. */}
-                      <SelectTrigger className="h-10 w-[100px] border-0 bg-secondary text-xs sm:h-7">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="owner">owner</SelectItem>
-                        <SelectItem value="member">member</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="rounded-full bg-secondary px-2 py-1 text-xs">
-                      {member.role}
-                    </span>
-                  )}
-                  {isOwner && member.userId !== currentUserId && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Remove member"
-                      onClick={() =>
-                        void withMutationToast(
-                          removeMember({ teamId, userId: member.userId }),
-                          "Member removed",
-                          "Couldn't remove member",
-                          "team-member-remove",
-                        )
-                      }
-                    >
-                      <IconTrash size={14} />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                        <SelectTrigger className="h-10 w-[100px] border-0 bg-secondary text-xs sm:h-7">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="owner">owner</SelectItem>
+                          <SelectItem value="member">member</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="rounded-full bg-secondary px-2 py-1 text-xs">
+                        {member.role}
+                      </span>
+                    )}
+                    {isOwner && member.userId !== currentUserId && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Remove member"
+                        onClick={() =>
+                          void withMutationToast(
+                            removeMember({ teamId, userId: member.userId }),
+                            "Member removed",
+                            "Couldn't remove member",
+                            "team-member-remove",
+                          )
+                        }
+                      >
+                        <IconTrash size={14} />
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </ListEnter>
           ))
         )}
       </div>

@@ -9,12 +9,14 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { useDocByNumId } from "@/lib/useResolveByNumId";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import type { FunctionReturnType } from "convex/server";
+import { AnimatePresence, m } from "motion/react";
 import {
   ActivityTasks,
   Button,
   Spinner,
   TestError,
   TestErrorMessage,
+  motionFast,
 } from "@eva/ui";
 import {
   IconPlayerPlay,
@@ -24,6 +26,7 @@ import {
   IconTool,
 } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IssuesList } from "../_components/IssuesList";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { BranchSelect } from "@/lib/components/BranchSelect";
@@ -294,28 +297,39 @@ function CodeTestingContent({
         <p className="text-xs font-medium text-muted-foreground px-2 py-1">
           Test runs ({reports.length})
         </p>
-        {reports.map((report) => (
-          <RunListItem
-            key={report._id}
-            report={report}
-            isActive={report._id === activeId}
-            onClick={() => setSelectedId(report._id)}
-          />
+        {reports.map((report, index) => (
+          <ListEnter key={report._id} index={index}>
+            <RunListItem
+              report={report}
+              isActive={report._id === activeId}
+              onClick={() => setSelectedId(report._id)}
+            />
+          </ListEnter>
         ))}
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar p-4">
-        {activeReport && (
-          <ReportCard
-            report={activeReport}
-            streamingActivity={
-              activeReport.status === "running" ||
-              activeReport.fixStatus === "fixing"
-                ? streamingActivity
-                : undefined
-            }
-          />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {activeReport && (
+            <m.div
+              key={activeReport._id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ReportCard
+                report={activeReport}
+                streamingActivity={
+                  activeReport.status === "running" ||
+                  activeReport.fixStatus === "fixing"
+                    ? streamingActivity
+                    : undefined
+                }
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

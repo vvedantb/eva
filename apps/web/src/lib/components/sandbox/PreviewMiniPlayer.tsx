@@ -3,7 +3,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { cn } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { cn, motionSpring } from "@eva/ui";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { PreviewMiniPlayerChrome } from "./_components/PreviewMiniPlayerChrome";
 import { dropPreviewGroup, PreviewAnchor } from "./previewIframeHost";
@@ -25,12 +26,20 @@ import { usePreviewMiniPlayerFrame } from "./usePreviewMiniPlayerFrame";
  *
  * Desktop only: below `md` the sandbox pane never arms, and a window that is
  * open when the viewport shrinks simply hides until it grows back.
+ *
+ * Enter/exit is opacity + scale on the window chrome. Width/height stay in
+ * `style` — animating them would resize the hosted iframe overlay.
  */
 export function PreviewMiniPlayer() {
   const entry = usePreviewMiniPlayer();
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  if (entry === null || !isDesktop) return null;
-  return <PreviewMiniPlayerWindow entry={entry} />;
+  return (
+    <AnimatePresence>
+      {entry !== null && isDesktop ? (
+        <PreviewMiniPlayerWindow key={entry.entryKey} entry={entry} />
+      ) : null}
+    </AnimatePresence>
+  );
 }
 
 function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
@@ -58,12 +67,16 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
   };
 
   return (
-    <div
+    <m.div
       role="dialog"
       aria-label={`Preview: ${entry.title}`}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={motionSpring}
       style={style}
       className={cn(
-        "fixed z-40 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-xl",
+        "fixed z-40 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-xl origin-bottom-right",
         gesture !== null && "select-none",
       )}
     >
@@ -98,7 +111,7 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
         </div>
       </div>
       {stale ? <StalePreviewSweeper sandboxId={entry.sandboxId} /> : null}
-    </div>
+    </m.div>
   );
 }
 

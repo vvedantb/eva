@@ -14,7 +14,9 @@ import {
   QueueSectionLabel,
   QueueSectionTrigger,
   toast,
+  motionBase,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconLoader2,
   IconPlayerStop,
@@ -74,72 +76,90 @@ export function BackgroundProcessesPanel({
     };
   }, [hasRows, reconcile, sessionId]);
 
-  if (!rows || rows.length === 0) return null;
-
   return (
-    <Queue className="mb-2">
-      <QueueSection defaultOpen>
-        <QueueSectionTrigger>
-          <QueueSectionLabel
-            count={rows.length}
-            label={
-              rows.length === 1 ? "background process" : "background processes"
-            }
-          />
-        </QueueSectionTrigger>
-        <QueueSectionContent>
-          <QueueList>
-            {rows.map((row) => {
-              const isKilling = killingIds.has(row._id);
-              return (
-                <QueueItem key={row._id}>
-                  <div className="flex items-start gap-2">
-                    <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 grow">
-                      <p className="truncate font-mono text-xs text-foreground">
-                        {row.command}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatElapsed(row.startedAt, now)}
-                      </p>
-                    </div>
-                    <QueueItemActions>
-                      <QueueItemAction
-                        aria-label="Stop background process"
-                        disabled={isKilling}
-                        className="opacity-100"
-                        onClick={() => {
-                          setKillingIds((prev) => new Set(prev).add(row._id));
-                          void kill({ id: row._id })
-                            .then(() => {
-                              void reconcile({ sessionId }).catch(() => {});
-                            })
-                            .catch(() => {
-                              toast.error("Couldn't stop background process");
-                            })
-                            .finally(() => {
-                              setKillingIds((prev) => {
-                                const next = new Set(prev);
-                                next.delete(row._id);
-                                return next;
-                              });
-                            });
-                        }}
-                      >
-                        {isKilling ? (
-                          <IconLoader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <IconPlayerStop className="size-3.5" />
-                        )}
-                      </QueueItemAction>
-                    </QueueItemActions>
-                  </div>
-                </QueueItem>
-              );
-            })}
-          </QueueList>
-        </QueueSectionContent>
-      </QueueSection>
-    </Queue>
+    <AnimatePresence initial={false}>
+      {rows && rows.length > 0 ? (
+        <m.div
+          key="background-processes"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={motionBase}
+        >
+          <Queue className="mb-2">
+            <QueueSection defaultOpen>
+              <QueueSectionTrigger>
+                <QueueSectionLabel
+                  count={rows.length}
+                  label={
+                    rows.length === 1
+                      ? "background process"
+                      : "background processes"
+                  }
+                />
+              </QueueSectionTrigger>
+              <QueueSectionContent>
+                <QueueList>
+                  {rows.map((row) => {
+                    const isKilling = killingIds.has(row._id);
+                    return (
+                      <QueueItem key={row._id}>
+                        <div className="flex items-start gap-2">
+                          <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 grow">
+                            <p className="truncate font-mono text-xs text-foreground">
+                              {row.command}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatElapsed(row.startedAt, now)}
+                            </p>
+                          </div>
+                          <QueueItemActions>
+                            <QueueItemAction
+                              aria-label="Stop background process"
+                              disabled={isKilling}
+                              className="opacity-100"
+                              onClick={() => {
+                                setKillingIds((prev) =>
+                                  new Set(prev).add(row._id),
+                                );
+                                void kill({ id: row._id })
+                                  .then(() => {
+                                    void reconcile({ sessionId }).catch(
+                                      () => {},
+                                    );
+                                  })
+                                  .catch(() => {
+                                    toast.error(
+                                      "Couldn't stop background process",
+                                    );
+                                  })
+                                  .finally(() => {
+                                    setKillingIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.delete(row._id);
+                                      return next;
+                                    });
+                                  });
+                              }}
+                            >
+                              {isKilling ? (
+                                <IconLoader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <IconPlayerStop className="size-3.5" />
+                              )}
+                            </QueueItemAction>
+                          </QueueItemActions>
+                        </div>
+                      </QueueItem>
+                    );
+                  })}
+                </QueueList>
+              </QueueSectionContent>
+            </QueueSection>
+          </Queue>
+        </m.div>
+      ) : null}
+    </AnimatePresence>
   );
 }

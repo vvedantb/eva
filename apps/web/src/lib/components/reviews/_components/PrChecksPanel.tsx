@@ -1,18 +1,11 @@
 "use client";
 
 import { Button, Spinner, Surface } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IconRefresh } from "@tabler/icons-react";
-import {
-  checksHeadline,
-  checksOverallTone,
-  countChecks,
-} from "./prMergeState";
+import { checksHeadline, checksOverallTone, countChecks } from "./prMergeState";
 import { PrCheckRow } from "./PrCheckRow";
-import {
-  NOTICE_CLASS,
-  ToneIcon,
-  type PrOverview,
-} from "./prOverviewMeta";
+import { NOTICE_CLASS, ToneIcon, type PrOverview } from "./prOverviewMeta";
 
 /**
  * The Checks tab: every check run and commit status on the head commit, under
@@ -71,9 +64,11 @@ export function PrChecksPanel({
         ) : (
           <Surface density="none" className="overflow-hidden p-1.5">
             <ul className="space-y-0.5">
-              {overview.checks.map((check) => (
+              {overview.checks.map((check, index) => (
                 <li key={`${check.kind}-${check.name}`}>
-                  <PrCheckRow check={check} />
+                  <ListEnter index={index} fast>
+                    <PrCheckRow check={check} />
+                  </ListEnter>
                 </li>
               ))}
             </ul>

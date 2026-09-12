@@ -1,6 +1,13 @@
+import type { ReactNode } from "react";
 import type { ActivityStep } from "@eva/ui";
 import { IconChevronDown, IconFileText } from "@tabler/icons-react";
-import { cn, Surface } from "@eva/ui";
+import {
+  cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Surface,
+} from "@eva/ui";
 import {
   selectChangedFilePreview,
   shouldAutoExpandChangedFiles,
@@ -101,9 +108,8 @@ export function ChangedFilesCard({
 
   const isExpanded =
     expanded ?? shouldAutoExpandChangedFiles(files, isLatestAssistantTurn);
-  const visibleFiles = isExpanded
-    ? files
-    : shouldPreviewChangedFiles(files, isLatestAssistantTurn)
+  const previewFiles =
+    !isExpanded && shouldPreviewChangedFiles(files, isLatestAssistantTurn)
       ? selectChangedFilePreview(files)
       : [];
 
@@ -116,64 +122,97 @@ export function ChangedFilesCard({
 
   return (
     <Surface density="none" className="mt-2">
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <button
-          type="button"
-          aria-expanded={isExpanded}
-          onClick={toggleExpanded}
-          className="flex min-w-0 items-center gap-1.5 text-left text-xs font-medium text-foreground"
-        >
-          <IconChevronDown
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-fast)]",
-              !isExpanded && "-rotate-90",
-            )}
-          />
-          <span>Changed files ({files.length})</span>
-        </button>
-        {onViewDiff ? (
-          <button
-            type="button"
-            onClick={handleViewDiff}
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            View diff
-          </button>
-        ) : null}
-      </div>
-      {visibleFiles.length > 0 ? (
-        <ul className="grid gap-0.5 px-1.5 pb-1.5">
-          {visibleFiles.map((file) => (
-            <li key={file.path}>
-              {onOpenFile ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenFile(file.path)}
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
-                >
-                  <FileRow file={file} />
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 px-1.5 py-1.5">
-                  <FileRow file={file} />
-                </div>
-              )}
-            </li>
-          ))}
-          {!isExpanded && visibleFiles.length < files.length ? (
-            <li>
-              <button
-                type="button"
-                onClick={toggleExpanded}
-                className="w-full rounded-md px-1.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                Show all {files.length} files
-              </button>
-            </li>
+      <Collapsible open={isExpanded} onOpenChange={onExpandedChange}>
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              aria-expanded={isExpanded}
+              className="flex min-w-0 items-center gap-1.5 text-left text-xs font-medium text-foreground"
+            >
+              <IconChevronDown
+                className={cn(
+                  "size-3.5 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-fast)]",
+                  !isExpanded && "-rotate-90",
+                )}
+              />
+              <span>Changed files ({files.length})</span>
+            </button>
+          </CollapsibleTrigger>
+          {onViewDiff ? (
+            <button
+              type="button"
+              onClick={handleViewDiff}
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              View diff
+            </button>
           ) : null}
-        </ul>
-      ) : null}
+        </div>
+        {previewFiles.length > 0 ? (
+          <FileList
+            files={previewFiles}
+            onOpenFile={onOpenFile}
+            className="px-1.5 pb-1.5"
+            footer={
+              previewFiles.length < files.length ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={toggleExpanded}
+                    className="w-full rounded-md px-1.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    Show all {files.length} files
+                  </button>
+                </li>
+              ) : null
+            }
+          />
+        ) : null}
+        <CollapsibleContent>
+          <FileList
+            files={files}
+            onOpenFile={onOpenFile}
+            className="px-1.5 pb-1.5"
+          />
+        </CollapsibleContent>
+      </Collapsible>
     </Surface>
+  );
+}
+
+function FileList({
+  files,
+  onOpenFile,
+  className,
+  footer,
+}: {
+  files: ChangedFile[];
+  onOpenFile?: (path: string) => void;
+  className: string;
+  footer?: ReactNode;
+}) {
+  return (
+    <ul className={cn("grid gap-0.5", className)}>
+      {files.map((file) => (
+        <li key={file.path}>
+          {onOpenFile ? (
+            <button
+              type="button"
+              onClick={() => onOpenFile(file.path)}
+              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
+            >
+              <FileRow file={file} />
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-1.5 py-1.5">
+              <FileRow file={file} />
+            </div>
+          )}
+        </li>
+      ))}
+      {footer}
+    </ul>
   );
 }
 

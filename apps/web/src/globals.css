@@ -991,7 +991,8 @@
   }
 
   html[data-page-motion="off"] .t-tabs-pill,
-  html[data-page-motion="off"] .score-bar-fill {
+  html[data-page-motion="off"] .score-bar-fill,
+  html[data-page-motion="off"] .project-progress-fill {
     transition-duration: 0s !important;
   }
 

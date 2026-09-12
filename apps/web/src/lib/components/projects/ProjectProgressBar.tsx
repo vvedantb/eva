@@ -37,23 +37,39 @@ export function ProjectProgressBar({
     );
   }
 
+  // Fills stay at full track width and scale from the left — same compositor
+  // rule as UsageBar. `.project-progress-fill` is the hook for
+  // `html[data-page-motion=off]` (do not add that rule here).
+  const segments: {
+    status: (typeof TASK_STATUSES)[number];
+    ratio: number;
+    offset: number;
+  }[] = [];
+  let offset = 0;
+  for (const status of TASK_STATUSES) {
+    const count = progress[status];
+    if (count === 0) continue;
+    const ratio = count / progress.total;
+    segments.push({ status, ratio, offset });
+    offset += ratio;
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`flex h-1.5 overflow-hidden rounded-full bg-secondary ${className ?? ""}`}
+          className={`relative h-1.5 overflow-hidden rounded-full bg-secondary ${className ?? ""}`}
         >
-          {TASK_STATUSES.map((status) => {
-            const count = progress[status];
-            if (count === 0) return null;
-            return (
-              <div
-                key={status}
-                className={statusConfig[status].bar}
-                style={{ width: `${(count / progress.total) * 100}%` }}
-              />
-            );
-          })}
+          {segments.map((segment) => (
+            <div
+              key={segment.status}
+              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${statusConfig[segment.status].bar}`}
+              style={{
+                left: `${segment.offset * 100}%`,
+                transform: `scaleX(${segment.ratio})`,
+              }}
+            />
+          ))}
         </div>
       </TooltipTrigger>
       <TooltipContent>

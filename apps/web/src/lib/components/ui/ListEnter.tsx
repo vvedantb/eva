@@ -26,6 +26,7 @@ export function ListEnter({
   staggerStep,
   staggerMax,
   slide = true,
+  as = "div",
 }: {
   index: number;
   children: ReactNode;
@@ -37,11 +38,14 @@ export function ListEnter({
   staggerMax?: number;
   /** Fade only — use on Gantt bars so the row does not shift. */
   slide?: boolean;
+  /** `tr` when the child is a table row — an `m.div` wrapper is invalid HTML. */
+  as?: "div" | "tr";
 }) {
   const skip = firstPaint === false;
   const transition = fast ? motionFast : motionBase;
+  const MotionTag = as === "tr" ? m.tr : m.div;
   return (
-    <m.div
+    <MotionTag
       className={className}
       initial={skip ? false : { opacity: 0, y: slide ? 8 : 0 }}
       animate={{ opacity: 1, y: 0 }}
@@ -51,6 +55,6 @@ export function ListEnter({
       }}
     >
       {children}
-    </m.div>
+    </MotionTag>
   );
 }

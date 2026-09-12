@@ -31,7 +31,9 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCopy,
@@ -339,36 +341,58 @@ export function DocRecapViewer({
           </TabsList>
         </TabsBar>
 
-        <TabsContent
-          value="recap"
-          className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
-        >
-          {doc.html ? (
-            <HtmlPreviewFrame html={doc.html} title="PR recap" />
+        <AnimatePresence mode="wait" initial={false}>
+          {viewTab === "recap" ? (
+            <m.div
+              key="recap"
+              className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="recap"
+                className="mt-0 h-full min-h-0 overflow-hidden"
+              >
+                {doc.html ? (
+                  <HtmlPreviewFrame html={doc.html} title="PR recap" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {isRecapIncompleteReady || isRecapErrored
+                      ? INCOMPLETE_PR_RECAP_MESSAGE
+                      : "No recap generated yet. It is created the next time this review runs."}
+                  </p>
+                )}
+              </TabsContent>
+            </m.div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {isRecapIncompleteReady || isRecapErrored
-                ? INCOMPLETE_PR_RECAP_MESSAGE
-                : "No recap generated yet. It is created the next time this review runs."}
-            </p>
+            <m.div
+              key="summary"
+              className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="summary"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                <DocContentTab
+                  doc={doc}
+                  commentsOpen={commentsOpen}
+                  onToggleComments={toggleComments}
+                  historyOpen={historyPanelOpen}
+                  onToggleHistory={toggleHistory}
+                  suggestionsOpen={suggestionsOpen}
+                  onToggleSuggestions={toggleSuggestions}
+                  onSuggestionCount={setSuggestionCount}
+                />
+              </TabsContent>
+            </m.div>
           )}
-        </TabsContent>
-
-        <TabsContent
-          value="summary"
-          className="mt-3 min-h-0 flex-1 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col"
-        >
-          <DocContentTab
-            doc={doc}
-            commentsOpen={commentsOpen}
-            onToggleComments={toggleComments}
-            historyOpen={historyPanelOpen}
-            onToggleHistory={toggleHistory}
-            suggestionsOpen={suggestionsOpen}
-            onToggleSuggestions={toggleSuggestions}
-            onSuggestionCount={setSuggestionCount}
-          />
-        </TabsContent>
+        </AnimatePresence>
       </Tabs>
     </div>
   );
