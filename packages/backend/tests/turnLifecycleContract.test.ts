@@ -127,7 +127,7 @@ test("every warm daemon uses the shared claimed-turn lifecycle", () => {
 test("every heartbeat emitter is gated on claimed turn ownership", () => {
   const heartbeats = source("../callback-src/runtime/heartbeats.ts");
   for (const emitter of [
-    "export async function sendStreamingHeartbeatUpdate",
+    "async function sendStreamingHeartbeatUpdate",
     "async function flushStreamingPass",
     "async function heartbeatPing",
     "async function initialHeartbeat",

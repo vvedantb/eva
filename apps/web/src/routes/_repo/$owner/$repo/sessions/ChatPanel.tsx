@@ -1,13 +1,8 @@
-import {
-  api,
-  normalizeAIModel,
-  type Doc,
-  type Id,
-} from "@eva/backend";
+import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
@@ -16,7 +11,7 @@ import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
-import { SessionChatHeader } from "./_components/SessionChatHeader";
+import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
 import {
   SessionSummaryModal,
@@ -97,6 +92,11 @@ interface ChatPanelProps {
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   backgroundAgents?: Doc<"sessions">["backgroundAgents"];
+  /**
+   * False while this session shell is cached-hidden. Skips chat-local
+   * subscriptions that would otherwise keep a background turn warm.
+   */
+  isRouteActive?: boolean;
 }
 
 export function ChatPanel({
@@ -128,6 +128,7 @@ export function ChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   backgroundAgents,
+  isRouteActive = true,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
   const simpleView = useSimpleView();
@@ -143,7 +144,7 @@ export function ChatPanel({
   // The picker lists the session owner's accounts, not the viewer's — the turn
   // always runs on the owner's credentials.
   const { options: accounts, resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
   // Model + traits + account are owned by Convex.
   const {
     model,
@@ -153,7 +154,7 @@ export function ChatPanel({
     providerAccountId: stickyProviderAccountId,
     setProviderAccountId: setStickyProviderAccountId,
     isSwitchingAccount,
-  } = useSessionModel(sessionId, defaultModel);
+  } = useSessionModel(sessionId, defaultModel, isRouteActive);
   const {
     displayTraits,
     executionTraits,
@@ -168,7 +169,7 @@ export function ChatPanel({
     onTraitsPersist: setTraits,
     providerAccountId: stickyProviderAccountId,
     onProviderAccountChange: (next: string | null) => {
-      setStickyProviderAccountId(
+      void setStickyProviderAccountId(
         next === null ? null : (resolveAccountId(next) ?? null),
       );
     },
@@ -201,14 +202,17 @@ export function ChatPanel({
     resolveAccountId,
     accounts,
     messages,
+    isRouteActive,
   });
-  const proposedPlans = useQuery(api.proposedPlans.listBySession, {
-    sessionId,
-  });
+  const proposedPlans = useHeldQuery(
+    api.proposedPlans.listBySession,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const { implementPlan, implementPlanContent, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
       handleSend,
+      isRouteActive,
     });
   const {
     savePlan,
@@ -226,6 +230,16 @@ export function ChatPanel({
     // A stopped session sandbox still gets the offer: sending wakes it.
     compactionReadOnly: isReadOnly,
     backgroundAgents,
+    usageLimitRecovery: isReadOnly
+      ? undefined
+      : {
+          messages,
+          accounts,
+          resolveAccountId,
+          currentAccountId: stickyProviderAccountId,
+          onSwitchAccount: setStickyProviderAccountId,
+          isSandboxActive,
+        },
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
     onSendCommand: (command) => {
@@ -233,9 +247,10 @@ export function ChatPanel({
     },
   };
 
-  const activeQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: sessionId,
-  });
+  const activeQuestion = useHeldQuery(
+    api.pendingQuestions.getActive,
+    isRouteActive ? { entityId: sessionId } : "skip",
+  );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const handleAnswerBlockingQuestion = async (
     toolUseId: string,
@@ -264,7 +279,7 @@ export function ChatPanel({
         : (accounts.find((account) => account.id === stickyProviderAccountId)
             ?.label ?? "Selected account");
 
-  const { headerLeft, headerRight } = SessionChatHeader({
+  const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
     sessionId,
     title,
@@ -280,20 +295,29 @@ export function ChatPanel({
     permalinkPath,
     chatOnly,
     hideTitle,
+    simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,
     onSandboxToggle,
     onOpenSummaryModal: () =>
-      requestConfirm(altHeld, () => setShowSummaryModal(true), () => {
-        void startSummary();
-      }),
+      requestConfirm(
+        altHeld,
+        () => setShowSummaryModal(true),
+        () => {
+          void startSummary();
+        },
+      ),
     onOpenReviewModal: () =>
-      requestConfirm(altHeld, () => setShowReviewModal(true), () => {
-        void sendForReview().then((ok) => {
-          if (ok) toast.success("Sent to the team for review.");
-        });
-      }),
+      requestConfirm(
+        altHeld,
+        () => setShowReviewModal(true),
+        () => {
+          void sendForReview().then((ok) => {
+            if (ok) toast.success("Sent to the team for review.");
+          });
+        },
+      ),
     // Only Manager Ave can be reset: it is the one chat the user cannot simply
     // replace by opening a new session.
     onOpenResetChatDialog: chatOnly
@@ -332,7 +356,8 @@ export function ChatPanel({
   const lastAssistantMessageId = [...messages]
     .toReversed()
     .find(
-      (message) => message.role === "assistant" && message.isSystemAlert !== true,
+      (message) =>
+        message.role === "assistant" && message.isSystemAlert !== true,
     )?._id;
   const planContentMarkdown =
     typeof planContent === "string" && planContent.trim().length > 0
@@ -350,7 +375,10 @@ export function ChatPanel({
       beforeBanner={
         <>
           {simpleView ? null : (
-            <BackgroundProcessesPanel sessionId={sessionId} />
+            <BackgroundProcessesPanel
+              sessionId={sessionId}
+              isRouteActive={isRouteActive}
+            />
           )}
           {!isReadOnly ? (
             <PublishRecoveryBanner
@@ -485,7 +513,7 @@ export function ChatPanel({
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}
-        onViewDiff={prUrl ? onViewDiff : undefined}
+        onViewDiff={onViewDiff}
         hasPendingContext={hasPendingReviewComments}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={backgroundAgents}

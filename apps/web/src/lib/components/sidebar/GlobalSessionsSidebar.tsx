@@ -14,7 +14,9 @@ import {
   DialogTitle,
   Input,
   Skeleton,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
 import {
@@ -127,61 +129,73 @@ export function GlobalSessionsSidebar({
           />
         </div>
         <div className="pt-1.5">
-        {orderedRepos === undefined ? (
-          <div
-            className="min-h-48 space-y-2 px-3"
-            aria-busy="true"
-            aria-label="Loading sessions"
-          >
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-9" />
-            ))}
-          </div>
-        ) : orderedRepos.length === 0 ? (
-          <div className="px-3 py-8 text-center">
-            <p className="text-sm font-medium text-foreground">No apps yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Connect a codebase from Home.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {orderedRepos.map((repo) => (
-              <GlobalSessionGroup
-                key={repo._id}
-                repo={repo}
-                pathname={pathname}
-                open={isGroupOpen(repo)}
-                onOpenChange={(open) => {
-                  setGroupOpen(repo._id, open);
-                }}
-                onNavigate={onNavigate}
-                sessionSortOrder={settings.sessionSortOrder}
-                sessionPreviewCount={settings.sessionPreviewCount}
-                listMode={settings.listMode}
-                onRenameRequest={(session, groupRepo) => {
-                  setSessionToRename({ session, repo: groupRepo });
-                  setRenameValue(session.title);
-                }}
-                onArchiveRequest={(session, groupRepo) => {
-                  const pathSegment = entityPathSegment(session);
-                  if (!pathSegment) return;
-                  const target = { session, repo: groupRepo, pathSegment };
-                  requestConfirm(
-                    altHeld,
-                    () => setSessionToArchive(target),
-                    () => {
-                      void archive(target, pathname, () => {
-                        setSessionToArchive(null);
-                        if (onNavigate) onNavigate();
-                      });
-                    },
-                  );
-                }}
-              />
-            ))}
-          </div>
-        )}
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={settings.listMode}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {orderedRepos === undefined ? (
+                <div
+                  className="min-h-48 space-y-2 px-3"
+                  aria-busy="true"
+                  aria-label="Loading sessions"
+                >
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-9" />
+                  ))}
+                </div>
+              ) : orderedRepos.length === 0 ? (
+                <div className="px-3 py-8 text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    No apps yet
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Connect a codebase from Home.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orderedRepos.map((repo) => (
+                    <GlobalSessionGroup
+                      key={repo._id}
+                      repo={repo}
+                      pathname={pathname}
+                      open={isGroupOpen(repo)}
+                      onOpenChange={(open) => {
+                        setGroupOpen(repo._id, open);
+                      }}
+                      onNavigate={onNavigate}
+                      sessionSortOrder={settings.sessionSortOrder}
+                      sessionPreviewCount={settings.sessionPreviewCount}
+                      listMode={settings.listMode}
+                      onRenameRequest={(session, groupRepo) => {
+                        setSessionToRename({ session, repo: groupRepo });
+                        setRenameValue(session.title);
+                      }}
+                      onArchiveRequest={(session, groupRepo) => {
+                        const pathSegment = entityPathSegment(session);
+                        if (!pathSegment) return;
+                        const target = { session, repo: groupRepo, pathSegment };
+                        requestConfirm(
+                          altHeld,
+                          () => setSessionToArchive(target),
+                          () => {
+                            void archive(target, pathname, () => {
+                              setSessionToArchive(null);
+                              if (onNavigate) onNavigate();
+                            });
+                          },
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </m.div>
+          </AnimatePresence>
         </div>
       </div>
 

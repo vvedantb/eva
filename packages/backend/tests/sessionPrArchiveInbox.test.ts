@@ -69,7 +69,7 @@ describe("session PR archive inbox copy", () => {
       }),
     ).toEqual({
       title: `PR #664 merged — "${SESSION_TITLE}" archived`,
-      message: `Your session was archived because GitHub merged ${PR_URL}.`,
+      message: `PR #664 was merged on GitHub (${PR_URL}). Your session was archived.`,
     });
   });
 
@@ -82,7 +82,7 @@ describe("session PR archive inbox copy", () => {
       }),
     ).toEqual({
       title: `PR #664 closed — "${SESSION_TITLE}" archived`,
-      message: `Your session was archived because GitHub closed ${PR_URL} without merging.`,
+      message: `PR #664 was closed on GitHub without merging (${PR_URL}). Your session was archived.`,
     });
   });
 });

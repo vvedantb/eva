@@ -643,12 +643,12 @@ describe("the new tools reach every MCP caller and write no review state", () =>
 
   test("every entity tool resolves its target through the shared access check", () => {
     const entityRef = convexSource("mcp/entityRef.ts");
-    expect(entityRef).toContain("assertRepoAccess(target.repoId");
+    expect(entityRef).toContain("assertUserRepoAccess(target.repoId");
     // Four tools, four resolutions: three by entity ref, one by repo ref.
     expect(
       (entityTools.match(/resolveEntityTarget\(ref, userId\)/g) ?? []).length,
     ).toBe(3);
-    expect(entityTools).toContain("assertRepoAccess(ref.repoId, userId)");
+    expect(entityTools).toContain("assertUserRepoAccess(ref.repoId, userId)");
   });
 
   test("no entity tool patches status, phase or any review field", () => {
@@ -684,5 +684,65 @@ describe("the new tools reach every MCP caller and write no review state", () =>
     );
     expect(ensure).toContain("surface.start");
     expect(ensure.match(/"[\w/]+:[\w]+"/g)).toBeNull();
+  });
+});
+
+/**
+ * 2026-09-10: a session on eva diagnosed a carepulse-ts PR but could not post
+ * the fix into that PR's task chat — every entity tool ran the sandbox token's
+ * single-repo pin, while create_and_run_task never did. Chats now follow the
+ * per-user rule the web app uses; the pin stays on anything that hands out a
+ * repo's credentials.
+ */
+describe("a sandbox token reaches chats in every repo its user can, but credentials stay pinned", () => {
+  const entityRef = readFileSync(
+    join(testsDir, "../convex/mcp/entityRef.ts"),
+    "utf8",
+  );
+  const entityToolsSource = readFileSync(
+    join(testsDir, "../convex/mcp/entityTools.ts"),
+    "utf8",
+  );
+  const tools = readFileSync(join(testsDir, "../convex/mcp/tools.ts"), "utf8");
+  const between = (source: string, start: string, end: string): string =>
+    source.slice(source.indexOf(start), source.indexOf(end));
+
+  test("resolving a chat checks the user, not the token pin", () => {
+    const resolve = between(
+      entityRef,
+      "async function resolveEntityTarget(",
+      "return {\n    assertRepoAccess,",
+    );
+    expect(resolve).toContain("assertUserRepoAccess(target.repoId, userId)");
+    expect(resolve).not.toContain("assertRepoAccess(");
+    expect(entityRef).not.toContain("tokenScopedRepoIds");
+  });
+
+  test("the chat tools never import the pinned check", () => {
+    expect(entityToolsSource).toContain("assertUserRepoAccess");
+    expect(entityToolsSource).not.toMatch(/\bassertRepoAccess\b/);
+    expect(entityToolsSource).not.toContain("tokenScopedRepoIds");
+  });
+
+  test("the pin still guards every credential hand-out", () => {
+    const pinned = between(
+      entityRef,
+      "async function assertRepoAccess(",
+      "async function resolveRepoRef(",
+    );
+    expect(pinned).toContain("scoped to a different repository");
+    // Convex deploy keys, Postgres, and repo skills all go through the pinned check.
+    const credentials = between(
+      tools,
+      "async function resolveTargetWithAccess(",
+      '"list_tables"',
+    );
+    expect(credentials).toContain("await assertRepoAccess(repoId, userId)");
+    const postgres = between(
+      tools,
+      '"postgres_query"',
+      "async function resolveRepoByName(",
+    );
+    expect(postgres).toContain("await assertRepoAccess(ref.repoId, userId)");
   });
 });

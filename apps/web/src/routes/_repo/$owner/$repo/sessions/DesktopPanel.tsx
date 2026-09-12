@@ -2,7 +2,8 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { IconDeviceDesktop } from "@tabler/icons-react";
-import { BorderBeam, Button, cn } from "@eva/ui";
+import { BorderBeam, Button, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   SandboxIframeService,
   type StartResult,
@@ -171,7 +172,17 @@ export function DesktopPanel({
               beamPane ? null : "ring-[3px] ring-inset ring-primary/70",
             )}
           />
-          <div className="absolute top-3 left-1/2 z-20 -translate-x-1/2">
+        </>
+      ) : null}
+      <AnimatePresence initial={false}>
+        {showLockOverlay ? (
+          <m.div
+            className="absolute top-3 left-1/2 z-20 -translate-x-1/2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
             <div className="flex items-center gap-2 rounded-full bg-primary py-1.5 pr-1.5 pl-4 text-sm font-medium text-primary-foreground smooth-shadow-lg">
               <span>Agent is browsing</span>
               <Button
@@ -183,9 +194,9 @@ export function DesktopPanel({
                 Take control
               </Button>
             </div>
-          </div>
-        </>
-      ) : null}
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

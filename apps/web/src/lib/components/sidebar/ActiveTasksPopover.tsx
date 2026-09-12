@@ -1,6 +1,14 @@
 ﻿"use client";
 
-import { HoverCard, HoverCardTrigger, HoverCardContent, Badge } from "@eva/ui";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+  Badge,
+  motionFast,
+} from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { IconListCheck, IconLoader2 } from "@tabler/icons-react";
@@ -24,110 +32,123 @@ export function ActiveTasksBadge({ repoId, basePath }: ActiveTasksBadgeProps) {
       t.reviewTaskSandboxStatus === "starting",
   );
 
-  if (runningTasks.length === 0 && sandboxTasks.length === 0) {
-    return null;
-  }
+  const visible = runningTasks.length > 0 || sandboxTasks.length > 0;
 
   return (
-    <HoverCard>
-      <HoverCardTrigger asChild>
-        <Badge
-          variant="secondary"
-          className="ml-auto cursor-default items-center gap-2 border-none bg-sidebar-accent/50 px-1.5 py-0.5"
+    <AnimatePresence>
+      {visible ? (
+        <m.div
+          key="active-tasks"
+          className="ml-auto"
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.85 }}
+          transition={motionFast}
         >
-          {runningTasks.length > 0 && (
-            <span className="flex items-center gap-1.5">
-              <IconLoader2
-                size={11}
-                className="animate-spin text-muted-foreground"
-              />
-              <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
-                {runningTasks.length}
-              </span>
-            </span>
-          )}
-          {sandboxTasks.length > 0 && (
-            <span className="flex items-center gap-1.5">
-              <StatusDot />
-              <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
-                {sandboxTasks.length}
-              </span>
-            </span>
-          )}
-        </Badge>
-      </HoverCardTrigger>
-      <HoverCardContent
-        align="start"
-        className="w-[min(22rem,calc(100vw-2rem))] p-3"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <IconListCheck size={15} className="text-primary" />
-            <h3 className="text-[13px] font-semibold tracking-tight text-foreground">
-              Active tasks
-            </h3>
-            <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
-              {runningTasks.length > 0 && (
-                <span>{runningTasks.length} running</span>
-              )}
-              {runningTasks.length > 0 && sandboxTasks.length > 0 && (
-                <span aria-hidden className="text-muted-foreground/40">
-                  Â·
-                </span>
-              )}
-              {sandboxTasks.length > 0 && (
-                <span>{sandboxTasks.length} active</span>
-              )}
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {runningTasks.length > 0 && (
-              <Section
-                label="Running"
-                count={runningTasks.length}
-                glyph={
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <Badge
+                variant="secondary"
+                className="cursor-default items-center gap-2 border-none bg-sidebar-accent/50 px-1.5 py-0.5"
+              >
+                <CountPop
+                  label={countLabel(runningTasks.length)}
+                  className="flex items-center gap-1.5"
+                >
                   <IconLoader2
                     size={11}
                     className="animate-spin text-muted-foreground"
                   />
-                }
-              >
-                {runningTasks.map((task) => (
-                  <TaskRow
-                    key={task._id}
-                    title={task.title}
-                    taskNumber={task.taskNumber}
-                    to={toInternalRepoHref(
-                      `${basePath}/quick-tasks/${entityPathSegment(task) ?? ""}`,
+                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                    {runningTasks.length}
+                  </span>
+                </CountPop>
+                <CountPop
+                  label={countLabel(sandboxTasks.length)}
+                  className="flex items-center gap-1.5"
+                >
+                  <StatusDot />
+                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                    {sandboxTasks.length}
+                  </span>
+                </CountPop>
+              </Badge>
+            </HoverCardTrigger>
+            <HoverCardContent
+              align="start"
+              className="w-[min(22rem,calc(100vw-2rem))] p-3"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <IconListCheck size={15} className="text-primary" />
+                  <h3 className="text-[13px] font-semibold tracking-tight text-foreground">
+                    Active tasks
+                  </h3>
+                  <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+                    {runningTasks.length > 0 && (
+                      <span>{runningTasks.length} running</span>
                     )}
-                  />
-                ))}
-              </Section>
-            )}
+                    {runningTasks.length > 0 && sandboxTasks.length > 0 && (
+                      <span aria-hidden className="text-muted-foreground/40">
+                        Â·
+                      </span>
+                    )}
+                    {sandboxTasks.length > 0 && (
+                      <span>{sandboxTasks.length} active</span>
+                    )}
+                  </span>
+                </div>
 
-            {sandboxTasks.length > 0 && (
-              <Section
-                label="Sandbox"
-                count={sandboxTasks.length}
-                glyph={<StatusDot />}
-              >
-                {sandboxTasks.map((task) => (
-                  <TaskRow
-                    key={task._id}
-                    title={task.title}
-                    taskNumber={task.taskNumber}
-                    to={toInternalRepoHref(
-                      `${basePath}/quick-tasks/${entityPathSegment(task) ?? ""}`,
-                    )}
-                  />
-                ))}
-              </Section>
-            )}
-          </div>
-        </div>
-      </HoverCardContent>
-    </HoverCard>
+                <div className="space-y-3">
+                  {runningTasks.length > 0 && (
+                    <Section
+                      label="Running"
+                      count={runningTasks.length}
+                      glyph={
+                        <IconLoader2
+                          size={11}
+                          className="animate-spin text-muted-foreground"
+                        />
+                      }
+                    >
+                      {runningTasks.map((task) => (
+                        <TaskRow
+                          key={task._id}
+                          title={task.title}
+                          taskNumber={task.taskNumber}
+                          to={toInternalRepoHref(
+                            `${basePath}/quick-tasks/${entityPathSegment(task) ?? ""}`,
+                          )}
+                        />
+                      ))}
+                    </Section>
+                  )}
+
+                  {sandboxTasks.length > 0 && (
+                    <Section
+                      label="Sandbox"
+                      count={sandboxTasks.length}
+                      glyph={<StatusDot />}
+                    >
+                      {sandboxTasks.map((task) => (
+                        <TaskRow
+                          key={task._id}
+                          title={task.title}
+                          taskNumber={task.taskNumber}
+                          to={toInternalRepoHref(
+                            `${basePath}/quick-tasks/${entityPathSegment(task) ?? ""}`,
+                          )}
+                        />
+                      ))}
+                    </Section>
+                  )}
+                </div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        </m.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 

@@ -20,9 +20,11 @@ FOLLOW ALL OF THESE RULES
 - Do not default to `useState`/`useRef` — pick the right state ownership first.
 - useCallback and useMemo are banned as React Compiler is enabled
 - useEffect is banned as it introduces performance regressions
+- Never call a component as a function in render; name hook-calling helpers `use*` (the compiler memoises capitalised calls and skips them).
 - Do not run dev / lint / build unless the user asks.
 - After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (or `internal/changelog.md`).
 - Eliminate duplication, centralise your changes so its easier to update them
+- Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - For debugging, use Eva MCP and Convex CLI for prod logs
 
 
@@ -36,5 +38,6 @@ FOLLOW ALL OF THESE RULES
 
 - This repo is a platform for managing other codebases and running them remotely (sandbox app ≠ this codebase).
 - Sandbox provider is Vercel; Daytona is legacy. Sandboxes: IPv4 only (no IPv6).
+- Chat is one surface: sessions, quick tasks and projects share `ChatBody`/`SandboxChatPreInput`; ship chat changes to all three panels and workflow modules.
 
 Fight entropy. Leave the codebase better than you found it.

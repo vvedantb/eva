@@ -189,6 +189,17 @@ export function getAssistantTurnState(message: ChatBodyMessage): {
 }
 
 /**
+ * The failure text without the harness's `Error: ` stamp. A failed turn is
+ * already framed as an error by the notice around it, so the prefix only
+ * repeats what the icon and the title say.
+ */
+export function stripErrorPrefix(content: string): string {
+  const trimmed = content.trim();
+  const prefix = /^error:\s*/i.exec(trimmed);
+  return prefix === null ? trimmed : trimmed.slice(prefix[0].length);
+}
+
+/**
  * The bubble the session-scoped streaming row belongs to: the oldest empty,
  * unfinished assistant bubble. Turns execute FIFO, so when a queued turn's
  * placeholder is inserted while an older turn (a synthetic loop continuation,

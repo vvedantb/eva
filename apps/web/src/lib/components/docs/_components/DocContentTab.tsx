@@ -15,7 +15,8 @@ import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docModeParser, type DocMode } from "@/lib/search-params";
 import { nanoid } from "nanoid";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconMessage } from "@tabler/icons-react";
 import { FloatingToc } from "../FloatingToc";
 import { DocCommentsPanel } from "./DocCommentsPanel";
@@ -345,86 +346,127 @@ export function DocContentTab({
     // and they position against this row.
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="flex max-sm:min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        {selectedVersionId ? (
-          <div className="scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-            <DocVersionDiff
-              versionId={selectedVersionId}
-              currentContent={doc.content}
-              onRestore={handleRestoreVersion}
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
-            {!commentsOpen &&
-              !historyOpen &&
-              !suggestionsOpen &&
-              tocContent.trim().length > 0 && (
-                <FloatingToc
-                  containerRef={contentScrollRef}
-                  content={tocContent}
-                  className="hidden w-52 shrink-0 border-r border-border py-1 lg:block"
-                />
-              )}
-
-            <div
-              ref={contentScrollRef}
-              className="scrollbar min-h-0 flex-1 overflow-y-auto"
+        <AnimatePresence mode="wait" initial={false}>
+          {selectedVersionId ? (
+            <m.div
+              key="diff"
+              className="scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
             >
-              <EditorContent
-                editor={editor}
-                // Code fences scroll inside themselves; an unbroken line would
-                // otherwise widen the whole document past the viewport.
-                className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
+              <DocVersionDiff
+                versionId={selectedVersionId}
+                currentContent={doc.content}
+                onRestore={handleRestoreVersion}
               />
-              {editor && (
-                <BubbleMenu
+            </m.div>
+          ) : (
+            <m.div
+              key="live"
+              className="flex min-h-0 flex-1 gap-6 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {!commentsOpen &&
+                !historyOpen &&
+                !suggestionsOpen &&
+                tocContent.trim().length > 0 && (
+                  <FloatingToc
+                    containerRef={contentScrollRef}
+                    content={tocContent}
+                    className="hidden w-52 shrink-0 border-r border-border py-1 lg:block"
+                  />
+                )}
+
+              <div
+                ref={contentScrollRef}
+                className="scrollbar min-h-0 flex-1 overflow-y-auto"
+              >
+                <EditorContent
                   editor={editor}
-                  className="rounded-menu-item bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-md"
-                >
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs max-sm:h-10 max-sm:px-3"
-                    onClick={handleStartComment}
+                  // Code fences scroll inside themselves; an unbroken line would
+                  // otherwise widen the whole document past the viewport.
+                  className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
+                />
+                {editor && (
+                  <BubbleMenu
+                    editor={editor}
+                    className="rounded-menu-item bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-md"
                   >
-                    <IconMessage size={14} aria-hidden />
-                    Comment
-                  </Button>
-                </BubbleMenu>
-              )}
-            </div>
-          </div>
-        )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs max-sm:h-10 max-sm:px-3"
+                      onClick={handleStartComment}
+                    >
+                      <IconMessage size={14} aria-hidden />
+                      Comment
+                    </Button>
+                  </BubbleMenu>
+                )}
+              </div>
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {commentsOpen && (
-        <DocCommentsPanel
-          docId={doc._id}
-          allowAskEva={isPrRecap}
-          activeAnchorId={activeAnchorId}
-          onAnchorClick={handleAnchorActivate}
-          onClose={onToggleComments}
-          composingAnchorId={composingAnchorId}
-          composingAnchorText={composingAnchorText}
-          onCancelCompose={handleCancelCompose}
-          onCommentCreated={handleCommentCreated}
-          presentAnchorIds={presentAnchorIds}
-        />
-      )}
-
-      {historyOpen && (
-        <DocHistoryPanel
-          docId={doc._id}
-          docKind={doc.kind}
-          selectedVersionId={selectedVersionId}
-          onSelectVersion={(id) => setSelectedVersionId(id)}
-          onClose={onToggleHistory}
-        />
-      )}
-
-      {suggestionsOpen && editor && (
-        <DocSuggestionsPanel editor={editor} onClose={onToggleSuggestions} />
-      )}
+      <AnimatePresence mode="wait">
+        {commentsOpen ? (
+          <m.div
+            key="comments"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocCommentsPanel
+              docId={doc._id}
+              allowAskEva={isPrRecap}
+              activeAnchorId={activeAnchorId}
+              onAnchorClick={handleAnchorActivate}
+              onClose={onToggleComments}
+              composingAnchorId={composingAnchorId}
+              composingAnchorText={composingAnchorText}
+              onCancelCompose={handleCancelCompose}
+              onCommentCreated={handleCommentCreated}
+              presentAnchorIds={presentAnchorIds}
+            />
+          </m.div>
+        ) : historyOpen ? (
+          <m.div
+            key="history"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocHistoryPanel
+              docId={doc._id}
+              docKind={doc.kind}
+              selectedVersionId={selectedVersionId}
+              onSelectVersion={(id) => setSelectedVersionId(id)}
+              onClose={onToggleHistory}
+            />
+          </m.div>
+        ) : suggestionsOpen && editor ? (
+          <m.div
+            key="suggestions"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocSuggestionsPanel editor={editor} onClose={onToggleSuggestions} />
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

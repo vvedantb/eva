@@ -146,7 +146,10 @@ export async function createSession(
 
   const content = args.message?.trim() ?? "";
   if (content) {
-    if (!args.model) {
+    // MCP `create_session` (and any caller that omits `model`) relies on
+    // `repo.defaultModel` resolved above. Checking `args.model` here threw
+    // after the session row was built and rolled the mutation back.
+    if (!model) {
       throw new Error("model is required when queuing a message");
     }
     await ctx.db.insert("queuedMessages", {
@@ -155,7 +158,7 @@ export async function createSession(
       createdAt: Date.now(),
       order: Date.now(),
       userId: ctx.userId,
-      model: args.model,
+      model,
       reasoningLevel,
       thinkingEnabled,
       use1mContext,

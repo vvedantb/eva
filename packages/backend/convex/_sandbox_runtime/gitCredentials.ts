@@ -23,11 +23,14 @@ const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
 // install so git uses our credential helper instead of stale URL credentials.
 const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 
-// Bash credential helper. Git invokes it with `get` and supplies the host/proto
-// on stdin (which we discard — we only auth one installation). We POST the
-// per-sandbox bearer secret to the eva backend, which mints a fresh
-// installation token. A short file cache trims duplicate mints during a single
-// git operation (clone/fetch/push fan out into several helper invocations).
+// Bash credential helper. Git invokes it with `get` and supplies the
+// host/proto/path on stdin; we read the `path=` line (git sends it because the
+// install sets `credential.useHttpPath`) and forward it. We POST the
+// per-sandbox bearer secret plus that path to the eva backend, which mints a
+// full installation token for the sandbox's own repo and a read-only,
+// single-repository token for any other repo its owner can reach in eva.
+// A short per-path file cache trims duplicate mints during a single git
+// operation (clone/fetch/push fan out into several helper invocations).
 const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
 
@@ -36,7 +39,12 @@ if [ "\${1:-}" != "get" ]; then
   exit 0
 fi
 
-cat >/dev/null 2>&1 || true
+REQ_PATH=""
+while IFS= read -r LINE; do
+  case "$LINE" in
+    path=*) REQ_PATH="\${LINE#path=}" ;;
+  esac
+done
 
 CONFIG_FILE="${HELPER_CONFIG_PATH}"
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -52,7 +60,8 @@ if [ -z "\${EVA_SANDBOX_SECRET:-}" ] || [ -z "\${CONVEX_SITE_URL:-}" ]; then
   exit 1
 fi
 
-CACHE_FILE="/tmp/git-cred-cache"
+CACHE_KEY=$(printf '%s' "\${REQ_PATH:-home}" | cksum | cut -d' ' -f1)
+CACHE_FILE="/tmp/git-cred-cache-$CACHE_KEY"
 CACHE_TTL_SECONDS=3000
 
 if [ -f "$CACHE_FILE" ]; then
@@ -68,12 +77,18 @@ if [ -f "$CACHE_FILE" ]; then
   fi
 fi
 
+if [ -n "$REQ_PATH" ]; then
+  REQ_BODY=$(jq -cn --arg p "$REQ_PATH" '{path:$p}')
+else
+  REQ_BODY='{}'
+fi
+
 RESPONSE=$(curl -fsSL -X POST \\
   -H "Authorization: Bearer $EVA_SANDBOX_SECRET" \\
   -H "Content-Type: application/json" \\
-  --data '{}' \\
+  --data "$REQ_BODY" \\
   "$CONVEX_SITE_URL/api/git-credentials") || {
-    echo "git-credential-eva: token fetch failed" >&2
+    echo "git-credential-eva: token fetch failed (no access?)" >&2
     exit 1
   }
 
@@ -144,7 +159,7 @@ export async function ensureGitCredentialHelper(
       `chmod 600 ${HELPER_CONFIG_PATH}`,
       `chmod 755 ${HELPER_SCRIPT_PATH}`,
       // Stale cache from a prior secret/token must not be reused under the new secret.
-      `rm -f /tmp/git-cred-cache`,
+      `rm -f /tmp/git-cred-cache /tmp/git-cred-cache-*`,
       // Wipe any inherited URL-embedded token / extraheader before switching to the helper.
       `git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true`,
       // Reset credential.helper to exactly `''` + our helper. `--unset-all`
@@ -155,6 +170,9 @@ export async function ensureGitCredentialHelper(
       `git config --global --add credential.helper ''`,
       `git config --global --add credential.helper ${HELPER_SCRIPT_PATH}`,
       `git config --global --replace-all credential.https://github.com.helper ${HELPER_SCRIPT_PATH}`,
+      // Makes git send `path=owner/repo.git` on stdin so the helper can ask for
+      // a read-only token for a sibling repo instead of the sandbox's own.
+      `git config --global credential.https://github.com.useHttpPath true`,
       // Agents often `git pull` without a strategy; modern git fatals otherwise.
       `git config --global pull.rebase true`,
       ...repoCleanupSteps,

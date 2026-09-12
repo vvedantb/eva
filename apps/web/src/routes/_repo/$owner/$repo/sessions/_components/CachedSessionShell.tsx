@@ -75,10 +75,17 @@ function CachedSessionShellInner({
     setSandboxTab(urlSandboxTab);
   }, [isActiveRoute, urlSandboxTab]);
 
+  // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
+  // `basePath`. `navigate({ to })` matches the route tree before the
+  // history rewrite, so `/owner/repo/app/sessions/…` is a miss on
+  // monorepo apps and the Review tab never opens.
+  const sessionParams = { owner, repo: repoParam, numId };
+
   const openFile = (path: string) => {
     if (simpleView) return;
     void navigate({
-      to: `${basePath}/sessions/${numId}/files`,
+      to: "/$owner/$repo/sessions/$numId/$sandboxTab",
+      params: { ...sessionParams, sandboxTab: "files" },
       search: (prev) => ({ ...prev, file: path }),
     });
   };
@@ -86,7 +93,8 @@ function CachedSessionShellInner({
   const openDiffs = (repoRelativePath?: string) => {
     if (simpleView) return;
     void navigate({
-      to: `${basePath}/sessions/${numId}/review/diffs/unified`,
+      to: "/$owner/$repo/sessions/$numId/review/diffs/$diffView",
+      params: { ...sessionParams, diffView: "unified" },
       search: (prev) => ({
         ...prev,
         ...(repoRelativePath ? { diffFile: repoRelativePath } : {}),
@@ -97,13 +105,15 @@ function CachedSessionShellInner({
   const onSandboxTabChange = (next: string) => {
     if (next === "review") {
       void navigate({
-        to: `${basePath}/sessions/${numId}/review/diffs/unified`,
+        to: "/$owner/$repo/sessions/$numId/review/diffs/$diffView",
+        params: { ...sessionParams, diffView: "unified" },
         search: true,
       });
       return;
     }
     void navigate({
-      to: `${basePath}/sessions/${numId}/${next}`,
+      to: "/$owner/$repo/sessions/$numId/$sandboxTab",
+      params: { ...sessionParams, sandboxTab: next },
       search: true,
     });
   };
@@ -119,25 +129,25 @@ function CachedSessionShellInner({
           params={{ owner, repo: repoParam, numId }}
         />
       ) : null}
-    <EntityNumIdGate
-      // Same rule as the redirect above: only the visible shell may navigate,
-      // so a hidden shell holding a legacy Convex id just keeps its spinner.
-      resolve={isActiveRoute ? session : { ...session, redirectTo: null }}
-      entityLabel="session"
-      backTo={`${basePath}/sessions`}
-    >
-      {(sessionDoc) => (
-        <SessionDetailClient
-          sessionId={sessionDoc._id}
-          activeSandboxTab={sandboxTab}
-          onSandboxTabChange={onSandboxTabChange}
-          onOpenFile={openFile}
-          onViewDiff={simpleView ? undefined : openDiffs}
-          isRouteActive={isActiveRoute}
-          hideTitle={embedded}
-        />
-      )}
-    </EntityNumIdGate>
+      <EntityNumIdGate
+        // Same rule as the redirect above: only the visible shell may navigate,
+        // so a hidden shell holding a legacy Convex id just keeps its spinner.
+        resolve={isActiveRoute ? session : { ...session, redirectTo: null }}
+        entityLabel="session"
+        backTo={`${basePath}/sessions`}
+      >
+        {(sessionDoc) => (
+          <SessionDetailClient
+            sessionId={sessionDoc._id}
+            activeSandboxTab={sandboxTab}
+            onSandboxTabChange={onSandboxTabChange}
+            onOpenFile={openFile}
+            onViewDiff={simpleView ? undefined : openDiffs}
+            isRouteActive={isActiveRoute}
+            hideTitle={embedded}
+          />
+        )}
+      </EntityNumIdGate>
     </>
   );
 }

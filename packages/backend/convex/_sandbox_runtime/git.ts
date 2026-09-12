@@ -36,6 +36,7 @@ import {
   rewrittenBranchPublishError,
 } from "./divergedPublish";
 import { ensureSwapFile } from "./swap";
+import { COREPACK_SANDBOX_ENV } from "../_sandbox/vercelEnvFile";
 import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
@@ -384,6 +385,7 @@ export async function createSandbox(
           EVA_ENV_FILE,
           renderEvaEnvFile({
             VNC_RESOLUTION: "1920x1080",
+            ...COREPACK_SANDBOX_ENV,
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),

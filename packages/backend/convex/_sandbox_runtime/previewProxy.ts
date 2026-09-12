@@ -26,9 +26,16 @@ export const VERCEL_DESKTOP_INTERNAL_PORT = 16080;
 /** code-server listens here; auth proxy owns exposed 8080. */
 export const VERCEL_EDITOR_INTERNAL_PORT = 18080;
 const HEALTH_PATH = "/__eva_preview_proxy/health";
+/**
+ * Path prefix that forwards to an arbitrary in-sandbox port:
+ * `/__tab/<port>/…` → `127.0.0.1:<port>/…`. Custom tabs (e.g. Supabase Studio
+ * on 54323) use it so they share the single exposed proxy port with Preview
+ * instead of restarting the proxy onto their own upstream.
+ */
+export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v18";
+const SCRIPT_VERSION = "stream-v20";
 
 /** Values injected into the generated proxy script to drive the auth gate. */
 interface PreviewProxyAuthParams {
@@ -401,12 +408,17 @@ function authorize(clientReq, clientRes) {
 // The agentation annotation widget has the same problem: it runs in the browser
 // but its server listens on sandbox-localhost:4747, which the user's machine
 // cannot reach. /__agentation forwards to it on the authenticated preview origin.
+//
+// /__tab/<port> generalises that to any in-sandbox port, so user-defined custom
+// tabs (Supabase Studio on 54323, say) share this one exposed proxy port with
+// the Preview tab rather than fighting over it.
 const CONVEX_PORT = 3210;
 const CONVEX_SITE_PORT = 3211;
 const AGENTATION_PORT = 4747;
 const CONVEX_PREFIX = "/__convex";
 const CONVEX_SITE_PREFIX = "/__convex-site";
 const AGENTATION_PREFIX = "/__agentation";
+const TAB_PREFIX = ${JSON.stringify(PREVIEW_TAB_PREFIX)};
 
 // Returns the path with the prefix stripped (always leading-slashed), or null
 // when "url" is not the prefix or a "/", "?", "#" delimited sub-path of it.
@@ -419,23 +431,139 @@ function matchPrefix(url, prefix) {
   return next === "/" ? rest : "/" + rest;
 }
 
+// Matches "/__tab/<port>" (+ optional "/", "?" or "#" tail) and returns the tab
+// route, or null when the port is missing, malformed, out of range or the proxy
+// itself (which would loop back into us). Null falls through to the default.
+function matchTabPrefix(url) {
+  const rest = matchPrefix(url || "/", TAB_PREFIX);
+  if (rest === null) return null;
+  const digits = /^\/(\d{1,5})(?=$|[\/?#])/.exec(rest);
+  if (digits === null) return null;
+  const port = Number(digits[1]);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return null;
+  if (port === proxyPort) return null;
+  const tail = rest.slice(digits[0].length);
+  const path = tail === "" ? "/" : tail[0] === "/" ? tail : "/" + tail;
+  return {
+    port: port,
+    path: path,
+    injects: false,
+    tabPrefix: TAB_PREFIX + "/" + String(port),
+  };
+}
+
 // Maps an incoming request URL to an upstream port + stripped path. Anything
-// outside the Convex prefixes goes to the dev server and gets HTML injection.
+// outside the Convex / agentation / tab prefixes goes to the dev server and
+// gets HTML injection.
 function resolveRoute(url) {
   const u = url || "/";
   const siteMatch = matchPrefix(u, CONVEX_SITE_PREFIX);
   if (siteMatch !== null) {
-    return { port: CONVEX_SITE_PORT, path: siteMatch, injects: false };
+    return {
+      port: CONVEX_SITE_PORT,
+      path: siteMatch,
+      injects: false,
+      tabPrefix: null,
+    };
   }
   const convexMatch = matchPrefix(u, CONVEX_PREFIX);
   if (convexMatch !== null) {
-    return { port: CONVEX_PORT, path: convexMatch, injects: false };
+    return {
+      port: CONVEX_PORT,
+      path: convexMatch,
+      injects: false,
+      tabPrefix: null,
+    };
   }
   const agentationMatch = matchPrefix(u, AGENTATION_PREFIX);
   if (agentationMatch !== null) {
-    return { port: AGENTATION_PORT, path: agentationMatch, injects: false };
+    return {
+      port: AGENTATION_PORT,
+      path: agentationMatch,
+      injects: false,
+      tabPrefix: null,
+    };
   }
-  return { port: targetPort, path: u, injects: INJECT_ENABLED };
+  const tabMatch = matchTabPrefix(u);
+  if (tabMatch !== null) {
+    return tabMatch;
+  }
+  return {
+    port: targetPort,
+    path: u,
+    injects: INJECT_ENABLED,
+    tabPrefix: null,
+  };
+}
+
+// Tab apps (Supabase Studio, say) request root-absolute assets — /_next/…,
+// /api/… — that carry no prefix and would otherwise hit the dev server. The
+// Referer of the tab page says which port they belong to. This also covers the
+// asset loads after a pushState navigation moves the iframe URL off the prefix
+// (fixing the iframe URL itself is out of scope).
+function resolveRouteWithReferer(url, headers) {
+  const route = resolveRoute(url);
+  if (route.tabPrefix !== null || route.port !== targetPort) return route;
+  const referer = headers ? headers["referer"] : null;
+  if (!referer) return route;
+  try {
+    const tab = matchTabPrefix(new URL(String(referer)).pathname);
+    if (tab === null) return route;
+    return {
+      port: tab.port,
+      path: route.path,
+      injects: false,
+      tabPrefix: tab.tabPrefix,
+    };
+  } catch {
+    return route;
+  }
+}
+
+// Upstream apps set their session cookies with the browser's SameSite=Lax
+// default, which cross-site iframes (Eva web app → *.vercel.run preview
+// origin) silently drop — so signing in to the previewed app only worked when
+// opened top-level in a new tab. Rewrite Set-Cookie with the same attributes
+// the proxy's own session cookie uses (SameSite=None; Secure; Partitioned) so
+// the app's sign-in works inside the preview iframe. Domain= is stripped: the
+// upstream only knows its localhost host, which would pin the cookie to a
+// host the browser never sees. Every rewrite is paired with an
+// unpartitionedCookieDeletion of the same cookie (see below).
+function rewriteSetCookie(value) {
+  const parts = String(value).split(";");
+  const kept = [parts[0]];
+  for (let i = 1; i < parts.length; i += 1) {
+    const attr = parts[i].trim();
+    if (!attr) continue;
+    const lower = attr.toLowerCase();
+    if (lower.startsWith("samesite")) continue;
+    if (lower.startsWith("domain")) continue;
+    if (lower === "secure" || lower === "partitioned") continue;
+    kept.push(attr);
+  }
+  return kept.join("; ") + "; Secure; SameSite=None; Partitioned";
+}
+
+// Same-name partitioned and unpartitioned cookies are distinct cookies to the
+// browser (CHIPS) and are both sent in the Cookie header. A cookie the app
+// wrote client-side via document.cookie is unpartitioned; once the proxy
+// rewrites the server copy to Partitioned the two coexist and the upstream sees
+// two values under one name (stale logouts, wrong account). Every rewritten
+// Set-Cookie is therefore preceded by an expiry of the unpartitioned copy with
+// the same name and path. Emitted FIRST so browsers without CHIPS (which
+// ignore Partitioned and share one jar) delete then set, never set then delete.
+function unpartitionedCookieDeletion(value) {
+  const parts = String(value).split(";");
+  const eq = parts[0].indexOf("=");
+  const name = (eq === -1 ? parts[0] : parts[0].slice(0, eq)).trim();
+  let path = "/";
+  for (let i = 1; i < parts.length; i += 1) {
+    const attr = parts[i].trim();
+    if (attr.toLowerCase().startsWith("path=")) {
+      path = attr.slice(5).trim();
+    }
+  }
+  return name + "=; Path=" + path + "; Max-Age=0; Secure; SameSite=None";
 }
 
 const injectedScript = "(" + function () {
@@ -625,11 +753,49 @@ const convexRewriteScript = "(" + function () {
   rewriteTree(document);
 }.toString() + ")();";
 
+// Cookies the app writes client-side never pass through responseHeaders, so
+// without this patch they keep the browser's unpartitioned default while the
+// proxy's rewrite makes the server copies Partitioned — two same-name cookies
+// in the Cookie header (see unpartitionedCookieDeletion). document.cookie
+// therefore applies the very same attribute rules, deletion first so
+// non-CHIPS browsers (one jar) end up with the rewritten cookie, not none.
+function installPartitionedDocumentCookie(rewrite, deletion) {
+  const flag = "__evaPartitionedDocumentCookie";
+  if (window[flag]) return;
+  window[flag] = true;
+  // Mirrors the proxy's loopback exemption: in-sandbox browsers are not
+  // behind the cookie rewrite, so their client-side cookies must stay as-is.
+  const host = window.location.hostname;
+  if (host === "127.0.0.1" || host === "localhost" || host === "[::1]") return;
+  const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  if (!descriptor || typeof descriptor.set !== "function" || typeof descriptor.get !== "function") return;
+  Object.defineProperty(Document.prototype, "cookie", {
+    configurable: true,
+    enumerable: descriptor.enumerable,
+    get: descriptor.get,
+    set: function (value) {
+      const text = String(value);
+      descriptor.set.call(this, deletion(text));
+      descriptor.set.call(this, rewrite(text));
+    },
+  });
+}
+
+const cookiePatchScript =
+  "(" + installPartitionedDocumentCookie.toString() + ")(" +
+  rewriteSetCookie.toString() + ", " + unpartitionedCookieDeletion.toString() + ");";
+
 const ANNOTATION_SCRIPT = ${JSON.stringify(PREVIEW_ANNOTATION_SCRIPT)};
 
 function buildInjectionTag() {
   const combined =
-    convexRewriteScript + "\n" + injectedScript + "\n" + ANNOTATION_SCRIPT;
+    cookiePatchScript +
+    "\n" +
+    convexRewriteScript +
+    "\n" +
+    injectedScript +
+    "\n" +
+    ANNOTATION_SCRIPT;
   const safeScript = combined.replace(/<\/script/gi, "<\\/script");
   return "<script data-eva-preview-nav-sync>" + safeScript + "</scr" + "ipt>";
 }
@@ -678,9 +844,47 @@ function rewriteNovncModuleImports(html) {
     );
 }
 
-function rewriteHtml(html, injects) {
+// Root-absolute URLs in a tab app's HTML ("/_next/x.js") would resolve against
+// the preview origin and hit the dev server, so first-party attributes are
+// moved under the tab's own prefix. Prefixes the proxy owns are left alone, as
+// are protocol-relative ("//cdn/x") and absolute URLs.
+const TAB_SKIP_PREFIX_RE =
+  /^\/(?:__tab\/|__convex|__agentation|__eva_preview_proxy)/;
+
+function prefixTabPath(value, tabPrefix) {
+  if (value.length === 0 || value[0] !== "/" || value[1] === "/") return null;
+  if (TAB_SKIP_PREFIX_RE.test(value)) return null;
+  return tabPrefix + value;
+}
+
+function rewriteTabHtml(html, tabPrefix) {
+  const withAttributes = html.replace(
+    /(\b(?:href|src|action)\s*=\s*["'])([^"']*)/gi,
+    function rewriteAttribute(match, lead, value) {
+      const prefixed = prefixTabPath(value, tabPrefix);
+      return prefixed === null ? match : lead + prefixed;
+    },
+  );
+  return withAttributes.replace(
+    /(\bsrcset\s*=\s*["'])([^"']*)/gi,
+    function rewriteSrcset(match, lead, value) {
+      const entries = value.split(",").map(function rewriteEntry(entry) {
+        const parts = /^(\s*)(\S*)([\s\S]*)$/.exec(entry);
+        if (parts === null) return entry;
+        const prefixed = prefixTabPath(parts[2], tabPrefix);
+        return prefixed === null ? entry : parts[1] + prefixed + parts[3];
+      });
+      return lead + entries.join(",");
+    },
+  );
+}
+
+function rewriteHtml(html, injects, tabPrefix) {
   let out = stripModuleCrossorigin(html);
   out = rewriteNovncModuleImports(out);
+  if (tabPrefix) {
+    out = rewriteTabHtml(out, tabPrefix);
+  }
   if (injects) {
     out = injectHtml(out);
   }
@@ -700,15 +904,25 @@ function rewriteHtml(html, injects) {
 // rejects as "port is not exposed" for that host/path combination.
 const VERCEL_HOST_SUFFIX = ".vercel.run";
 
-function rewriteLocationHeader(value) {
+function rewriteLocationHeader(value, route) {
   try {
-    const parsed = new URL(value, "http://127.0.0.1:" + String(targetPort));
+    const parsed = new URL(value, "http://127.0.0.1:" + String(route.port));
     const isLocalUpstream =
       (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
-      Number(parsed.port || "80") === targetPort;
+      Number(parsed.port || "80") === route.port;
     const isVercelHost = parsed.hostname.endsWith(VERCEL_HOST_SUFFIX);
     if (isLocalUpstream || isVercelHost) {
-      return parsed.pathname + parsed.search + parsed.hash;
+      const path = parsed.pathname + parsed.search + parsed.hash;
+      // A tab upstream redirects within its own app ("/login"), which must stay
+      // under the tab prefix or it would land on the dev server.
+      if (
+        route.tabPrefix &&
+        parsed.pathname !== route.tabPrefix &&
+        !parsed.pathname.startsWith(route.tabPrefix + "/")
+      ) {
+        return route.tabPrefix + path;
+      }
+      return path;
     }
     return value;
   } catch {
@@ -716,30 +930,13 @@ function rewriteLocationHeader(value) {
   }
 }
 
-// Upstream apps set their session cookies with the browser's SameSite=Lax
-// default, which cross-site iframes (Eva web app → *.vercel.run preview
-// origin) silently drop — so signing in to the previewed app only worked when
-// opened top-level in a new tab. Rewrite Set-Cookie with the same attributes
-// the proxy's own session cookie uses (SameSite=None; Secure; Partitioned) so
-// the app's sign-in works inside the preview iframe. Domain= is stripped: the
-// upstream only knows its localhost host, which would pin the cookie to a
-// host the browser never sees.
-function rewriteSetCookie(value) {
-  const parts = String(value).split(";");
-  const kept = [parts[0]];
-  for (let i = 1; i < parts.length; i += 1) {
-    const attr = parts[i].trim();
-    if (!attr) continue;
-    const lower = attr.toLowerCase();
-    if (lower.startsWith("samesite")) continue;
-    if (lower.startsWith("domain")) continue;
-    if (lower === "secure" || lower === "partitioned") continue;
-    kept.push(attr);
-  }
-  return kept.join("; ") + "; Secure; SameSite=None; Partitioned";
-}
-
-function responseHeaders(upstreamHeaders, injectsHtml, addCors, rewriteCookies) {
+function responseHeaders(
+  upstreamHeaders,
+  injectsHtml,
+  addCors,
+  rewriteCookies,
+  route,
+) {
   const headers = {};
   for (const name of Object.keys(upstreamHeaders)) {
     const lower = name.toLowerCase();
@@ -752,19 +949,23 @@ function responseHeaders(upstreamHeaders, injectsHtml, addCors, rewriteCookies) 
 
     if (lower === "location") {
       if (Array.isArray(value)) {
-        headers[name] = value.map(rewriteLocationHeader);
+        headers[name] = value.map(function rewriteOne(item) {
+          return rewriteLocationHeader(String(item), route);
+        });
       } else {
-        headers[name] = rewriteLocationHeader(String(value));
+        headers[name] = rewriteLocationHeader(String(value), route);
       }
       continue;
     }
 
     if (lower === "set-cookie" && rewriteCookies) {
-      if (Array.isArray(value)) {
-        headers[name] = value.map(rewriteSetCookie);
-      } else {
-        headers[name] = rewriteSetCookie(String(value));
+      const cookies = Array.isArray(value) ? value : [String(value)];
+      const out = [];
+      for (const cookie of cookies) {
+        out.push(unpartitionedCookieDeletion(String(cookie)));
+        out.push(rewriteSetCookie(String(cookie)));
       }
+      headers[name] = out;
       continue;
     }
 
@@ -831,7 +1032,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
     } catch {}
   }
 
-  const route = resolveRoute(routePath);
+  const route = resolveRouteWithReferer(routePath, clientReq.headers);
 
   const upstreamReq = http.request(
     {
@@ -866,6 +1067,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
           rewriteHtmlBody,
           addCors,
           !isLoopbackRequest(clientReq),
+          route,
         ),
       );
 
@@ -877,15 +1079,16 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
       // noVNC / code-server HTML must be rewritten as a whole document
       // (vnc_lite.html imports RFB at the END of <body>, so the module
       // rewrites cannot stop at </head>). Those pages are tiny static files,
-      // so buffering them is free.
-      if (BUFFER_WHOLE_HTML) {
+      // so buffering them is free. Tab routes buffer for the same reason: the
+      // root-relative attribute rewrite spans the whole document.
+      if (BUFFER_WHOLE_HTML || route.tabPrefix) {
         const chunks = [];
         upstreamRes.on("data", function handleData(chunk) {
           chunks.push(chunk);
         });
         upstreamRes.on("end", function handleEnd() {
           const html = Buffer.concat(chunks).toString("utf8");
-          clientRes.end(rewriteHtml(html, injectsHtml));
+          clientRes.end(rewriteHtml(html, injectsHtml, route.tabPrefix));
         });
         return;
       }
@@ -923,7 +1126,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
         // bytes and never decoded.
         const headEnd = idx + HEAD_CLOSE.length;
         clientRes.write(
-          rewriteHtml(pending.slice(0, headEnd).toString("utf8"), injectsHtml),
+          rewriteHtml(pending.slice(0, headEnd).toString("utf8"), injectsHtml, null),
         );
         const rest = pending.slice(headEnd);
         pending = Buffer.alloc(0);
@@ -939,7 +1142,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
         // No </head> in the document: fall back to the whole-document rewrite
         // (injectHtml handles </body> and prepend). Everything is already
         // buffered in "pending", so nothing was lost by waiting.
-        clientRes.end(rewriteHtml(pending.toString("utf8"), injectsHtml));
+        clientRes.end(rewriteHtml(pending.toString("utf8"), injectsHtml, null));
       });
     },
   );
@@ -991,7 +1194,7 @@ server.on("upgrade", function handleUpgrade(req, socket, head) {
       upgradeUrl = u.pathname + u.search + u.hash;
     } catch {}
   }
-  const route = resolveRoute(upgradeUrl);
+  const route = resolveRouteWithReferer(upgradeUrl, req.headers);
   const upstream = net.connect(route.port, "127.0.0.1", function handleConnect() {
     const lines = [
       (req.method || "GET") + " " + route.path + " HTTP/" + req.httpVersion,

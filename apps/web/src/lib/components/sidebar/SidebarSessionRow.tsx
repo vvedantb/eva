@@ -7,6 +7,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   motionFast,
+  toast,
 } from "@eva/ui";
 import { useState } from "react";
 import { entityPathSegment } from "@/lib/numId";
@@ -22,7 +23,6 @@ import {
 } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
-import { toast } from "@eva/ui";
 
 type SessionStatus = "active" | "starting" | "stopping" | "closed";
 

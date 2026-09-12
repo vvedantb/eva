@@ -72,7 +72,7 @@ import {
   endTurnOwnership,
   getCurrentTurnLease,
 } from "../runtime/turnLease.js";
-import { log, readResponseJson } from "../utils.js";
+import { log } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   buildEntityMutationArgs,

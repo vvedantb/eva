@@ -615,6 +615,9 @@ export const githubRepoFields = {
   defaultFastMode: v.optional(v.boolean()),
   sessionsVncEnabled: v.optional(v.boolean()),
   sessionsVscodeEnabled: v.optional(v.boolean()),
+  // Opt-out: when true, other sandboxes may not mint read tokens for this
+  // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
+  sandboxReadExcluded: v.optional(v.boolean()),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -815,6 +818,10 @@ export const messageFields = {
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
   errorDetail: v.optional(v.string()),
+  // Assistant rows: why the turn failed, when the client needs to react to the
+  // class of failure (the usage-limit recovery banner). Only "rate_limit" is
+  // stamped today; unclassified failures leave it unset.
+  errorType: v.optional(errorTypeValidator),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),
@@ -964,6 +971,15 @@ export const docFields = {
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
+  // Chat that created this doc (`create_eva_doc` from a sandbox token, or
+  // Save-as-document from a session plan). Manual New Document leaves these
+  // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -1130,6 +1146,14 @@ export const artifactFields = {
   htmlStorageId: v.id("_storage"),
   uploadedBy: v.id("users"),
   createdAt: v.number(),
+  // Chat that created this artifact (`create_artifact` from a sandbox token).
+  // Manual uploads leave these unset. Indexes skip rows with no source.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port

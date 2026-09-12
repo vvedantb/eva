@@ -14,13 +14,14 @@ import { ChatTypeToFocus } from "@/lib/components/chat/ChatTypeToFocus";
 import { ChatTypingLayer } from "@/lib/components/chat/ChatTypingLayer";
 import { ComposerInputChrome } from "@/lib/components/chat/_components/ComposerInputChrome";
 import { ComposerStash } from "@/lib/components/chat/_components/ComposerStash";
+import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import {
   mergeMentionItems,
   tokenizedToEditable,
 } from "@/lib/components/mentions";
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -84,7 +85,11 @@ interface ChatComposerProps {
   streamingActivity?: string;
   /** Message id of the streaming turn; scopes Tasks-panel dismissal to it. */
   streamingTurnId?: string;
-  /** Optional left-side control on the under-input card (e.g. base branch). */
+  /**
+   * Optional left-side control on the under-input bar (e.g. base branch).
+   * The bar itself always renders so the model picker has a home on every
+   * composer surface; this slot is only the extra leading control.
+   */
   underCardLeading?: React.ReactNode;
   draft?: ChatDraftSeed;
   /** Persist draft in localStorage when no Convex conversation exists yet. */
@@ -176,6 +181,35 @@ export function ChatComposer({
     userId: message.userId,
   }));
 
+  const mutedBar = (stashButton: ReactNode) => (
+    <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
+      {/* On a phone the bar is ~340px wide and the model name is long, so a
+          `shrink-0` picker left the leading control (the base branch) one
+          letter. Both sides give width there: the leading control takes a share
+          of the free space, the picker shrinks and truncates. Desktop keeps the
+          picker at its natural width. */}
+      {underCardLeading ? (
+        <div className="min-w-0 max-sm:flex-1 max-sm:basis-0">
+          {underCardLeading}
+        </div>
+      ) : null}
+      {stashButton}
+      <div className="ml-auto min-w-0 max-sm:shrink sm:shrink-0">
+        <ModelSelectWithTraits
+          value={model}
+          options={modelOptions}
+          onValueChange={setModel}
+          accounts={accounts}
+          accountId={accountId}
+          onAccountChange={onAccountChange}
+          traits={displayTraits}
+          onTraitsChange={onTraitsChange}
+          className="h-7 w-auto max-w-full justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
       <AnimatePresence initial={false}>
@@ -192,11 +226,14 @@ export function ChatComposer({
       </AnimatePresence>
       {preInputContent}
       {isDraftLoading ? (
-        <div
-          aria-busy="true"
-          aria-label="Loading draft..."
-          className="pointer-events-none rounded-full bg-background opacity-50 min-h-12"
-        />
+        <>
+          <div
+            aria-busy="true"
+            aria-label="Loading draft..."
+            className="pointer-events-none rounded-full bg-background opacity-50 min-h-12"
+          />
+          {mutedBar(null)}
+        </>
       ) : (
         <PromptInputProvider initialInput={seed?.initialDisplay}>
           <ChatTypingLayer
@@ -262,6 +299,7 @@ export function ChatComposer({
                 />
               </>
             }
+            bar={mutedBar}
           >
             <ComposerInputChrome
               repoId={repoId}
@@ -274,14 +312,6 @@ export function ChatComposer({
               isExecuting={isExecuting}
               isInputDisabled={isInputDisabled}
               hasPendingContext={hasPendingContext}
-              model={model}
-              setModel={setModel}
-              modelOptions={modelOptions}
-              accounts={accounts}
-              accountId={accountId}
-              onAccountChange={onAccountChange}
-              displayTraits={displayTraits}
-              onTraitsChange={onTraitsChange}
               onPromptSubmit={handlePromptSubmit}
               onCancel={onCancel}
               seedMentionMap={seed?.mentionMap}
@@ -292,11 +322,6 @@ export function ChatComposer({
           </ComposerStash>
         </PromptInputProvider>
       )}
-      {underCardLeading ? (
-        <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center rounded-b-surface bg-muted/70 px-2 py-1.5">
-          <div className="min-w-0">{underCardLeading}</div>
-        </div>
-      ) : null}
     </div>
   );
 }

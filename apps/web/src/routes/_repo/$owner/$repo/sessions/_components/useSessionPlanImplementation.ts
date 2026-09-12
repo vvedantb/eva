@@ -16,6 +16,7 @@ import type { SessionSendOptions } from "./useSessionSend";
 export function useSessionPlanImplementation({
   sessionId,
   handleSend,
+  isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
   handleSend: (
@@ -23,14 +24,15 @@ export function useSessionPlanImplementation({
     attachmentStorageIds?: Id<"_storage">[],
     options?: SessionSendOptions,
   ) => void | Promise<void>;
+  isRouteActive?: boolean;
 }) {
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
   const defaultModel = normalizeAIModel(repo.defaultModel);
   const { resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
   const { model, traits, providerAccountId: stickyProviderAccountId } =
-    useSessionModel(sessionId, defaultModel);
+    useSessionModel(sessionId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,
@@ -56,6 +58,10 @@ export function useSessionPlanImplementation({
     planMarkdown: string,
     plan?: ProposedPlanRow,
   ) => {
+    // Resolved above the `try` so the block holds no expression-level control
+    // flow — React Compiler bails on the whole file otherwise.
+    const resolvedProviderAccountId =
+      resolveAccountId(providerAccountId) ?? null;
     try {
       const { sessionId: nextSessionId, numId } = await createSession({
         repoId: repo._id,
@@ -67,7 +73,7 @@ export function useSessionPlanImplementation({
         thinkingEnabled: displayTraits.thinkingEnabled,
         use1mContext: displayTraits.use1mContext,
         fastMode: displayTraits.fastMode,
-        providerAccountId: resolveAccountId(providerAccountId) ?? null,
+        providerAccountId: resolvedProviderAccountId,
       });
       await updatePlanContent({
         id: nextSessionId,

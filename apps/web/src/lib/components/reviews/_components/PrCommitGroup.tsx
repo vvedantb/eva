@@ -1,5 +1,6 @@
 import type { Id } from "@eva/backend";
 import { Surface } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { PrCommitRow } from "./PrCommitRow";
 import type { PrCommit } from "./prOverviewMeta";
 
@@ -36,10 +37,17 @@ export function PrCommitGroup({
 
       <Surface density="none" className="mt-1.5 overflow-hidden py-1">
         <ul>
-          {commits.map((commit) => (
-            <li key={commit.sha} className="min-w-0">
+          {commits.map((commit, index) => (
+            <ListEnter
+              key={commit.sha}
+              as="li"
+              index={index}
+              fast
+              slide={false}
+              className="min-w-0"
+            >
               <PrCommitRow repoId={repoId} commit={commit} />
-            </li>
+            </ListEnter>
           ))}
         </ul>
       </Surface>

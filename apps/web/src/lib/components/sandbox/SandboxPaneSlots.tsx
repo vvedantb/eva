@@ -270,6 +270,7 @@ export function SandboxPaneSlots({
                     sandboxId={sandboxId}
                     isActive={isActive}
                     isForeground={resolvedTab === slug}
+                    previewPort={preview.effectivePort}
                     repoId={repoId}
                   />
                 </SandboxPaneBoundary>

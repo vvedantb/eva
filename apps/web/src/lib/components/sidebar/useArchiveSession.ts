@@ -8,9 +8,15 @@ import {
   mutationError,
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
+import {
+  sessionMatchesPath,
+  type RepoPathParts,
+} from "@/lib/components/sidebar/_utils/repoSessionPaths";
 
 export interface ArchiveSessionTarget {
   session: { _id: Id<"sessions">; sandboxId?: string };
+  /** Scopes the "am I on this session?" check; ids are only unique per app. */
+  repo: RepoPathParts;
   pathSegment: string;
 }
 
@@ -37,7 +43,10 @@ export function useArchiveSession() {
       }
       await archiveSession({ id: target.session._id });
       mutationSuccess("Session archived", "session-archive");
-      if (pathname.includes(`/sessions/${target.pathSegment}`)) {
+      // Must be the exact route, not a substring: `includes` sent the user
+      // away from session 123 whenever session 12 was archived, and matched
+      // the same id under a different app.
+      if (sessionMatchesPath(target.repo, target.pathSegment, pathname)) {
         void navigate({ to: "/sessions" });
       }
       if (onDone) onDone();

@@ -2,6 +2,7 @@
 
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { isReviewTab, type ReviewTab } from "@/lib/search-params";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 /** Matches `/review/diffs…` or any of the single-segment review sub-tabs. */
 const REVIEW_DIFFS_PATH = /\/review\/diffs(?:\/(?:unified|split))?\/?$/;
@@ -46,8 +47,11 @@ export function usePrTabParam() {
       const view = viewMatch?.[1] ?? "unified";
       const nextPath = `${reviewBase}/${reviewSubPath(tab, view)}`;
       if (nextPath === pathname) return;
+      // Pathname is usually already `--` form, but `navigate({ to })` does
+      // not run the history rewrite. Internalize so a slash-form monorepo
+      // path cannot miss the route tree.
       void navigate({
-        to: nextPath,
+        to: toInternalRepoHref(nextPath),
         search: true,
         replace: true,
       });

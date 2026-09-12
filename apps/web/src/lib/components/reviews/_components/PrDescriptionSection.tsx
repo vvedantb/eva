@@ -7,7 +7,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Surface,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconChevronRight,
   IconExternalLink,
@@ -53,24 +55,37 @@ export function PrDescriptionSection({
   const body = overview.body ?? "";
   const hasBody = body.trim().length > 0;
 
-  if (draft !== null) {
-    return (
-      <PrDescriptionEditor
-        draft={draft}
-        onDraftChange={setDraft}
-        onCancel={() => setDraft(null)}
-        onSave={() => edit.save({ body: draft })}
-        saving={edit.saving}
-        error={edit.error}
-      />
-    );
-  }
-
   return (
-    // Plain `group` on the card, not on the Collapsible inside it:
-    // `reveal-on-hover transition-opacity` keys off the unnamed group, and the
-    // card is the whole hover target the reader aims at.
-    <Surface density="tight" className="group">
+    <AnimatePresence mode="wait" initial={false}>
+      {draft !== null ? (
+        <m.div
+          key="edit"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
+          <PrDescriptionEditor
+            draft={draft}
+            onDraftChange={setDraft}
+            onCancel={() => setDraft(null)}
+            onSave={() => edit.save({ body: draft })}
+            saving={edit.saving}
+            error={edit.error}
+          />
+        </m.div>
+      ) : (
+        <m.div
+          key="read"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
+          {/* Plain `group` on the card, not on the Collapsible inside it:
+              `reveal-on-hover transition-opacity` keys off the unnamed group, and
+              the card is the whole hover target the reader aims at. */}
+          <Surface density="tight" className="group">
       <Collapsible open={open} onOpenChange={setOpen} className="space-y-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {/* The house Collapsible, not Accordion: an accordion item carries a
@@ -137,6 +152,9 @@ export function PrDescriptionSection({
         </CollapsibleContent>
       </Collapsible>
     </Surface>
+        </m.div>
+      )}
+    </AnimatePresence>
   );
 }
 

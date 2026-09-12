@@ -2,6 +2,7 @@
 
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { isDiffView, type DiffView } from "@/lib/search-params";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 const DIFF_VIEW_PATH = /\/review\/diffs\/(unified|split)\/?$/;
 
@@ -46,7 +47,7 @@ export function useDiffSearchParams() {
       );
       if (nextPath === pathname) return;
       void navigate({
-        to: nextPath,
+        to: toInternalRepoHref(nextPath),
         search: true,
         replace: true,
       });

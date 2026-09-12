@@ -33,6 +33,8 @@ interface ProjectSandboxChatPanelProps {
   isSandboxToggling?: boolean;
   /** Opens the Files tab and loads this sandbox path in the file viewer. */
   onOpenFile?: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
+  onViewDiff?: (repoRelativePath?: string) => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
@@ -43,6 +45,7 @@ export function ProjectSandboxChatPanel({
   isSandboxActive,
   isSandboxToggling = false,
   onOpenFile,
+  onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
 }: ProjectSandboxChatPanelProps) {
@@ -238,6 +241,20 @@ export function ProjectSandboxChatPanel({
     // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
     compactionReadOnly: !isSandboxActive,
     backgroundAgents: project?.backgroundAgents,
+    // Owner-only, like the account picker: project chat is owner-sticky. The
+    // account list is `accounts`, not `displayAccounts` — the synthetic owner
+    // row exists only for non-owners, who never see the card.
+    usageLimitRecovery:
+      isOwner && project
+        ? {
+            messages: messages ?? [],
+            accounts,
+            resolveAccountId,
+            currentAccountId: project.providerAccountId ?? null,
+            onSwitchAccount: switchProviderAccount,
+            isSandboxActive,
+          }
+        : undefined,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
     onSendCommand: (command) => {
@@ -296,6 +313,7 @@ export function ProjectSandboxChatPanel({
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}
+        onViewDiff={onViewDiff}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={project?.backgroundAgents}
         sandboxRunning={isSandboxActive}

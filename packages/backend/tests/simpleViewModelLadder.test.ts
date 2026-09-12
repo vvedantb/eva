@@ -41,6 +41,8 @@ describe("snapToSimpleViewLadder", () => {
     expect(snapToSimpleViewLadder("cursor:grok-4.5-high")).toBe(
       "cursor:grok-4.5",
     );
-    expect(snapToSimpleViewLadder("cursor:gpt-5.5")).toBe("cursor:grok-4.6");
+    expect(snapToSimpleViewLadder("cursor:gpt-6-astra")).toBe(
+      "cursor:grok-4.6",
+    );
   });
 });

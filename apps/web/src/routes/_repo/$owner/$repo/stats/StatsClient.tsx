@@ -2,7 +2,8 @@ import { useQueryState } from "nuqs";
 import { timeRangeParser } from "@/lib/search-params";
 import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { Skeleton } from "@eva/ui";
+import { Skeleton, motionBase } from "@eva/ui";
+import { m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { Kpi, KpiGroup } from "@/lib/components/analytics/Kpi";
@@ -181,13 +182,19 @@ export function StatsClient() {
             />
           </KpiGroup>
 
-          <Kpi
-            icon={IconClockHour4}
-            label="Estimated Hours Saved"
-            value={`${impactStats.tasksCompleted * HOURS_SAVED_PER_TASK}h`}
-            subtitle={`est. ${HOURS_SAVED_PER_TASK}h saved per completed task · agent worked ${formatDurationCompactMs(impactStats.agentWorkMs)}`}
-            size="lg"
-          />
+          <m.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={motionBase}
+          >
+            <Kpi
+              icon={IconClockHour4}
+              label="Estimated Hours Saved"
+              value={`${impactStats.tasksCompleted * HOURS_SAVED_PER_TASK}h`}
+              subtitle={`est. ${HOURS_SAVED_PER_TASK}h saved per completed task · agent worked ${formatDurationCompactMs(impactStats.agentWorkMs)}`}
+              size="lg"
+            />
+          </m.div>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2">
