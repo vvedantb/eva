@@ -136,6 +136,27 @@ export const notificationTypeValidator = v.union(
   v.literal("system"),
   // Inbox-only: session auto-archived because its GitHub PR closed or merged.
   v.literal("session_archived"),
+  // Eva routed a clarification to a teammate (Messages area).
+  v.literal("routed_question"),
+);
+
+export const routedSourceKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+
+export const routedThreadStatusValidator = v.union(
+  v.literal("open"),
+  v.literal("waiting_human"),
+  v.literal("waiting_eva"),
+  v.literal("resolved"),
+  v.literal("cancelled"),
+);
+
+export const routedAuthorKindValidator = v.union(
+  v.literal("eva"),
+  v.literal("user"),
 );
 
 export const errorTypeValidator = v.union(

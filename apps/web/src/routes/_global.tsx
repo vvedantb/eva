@@ -57,6 +57,9 @@ function GlobalMainContent() {
   // The two-pane inbox is an app surface (viewport-bound, full-bleed) like the
   // repo shell, not a scrolling document page like the rest of _global.
   const isInbox = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const isMessages =
+    pathname === "/messages" || pathname.startsWith("/messages/");
+  const isAppSurface = isInbox || isAvePath || isMessages;
 
   return (
     <div
@@ -64,7 +67,7 @@ function GlobalMainContent() {
         "relative flex flex-col",
         // Ave's chat is a virtualized session surface like the inbox: both need
         // a viewport-clamped shell, not a content-sized scrolling column.
-        isInbox || isAvePath ? "h-dvh overflow-hidden" : "min-h-dvh",
+        isAppSurface ? "h-dvh overflow-hidden" : "min-h-dvh",
         // No padding transition: animating pl-* during route changes counts as CLS.
         // Embedded documents have no sidebar or mobile top bar to pad for.
         // `--eva-mobile-header-height` (globals.css), not a literal `pt-14`: the
@@ -77,7 +80,7 @@ function GlobalMainContent() {
       <div
         className={cn(
           "relative flex flex-1 flex-col bg-background",
-          (isInbox || isAvePath) && "min-h-0 overflow-hidden",
+          isAppSurface && "min-h-0 overflow-hidden",
         )}
       >
         {chromeSessionTabs && isSessionsLanding ? (
@@ -85,7 +88,7 @@ function GlobalMainContent() {
         ) : null}
         <div
           className={
-            isInbox || isAvePath
+            isAppSurface
               ? "relative z-10 flex w-full min-h-0 flex-1 flex-col overflow-hidden"
               : isGlobalSettingsPath(pathname)
                 ? "relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col"

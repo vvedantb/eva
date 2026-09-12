@@ -931,6 +931,83 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
   );
 
   server.tool(
+    "list_work_profiles",
+    "List teammates and what they own so you can route a clarification. Returns each non-personal team's directory: userId, name, role (business/dev/designer), headline, owns, askMeAbout. Call this before ask_teammate when you do not already know who to ping.",
+    {},
+    async () => {
+      const { userId } = await getContext();
+      const teams = await ctx.runQuery(internal.workProfiles.listForAgent, {
+        userId,
+      });
+      if (teams.length === 0) {
+        return textResult({
+          teams: [],
+          note: "No shared team directory. Ask in this chat instead.",
+        });
+      }
+      return textResult({ teams });
+    },
+  );
+
+  server.tool(
+    "ask_teammate",
+    "Route a clarification to a teammate (Messages area). Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. Their reply is injected back into this session/task/project and wakes the run. Pass userId from list_work_profiles, or role when exactly one person matches. Defaults to the current chat as the source.",
+    {
+      question: z.string().describe("The question for the teammate."),
+      topicKey: z
+        .string()
+        .describe(
+          'Stable slug for this topic, e.g. "empty-state-copy". Follow-ups with the same topic append to the same thread.',
+        ),
+      role: z
+        .enum(["business", "dev", "designer"])
+        .optional()
+        .describe("Job function to route to when userId is omitted."),
+      userId: z
+        .string()
+        .optional()
+        .describe("Teammate user id from list_work_profiles."),
+      sourceKind: z
+        .enum(["session", "task", "project"])
+        .optional()
+        .describe("Override the source chat. Defaults to this sandbox."),
+      sourceId: z
+        .string()
+        .optional()
+        .describe("Override the source chat id. Defaults to this sandbox."),
+    },
+    async ({ question, topicKey, role, userId, sourceKind, sourceId }) => {
+      const { userId: actorId } = await getContext();
+      const kind = sourceKind ?? entityKind;
+      const id = sourceId ?? entityId;
+      if (!kind || !id) {
+        return errorResult(
+          "No source chat. Pass sourceKind and sourceId, or call this from a session, task, or project sandbox.",
+        );
+      }
+      const result = await ctx.runMutation(internal.routedThreads.askFromAgent, {
+        userId: actorId,
+        sourceKind: kind,
+        sourceId: id,
+        question,
+        topicKey,
+        role,
+        assigneeUserId: userId,
+      });
+      if (!result.ok) {
+        return errorResult(
+          result.candidates
+            ? `${result.error} Candidates: ${result.candidates
+                .map((c: { name: string; userId: string }) => `${c.name} (${c.userId})`)
+                .join(", ")}`
+            : result.error,
+        );
+      }
+      return textResult(result);
+    },
+  );
+
+  server.tool(
     "create_artifact",
     `Save an HTML artifact to Eva and get back a hosted link to view it.
 

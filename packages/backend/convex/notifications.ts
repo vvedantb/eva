@@ -22,6 +22,7 @@ const EMAIL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
   "comment_reply",
   "comment_added",
   "task_assigned",
+  "routed_question",
 ]);
 
 /**
@@ -33,6 +34,7 @@ const EMAIL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
 const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
+  "routed_question",
 ]);
 
 /**

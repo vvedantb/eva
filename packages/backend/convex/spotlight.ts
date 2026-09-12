@@ -53,6 +53,7 @@ type SpotlightHit = {
 const GLOBAL_PAGES: Array<{ title: string; href: string; keywords: string }> = [
   { title: "Home", href: "/home", keywords: "home dashboard" },
   { title: "Inbox", href: "/inbox", keywords: "inbox notifications" },
+  { title: "Messages", href: "/messages", keywords: "messages questions teammate" },
   { title: "Sessions", href: "/sessions", keywords: "sessions" },
   { title: "Artifacts", href: "/artifacts", keywords: "artifacts html" },
   { title: "Teams", href: "/teams", keywords: "teams" },

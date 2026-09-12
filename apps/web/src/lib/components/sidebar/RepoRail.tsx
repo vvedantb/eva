@@ -19,6 +19,7 @@ import { IconPencil } from "@tabler/icons-react";
 import {
   AutomationsIcon,
   InboxIcon,
+  MessagesIcon,
   SearchIcon,
   SessionsIcon,
   SidebarCollapseIcon,
@@ -109,6 +110,12 @@ function InboxUnreadBadge() {
   return <RailUnreadBadge count={useQuery(api.notifications.countUnread)} />;
 }
 
+function MessagesUnreadBadge() {
+  return (
+    <RailUnreadBadge count={useQuery(api.routedThreads.countWaitingForMe)} />
+  );
+}
+
 function AutomationsUnreadBadge() {
   return <RailUnreadBadge count={useQuery(api.automations.countUnreadAll)} />;
 }
@@ -188,6 +195,8 @@ function RepoRailView({
   const homeActive =
     pathname === "/" || pathname.startsWith("/setup") || isHomePath(pathname);
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const messagesActive =
+    pathname === "/messages" || pathname.startsWith("/messages/");
   const pathParts = pathname.split("/").filter(Boolean);
   const onRepoSessionsPath =
     pathParts.includes("sessions") && pathParts[0] !== "sessions";
@@ -254,6 +263,26 @@ function RepoRailView({
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">Inbox</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              to="/messages"
+              onClick={onNavigate}
+              aria-label="Messages"
+              className={cn(
+                RAIL_TILE_CLASS,
+                "group",
+                railTileActive(messagesActive),
+              )}
+            >
+              <MessagesIcon size={22} className="shrink-0" />
+              <QueryErrorBoundary>
+                <MessagesUnreadBadge />
+              </QueryErrorBoundary>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right">Messages</TooltipContent>
         </Tooltip>
         <div className="h-px w-8 bg-sidebar-border" aria-hidden />
         <Tooltip>

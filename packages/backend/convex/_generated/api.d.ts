@@ -346,6 +346,7 @@ import type * as repoSkills from "../repoSkills.js";
 import type * as repoSnapshots from "../repoSnapshots.js";
 import type * as repoSystemSkills from "../repoSystemSkills.js";
 import type * as repoUtils from "../repoUtils.js";
+import type * as routedThreads from "../routedThreads.js";
 import type * as sandbox from "../sandbox.js";
 import type * as sandboxAuthConfig from "../sandboxAuthConfig.js";
 import type * as sandboxAutoStop from "../sandboxAutoStop.js";
@@ -391,6 +392,7 @@ import type * as userProviderAccounts from "../userProviderAccounts.js";
 import type * as userProviderAccountsActions from "../userProviderAccountsActions.js";
 import type * as users from "../users.js";
 import type * as validators from "../validators.js";
+import type * as workProfiles from "../workProfiles.js";
 import type * as workflowManager from "../workflowManager.js";
 import type * as workflowWatchdog from "../workflowWatchdog.js";
 
@@ -739,6 +741,7 @@ declare const fullApi: ApiFromModules<{
   repoSnapshots: typeof repoSnapshots;
   repoSystemSkills: typeof repoSystemSkills;
   repoUtils: typeof repoUtils;
+  routedThreads: typeof routedThreads;
   sandbox: typeof sandbox;
   sandboxAuthConfig: typeof sandboxAuthConfig;
   sandboxAutoStop: typeof sandboxAutoStop;
@@ -784,6 +787,7 @@ declare const fullApi: ApiFromModules<{
   userProviderAccountsActions: typeof userProviderAccountsActions;
   users: typeof users;
   validators: typeof validators;
+  workProfiles: typeof workProfiles;
   workflowManager: typeof workflowManager;
   workflowWatchdog: typeof workflowWatchdog;
 }>;
