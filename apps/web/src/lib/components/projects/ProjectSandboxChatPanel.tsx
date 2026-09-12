@@ -33,6 +33,8 @@ interface ProjectSandboxChatPanelProps {
   isSandboxToggling?: boolean;
   /** Opens the Files tab and loads this sandbox path in the file viewer. */
   onOpenFile?: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
+  onViewDiff?: (repoRelativePath?: string) => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
@@ -43,6 +45,7 @@ export function ProjectSandboxChatPanel({
   isSandboxActive,
   isSandboxToggling = false,
   onOpenFile,
+  onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
 }: ProjectSandboxChatPanelProps) {
@@ -310,6 +313,7 @@ export function ProjectSandboxChatPanel({
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}
+        onViewDiff={onViewDiff}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={project?.backgroundAgents}
         sandboxRunning={isSandboxActive}

@@ -83,6 +83,22 @@ describe("a passive RepoProvider never navigates", () => {
   });
 });
 
+/**
+ * Slash-form `basePath` (`/owner/repo/app/…`) does not match the route tree
+ * (`/owner/repo--app/…`). Chat View diff / file rows and the Review rail
+ * all have to use typed paths + the cached `repoParam`.
+ */
+describe("session sandbox navigations match the route tree", () => {
+  test("Review diffs and tab changes use typed routes against the cached repo", () => {
+    expect(shell).toContain(
+      'to: "/$owner/$repo/sessions/$numId/review/diffs/$diffView"',
+    );
+    expect(shell).toContain('to: "/$owner/$repo/sessions/$numId/$sandboxTab"');
+    expect(shell).toContain("repo: repoParam");
+    expect(shell).not.toContain("${basePath}/sessions/${numId}/review");
+  });
+});
+
 function read(relativePath: string): string {
   return readFileSync(join(here, relativePath), "utf8").replaceAll(
     "\r\n",
