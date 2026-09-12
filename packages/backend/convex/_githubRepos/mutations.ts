@@ -51,6 +51,22 @@ export const assignToTeam = authMutation({
       throw new Error("Repository is already assigned to this team");
     }
 
+    // Members of the current team must not be able to walk a shared repo onto
+    // a team they own. Only the connector or an owner of the *source* team.
+    if (repo.connectedBy !== ctx.userId) {
+      const sourceTeamId = repo.teamId;
+      if (!sourceTeamId) throw new Error("Not authorized");
+      const sourceMembership = await ctx.db
+        .query("teamMembers")
+        .withIndex("by_team_and_user", (q) =>
+          q.eq("teamId", sourceTeamId).eq("userId", ctx.userId),
+        )
+        .first();
+      if (!sourceMembership || sourceMembership.role !== "owner") {
+        throw new Error("Not authorized");
+      }
+    }
+
     await ctx.db.patch(args.repoId, { teamId: args.teamId });
     return null;
   },

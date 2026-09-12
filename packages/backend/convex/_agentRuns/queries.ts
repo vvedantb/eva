@@ -110,6 +110,10 @@ export const getTaskIdsWithLatestRunError = authQuery({
 
     const results = await Promise.all(
       args.taskIds.map(async (taskId) => {
+        const task = await ctx.db.get(taskId);
+        if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+          return null;
+        }
         const latestRun = await ctx.db
           .query("agentRuns")
           .withIndex("by_task", (q) => q.eq("taskId", taskId))
@@ -139,6 +143,10 @@ export const getLatestDeploymentStatuses = authQuery({
 
     const results = await Promise.all(
       args.taskIds.map(async (taskId) => {
+        const task = await ctx.db.get(taskId);
+        if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+          return null;
+        }
         const latestRunWithDeployment = await ctx.db
           .query("agentRuns")
           .withIndex("by_task", (q) => q.eq("taskId", taskId))

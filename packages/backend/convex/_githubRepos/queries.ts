@@ -358,6 +358,7 @@ export const listSiblingApps = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
     if (!repo) return [];
+    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) return [];
 
     const siblings = await ctx.db
       .query("githubRepos")

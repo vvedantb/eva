@@ -50,6 +50,13 @@ export const listRuns = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    const automation = await ctx.db.get(args.automationId);
+    if (
+      !automation ||
+      !(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))
+    ) {
+      return [];
+    }
     return await ctx.db
       .query("automationRuns")
       .withIndex("by_automation", (q) =>
@@ -279,6 +286,9 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.automationRunId);
     if (!run || !run.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, run.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     await sendCompletionEvent(ctx, taskCompleteEvent, run.activeWorkflowId, {
       success: args.success,

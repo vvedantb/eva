@@ -5,7 +5,10 @@ import { makeFunctionReference } from "convex/server";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import { getInstallationOctokit, getInstallationToken } from "../githubAuth";
+import {
+  getInstallationOctokit,
+  getRepoScopedInstallationToken,
+} from "../githubAuth";
 import { detectAppsForRepo } from "./helpers";
 import { authAction, getActionRepoWithAccess } from "../functions";
 import { assertUserCanUseRepo, listInstallationReposForUser } from "./userAuth";
@@ -34,7 +37,11 @@ export const getInstallationTokenAction = action({
       throw new Error("Not authenticated");
     }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
-    const token = await getInstallationToken(repo.installationId);
+    const token = await getRepoScopedInstallationToken(
+      repo.installationId,
+      { githubId: repo.githubId, name: repo.name },
+      "write",
+    );
     return { token };
   },
 });

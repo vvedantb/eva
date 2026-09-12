@@ -120,6 +120,12 @@ export const setSubscription = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     const targetUserId = args.userId ?? ctx.userId;
+    if (
+      targetUserId !== ctx.userId &&
+      !(await hasTaskAccess(ctx.db, task, targetUserId))
+    ) {
+      throw new Error("Not authorized");
+    }
     const existing = await ctx.db
       .query("taskSubscribers")
       .withIndex("by_task_and_user", (q) =>

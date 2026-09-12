@@ -12,7 +12,7 @@ import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
  * A sandbox's git credential helper sends the repository git asked about, so
  * the backend can hand a read-only single-repo token for a sibling codebase
  * the sandbox owner can reach in eva — and nothing else. These tests pin who
- * gets a token, who gets 403, and that the home repo keeps its full token.
+ * gets a token, who gets 403, and that the home repo gets a scoped write token.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -132,14 +132,21 @@ function resolve(
 }
 
 describe("resolveCredentialRequest — home repository", () => {
-  test("no path keeps today's full installation token", async () => {
+  const home = {
+    kind: "home" as const,
+    installationId: 1,
+    githubId: 111,
+    name: "eva",
+  };
+
+  test("no path returns the home repo (scoped write token)", async () => {
     const { t } = await fixture({});
-    expect(await resolve(t)).toEqual({ kind: "home", installationId: 1 });
+    expect(await resolve(t)).toEqual(home);
   });
 
   test("empty path is treated as the home repository", async () => {
     const { t } = await fixture({});
-    expect(await resolve(t, "")).toEqual({ kind: "home", installationId: 1 });
+    expect(await resolve(t, "")).toEqual(home);
   });
 
   test.each([
@@ -149,7 +156,7 @@ describe("resolveCredentialRequest — home repository", () => {
     "VVedantB/EVA.git",
   ])("path %s resolves to the home repository", async (path) => {
     const { t } = await fixture({});
-    expect(await resolve(t, path)).toEqual({ kind: "home", installationId: 1 });
+    expect(await resolve(t, path)).toEqual(home);
   });
 });
 

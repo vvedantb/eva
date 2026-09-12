@@ -119,6 +119,16 @@ export const listByParent = authQuery({
   },
 });
 
+/** Used by screenshot attach and other actions that only have an action ctx. */
+export const assertParentAccess = authQuery({
+  args: { parentId: parentIdValidator },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    return null;
+  },
+});
+
 /** Updates an exact message when supplied, otherwise the latest legacy target. */
 export const updateLastInternal = internalMutation({
   args: {

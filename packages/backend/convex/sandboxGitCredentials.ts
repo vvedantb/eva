@@ -100,7 +100,12 @@ async function lookupSandboxOwner(
 export const resolveCredentialRequest = internalQuery({
   args: { secret: v.string(), path: v.optional(v.string()) },
   returns: v.union(
-    v.object({ kind: v.literal("home"), installationId: v.number() }),
+    v.object({
+      kind: v.literal("home"),
+      installationId: v.number(),
+      githubId: v.optional(v.number()),
+      name: v.string(),
+    }),
     v.object({
       kind: v.literal("sibling"),
       installationId: v.number(),
@@ -119,11 +124,6 @@ export const resolveCredentialRequest = internalQuery({
       .unique();
     if (!row) return { kind: "denied" as const, reason: "unknown secret" };
 
-    const requested = parseRepoPath(args.path);
-    if (!requested) {
-      return { kind: "home" as const, installationId: row.installationId };
-    }
-
     const entity = await lookupSandboxOwner(ctx.db, row.sandboxId);
     if (!entity) {
       return {
@@ -136,8 +136,20 @@ export const resolveCredentialRequest = internalQuery({
     if (!homeRepo) {
       return { kind: "denied" as const, reason: "home repository missing" };
     }
+
+    const home = {
+      kind: "home" as const,
+      installationId: row.installationId,
+      githubId: homeRepo.githubId,
+      name: homeRepo.name,
+    };
+
+    const requested = parseRepoPath(args.path);
+    if (!requested) {
+      return home;
+    }
     if (isSameGitHubRepo(homeRepo, requested)) {
-      return { kind: "home" as const, installationId: row.installationId };
+      return home;
     }
 
     const sibling = await resolveSiblingReadAccess(

@@ -255,6 +255,7 @@ function verifyGrant(token) {
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (aud.indexOf(EXPECTED_AUD) === -1) return null;
     if (payload.sandboxId !== SANDBOX_ID) return null;
+    if (payload.port !== AUTH_PORT) return null;
     return payload;
   } catch {
     return null;

@@ -336,8 +336,12 @@ export const getStatusesByIds = authQuery({
   ),
   handler: async (ctx, args) => {
     const tasks = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return tasks
-      .filter((t): t is Exclude<typeof t, null> => t !== null)
-      .map((t) => ({ id: t._id, status: t.status }));
+    const visible = [];
+    for (const t of tasks) {
+      if (!t) continue;
+      if (!(await hasTaskAccess(ctx.db, t, ctx.userId))) continue;
+      visible.push({ id: t._id, status: t.status });
+    }
+    return visible;
   },
 });

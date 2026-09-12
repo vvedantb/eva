@@ -4,7 +4,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, hasRepoAccess } from "./functions";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import { GENERATE_PROMPT, INTERVIEW_PROMPT } from "./prompts";
@@ -279,6 +279,9 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     await sendCompletionEvent(
       ctx,
@@ -319,6 +322,9 @@ export const startInterview = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc) throw new Error("Doc not found");
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -433,6 +439,9 @@ export const handleGenerateCompletion = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     await sendCompletionEvent(
       ctx,
@@ -530,6 +539,9 @@ export const startGenerate = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc) throw new Error("Doc not found");
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");

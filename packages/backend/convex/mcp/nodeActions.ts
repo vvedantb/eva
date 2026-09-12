@@ -2066,10 +2066,18 @@ const supabaseTokenCache = new Map<
 >();
 
 export const resolveSupabaseToken = internalAction({
-  args: { clerkUserId: v.string() },
+  args: {
+    clerkUserId: v.string(),
+    scopedRepoId: v.optional(v.string()),
+  },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { clerkUserId }): Promise<string | null> => {
-    const cached = supabaseTokenCache.get(clerkUserId);
+  handler: async (
+    ctx,
+    { clerkUserId, scopedRepoId },
+  ): Promise<string | null> => {
+    const cacheKey =
+      scopedRepoId !== undefined ? `${clerkUserId}:${scopedRepoId}` : clerkUserId;
+    const cached = supabaseTokenCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.token;
     }
@@ -2077,6 +2085,28 @@ export const resolveSupabaseToken = internalAction({
     const deployKey = await getDeployKey();
     const userId = await resolveUserByClerkId(deployKey, clerkUserId);
     if (!userId) return null;
+
+    if (scopedRepoId !== undefined) {
+      try {
+        const vars: EnvVar[] = await ctx.runAction(
+          internal.mcp.routes.getDecryptedRepoEnvVars,
+          { repoId: scopedRepoId },
+        );
+        const match: EnvVar | undefined = vars.find(
+          (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
+        );
+        if (match) {
+          supabaseTokenCache.set(cacheKey, {
+            token: match.value,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+          });
+          return match.value;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    }
 
     // Get repos and search for SUPABASE_ACCESS_TOKEN
     const convexUrl = getEvaConvexCloudUrl();
@@ -2108,7 +2138,7 @@ export const resolveSupabaseToken = internalAction({
           (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
         );
         if (match) {
-          supabaseTokenCache.set(clerkUserId, {
+          supabaseTokenCache.set(cacheKey, {
             token: match.value,
             expiresAt: Date.now() + CACHE_TTL_MS,
           });

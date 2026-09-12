@@ -197,4 +197,54 @@ describe("backend authorization boundaries", () => {
     expect(native).toContain("entry.clientId !== params.client_id");
     expect(native).toContain('entry.codeChallengeMethod !== "S256"');
   });
+
+  it("public session create ignores a client-supplied orchestrator flag", () => {
+    const mutations = convexSource("_sessions/mutations.ts");
+    const create = mutations.slice(mutations.indexOf("export const create = authMutation"));
+    expect(create).toContain("isOrchestrator: _ignored");
+    expect(create.indexOf("createSession(ctx, safeArgs)")).toBeGreaterThan(-1);
+    expect(create.indexOf("createSession(ctx, args)")).toBe(-1);
+  });
+
+  it("docs.update checks repo access before patching", () => {
+    const docs = convexSource("docs.ts");
+    const update = docs.slice(docs.indexOf("export const update = authMutation"));
+    expect(update.indexOf("hasRepoAccess")).toBeLessThan(update.indexOf("ctx.db.patch"));
+  });
+
+  it("streaming.get and pendingQuestions.getActive require entity access", () => {
+    expect(convexSource("streaming.ts")).toContain("hasEntityAccess");
+    expect(convexSource("pendingQuestions.ts")).toContain("assertEntityAccess");
+  });
+
+  it("installation tokens returned to clients are repository-scoped", () => {
+    const api = convexSource("_github/api.ts");
+    const action = api.slice(api.indexOf("export const getInstallationTokenAction"));
+    expect(action).toContain("getRepoScopedInstallationToken");
+    expect(action).not.toContain("getInstallationToken(");
+    expect(convexSource("http.ts")).toContain("mintRepoScopedWriteToken");
+  });
+
+  it("assignToTeam requires the connector or source-team owner", () => {
+    const mutations = convexSource("_githubRepos/mutations.ts");
+    const assign = mutations.slice(
+      mutations.indexOf("export const assignToTeam"),
+    );
+    expect(assign).toContain("repo.connectedBy !== ctx.userId");
+    expect(assign).toContain('sourceMembership.role !== "owner"');
+  });
+
+  it("preview grants are bound to AUTH_PORT", () => {
+    expect(convexSource("_sandbox_runtime/previewProxy.ts")).toContain(
+      "payload.port !== AUTH_PORT",
+    );
+  });
+
+  it("sandbox Supabase tokens honor scopedRepoId", () => {
+    const resolve = convexSource("mcp/nodeActions.ts");
+    expect(resolve).toContain("scopedRepoId: v.optional(v.string())");
+    expect(convexSource("mcp/supabase.ts")).toContain(
+      "scopedRepoId: credentials.scopedRepoId",
+    );
+  });
 });
