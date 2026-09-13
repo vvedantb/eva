@@ -8,6 +8,7 @@ import {
   resolveSandboxCredentials,
   resolveSandboxCredentialsOnly,
 } from "../envVarResolver";
+import { resolveConnectorLaunchEnv } from "../_connectors/resolve";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
 import {
   SandboxCommandFailedError,
@@ -681,6 +682,13 @@ export async function signAndLaunchScript(
   );
 
   const mcpBaseUrl = mcpToken ? (process.env.CONVEX_SITE_URL ?? "") : "";
+
+  if (opts.enableMcp !== false) {
+    const connectorEnv = await resolveConnectorLaunchEnv(ctx, userId, repoId);
+    if (Object.keys(connectorEnv).length > 0) {
+      extraEnvVars = { ...extraEnvVars, ...connectorEnv };
+    }
+  }
 
   // A catalog writer is deliberately short-lived and single-use. Unlike the
   // old fleet-constant HMAC, reading one sandbox's env cannot grant permanent

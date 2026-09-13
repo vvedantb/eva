@@ -733,6 +733,59 @@ http.route({
   }),
 });
 
+function connectorAuthReturnUrl(returnPath: string | null): string {
+  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const path =
+    returnPath && returnPath.startsWith("/settings") && !returnPath.includes("//")
+      ? returnPath
+      : "/settings/connections";
+  return `${webAppUrl}${path}`;
+}
+
+http.route({
+  path: "/api/connectors/oauth/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const requestUrl = new URL(request.url);
+    const params = requestUrl.searchParams;
+    const state = params.get("state");
+    if (!state) {
+      return new Response("Missing state", { status: 400 });
+    }
+
+    const claim = await ctx.runMutation(
+      internal._connectors.tokens.consumeOauthState,
+      { nonce: state },
+    );
+    if (!claim) {
+      return new Response("Authorization request expired. Start again.", {
+        status: 400,
+      });
+    }
+
+    const code = params.get("code");
+    if (!code) {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    const siteUrl = (process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
+    try {
+      await ctx.runAction(internal._connectors.oauth.completeAuthorization, {
+        userId: claim.userId,
+        provider: claim.provider,
+        actor: claim.actor,
+        code,
+        redirectUri: `${siteUrl}/api/connectors/oauth/callback`,
+        codeVerifier: claim.codeVerifier,
+      });
+    } catch {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+  }),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MCP OAuth State Endpoints
 // ─────────────────────────────────────────────────────────────────────────────
