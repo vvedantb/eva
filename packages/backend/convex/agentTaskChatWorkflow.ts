@@ -60,6 +60,7 @@ import {
   prependModelHandoffContext,
 } from "./_shared/modelHandoff";
 import { composerTraitFields } from "./_shared/composerTraits";
+import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -1164,10 +1165,7 @@ export const prewarmChatDaemon = authMutation({
     // the sandbox, and on Vercel any exec lazily resumes a stopped VM —
     // resurrecting a sandbox the user stopped, invisibly (same guard as
     // sessions' prewarmDaemon).
-    if (
-      task.reviewTaskSandboxStatus === "closed" ||
-      task.reviewTaskSandboxStatus === "stopping"
-    ) {
+    if (isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return null;
     }
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
@@ -1278,8 +1276,7 @@ export const getChatPrewarmData = internalQuery({
     }
     if (
       !task.sandboxId ||
-      task.reviewTaskSandboxStatus === "closed" ||
-      task.reviewTaskSandboxStatus === "stopping"
+      isSandboxClosingStatus(task.reviewTaskSandboxStatus)
     ) {
       return null;
     }

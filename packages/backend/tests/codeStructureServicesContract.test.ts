@@ -531,6 +531,64 @@ test("usage-limit retries share selectUsageLimitRetryUserMessage", () => {
   }
 });
 
+test("synthetic-turn completions share assistantReplyContent", () => {
+  const helper = read("convex/_sessions/resultTarget.ts");
+  expect(helper).toContain("export function assistantReplyContent(");
+  for (const path of [
+    "convex/_chat/taskChatDaemon.ts",
+    "convex/_chat/projectChatDaemon.ts",
+    "convex/_sessions/workflow.ts",
+    "convex/_chat/chatResult.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should format via the shared helper`).toContain(
+      "assistantReplyContent(",
+    );
+    expect(source, `${path} re-inlined the empty-success fallback`).not.toContain(
+      "I couldn't process your message.",
+    );
+  }
+});
+
+test("stale synthetic-turn heartbeats share isStreamingActivityStale", () => {
+  const helper = read("convex/_chat/turnLease.ts");
+  expect(helper).toContain("export function isStreamingActivityStale(");
+  expect(helper).toContain("TURN_RUNNING_LEASE_MS");
+  for (const path of [
+    "convex/_chat/taskChatDaemon.ts",
+    "convex/_chat/projectChatDaemon.ts",
+    "convex/_sessions/workflow.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should classify via the shared helper`).toContain(
+      "isStreamingActivityStale(",
+    );
+    expect(source, `${path} re-inlined the 2-minute heartbeat window`).not.toContain(
+      "2 * 60 * 1000",
+    );
+  }
+});
+
+test("prewarm and refresh skip closed sandboxes via isSandboxClosingStatus", () => {
+  const helper = read("convex/_sandbox/closingStatus.ts");
+  expect(helper).toContain("export function isSandboxClosingStatus(");
+  for (const path of [
+    "convex/usageLimits.ts",
+    "convex/_sessions/execution.ts",
+    "convex/projectChatWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+    "convex/_sandbox_runtime/execution.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should classify via the shared helper`).toContain(
+      "isSandboxClosingStatus(",
+    );
+    expect(source, `${path} re-inlined the closed/stopping pair`).not.toContain(
+      'status === "closed" ||',
+    );
+  }
+});
+
 test("composer last-* patches share composerTraitFields", () => {
   const helper = read("convex/_shared/composerTraits.ts");
   expect(helper).toContain("export function composerTraitFields(");

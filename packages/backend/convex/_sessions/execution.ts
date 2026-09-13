@@ -24,6 +24,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   bindTurnWorkflow,
   closeOpenSessionTurn,
@@ -382,8 +383,7 @@ export const prewarmDaemon = authMutation({
     // session status stays "closed"). A closed session keeps its sandboxId, so
     // without this guard merely opening its page (SessionDetailClient fires this
     // on mount) wakes the VM behind the user's back.
-    if (session.status === "closed" || session.status === "stopping")
-      return null;
+    if (isSandboxClosingStatus(session.status)) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     // Match the turn path's launch options so the first real message does not
@@ -479,11 +479,7 @@ export const getDaemonPrewarmData = internalQuery({
     if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (
-      !session.sandboxId ||
-      session.status === "closed" ||
-      session.status === "stopping"
-    ) {
+    if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
       return null;
     }
     const normalizedModel = normalizeAIModel(session.lastModel);
