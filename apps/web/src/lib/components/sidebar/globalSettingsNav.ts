@@ -6,10 +6,10 @@ import {
   IconKey,
   IconKeyboard,
   IconPalette,
-  IconRobot,
   IconServerBolt,
   IconUserCog,
 } from "@tabler/icons-react";
+import { GrokMark } from "@/lib/components/grokBot/GrokMark";
 
 /** Shared nav for the rail settings menu and the global Settings sidebar. */
 export const GLOBAL_SETTINGS_NAV = [
@@ -36,7 +36,7 @@ export const GLOBAL_SETTINGS_NAV = [
   {
     name: "Grok Bot",
     href: "/settings/grok-bot",
-    icon: IconRobot,
+    icon: GrokMark,
   },
   {
     name: "Notifications",
