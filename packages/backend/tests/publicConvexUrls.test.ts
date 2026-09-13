@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  assertAllowedCustomerConvexUrl,
   resolvePublicConvexCloudUrl,
   resolvePublicConvexSiteUrl,
 } from "../convex/_env/publicConvexUrls";
@@ -25,5 +26,28 @@ test("public site URL prefers an explicit site override, then rewrites cloud", (
     resolvePublicConvexSiteUrl({
       CONVEX_CLOUD_URL: "https://x.convex.cloud",
     }),
-  ).toBe("https://x.convex.site");
+      ).toBe("https://x.convex.site");
+});
+
+test("customer Convex URLs must be https Convex Cloud hosts", () => {
+  expect(assertAllowedCustomerConvexUrl("https://happy-animal-123.convex.cloud")).toBe(
+    "https://happy-animal-123.convex.cloud",
+  );
+  expect(assertAllowedCustomerConvexUrl("https://happy-animal-123.convex.cloud/")).toBe(
+    "https://happy-animal-123.convex.cloud",
+  );
+  expect(() =>
+    assertAllowedCustomerConvexUrl("https://evil.example/steal"),
+  ).toThrow(/not allowed/);
+  expect(() =>
+    assertAllowedCustomerConvexUrl("http://happy-animal-123.convex.cloud"),
+  ).toThrow(/https/);
+  expect(() =>
+    assertAllowedCustomerConvexUrl(
+      "https://user:deploykey@happy-animal-123.convex.cloud",
+    ),
+  ).toThrow(/credentials/);
+  expect(() =>
+    assertAllowedCustomerConvexUrl("https://169.254.169.254"),
+  ).toThrow(/not allowed/);
 });

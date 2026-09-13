@@ -5,6 +5,7 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 const reviewSideValidator = v.union(v.literal("LEFT"), v.literal("RIGHT"));
 
@@ -53,6 +54,10 @@ export const submitPrReview = action({
   ): Promise<{ reviewId: number; htmlUrl: string; state: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
@@ -108,6 +113,10 @@ export const addPrComment = action({
   handler: async (ctx, args): Promise<{ id: number; htmlUrl: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const body = args.body.trim();

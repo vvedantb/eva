@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import { rejectSandboxCaller, requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackEvaluationWorkflow } from "./workflowWatchdog";
 import {
@@ -640,6 +640,7 @@ export const startEvaluation = authMutation({
   },
   returns: v.id("evaluationReports"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || doc.repoId !== args.repoId) {
       throw new Error("Document not found");
@@ -701,6 +702,7 @@ export const startFix = authMutation({
   args: { reportId: v.id("evaluationReports") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const report = await ctx.db.get(args.reportId);
     if (!report) throw new Error("Report not found");
     if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId))) {

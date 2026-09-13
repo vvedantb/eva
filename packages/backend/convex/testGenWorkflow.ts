@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import { rejectSandboxCaller, requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import {
@@ -369,6 +369,7 @@ export const cancelTestGen = authMutation({
   args: { docId: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc) throw new Error("Doc not found");
     if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
@@ -398,6 +399,7 @@ export const startTestGen = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc) throw new Error("Doc not found");
     if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {

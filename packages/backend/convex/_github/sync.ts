@@ -5,6 +5,7 @@ import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { detectAppsForRepo } from "./helpers";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 /** Syncs all GitHub App installation repos into the database, detecting monorepo apps and updating connected status. */
 export const syncRepos = action({
@@ -15,6 +16,10 @@ export const syncRepos = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
 
     const accessibleRepos = await ctx.runQuery(api.githubRepos.list, {
       includeHidden: true,

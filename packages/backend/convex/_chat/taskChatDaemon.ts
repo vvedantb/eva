@@ -3,7 +3,10 @@ import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, getTaskWithAccess, hasTaskAccess } from "../functions";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -215,6 +218,7 @@ export const requestStopBackgroundAgent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (

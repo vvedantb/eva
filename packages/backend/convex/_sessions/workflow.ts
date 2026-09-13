@@ -9,7 +9,10 @@ import {
   getSessionWithAccess,
   hasSessionAccess,
 } from "../functions";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -1208,6 +1211,7 @@ export const requestStopBackgroundAgent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))

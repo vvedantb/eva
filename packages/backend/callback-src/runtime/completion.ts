@@ -556,11 +556,18 @@ function safeHarvestPath(dir: string, file: string): string | null {
   ) {
     return null;
   }
+  try {
+    const dirSt = lstatSync(dir);
+    if (dirSt.isSymbolicLink() || !dirSt.isDirectory()) return null;
+  } catch {
+    return null;
+  }
   const root = resolve(dir);
   const resolved = resolve(dir, file);
   if (resolved !== root && !resolved.startsWith(root + "/")) return null;
   try {
-    if (!lstatSync(resolved).isFile()) return null;
+    const st = lstatSync(resolved);
+    if (!st.isFile() || st.nlink > 1) return null;
   } catch {
     return null;
   }

@@ -9,6 +9,7 @@ import { resolveSessionBaseBranch } from "../_sessions/baseBranch";
 import { extractPrNumber } from "./helpers";
 import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 /**
  * Promotes a session's draft PR to ready-for-review. Called when the user
@@ -26,6 +27,10 @@ export const createSessionPr = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     const session = await ctx.runQuery(api.sessions.get, {
       id: args.sessionId,
     });

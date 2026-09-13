@@ -571,6 +571,48 @@ describe("backend authorization boundaries", () => {
     expect(convexSource("_automations/crud.ts")).toContain(
       "Email broadcast is reserved for system automations",
     );
+    expect(convexSource("_sessions/sandbox.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("buildWorkflow.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("_agentTasks/execution.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("messages.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("projectChatWorkflow.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("agentTaskChatWorkflow.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("_taskWorkflow/publicMutations.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("evaluationWorkflow.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("docs.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("_projects/development.ts")).toContain(
+      "rejectSandboxCaller",
+    );
+    expect(convexSource("pty.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_github/prOverview.ts")).toContain(
+      "isSandboxIdentity",
+    );
+    expect(convexSource("_github/prReview.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_github/prFlow.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("mcp/oauth.ts")).toContain(
+      "isAllowedOAuthRedirectUri",
+    );
+    expect(convexSource("taskWorkflowActions.ts")).toContain(
+      "isSandboxIdentity",
+    );
+    expect(convexSource("_sandbox_runtime/services.ts")).toContain(
+      "isSandboxIdentity",
+    );
+    expect(convexSource("evaluationReports.ts")).toContain(
+      "rejectSandboxCaller",
+    );
   });
 
   it("sandbox-only callbacks reject Clerk callers", () => {
@@ -617,7 +659,7 @@ describe("backend authorization boundaries", () => {
     const api = convexSource("_github/api.ts");
     const mint = api.slice(api.indexOf("export const getInstallationTokenAction"));
     expect(mint).toContain("isSandboxIdentity");
-    expect(mint).toContain("isBoundToRepo");
+    expect(mint).toContain("isBoundAndVisible");
     expect(mint).toContain("if (!isSandboxIdentity(identity))");
     expect(convexSource("_github/api.ts")).toContain("githubId: match.id");
   });

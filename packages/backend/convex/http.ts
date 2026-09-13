@@ -575,8 +575,15 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
+    let webhookJson: unknown;
+    try {
+      webhookJson = JSON.parse(body);
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
     if (event === "pull_request") {
-      const parsed = prWebhookSchema.safeParse(JSON.parse(body));
+      const parsed = prWebhookSchema.safeParse(webhookJson);
       if (!parsed.success) {
         return new Response("OK", { status: 200 });
       }
@@ -646,7 +653,7 @@ http.route({
     }
 
     if (event === "push") {
-      const parsed = pushWebhookSchema.safeParse(JSON.parse(body));
+      const parsed = pushWebhookSchema.safeParse(webhookJson);
       if (parsed.success && parsed.data.ref.startsWith("refs/heads/")) {
         const branch = parsed.data.ref.slice("refs/heads/".length);
         await ctx.scheduler.runAfter(
@@ -797,7 +804,8 @@ http.route({
       return Response.json({ found: false }, { status: 404 });
     }
 
-    return Response.json({ found: true, client });
+    const { clientSecret: _secret, ...publicClient } = client;
+    return Response.json({ found: true, client: publicClient });
   }),
 });
 

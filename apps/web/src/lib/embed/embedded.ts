@@ -19,7 +19,13 @@ export const embedReadyMessage = z.object({
  */
 /** App-internal path only — rejects protocol-relative and absolute URLs. */
 export function isInternalAppHref(href: string): boolean {
-  return href.startsWith("/") && !href.startsWith("//") && !href.includes("://");
+  return (
+    href.startsWith("/") &&
+    !href.startsWith("//") &&
+    !href.includes("://") &&
+    !href.includes("\\") &&
+    !/[\0-\x1f\x7f]/.test(href)
+  );
 }
 
 export const embedNavigateMessage = z.object({

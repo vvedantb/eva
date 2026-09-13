@@ -17,6 +17,7 @@ import {
   softDeleteAgentTask,
   recomputeProjectPhase,
 } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { allocateNumId } from "../numId";
 import {
   normalizeTaskTags,
@@ -84,6 +85,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
@@ -316,6 +318,7 @@ export const updateStatus = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
@@ -475,6 +478,7 @@ export const removeAttachment = authMutation({
   args: { taskId: v.id("agentTasks"), storageId: v.id("_storage") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
@@ -497,6 +501,7 @@ export const remove = authMutation({
   args: { id: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
@@ -526,6 +531,7 @@ export const createQuickTask = authMutation({
   },
   returns: v.id("agentTasks"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId)))
       throw new Error("Not authorized");
     const repo = await ctx.db.get(args.repoId);
@@ -623,6 +629,7 @@ export const createQuickTasksBatch = authMutation({
   },
   returns: v.array(v.id("agentTasks")),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId)))
       throw new Error("Not authorized");
     const repo = await ctx.db.get(args.repoId);
@@ -663,6 +670,7 @@ export const assignToProject = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       throw new Error("Project not found");
@@ -723,6 +731,7 @@ export const createBatchWithDependencies = authMutation({
     projectId: v.optional(v.id("projects")),
   }),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (args.tasks.length === 0) {
       throw new Error("At least one task is required");
     }
@@ -813,6 +822,7 @@ export const reorderProjectTasks = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       throw new Error("Project not found");
@@ -845,6 +855,7 @@ export const deleteCascade = authMutation({
   args: { id: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
@@ -890,6 +901,7 @@ export const setTraits = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");

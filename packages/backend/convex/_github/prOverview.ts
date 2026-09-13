@@ -9,6 +9,7 @@ import { invalidatePrHeaderCache } from "./pullRequests";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { getActionRepoWithAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 const MAX_ISSUE_COMMENTS = 100;
 const MAX_REVIEW_COMMENTS = 100;
@@ -645,6 +646,10 @@ export const updatePullRequest = action({
   handler: async (ctx, args): Promise<{ title: string; body: string | null }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const title = args.title?.trim();
@@ -799,6 +804,10 @@ export const mergePullRequest = action({
   ): Promise<{ merged: boolean; sha: string | null; message: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {

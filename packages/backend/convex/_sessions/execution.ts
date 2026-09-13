@@ -4,6 +4,10 @@ import { internalMutation, internalQuery, type MutationCtx } from "../_generated
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { authAction, authMutation, hasSessionAccess } from "../functions";
 import {
+  isSandboxIdentity,
+  rejectSandboxCaller,
+} from "../_auth/sandboxIdentity";
+import {
   aiModelValidator,
   launchTraitsFromStored,
   normalizeAIModel,
@@ -248,6 +252,7 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
@@ -325,6 +330,7 @@ export const startExecute = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))
@@ -392,6 +398,7 @@ export const prewarmDaemon = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session || !session.sandboxId) return null;
     // Never prewarm a stopped/stopping session. prewarmSessionDaemon execs on
@@ -445,6 +452,10 @@ export const prewarmDaemonNow = authAction({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
     const data = await ctx.runQuery(
       internal.sessionWorkflow.getDaemonPrewarmData,
       { sessionId: args.sessionId, userId: ctx.userId },
@@ -545,6 +556,7 @@ export const enqueueMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const content = args.message.trim();
     if (!content) return null;
     const displayContent = args.displayContent?.trim();
@@ -614,6 +626,7 @@ export const cancelExecution = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId)))

@@ -23,6 +23,7 @@ import {
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary } from "./runSummary";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 
 /** Lists all draft tasks for the current user in a given repo, sorted by most recently updated. */
 export const listDrafts = authQuery({
@@ -153,6 +154,7 @@ export const activateDraft = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.id);
     if (!task || task.createdBy !== ctx.userId || task.status !== "draft")
       throw new Error("Draft not found");

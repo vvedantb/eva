@@ -206,6 +206,11 @@ export function registerTools(
       app,
       environment,
     }) => {
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table)) {
+        return errorResult(
+          "Invalid table name. Use alphanumeric characters and underscores.",
+        );
+      }
       const { deployKey, userId } = await getContext();
       const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
       if ("isError" in ref) return ref;

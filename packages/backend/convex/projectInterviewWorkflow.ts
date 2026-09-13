@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, getProjectWithAccess } from "./functions";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import { rejectSandboxCaller, requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackProjectWorkflow } from "./workflowWatchdog";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
@@ -432,6 +432,7 @@ export const startInterview = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,
@@ -471,6 +472,7 @@ export const startSpec = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,

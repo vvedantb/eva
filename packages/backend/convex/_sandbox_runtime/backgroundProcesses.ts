@@ -6,6 +6,7 @@ import { action } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { execHandle, getSandboxHandle } from "./helpers";
 import { assertActionSandboxAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 /** Static POSIX ps snapshot used for reconcile matching (no user input). */
 const PS_SNAPSHOT_CMD = "ps -wweo pid=,ppid=,etimes=,args=";
@@ -150,6 +151,7 @@ export const reconcileBackgroundProcesses = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
 
     const session = await ctx.runQuery(api.sessions.get, {
       id: args.sessionId,
@@ -225,6 +227,7 @@ export const killBackgroundProcess = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
 
     const row = await ctx.runQuery(internal.backgroundProcesses.getInternal, {
       id: args.id,

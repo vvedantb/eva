@@ -8,6 +8,7 @@ import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps
 import { decideSandboxStartPlan } from "./mcp/orchestratorDelivery";
 import { authAction, authMutation, hasTaskAccess } from "./functions";
 import {
+  rejectSandboxCaller,
   assertPublicChatMessageRole,
   requireSandboxCaller,
 } from "./_auth/sandboxIdentity";
@@ -304,6 +305,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (
@@ -365,6 +367,7 @@ export const startExecute = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (
@@ -431,6 +434,7 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (
@@ -532,6 +536,7 @@ export const enqueueMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const content = args.message.trim();
     if (!content) return null;
 
@@ -610,6 +615,7 @@ export const cancelExecution = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (
@@ -1191,6 +1197,7 @@ export const prewarmChatDaemon = authMutation({
   args: { taskId: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task?.sandboxId || !task.repoId) return null;
     // Never prewarm a stopped/stopping sandbox. prewarmEntityDaemon execs on
@@ -1250,6 +1257,7 @@ export const prewarmChatDaemonNow = authAction({
   args: { taskId: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const data = await ctx.runQuery(
       internal.agentTaskChatWorkflow.getChatPrewarmData,
       { taskId: args.taskId, userId: ctx.userId },

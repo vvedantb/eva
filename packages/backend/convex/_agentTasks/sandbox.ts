@@ -8,6 +8,7 @@ import {
 import type { Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { authMutation, hasTaskAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
 import {
@@ -43,6 +44,7 @@ export const startTaskSandbox = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
 
@@ -122,6 +124,7 @@ export const retryStartupCommands = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
 
@@ -187,6 +190,7 @@ export const runDevServer = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
 
@@ -231,6 +235,7 @@ export const runBackgroundCommands = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
 
@@ -338,6 +343,7 @@ export const stopTaskSandbox = authMutation({
   args: { taskId: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
 

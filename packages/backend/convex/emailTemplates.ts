@@ -83,7 +83,13 @@ function formatDate(timestamp: number): string {
 }
 
 function isInternalAppHref(href: string): boolean {
-  return href.startsWith("/") && !href.startsWith("//") && !href.includes("://");
+  return (
+    href.startsWith("/") &&
+    !href.startsWith("//") &&
+    !href.includes("://") &&
+    !href.includes("\\") &&
+    !/[\0-\x1f\x7f]/.test(href)
+  );
 }
 
 /** Joins the app base URL with a notification path, tolerating slashes on either side. */

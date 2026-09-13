@@ -178,6 +178,7 @@ export const remove = authMutation({
   args: { id: v.id("artifacts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const artifact = await ctx.db.get(args.id);
     if (!artifact) throw new Error("Artifact not found");
     if (!(await hasTeamAccess(ctx.db, artifact.boundTeamId, ctx.userId))) {

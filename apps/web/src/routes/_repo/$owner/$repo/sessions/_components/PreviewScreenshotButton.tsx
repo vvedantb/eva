@@ -44,6 +44,18 @@ export function PreviewScreenshotButton({
       return;
     }
 
+    let targetOrigin: string;
+    try {
+      if (!frame.src) {
+        toast.error("Preview isn't ready to screenshot");
+        return;
+      }
+      targetOrigin = new URL(frame.src).origin;
+    } catch {
+      toast.error("Preview isn't ready to screenshot");
+      return;
+    }
+
     const requestId = crypto.randomUUID();
     setCapturing(true);
     const timeoutId = window.setTimeout(() => {
@@ -58,7 +70,9 @@ export function PreviewScreenshotButton({
     }
 
     function onMessage(event: MessageEvent) {
-      if (event.source !== target) return;
+      if (event.source !== target || event.origin !== targetOrigin) {
+        return;
+      }
       if (typeof event.data !== "object" || event.data === null) return;
       const inbound = parseScreenshotInbound(event.data);
       if (!inbound || inbound.requestId !== requestId) return;
@@ -75,7 +89,7 @@ export function PreviewScreenshotButton({
     window.addEventListener("message", onMessage);
     target.postMessage(
       { type: "eva-preview-screenshot-capture", requestId },
-      "*",
+      targetOrigin,
     );
   }
 

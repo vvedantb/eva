@@ -44,7 +44,7 @@ export const getInstallationTokenAction = action({
       throw new Error("Not authorized");
     }
     if (!args.sandboxId) throw new Error("Not authorized");
-    const bound = await ctx.runQuery(internal.sandboxHeal.isBoundToRepo, {
+    const bound = await ctx.runQuery(internal.sandboxHeal.isBoundAndVisible, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,
     });

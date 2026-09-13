@@ -12,7 +12,10 @@ import {
   hasRepoAccess,
   hasTaskAccess,
 } from "../functions";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import { aiModelValidator, turnCheckpointArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
@@ -157,6 +160,7 @@ export const cancelExecution = authMutation({
   args: { taskId: v.id("agentTasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
@@ -223,6 +227,7 @@ export const triggerExecution = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {

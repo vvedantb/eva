@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import { z } from "zod";
 import {
   isAllowedOAuthRedirectUri,
+  normalizeOAuthRedirectUri,
   redirectUriMatchesRegistered,
 } from "../_mcp/redirectUri";
 
@@ -244,7 +245,19 @@ export const token = httpAction(async (ctx, request) => {
     );
   }
 
-  if (entry.redirectUri !== params.redirect_uri) {
+  let givenRedirect: string;
+  try {
+    givenRedirect = normalizeOAuthRedirectUri(params.redirect_uri);
+  } catch {
+    return Response.json(
+      { error: "invalid_grant", error_description: "Redirect URI mismatch" },
+      { status: 400 },
+    );
+  }
+  if (
+    !isAllowedOAuthRedirectUri(params.redirect_uri) ||
+    entry.redirectUri !== givenRedirect
+  ) {
     console.error(
       "[MCP][token] redirect_uri mismatch. stored:",
       entry.redirectUri,

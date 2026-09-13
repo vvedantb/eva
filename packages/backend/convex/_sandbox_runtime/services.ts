@@ -18,6 +18,7 @@ import {
 import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
 import { assertActionSandboxAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
 // Aliased: this module's public action is also called writeSandboxFile.
 import { writeSandboxFile as writeFileToSandbox } from "./sandboxFiles";
@@ -37,6 +38,7 @@ export const toggleCodeServer = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
     console.log(
@@ -146,6 +148,7 @@ export const toggleDesktopServer = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
@@ -175,6 +178,7 @@ export const launchChromeInDesktop = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
@@ -302,6 +306,7 @@ export async function authorizedRunningHandle(
 ): Promise<SandboxHandle | null> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
+  if (isSandboxIdentity(identity)) throw new Error("Not authorized");
 
   await assertActionSandboxAccess(ctx, repoId, sandboxId);
 

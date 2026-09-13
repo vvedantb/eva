@@ -7,6 +7,7 @@ import {
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
@@ -34,6 +35,7 @@ export const updateSandbox = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
       branchName?: string;
@@ -60,6 +62,7 @@ export const clearSandbox = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     await markAllRunningExited(ctx.db, args.id);
     await ctx.db.patch(args.id, {
@@ -78,6 +81,7 @@ export const startSandbox = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionWithAccess(
       ctx.db,
       args.sessionId,
@@ -139,6 +143,7 @@ export const forcePushBranch = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionWithAccess(
       ctx.db,
       args.sessionId,
@@ -261,6 +266,7 @@ export const stopSandbox = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
     await requestSessionSandboxStop(ctx, args.sessionId);
     return null;

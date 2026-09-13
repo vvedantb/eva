@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { DatabaseWriter } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
 import { authMutation, getSessionWithAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import type { Id } from "../_generated/dataModel";
 
 /** Patches the PTY session ID on a session, throwing if it does not exist. */
@@ -29,6 +30,7 @@ export const updatePtySession = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     return applyPtySession(ctx.db, args.id, args.ptySessionId);
   },

@@ -7,7 +7,10 @@ import {
   getProjectWithAccess,
   hasRepoAccess,
 } from "../functions";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -216,6 +219,7 @@ export const requestStopBackgroundAgent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {

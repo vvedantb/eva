@@ -10,6 +10,7 @@ import { getInstallationOctokit } from "./githubAuth";
 import { parseGithubPrUrl } from "./_github/prUrl";
 import { isPullRequestAlreadyExistsError } from "./_github/prErrors";
 import { getActionRepoWithAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import {
   buildPrBody,
   buildTaskPrSections,
@@ -283,6 +284,9 @@ export const createTaskPr = action({
       if (!identity) {
         throw new Error("Not authenticated");
       }
+      if (isSandboxIdentity(identity)) {
+        throw new Error("Not authorized");
+      }
 
       const task = await ctx.runQuery(api.agentTasks.get, {
         id: args.taskId,
@@ -358,6 +362,9 @@ export const createProjectPr = action({
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) {
           throw new Error("Not authenticated");
+        }
+        if (isSandboxIdentity(identity)) {
+          throw new Error("Not authorized");
         }
 
         const data = await ctx.runQuery(

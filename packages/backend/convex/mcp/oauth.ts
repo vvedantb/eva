@@ -6,6 +6,7 @@ import {
 } from "../_generated/server";
 import {
   isAllowedOAuthRedirectUri,
+  normalizeOAuthRedirectUri,
   redirectUriMatchesRegistered,
 } from "../_mcp/redirectUri";
 import { isSandboxIdentity } from "../_auth/sandboxIdentity";
@@ -70,7 +71,7 @@ export const authorize = mutation({
       clerkUserId,
       codeChallenge: args.codeChallenge,
       codeChallengeMethod: args.codeChallengeMethod,
-      redirectUri: args.redirectUri,
+      redirectUri: normalizeOAuthRedirectUri(args.redirectUri),
       clientId: args.clientId,
       expiresAt: Date.now() + CODE_TTL_MS,
     });
@@ -94,7 +95,10 @@ export const storeAuthCode = internalMutation({
     expiresAt: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("mcpAuthCodes", args);
+    await ctx.db.insert("mcpAuthCodes", {
+      ...args,
+      redirectUri: normalizeOAuthRedirectUri(args.redirectUri),
+    });
   },
 });
 
@@ -139,10 +143,16 @@ export const registerClient = internalMutation({
     redirectUris: v.array(v.string()),
   },
   handler: async (ctx, { clientId, clientSecret, redirectUris }) => {
+    const normalized = redirectUris.map((uri) => {
+      if (!isAllowedOAuthRedirectUri(uri)) {
+        throw new Error("Unsafe redirect_uri");
+      }
+      return normalizeOAuthRedirectUri(uri);
+    });
     await ctx.db.insert("mcpClientRegistrations", {
       clientId,
       clientSecret,
-      redirectUris,
+      redirectUris: normalized,
       registeredAt: Date.now(),
     });
   },

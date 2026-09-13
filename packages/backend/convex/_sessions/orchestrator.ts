@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
 import { authMutation, authQuery } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { sessionStatusValidator } from "../_validators/enums";
 import { entityVisible } from "../numId";
 import {
@@ -100,6 +101,7 @@ export const ensureOrchestratorSession = authMutation({
   args: { repoId: v.id("githubRepos") },
   returns: orchestratorSessionValidator,
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const existing = await resolveOrchestratorSession(ctx.db, ctx.userId);
     if (existing) return existing;
     // The old pointer could not serve (archived, or its home repo is gone) but
@@ -138,6 +140,7 @@ export const resetOrchestratorSession = authMutation({
   args: {},
   returns: orchestratorSessionValidator,
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     const existing = await resolveOrchestratorSession(ctx.db, ctx.userId);
     if (!existing) throw new Error("No Manager Ave chat to reset");
     const previous = await ctx.db.get(existing.sessionId);

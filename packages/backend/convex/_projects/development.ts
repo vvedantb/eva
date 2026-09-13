@@ -17,6 +17,7 @@ import {
 } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 
 /** Converts a finalized project spec into tasks with dependencies and sets the project to business_review. */
 export const startDevelopment = authMutation({
@@ -25,6 +26,7 @@ export const startDevelopment = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,
@@ -99,6 +101,7 @@ export const createFromTasks = authMutation({
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }

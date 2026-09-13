@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, getSessionWithAccess } from "./functions";
-import { requireSandboxCaller } from "./_auth/sandboxIdentity";
+import { rejectSandboxCaller, requireSandboxCaller } from "./_auth/sandboxIdentity";
 import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import {
@@ -202,6 +202,7 @@ export const startSummarize = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionWithAccess(
       ctx.db,
       args.sessionId,

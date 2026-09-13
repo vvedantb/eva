@@ -8,6 +8,7 @@ import {
 import type { Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { workflow } from "../workflowManager";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { buildProjectBranchName } from "./helpers";
@@ -33,6 +34,7 @@ export const startProjectSandbox = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,
@@ -110,6 +112,7 @@ export const retryProjectStartupCommands = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,
@@ -174,6 +177,7 @@ export const runProjectBackgroundCommands = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,
@@ -205,6 +209,7 @@ export const resolveProjectConflicts = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,
@@ -329,6 +334,7 @@ export const stopProjectSandbox = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(
       ctx.db,
       args.projectId,

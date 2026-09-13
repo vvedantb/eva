@@ -109,7 +109,9 @@ export async function createNotification(
     params.href &&
     params.href.startsWith("/") &&
     !params.href.startsWith("//") &&
-    !params.href.includes("://")
+    !params.href.includes("://") &&
+    !params.href.includes("\\") &&
+    !/[\0-\x1f\x7f]/.test(params.href)
       ? params.href
       : undefined;
   if (!href && params.repoId) {

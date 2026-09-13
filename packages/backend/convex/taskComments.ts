@@ -6,6 +6,7 @@ import { authQuery, authMutation, hasTaskAccess } from "./functions";
 import { extractMentionedUserIds } from "./_mentions/extractMentionedUserIds";
 import { taskCommentFields } from "./validators";
 import { deleteDraftForTarget } from "./_drafts/helpers";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 export const DELETED_COMMENT_PLACEHOLDER =
   "This comment has been deleted by the author";
@@ -78,6 +79,7 @@ export const create = authMutation({
   },
   returns: v.id("taskComments"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");

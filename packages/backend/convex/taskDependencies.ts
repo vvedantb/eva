@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   authQuery,
   authMutation,
@@ -105,6 +106,7 @@ export const add = authMutation({
   },
   returns: v.id("taskDependencies"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (args.taskId === args.dependsOnId) {
       throw new Error("A task cannot depend on itself");
     }
@@ -133,6 +135,7 @@ export const remove = authMutation({
   args: { id: v.id("taskDependencies") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const dep = await ctx.db.get(args.id);
     if (!dep) {
       throw new Error("Dependency not found");
@@ -154,6 +157,7 @@ export const removeByTasks = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await Promise.all([
       getTaskWithAccess(ctx.db, args.taskId, ctx.userId),
       getTaskWithAccess(ctx.db, args.dependsOnId, ctx.userId),

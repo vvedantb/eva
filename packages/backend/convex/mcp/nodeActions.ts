@@ -23,7 +23,10 @@ import {
 } from "./orchestratorDelivery";
 import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
 import { formatConvexQueryError } from "./convexQueryLimits";
-import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
+import {
+  assertAllowedCustomerConvexUrl,
+  resolvePublicConvexCloudUrl,
+} from "../_env/publicConvexUrls";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Environment Helpers
@@ -673,8 +676,11 @@ export const getRepoConvexCredentials = internalAction({
 
     if (!urlEntry || !keyEntry) return null;
 
+    const convexUrl = assertAllowedCustomerConvexUrl(
+      urlEntry.value.replace(/\/$/, ""),
+    );
     const creds: { convexUrl: string; deployKey: string; expiresAt: number } = {
-      convexUrl: urlEntry.value.replace(/\/$/, ""),
+      convexUrl,
       deployKey: keyEntry.value,
       expiresAt: Date.now() + CACHE_TTL_MS,
     };

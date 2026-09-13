@@ -56,6 +56,7 @@ export const create = authMutation({
   },
   returns: v.id("projects"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -128,6 +129,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
@@ -222,6 +224,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     assertPublicUserMessageRole(args);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const conversation = await getProjectConversation(ctx.db, args.id);
@@ -276,6 +279,7 @@ export const clearMessages = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await setProjectConversation(ctx.db, args.id, []);
     return null;
@@ -290,6 +294,7 @@ export const updatePrUrl = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const prUrl = await assertPrUrlForRepo(ctx.db, project.repoId, args.prUrl);
     await ctx.db.patch(args.id, { prUrl });
@@ -322,6 +327,7 @@ export const updateProjectSandbox = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const boundSession = await ctx.db
       .query("sessions")
@@ -353,6 +359,7 @@ export const clearProjectSandbox = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const deleteId = preferPersistedSandboxId({
       sandboxId: project.sandboxId,
@@ -387,6 +394,7 @@ export const updateLastSandboxActivity = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { lastSandboxActivity: Date.now() });
     return null;
@@ -460,6 +468,7 @@ export const setTraits = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     if (
       args.reasoningLevel === undefined &&

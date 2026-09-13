@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { evaluationReportFields, normalizeAIModel } from "./validators";
 import { allocateNumId } from "./numId";
 import { ensureSubscribed } from "./taskSubscribers";
@@ -46,6 +47,7 @@ export const createTasksFromIssues = authMutation({
   },
   returns: v.array(v.id("agentTasks")),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const report = await ctx.db.get(args.reportId);
     if (!report) throw new Error("Report not found");
     if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId))) {

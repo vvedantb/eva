@@ -7,6 +7,7 @@ import {
   authQuery,
   authMutation,
 } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import { variationValidator, messageFields } from "./validators";
 import {
   appendMediaStorageIds,
@@ -47,7 +48,10 @@ const messageValidator = v.object({
 export const generateUploadUrl = authMutation({
   args: {},
   returns: v.string(),
-  handler: async (ctx) => ctx.storage.generateUploadUrl(),
+  handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
+    return ctx.storage.generateUploadUrl();
+  },
 });
 
 /** Fetches messages for a parent and resolves their image/video/attachment storage URLs. */

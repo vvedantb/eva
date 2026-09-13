@@ -8,6 +8,7 @@ import { internalMutation } from "./_generated/server";
 import { extractMentionedUserIds } from "./_mentions/extractMentionedUserIds";
 import { docCommentFields } from "./validators";
 import { hasCodebaseRepoAccess } from "./_githubRepos/helpers";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 export const DELETED_DOC_COMMENT_PLACEHOLDER =
   "This comment has been deleted by the author";
@@ -66,6 +67,7 @@ export const create = authMutation({
   },
   returns: v.id("docComments"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || !(await canAccessDoc(ctx.db, ctx.userId, doc))) {
       throw new Error("Document not found");

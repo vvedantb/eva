@@ -15,7 +15,10 @@ import {
 } from "./_generated/server";
 import { components, internal } from "./_generated/api";
 import { parseGithubPrUrl } from "./_github/prUrl";
-import { assertPublicUserMessageRole } from "./_auth/sandboxIdentity";
+import {
+  assertPublicUserMessageRole,
+  rejectSandboxCaller,
+} from "./_auth/sandboxIdentity";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -449,6 +452,7 @@ export const remove = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) {
       throw new Error("Doc not found");
@@ -827,6 +831,7 @@ export const reviseRecapFromFeedback = authMutation({
   args: { docId: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || doc.kind !== "pr-recap") {
       throw new Error("PR recap not found");
@@ -909,6 +914,7 @@ export const generatePrRecap = authAction({
     ctx,
     args,
   ): Promise<{ docId: Id<"docs">; workflowId: string }> => {
+    await rejectSandboxCaller(ctx);
     const context = await ctx.runQuery(
       internal._prRecapWorkflow.start.getManualRecapContext,
       { repoId: args.repoId, userId: ctx.userId },

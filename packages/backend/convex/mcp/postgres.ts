@@ -6,6 +6,35 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 
 const ENV_KEY = "POSTGRES_READ_REPLICA_URL";
+
+function assertSafePostgresUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Invalid Postgres URL");
+  }
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+    throw new Error("Postgres URL must use postgres://");
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host === "[::1]" ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local") ||
+    host === "metadata.google.internal" ||
+    host.startsWith("169.254.") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  ) {
+    throw new Error("Postgres URL host is not allowed");
+  }
+}
 const CONNECT_TIMEOUT_MS = 10_000;
 const STATEMENT_TIMEOUT_MS = 30_000;
 // Keep the shaped payload well under Convex's function return size limits.
@@ -108,6 +137,16 @@ export const runPostgresQuery = internalAction({
         ok: false,
         errorCode: "missing_config",
         error: `${ENV_KEY} is not set for this repo.`,
+      };
+    }
+
+    try {
+      assertSafePostgresUrl(connEntry.value);
+    } catch (err) {
+      return {
+        ok: false,
+        errorCode: "query_error",
+        error: err instanceof Error ? err.message : String(err),
       };
     }
 

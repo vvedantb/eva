@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import { authMutation, authQuery, hasSessionAccess } from "../functions";
-import { requireSandboxCaller } from "../_auth/sandboxIdentity";
+import {
+  rejectSandboxCaller,
+  requireSandboxCaller,
+} from "../_auth/sandboxIdentity";
 import { proposedPlanFields } from "../validators";
 import { findOpenSessionTurn } from "../_chat/turnStore";
 
@@ -115,6 +118,7 @@ export const markImplemented = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const plan = await ctx.db.get(args.planId);
     if (!plan) return null;
     const session = await ctx.db.get(plan.sessionId);

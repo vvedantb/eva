@@ -76,6 +76,7 @@ export const acknowledgeRun = authMutation({
   args: { runId: v.id("automationRuns") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await loadRunWithAccess(ctx.db, ctx.userId, args.runId);
     await ctx.db.patch(args.runId, { acknowledged: true });
     return null;

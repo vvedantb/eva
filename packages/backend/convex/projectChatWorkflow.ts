@@ -7,6 +7,7 @@ import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { authAction, authMutation, hasRepoAccess } from "./functions";
 import {
+  rejectSandboxCaller,
   assertPublicChatMessageRole,
   requireSandboxCaller,
 } from "./_auth/sandboxIdentity";
@@ -299,6 +300,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
@@ -356,6 +358,7 @@ export const startExecute = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
@@ -420,6 +423,7 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
@@ -516,6 +520,7 @@ export const enqueueMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const content = args.message.trim();
     if (!content) return null;
 
@@ -590,6 +595,7 @@ export const cancelExecution = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
@@ -1057,6 +1063,7 @@ export const prewarmChatDaemon = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const project = await ctx.db.get(args.projectId);
     if (!project?.sandboxId) return null;
     // Never prewarm a stopped/stopping sandbox. prewarmEntityDaemon execs on
@@ -1118,6 +1125,7 @@ export const prewarmChatDaemonNow = authAction({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const data = await ctx.runQuery(
       internal.projectChatWorkflow.getChatPrewarmData,
       { projectId: args.projectId, userId: ctx.userId },

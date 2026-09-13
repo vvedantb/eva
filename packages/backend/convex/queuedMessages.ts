@@ -5,6 +5,7 @@ import {
   assertMessageParentAccess,
 } from "./functions";
 import { queuedMessageFields } from "./validators";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 const parentIdValidator = queuedMessageFields.parentId;
 
@@ -40,6 +41,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const queuedMessage = await ctx.db.get(args.id);
     if (!queuedMessage) {
       throw new Error("Queued message not found");
@@ -77,6 +79,7 @@ export const remove = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const queuedMessage = await ctx.db.get(args.id);
     if (!queuedMessage) {
       return null;
@@ -116,6 +119,7 @@ export const reorder = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
 
     let index = 0;

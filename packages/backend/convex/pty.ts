@@ -7,6 +7,7 @@ import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 import { unwrapVercelSandbox } from "./_sandbox/vercelProvider";
 import { ownerArg, resolveOwner } from "./_pty/owners";
 import { assertActionSandboxAccess } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import {
   connectVercelInteractive,
   ensureVercelSharedTerminal,
@@ -43,6 +44,7 @@ export const connectPty = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
 
     const resolved = await resolveOwner(ctx, args.owner);
     await assertActionSandboxAccess(ctx, resolved.repoId, resolved.sandboxId);
@@ -95,6 +97,7 @@ export const resizePty = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
 
     const resolved = await resolveOwner(ctx, args.owner);
     await assertActionSandboxAccess(ctx, resolved.repoId, resolved.sandboxId);
@@ -116,6 +119,7 @@ export const disconnectPty = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) throw new Error("Not authorized");
 
     const resolved = await resolveOwner(ctx, args.owner);
     await assertActionSandboxAccess(ctx, resolved.repoId, resolved.sandboxId);

@@ -6,6 +6,7 @@ import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 import { invalidatePrOverviewCache } from "./prOverview";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 /**
  * The three fields of a pull request's metadata column a reader can change from
@@ -109,6 +110,10 @@ export const setPullRequestReviewers = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
@@ -158,6 +163,10 @@ export const setPullRequestAssignees = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
@@ -193,6 +202,10 @@ export const setPullRequestLabels = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
