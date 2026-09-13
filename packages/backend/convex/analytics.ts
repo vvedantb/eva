@@ -571,7 +571,7 @@ export const getLeaderboard = authQuery({
   },
   returns: v.array(
     v.object({
-      clerkId: v.string(),
+      userId: v.id("users"),
       fullName: v.optional(v.string()),
       tasksCompleted: v.number(),
       prsCreated: v.number(),
@@ -647,11 +647,10 @@ export const getLeaderboard = authQuery({
     const leaderboard = userStatEntries
       .map(([, stats], i) => {
         const user = leaderboardUsers[i];
-        const clerkId = user?.clerkId ?? "";
-        if (!clerkId) return null;
+        if (!user) return null;
         return {
-          clerkId,
-          fullName: user?.fullName ?? undefined,
+          userId: user._id,
+          fullName: user.fullName ?? undefined,
           ...stats,
         };
       })

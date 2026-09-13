@@ -16,6 +16,7 @@ import { CLAUDE_CODE_VERSION } from "./claudeCliVersion";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
+import { redactSecrets } from "../_shared/redactSecrets";
 
 // Paths baked into the callback script env for each CLI's config directory.
 // These originated as Daytona persistence-volume mount paths; the *_RUNTIME_*
@@ -94,9 +95,11 @@ export function condenseRunnerLogTail(log: string): string {
   }
   flush();
   const condensed = collapsed.join("\n").trim();
-  return condensed.length > RUNNER_LOG_TAIL_MAX_CHARS
-    ? `…${condensed.slice(-RUNNER_LOG_TAIL_MAX_CHARS)}`
-    : condensed;
+  const clipped =
+    condensed.length > RUNNER_LOG_TAIL_MAX_CHARS
+      ? `…${condensed.slice(-RUNNER_LOG_TAIL_MAX_CHARS)}`
+      : condensed;
+  return redactSecrets(clipped);
 }
 
 /**

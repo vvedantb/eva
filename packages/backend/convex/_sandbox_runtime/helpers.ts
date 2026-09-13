@@ -14,6 +14,7 @@ import {
   SandboxExecTimeoutError,
 } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
+import { redactSecrets } from "../_shared/redactSecrets";
 import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
 import { ensureSwapFile } from "./swap";
@@ -153,9 +154,9 @@ export async function execHandle(
     // read as "the sandbox is gone". See sandboxErrors.ts.
     throw new SandboxCommandFailedError(
       output
-        ? `Sandbox command failed (exit ${resp.exitCode}): ${output}`
+        ? `Sandbox command failed (exit ${resp.exitCode}): ${redactSecrets(output)}`
         : `Sandbox command failed with exit code ${resp.exitCode} (${cmdHint})`,
-      { exitCode: resp.exitCode, output },
+      { exitCode: resp.exitCode, output: output ? redactSecrets(output) : output },
     );
   }
   return resp.output;

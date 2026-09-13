@@ -6,6 +6,7 @@ import {
   getSessionWithAccess,
   hasTaskAccess,
 } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /**
  * Resolves the orchestrator session a watch registration points at. Only the
@@ -39,6 +40,7 @@ export const setSessionWatchedBy = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
     if (session.userId !== ctx.userId) {
       throw new Error("Not authorized");
@@ -61,6 +63,7 @@ export const setTaskWatchedBy = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {

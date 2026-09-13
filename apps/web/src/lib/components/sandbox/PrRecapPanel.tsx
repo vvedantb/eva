@@ -31,6 +31,7 @@ import {
   IconGitPullRequest,
 } from "@tabler/icons-react";
 import { Streamdown } from "streamdown";
+import { safeStreamdownMediaComponents } from "@/lib/markdown/safeStreamdownMedia";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { HtmlPreviewFrame } from "@/lib/components/docs/_components/HtmlPreviewFrame";
 import { RecapGenerateControls } from "@/lib/components/sandbox/_components/RecapGenerateControls";
@@ -294,7 +295,10 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
           )
         ) : (
           <Surface>
-            <Streamdown className="prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <Streamdown
+              className="prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              components={safeStreamdownMediaComponents}
+            >
               {recapDoc.content}
             </Streamdown>
           </Surface>

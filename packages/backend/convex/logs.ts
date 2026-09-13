@@ -8,6 +8,7 @@ import {
   hasSessionAccess,
   hasTaskAccess,
 } from "./functions";
+import { isSandboxIdentity } from "./_auth/sandboxIdentity";
 import {
   buildTaskProjectIdLookup,
   resolveLogProjectId,
@@ -30,13 +31,17 @@ function usageOf(entry: Doc<"logs">) {
   };
 }
 
-function toLogDto(entry: Doc<"logs">, projectId: Id<"projects"> | undefined) {
+function toLogDto(
+  entry: Doc<"logs">,
+  projectId: Id<"projects"> | undefined,
+  includeRaw: boolean,
+) {
   return {
     _id: entry._id,
     entityType: entry.entityType,
     entityId: entry.entityId,
     entityTitle: entry.entityTitle,
-    rawResultEvent: entry.rawResultEvent,
+    rawResultEvent: includeRaw ? entry.rawResultEvent : undefined,
     projectId,
     createdAt: entry.createdAt,
     ...usageOf(entry),
@@ -121,6 +126,7 @@ export const getByEntityId = authQuery({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
     }
+    const includeRaw = !isSandboxIdentity(await ctx.auth.getUserIdentity());
 
     const logs = await ctx.db
       .query("logs")
@@ -134,7 +140,7 @@ export const getByEntityId = authQuery({
     for (const entry of logs) {
       if (await canReadLogEntity(ctx, ctx.userId, entry)) visible.push(entry);
     }
-    return visible.map((entry) => toLogDto(entry, entry.projectId));
+    return visible.map((entry) => toLogDto(entry, entry.projectId, includeRaw));
   },
 });
 
@@ -157,6 +163,7 @@ export const getByProjectId = authQuery({
     if (!project || project.repoId !== args.repoId) {
       return [];
     }
+    const includeRaw = !isSandboxIdentity(await ctx.auth.getUserIdentity());
 
     const tagged = await ctx.db
       .query("logs")
@@ -196,7 +203,7 @@ export const getByProjectId = authQuery({
       if (!(await canReadLogEntity(ctx, ctx.userId, entry))) continue;
       const projectId = resolveLogProjectId(ctx, entry, projectByTaskId);
       if (projectId !== args.projectId) continue;
-      resolved.push(toLogDto(entry, projectId));
+      resolved.push(toLogDto(entry, projectId, includeRaw));
     }
 
     return resolved.sort((a, b) => b.createdAt - a.createdAt);
@@ -214,6 +221,7 @@ export const listByRepo = authQuery({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
     }
+    const includeRaw = !isSandboxIdentity(await ctx.auth.getUserIdentity());
 
     const all = await ctx.db
       .query("logs")
@@ -232,7 +240,11 @@ export const listByRepo = authQuery({
     for (const entry of all) {
       if (!(await canReadLogEntity(ctx, ctx.userId, entry))) continue;
       visible.push(
-        toLogDto(entry, resolveLogProjectId(ctx, entry, projectByTaskId)),
+        toLogDto(
+          entry,
+          resolveLogProjectId(ctx, entry, projectByTaskId),
+          includeRaw,
+        ),
       );
     }
     return visible;
@@ -257,6 +269,7 @@ export const listByProject = authQuery({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
     }
+    const includeRaw = !isSandboxIdentity(await ctx.auth.getUserIdentity());
 
     const all = await ctx.db
       .query("logs")
@@ -290,7 +303,7 @@ export const listByProject = authQuery({
         if (!project) continue;
         projectTitles.set(pidStr, project.title);
       }
-      const logEntry: LogEntry = toLogDto(entry, projectId);
+      const logEntry: LogEntry = toLogDto(entry, projectId, includeRaw);
       const existing = groups.get(pidStr);
       if (existing) {
         existing.logs.push(logEntry);

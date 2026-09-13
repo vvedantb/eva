@@ -32,6 +32,31 @@ export function assertAllowedCustomerConvexUrl(url: string): string {
   return parsed.origin;
 }
 
+/**
+ * Fetch target for Convex test-query / admin APIs. Eva's own cloud URL
+ * (including tunnel overrides) is allowed; anything else must be a customer
+ * Convex Cloud host so a deploy key cannot be sent off-platform.
+ */
+export function assertSafeConvexFetchUrl(
+  url: string,
+  evaCloudUrl: string,
+): string {
+  const strip = (value: string) => value.replace(/\/$/, "");
+  if (strip(url) === strip(evaCloudUrl)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error("Invalid Convex URL");
+    }
+    if (parsed.username || parsed.password) {
+      throw new Error("Convex URL must not include credentials");
+    }
+    return strip(evaCloudUrl);
+  }
+  return assertAllowedCustomerConvexUrl(url);
+}
+
 /** Cloud URL sandboxes / external callers should use (tunnel override wins). */
 export function resolvePublicConvexCloudUrl(
   env: PublicConvexUrlEnv,

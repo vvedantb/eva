@@ -2,7 +2,10 @@ import type { GenericDatabaseReader } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
-import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
+import {
+  isSandboxIdentity,
+  rejectSandboxCaller,
+} from "./_auth/sandboxIdentity";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { teamMemberRoleValidator } from "./validators";
 
@@ -61,6 +64,7 @@ export const list = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     const currentUserMembership = await getTeamMembership(
       ctx.db,
       args.teamId,
@@ -120,6 +124,7 @@ export const listForRepo = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
     const repo = await ctx.db.get(args.repoId);
     const teamId = repo?.teamId;

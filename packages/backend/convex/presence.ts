@@ -7,6 +7,7 @@ import { assertEntityAccess, hasTaskAccess } from "./_auth/entityAccess";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { getCurrentUserId } from "./_auth/currentUser";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   getUserPresenceRow,
   shouldWriteLastSeenAt,
@@ -54,17 +55,19 @@ async function assertPresenceRoomAccess(
   }
   if (roomId.startsWith("cursor:")) {
     const parts = roomId.slice("cursor:".length).split("/").filter(Boolean);
-    if (parts.length < 2) return;
+    if (parts.length < 2) throw new Error("Not authorized");
     const owner = parts[0];
     const name = parts[1];
-    if (owner === undefined || name === undefined) return;
+    if (owner === undefined || name === undefined) {
+      throw new Error("Not authorized");
+    }
     const repo = await db
       .query("githubRepos")
       .withIndex("by_owner_and_name", (q) =>
         q.eq("owner", owner).eq("name", name),
       )
       .first();
-    if (repo && !(await hasRepoAccess(db, repo._id, userId))) {
+    if (!repo || !(await hasRepoAccess(db, repo._id, userId))) {
       throw new Error("Not authorized");
     }
     return;
@@ -82,6 +85,7 @@ export const heartbeat = authMutation({
     interval: v.number(),
   },
   handler: async (ctx, { roomId, userId, sessionId, interval }) => {
+    await rejectSandboxCaller(ctx);
     if (userId !== ctx.userId) {
       throw new Error("Cannot send heartbeat for another user");
     }
@@ -113,6 +117,7 @@ export const updatePath = authMutation({
   args: { path: v.string() },
   returns: v.null(),
   handler: async (ctx, { path }) => {
+    await rejectSandboxCaller(ctx);
     if (
       !path.startsWith("/") ||
       path.startsWith("//") ||
@@ -158,6 +163,7 @@ export const updateCursor = authMutation({
     y: v.number(),
   },
   handler: async (ctx, { roomId, x, y }) => {
+    await rejectSandboxCaller(ctx);
     await assertPresenceRoomAccess(ctx.db, roomId, ctx.userId);
     const user = await ctx.db.get(ctx.userId);
     if (!user) return;
@@ -182,6 +188,7 @@ export const updateTyping = authMutation({
     isTyping: v.boolean(),
   },
   handler: async (ctx, { roomId, isTyping }) => {
+    await rejectSandboxCaller(ctx);
     await assertPresenceRoomAccess(ctx.db, roomId, ctx.userId);
     const user = await ctx.db.get(ctx.userId);
     if (!user) return;

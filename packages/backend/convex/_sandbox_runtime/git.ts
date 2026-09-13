@@ -3,6 +3,7 @@
 import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
+import { redactSecrets } from "../_shared/redactSecrets";
 import { getRepoScopedInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
@@ -117,7 +118,7 @@ async function cleanupTimedOutGitState(sandbox: SandboxHandle): Promise<void> {
  * Matches all GitHub token prefixes (ghs_, ghp_, gho_, ghu_) regardless of URL escaping.
  */
 function sanitizeCommand(command: string): string {
-  return command.replace(/gh[spou]_[A-Za-z0-9_]+/g, "***");
+  return redactSecrets(command);
 }
 
 /** Executes a git command, cleaning up lock files on timeout errors. */
@@ -139,7 +140,7 @@ async function execGitCommand(
     const elapsed = Date.now() - startedAt;
     const message = error instanceof Error ? error.message : String(error);
     logGit(
-      `exec failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${sanitized} — ${message}`,
+      `exec failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${sanitized} — ${redactSecrets(message)}`,
     );
     if (isSandboxExecTimeout(message)) {
       await cleanupTimedOutGitState(sandbox);

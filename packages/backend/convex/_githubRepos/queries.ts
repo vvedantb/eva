@@ -106,6 +106,7 @@ export const listActiveSandboxCounts = authQuery({
     v.object({ repoId: v.id("githubRepos"), count: v.number() }),
   ),
   handler: async (ctx) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
     const counts = await Promise.all(
       repos.map(async (repo) => ({
@@ -122,6 +123,7 @@ export const countActiveSessions = authQuery({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return 0;
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
     const perRepo = await Promise.all(
       repos.map(async (repo) => {
@@ -204,6 +206,9 @@ export const getProviderAvailability = authQuery({
       opencode: false,
       cursor: false,
     };
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) {
+      return unavailable;
+    }
     const repo = await ctx.db.get(args.repoId);
     if (!repo) {
       return unavailable;
@@ -483,6 +488,7 @@ export const listGroupedByCodebase = authQuery({
     }),
   ),
   handler: async (ctx) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
 
     // Group by owner/name

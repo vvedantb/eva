@@ -188,7 +188,6 @@ export const getEntity = authQuery({
           id: visible._id,
           label: visible.title,
           badge: DATA_MENTION_BADGE.document,
-          content: visible.content,
           ...(description !== undefined ? { description } : {}),
           ...(visible.numId !== undefined ? { numId: visible.numId } : {}),
         };

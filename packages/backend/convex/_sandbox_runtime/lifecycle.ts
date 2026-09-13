@@ -10,6 +10,7 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
+import { redactSecrets } from "../_shared/redactSecrets";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -295,7 +296,7 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
         KILL_DIAGNOSTICS_COMMAND,
         15,
       );
-      const trimmed = diagnostics.trim().slice(0, 4000);
+      const trimmed = redactSecrets(diagnostics.trim().slice(0, 4000));
       console.log(
         `[watchdog][diagnostics] runId=${args.runId} sandboxId=${args.sandboxId}\n${trimmed}`,
       );

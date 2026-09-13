@@ -22,15 +22,7 @@ import {
 import { ScreenshotPreview, VideoPreview } from "@/lib/components/MediaPreview";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { remarkMentionChips, MENTION_HREF_REGEX } from "./remarkMentionChips";
-
-function isSafeMediaUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, "https://eva.invalid");
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
+import { isSafeMediaUrl } from "@/lib/utils/safeMediaUrl";
 
 interface MarkdownMentionTextProps {
   text: string;
@@ -185,11 +177,14 @@ export function MarkdownMentionText({
             if (typeof href === "string" && isChipLinkUrl(href)) {
               return <LinkChip url={href} />;
             }
-            return (
-              <a href={href} target="_blank" rel="noopener noreferrer">
-                {children}
-              </a>
-            );
+            if (typeof href === "string" && isSafeMediaUrl(href)) {
+              return (
+                <a href={href} target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              );
+            }
+            return <span>{children}</span>;
           }
 
           const prefix = match[1];

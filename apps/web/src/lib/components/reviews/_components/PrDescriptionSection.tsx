@@ -14,6 +14,7 @@ import {
   IconPencil,
 } from "@tabler/icons-react";
 import { Streamdown } from "streamdown";
+import { safeStreamdownMediaComponents } from "@/lib/markdown/safeStreamdownMedia";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { usePrEdit } from "../usePrEdit";
 import { MARKDOWN_CLASS, type PrOverview } from "./prOverviewMeta";
@@ -128,7 +129,12 @@ export function PrDescriptionSection({
 
         <CollapsibleContent>
           {hasBody ? (
-            <Streamdown className={MARKDOWN_CLASS}>{body}</Streamdown>
+            <Streamdown
+              className={MARKDOWN_CLASS}
+              components={safeStreamdownMediaComponents}
+            >
+              {body}
+            </Streamdown>
           ) : (
             <p className="text-sm text-muted-foreground">
               No description yet. Add one to say what changed and why.

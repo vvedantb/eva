@@ -25,6 +25,7 @@ import { formatDuration } from "@eva/shared/duration";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { Streamdown } from "streamdown";
+import { safeStreamdownMediaComponents } from "@/lib/markdown/safeStreamdownMedia";
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
@@ -300,6 +301,7 @@ function RunAccordion({
                   <Streamdown
                     className="text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                     plugins={summaryPlugins}
+                    components={safeStreamdownMediaComponents}
                   >
                     {run.resultSummary}
                   </Streamdown>

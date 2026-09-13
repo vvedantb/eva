@@ -562,6 +562,11 @@ function resetAttemptState() {
   callbackState.cursorTerminalToolIds.clear();
 }
 
+// callback-src/redactSecrets.ts
+function redactSecrets(text) {
+  return text.replace(/gh[spou]_[A-Za-z0-9_]+/g, "***").replace(/\\bsk-[A-Za-z0-9_-]{10,}\\b/g, "***").replace(/\\bAKIA[0-9A-Z]{16}\\b/g, "***").replace(/(?<=Bearer\\s+)[A-Za-z0-9._-]+/gi, "***").replace(/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9._-]+\\b/g, "***").replace(/x-access-token:[^@\\s]+@/gi, "x-access-token:***@").replace(/\\/\\/([^/\\s:@]+):([^@\\s]+)@/g, "//\$1:***@");
+}
+
 // callback-src/utils.ts
 function narrowJsonValue(value) {
   if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -591,7 +596,7 @@ function narrowJsonValue(value) {
   return obj;
 }
 function log(msg) {
-  const line = "[callback " + (/* @__PURE__ */ new Date()).toISOString() + "] " + msg + "\\n";
+  const line = "[callback " + (/* @__PURE__ */ new Date()).toISOString() + "] " + redactSecrets(msg) + "\\n";
   console.error(line.trim());
   try {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
@@ -1077,7 +1082,7 @@ function capContentPreview(content) {
   return headCap(content, STEP_FIELD_CAPS.contentPreview).text;
 }
 function buildStepOutput(text, exitCode) {
-  const trimmed = text.trim();
+  const trimmed = redactSecrets(text).trim();
   if (!trimmed && exitCode === void 0) {
     return void 0;
   }
@@ -2204,13 +2209,6 @@ function buildErrorMessage(code, fatalHeartbeatError, toolStallError, timedOutFo
     return agentName + (code === 137 ? " was killed before it finished \\u2014 the sandbox ran out of memory." : " was stopped before it finished \\u2014 the run was interrupted.") + " This usually means the sandbox was stopped or a new message cancelled the run, so nothing was completed. Send the request again on a running sandbox.";
   }
   return agentName + " exited with code " + code;
-}
-function redactSecrets(text) {
-  return text
-    .replace(/gh[spou]_[A-Za-z0-9_]+/g, "***")
-    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "***")
-    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "***")
-    .replace(/(?<=Bearer\s+)[A-Za-z0-9._-]+/gi, "***");
 }
 function appendDiagnosticTail(message) {
   const details = [];
@@ -10148,13 +10146,15 @@ try {
   const completionArgs = {
     [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",
     success: completionSuccess,
-    result: finalResultEvent?.result ?? callbackState.rawOutput,
-    error: errorValue,
+    result: redactSecrets(finalResultEvent?.result ?? callbackState.rawOutput),
+    error: errorValue ? redactSecrets(errorValue) : errorValue,
     activityLog
   };
   if (RUN_ID) completionArgs.runId = RUN_ID;
   if (finalResultEvent?.rawResultEvent) {
-    completionArgs.rawResultEvent = finalResultEvent.rawResultEvent;
+    completionArgs.rawResultEvent = redactSecrets(
+      finalResultEvent.rawResultEvent
+    );
   }
   if (callbackState.pendingQuestionData) {
     completionArgs.pendingQuestion = callbackState.pendingQuestionData;

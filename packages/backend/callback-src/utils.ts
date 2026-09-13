@@ -18,6 +18,7 @@ import {
 } from "./config.js";
 import { callbackState as S } from "./runtime/state.js";
 import type { JsonValue } from "./types.js";
+import { redactSecrets } from "./redactSecrets.js";
 
 /** Narrow JSON.parse / Response.json() payloads into JsonValue (null if invalid). */
 function narrowJsonValue(
@@ -69,7 +70,8 @@ function narrowJsonValue(
 
 /** Logs a timestamped debug message to stderr and the debug log file. */
 export function log(msg: string): void {
-  const line = "[callback " + new Date().toISOString() + "] " + msg + "\n";
+  const line =
+    "[callback " + new Date().toISOString() + "] " + redactSecrets(msg) + "\n";
   console.error(line.trim());
   try {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });

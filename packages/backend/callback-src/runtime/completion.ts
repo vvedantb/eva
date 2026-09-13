@@ -25,6 +25,7 @@ import { mediaSearchDirs } from "../runtime/sandboxMedia.js";
 import { appendTurnCheckpoint } from "../runtime/turnCheckpoint.js";
 import type { JsonObject, ResultEvent } from "../types.js";
 import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
+import { redactSecrets } from "../redactSecrets.js";
 import {
   existsSync,
   lstatSync,
@@ -431,14 +432,6 @@ export function buildErrorMessage(
     );
   }
   return agentName + " exited with code " + code;
-}
-
-function redactSecrets(text: string): string {
-  return text
-    .replace(/gh[spou]_[A-Za-z0-9_]+/g, "***")
-    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "***")
-    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "***")
-    .replace(/(?<=Bearer\s+)[A-Za-z0-9._-]+/gi, "***");
 }
 
 export function appendDiagnosticTail(message: string): string {

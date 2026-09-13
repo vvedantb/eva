@@ -6,6 +6,7 @@ import type {
   ToolCompleteResult,
 } from "../types.js";
 import { headCap, STEP_FIELD_CAPS, tailCap } from "./stepBudget.js";
+import { redactSecrets } from "../redactSecrets.js";
 
 /** Caps a command string for ProgressStep.command. */
 export function capCommand(command: string): string {
@@ -22,7 +23,7 @@ export function buildStepOutput(
   text: string,
   exitCode?: number,
 ): StepOutput | undefined {
-  const trimmed = text.trim();
+  const trimmed = redactSecrets(text).trim();
   if (!trimmed && exitCode === undefined) {
     return undefined;
   }

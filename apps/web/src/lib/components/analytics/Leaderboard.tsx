@@ -42,7 +42,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
           {entries.map((entry, index) => {
             const isTop = index === 0;
             return (
-              <div key={entry.clerkId} className="space-y-2">
+              <div key={entry.userId} className="space-y-2">
                 <div className="group flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
                     <IconUser size={16} />

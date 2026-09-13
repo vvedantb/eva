@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api, DAILY_STANDUP_KEY } from "@eva/backend";
 import { cn, STREAMDOWN_TABLE_RADIUS_CLASS } from "@eva/ui";
 import { Streamdown } from "streamdown";
+import { safeStreamdownMediaComponents } from "@/lib/markdown/safeStreamdownMedia";
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
@@ -113,6 +114,7 @@ export function TodayClient() {
                       STREAMDOWN_TABLE_RADIUS_CLASS,
                     )}
                     plugins={standupPlugins}
+                    components={safeStreamdownMediaComponents}
                   >
                     {entry.content}
                   </Streamdown>

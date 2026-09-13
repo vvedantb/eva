@@ -8,6 +8,7 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { notificationTypeValidator, withCommentAnchor } from "./validators";
 import { authQuery, authMutation } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Max unread notifications shown per user in the daily digest email. */
 const DIGEST_NOTIFICATION_LIMIT = 50;
@@ -203,6 +204,7 @@ export const list = authQuery({
   args: {},
   returns: v.array(notificationValidator),
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     return await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
@@ -216,6 +218,7 @@ export const get = authQuery({
   args: { id: v.id("notifications") },
   returns: v.union(notificationValidator, v.null()),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const notification = await ctx.db.get(args.id);
     if (!notification || notification.userId !== ctx.userId) return null;
     return notification;
@@ -227,6 +230,7 @@ export const countUnread = authQuery({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     const unread = await ctx.db
       .query("notifications")
       .withIndex("by_user_and_read", (q) =>
@@ -242,6 +246,7 @@ export const markAsRead = authMutation({
   args: { id: v.id("notifications") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const notification = await ctx.db.get(args.id);
     if (!notification || notification.userId !== ctx.userId)
       throw new Error("Not found");
@@ -260,6 +265,7 @@ export const markAsUnread = authMutation({
   args: { id: v.id("notifications") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const notification = await ctx.db.get(args.id);
     if (!notification || notification.userId !== ctx.userId)
       throw new Error("Not found");
@@ -275,6 +281,7 @@ export const markAllAsRead = authMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    await rejectSandboxCaller(ctx);
     const unread = await ctx.db
       .query("notifications")
       .withIndex("by_user_and_read", (q) =>

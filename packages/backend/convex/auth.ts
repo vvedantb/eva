@@ -11,7 +11,10 @@ import {
   shortcutOverridesValidator,
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
-import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
+import {
+  isSandboxIdentity,
+  rejectSandboxCaller,
+} from "./_auth/sandboxIdentity";
 import { getCurrentUserId } from "./_auth/currentUser";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import type { ExperimentalFlagKey } from "./_auth/experimentalFlags";
@@ -339,6 +342,9 @@ export const getPersonalisation = authQuery({
     customInstructions: v.union(v.string(), v.null()),
   }),
   handler: async (ctx) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) {
+      return { role: null, customInstructions: null };
+    }
     const user = await ctx.db.get(ctx.userId);
     return {
       role: user?.role ?? null,

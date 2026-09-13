@@ -13,6 +13,7 @@ import {
   stripPreviewGrant,
   carryPreviewGrant,
 } from "@/lib/utils/previewGrant";
+import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import { normalizePreviewPath } from "./previewPathHistory";
@@ -277,7 +278,7 @@ export function PreviewNavBar({
   // top-level navigation that runs the sign-in handshake, and the link must not
   // carry a bearer token.
   const openInNewTabHref = previewUrl
-    ? stripPreviewGrant(buildUrlWithPath(previewUrl, pathInput))
+    ? ensureHttps(stripPreviewGrant(buildUrlWithPath(previewUrl, pathInput)))
     : undefined;
 
   function toggleFullscreen() {

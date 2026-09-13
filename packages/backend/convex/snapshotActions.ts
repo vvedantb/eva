@@ -41,6 +41,7 @@ import {
 import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
+import { redactSecrets } from "./_shared/redactSecrets";
 
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
 const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
@@ -633,7 +634,7 @@ export const fetchSeedDiagnostics = internalAction({
   handler: async (ctx, args): Promise<string> => {
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
     try {
-      return await execHandle(
+      const diagnostics = await execHandle(
         sandbox,
         [
           'echo "== git state =="',
@@ -661,6 +662,7 @@ export const fetchSeedDiagnostics = internalAction({
         ].join("; "),
         90,
       );
+      return redactSecrets(diagnostics.trim().slice(0, 4000));
     } catch (e) {
       return `diagnostics unavailable: ${e instanceof Error ? e.message : String(e)}`;
     }

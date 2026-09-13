@@ -1,5 +1,6 @@
 import { v, type Infer } from "convex/values";
 import {
+  isSandboxIdentity,
   rejectSandboxCaller,
   requireSandboxCaller,
 } from "./_auth/sandboxIdentity";
@@ -355,6 +356,7 @@ export const getForViewer = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
     const credentials = await listUsageLimitCredentials(
       ctx,

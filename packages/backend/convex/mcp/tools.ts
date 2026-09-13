@@ -1108,6 +1108,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         entityKind: entity.entityKind,
         entityId: entity.entityId,
         locked: true,
+        clerkUserId,
       });
       return textResult({ locked: true });
     },
@@ -1125,6 +1126,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         entityKind: entity.entityKind,
         entityId: entity.entityId,
         locked: false,
+        clerkUserId,
       });
       return textResult({ locked: false });
     },

@@ -12,8 +12,8 @@ interface DataMentionHoverCardBodyProps {
 }
 
 /**
- * Hover preview for Data `@` chips. Documents show content; other kinds show
- * title + type badge (+ short description when present).
+ * Hover preview for Data `@` chips. Documents show a short description;
+ * other kinds show title + type badge.
  */
 export function DataMentionHoverCardBody({
   entityId,
@@ -38,8 +38,7 @@ export function DataMentionHoverCardBody({
   }
 
   if (entity.kind === "document") {
-    const preview =
-      entity.content?.trim() || entity.description?.trim() || "No content yet.";
+    const preview = entity.description?.trim() || "No content yet.";
     return (
       <MentionContentPreview title={entity.label}>
         <pre className="whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-relaxed text-foreground">

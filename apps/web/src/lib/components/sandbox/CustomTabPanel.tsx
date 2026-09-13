@@ -210,7 +210,7 @@ export function CustomTabPanel({
           </Button>
           <Button size="icon" variant="ghost" className="size-8" asChild>
             <a
-              href={stripPreviewGrant(url)}
+              href={ensureHttps(stripPreviewGrant(url))}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open ${name} in a new tab`}

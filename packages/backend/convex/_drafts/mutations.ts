@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { authMutation } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { draftTarget } from "../validators";
 import { resolveTarget } from "./helpers";
 
@@ -15,6 +16,7 @@ export const set = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const { repoId, findExisting } = await resolveTarget(
       ctx.db,
       ctx.userId,
@@ -82,6 +84,7 @@ export const remove = authMutation({
   args: { id: v.id("drafts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const draft = await ctx.db.get(args.id);
     if (draft && draft.userId === ctx.userId) {
       await ctx.db.delete(args.id);

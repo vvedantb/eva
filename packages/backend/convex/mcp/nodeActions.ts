@@ -25,8 +25,10 @@ import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import {
   assertAllowedCustomerConvexUrl,
+  assertSafeConvexFetchUrl,
   resolvePublicConvexCloudUrl,
 } from "../_env/publicConvexUrls";
+import { wrapQueryHandler } from "../_mcp/wrapQueryHandler";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Environment Helpers
@@ -336,17 +338,7 @@ function parseConvexResponse(json: JsonValue) {
   return result;
 }
 
-function wrapQueryHandler(handlerBody: string): string {
-  return [
-    'import { query } from "convex:/_system/repl/wrappers.js";',
-    "",
-    "export default query({",
-    "  handler: async (ctx) => {",
-    `    ${handlerBody}`,
-    "  },",
-    "});",
-  ].join("\n");
-}
+const CONVEX_TABLE_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 // In-memory caches (reset on action cold starts)
 let cachedDeployKey: { value: string; expiresAt: number } | null = null;
@@ -416,7 +408,11 @@ async function runTestQueryRemote(
   deployKey: string,
   source: string,
 ): Promise<{ value: JsonValue; logLines: string[] }> {
-  const response = await fetch(`${convexUrl}/api/run_test_function`, {
+  const allowedUrl = assertSafeConvexFetchUrl(
+    convexUrl,
+    getEvaConvexCloudUrl(),
+  );
+  const response = await fetch(`${allowedUrl}/api/run_test_function`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -787,6 +783,9 @@ export const queryTable = internalAction({
     _ctx,
     { convexUrl, deployKey, table, order, numItems, cursor },
   ) => {
+    if (!CONVEX_TABLE_NAME_RE.test(table)) {
+      throw new Error("Invalid table name");
+    }
     const allowedUrl = assertAllowedCustomerConvexUrl(convexUrl);
     const response = await fetch(`${allowedUrl}/api/query`, {
       method: "POST",

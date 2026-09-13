@@ -49,4 +49,10 @@ describe("condenseRunnerLogTail", () => {
     expect(condensed.startsWith("…")).toBe(true);
     expect(condensed.endsWith("failed")).toBe(true);
   });
+
+  test("redacts tokens in the condensed tail", () => {
+    expect(condenseRunnerLogTail("clone https://x-access-token:ghs_secret@github.com/a/b")).toBe(
+      "clone https://x-access-token:***@github.com/a/b",
+    );
+  });
 });

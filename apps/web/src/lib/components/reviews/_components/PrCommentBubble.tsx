@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Surface } from "@eva/ui";
 import { IconExternalLink } from "@tabler/icons-react";
 import { Streamdown } from "streamdown";
+import { safeStreamdownMediaComponents } from "@/lib/markdown/safeStreamdownMedia";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { MARKDOWN_CLASS } from "./prOverviewMeta";
 
@@ -81,7 +82,12 @@ export function PrCommentBubble({
       </div>
 
       {hasBody ? (
-        <Streamdown className={MARKDOWN_CLASS}>{body}</Streamdown>
+        <Streamdown
+          className={MARKDOWN_CLASS}
+          components={safeStreamdownMediaComponents}
+        >
+          {body}
+        </Streamdown>
       ) : (
         <p className="text-sm text-muted-foreground">
           {emptyLabel ?? "Nothing written."}

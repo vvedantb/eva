@@ -33,6 +33,7 @@ import {
 } from "./runtime/turnLease.js";
 import { waitForPendingClaudeUsageReport } from "./runtime/usageLimits.js";
 import { persistTurnWork } from "./runtime/turnPersist.js";
+import { redactSecrets } from "./redactSecrets.js";
 import {
   appendTurnCheckpoint,
   beginTurnCheckpoint,
@@ -328,13 +329,15 @@ try {
   const completionArgs: JsonObject = {
     [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",
     success: completionSuccess,
-    result: finalResultEvent?.result ?? S.rawOutput,
-    error: errorValue,
+    result: redactSecrets(finalResultEvent?.result ?? S.rawOutput),
+    error: errorValue ? redactSecrets(errorValue) : errorValue,
     activityLog,
   };
   if (RUN_ID) completionArgs.runId = RUN_ID;
   if (finalResultEvent?.rawResultEvent) {
-    completionArgs.rawResultEvent = finalResultEvent.rawResultEvent;
+    completionArgs.rawResultEvent = redactSecrets(
+      finalResultEvent.rawResultEvent,
+    );
   }
   if (S.pendingQuestionData) {
     completionArgs.pendingQuestion = S.pendingQuestionData;

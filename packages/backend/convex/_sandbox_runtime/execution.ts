@@ -53,6 +53,7 @@ import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from 
 import { isDaytonaNetworkIssue } from "../_taskWorkflow/recovery";
 import { assertActionSandboxAccess } from "../functions";
 import { isSandboxIdentity } from "../_auth/sandboxIdentity";
+import { redactSecrets } from "../_shared/redactSecrets";
 import {
   isSandboxGoneError,
   isSandboxUnresponsiveError,
@@ -298,18 +299,27 @@ export async function runStartupCommandsDirect(
 
   const errors: string[] = [];
   for (const command of commands) {
-    console.log(`[sandbox] runStartupCommands: running: ${command}`);
+    console.log(
+      `[sandbox] runStartupCommands: running: ${redactSecrets(command)}`,
+    );
     try {
       // 10 minute timeout per command (supabase start can take a while)
       const output = await execHandle(sandbox, command, 600);
-      console.log(`[sandbox] runStartupCommands: completed: ${command}`);
+      console.log(
+        `[sandbox] runStartupCommands: completed: ${redactSecrets(command)}`,
+      );
       if (output.trim()) {
-        console.log(`[sandbox] output: ${output.slice(0, 500)}`);
+        console.log(
+          `[sandbox] output: ${redactSecrets(output.slice(0, 500))}`,
+        );
       }
     } catch (e) {
       const msg = errorMessage(e, "command failed");
-      console.error(`[sandbox] runStartupCommands: failed: ${command}`, msg);
-      errors.push(`${command}: ${msg}`);
+      console.error(
+        `[sandbox] runStartupCommands: failed: ${redactSecrets(command)}`,
+        redactSecrets(msg),
+      );
+      errors.push(redactSecrets(`${command}: ${msg}`));
       // Continue with other commands even if one fails
     }
   }
@@ -799,11 +809,12 @@ export const watchConvexReadiness = internalAction({
     } catch {
       // Tail is best-effort context only.
     }
-    const detail =
+    const detail = redactSecrets(
       `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${logTail}`.slice(
         0,
         4000,
-      );
+      ),
+    );
     console.error(
       `[sandbox] watchConvexReadiness: timed out (${args.sandboxId}): ${detail}`,
     );
