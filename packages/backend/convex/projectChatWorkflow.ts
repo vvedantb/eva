@@ -60,6 +60,7 @@ import {
   prependModelHandoffContext,
 } from "./_shared/modelHandoff";
 import { composerTraitFields } from "./_shared/composerTraits";
+import { detectCancelSupersession } from "./_chat/cancelRace";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
@@ -597,14 +598,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.projectId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeChatWorkflowId !== undefined &&
-      latest.activeChatWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+        latestPendingTurn: latest.pendingTurn,
+        cancelPendingRequestedAt: pendingRequestedAt,
+        latestActiveWorkflowId: latest.activeChatWorkflowId,
+        cancelWorkflowId: workflowIdToCancel,
+      });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -648,7 +649,7 @@ export const cancelExecution = authMutation({
     ) {
       projectPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       projectPatch.syntheticTurnMessageId = undefined;
       // This cancel owns the current turn and nothing newer has arrived, so the
       // claim stamp is spent. See `_chat/pendingTurnRestage.ts`.

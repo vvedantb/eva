@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   composerTraitFields,
   hasComposerTraitUpdate,
+  storedComposerTraits,
 } from "../convex/_shared/composerTraits";
 
 describe("composerTraitFields", () => {
@@ -45,5 +46,30 @@ describe("hasComposerTraitUpdate", () => {
 
   test("is true for a single provided knob, including false", () => {
     expect(hasComposerTraitUpdate({ fastMode: false })).toBe(true);
+  });
+});
+
+describe("storedComposerTraits", () => {
+  test("maps last-* columns onto the menu shape", () => {
+    expect(
+      storedComposerTraits({
+        lastReasoningLevel: "high",
+        lastFastMode: true,
+      }),
+    ).toEqual({
+      effortLevel: "high",
+      thinkingEnabled: undefined,
+      use1mContext: undefined,
+      fastMode: true,
+    });
+  });
+
+  test("returns empty-ish traits when the entity is missing", () => {
+    expect(storedComposerTraits(undefined)).toEqual({
+      effortLevel: undefined,
+      thinkingEnabled: undefined,
+      use1mContext: undefined,
+      fastMode: undefined,
+    });
   });
 });

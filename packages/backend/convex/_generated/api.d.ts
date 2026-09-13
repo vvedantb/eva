@@ -37,6 +37,7 @@ import type * as _automations_runs from "../_automations/runs.js";
 import type * as _automations_systemAutomations from "../_automations/systemAutomations.js";
 import type * as _automations_systemInstall from "../_automations/systemInstall.js";
 import type * as _automations_triggers from "../_automations/triggers.js";
+import type * as _chat_cancelRace from "../_chat/cancelRace.js";
 import type * as _chat_cancelledMessage from "../_chat/cancelledMessage.js";
 import type * as _chat_chatResult from "../_chat/chatResult.js";
 import type * as _chat_daemonClaimPause from "../_chat/daemonClaimPause.js";
@@ -439,6 +440,7 @@ declare const fullApi: ApiFromModules<{
   "_automations/systemAutomations": typeof _automations_systemAutomations;
   "_automations/systemInstall": typeof _automations_systemInstall;
   "_automations/triggers": typeof _automations_triggers;
+  "_chat/cancelRace": typeof _chat_cancelRace;
   "_chat/cancelledMessage": typeof _chat_cancelledMessage;
   "_chat/chatResult": typeof _chat_chatResult;
   "_chat/daemonClaimPause": typeof _chat_daemonClaimPause;

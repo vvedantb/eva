@@ -15,3 +15,11 @@ export {
   TITLE_REGENERATION_STALE_MS,
   isTitleRegenerating,
 } from "./sessionTitle";
+export {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+  storedComposerTraits,
+  type ComposerTraitFields,
+  type ComposerTraits,
+  type StoredComposerTraits,
+} from "./composerTraits";

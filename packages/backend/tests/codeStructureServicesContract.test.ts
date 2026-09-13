@@ -590,9 +590,12 @@ test("prewarm and refresh skip closed sandboxes via isSandboxClosingStatus", () 
 });
 
 test("composer last-* patches share composerTraitFields", () => {
-  const helper = read("convex/_shared/composerTraits.ts");
-  expect(helper).toContain("export function composerTraitFields(");
-  expect(helper).toContain("export function hasComposerTraitUpdate(");
+  const shared = read("../shared/src/composerTraits.ts");
+  expect(shared).toContain("export function composerTraitFields<");
+  expect(shared).toContain("export function hasComposerTraitUpdate<");
+  expect(read("convex/_shared/composerTraits.ts")).toContain(
+    'from "@eva/shared"',
+  );
   for (const path of [
     "convex/_sessions/execution.ts",
     "convex/_sessions/mutations.ts",
@@ -607,6 +610,37 @@ test("composer last-* patches share composerTraitFields", () => {
     );
     expect(source, `${path} re-inlined lastReasoningLevel`).not.toContain(
       "lastReasoningLevel:",
+    );
+  }
+  for (const path of [
+    "../../apps/web/src/lib/hooks/useSessionModel.ts",
+    "../../apps/web/src/lib/components/tasks/TaskSandboxChatPanel.tsx",
+    "../../apps/web/src/lib/components/projects/useProjectTraits.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should patch via the shared helper`).toContain(
+      "composerTraitFields(",
+    );
+    expect(source, `${path} re-inlined lastReasoningLevel`).not.toContain(
+      "lastReasoningLevel:",
+    );
+  }
+});
+
+test("cancel races share detectCancelSupersession", () => {
+  const helper = read("convex/_chat/cancelRace.ts");
+  expect(helper).toContain("export function detectCancelSupersession(");
+  for (const path of [
+    "convex/_sessions/execution.ts",
+    "convex/projectChatWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should classify via the shared helper`).toContain(
+      "detectCancelSupersession(",
+    );
+    expect(source, `${path} re-inlined the staged-turn race`).not.toContain(
+      "latest.pendingTurn.requestedAt !==",
     );
   }
 });

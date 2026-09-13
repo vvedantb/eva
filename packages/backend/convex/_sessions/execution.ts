@@ -24,6 +24,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
+import { detectCancelSupersession } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   bindTurnWorkflow,
@@ -625,14 +626,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.sessionId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeWorkflowId !== undefined &&
-      latest.activeWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+        latestPendingTurn: latest.pendingTurn,
+        cancelPendingRequestedAt: pendingRequestedAt,
+        latestActiveWorkflowId: latest.activeWorkflowId,
+        cancelWorkflowId: workflowIdToCancel,
+      });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -678,7 +679,7 @@ export const cancelExecution = authMutation({
     if (clearsPendingTurn) {
       sessionPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       sessionPatch.syntheticTurnMessageId = undefined;
     }
 
