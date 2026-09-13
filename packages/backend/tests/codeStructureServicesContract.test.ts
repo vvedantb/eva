@@ -645,6 +645,40 @@ test("cancel races share detectCancelSupersession", () => {
   }
 });
 
+test("implementation prompts share buildTypecheckCommand", () => {
+  const helper = read("convex/_sandbox_runtime/typecheckCommand.ts");
+  expect(helper).toContain("export function buildTypecheckCommand(");
+  expect(helper).toContain("/tmp/eva-tsc.log");
+  for (const path of [
+    "convex/_taskWorkflow/prompts.ts",
+    "convex/_automationWorkflow/prompts.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should embed via the shared helper`).toContain(
+      "buildTypecheckCommand(",
+    );
+    expect(source, `${path} re-inlined the tsc timeout command`).not.toContain(
+      "/tmp/eva-tsc.log",
+    );
+  }
+});
+
+test("session and task trait writes share toRunTraitArgs", () => {
+  for (const path of [
+    "../../apps/web/src/lib/hooks/useSessionModel.ts",
+    "../../apps/web/src/lib/components/tasks/TaskSandboxChatPanel.tsx",
+    "../../apps/web/src/lib/components/projects/useProjectTraits.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should map via toRunTraitArgs`).toContain(
+      "toRunTraitArgs(",
+    );
+    expect(source, `${path} re-inlined effortLevel → reasoningLevel`).not.toContain(
+      "reasoningLevel !== undefined",
+    );
+  }
+});
+
 test("deployment status reads share fetchLatestDeploymentStatus", () => {
   const service = read("convex/_github/deploymentSnapshot.ts");
   expect(service).toContain("export async function fetchLatestDeploymentStatus(");

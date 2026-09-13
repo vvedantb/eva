@@ -10,10 +10,10 @@ import {
   resolveTraitsForDisplay,
   type AIModel,
   type Id,
-  type ReasoningLevel,
   type StoredModelTraits,
 } from "@eva/backend";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
+import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 import {
@@ -183,17 +183,9 @@ export function TaskSandboxChatPanel({
   };
 
   const onTraitsChange = (partial: Partial<StoredModelTraits>) => {
-    const reasoningLevel: ReasoningLevel | undefined = partial.effortLevel;
     void setTraitsMutation({
       id: taskId,
-      ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
-      ...(partial.thinkingEnabled !== undefined
-        ? { thinkingEnabled: partial.thinkingEnabled }
-        : {}),
-      ...(partial.use1mContext !== undefined
-        ? { use1mContext: partial.use1mContext }
-        : {}),
-      ...(partial.fastMode !== undefined ? { fastMode: partial.fastMode } : {}),
+      ...toRunTraitArgs(partial),
     });
   };
 
