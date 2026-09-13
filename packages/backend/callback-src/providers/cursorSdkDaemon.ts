@@ -3,9 +3,6 @@ import { readFileSync, unlinkSync, writeFileSync } from "fs";
 import {
   CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
-  COMPLETION_MUTATION,
-  CONVEX_TOKEN,
-  CONVEX_URL,
   CURSOR_TURN_WORKER_LEASE_GENERATION,
   CURSOR_TURN_WORKER_LIFECYCLE,
   CURSOR_TURN_WORKER_PROMPT_FILE,
@@ -15,30 +12,32 @@ import {
   ENTITY_ID_FIELD,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
-  REPO_ID,
-  RUN_ID,
 } from "../config.js";
 import { evaMcpWorkerHandoffEnv } from "../evaMcp.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
-import { ensureGithubToken } from "./githubToken.js";
+import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
 import { serializeSteps } from "../parse/stepBudget.js";
 import {
   appendDiagnosticTail,
-  buildErrorMessage,
+  buildTurnCompletionPayload,
   deliverCompletionWithMedia,
+  drainStreamingAndCompleteSteps,
   extractResultEvent,
+  postClaimedTurnFailureCompletion,
+  reconcileStreamingAndPersist,
+  resolveProviderAttemptOutcome,
 } from "../runtime/completion.js";
 import {
-  flushStreaming,
   runPreflightHeartbeat,
-  setFinalizingState,
   startStreamingLoops,
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
-import { callbackState as S } from "../runtime/state.js";
+import {
+  callbackState as S,
+  resetDaemonTurnStreamingState,
+} from "../runtime/state.js";
 import { materializeTurnAttachments } from "../runtime/turnAttachments.js";
 import { persistTurnWork } from "../runtime/turnPersist.js";
-import { appendTurnCheckpoint } from "../runtime/turnCheckpoint.js";
 import { getCurrentTurnLease } from "../runtime/turnLease.js";
 import {
   prepareCursorSessionState,
@@ -46,6 +45,19 @@ import {
 } from "../session/cursorSession.js";
 import type { JsonValue, ProviderAttemptResult } from "../types.js";
 import { log } from "../utils.js";
+import {
+  DAEMON_CLAIM_POLL_TIMING,
+  buildEntityMutationArgs,
+  callbackBundleWentStale,
+  claimDaemonPidfileBoot,
+  cleanOwnedDaemonMarkers,
+  readPidFromFile,
+  selectClaimPollIntervalMs,
+  sleep,
+  startDaemonDepositionFence,
+  writeOomScoreAdj,
+} from "../runtime/daemonProcess.js";
+import { decideCallbackRefresh } from "./callbackRefresh.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
 import {
   appendClaimedTurnCompletion,
@@ -56,20 +68,17 @@ import {
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
 import { runCursorSdkAttempt } from "./cursorSdk.js";
-import {
-  resolveDaemonPaths,
-  resolveLegacySessionDaemonPaths,
-} from "./daemonPaths.js";
+import { resolveDaemonPaths } from "./daemonPaths.js";
 
 // Same knobs as the Claude/Codex daemons (see claudeSdkDaemon.ts for the
 // reasoning behind each): keep the sandbox warm for a whole work session, poll
 // the claim mutation fast while anything is in flight and back off when idle so
 // an idle daemon does not burn ~20 mutations/s for turns that never come.
-const IDLE_EXIT_MS = 45 * 60 * 1000;
-const FENCE_POLL_INTERVAL_MS = 5000;
-const PROMPT_POLL_INTERVAL_MS = 50;
-const PROMPT_POLL_IDLE_INTERVAL_MS = 1000;
-const PROMPT_POLL_FAST_WINDOW_MS = 30_000;
+const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
+const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
+const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
+const PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
+const PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 const WATCHDOG_TICK_MS = 5000;
 // Outer bound on one claimed turn. `runCursorSdkAttempt` already enforces the
 // runtime cap and the silence kill itself (cancelling the run so the attempt
@@ -107,9 +116,6 @@ export type CursorTurnWorkerExit =
   | { status: "exited"; code: number | null; signal: NodeJS.Signals | null }
   | { status: "spawn_error"; message: string };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function cursorTurnWorkerEntryPath(): string {
   const entryPath = process.argv[1];
@@ -242,39 +248,20 @@ function spawnCursorTurnWorker(
   // so host-level pressure sacrifices it before the process that reports the
   // failure and accepts the next message.
   if (child.pid !== undefined) {
-    try {
-      writeFileSync(
-        `/proc/${child.pid}/oom_score_adj`,
-        CURSOR_TURN_WORKER_OOM_SCORE,
-      );
-    } catch {
-      // Non-Linux and restricted procfs environments fail open.
-    }
+    writeOomScoreAdj(child.pid, CURSOR_TURN_WORKER_OOM_SCORE);
   }
   return child;
 }
 
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function readDaemonPidFile(): number {
-  try {
-    return Number(readFileSync(daemonPaths.pid, "utf8").trim());
-  } catch {
-    return Number.NaN;
-  }
+  return readPidFromFile(daemonPaths.pid);
 }
 
 function entityMutationArgs(
   fields: Record<string, JsonValue>,
 ): Record<string, JsonValue> {
-  return { [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "", ...fields };
+  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
 }
 
 /**
@@ -283,43 +270,17 @@ function entityMutationArgs(
  * next prewarm spawns with fresh code — a refresh must never lose a turn.
  */
 function callbackScriptWentStaleOnDisk(): boolean {
-  if (!CALLBACK_SCRIPT_FP) return false;
-  try {
-    return (
-      readFileSync("/tmp/eva-callback-fp", "utf8").trim() !== CALLBACK_SCRIPT_FP
-    );
-  } catch {
-    return false;
-  }
+  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
 }
 
 /** Clears the per-turn accumulators so the next turn starts clean. */
 function resetTurnState(): void {
-  S.accumulatedSteps.length = 0;
-  S.currentStreamedContent = "";
-  S.streamedAssistantTextThisMessage = false;
-  S.pendingParagraphBreak = false;
-  S.resultEventSeen = false;
-  S.rawOutput = "";
-  // The flush cursor and the buffer are one value: a cleared buffer with a live
-  // cursor makes flushStreaming's `rawOutput.length <= lastProcessed` guard
-  // permanently true, so no later line is ever parsed into accumulatedSteps and
-  // every turn from the second onward reports an empty activity log.
-  S.lastProcessed = 0;
-  S.realtimeOutputBuffer = "";
-  S.inFlightToolUses = 0;
-  S.pendingQuestionData = "";
-  S.todoState.length = 0;
-  S.lastStepType = "thinking";
+  resetDaemonTurnStreamingState();
 }
 
 /** Sessions may push git commits; refresh the installation token like the one-shot path. */
 async function refreshGithubToken(): Promise<void> {
-  await ensureGithubToken({
-    convexUrl: CONVEX_URL,
-    convexToken: CONVEX_TOKEN,
-    repoId: REPO_ID,
-  });
+  await refreshDaemonGithubTokenFromEnv();
 }
 
 /**
@@ -331,46 +292,10 @@ export function buildTurnCompletion(attempt: ProviderAttemptResult): {
   success: boolean;
   error: string | null;
 } {
-  const resultEvent = extractResultEvent(attempt.output);
-  const attemptEndedDueToTimeout =
-    attempt.timedOutForMaxRuntime ||
-    attempt.timedOutForNoOutput ||
-    Boolean(attempt.toolStallErrorMessage);
-  // Same interruption guard as index.ts: Cursor can flush partial text while a
-  // SIGTERM/SIGKILL tears the process down, and shells translate a direct
-  // signal (code=null, terminatedBySignal) into exit 137/143 — none of those
-  // may masquerade as genuine completion.
-  const finalTerminatedBySignal = attempt.terminatedBySignal;
-  const finalCode = attempt.code;
-  const agentWasInterrupted =
-    finalTerminatedBySignal || finalCode === 137 || finalCode === 143;
-  const runSucceededWithResult =
-    resultEvent !== null && !resultEvent.isError && !agentWasInterrupted;
-  if (resultEvent?.isError) {
-    return { success: false, error: resultEvent.result };
-  }
-  if (
-    (!runSucceededWithResult && attempt.code !== 0) ||
-    (attemptEndedDueToTimeout && !runSucceededWithResult)
-  ) {
-    return {
-      success: false,
-      error: appendDiagnosticTail(
-        buildErrorMessage(
-          attempt.code,
-          S.fatalHeartbeatErrorMessage,
-          attempt.toolStallErrorMessage,
-          attempt.timedOutForMaxRuntime,
-          attempt.timedOutForNoOutput,
-          attempt.timedOutForFirstEvent,
-          attempt.timedOutForFirstAssistant,
-          attempt.timedOutAfterFirstText,
-          attempt.timedOutForZombie,
-        ),
-      ),
-    };
-  }
-  return { success: runSucceededWithResult, error: null };
+  return resolveProviderAttemptOutcome(
+    attempt,
+    extractResultEvent(attempt.output),
+  );
 }
 
 /** Reports one finished turn to the chat workflow (mirrors the one-shot completion). */
@@ -378,33 +303,22 @@ async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {
   // Only flushStreaming parses buffered lines into accumulatedSteps, so the
   // drain has to happen before the activity log is read and before the
   // completion mutation persists it.
-  await flushStreaming();
+  await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(attempt.output);
-  for (const step of S.accumulatedSteps) step.status = "complete";
   const { success, error } = buildTurnCompletion(attempt);
-  const completionArgs: Record<string, string | boolean | null> = {
-    [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+  const completionArgs = buildTurnCompletionPayload({
     success,
     result: resultEvent?.result ?? S.rawOutput,
     error,
     activityLog: serializeSteps(S.accumulatedSteps),
-  };
-  if (RUN_ID) completionArgs.runId = RUN_ID;
-  if (resultEvent?.rawResultEvent) {
-    completionArgs.rawResultEvent = resultEvent.rawResultEvent;
-  }
-  if (S.pendingQuestionData) {
-    completionArgs.pendingQuestion = S.pendingQuestionData;
-  }
+    resultEvent,
+  });
   appendClaimedTurnCompletion(completionArgs);
   // Final streaming reconcile BEFORE completion: the completion mutation
   // finalizes the assistant message and the server may dequeue the next turn
   // straight after, so writing streaming state past that point resurrects this
   // turn's text into the next turn's placeholder.
-  if (await setFinalizingState()) return;
-  // Durability BEFORE completion: a VM death after this point must not erase
-  // the turn's work.
-  persistTurnWork();
+  if (await reconcileStreamingAndPersist()) return;
   await deliverCompletionWithMedia(completionArgs);
   syncCursorStateToPersist();
   log("cursor daemon: turn finalized success=" + success);
@@ -421,22 +335,9 @@ async function failTurnAndExit(error: string): Promise<never> {
   // committed work is still the user's work and this process is about to exit.
   persistTurnWork();
   try {
-    const completionArgs = entityMutationArgs({
-      success: false,
-      result: null,
-      error,
-      // The disposable worker owns the live steps. A null log tells Convex to
-      // preserve the last streaming snapshot when the worker cannot report.
-      activityLog: null,
-      ...(RUN_ID ? { runId: RUN_ID } : {}),
-    });
-    appendClaimedTurnCompletion(completionArgs);
-    appendTurnCheckpoint(completionArgs);
-    await callConvexWithRetry(
-      "mutation",
-      COMPLETION_MUTATION ?? "",
-      completionArgs,
-    );
+    // The disposable worker owns the live steps. A null log tells Convex to
+    // preserve the last streaming snapshot when the worker cannot report.
+    await postClaimedTurnFailureCompletion({ error, activityLog: null });
   } catch {
     /* best-effort: exit regardless so the daemon does not wedge */
   }
@@ -447,22 +348,10 @@ async function failTurnAndExit(error: string): Promise<never> {
 
 /** Removes marker files only while this process still owns the pidfile. */
 function cleanOwnedMarkers(): void {
-  if (readDaemonPidFile() !== process.pid) return;
-  const legacy =
-    ENTITY_ID_FIELD === "sessionId" ? resolveLegacySessionDaemonPaths() : null;
-  const targets = [
-    daemonPaths.pid,
-    daemonPaths.entity,
-    daemonPaths.opts,
-    ...(legacy ? [legacy.pid, legacy.entity, legacy.opts] : []),
-  ];
-  for (const path of targets) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* ignore */
-    }
-  }
+  cleanOwnedDaemonMarkers({
+    paths: daemonPaths,
+    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
+  });
 }
 
 /**
@@ -501,17 +390,29 @@ function startClaimWatcher(): void {
   void (async () => {
     while (!daemonExiting) {
       if (callbackScriptWentStaleOnDisk()) callbackRefreshPending = true;
-      if (callbackRefreshPending) {
-        if (turnActive || pendingClaimedTurn !== null || cancelInFlight) {
-          if (!callbackRefreshDeferralLogged) {
-            callbackRefreshDeferralLogged = true;
-            log(
-              "cursor daemon: callback script updated on disk — deferring respawn until active work settles",
-            );
-          }
-          await sleep(PROMPT_POLL_INTERVAL_MS);
-          continue;
+      const refreshDecision = decideCallbackRefresh({
+        refreshPending: callbackRefreshPending,
+        watchedTurnActive: turnActive,
+        daemonTurnActive: false,
+        claimedTurnPending: pendingClaimedTurn !== null,
+        cancellationInFlight: cancelInFlight,
+        backgroundAgentCount: 0,
+        sdkMessagePending: false,
+        syntheticTurnOpening: false,
+      });
+      if (refreshDecision.action === "defer") {
+        if (!callbackRefreshDeferralLogged) {
+          callbackRefreshDeferralLogged = true;
+          log(
+            "cursor daemon: callback script updated on disk — deferring respawn until active work settles (" +
+              refreshDecision.blocker +
+              ")",
+          );
         }
+        await sleep(PROMPT_POLL_INTERVAL_MS);
+        continue;
+      }
+      if (refreshDecision.action === "exit") {
         log(
           "cursor daemon: callback script updated on disk — exiting for respawn",
         );
@@ -563,12 +464,11 @@ function startClaimWatcher(): void {
         /* retry on the next poll */
       }
       const busy = turnActive || pendingClaimedTurn !== null || cancelInFlight;
-      const recentlyActive =
-        Date.now() - lastIdleActivityAtMs < PROMPT_POLL_FAST_WINDOW_MS;
       await sleep(
-        busy || recentlyActive
-          ? PROMPT_POLL_INTERVAL_MS
-          : PROMPT_POLL_IDLE_INTERVAL_MS,
+        selectClaimPollIntervalMs({
+          busy,
+          lastIdleActivityAtMs,
+        }),
       );
     }
   })();
@@ -625,20 +525,14 @@ async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
     log("cursor daemon: turn failed — " + message);
     if (cancelInFlight) return;
     try {
-      await flushStreaming();
-      for (const step of S.accumulatedSteps) step.status = "complete";
-      if (await setFinalizingState()) return;
-      // Durability BEFORE completion, as finalizeTurn does it — the turn failed
-      // but anything it committed is still the user's work.
-      persistTurnWork();
-      const completionArgs: Record<string, JsonValue> = {
-        [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+      await drainStreamingAndCompleteSteps();
+      if (await reconcileStreamingAndPersist()) return;
+      const completionArgs = buildTurnCompletionPayload({
         success: false,
         result: null,
         error: appendDiagnosticTail(message),
         activityLog: serializeSteps(S.accumulatedSteps),
-        ...(RUN_ID ? { runId: RUN_ID } : {}),
-      };
+      });
       appendClaimedTurnCompletion(completionArgs);
       await deliverCompletionWithMedia(completionArgs);
     } catch {
@@ -682,22 +576,9 @@ async function reportCursorTurnWorkerFailure(
   // The worker died too hard to publish its own work, so the supervisor does it
   // from the same working tree — durability before the failure completion.
   persistTurnWork();
-  const completionArgs = entityMutationArgs({
-    success: false,
-    result: null,
-    error,
-    // Convex falls back to the last streamed activity so a hard worker crash
-    // cannot erase the reasoning/tools the user already saw.
-    activityLog: null,
-    ...(RUN_ID ? { runId: RUN_ID } : {}),
-  });
-  appendClaimedTurnCompletion(completionArgs);
-  appendTurnCheckpoint(completionArgs);
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
+  // Convex falls back to the last streamed activity so a hard worker crash
+  // cannot erase the reasoning/tools the user already saw.
+  await postClaimedTurnFailureCompletion({ error, activityLog: null });
 }
 
 /**
@@ -773,46 +654,32 @@ export async function runCursorDaemon(): Promise<void> {
 
   // Single-daemon fence, part 1 (boot claim): a live rival owning the pidfile
   // wins, and this process exits without touching its markers.
-  const rivalPid = readDaemonPidFile();
-  if (
-    !Number.isNaN(rivalPid) &&
-    rivalPid !== process.pid &&
-    pidAlive(rivalPid)
-  ) {
+  const bootClaim = claimDaemonPidfileBoot({
+    paths: daemonPaths,
+    entityId: ENTITY_ID ?? "",
+    optsSig: DAEMON_OPTS_SIG,
+  });
+  if (bootClaim.status === "rival_alive") {
     log(
-      `cursor daemon: rival daemon pid=${rivalPid} already owns ${daemonPaths.pid} — exiting`,
+      `cursor daemon: rival daemon pid=${bootClaim.rivalPid} already owns ${daemonPaths.pid} — exiting`,
     );
     process.exit(0);
   }
-  writeFileSync(daemonPaths.pid, String(process.pid));
-  writeFileSync(daemonPaths.entity, ENTITY_ID ?? "");
-  writeFileSync(daemonPaths.opts, DAEMON_OPTS_SIG);
 
   // Single-daemon fence, part 2: a launch racing past the boot claim (or an
   // opts-mismatch respawn) overwrites the pidfile; the deposed daemon must exit
   // or it double-claims turns and flip-flops the shared streaming row. Deferred
   // while a turn is running so work is never killed mid-flight.
-  let deposedLogged = false;
-  const fence = setInterval(() => {
-    const owner = readDaemonPidFile();
-    if (owner === process.pid) {
-      deposedLogged = false;
-      return;
-    }
-    const ownerLabel = Number.isNaN(owner) ? "none" : String(owner);
-    if (turnActive) {
-      if (!deposedLogged) {
-        deposedLogged = true;
-        log(
-          `cursor daemon: deposed (pidfile owner=${ownerLabel}) — exiting after active turn`,
-        );
-      }
-      return;
-    }
-    log(`cursor daemon: deposed (pidfile owner=${ownerLabel}) — exiting`);
-    process.exit(0);
-  }, FENCE_POLL_INTERVAL_MS);
-  fence.unref?.();
+  startDaemonDepositionFence({
+    readOwnerPid: readDaemonPidFile,
+    hasActiveWork: () => turnActive,
+    pollIntervalMs: FENCE_POLL_INTERVAL_MS,
+    log,
+    logPrefix: "cursor daemon",
+    onDeposedIdle: () => {
+      process.exit(0);
+    },
+  });
 
   const preflightOk = await runPreflightHeartbeat();
   if (!preflightOk) {

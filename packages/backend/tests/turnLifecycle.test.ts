@@ -4,6 +4,7 @@ import {
   TURN_RUNNING_LEASE_MS,
   TURN_STARTUP_LEASE_MS,
   canTransitionTurn,
+  isStreamingActivityStale,
   isTerminalTurnState,
   shouldWriteTurnLeaseRenewal,
   turnExceededAbsoluteLimit,
@@ -96,6 +97,27 @@ describe("durable turn lifecycle", () => {
         now,
         durationMs: TURN_RUNNING_LEASE_MS,
       }),
+    ).toBe(true);
+  });
+});
+
+describe("isStreamingActivityStale", () => {
+  test("treats a missing heartbeat row as stale", () => {
+    expect(isStreamingActivityStale(null, STARTED_AT)).toBe(true);
+  });
+
+  test("uses the running-turn lease as the heartbeat window", () => {
+    expect(
+      isStreamingActivityStale(
+        { lastUpdatedAt: STARTED_AT },
+        STARTED_AT + TURN_RUNNING_LEASE_MS,
+      ),
+    ).toBe(false);
+    expect(
+      isStreamingActivityStale(
+        { lastUpdatedAt: STARTED_AT },
+        STARTED_AT + TURN_RUNNING_LEASE_MS + 1,
+      ),
     ).toBe(true);
   });
 });

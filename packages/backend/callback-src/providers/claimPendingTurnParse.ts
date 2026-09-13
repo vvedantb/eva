@@ -1,26 +1,13 @@
+import { unwrapConvexMutationPayload } from "../http/convexClient.js";
 import type { JsonValue } from "../types.js";
 import type { TurnLeaseIdentity } from "../runtime/turnLease.js";
 
-function claimPayload(result: JsonValue): { [key: string]: JsonValue } | null {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
-    return null;
-  }
-  const inner = result.value;
-  return typeof inner === "object" && inner !== null && !Array.isArray(inner)
-    ? inner
-    : result;
-}
-
 /** Reads stop-task toolUseIds from a claimPendingTurn mutation HTTP response. */
 export function readStopTaskToolUseIds(result: JsonValue): string[] {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+  const payload = unwrapConvexMutationPayload(result);
+  if (!payload) {
     return [];
   }
-  const inner = result.value;
-  const payload =
-    typeof inner === "object" && inner !== null && !Array.isArray(inner)
-      ? inner
-      : result;
   const field = payload.stopTaskToolUseIds;
   if (!Array.isArray(field)) {
     return [];
@@ -36,7 +23,7 @@ export function readStopTaskToolUseIds(result: JsonValue): string[] {
  * claim-payload readers (the value may live under `.value`).
  */
 export function readCancelRequested(result: JsonValue): boolean {
-  const payload = claimPayload(result);
+  const payload = unwrapConvexMutationPayload(result);
   if (!payload) return false;
   return payload.cancelRequested === true;
 }
@@ -46,7 +33,7 @@ export function readCancelRequested(result: JsonValue): boolean {
  * action clears it. Missing (old servers) is `false`.
  */
 export function readUsageRefreshRequested(result: JsonValue): boolean {
-  const payload = claimPayload(result);
+  const payload = unwrapConvexMutationPayload(result);
   if (!payload) return false;
   return payload.usageRefreshRequested === true;
 }
@@ -55,7 +42,7 @@ export function readUsageRefreshRequested(result: JsonValue): boolean {
 export function readTurnLeaseIdentity(
   result: JsonValue,
 ): TurnLeaseIdentity | null {
-  const payload = claimPayload(result);
+  const payload = unwrapConvexMutationPayload(result);
   if (!payload) return null;
   const turnId = payload.turnId;
   const leaseGeneration = payload.leaseGeneration;

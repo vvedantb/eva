@@ -290,6 +290,27 @@ export function assignRawLogStream(stream: WriteStream | null): void {
  * tool bookkeeping or fatal-heartbeat flag. Fields outside one turn's lifetime
  * (session ids, todo state, raw-log stream) deliberately survive.
  */
+/**
+ * Clears the per-turn streaming accumulators shared by every warm daemon.
+ * `rawOutput` and `lastProcessed` must reset together: a cleared buffer with a
+ * live cursor makes flushStreaming's length guard permanently true, so later
+ * turns persist an empty activity log.
+ */
+export function resetDaemonTurnStreamingState(): void {
+  callbackState.accumulatedSteps.length = 0;
+  callbackState.currentStreamedContent = "";
+  callbackState.streamedAssistantTextThisMessage = false;
+  callbackState.pendingParagraphBreak = false;
+  callbackState.resultEventSeen = false;
+  callbackState.rawOutput = "";
+  callbackState.lastProcessed = 0;
+  callbackState.realtimeOutputBuffer = "";
+  callbackState.inFlightToolUses = 0;
+  callbackState.pendingQuestionData = "";
+  callbackState.todoState.length = 0;
+  callbackState.lastStepType = "thinking";
+}
+
 export function resetAttemptState(): void {
   callbackState.transientThinkingStep = null;
   callbackState.realtimeOutputBuffer = "";

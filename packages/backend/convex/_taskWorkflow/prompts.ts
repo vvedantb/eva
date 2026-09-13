@@ -9,19 +9,7 @@ import {
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
 } from "../prompts";
-
-export const WORKSPACE_DIR = "/tmp/repo";
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function buildTypecheckCommand(rootDirectory: string): string {
-  const typecheckDirectory = rootDirectory
-    ? `${WORKSPACE_DIR}/${rootDirectory}`
-    : WORKSPACE_DIR;
-  return `cd ${shellSingleQuote(typecheckDirectory)} && { status=0; timeout --kill-after=10s 120s npx tsc --noEmit --pretty false > /tmp/eva-tsc.log 2>&1 || status=$?; tail -50 /tmp/eva-tsc.log; exit "$status"; }`;
-}
+import { buildTypecheckCommand } from "../_sandbox_runtime/typecheckCommand";
 
 /** Builds a user-facing notification message for a workflow run completion. */
 export function buildWorkflowRunNotificationMessage(params: {

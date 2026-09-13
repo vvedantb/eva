@@ -83,14 +83,18 @@ describe("the flush cursor stays inside the buffer", () => {
  */
 describe("resetting the turn resets the cursor with it", () => {
   const daemon = readSource("providers/claudeSdkDaemon.ts");
-  const reset = functionBody(daemon, "function resetTurnState(): void {");
+  const reset = functionBody(
+    readSource("runtime/state.ts"),
+    "export function resetDaemonTurnStreamingState(): void {",
+  );
 
   test("clearing the buffer also rewinds the cursor", () => {
-    expect(reset).toContain('S.rawOutput = ""');
+    expect(daemon).toContain("resetDaemonTurnStreamingState()");
+    expect(reset).toContain('callbackState.rawOutput = ""');
     expect(
       reset,
       "a cleared buffer with a live cursor kills flushing",
-    ).toContain("S.lastProcessed = 0");
+    ).toContain("callbackState.lastProcessed = 0");
   });
 
   /**
@@ -100,7 +104,7 @@ describe("resetting the turn resets the cursor with it", () => {
    */
   test("the turn is drained before its activity log is read", () => {
     const finalize = functionBody(daemon, "async function finalizeTurn(");
-    const flushAt = finalize.indexOf("await flushStreaming()");
+    const flushAt = finalize.indexOf("await drainStreamingAndCompleteSteps()");
     const serializeAt = finalize.indexOf("serializeSteps(S.accumulatedSteps)");
     expect(flushAt, "the pre-completion drain is gone").toBeGreaterThan(-1);
     expect(serializeAt, "the activity log build moved").toBeGreaterThan(-1);
@@ -110,9 +114,9 @@ describe("resetting the turn resets the cursor with it", () => {
   /** And the drain has to precede the mutation that persists the payload. */
   test("the drain precedes the completion mutation", () => {
     const finalize = functionBody(daemon, "async function finalizeTurn(");
-    expect(finalize.indexOf("await flushStreaming()")).toBeLessThan(
-      finalize.indexOf("deliverCompletionWithMedia("),
-    );
+    expect(
+      finalize.indexOf("await drainStreamingAndCompleteSteps()"),
+    ).toBeLessThan(finalize.indexOf("deliverCompletionWithMedia("));
   });
 });
 

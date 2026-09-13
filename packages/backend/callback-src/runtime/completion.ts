@@ -2,6 +2,7 @@ import {
   CODEX_PRICING_PER_MILLION,
   COMPLETION_MUTATION,
   ENTITY_ID,
+  ENTITY_ID_FIELD,
   PROVIDER,
   ROOT_DIRECTORY,
   RUN_ID,
@@ -22,8 +23,17 @@ import { callConvexWithRetry, fetchWithTimeout } from "../http/convexClient.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
 import { callbackState as S } from "../runtime/state.js";
 import { mediaSearchDirs } from "../runtime/sandboxMedia.js";
+import { appendClaimedTurnCompletion } from "../providers/claimedTurnLifecycle.js";
+import { buildEntityMutationArgs } from "./daemonProcess.js";
+import { persistTurnWork } from "./turnPersist.js";
+import { flushStreaming, setFinalizingState } from "./heartbeats.js";
 import { appendTurnCheckpoint } from "../runtime/turnCheckpoint.js";
-import type { JsonObject, ResultEvent } from "../types.js";
+import type {
+  JsonObject,
+  JsonValue,
+  ProviderAttemptResult,
+  ResultEvent,
+} from "../types.js";
 import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
 import {
   existsSync,
@@ -429,6 +439,142 @@ export function buildErrorMessage(
     );
   }
   return agentName + " exited with code " + code;
+}
+
+/** Signal death (direct or shell-translated) is never a successful result. */
+export function providerAttemptWasInterrupted(
+  attempt: Pick<ProviderAttemptResult, "code" | "terminatedBySignal">,
+): boolean {
+  return (
+    attempt.terminatedBySignal || attempt.code === 137 || attempt.code === 143
+  );
+}
+
+/** Any watchdog timeout or tool stall counts as a timed-out attempt. */
+export function providerAttemptTimedOut(
+  attempt: ProviderAttemptResult,
+): boolean {
+  return (
+    attempt.timedOutAfterFirstText ||
+    attempt.timedOutForNoOutput ||
+    attempt.timedOutForMaxRuntime ||
+    attempt.timedOutForFirstEvent ||
+    attempt.timedOutForFirstAssistant ||
+    attempt.timedOutForZombie ||
+    Boolean(attempt.toolStallErrorMessage)
+  );
+}
+
+/**
+ * Maps a provider attempt + parsed result event to `{ success, error }`.
+ * One-shot still owns task-commit and response-step dedup on top of this.
+ */
+export function resolveProviderAttemptOutcome(
+  attempt: ProviderAttemptResult,
+  resultEvent: ResultEvent | null,
+): { success: boolean; error: string | null } {
+  const agentWasInterrupted = providerAttemptWasInterrupted(attempt);
+  const attemptEndedDueToTimeout = providerAttemptTimedOut(attempt);
+  const runSucceededWithResult =
+    resultEvent != null && !resultEvent.isError && !agentWasInterrupted;
+  if (resultEvent?.isError) {
+    return { success: false, error: resultEvent.result };
+  }
+  if (
+    (!runSucceededWithResult && attempt.code !== 0) ||
+    (attemptEndedDueToTimeout && !runSucceededWithResult)
+  ) {
+    return {
+      success: false,
+      error: appendDiagnosticTail(
+        buildErrorMessage(
+          attempt.code,
+          S.fatalHeartbeatErrorMessage,
+          attempt.toolStallErrorMessage,
+          attempt.timedOutForMaxRuntime,
+          attempt.timedOutForNoOutput,
+          attempt.timedOutForFirstEvent,
+          attempt.timedOutForFirstAssistant,
+          attempt.timedOutAfterFirstText,
+          attempt.timedOutForZombie,
+        ),
+      ),
+    };
+  }
+  return { success: runSucceededWithResult, error: null };
+}
+
+/** Drain the stream into steps and mark them complete before reading the log. */
+export async function drainStreamingAndCompleteSteps(): Promise<void> {
+  await flushStreaming();
+  for (const step of S.accumulatedSteps) step.status = "complete";
+}
+
+/**
+ * Final streaming reconcile then persist. True means skip the completion
+ * (lease lost or already finalizing).
+ */
+export async function reconcileStreamingAndPersist(): Promise<boolean> {
+  if (await setFinalizingState()) return true;
+  persistTurnWork();
+  return false;
+}
+
+/** Shared success/failure completion envelope. Callers still decide the fields. */
+export function buildTurnCompletionPayload(params: {
+  success: boolean;
+  result: JsonValue;
+  error: string | null;
+  activityLog: string | null;
+  resultEvent?: ResultEvent | null;
+  entityFieldFallback?: string;
+}): JsonObject {
+  return buildEntityMutationArgs(
+    ENTITY_ID_FIELD ?? params.entityFieldFallback,
+    ENTITY_ID,
+    {
+      success: params.success,
+      result: params.result,
+      error: params.error,
+      activityLog: params.activityLog,
+      ...(RUN_ID ? { runId: RUN_ID } : {}),
+      ...(params.resultEvent?.rawResultEvent
+        ? { rawResultEvent: params.resultEvent.rawResultEvent }
+        : {}),
+      ...(S.pendingQuestionData
+        ? { pendingQuestion: S.pendingQuestionData }
+        : {}),
+    },
+  );
+}
+
+/**
+ * Posts a failure completion without media harvest. Callers persist first,
+ * then choose whether to exit. A null activityLog tells Convex to keep the
+ * last streaming snapshot.
+ */
+export async function postClaimedTurnFailureCompletion(params: {
+  error: string;
+  activityLog: string | null;
+}): Promise<void> {
+  const completionArgs = buildEntityMutationArgs(
+    ENTITY_ID_FIELD,
+    ENTITY_ID,
+    {
+      success: false,
+      result: null,
+      error: params.error,
+      activityLog: params.activityLog,
+      ...(RUN_ID ? { runId: RUN_ID } : {}),
+    },
+  );
+  appendClaimedTurnCompletion(completionArgs);
+  appendTurnCheckpoint(completionArgs);
+  await callConvexWithRetry(
+    "mutation",
+    COMPLETION_MUTATION ?? "",
+    completionArgs,
+  );
 }
 
 export function appendDiagnosticTail(message: string): string {

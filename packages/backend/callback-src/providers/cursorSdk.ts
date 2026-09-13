@@ -29,11 +29,11 @@ import {
 import { evaMcpServers } from "../evaMcp.js";
 import { cursorCompactionEventPhase } from "./cursor.js";
 import { pushNoticeStep, updateThinkingStep } from "../parse/canonical.js";
-import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
+import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import {
   appendToRawLogFile,
-  appendToRawOutput,
-  trimBufferHead,
+  recordSdkAttemptFailure,
+  recordSdkRetry,
 } from "../runtime/buffers.js";
 import { callbackState as S, resetAttemptState } from "../runtime/state.js";
 import {
@@ -46,6 +46,7 @@ import type {
   SessionMode,
 } from "../types.js";
 import { log } from "../utils.js";
+import { buildStandardSdkAttemptResult } from "./attemptResult.js";
 import { resolvePinnedSdkEntry, type JsonLike } from "./claudeSdk.js";
 
 const SDK_PACKAGE = "@cursor/sdk";
@@ -863,7 +864,7 @@ export async function runCursorSdkAttempt(
           error.message +
           ")",
       );
-      appendToRawLogFile("[sdk-retry] " + error.message + "\n");
+      recordSdkRetry(error.message);
       created = await create();
     }
     persistAgentId(created.agentId);
@@ -907,7 +908,7 @@ export async function runCursorSdkAttempt(
             messageText +
             ")",
         );
-        appendToRawLogFile("[sdk-retry] resume failed: " + messageText + "\n");
+        recordSdkRetry("resume failed: " + messageText);
         agent = await createFreshAgent();
       } else {
         log(
@@ -915,7 +916,7 @@ export async function runCursorSdkAttempt(
             messageText +
             ")",
         );
-        appendToRawLogFile("[sdk-retry] resume failed: " + messageText + "\n");
+        recordSdkRetry("resume failed: " + messageText);
         try {
           agent = await resumeSavedAgent(sessionMode.sessionId);
           resumedExistingAgent = true;
@@ -930,9 +931,7 @@ export async function runCursorSdkAttempt(
                 retryMessageText +
                 ")",
             );
-            appendToRawLogFile(
-              "[sdk-retry] resume retry failed: " + retryMessageText + "\n",
-            );
+            recordSdkRetry("resume retry failed: " + retryMessageText);
             agent = await createFreshAgent();
           } else {
             throw retryError;
@@ -976,10 +975,8 @@ export async function runCursorSdkAttempt(
   }, NO_OUTPUT_CHECK_INTERVAL_MS);
 
   const pushLine = (line: string): void => {
-    appendToRawLogFile(line);
+    emitParsedStreamLine(line);
     attemptOutput = trimBufferHead(attemptOutput + line);
-    appendToRawOutput(line);
-    processRealtimeStdoutChunk(line);
   };
 
   /** `getUsage()` is one cloud round trip; a failure only costs us the cost. */
@@ -1141,10 +1138,8 @@ export async function runCursorSdkAttempt(
               (RESOURCE_EXHAUSTED_RETRY_DELAYS_MS.length + 1) +
               ")",
           );
-          appendToRawLogFile(
-            "[sdk-retry] resource_exhausted — waiting " +
-              retryDelayMs +
-              "ms before retry\n",
+          recordSdkRetry(
+            "resource_exhausted — waiting " + retryDelayMs + "ms before retry",
           );
           updateThinkingStep(
             "Cursor is rate-limited...",
@@ -1193,7 +1188,7 @@ export async function runCursorSdkAttempt(
             error.message +
             ")",
         );
-        appendToRawLogFile("[sdk-retry] " + error.message + "\n");
+        recordSdkRetry(error.message);
         resetForRecovery(agent);
         pushNoticeStep(
           "Started a fresh Cursor agent",
@@ -1207,7 +1202,7 @@ export async function runCursorSdkAttempt(
             error.message +
             ")",
         );
-        appendToRawLogFile("[sdk-retry] " + error.message + "\n");
+        recordSdkRetry(error.message);
         resetForRecovery(agent);
         pushNoticeStep(
           "Retrying the saved Cursor agent",
@@ -1226,7 +1221,7 @@ export async function runCursorSdkAttempt(
                 retryError.message +
                 ")",
             );
-            appendToRawLogFile("[sdk-retry] " + retryError.message + "\n");
+            recordSdkRetry(retryError.message);
             resetForRecovery(agent);
             pushNoticeStep(
               "Started a fresh Cursor agent",
@@ -1249,8 +1244,7 @@ export async function runCursorSdkAttempt(
       : rawMessage;
     attemptErrorMessage = messageText;
     log("runCursorSdkAttempt: run failed — " + rawMessage);
-    appendToRawLogFile("[sdk-error] " + rawMessage + "\n");
-    S.stderrOutput = trimBufferHead(S.stderrOutput + messageText + "\n");
+    recordSdkAttemptFailure(rawMessage, { stderrMessage: messageText });
   } finally {
     clearInterval(healthTimer);
     try {
@@ -1290,18 +1284,12 @@ export async function runCursorSdkAttempt(
       (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") +
       ")",
   );
-  return {
+  return buildStandardSdkAttemptResult({
     code,
-    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
-    timedOutForFirstEvent: false,
-    timedOutForFirstAssistant: false,
-    timedOutAfterFirstText: false,
-    timedOutForZombie: false,
-    toolStallErrorMessage: "",
-  };
+  });
 }
 
 /** User-facing startup copy must say whether this turn resumes or creates. */

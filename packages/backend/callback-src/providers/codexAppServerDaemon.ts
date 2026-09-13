@@ -1,15 +1,11 @@
-import { readFileSync, unlinkSync, writeFileSync } from "fs";
 import {
   CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
-  CONVEX_TOKEN,
-  CONVEX_URL,
   DAEMON_OPTS_SIG,
   ENTITY_ID,
   ENTITY_ID_FIELD,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
-  REPO_ID,
   RUN_ID,
   SYSTEM_PROMPT,
   WORK_DIR,
@@ -17,26 +13,27 @@ import {
   normalizedCodexModel,
 } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
-import { ensureGithubToken } from "./githubToken.js";
-import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
+import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
+import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { serializeSteps } from "../parse/stepBudget.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
-import { appendToRawLogFile, appendToRawOutput } from "../runtime/buffers.js";
 import {
   buildClaudeShapedResult,
   computeCodexCostUsd,
   deliverCompletionWithMedia,
+  drainStreamingAndCompleteSteps,
+  reconcileStreamingAndPersist,
 } from "../runtime/completion.js";
 import {
-  flushStreaming,
   runPreflightHeartbeat,
-  setFinalizingState,
   startStreamingLoops,
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
-import { callbackState as S } from "../runtime/state.js";
+import {
+  callbackState as S,
+  resetDaemonTurnStreamingState,
+} from "../runtime/state.js";
 import { materializeTurnAttachments } from "../runtime/turnAttachments.js";
-import { persistTurnWork } from "../runtime/turnPersist.js";
 import { getCurrentTurnLease } from "../runtime/turnLease.js";
 import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";
 import {
@@ -45,7 +42,16 @@ import {
   writeCodexSessionState,
 } from "../session/codexSession.js";
 import type { JsonObject, JsonValue, SessionMode } from "../types.js";
-import { attemptElapsedMs, log } from "../utils.js";
+import { asJsonObject, attemptElapsedMs, log } from "../utils.js";
+import {
+  DAEMON_CLAIM_POLL_TIMING,
+  buildEntityMutationArgs,
+  callbackBundleWentStale,
+  claimDaemonPidfileBoot,
+  cleanOwnedDaemonMarkers,
+  readPidFromFile,
+  sleep,
+} from "../runtime/daemonProcess.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
 import {
   appendClaimedTurnCompletion,
@@ -59,14 +65,11 @@ import {
   CodexAppServerClient,
   type AppServerNotification,
 } from "./codexAppServerClient.js";
-import {
-  resolveDaemonPaths,
-  resolveLegacySessionDaemonPaths,
-} from "./daemonPaths.js";
+import { resolveDaemonPaths } from "./daemonPaths.js";
 
-const IDLE_EXIT_MS = 45 * 60 * 1000;
-const POLL_INTERVAL_MS = 50;
-const FENCE_POLL_INTERVAL_MS = 5000;
+const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
+const POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
+const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 const NO_EVENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 type CodexDaemonTurn = { providerTurnId: string };
@@ -84,82 +87,39 @@ let exitWithError = false;
 let threadTotalUsage: JsonObject | null = null;
 let turnStartUsage: JsonObject | null = null;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function objectValue(value: JsonValue | undefined): JsonObject {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
 
 function stringField(value: JsonValue | undefined, field: string): string {
-  const object = objectValue(value);
+  const object = asJsonObject(value);
   return typeof object[field] === "string" ? object[field] : "";
 }
 
 function nestedId(value: JsonValue, field: string): string {
-  return stringField(objectValue(value)[field], "id");
+  return stringField(asJsonObject(value)[field], "id");
 }
 
 function entityArgs(
   fields: Record<string, JsonValue>,
 ): Record<string, JsonValue> {
-  return { [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "", ...fields };
-}
-
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
 }
 
 function readOwnerPid(): number {
-  try {
-    return Number(readFileSync(paths.pid, "utf8").trim());
-  } catch {
-    return Number.NaN;
-  }
+  return readPidFromFile(paths.pid);
 }
 
 function callbackWentStale(): boolean {
-  if (!CALLBACK_SCRIPT_FP) return false;
-  try {
-    return (
-      readFileSync("/tmp/eva-callback-fp", "utf8").trim() !== CALLBACK_SCRIPT_FP
-    );
-  } catch {
-    return false;
-  }
+  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
 }
 
 function resetTurnState(): void {
-  S.accumulatedSteps.length = 0;
-  S.currentStreamedContent = "";
-  S.streamedAssistantTextThisMessage = false;
-  S.pendingParagraphBreak = false;
-  S.resultEventSeen = false;
-  S.rawOutput = "";
-  S.lastProcessed = 0;
-  S.realtimeOutputBuffer = "";
-  S.inFlightToolUses = 0;
+  resetDaemonTurnStreamingState();
   S.codexToolItemIds.clear();
-  S.pendingQuestionData = "";
-  S.todoState.length = 0;
-  S.lastStepType = "thinking";
   activeTurnStartedAt = 0;
   finalText = "";
 }
 
 function emitEvent(event: JsonObject): void {
-  const line = JSON.stringify(event) + "\n";
-  appendToRawLogFile(line);
-  appendToRawOutput(line);
-  processRealtimeStdoutChunk(line);
+  emitParsedStreamLine(JSON.stringify(event) + "\n");
 }
 
 export function normalizeAppServerNotification(
@@ -169,10 +129,10 @@ export function normalizeAppServerNotification(
   if (method === "turn/started") return { type: "turn.started" };
   if (method === "turn/completed") return { type: "turn.completed" };
   if (method === "item/started") {
-    return { type: "item.started", item: objectValue(params.item) };
+    return { type: "item.started", item: asJsonObject(params.item) };
   }
   if (method === "item/completed") {
-    return { type: "item.completed", item: objectValue(params.item) };
+    return { type: "item.completed", item: asJsonObject(params.item) };
   }
   if (
     method === "item/agentMessage/delta" &&
@@ -225,8 +185,8 @@ export function computeTurnUsageDelta(
 }
 
 function turnError(params: JsonObject): string | null {
-  const turn = objectValue(params.turn);
-  const error = objectValue(turn.error);
+  const turn = asJsonObject(params.turn);
+  const error = asJsonObject(turn.error);
   return typeof error.message === "string" ? error.message : null;
 }
 
@@ -234,11 +194,9 @@ async function finalizeTurn(
   success: boolean,
   error: string | null,
 ): Promise<void> {
-  await flushStreaming();
-  for (const step of S.accumulatedSteps) step.status = "complete";
+  await drainStreamingAndCompleteSteps();
   const result = finalText || S.currentStreamedContent || S.rawOutput;
-  if (await setFinalizingState()) return;
-  persistTurnWork();
+  if (await reconcileStreamingAndPersist()) return;
   const usage = computeTurnUsageDelta(turnStartUsage, threadTotalUsage);
   const completionArgs: JsonObject = {
     [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
@@ -294,8 +252,8 @@ function processNotification(
 ): Promise<void> | null {
   lastEventAt = Date.now();
   if (notification.method === "thread/tokenUsage/updated") {
-    const total = objectValue(
-      objectValue(notification.params.tokenUsage).total,
+    const total = asJsonObject(
+      asJsonObject(notification.params.tokenUsage).total,
     );
     // Keep the last known totals on a malformed notification: an empty object
     // here would turn into an all-zeros usage event at finalize.
@@ -304,12 +262,12 @@ function processNotification(
   const event = normalizeAppServerNotification(notification);
   if (event) emitEvent(event);
   if (notification.method === "item/completed") {
-    const item = objectValue(notification.params.item);
+    const item = asJsonObject(notification.params.item);
     const text = getCodexAgentMessageText(item);
     if (text) finalText = text;
   }
   if (notification.method !== "turn/completed") return null;
-  const turn = objectValue(notification.params.turn);
+  const turn = asJsonObject(notification.params.turn);
   const status = typeof turn.status === "string" ? turn.status : "failed";
   lastIdleActivityAt = Date.now();
   if (supervisor.isCancellationInFlight || status === "interrupted") {
@@ -329,11 +287,7 @@ function processNotification(
 }
 
 async function refreshGithubToken(): Promise<void> {
-  await ensureGithubToken({
-    convexUrl: CONVEX_URL,
-    convexToken: CONVEX_TOKEN,
-    repoId: REPO_ID,
-  });
+  await refreshDaemonGithubTokenFromEnv();
 }
 
 async function establishThread(
@@ -405,41 +359,24 @@ async function startTurn(
 }
 
 function cleanMarkers(): void {
-  if (readOwnerPid() !== process.pid) return;
-  for (const path of [paths.pid, paths.entity, paths.opts]) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* ignore */
-    }
-  }
-  if (ENTITY_ID_FIELD === "sessionId") {
-    const legacy = resolveLegacySessionDaemonPaths();
-    for (const path of [legacy.pid, legacy.entity, legacy.opts]) {
-      try {
-        unlinkSync(path);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
+  cleanOwnedDaemonMarkers({
+    paths,
+    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
+  });
 }
 
 export async function runCodexAppServerDaemon(): Promise<void> {
   if (!CLAIM_MUTATION)
     throw new Error("CLAIM_MUTATION is required for Codex App Server mode");
-  const rivalPid = readOwnerPid();
-  if (
-    !Number.isNaN(rivalPid) &&
-    rivalPid !== process.pid &&
-    pidAlive(rivalPid)
-  ) {
+  const bootClaim = claimDaemonPidfileBoot({
+    paths,
+    entityId: ENTITY_ID ?? "",
+    optsSig: DAEMON_OPTS_SIG,
+  });
+  if (bootClaim.status === "rival_alive") {
     log("codex daemon: live rival already owns entity; exiting");
     process.exit(0);
   }
-  writeFileSync(paths.pid, String(process.pid));
-  writeFileSync(paths.entity, ENTITY_ID ?? "");
-  writeFileSync(paths.opts, DAEMON_OPTS_SIG);
 
   const fence = setInterval(() => {
     if (readOwnerPid() !== process.pid && !supervisor.hasWork) {

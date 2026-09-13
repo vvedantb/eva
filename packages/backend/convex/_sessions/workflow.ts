@@ -32,7 +32,10 @@ import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt, buildOrchestratorPrompt } from "./prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { z } from "zod";
-import { formatDelayedPublishFailureError } from "./resultTarget";
+import {
+  assistantReplyContent,
+  formatDelayedPublishFailureError,
+} from "./resultTarget";
 import {
   applyChatTurnResult,
   insertAssistantPlaceholderIfNeeded,
@@ -46,6 +49,7 @@ import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
 import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { isDaemonClaimPaused } from "../_chat/daemonClaimPause";
+import { isStreamingActivityStale } from "../_chat/turnLease";
 import {
   ensureSessionDaemonState,
   syncSessionDaemonState,
@@ -1487,9 +1491,11 @@ export const completeSyntheticTurn = authMutation({
       beforeSha?: string;
       afterSha?: string;
     } = {
-      content: args.success
-        ? args.result || "I couldn't process your message."
-        : `Error: ${args.error || "Unknown error during execution."}`,
+      content: assistantReplyContent({
+        success: args.success,
+        result: args.result,
+        error: args.error,
+      }),
       finishedAt: Date.now(),
     };
     if (args.activityLog) {
@@ -1552,9 +1558,7 @@ export const handleStaleSyntheticTurn = internalMutation({
       .query("streamingActivity")
       .withIndex("by_entity", (q) => q.eq("entityId", String(args.sessionId)))
       .first();
-    const streamingStale =
-      streaming === null ||
-      Date.now() - (streaming.lastUpdatedAt ?? 0) > 2 * 60 * 1000;
+    const streamingStale = isStreamingActivityStale(streaming);
     if (!streamingStale) {
       // Still live — re-arm so a later daemon death is still cleaned up.
       await ctx.scheduler.runAfter(

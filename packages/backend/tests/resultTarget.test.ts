@@ -6,6 +6,7 @@ import {
   orphanPlaceholderMessages,
   PUBLISH_FAILURE_MARKER,
   resultTargetMessage,
+  selectUsageLimitRetryUserMessage,
 } from "../convex/_sessions/resultTarget";
 
 /** Only the fields the decision reads; the real docs carry many more. */
@@ -15,6 +16,7 @@ function reply(fields: {
   isSyntheticTurn?: boolean;
   finishedAt?: number;
   role?: string;
+  errorType?: string;
 }) {
   return {
     role: fields.role ?? "assistant",
@@ -22,6 +24,7 @@ function reply(fields: {
     isSystemAlert: fields.isSystemAlert,
     isSyntheticTurn: fields.isSyntheticTurn,
     finishedAt: fields.finishedAt,
+    errorType: fields.errorType,
   };
 }
 
@@ -195,5 +198,38 @@ describe("orphanPlaceholderMessages", () => {
       first,
       second,
     ]);
+  });
+});
+
+describe("selectUsageLimitRetryUserMessage", () => {
+  test("returns the user message after a finished usage-limit reply", () => {
+    const user = reply({ role: "user", content: "try again" });
+    const assistant = reply({
+      content: "rate limited",
+      errorType: "rate_limit",
+      finishedAt: 1,
+    });
+    expect(selectUsageLimitRetryUserMessage([assistant, user])).toBe(user);
+  });
+
+  test("rejects a missing or unfinished usage-limit reply", () => {
+    const user = reply({ role: "user", content: "try again" });
+    expect(() => selectUsageLimitRetryUserMessage([user])).toThrow(
+      "usage limit",
+    );
+    expect(() =>
+      selectUsageLimitRetryUserMessage([
+        reply({ errorType: "rate_limit" }),
+        user,
+      ]),
+    ).toThrow("usage limit");
+  });
+
+  test("rejects when there is no user message to restage", () => {
+    expect(() =>
+      selectUsageLimitRetryUserMessage([
+        reply({ errorType: "rate_limit", finishedAt: 1 }),
+      ]),
+    ).toThrow("No message to retry");
   });
 });

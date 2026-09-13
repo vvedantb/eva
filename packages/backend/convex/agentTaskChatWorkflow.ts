@@ -48,7 +48,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { TASK_CHAT_DAEMON_MUTATIONS } from "./_sandbox_runtime/daemonPaths";
 import {
   formatDelayedPublishFailureError,
-  resultTargetMessage,
+  selectUsageLimitRetryUserMessage,
 } from "./_sessions/resultTarget";
 import {
   applyChatTurnResult,
@@ -59,6 +59,9 @@ import {
   maybeInsertModelHandoffAlert,
   prependModelHandoffContext,
 } from "./_shared/modelHandoff";
+import { composerTraitFields } from "./_shared/composerTraits";
+import { detectCancelSupersession } from "./_chat/cancelRace";
+import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -214,16 +217,7 @@ async function stageAndStartTaskChatTurn(
       : { pendingTurn: undefined }),
     lastChatModel: normalizedModel,
     providerAccountId: params.providerAccountId,
-    ...(params.reasoningLevel !== undefined
-      ? { lastReasoningLevel: params.reasoningLevel }
-      : {}),
-    ...(params.thinkingEnabled !== undefined
-      ? { lastThinkingEnabled: params.thinkingEnabled }
-      : {}),
-    ...(params.use1mContext !== undefined
-      ? { lastUse1mContext: params.use1mContext }
-      : {}),
-    ...(params.fastMode !== undefined ? { lastFastMode: params.fastMode } : {}),
+    ...composerTraitFields(params),
     updatedAt: Date.now(),
   });
 
@@ -451,17 +445,7 @@ export const retryLastTurnWithAccount = authMutation({
       .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
       .order("desc")
       .take(20);
-    const reply = resultTargetMessage(recent);
-    if (
-      reply === undefined ||
-      reply.errorType !== "rate_limit" ||
-      reply.finishedAt === undefined
-    ) {
-      throw new Error("The last turn did not fail on a usage limit");
-    }
-
-    const userMessage = recent.find((message) => message.role === "user");
-    if (!userMessage) throw new Error("No message to retry");
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
 
     const model = normalizeAIModel(
       userMessage.model ?? task.lastChatModel ?? task.model,
@@ -577,16 +561,7 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.taskId, {
       lastChatModel: normalizedModel,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
     return null;
@@ -646,14 +621,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.taskId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeChatWorkflowId !== undefined &&
-      latest.activeChatWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+        latestPendingTurn: latest.pendingTurn,
+        cancelPendingRequestedAt: pendingRequestedAt,
+        latestActiveWorkflowId: latest.activeChatWorkflowId,
+        cancelWorkflowId: workflowIdToCancel,
+      });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -697,7 +672,7 @@ export const cancelExecution = authMutation({
     ) {
       taskPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       taskPatch.syntheticTurnMessageId = undefined;
       // This cancel owns the current turn and nothing newer has arrived, so the
       // claim stamp is spent. See `_chat/pendingTurnRestage.ts`.
@@ -1191,10 +1166,7 @@ export const prewarmChatDaemon = authMutation({
     // the sandbox, and on Vercel any exec lazily resumes a stopped VM —
     // resurrecting a sandbox the user stopped, invisibly (same guard as
     // sessions' prewarmDaemon).
-    if (
-      task.reviewTaskSandboxStatus === "closed" ||
-      task.reviewTaskSandboxStatus === "stopping"
-    ) {
+    if (isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return null;
     }
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
@@ -1305,8 +1277,7 @@ export const getChatPrewarmData = internalQuery({
     }
     if (
       !task.sandboxId ||
-      task.reviewTaskSandboxStatus === "closed" ||
-      task.reviewTaskSandboxStatus === "stopping"
+      isSandboxClosingStatus(task.reviewTaskSandboxStatus)
     ) {
       return null;
     }

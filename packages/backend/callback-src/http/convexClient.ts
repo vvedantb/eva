@@ -296,6 +296,22 @@ export async function callStreamingHeartbeat(
   );
 }
 
+/**
+ * Convex `/api/mutation` wraps returns in `{ status, value }`. Readers accept
+ * either that envelope or a bare object so older/unwrapped fixtures still work.
+ */
+export function unwrapConvexMutationPayload(
+  result: JsonValue,
+): JsonObject | null {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return null;
+  }
+  const inner = result.value;
+  return typeof inner === "object" && inner !== null && !Array.isArray(inner)
+    ? inner
+    : result;
+}
+
 /** Retries a lightweight touch heartbeat (no activity payload). */
 export async function callStreamingHeartbeatTouch(
   entityId: string,

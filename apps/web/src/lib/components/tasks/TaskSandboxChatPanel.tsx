@@ -10,9 +10,10 @@ import {
   resolveTraitsForDisplay,
   type AIModel,
   type Id,
-  type ReasoningLevel,
   type StoredModelTraits,
 } from "@eva/backend";
+import { composerTraitFields, storedComposerTraits } from "@eva/shared";
+import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 import {
@@ -120,16 +121,7 @@ export function TaskSandboxChatPanel({
       { id: args.id },
       {
         ...current,
-        ...(args.reasoningLevel !== undefined
-          ? { lastReasoningLevel: args.reasoningLevel }
-          : {}),
-        ...(args.thinkingEnabled !== undefined
-          ? { lastThinkingEnabled: args.thinkingEnabled }
-          : {}),
-        ...(args.use1mContext !== undefined
-          ? { lastUse1mContext: args.use1mContext }
-          : {}),
-        ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+        ...composerTraitFields(args),
       },
     );
   });
@@ -139,12 +131,7 @@ export function TaskSandboxChatPanel({
   const model = normalizeAIModel(
     task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
   );
-  const storedTraits: StoredModelTraits = {
-    effortLevel: task?.lastReasoningLevel,
-    thinkingEnabled: task?.lastThinkingEnabled,
-    use1mContext: task?.lastUse1mContext,
-    fastMode: task?.lastFastMode,
-  };
+  const storedTraits: StoredModelTraits = storedComposerTraits(task);
   const displayTraits = resolveTraitsForDisplay(model, storedTraits);
   const executionTraits = buildTraitsExecutionPayload(model, storedTraits);
   const providerAccountId = task?.providerAccountId ?? null;
@@ -196,17 +183,9 @@ export function TaskSandboxChatPanel({
   };
 
   const onTraitsChange = (partial: Partial<StoredModelTraits>) => {
-    const reasoningLevel: ReasoningLevel | undefined = partial.effortLevel;
     void setTraitsMutation({
       id: taskId,
-      ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
-      ...(partial.thinkingEnabled !== undefined
-        ? { thinkingEnabled: partial.thinkingEnabled }
-        : {}),
-      ...(partial.use1mContext !== undefined
-        ? { use1mContext: partial.use1mContext }
-        : {}),
-      ...(partial.fastMode !== undefined ? { fastMode: partial.fastMode } : {}),
+      ...toRunTraitArgs(partial),
     });
   };
 
