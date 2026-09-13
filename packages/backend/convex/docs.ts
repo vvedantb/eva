@@ -289,6 +289,7 @@ export const create = authMutation({
   },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -320,6 +321,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) {
       throw new Error("Doc not found");
@@ -369,6 +371,7 @@ export const createFromSession = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
     if (!(await hasSessionAccess(ctx.db, session, ctx.userId))) {
@@ -430,6 +433,7 @@ export const ensureSyncDoc = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Doc not found");
     if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
@@ -475,6 +479,7 @@ export const addInterviewMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     assertPublicUserMessageRole(args);
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Doc not found");
@@ -498,6 +503,7 @@ export const clearInterview = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.id);
     if (!doc) throw new Error("Doc not found");
     if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {

@@ -17,6 +17,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useSearch } from "@/lib/contexts/SearchContext";
+import { isInternalAppHref } from "@/lib/embed/embedded";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import {
   IconSearch,
@@ -148,6 +149,7 @@ export function SpotlightSearch() {
   };
 
   const handleSelect = (href: string) => {
+    if (!isInternalAppHref(href)) return;
     navigate({ to: href });
     setIsOpen(false);
     setSearch("");

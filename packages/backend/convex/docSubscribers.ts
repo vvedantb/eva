@@ -3,6 +3,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { createNotification } from "./notifications";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   docSubscriberFields,
   type notificationTypeValidator,
@@ -107,6 +108,7 @@ export const setSubscription = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
       throw new Error("Document not found");

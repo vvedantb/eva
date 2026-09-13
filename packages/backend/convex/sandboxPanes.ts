@@ -3,6 +3,7 @@ import { authMutation, authQuery } from "./functions";
 import type { GenericDatabaseWriter } from "convex/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { terminalPaneValidator } from "./validators";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   resolveSandboxOwnerForUser,
   sandboxOwnerValidator,
@@ -84,6 +85,7 @@ export const ensureDefaultTerminalPane = authMutation({
   args: { owner: sandboxOwnerValidator },
   returns: v.array(terminalPaneValidator),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveSandboxOwnerForUser(
       ctx.db,
       ctx.userId,
@@ -103,6 +105,7 @@ export const createTerminalPane = authMutation({
   args: { owner: sandboxOwnerValidator },
   returns: terminalPaneValidator,
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveSandboxOwnerForUser(
       ctx.db,
       ctx.userId,
@@ -125,6 +128,7 @@ export const closeTerminalPane = authMutation({
   },
   returns: v.array(terminalPaneValidator),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveSandboxOwnerForUser(
       ctx.db,
       ctx.userId,
@@ -162,6 +166,7 @@ export const setPreviewPath = authMutation({
   args: { owner: sandboxOwnerValidator, path: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
     const previewPath = normalizeStickyPreviewPath(args.path);
     if (owner.kind === "session") {
@@ -179,6 +184,7 @@ export const setPreviewPort = authMutation({
   args: { owner: sandboxOwnerValidator, port: v.number() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
     assertStickyPreviewPort(args.port);
     if (owner.kind === "session") {
@@ -196,6 +202,7 @@ export const setTerminalHistoryTail = authMutation({
   args: { owner: sandboxOwnerValidator, tail: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
     const terminalHistoryTail = truncateTerminalHistoryTail(args.tail);
     if (owner.kind === "session") {
@@ -213,6 +220,7 @@ export const releaseBrowserLock = authMutation({
   args: { owner: sandboxOwnerValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
     const patch = { agentBrowsingAt: undefined, updatedAt: Date.now() };
     if (owner.kind === "session") {

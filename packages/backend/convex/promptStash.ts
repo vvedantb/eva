@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { promptStashFields } from "./validators";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Max stashed prompts per user per repo; oldest (`_creationTime`) is evicted. */
 const MAX_STASHES_PER_REPO = 20;
@@ -35,6 +36,7 @@ export const add = authMutation({
   },
   returns: v.object({ evicted: v.boolean() }),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
@@ -127,6 +129,7 @@ export const remove = authMutation({
   args: { id: v.id("promptStashes") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const row = await ctx.db.get(args.id);
     if (!row) {
       return null;

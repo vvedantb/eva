@@ -12,7 +12,10 @@ import {
   listSelectableAccountsFor,
 } from "./_userProviderAccounts/listing";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
-import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
+import {
+  isSandboxIdentity,
+  rejectSandboxCaller,
+} from "./_auth/sandboxIdentity";
 
 const credentialValidator = v.object({ key: v.string(), value: v.string() });
 
@@ -42,7 +45,10 @@ const accountListItemValidator = v.object({
 export const list = authQuery({
   args: {},
   returns: v.array(accountListItemValidator),
-  handler: async (ctx) => await listAccountsFor(ctx, ctx.userId, true),
+  handler: async (ctx) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
+    return await listAccountsFor(ctx, ctx.userId, true);
+  },
 });
 
 /**
@@ -52,7 +58,10 @@ export const list = authQuery({
 export const listSelectable = authQuery({
   args: {},
   returns: v.array(accountListItemValidator),
-  handler: async (ctx) => await listSelectableAccountsFor(ctx, ctx.userId),
+  handler: async (ctx) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
+    return await listSelectableAccountsFor(ctx, ctx.userId);
+  },
 });
 
 /**
@@ -64,6 +73,7 @@ export const listForTaskOwner = authQuery({
   args: { taskId: v.id("agentTasks") },
   returns: v.array(accountListItemValidator),
   handler: async (ctx, args) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       return [];
@@ -81,6 +91,7 @@ export const listForSessionOwner = authQuery({
   args: { sessionId: v.id("sessions") },
   returns: v.array(accountListItemValidator),
   handler: async (ctx, args) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     const session = await ctx.db.get(args.sessionId);
     if (
       !session ||

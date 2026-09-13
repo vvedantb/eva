@@ -80,6 +80,7 @@ export const saveDraft = authMutation({
   },
   returns: v.id("agentTasks"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId)))
       throw new Error("Not authorized");
 

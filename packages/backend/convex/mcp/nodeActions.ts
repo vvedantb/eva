@@ -473,7 +473,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");
 
-  const jwt = await new SignJWT({ sub: clerkUserId })
+  const jwt = await new SignJWT({ sub: clerkUserId, evaMcp: true })
     .setProtectedHeader({ alg: "ES256", kid })
     .setIssuer(issuer)
     .setAudience("convex")
@@ -701,8 +701,9 @@ export const listTables = internalAction({
   args: { convexUrl: v.string(), deployKey: v.string() },
   returns: v.array(v.any()),
   handler: async (_ctx, { convexUrl, deployKey }) => {
+    const allowedUrl = assertAllowedCustomerConvexUrl(convexUrl);
     // Fetch shapes
-    const shapesResponse = await fetch(`${convexUrl}/api/shapes2`, {
+    const shapesResponse = await fetch(`${allowedUrl}/api/shapes2`, {
       headers: authHeaders(deployKey),
     });
     if (!shapesResponse.ok) {
@@ -715,7 +716,7 @@ export const listTables = internalAction({
       .parse(await shapesResponse.json());
 
     // Fetch declared schema
-    const schemaResponse = await fetch(`${convexUrl}/api/query`, {
+    const schemaResponse = await fetch(`${allowedUrl}/api/query`, {
       method: "POST",
       headers: authHeaders(deployKey),
       body: JSON.stringify({
@@ -786,7 +787,8 @@ export const queryTable = internalAction({
     _ctx,
     { convexUrl, deployKey, table, order, numItems, cursor },
   ) => {
-    const response = await fetch(`${convexUrl}/api/query`, {
+    const allowedUrl = assertAllowedCustomerConvexUrl(convexUrl);
+    const response = await fetch(`${allowedUrl}/api/query`, {
       method: "POST",
       headers: authHeaders(deployKey),
       body: JSON.stringify({

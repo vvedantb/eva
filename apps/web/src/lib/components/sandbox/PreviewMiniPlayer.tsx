@@ -14,6 +14,7 @@ import {
   type PreviewMiniPlayerEntry,
 } from "./previewMiniPlayerStore";
 import { usePreviewMiniPlayerFrame } from "./usePreviewMiniPlayerFrame";
+import { isInternalAppHref } from "@/lib/embed/embedded";
 
 /**
  * Floating picture-in-picture window for a session's dev-server preview.
@@ -53,6 +54,7 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
       (session.sandboxId !== entry.sandboxId || session.status !== "active"));
 
   const expand = () => {
+    if (!isInternalAppHref(entry.returnTo)) return;
     closePreviewMiniPlayer();
     void navigate({ to: entry.returnTo });
   };

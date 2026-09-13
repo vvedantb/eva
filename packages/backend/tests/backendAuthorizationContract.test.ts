@@ -512,6 +512,13 @@ describe("backend authorization boundaries", () => {
     expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
       "SANDBOX_JWT_ISSUER",
     );
+    expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
+      "isSandboxVmIdentity",
+    );
+    expect(convexSource("_auth/sandboxIdentity.ts")).toContain(
+      "identity?.evaMcp !== true",
+    );
+    expect(convexSource("mcp/nodeActions.ts")).toContain("evaMcp: true");
     expect(convexSource("teamMembers.ts")).toContain("rejectSandboxCaller");
     expect(convexSource("teams.ts")).toContain("rejectSandboxCaller");
     expect(convexSource("_githubRepos/mutations.ts")).toContain(
@@ -601,6 +608,15 @@ describe("backend authorization boundaries", () => {
     );
     expect(convexSource("_github/prReview.ts")).toContain("isSandboxIdentity");
     expect(convexSource("_github/prFlow.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_github/prDiff.ts")).toContain("isSandboxIdentity");
+    expect(convexSource("_github/pullRequests.ts")).toContain(
+      "isSandboxIdentity",
+    );
+    expect(convexSource("sandboxPanes.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("promptStash.ts")).toContain("rejectSandboxCaller");
+    expect(convexSource("userProviderAccounts.ts")).toContain(
+      "isSandboxIdentity",
+    );
     expect(convexSource("mcp/oauth.ts")).toContain(
       "isAllowedOAuthRedirectUri",
     );

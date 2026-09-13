@@ -60,7 +60,17 @@ export async function canReadLogEntity(
     const task = await ctx.db.get(taskId);
     return task ? hasTaskAccess(ctx.db, task, userId) : false;
   }
-  return true;
+  if (
+    entry.entityType === "automation" ||
+    entry.entityType === "doc" ||
+    entry.entityType === "testGen" ||
+    entry.entityType === "evaluation" ||
+    entry.entityType === "project" ||
+    entry.entityType === "project-chat"
+  ) {
+    return true;
+  }
+  return false;
 }
 
 const logDtoValidator = v.object({

@@ -2,6 +2,7 @@
 
 import { DropdownMenuItem } from "@eva/ui";
 import { IconLink } from "@tabler/icons-react";
+import { isInternalAppHref } from "@/lib/embed/embedded";
 
 /**
  * Copies the current page URL — shared More-menu item for task / project /
@@ -19,9 +20,10 @@ export function CopyLinkMenuItem({
   return (
     <DropdownMenuItem
       onClick={() => {
-        const href = path
-          ? new URL(path, window.location.origin).href
-          : window.location.href;
+        const href =
+          path && isInternalAppHref(path)
+            ? `${window.location.origin}${path}`
+            : window.location.href;
         void navigator.clipboard.writeText(href);
       }}
     >

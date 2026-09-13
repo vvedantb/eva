@@ -1,28 +1,40 @@
 import { SANDBOX_JWT_ISSUER } from "../sandboxAuthConfig";
 
-/** True when the Convex identity came from a sandbox launch token, not Clerk. */
-export function isSandboxIdentity(identity: {
+type SandboxIdentity = {
   issuer?: string;
-} | null): boolean {
+  /** Set on MCP `runMutationAsUser` JWTs; launch CONVEX_TOKEN omits it. */
+  evaMcp?: unknown;
+} | null;
+
+/** True when the Convex identity came from the sandbox JWT issuer, not Clerk. */
+export function isSandboxIdentity(identity: SandboxIdentity): boolean {
   return identity?.issuer === SANDBOX_JWT_ISSUER;
 }
 
-/** Settings mutations that must stay in the Eva UI, never the VM. */
+/**
+ * Launch VM token (CONVEX_TOKEN). MCP impersonation JWTs share the issuer but
+ * carry `evaMcp: true` so Eva MCP tools can call the same public mutations.
+ */
+export function isSandboxVmIdentity(identity: SandboxIdentity): boolean {
+  return isSandboxIdentity(identity) && identity?.evaMcp !== true;
+}
+
+/** UI-or-MCP mutations. Blocks the VM; Clerk and MCP-as-user still pass. */
 export async function rejectSandboxCaller(ctx: {
-  auth: { getUserIdentity: () => Promise<{ issuer?: string } | null> };
+  auth: { getUserIdentity: () => Promise<SandboxIdentity> };
 }): Promise<void> {
   const identity = await ctx.auth.getUserIdentity();
-  if (isSandboxIdentity(identity)) {
+  if (isSandboxVmIdentity(identity)) {
     throw new Error("Not authorized");
   }
 }
 
-/** Callbacks that must come from a sandbox launch token, never a Clerk session. */
+/** Callbacks that must come from a sandbox launch token, never Clerk or MCP. */
 export async function requireSandboxCaller(ctx: {
-  auth: { getUserIdentity: () => Promise<{ issuer?: string } | null> };
+  auth: { getUserIdentity: () => Promise<SandboxIdentity> };
 }): Promise<void> {
   const identity = await ctx.auth.getUserIdentity();
-  if (!isSandboxIdentity(identity)) {
+  if (!isSandboxVmIdentity(identity)) {
     throw new Error("Not authorized");
   }
 }

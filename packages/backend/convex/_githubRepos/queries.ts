@@ -3,6 +3,7 @@ import type { GenericDatabaseReader, StorageReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
 import { authQuery } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 import {
   gatherAccessibleRepos,
   githubRepoValidator,
@@ -84,6 +85,7 @@ export const list = authQuery({
   },
   returns: v.array(githubRepoWithLogoValidator),
   handler: async (ctx, args) => {
+    if (isSandboxIdentity(await ctx.auth.getUserIdentity())) return [];
     const repos = await gatherAccessibleRepos(
       ctx.db,
       ctx.userId,

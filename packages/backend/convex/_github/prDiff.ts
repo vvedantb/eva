@@ -14,6 +14,7 @@ import {
 } from "../_repoSkills/decodeGitHubContent";
 import { isPrDiffTooLargeError, listFileToUnifiedDiff } from "./prDiffFallback";
 import { getActionRepoWithAccess } from "../functions";
+import { isSandboxIdentity } from "../_auth/sandboxIdentity";
 
 /** Cap the diff we return to the client so huge PRs don't blow the payload. */
 const MAX_DIFF_BYTES = 500_000;
@@ -162,6 +163,10 @@ export const getPrDiff = action({
   handler: async (ctx, args): Promise<PrDiffResult> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const prNumber =
@@ -292,6 +297,10 @@ export const getCommitDiff = action({
   handler: async (ctx, args): Promise<CommitDiffResult> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await commitDiffCache.fetch(ctx, {
@@ -391,6 +400,10 @@ export const getCompareDiff = action({
   handler: async (ctx, args): Promise<CompareDiffResult> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await compareDiffCache.fetch(
@@ -533,6 +546,10 @@ export const getPrFileContents = action({
   handler: async (ctx, args): Promise<PrFileContents> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prFileContentsCache.fetch(ctx, {

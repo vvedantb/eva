@@ -189,6 +189,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const comment = await ctx.db.get(args.id);
     if (!comment) throw new Error("Comment not found");
     if (comment.deletedAt !== undefined)
@@ -208,6 +209,7 @@ export const remove = authMutation({
   args: { id: v.id("docComments") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const comment = await ctx.db.get(args.id);
     if (!comment) throw new Error("Comment not found");
     if (comment.authorId !== ctx.userId)
@@ -233,6 +235,7 @@ export const setResolved = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const comment = await ctx.db.get(args.id);
     if (!comment) throw new Error("Comment not found");
     if (comment.parentId) throw new Error("Only root comments can be resolved");

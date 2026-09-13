@@ -205,6 +205,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const comment = await ctx.db.get(args.id);
     if (!comment) {
       throw new Error("Comment not found");
@@ -229,6 +230,7 @@ export const remove = authMutation({
   args: { id: v.id("taskComments") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const comment = await ctx.db.get(args.id);
     if (!comment) {
       throw new Error("Comment not found");

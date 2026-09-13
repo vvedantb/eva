@@ -39,7 +39,10 @@ export const setSessionWatchedBy = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
+    const session = await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
+    if (session.userId !== ctx.userId) {
+      throw new Error("Not authorized");
+    }
     const watchedByOrchestrator = await assertOwnOrchestratorSession(
       ctx.db,
       args.masterSessionId,
@@ -61,6 +64,9 @@ export const setTaskWatchedBy = authMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    if (task.createdBy !== ctx.userId) {
       throw new Error("Not authorized");
     }
     const watchedByOrchestrator = await assertOwnOrchestratorSession(

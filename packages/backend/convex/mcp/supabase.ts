@@ -25,7 +25,6 @@ const READ_ONLY_SUPABASE_TOOLS = new Set([
   "list_edge_functions",
   "list_extensions",
   "list_migrations",
-  "list_projects",
   "list_tables",
   "search_docs",
 ]);
@@ -173,6 +172,27 @@ interface McpCredentials {
   scopedRepoId?: string;
 }
 
+function projectIdFromEnv(
+  vars: Array<{ key: string; value: string }>,
+): string | null {
+  const explicit = vars
+    .find((entry) => entry.key === "SUPABASE_PROJECT_ID")
+    ?.value.trim();
+  if (explicit) return explicit;
+  for (const key of ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]) {
+    const raw = vars.find((entry) => entry.key === key)?.value;
+    if (!raw) continue;
+    try {
+      const host = new URL(raw).hostname.toLowerCase();
+      const match = /^([a-z0-9-]+)\.supabase\.co$/.exec(host);
+      if (match?.[1]) return match[1];
+    } catch {
+      // ignore unparseable URLs
+    }
+  }
+  return null;
+}
+
 export async function registerSupabaseTools(
   server: McpServer,
   credentials: McpCredentials,
@@ -194,6 +214,24 @@ export async function registerSupabaseTools(
 
   if (!token) {
     console.log("Supabase: no SUPABASE_ACCESS_TOKEN found, skipping");
+    return;
+  }
+
+  let projectId: string | null = null;
+  if (credentials.scopedRepoId) {
+    try {
+      const vars: Array<{ key: string; value: string }> = await ctx.runAction(
+        internal.mcp.routes.getDecryptedRepoEnvVars,
+        { repoId: credentials.scopedRepoId },
+      );
+      projectId = projectIdFromEnv(vars);
+    } catch (err) {
+      console.error("Supabase: failed to resolve project id:", err);
+      return;
+    }
+  }
+  if (!projectId) {
+    console.log("Supabase: no SUPABASE_PROJECT_ID or SUPABASE_URL, skipping");
     return;
   }
 
@@ -238,10 +276,23 @@ export async function registerSupabaseTools(
         }
 
         try {
+          const boundArgs = { ...args };
+          if (
+            tool.inputSchema.properties &&
+            "project_id" in tool.inputSchema.properties
+          ) {
+            if (
+              typeof args.project_id === "string" &&
+              args.project_id !== projectId
+            ) {
+              return errorResult("project_id does not match this repo");
+            }
+            boundArgs.project_id = projectId;
+          }
           const client = await connectClient(currentToken);
           try {
             const result = await withTimeout(
-              client.callTool({ name: tool.name, arguments: args }),
+              client.callTool({ name: tool.name, arguments: boundArgs }),
               CALL_TIMEOUT_MS,
               `Supabase tool ${tool.name}`,
             );

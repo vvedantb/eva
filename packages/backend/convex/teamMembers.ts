@@ -130,6 +130,7 @@ export const listForRepo = authQuery({
       .withIndex("by_team", (q) => q.eq("teamId", teamId))
       .collect();
 
+    const callerOnTeam = members.some((member) => member.userId === ctx.userId);
     const users = [];
     for (const member of members) {
       const user = await ctx.db.get(member.userId);
@@ -137,7 +138,7 @@ export const listForRepo = authQuery({
       users.push({
         _id: user._id,
         fullName: user.fullName,
-        email: user.email,
+        ...(callerOnTeam ? { email: user.email } : {}),
       });
     }
     return users;

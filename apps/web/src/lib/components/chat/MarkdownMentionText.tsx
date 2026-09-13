@@ -23,6 +23,15 @@ import { ScreenshotPreview, VideoPreview } from "@/lib/components/MediaPreview";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { remarkMentionChips, MENTION_HREF_REGEX } from "./remarkMentionChips";
 
+function isSafeMediaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, "https://eva.invalid");
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 interface MarkdownMentionTextProps {
   text: string;
   /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
@@ -139,7 +148,8 @@ export function MarkdownMentionText({
         // Replace Streamdown's inline-block image wrapper (download-only hover)
         // with the shared click-to-fullscreen preview used elsewhere.
         img: ({ src, alt }) => {
-          if (typeof src !== "string" || src.length === 0) return null;
+          if (typeof src !== "string" || src.length === 0 || !isSafeMediaUrl(src))
+            return null;
           const label =
             typeof alt === "string" && alt.length > 0 ? alt : "Image";
           return (
@@ -156,7 +166,8 @@ export function MarkdownMentionText({
           );
         },
         video: ({ src }) => {
-          if (typeof src !== "string" || src.length === 0) return null;
+          if (typeof src !== "string" || src.length === 0 || !isSafeMediaUrl(src))
+            return null;
           return (
             <span
               className="my-4 flex justify-center overflow-hidden"

@@ -56,6 +56,10 @@ export const listPullRequestCandidates = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {

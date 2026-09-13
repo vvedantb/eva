@@ -4,6 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
 import { internalMutation } from "./_generated/server";
 import { docVersionSourceValidator } from "./validators";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 const VERSION_CAP = 100;
 
@@ -65,6 +66,7 @@ export const touchDraft = authMutation({
   args: { docId: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
       throw new Error("Document not found");
@@ -98,6 +100,7 @@ export const saveVersion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const doc = await ctx.db.get(args.docId);
     if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
       throw new Error("Document not found");

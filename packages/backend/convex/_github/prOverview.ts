@@ -611,6 +611,10 @@ export const getPullRequestOverview = action({
   handler: async (ctx, args): Promise<PullRequestOverview> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prOverviewCache.fetch(
@@ -769,6 +773,10 @@ export const getPullRequestCommits = action({
   handler: async (ctx, args): Promise<PullRequestCommits> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    if (isSandboxIdentity(identity)) {
+      throw new Error("Not authorized");
+    }
+
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prCommitsCache.fetch(ctx, {

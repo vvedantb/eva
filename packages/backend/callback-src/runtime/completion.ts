@@ -433,10 +433,18 @@ export function buildErrorMessage(
   return agentName + " exited with code " + code;
 }
 
+function redactSecrets(text: string): string {
+  return text
+    .replace(/gh[spou]_[A-Za-z0-9_]+/g, "***")
+    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "***")
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "***")
+    .replace(/(?<=Bearer\s+)[A-Za-z0-9._-]+/gi, "***");
+}
+
 export function appendDiagnosticTail(message: string): string {
   const details: string[] = [];
-  const stdoutTail = S.rawOutput.slice(-1500).trim();
-  const stderrTail = S.stderrOutput.slice(-1500).trim();
+  const stdoutTail = redactSecrets(S.rawOutput.slice(-1500).trim());
+  const stderrTail = redactSecrets(S.stderrOutput.slice(-1500).trim());
   if (stdoutTail) details.push("stdout tail:\n" + stdoutTail);
   if (stderrTail) details.push("stderr tail:\n" + stderrTail);
   if (details.length === 0) {

@@ -3,6 +3,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { createNotification } from "./notifications";
 import { authQuery, authMutation, hasTaskAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 import {
   taskSubscriberFields,
   type notificationTypeValidator,
@@ -116,6 +117,7 @@ export const setSubscription = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");

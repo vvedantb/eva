@@ -2205,10 +2205,17 @@ function buildErrorMessage(code, fatalHeartbeatError, toolStallError, timedOutFo
   }
   return agentName + " exited with code " + code;
 }
+function redactSecrets(text) {
+  return text
+    .replace(/gh[spou]_[A-Za-z0-9_]+/g, "***")
+    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, "***")
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "***")
+    .replace(/(?<=Bearer\s+)[A-Za-z0-9._-]+/gi, "***");
+}
 function appendDiagnosticTail(message) {
   const details = [];
-  const stdoutTail = callbackState.rawOutput.slice(-1500).trim();
-  const stderrTail = callbackState.stderrOutput.slice(-1500).trim();
+  const stdoutTail = redactSecrets(callbackState.rawOutput.slice(-1500).trim());
+  const stderrTail = redactSecrets(callbackState.stderrOutput.slice(-1500).trim());
   if (stdoutTail) details.push("stdout tail:\\n" + stdoutTail);
   if (stderrTail) details.push("stderr tail:\\n" + stderrTail);
   if (details.length === 0) {
