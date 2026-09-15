@@ -42,6 +42,12 @@ import { useFilteredQuickTasks, useQuickTaskFilters } from "./_utils";
 import { useAgentTaskByNumId } from "@/lib/useResolveByNumId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { TASK_TAGS } from "@eva/shared";
+import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
+import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
+import {
+  mutationError,
+  mutationSuccess,
+} from "@/lib/utils/mutationToast";
 
 export function QuickTasksClient() {
   const navigate = useNavigate();
@@ -74,6 +80,8 @@ export function QuickTasksClient() {
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
   );
+  const deleteSelected = useBulkDeleteTasks();
+  const runSelected = useBulkRunTasks();
   const [
     { q, view, project, user, assignee, tags, timeRange, statuses },
     setParams,
@@ -154,6 +162,31 @@ export function QuickTasksClient() {
     setIsSelecting(false);
     setSelectedIds(new Set());
     setActiveBulkAction(null);
+  };
+
+  const skipBulkDelete = () => {
+    void deleteSelected(selectedIds).then(exitSelectMode);
+  };
+
+  const skipBulkRun = () => {
+    void runSelected(selectedIds).then(({ startedCount, count }) => {
+      if (startedCount === count) {
+        mutationSuccess(
+          `Started ${count} task${count === 1 ? "" : "s"}`,
+          "tasks-bulk-run",
+        );
+        exitSelectMode();
+        return;
+      }
+      if (startedCount === 0) {
+        mutationError("Couldn't start tasks", "tasks-bulk-run");
+        return;
+      }
+      mutationError(
+        `Started ${startedCount} of ${count} tasks. ${count - startedCount} failed to start.`,
+        "tasks-bulk-run",
+      );
+    });
   };
 
   const activeFilterLabels = (() => {
@@ -509,6 +542,10 @@ export function QuickTasksClient() {
               onExitSelect={exitSelectMode}
               activeBulkAction={activeBulkAction}
               onSetBulkAction={setActiveBulkAction}
+              onSkipConfirm={{
+                delete: skipBulkDelete,
+                run: skipBulkRun,
+              }}
             />
           )}
         </div>

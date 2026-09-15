@@ -7,15 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from "@eva/ui";
 import {
-  IconBrandVercel,
   IconDots,
   IconEye,
-  IconGitPullRequest,
   IconMessagePlus,
   IconSparkles,
 } from "@tabler/icons-react";
@@ -23,12 +18,13 @@ import type { Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SessionSwitcher } from "./SessionSwitcher";
-import { prStateIconClass } from "../_utils/-prStateIconClass";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
-interface SessionChatHeaderProps {
+interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
   sessionId: Id<"sessions">;
   title: string;
@@ -52,6 +48,11 @@ interface SessionChatHeaderProps {
   chatOnly?: boolean;
   /** Popover already titles the surface — omit the duplicate "Manager Ave". */
   hideTitle?: boolean;
+  /**
+   * Hides Send for Review — git/PR plumbing simple view does not surface. The
+   * PR links hide themselves (see `usePrLinkMenuItems`).
+   */
+  simpleView: boolean;
   /** Active model + sticky credential — only the chip bar cares. */
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
@@ -63,7 +64,12 @@ interface SessionChatHeaderProps {
   onOpenResetChatDialog?: () => void;
 }
 
-export function SessionChatHeader({
+/**
+ * Builds the session chat header slots. Named `use*` because ChatPanel invokes
+ * it during render: a PascalCase helper would look pure to React Compiler,
+ * which then skips the call on a cache hit and drops `usePrLinkMenuItems`.
+ */
+export function useSessionChatHeader({
   repoId,
   sessionId,
   title,
@@ -79,6 +85,7 @@ export function SessionChatHeader({
   permalinkPath,
   chatOnly = false,
   hideTitle = false,
+  simpleView,
   model,
   providerAccountId,
   usageAccountLabel,
@@ -86,12 +93,19 @@ export function SessionChatHeader({
   onOpenSummaryModal,
   onOpenReviewModal,
   onOpenResetChatDialog,
-}: SessionChatHeaderProps) {
+}: SessionChatHeaderArgs) {
   // `chatOnly` is Manager Ave, i.e. `session.isOrchestrator`.
-  const showSendForReview = canSendSessionForReview({
-    branchName,
+  const showSendForReview =
+    !simpleView &&
+    canSendSessionForReview({
+      branchName,
+      prState,
+      isOrchestrator: chatOnly,
+    });
+  const prLinks = usePrLinkMenuItems({
+    prUrl,
     prState,
-    isOrchestrator: chatOnly,
+    hasDeployment: Boolean(deploymentStatus),
   });
 
   // Manager Ave is one fixed session at its own URL, so there is nothing to
@@ -139,9 +153,11 @@ export function SessionChatHeader({
               <DropdownMenuItem
                 onClick={onOpenResetChatDialog}
                 disabled={isAssistantResponding}
+                title={skipConfirmTitle("Start new chat")}
               >
                 <IconMessagePlus size={14} />
                 Start new chat
+                <ConfirmSkipHint />
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
@@ -149,48 +165,26 @@ export function SessionChatHeader({
           <DropdownMenuItem
             onClick={onOpenSummaryModal}
             disabled={!isSandboxActive || messageCount === 0}
+            title={skipConfirmTitle(
+              hasSummary ? "Regenerate Summary" : "Summarise Session",
+            )}
           >
             <IconSparkles size={14} />
             {hasSummary ? "Regenerate Summary" : "Summarise Session"}
+            <ConfirmSkipHint />
           </DropdownMenuItem>
-          {(showSendForReview || deploymentStatus || prUrl) && (
-            <DropdownMenuSeparator />
-          )}
+          {(showSendForReview || prLinks.hasItems) && <DropdownMenuSeparator />}
           {showSendForReview && (
-            <DropdownMenuItem onClick={onOpenReviewModal}>
+            <DropdownMenuItem
+              onClick={onOpenReviewModal}
+              title={skipConfirmTitle("Send for Review")}
+            >
               <IconEye size={14} className="text-status-code-review" />
               Send for Review
+              <ConfirmSkipHint />
             </DropdownMenuItem>
           )}
-          {deploymentStatus && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <DropdownMenuItem disabled>
-                    <IconBrandVercel size={14} />
-                    View Preview
-                  </DropdownMenuItem>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                Please start sandbox and view changes through the preview tab
-                there instead
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {prUrl && (
-            <DropdownMenuItem
-              onClick={() => {
-                window.open(prUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <IconGitPullRequest
-                size={14}
-                className={prStateIconClass(prState)}
-              />
-              View PR
-            </DropdownMenuItem>
-          )}
+          {prLinks.items}
           <DropdownMenuSeparator />
           <CopyLinkMenuItem path={permalinkPath} />
         </DropdownMenuContent>

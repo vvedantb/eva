@@ -3,6 +3,7 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import { cn } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCircleCheck,
   IconCircleX,
@@ -131,16 +132,27 @@ export function PrStatusPill({
   const meta = statusMeta(status, draft);
   const Icon = meta.icon;
   return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-        meta.className,
-        className,
-      )}
-    >
-      <Icon size={12} aria-hidden />
-      {meta.label}
-    </span>
+    <AnimatePresence mode="wait" initial={false}>
+      <m.span
+        key={`${status}-${draft}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.075, ease: [0.22, 1, 0.36, 1] }}
+        className="inline-flex"
+      >
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+            meta.className,
+            className,
+          )}
+        >
+          <Icon size={12} aria-hidden />
+          {meta.label}
+        </span>
+      </m.span>
+    </AnimatePresence>
   );
 }
 

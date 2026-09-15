@@ -57,6 +57,7 @@ import {
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
 import { KanbanBoardSkeleton } from "@/lib/components/kanban/KanbanBoardSkeleton";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import {
   useProjectFilters,
   SORT_FIELDS,
@@ -118,6 +119,7 @@ export function ProjectsClient() {
     title: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const altHeld = useAltHeld();
   const hasProjects = projects !== undefined && projects.length > 0;
 
   const filteredSorted = (() => {
@@ -164,12 +166,12 @@ export function ProjectsClient() {
     return acc;
   }, projectsByPhaseInitial);
 
-  const handleDelete = async () => {
-    if (!projectToDelete) return;
+  const handleDelete = async (target = projectToDelete) => {
+    if (!target) return;
     setIsDeleting(true);
     try {
       await withMutationToast(
-        deleteProject({ id: projectToDelete.id }),
+        deleteProject({ id: target.id }),
         "Project deleted",
         "Couldn't delete project",
         "project-delete",
@@ -180,6 +182,13 @@ export function ProjectsClient() {
       return;
     }
     setIsDeleting(false);
+  };
+
+  const requestDelete = (id: Id<"projects">, title: string) => {
+    const target = { id, title };
+    requestConfirm(altHeld, () => setProjectToDelete(target), () => {
+      void handleDelete(target);
+    });
   };
 
   const handlePhaseToggle = (phase: ProjectPhase) => {
@@ -454,9 +463,7 @@ export function ProjectsClient() {
                       owner={owner}
                       name={name}
                       basePath={basePath}
-                      onDelete={(id, title) =>
-                        setProjectToDelete({ id, title })
-                      }
+                      onDelete={requestDelete}
                     />
                   </div>
                 </m.div>
@@ -490,7 +497,7 @@ export function ProjectsClient() {
                   <ProjectsListView
                     projectsByPhase={projectsByPhase}
                     visiblePhases={visiblePhases}
-                    onDelete={(id, title) => setProjectToDelete({ id, title })}
+                    onDelete={requestDelete}
                   />
                 </m.div>
               )}
@@ -505,7 +512,7 @@ export function ProjectsClient() {
       <ProjectDeleteDialog
         project={projectToDelete}
         onClose={() => setProjectToDelete(null)}
-        onConfirm={handleDelete}
+        onConfirm={() => handleDelete()}
         isDeleting={isDeleting}
       />
     </>

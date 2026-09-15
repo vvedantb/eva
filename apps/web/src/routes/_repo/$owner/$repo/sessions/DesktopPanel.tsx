@@ -2,7 +2,8 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { IconDeviceDesktop } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { BorderBeam, Button, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   SandboxIframeService,
   type StartResult,
@@ -118,6 +119,7 @@ export function DesktopPanel({
   const autoStartKey = isAgentBrowsing ? agentBrowsingAt : undefined;
 
   const showLockOverlay = onReleaseLock !== undefined && isAgentBrowsing;
+  const beamPane = surface === "browser" && showLockOverlay;
 
   const handleTakeControl = () => {
     onReleaseLock?.();
@@ -151,13 +153,36 @@ export function DesktopPanel({
       />
       {showLockOverlay ? (
         <>
-          {/* Same language as FollowOverlay: an inset ring marks the surface as
-              driven by someone else, and this layer swallows clicks so a stray
-              tap cannot fight the agent for the cursor. Releasing the lock is
-              the pill button only. No scrim/blur — the agent's browsing has to
-              stay watchable. */}
-          <div className="absolute inset-0 z-10 cursor-not-allowed ring-[3px] ring-inset ring-primary/70" />
-          <div className="absolute top-3 left-1/2 z-20 -translate-x-1/2">
+          {/* Browser pane: the colorful composer beam replaces the inset
+              ring. Computer keeps FollowOverlay's static ring — same Chrome,
+              different tab. Overlay so the iframe stays visible through the
+              masked hole; the click layer still swallows taps. */}
+          {beamPane ? (
+            <BorderBeam
+              active
+              colorVariant="colorful"
+              className="beam-inset pointer-events-none absolute inset-0 z-10"
+            >
+              {null}
+            </BorderBeam>
+          ) : null}
+          <div
+            className={cn(
+              "absolute inset-0 z-10 cursor-not-allowed",
+              beamPane ? null : "ring-[3px] ring-inset ring-primary/70",
+            )}
+          />
+        </>
+      ) : null}
+      <AnimatePresence initial={false}>
+        {showLockOverlay ? (
+          <m.div
+            className="absolute top-3 left-1/2 z-20 -translate-x-1/2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
             <div className="flex items-center gap-2 rounded-full bg-primary py-1.5 pr-1.5 pl-4 text-sm font-medium text-primary-foreground smooth-shadow-lg">
               <span>Agent is browsing</span>
               <Button
@@ -169,9 +194,9 @@ export function DesktopPanel({
                 Take control
               </Button>
             </div>
-          </div>
-        </>
-      ) : null}
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

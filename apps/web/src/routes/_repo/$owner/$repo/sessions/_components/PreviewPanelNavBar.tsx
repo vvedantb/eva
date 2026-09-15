@@ -8,6 +8,7 @@ import {
   useWebPreview,
 } from "@eva/ui";
 import {
+  IconAspectRatio,
   IconClick,
   IconDevices,
   IconPictureInPicture,
@@ -37,6 +38,8 @@ export function PreviewPanelNavBar({
   onPathChange,
   viewport,
   onToggleDevice,
+  contain,
+  onToggleContain,
   annotationMode,
   onAnnotationModeChange,
   showAnnotationToggle,
@@ -54,6 +57,9 @@ export function PreviewPanelNavBar({
   onPathChange: (path: string) => void;
   viewport: PreviewViewport;
   onToggleDevice: () => void;
+  /** Letterbox a locked viewport instead of filling the pane (responsive). */
+  contain: boolean;
+  onToggleContain: () => void;
   annotationMode: boolean;
   onAnnotationModeChange: (active: boolean) => void;
   showAnnotationToggle: boolean;
@@ -62,6 +68,7 @@ export function PreviewPanelNavBar({
 }) {
   const { iframeRef } = useWebPreview();
   const deviceActive = viewport.mode !== "fill";
+  const containActive = contain || deviceActive;
 
   return (
     <WebPreviewNavigation className="max-sm:flex-wrap gap-1">
@@ -76,6 +83,22 @@ export function PreviewPanelNavBar({
         onClick={onToggleDevice}
       >
         <IconDevices size={16} />
+      </WebPreviewNavigationButton>
+      <WebPreviewNavigationButton
+        tooltip={
+          containActive ? "Fill panel (responsive)" : "Contain aspect ratio"
+        }
+        aria-label={
+          containActive ? "Fill panel (responsive)" : "Contain aspect ratio"
+        }
+        aria-pressed={containActive}
+        className={cn(
+          "max-sm:hit-target",
+          containActive && "bg-secondary text-primary hover:text-primary",
+        )}
+        onClick={onToggleContain}
+      >
+        <IconAspectRatio size={16} />
       </WebPreviewNavigationButton>
       {popOut ? (
         <WebPreviewNavigationButton

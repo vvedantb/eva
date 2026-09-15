@@ -7,11 +7,13 @@ const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
 const sessionWorkflow = readSource("_sessions/workflow.ts");
 const resultTarget = readSource("_sessions/resultTarget.ts");
+const chatResult = readSource("_chat/chatResult.ts");
 const sandboxExecution = readSource("_sandbox_runtime/execution.ts");
 const sandboxGit = readSource("_sandbox_runtime/git.ts");
 const sessionsSandbox = readSource("_sessions/sandbox.ts");
 const taskChatWorkflow = readSource("agentTaskChatWorkflow.ts");
 const projectChatWorkflow = readSource("projectChatWorkflow.ts");
+const taskRunWorkflow = readSource("_taskWorkflow/workflowDefinition.ts");
 const turnPersist = readSource("../callback-src/runtime/turnPersist.ts");
 const claudeSdkDaemon = readSource(
   "../callback-src/providers/claudeSdkDaemon.ts",
@@ -212,14 +214,18 @@ describe("the reply is saved before the push", () => {
     expect(marker, "the publish-failure marker moved").not.toBeNull();
     const prefix = marker?.[1] ?? "";
     expect(prefix.length).toBeGreaterThan(0);
+    expect(resultTarget).toContain("formatDelayedPublishFailureError");
+    expect(resultTarget).toContain(prefix);
     for (const source of [
       sessionWorkflow,
       taskChatWorkflow,
       projectChatWorkflow,
+      taskRunWorkflow,
     ]) {
-      const thrown = source.match(/const publishError = `([^${]+)/);
-      expect(thrown, "the publish-failure message moved").not.toBeNull();
-      expect(thrown?.[1] ?? "").toContain(prefix);
+      expect(
+        source,
+        "the workflow must format the failure through the shared helper",
+      ).toContain("formatDelayedPublishFailureError(");
     }
   });
 });
@@ -240,14 +246,8 @@ describe("a delayed publish failure cannot rewrite a newer turn", () => {
     "%s saveResult isolates the failure before touching turn state",
     (_label, source) => {
       const body = definitionBody(source, "saveResult");
-      const guardAt = body.indexOf("delayedPublishFailureError(");
-      const clearAt = body.indexOf("clearStreamingActivity(");
-      const targetAt = body.indexOf("resultTargetMessage(");
-      expect(guardAt, "the publish-failure guard moved").toBeGreaterThan(-1);
-      expect(clearAt, "the streaming clear moved").toBeGreaterThan(-1);
-      expect(targetAt, "the result target lookup moved").toBeGreaterThan(-1);
-      expect(guardAt).toBeLessThan(clearAt);
-      expect(guardAt).toBeLessThan(targetAt);
+      expect(body).toContain("applyChatTurnResult(");
+      expect(body).toContain('"publish-failure"');
     },
   );
 
@@ -257,12 +257,29 @@ describe("a delayed publish failure cannot rewrite a newer turn", () => {
     ["project chat", projectChatWorkflow],
   ] as const)("%s failure becomes a standalone system alert", (_label, source) => {
     const body = definitionBody(source, "saveResult");
-    const guard = body.slice(
-      body.indexOf("delayedPublishFailureError("),
-      body.indexOf("clearStreamingActivity("),
+    expect(body).toContain("applyChatTurnResult(");
+    expect(body).toContain("return null;");
+  });
+
+  test("the shared module isolates the failure before touching turn state", () => {
+    const apply = functionBody(
+      chatResult,
+      "export async function applyChatTurnResult(",
     );
-    expect(guard).toContain("isSystemAlert: true");
-    expect(guard).toContain("return null;");
+    const guardAt = apply.indexOf("recordDelayedPublishFailure(");
+    const salvageAt = apply.indexOf("salvageAndClearStreamingActivity(");
+    const writeAt = apply.indexOf("writeAssistantTurnResult(");
+    expect(guardAt, "the publish-failure guard moved").toBeGreaterThan(-1);
+    expect(salvageAt, "the streaming salvage moved").toBeGreaterThan(-1);
+    expect(writeAt, "the result write moved").toBeGreaterThan(-1);
+    expect(guardAt).toBeLessThan(salvageAt);
+    expect(guardAt).toBeLessThan(writeAt);
+
+    const record = functionBody(
+      chatResult,
+      "export async function recordDelayedPublishFailure(",
+    );
+    expect(record).toContain("isSystemAlert: true");
   });
 });
 

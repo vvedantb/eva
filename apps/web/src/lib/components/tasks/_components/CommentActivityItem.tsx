@@ -18,6 +18,7 @@ import {
   toast,
 } from "@eva/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
@@ -206,10 +207,12 @@ export function CommentActivityItem({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
+                  title={skipConfirmTitle("Delete")}
                   onClick={() => onDeleteRequest(comment._id)}
                 >
                   <IconTrash size={14} />
                   Delete
+                  <ConfirmSkipHint />
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

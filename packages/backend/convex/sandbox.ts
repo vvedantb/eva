@@ -7,6 +7,7 @@ export {
   captureDiagnosticsAndStopSandbox,
   archiveSandbox,
   verifySandboxLiveness,
+  captureStalledTurnDiagnostics,
   getSandboxProviderKind,
   getSnapshotSandboxProviderKind,
 } from "./_sandbox_runtime/lifecycle";
@@ -52,6 +53,7 @@ export {
   launchChromeInDesktop,
   startDesktopForBrowserEntity,
   readSandboxFile,
+  writeSandboxFile,
   readSandboxMediaFile,
   listSandboxFiles,
 } from "./_sandbox_runtime/services";

@@ -16,6 +16,30 @@ import {
 } from "@eva/ui";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
+/** Starts selected quick tasks. Shared by the modal and Alt-click bypass. */
+export function useBulkRunTasks() {
+  const startExecution = useMutation(api.agentTasks.startExecution);
+
+  return async (
+    selectedTaskIds: Set<Id<"agentTasks">>,
+  ): Promise<{ startedCount: number; count: number }> => {
+    const count = selectedTaskIds.size;
+    const taskIds = [...selectedTaskIds];
+    const results = await Promise.all(
+      taskIds.map(async (id) => {
+        try {
+          await startExecution({ id });
+          return true;
+        } catch (err) {
+          console.error(`Failed to start task ${id}:`, err);
+          return false;
+        }
+      }),
+    );
+    return { startedCount: results.filter((started) => started).length, count };
+  };
+}
+
 interface RunTasksModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,7 +53,7 @@ export function RunTasksModal({
   selectedTaskIds,
   onSuccess,
 }: RunTasksModalProps) {
-  const startExecution = useMutation(api.agentTasks.startExecution);
+  const runSelected = useBulkRunTasks();
   const [isLoading, setIsLoading] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -42,19 +66,7 @@ export function RunTasksModal({
     // of this whole file. See CLAUDE.md.
     const successMessage = `Started ${count} task${count === 1 ? "" : "s"}`;
     try {
-      const taskIds = [...selectedTaskIds];
-      const results = await Promise.all(
-        taskIds.map(async (id) => {
-          try {
-            await startExecution({ id });
-            return true;
-          } catch (err) {
-            console.error(`Failed to start task ${id}:`, err);
-            return false;
-          }
-        }),
-      );
-      const startedCount = results.filter((started) => started).length;
+      const { startedCount } = await runSelected(selectedTaskIds);
       if (startedCount === count) {
         mutationSuccess(successMessage, "tasks-bulk-run");
         setIsLoading(false);

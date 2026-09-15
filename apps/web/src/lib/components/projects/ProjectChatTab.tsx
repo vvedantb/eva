@@ -13,6 +13,12 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { MultipleChoiceQuestion } from "@/lib/components/plan/MultipleChoiceQuestion";
 import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import { IconTrash, IconPlayerPlay } from "@tabler/icons-react";
 import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectChatMessageList } from "./ProjectChatMessageList";
@@ -64,6 +70,7 @@ export function ProjectChatTab({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const altHeld = useAltHeld();
   const [isClearing, setIsClearing] = useState(false);
   const prevMessagesLengthRef = useRef(initialMessages.length);
 
@@ -272,13 +279,24 @@ export function ProjectChatTab({
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={() => setConfirmClearOpen(true)}
+                  title={skipConfirmTitle("Clear")}
+                  onClick={(event) =>
+                    requestConfirm(
+                      altHeld,
+                      () => setConfirmClearOpen(true),
+                      () => {
+                        void handleClearChat();
+                      },
+                      event,
+                    )
+                  }
                   disabled={
                     isLoading || isLocked || initialMessages.length === 0
                   }
                 >
                   <IconTrash size={16} />
                   Clear
+                  <ConfirmSkipHint />
                 </Button>
               </>
             }

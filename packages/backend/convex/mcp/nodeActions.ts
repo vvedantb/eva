@@ -24,8 +24,8 @@ import {
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
-import { normalizeAIModel } from "../validators";
 import { formatConvexQueryError } from "./convexQueryLimits";
+import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Environment Helpers
@@ -380,8 +380,7 @@ function getBootstrapSecret(): string {
  * found") — the whole MCP tool layer was unusable against such deployments.
  */
 function getEvaConvexCloudUrl(): string {
-  const configured =
-    process.env.EVA_PUBLIC_CONVEX_URL ?? process.env.CONVEX_CLOUD_URL;
+  const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
   return getConvexSiteUrl().replace(".convex.site", ".convex.cloud");
 }
@@ -830,27 +829,23 @@ export const runTestQuery = internalAction({
   },
 });
 
-const mcpClaudeModelValidator = v.union(
-  v.literal("opus"),
-  v.literal("sonnet"),
-  v.literal("haiku"),
-  v.literal("fable"),
-);
-
+// Task and session creation deliberately take no model: the mutations behind
+// them fall back to `repo.defaultModel`, and that per-repo choice (provider,
+// cost, plan limits) is the one the MCP surface must not override. Per-turn
+// sends (orchestratorSendMessage) keep their model override.
 export const createTask = internalAction({
   args: {
     clerkUserId: v.string(),
     repoId: v.string(),
     title: v.string(),
     description: v.string(),
-    model: v.optional(mcpClaudeModelValidator),
     baseBranch: v.optional(v.string()),
     projectId: v.optional(v.string()),
   },
   returns: v.string(),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, title, description, model, baseBranch, projectId },
+    { clerkUserId, repoId, title, description, baseBranch, projectId },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
     const mutationArgs: Record<string, JsonValue> = {
@@ -858,7 +853,6 @@ export const createTask = internalAction({
       title,
       description,
     };
-    if (model) mutationArgs.model = normalizeAIModel(model);
     if (baseBranch) mutationArgs.baseBranch = baseBranch;
     if (projectId) mutationArgs.projectId = projectId;
 
@@ -903,13 +897,12 @@ export const createTasksBatch = internalAction({
       }),
     ),
     projectTitle: v.optional(v.string()),
-    model: v.optional(mcpClaudeModelValidator),
     baseBranch: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, tasks, projectTitle, model, baseBranch },
+    { clerkUserId, repoId, tasks, projectTitle, baseBranch },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
     const mutationArgs: Record<string, JsonValue> = {
@@ -921,7 +914,6 @@ export const createTasksBatch = internalAction({
       })),
     };
     if (projectTitle) mutationArgs.projectTitle = projectTitle;
-    if (model) mutationArgs.model = normalizeAIModel(model);
     if (baseBranch) mutationArgs.baseBranch = baseBranch;
 
     const result = await runMutationAsUser(
@@ -948,14 +940,30 @@ export const createEvaDoc = internalAction({
     repoId: v.string(),
     title: v.string(),
     content: v.string(),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.string(),
-  handler: async (_ctx, { clerkUserId, repoId, title, content }) => {
+  handler: async (
+    _ctx,
+    { clerkUserId, repoId, title, content, sourceKind, sourceId },
+  ) => {
+    const createArgs: Record<string, JsonValue> = { repoId, title, content };
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const docId = await runMutationAsUser(
       getEvaConvexCloudUrl(),
       clerkUserId,
       "docs:create",
-      { repoId, title, content },
+      createArgs,
     );
     if (typeof docId !== "string") {
       throw new Error("Unexpected response from docs:create");
@@ -1054,11 +1062,24 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
   handler: async (
     _ctx,
-    { clerkUserId, name, html, description, boundTeamId, declaredTools },
+    {
+      clerkUserId,
+      name,
+      html,
+      description,
+      boundTeamId,
+      declaredTools,
+      sourceKind,
+      sourceId,
+    },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
 
@@ -1094,6 +1115,14 @@ export const createArtifact = internalAction({
       htmlStorageId: storageId,
     };
     if (description) createArgs.description = description;
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const artifactId = await runMutationAsUser(
       convexUrl,
       clerkUserId,
@@ -1168,6 +1197,31 @@ export const listArtifacts = internalAction({
 
 const agentKindValidator = v.union(v.literal("session"), v.literal("task"));
 type AgentKind = "session" | "task";
+
+type AgentStateTranscript = {
+  role: string;
+  content: string;
+  timestamp: number;
+  truncated: boolean;
+};
+
+type AgentStateResult = {
+  kind: AgentKind;
+  id: string;
+  numId?: number;
+  title: string;
+  status: string;
+  isExecuting: boolean;
+  model?: string;
+  updatedAt: number;
+  deploymentUrl?: string;
+  deploymentStatus?: string;
+  currentActivity?: string;
+  currentContent?: string;
+  pendingQuestion?: string;
+  queuedMessageCount: number;
+  transcript: AgentStateTranscript[];
+};
 
 /**
  * Sending a message reaches one surface more than the fleet tools do: a
@@ -1473,7 +1527,10 @@ export const orchestratorGetAgentState = internalAction({
       }),
     ),
   }),
-  handler: async (_ctx, { clerkUserId, kind, id, transcriptTail }) => {
+  handler: async (
+    ctx,
+    { clerkUserId, kind, id, transcriptTail },
+  ): Promise<AgentStateResult> => {
     const convexUrl = getEvaConvexCloudUrl();
     const streamingEntityId =
       kind === "session" ? id : `${TASK_CHAT_STREAM_PREFIX}${id}`;
@@ -1491,6 +1548,13 @@ export const orchestratorGetAgentState = internalAction({
     if (rawDoc === null) {
       throw new Error(`No ${kind} ${id} found, or you do not have access.`);
     }
+
+    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
+    // never sets `activeWorkflowId`, so that field alone is not "is executing".
+    const isExecuting: boolean = await ctx.runQuery(
+      internal.mcp.queries.entityIsExecuting,
+      { kind, id },
+    );
 
     const [rawStreaming, rawMessages, rawQueued] = await Promise.all([
       runQueryAsUser(convexUrl, clerkUserId, "streaming:get", {
@@ -1523,6 +1587,7 @@ export const orchestratorGetAgentState = internalAction({
       currentActivity: streaming?.currentActivity,
       currentContent: streaming?.currentContent,
       pendingQuestion: streaming?.pendingQuestion,
+      isExecuting,
     };
 
     if (kind === "session") {
@@ -1532,7 +1597,6 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        isExecuting: session.activeWorkflowId !== undefined,
         model: session.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
@@ -1546,9 +1610,6 @@ export const orchestratorGetAgentState = internalAction({
       numId: task.numId,
       title: task.title,
       status: task.status,
-      isExecuting:
-        task.activeWorkflowId !== undefined ||
-        task.activeChatWorkflowId !== undefined,
       model: task.lastChatModel ?? task.model,
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
@@ -1658,11 +1719,13 @@ function chatDelivery(
   rawDoc: unknown,
   queuedAhead: number,
   requestedModel: string | undefined,
+  sessionIsExecuting: boolean,
 ): AgentDelivery {
   if (kind === "session") {
     const session = sessionDocSchema.parse(rawDoc);
     return resolveAgentDelivery({
-      isBusy: session.activeWorkflowId !== undefined || queuedAhead > 0,
+      // Durable `/loop` turns never set `activeWorkflowId`.
+      isBusy: sessionIsExecuting || queuedAhead > 0,
       requestedModel,
       storedModel: session.lastModel,
     });
@@ -1670,6 +1733,7 @@ function chatDelivery(
   if (kind === "task") {
     const task = agentTaskSchema.parse(rawDoc);
     return resolveAgentDelivery({
+      // A quick task's run and its sandbox chat are independent slots.
       isBusy: task.activeChatWorkflowId !== undefined || queuedAhead > 0,
       requestedModel,
       storedModel: task.lastChatModel ?? task.model,
@@ -1703,7 +1767,7 @@ export const orchestratorSendMessage = internalAction({
     model: v.string(),
   }),
   handler: async (
-    _ctx,
+    ctx,
     {
       clerkUserId,
       kind,
@@ -1745,7 +1809,20 @@ export const orchestratorSendMessage = internalAction({
         ),
       ).length;
 
-    const delivery = chatDelivery(kind, rawDoc, queuedAhead, model);
+    const sessionIsExecuting: boolean =
+      kind === "session"
+        ? await ctx.runQuery(internal.mcp.queries.entityIsExecuting, {
+            kind,
+            id,
+          })
+        : false;
+    const delivery = chatDelivery(
+      kind,
+      rawDoc,
+      queuedAhead,
+      model,
+      sessionIsExecuting,
+    );
     for (const call of buildChatMessageCalls({
       kind,
       id,
@@ -1967,19 +2044,20 @@ export const orchestratorCreateSession = internalAction({
     repoId: v.string(),
     title: v.optional(v.string()),
     message: v.string(),
-    model: v.optional(v.string()),
     baseBranch: v.optional(v.string()),
     masterSessionId: v.optional(v.string()),
   },
   returns: v.object({ sessionId: v.string(), numId: v.number() }),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, title, message, model, baseBranch, masterSessionId },
+    { clerkUserId, repoId, title, message, baseBranch, masterSessionId },
   ) => {
+    // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
+    // Passing normalizeAIModel(undefined) here used to force claude:sonnet on
+    // every MCP-created session regardless of the repo's configured default.
     const createArgs: Record<string, JsonValue> = {
       repoId,
       message,
-      model: normalizeAIModel(model),
       sentViaOrchestrator: true,
     };
     if (title) createArgs.title = title;

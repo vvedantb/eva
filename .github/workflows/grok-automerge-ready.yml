@@ -1,3 +1,4 @@
+# Wake Grok automerge bot on ready_for_review (mark active) and synchronize (push/rebase).
 # Secrets required (add in GitHub Settings → Secrets):
 #   GROK_BOT_WEBHOOK_URL — Grok Bot webhook routine POST URL
 #   GROK_BOT_WEBHOOK_KEY — sender key used as Bearer token
@@ -6,27 +7,27 @@ name: Wake Grok Automerge
 
 on:
   pull_request:
-    types: [ready_for_review]
+    types: [ready_for_review, synchronize]
 
 jobs:
   notify:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Send ready_for_review webhook
+      - name: Send webhook to Grok automerge bot
         run: |
-          echo "Sending ready_for_review webhook for PR #${{ github.event.pull_request.number }}..."
+          echo "Sending ${{ github.event.action }} webhook for PR #${{ github.event.pull_request.number }}..."
           curl -f -X POST "${{ secrets.GROK_BOT_WEBHOOK_URL }}" \
             -H "Authorization: Bearer ${{ secrets.GROK_BOT_WEBHOOK_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "event": "ready_for_review",
+              "event": "${{ github.event.action }}",
               "repo": "${{ github.repository }}",
               "pr": ${{ github.event.pull_request.number }},
               "title": ${{ toJSON(github.event.pull_request.title) }},
               "html_url": "${{ github.event.pull_request.html_url }}",
-              "draft": false
+              "draft": ${{ github.event.pull_request.draft }}
             }'
           echo "Webhook sent successfully."

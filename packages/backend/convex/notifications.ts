@@ -39,10 +39,10 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
  * Delay before an instant notification email is sent. Acts as a debounce: a
  * burst of activity within this window is swept into a single email, and the
  * send is skipped entirely if the user reads the notification in-app first.
- * Set to 30 minutes so that comment fan-out to a task's subscribers collapses
+ * Set to 15 minutes so that comment fan-out to a task's subscribers collapses
  * into one email per window rather than one per comment.
  */
-const EMAIL_SEND_DELAY_MS = 30 * 60 * 1000;
+const EMAIL_SEND_DELAY_MS = 15 * 60 * 1000;
 
 /**
  * How many unread notifications to scan per user before filtering. Larger than

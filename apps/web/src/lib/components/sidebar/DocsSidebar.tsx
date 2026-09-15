@@ -22,7 +22,14 @@ import {
   Surface,
   Textarea,
 } from "@eva/ui";
-import { IconFile, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+import {
+  IconFile,
+  IconMessage,
+  IconPlus,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
+import { docSourceLabel, docSourceRoute } from "@/lib/components/docs/_source";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -34,10 +41,17 @@ import {
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment, routeNumIdFromPath } from "@/lib/numId";
 import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
+import {
   mutationError,
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface DocsSidebarProps {
   repoId: Id<"githubRepos">;
@@ -81,6 +95,7 @@ export function DocsSidebar({
     title: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const altHeld = useAltHeld();
   const [isUploading, setIsUploading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState("");
@@ -234,12 +249,14 @@ export function DocsSidebar({
     });
   };
 
-  const handleDelete = async () => {
-    if (!docToDelete) return;
+  const handleDelete = async (
+    target: { id: Id<"docs">; title: string } | null = docToDelete,
+  ) => {
+    if (!target) return;
     // Resolved before the try (it needs no await, and the guard above already
-    // proves docToDelete): React Compiler bails on the whole file when a
+    // proves target): React Compiler bails on the whole file when a
     // conditional or logical expression sits inside a try/catch.
-    const docToDeleteSegment = docs?.find((d) => d._id === docToDelete.id);
+    const docToDeleteSegment = docs?.find((d) => d._id === target.id);
     const deletePathSegment = docToDeleteSegment
       ? entityPathSegment(docToDeleteSegment)
       : null;
@@ -248,7 +265,7 @@ export function DocsSidebar({
       routeNumIdFromPath(pathname, `${basePath}/docs`) === deletePathSegment;
     setIsDeleting(true);
     try {
-      await removeDoc({ id: docToDelete.id });
+      await removeDoc({ id: target.id });
       mutationSuccess("Document deleted", "doc-delete");
       setDocToDelete(null);
       if (isViewing) {
@@ -300,7 +317,7 @@ export function DocsSidebar({
           </div>
         ) : (
           <SharedLayoutNav layoutId="docs-nav" className="space-y-1">
-            {filteredDocs.map((doc) => {
+            {filteredDocs.map((doc, index) => {
               const segment = entityPathSegment(doc);
               if (!segment) return null;
               const href = `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`;
@@ -308,49 +325,86 @@ export function DocsSidebar({
                 `${basePath}/docs/${segment}`,
               );
               return (
-                <ContextMenu key={doc._id}>
-                  <ContextMenuTrigger asChild>
-                    <SharedLayoutNavSurface
-                      itemId={doc._id}
-                      isActive={isSelected}
-                      className="group"
-                    >
-                      <SidebarListHoverCard
-                        title={doc.title}
-                        preview={doc.contentPreview}
-                        createdAt={doc.createdAt}
-                        userId={doc.createdBy}
+                <ListEnter key={doc._id} index={index} fast>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <SharedLayoutNavSurface
+                        itemId={doc._id}
+                        isActive={isSelected}
+                        className="group"
                       >
-                        <Link
-                          to={href}
-                          search={(prev) => prev}
-                          onClick={onNavigate}
-                          className={sidebarNavLinkClass(isSelected)}
+                        <SidebarListHoverCard
+                          title={doc.title}
+                          preview={doc.contentPreview}
+                          createdAt={doc.createdAt}
+                          userId={doc.createdBy}
                         >
-                          <span className="min-w-0 flex-1 truncate">
-                            {doc.title}
-                          </span>
-                          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                            {compactRelativeTime(doc.updatedAt)}
-                          </span>
-                        </Link>
-                      </SidebarListHoverCard>
-                    </SharedLayoutNavSurface>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent onClick={(e) => e.stopPropagation()}>
-                    {doc.kind !== "pr-recap" ? (
-                      <ContextMenuItem
-                        className="text-destructive"
-                        onClick={() =>
-                          setDocToDelete({ id: doc._id, title: doc.title })
-                        }
-                      >
-                        <IconTrash size={16} />
-                        Delete
-                      </ContextMenuItem>
-                    ) : null}
-                  </ContextMenuContent>
-                </ContextMenu>
+                          <Link
+                            to={href}
+                            search={(prev) => prev}
+                            onClick={onNavigate}
+                            className={sidebarNavLinkClass(isSelected)}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">{doc.title}</span>
+                              {doc.source ? (
+                                <span className="block truncate text-[10px] text-muted-foreground">
+                                  {docSourceLabel(doc.source)}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                              {compactRelativeTime(doc.updatedAt)}
+                            </span>
+                          </Link>
+                        </SidebarListHoverCard>
+                      </SharedLayoutNavSurface>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent onClick={(e) => e.stopPropagation()}>
+                      {doc.source && docSourceRoute(doc.source) ? (
+                        <ContextMenuItem
+                          onClick={() => {
+                            const route = docSourceRoute(doc.source);
+                            if (!route) return;
+                            void navigate({
+                              to: route.to,
+                              params: route.params,
+                            });
+                            if (onNavigate) onNavigate();
+                          }}
+                        >
+                          <IconMessage size={16} />
+                          Open{" "}
+                          {doc.source.kind === "session"
+                            ? "session"
+                            : doc.source.kind === "task"
+                              ? "task"
+                              : "project"}
+                        </ContextMenuItem>
+                      ) : null}
+                      {doc.kind !== "pr-recap" ? (
+                        <ContextMenuItem
+                          className="text-destructive"
+                          title={skipConfirmTitle("Delete")}
+                          onClick={() => {
+                            const target = { id: doc._id, title: doc.title };
+                            requestConfirm(
+                              altHeld,
+                              () => setDocToDelete(target),
+                              () => {
+                                void handleDelete(target);
+                              },
+                            );
+                          }}
+                        >
+                          <IconTrash size={16} />
+                          Delete
+                          <ConfirmSkipHint />
+                        </ContextMenuItem>
+                      ) : null}
+                    </ContextMenuContent>
+                  </ContextMenu>
+                </ListEnter>
               );
             })}
           </SharedLayoutNav>
@@ -489,7 +543,7 @@ export function DocsSidebar({
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDelete}
+              onClick={() => void handleDelete()}
               disabled={isDeleting}
             >
               {isDeleting && <Spinner size="sm" />}

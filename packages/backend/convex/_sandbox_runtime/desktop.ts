@@ -2,6 +2,7 @@
 
 import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle } from "./helpers";
+import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
 
 /**
  * Chrome launch flags for the sandbox (Vercel's Xvnc framebuffer, display :1).
@@ -106,7 +107,13 @@ export async function launchChrome(sandbox: SandboxHandle): Promise<void> {
 
     // Wait briefly for DevTools to come up (best-effort).
     await sandbox.exec(
-      "for i in $(seq 1 20); do curl -fsS http://127.0.0.1:9222/json/version >/dev/null 2>&1 && exit 0; sleep 0.5; done; exit 0",
+      buildHttpReadyProbeCommand({
+        url: "http://127.0.0.1:9222/json/version",
+        attempts: 20,
+        sleepSec: 0.5,
+        onReady: "exit 0",
+        onTimeout: "exit 0",
+      }),
       { timeoutSeconds: 20 },
     );
   } catch {

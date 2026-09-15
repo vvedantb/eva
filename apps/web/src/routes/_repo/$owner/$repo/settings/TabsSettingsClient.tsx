@@ -14,6 +14,7 @@ import { TablerIconByName } from "@/lib/components/TablerIconByName";
 import { CustomTabRow } from "./_components/CustomTabRow";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { IconLayoutNavbar } from "@tabler/icons-react";
 import { mutationSuccess } from "@/lib/utils/mutationToast";
@@ -173,8 +174,10 @@ export function TabsSettingsClient() {
       <SettingsSection title="Custom tabs" bodyVariant="list">
         {tabs && tabs.length > 0 ? (
           <div className="divide-y divide-border/50">
-            {tabs.map((tab) => (
-              <CustomTabRow key={tab._id} tab={tab} takenSlugs={takenSlugs} />
+            {tabs.map((tab, index) => (
+              <ListEnter key={tab._id} index={index}>
+                <CustomTabRow tab={tab} takenSlugs={takenSlugs} />
+              </ListEnter>
             ))}
           </div>
         ) : (

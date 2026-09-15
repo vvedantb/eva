@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
@@ -20,7 +21,6 @@ import {
   mcpListUserRepos,
   textResult,
   MCP_CLAUDE_MODELS,
-  type McpClaudeModel,
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
@@ -513,12 +513,10 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .describe(
         'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos.',
       ),
-    model: z
-      .enum(MCP_CLAUDE_MODELS)
-      .optional()
-      .describe(
-        'Claude model to use ("opus", "sonnet", "haiku", or "fable"). If omitted, uses the repo\'s default model.',
-      ),
+    // No `model` here on purpose: a task runs on the repo's configured default
+    // model (createQuickTask: `args.model ?? repo.defaultModel`). The picker
+    // used to be a Claude-only enum, which steered every MCP caller into
+    // overriding repos that run other providers.
     baseBranch: z
       .string()
       .optional()
@@ -543,7 +541,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     title: string;
     description: string;
     repoName: string;
-    model?: McpClaudeModel;
     baseBranch?: string;
     app?: string;
     projectId?: string;
@@ -564,7 +561,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       repoId: repo.id,
       title: input.title,
       description: input.description,
-      model: input.model,
       baseBranch: input.baseBranch,
       projectId: input.projectId,
     });
@@ -667,12 +663,7 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
           .describe(
             "If provided, creates a project with this title and assigns all tasks to it",
           ),
-        model: z
-          .enum(MCP_CLAUDE_MODELS)
-          .optional()
-          .describe(
-            'Claude model to use for all tasks ("opus", "sonnet", "haiku", or "fable"). If omitted, uses the repo\'s default model.',
-          ),
+        // Same as taskArgs: every task in the batch runs on the repo default.
         baseBranch: z
           .string()
           .optional()
@@ -709,7 +700,6 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
             repoId: repo.id,
             tasks: tasksForMutation,
             projectTitle: input.projectTitle,
-            model: input.model,
             baseBranch: input.baseBranch,
           },
         );
@@ -824,7 +814,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
     defineTool({
       name: "create_eva_doc",
       description:
-        "Create a design document (PRD) stored on the Eva platform, attached to one of your repos. This is Eva's own document store — NOT a connected repo's database (use get_document for that).",
+        "Create a design document (PRD) stored on the Eva platform, attached to one of your repos. This is Eva's own document store — NOT a connected repo's database (use get_document for that). When called from a session, quick task, or project sandbox, the document is linked to that chat: it appears in the chat's Documents tab and in the repo Documents list.",
       mutating: true,
       input: {
         repoName: z
@@ -854,6 +844,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             repoId: repo.id,
             title,
             content,
+            ...(entityKind !== undefined && entityId !== undefined
+              ? { sourceKind: entityKind, sourceId: entityId }
+              : {}),
           },
         );
 
@@ -1021,6 +1014,8 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
 Provide a self-contained HTML document (inline CSS/JS, or CDN links). Eva stores it and hosts it in a sandboxed iframe at the returned viewUrl. The link is viewable by members of the bound team while signed in to Eva.
 
+When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
+
 Do NOT use this for session walkthrough recordings, screen captures, or screenshots. For those, save the file under repo-root recordings/ or screenshots/ with agent-browser and leave it on disk — Eva attaches it to the chat message with the built-in video/image player.`,
       mutating: true,
       input: {
@@ -1059,6 +1054,9 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
             description,
             boundTeamId: resolved.teamId,
             declaredTools: declaredTools ?? [],
+            ...(entityKind !== undefined && entityId !== undefined
+              ? { sourceKind: entityKind, sourceId: entityId }
+              : {}),
           },
         );
 
@@ -1241,6 +1239,40 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
           locked: false,
         });
         return textResult({ locked: false });
+      },
+    }),
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // request_local_computer — Grok Bot webhook (every MCP caller)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "request_local_computer",
+      description:
+        "Wake the user's Grok Bot via their saved webhook when you need their local computer (outside this Vercel sandbox): local files, local apps, or a command on their laptop. Requires Settings → Grok Bot. A 200 only means the Bot started a run — it does not return the result and you must not claim the work finished. The laptop and Grok Bot desktop app must be available if the task needs local execution (default is ask-every-time).",
+      mutating: true,
+      input: {
+        task: z
+          .string()
+          .describe(
+            "Instruction for Grok Bot. Be specific about the local outcome you need.",
+          ),
+      },
+      handler: async ({ task }) => {
+        const { userId } = await getContext();
+        const result = await ctx.runAction(
+          internal.grokBotActions.callWebhook,
+          {
+            userId: userId as Id<"users">,
+            task,
+          },
+        );
+        if (!result.accepted) {
+          return errorResult(result.message);
+        }
+        return textResult(result);
       },
     }),
   );

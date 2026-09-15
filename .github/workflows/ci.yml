@@ -1,0 +1,70 @@
+# PR gate. This exists because #755 and #758 shipped a React hook-order crash
+# to production with no automated check standing in the way. Tests are
+# deliberately excluded — they were flaky and kept breaking the gate. Make this
+# a required status check in branch protection so the automerge bot cannot
+# bypass it.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck / lint / compiler / schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Skip the husky `prepare` hook during install.
+      HUSKY: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The schema gate diffs against the merge base, so it needs history.
+          fetch-depth: 0
+
+      # Reads the version from the root package.json `packageManager` field,
+      # which satisfies engines.pnpm (>=10 <11).
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Every step below runs even after an earlier one fails, so one push
+      # reports every problem instead of one per round trip.
+
+      # tsc only — `convex codegen` must never run in automation because it
+      # uploads to the linked deployment. convex/_generated is checked in, so
+      # `tsc -p convex/tsconfig.json` resolves without it.
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: pnpm typecheck
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: pnpm lint
+
+      # Fails on a new React Compiler bailout that is not in the baseline.
+      - name: React Compiler bailouts
+        if: ${{ !cancelled() }}
+        run: node scripts/compiler-check.mjs
+
+      # Blocks a Convex schema field/table/union member being removed while
+      # live rows may still hold it. See docs/eva-convex.md > Migrations.
+      - name: Schema narrowing gate
+        if: ${{ !cancelled() }}
+        env:
+          # On push, GITHUB_BASE_REF is empty; compare against the pushed-from
+          # commit instead so direct-to-main commits are covered too.
+          SCHEMA_NARROWING_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: node scripts/check-schema-narrowing.mjs

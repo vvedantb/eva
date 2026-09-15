@@ -23,19 +23,35 @@ const source = readFileSync(
   "utf8",
 );
 
-/** Public (client-callable) notification functions, with their handler bodies. */
+/**
+ * Public (client-callable) notification functions, with their handler bodies.
+ * A body ends at the next export of *any* kind, not the next public one:
+ * otherwise the last public function swallows the internal functions below it
+ * and inherits their validators.
+ */
 const publicFunctions = (() => {
-  const matches = [
-    ...source.matchAll(/export const (\w+) = (authQuery|authMutation)\(\{/g),
-  ].map((match) => ({ name: match[1], kind: match[2], at: match.index }));
-  return matches.map((entry, index) => ({
-    ...entry,
-    body: source.slice(entry.at, matches[index + 1]?.at ?? source.length),
-  }));
+  const exported = [...source.matchAll(/export const (\w+) = (\w+)\(\{/g)].map(
+    (match) => ({ name: match[1], kind: match[2], at: match.index }),
+  );
+  return exported
+    .map((entry, index) => ({
+      ...entry,
+      body: source.slice(entry.at, exported[index + 1]?.at ?? source.length),
+    }))
+    .filter(
+      (entry) => entry.kind === "authQuery" || entry.kind === "authMutation",
+    );
 })();
 
+/**
+ * The per-row functions: the ones that accept a caller-supplied row id and so
+ * have to compare that row's owner with the caller. Matching the argument
+ * (`id: v.id("notifications")`) rather than the bare validator keeps functions
+ * that only mention the id type — in a returns validator, or in an array of
+ * ids — out of the per-row assertions below.
+ */
 const idScoped = publicFunctions.filter((entry) =>
-  entry.body.includes('v.id("notifications")'),
+  entry.body.includes('id: v.id("notifications")'),
 );
 
 describe("notification ownership", () => {

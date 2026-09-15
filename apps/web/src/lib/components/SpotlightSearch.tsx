@@ -11,7 +11,10 @@ import {
   Dialog,
   DialogContent,
   CommandShortcut,
+  motionFast,
+  motionStagger,
 } from "@eva/ui";
+import { m } from "motion/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -177,25 +180,34 @@ export function SpotlightSearch() {
             </CommandEmpty>
             {groups.map((group) => (
               <CommandGroup key={group.type} heading={GROUP_LABEL[group.type]}>
-                {group.items.map((hit) => {
+                {group.items.map((hit, index) => {
                   const Icon =
                     hit.type === "page"
                       ? iconForPageTitle(hit.title)
                       : TYPE_ICON[hit.type];
                   return (
-                    <CommandItem
+                    <m.div
                       key={`${hit.type}:${hit.href}`}
-                      value={`${hit.type} ${hit.title} ${hit.subtitle} ${hit.href}`}
-                      onSelect={() => handleSelect(hit.href)}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        ...motionFast,
+                        delay: motionStagger(index, 0.02, 0.08),
+                      }}
                     >
-                      <Icon size={16} className="text-muted-foreground" />
-                      <MarqueeOnHover className="min-w-0 flex-1">
-                        {hit.title}
-                      </MarqueeOnHover>
-                      <CommandShortcut className="max-w-[40%] truncate normal-case tracking-normal">
-                        {hit.subtitle}
-                      </CommandShortcut>
-                    </CommandItem>
+                      <CommandItem
+                        value={`${hit.type} ${hit.title} ${hit.subtitle} ${hit.href}`}
+                        onSelect={() => handleSelect(hit.href)}
+                      >
+                        <Icon size={16} className="text-muted-foreground" />
+                        <MarqueeOnHover className="min-w-0 flex-1">
+                          {hit.title}
+                        </MarqueeOnHover>
+                        <CommandShortcut className="max-w-[40%] truncate normal-case tracking-normal">
+                          {hit.subtitle}
+                        </CommandShortcut>
+                      </CommandItem>
+                    </m.div>
                   );
                 })}
               </CommandGroup>

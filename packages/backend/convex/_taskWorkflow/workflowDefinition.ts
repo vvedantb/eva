@@ -11,6 +11,7 @@ import { taskCompleteEvent } from "./events";
 import { buildQuickTaskRetryDelayMs } from "./recovery";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
+import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
 
 const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
@@ -178,7 +179,7 @@ export const taskExecutionWorkflow = workflow.define({
         } catch (error) {
           preserveSandboxOnFailure = true;
           finalSuccess = false;
-          finalError = `Task committed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${error instanceof Error ? error.message : String(error)}`;
+          finalError = formatDelayedPublishFailureError("task", error);
           console.error(
             `[task-workflow] run=${args.runId} pushSandboxBranch failed: ${error instanceof Error ? error.message : String(error)}`,
           );

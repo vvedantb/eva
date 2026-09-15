@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityTasks,
   Reasoning,
@@ -17,6 +17,12 @@ import {
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  silentStreamDelayMs,
+  thinkingHeartbeatLabel,
+  thinkingHeartbeatSeconds,
+  visibleActivityKey,
+} from "@/lib/components/streamingActivityHeartbeat";
 
 /**
  * How long an empty-but-live activity payload is treated as ordinary startup
@@ -41,6 +47,88 @@ function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
   );
 }
 
+function SimpleViewHeartbeat({
+  lastOutputAt,
+  isStreaming,
+  startedAt,
+}: {
+  lastOutputAt: number;
+  isStreaming: boolean;
+  startedAt?: number;
+}) {
+  const sinceLastOutput = useElapsedSeconds(
+    lastOutputAt,
+    Boolean(isStreaming && startedAt),
+  );
+  const heartbeatSeconds = thinkingHeartbeatSeconds(sinceLastOutput);
+  if (heartbeatSeconds == null) return null;
+  return (
+    <div className="text-muted-foreground text-sm tabular-nums">
+      {thinkingHeartbeatLabel(heartbeatSeconds)}
+    </div>
+  );
+}
+
+function useSilentStreamNotice(
+  activity: string | undefined,
+  isStreaming: boolean,
+  startedAt: number | undefined,
+) {
+  const [silent, setSilent] = useState(false);
+  useEffect(() => {
+    if (!isStreaming || !isEmptyActivityPayload(activity)) {
+      setSilent(false);
+      return;
+    }
+    const remaining = silentStreamDelayMs(
+      startedAt,
+      Date.now(),
+      SILENT_STREAM_NOTICE_AFTER_SECONDS,
+    );
+    if (remaining <= 0) {
+      setSilent(true);
+      return;
+    }
+    setSilent(false);
+    const timer = window.setTimeout(() => setSilent(true), remaining);
+    return () => window.clearTimeout(timer);
+  }, [activity, isStreaming, startedAt]);
+  return silent;
+}
+
+/**
+ * Clock of last *visible* work. Reasoning-token updates leave this alone so
+ * a long think still heartbeats instead of looking like a hang.
+ */
+function useLastVisibleOutputAt(
+  activity: string | undefined,
+  isStreaming: boolean,
+  startedAt?: number,
+) {
+  const visibleKey = visibleActivityKey(activity);
+  const prevKeyRef = useRef(visibleKey);
+  const prevStartedAtRef = useRef(startedAt);
+  const [lastOutputAt, setLastOutputAt] = useState(() =>
+    visibleKey ? Date.now() : (startedAt ?? Date.now()),
+  );
+
+  useEffect(() => {
+    if (startedAt !== prevStartedAtRef.current) {
+      prevStartedAtRef.current = startedAt;
+      prevKeyRef.current = visibleKey;
+      setLastOutputAt(visibleKey ? Date.now() : (startedAt ?? Date.now()));
+      return;
+    }
+    if (!isStreaming) return;
+    if (visibleKey !== prevKeyRef.current) {
+      prevKeyRef.current = visibleKey;
+      if (visibleKey) setLastOutputAt(Date.now());
+    }
+  }, [visibleKey, isStreaming, startedAt]);
+
+  return lastOutputAt;
+}
+
 export function StreamingActivityDisplay({
   activity,
   isStreaming = true,
@@ -59,22 +147,23 @@ export function StreamingActivityDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
-  const elapsed = useElapsedSeconds(startedAt, isStreaming);
+  const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
+  const streamIsSilent = useSilentStreamNotice(activity, isStreaming, startedAt);
   if (simpleView) {
-    return isStreaming ? (
-      <SimpleViewWorkingStatus startedAt={startedAt} />
-    ) : null;
+    if (!isStreaming) return null;
+    return (
+      <div className="space-y-1.5">
+        <SimpleViewWorkingStatus startedAt={startedAt} />
+        <SimpleViewHeartbeat
+          lastOutputAt={lastOutputAt}
+          isStreaming={isStreaming}
+          startedAt={startedAt}
+        />
+      </div>
+    );
   }
 
   const steps = parseActivitySteps(activity);
-
-  // An empty payload means the daemon is publishing and the provider stream
-  // has produced nothing parseable — indistinguishable from "no payload yet"
-  // to `parseActivitySteps`, and from a hang to the reader. Say so rather than
-  // shimmering "Working..." over a stream that has gone quiet.
-  const streamIsSilent =
-    isEmptyActivityPayload(activity) &&
-    elapsed >= SILENT_STREAM_NOTICE_AFTER_SECONDS;
 
   return (
     <ActivityTasks

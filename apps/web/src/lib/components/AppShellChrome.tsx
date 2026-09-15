@@ -38,15 +38,19 @@ export function AppShellChrome({
             <ShortcutsProvider>
               <SearchProvider>
                 <FollowProvider>
-                  {/* Embedded documents (inbox preview pane) render content
-                      only: the host window already owns the sidebar, search,
-                      follow overlay and toast streams. Providers stay — pages
-                      consume them regardless of where they render. */}
-                  {embedded ? null : <Sidebar />}
                   {/* Wraps the outlet rather than sitting beside it: the
                       launcher popover keeps a live chat mounted, so it has to
-                      live above the routed content that comes and goes. */}
+                      live above the routed content that comes and goes.
+                      The sidebar is inside it — first, so the DOM order of the
+                      fixed z-50 chrome is unchanged — because below `lg` the
+                      mobile header owns Ave's summon button and reads the
+                      launcher state from its context. */}
                   <AveLauncherProvider enabled={!embedded}>
+                    {/* Embedded documents (inbox preview pane) render content
+                        only: the host window already owns the sidebar, search,
+                        follow overlay and toast streams. Providers stay — pages
+                        consume them regardless of where they render. */}
+                    {embedded ? null : <Sidebar />}
                     {children}
                   </AveLauncherProvider>
                   {embedded ? null : (

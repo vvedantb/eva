@@ -278,7 +278,8 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
       if (
         block.name === "TodoRead" ||
         block.name === "TaskGet" ||
-        block.name === "TaskList"
+        block.name === "TaskList" ||
+        block.name === "ExitPlanMode"
       ) {
         continue;
       }

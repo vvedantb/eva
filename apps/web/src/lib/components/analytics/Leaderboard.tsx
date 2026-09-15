@@ -1,6 +1,8 @@
 "use client";
 
 import { IconStar, IconUser } from "@tabler/icons-react";
+import { m } from "motion/react";
+import { motionBase, motionStagger } from "@eva/ui";
 import { Widget } from "@/lib/components/Widget";
 import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
@@ -31,7 +33,6 @@ export function Leaderboard({ entries }: LeaderboardProps) {
     <Widget
       title="Top contributors"
       subtitle="Who shipped the most PRs and tasks."
-      className="animate-in fade-in duration-300"
     >
       {entries.length === 0 ? (
         <div className="py-8 text-center text-muted-foreground">
@@ -42,7 +43,13 @@ export function Leaderboard({ entries }: LeaderboardProps) {
           {entries.map((entry, index) => {
             const isTop = index === 0;
             return (
-              <div key={entry.clerkId} className="space-y-2">
+              <m.div
+                key={entry.clerkId}
+                className="space-y-2"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...motionBase, delay: motionStagger(index) }}
+              >
                 <div className="group flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
                     <IconUser size={16} />
@@ -66,7 +73,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
                   max={maxActivity}
                   tone={isTop ? "top" : "default"}
                 />
-              </div>
+              </m.div>
             );
           })}
         </div>

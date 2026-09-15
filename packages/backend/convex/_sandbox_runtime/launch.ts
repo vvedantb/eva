@@ -5,6 +5,10 @@ import { quote } from "shell-quote";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
 import { execHandle, requireEnv } from "./helpers";
+import {
+  resolvePublicConvexCloudUrl,
+  resolvePublicConvexSiteUrl,
+} from "../_env/publicConvexUrls";
 import { writeSandboxFile } from "./sandboxFiles";
 import { streamingHeartbeatHmacMessage } from "./callbackAuth";
 import { entityDaemonPaths } from "./daemonPaths";
@@ -112,15 +116,17 @@ function computeScopedHmac(message: string): string | null {
  * reserved by Convex and cannot be overridden, hence the EVA_ pair.
  */
 function publicConvexUrl(): string {
-  return process.env.EVA_PUBLIC_CONVEX_URL ?? requireEnv("CONVEX_CLOUD_URL");
+  return (
+    resolvePublicConvexCloudUrl(process.env) ?? requireEnv("CONVEX_CLOUD_URL")
+  );
 }
 
 /** Resolves the Convex site URL used for HTTP actions, falling back from cloud URL. */
 function resolveConvexSiteUrl(convexCloudUrl: string): string {
-  const configured =
-    process.env.EVA_PUBLIC_CONVEX_SITE_URL ?? process.env.CONVEX_SITE_URL;
-  if (configured) return configured;
-  return convexCloudUrl.replace(".convex.cloud", ".convex.site");
+  return (
+    resolvePublicConvexSiteUrl(process.env, convexCloudUrl) ??
+    convexCloudUrl.replace(".convex.cloud", ".convex.site")
+  );
 }
 
 /**

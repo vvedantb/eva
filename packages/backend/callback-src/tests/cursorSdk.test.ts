@@ -22,6 +22,7 @@ import {
   readCursorCostSnapshot,
   resolveCursorTurnCostUsd,
   runTurnWithResourceExhaustedRetries,
+  canReplaceCursorAgent,
   shouldRetryStalledCursorCreate,
   shouldRetryStalledCursorResume,
   waitForCursorPhase,
@@ -84,6 +85,24 @@ test("only a pre-output resumed Cursor stall is safe to replay", () => {
   ).toBe(false);
 });
 
+test("only a missing Cursor store may replace the saved agent", () => {
+  expect(canReplaceCursorAgent(new Error("agent_not_found"))).toBe(true);
+  const gone: Error & { code?: string } = new Error("Agent not found");
+  gone.code = "agent_not_found";
+  expect(canReplaceCursorAgent(gone)).toBe(true);
+  expect(
+    canReplaceCursorAgent(
+      new CursorPhaseTimeoutError("waiting for the first model event", 300_000),
+    ),
+  ).toBe(false);
+  expect(
+    canReplaceCursorAgent(
+      new CursorPhaseTimeoutError("starting the model run", 60_000),
+    ),
+  ).toBe(false);
+  expect(canReplaceCursorAgent(new Error("resource_exhausted"))).toBe(false);
+});
+
 test("only a stalled Cursor creation is replayed as a creation", () => {
   expect(
     shouldRetryStalledCursorCreate(
@@ -139,7 +158,7 @@ test("Cursor silence policy distinguishes safe startup recovery from visible wor
       toolInFlight: false,
       compactionInFlight: false,
     }),
-  ).toBe(60_000);
+  ).toBe(300_000);
   // The pre-visible window rolls from the LAST event of any type: a stream
   // still emitting lifecycle events (status, usage, summaries) is alive, so
   // only total silence trips the stall — never a slow warm-up that talks.
@@ -151,7 +170,7 @@ test("Cursor silence policy distinguishes safe startup recovery from visible wor
       toolInFlight: false,
       compactionInFlight: false,
     }),
-  ).toBe(50_000);
+  ).toBe(290_000);
   // Once reasoning/text/tools are visible, a normal one-minute model pause is
   // not fatal. A much longer safety bound still catches a genuinely dead run.
   expect(

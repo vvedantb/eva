@@ -1,8 +1,12 @@
 import { api } from "@eva/backend";
-import type { AIModel, Id, ModelTraitsExecutionArgs } from "@eva/backend";
+import type {
+  AIModel,
+  Id,
+  ModelTraitsExecutionArgs,
+} from "@eva/backend";
 import type { ModelAccount } from "@eva/ui";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
@@ -73,6 +77,7 @@ export interface SessionSendOptions {
    * harness as bare text.
    */
   skipReviewComments?: boolean;
+  sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
 interface UseSessionSendParams {
@@ -87,6 +92,8 @@ interface UseSessionSendParams {
   ) => Id<"userProviderAccounts"> | undefined;
   accounts: ReadonlyArray<ModelAccount>;
   messages: SessionMessage[];
+  /** Cached-hidden shells skip the turn-status subscription. */
+  isRouteActive?: boolean;
 }
 
 export function useSessionSend({
@@ -98,6 +105,7 @@ export function useSessionSend({
   resolveAccountId,
   accounts,
   messages,
+  isRouteActive = true,
 }: UseSessionSendParams) {
   const review = usePendingReviewComments();
   const addMessage = useMutation(api.sessions.addMessage).withOptimisticUpdate(
@@ -109,7 +117,10 @@ export function useSessionSend({
   const cancelExecutionMutation = useMutation(
     api.sessionWorkflow.cancelExecution,
   );
-  const turnStatus = useQuery(api.turns.getSessionStatus, { sessionId });
+  const turnStatus = useHeldQuery(
+    api.turns.getSessionStatus,
+    isRouteActive ? { sessionId } : "skip",
+  );
 
   // The persisted open turn is canonical. Message shape only covers the first
   // render while that subscription loads, so a stale empty bubble cannot keep
@@ -162,6 +173,9 @@ export function useSessionSend({
         reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
         providerAccountId: accountId,
         attachmentStorageIds,
+        ...(options?.sourceProposedPlanId !== undefined
+          ? { sourceProposedPlanId: options.sourceProposedPlanId }
+          : {}),
       }),
     ])
       .catch(async (error) => {

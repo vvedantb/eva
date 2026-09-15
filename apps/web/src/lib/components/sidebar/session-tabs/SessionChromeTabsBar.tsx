@@ -31,6 +31,8 @@ import {
 } from "@/lib/components/sidebar/session-tabs/SessionTabsOverflowMenu";
 import { partitionSessionsForChromeTabs } from "@/lib/components/sidebar/session-tabs/sessionTabsPartition";
 import { entityPathSegment } from "@/lib/numId";
+import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type ArchivedListItem = FunctionReturnType<
@@ -48,6 +50,8 @@ interface SessionChromeTabsBarProps {
  */
 export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
   const { settings } = useSessionsSidebarSettings();
+  const altHeld = useAltHeld();
+  const { archive } = useArchiveSession();
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/sessions",
@@ -181,11 +185,16 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
                 onArchiveRequest={(session, groupRepo) => {
                   const pathSegment = entityPathSegment(session);
                   if (!pathSegment) return;
-                  setSessionToArchive({
-                    session,
-                    repo: groupRepo,
-                    pathSegment,
-                  });
+                  const target = { session, repo: groupRepo, pathSegment };
+                  requestConfirm(
+                    altHeld,
+                    () => setSessionToArchive(target),
+                    () => {
+                      void archive(target, pathname, () =>
+                        setSessionToArchive(null),
+                      );
+                    },
+                  );
                 }}
               />
             ))

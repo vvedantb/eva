@@ -8,14 +8,12 @@ import {
   PromptInputTools,
   toast,
   cn,
+  motionFast,
   motionSpring,
-  type ModelAccount,
-  type ModelOption,
   type PromptInputMessage,
   usePromptInputController,
 } from "@eva/ui";
-import { LayoutGroup, m } from "motion/react";
-import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
 import {
   MAX_CHAT_ATTACHMENTS,
@@ -31,12 +29,7 @@ import {
 } from "@/lib/components/chat/MentionTextarea";
 import { IconPlayerStop } from "@tabler/icons-react";
 import { useId, type RefObject } from "react";
-import type {
-  AIModel,
-  Id,
-  ReasoningLevel,
-  StoredModelTraits,
-} from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { type SlashItem } from "@/lib/components/mentions";
 import { useComposerCompact } from "@/lib/components/chat/_components/useComposerCompact";
 
@@ -70,19 +63,12 @@ export function ComposerInputChrome({
   isExecuting,
   isInputDisabled,
   hasPendingContext,
-  model,
-  setModel,
-  modelOptions,
-  accounts,
-  accountId,
-  onAccountChange,
-  displayTraits,
-  onTraitsChange,
   onPromptSubmit,
   onCancel,
   seedMentionMap,
   seedSkillMap,
   messageHistory,
+  allowEmptySubmit,
 }: {
   repoId: Id<"githubRepos">;
   repoBasePath: string;
@@ -94,24 +80,12 @@ export function ComposerInputChrome({
   isExecuting: boolean;
   isInputDisabled: boolean;
   hasPendingContext: boolean;
-  model: AIModel;
-  setModel: (model: AIModel) => void;
-  modelOptions: ReadonlyArray<ModelOption<AIModel>>;
-  accounts?: ReadonlyArray<ModelAccount>;
-  accountId?: string | null;
-  onAccountChange?: (accountId: string | null) => void;
-  displayTraits?: {
-    effortLevel: ReasoningLevel | undefined;
-    thinkingEnabled: boolean;
-    use1mContext: boolean;
-    fastMode: boolean;
-  };
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
   onPromptSubmit: (message: PromptInputMessage) => void | Promise<void>;
   onCancel: () => Promise<void>;
   seedMentionMap?: Map<string, string>;
   seedSkillMap?: Map<string, string>;
   messageHistory: string[];
+  allowEmptySubmit?: boolean;
 }) {
   const { textInput, attachments } = usePromptInputController();
   // `layoutId` is global unless a LayoutGroup namespaces it, and several
@@ -148,34 +122,36 @@ export function ComposerInputChrome({
       transition={motionSpring}
       className="flex min-w-0 items-center gap-0.5"
     >
-      <ModelSelectWithTraits
-        value={model}
-        options={modelOptions}
-        onValueChange={setModel}
-        accounts={accounts}
-        accountId={accountId}
-        onAccountChange={onAccountChange}
-        traits={displayTraits}
-        onTraitsChange={onTraitsChange}
-      />
       <ComposerSpeechButton disabled={isInputDisabled} />
-      {isExecuting ? (
-        <Button
-          size="icon-sm"
-          type="button"
-          variant="destructive"
-          className="rounded-full"
-          onClick={onCancel}
-          aria-label="Stop Eva"
-          title="Stop Eva"
-        >
-          <IconPlayerStop className="size-4" />
-        </Button>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {isExecuting ? (
+          <m.div
+            key="composer-stop"
+            className="inline-flex"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={motionFast}
+          >
+            <Button
+              size="icon-sm"
+              type="button"
+              variant="destructive"
+              className="rounded-full"
+              onClick={onCancel}
+              aria-label="Stop Eva"
+              title="Stop Eva"
+            >
+              <IconPlayerStop className="size-4" />
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
       <ChatBodySubmit
         disabled={isInputDisabled}
         isExecuting={isExecuting}
         hasPendingContext={hasPendingContext}
+        allowEmptySubmit={allowEmptySubmit}
       />
     </m.div>
   );
@@ -188,62 +164,62 @@ export function ComposerInputChrome({
           colorVariant="colorful"
           className={compact ? "rounded-full" : "rounded-surface"}
         >
-        <PromptInput
-          data-mention-popup-anchor=""
-          onSubmit={onPromptSubmit}
-          accept={CHAT_ATTACHMENT_ACCEPT}
-          multiple
-          maxFiles={MAX_CHAT_ATTACHMENTS}
-          maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
-          onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
-          inputGroupClassName={cn(
-            // Height interpolates to/from `auto` so the conversation viewport
-            // grows with the composer instead of jumping when the pill snaps.
-            "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
-            compact
-              ? "h-12 items-center rounded-full py-1"
-              : "h-auto rounded-surface",
-          )}
-        >
-          <ChatAttachmentPreview />
-          {compact ? (
-            <InputGroupAddon
-              align="inline-start"
-              className="order-first gap-1 py-0 pl-1.5 pr-0 has-[>button]:ml-0"
-            >
-              {leftTools}
-            </InputGroupAddon>
-          ) : null}
-          <MentionTextarea
-            key="composer-editor"
-            ref={mentionRef}
-            repoBasePath={repoBasePath}
-            repoId={repoId}
-            skillItems={skillItems}
-            skillsSettingsHref={skillsSettingsHref}
-            placeholder={placeholder}
-            initialMentionMap={seedMentionMap}
-            initialSkillMap={seedSkillMap}
-            history={messageHistory}
-            enableAttachmentPaste
-            completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
-            className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
-          />
-          {compact ? (
-            <InputGroupAddon
-              align="inline-end"
-              className="order-last gap-1 py-0 pr-1.5 pl-1 has-[>button]:mr-0"
-            >
-              {rightTools}
-            </InputGroupAddon>
-          ) : (
-            <PromptInputFooter className="max-sm:gap-y-2 px-3 pb-3 pt-0">
-              <PromptInputTools>{leftTools}</PromptInputTools>
-              {rightTools}
-            </PromptInputFooter>
-          )}
-        </PromptInput>
-      </BorderBeam>
+          <PromptInput
+            data-mention-popup-anchor=""
+            onSubmit={onPromptSubmit}
+            accept={CHAT_ATTACHMENT_ACCEPT}
+            multiple
+            maxFiles={MAX_CHAT_ATTACHMENTS}
+            maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
+            onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
+            inputGroupClassName={cn(
+              // Height interpolates to/from `auto` so the conversation viewport
+              // grows with the composer instead of jumping when the pill snaps.
+              "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
+              compact
+                ? "h-12 items-center rounded-full py-1"
+                : "h-auto rounded-surface",
+            )}
+          >
+            <ChatAttachmentPreview />
+            {compact ? (
+              <InputGroupAddon
+                align="inline-start"
+                className="order-first gap-1 py-0 pl-1.5 pr-0 has-[>button]:ml-0"
+              >
+                {leftTools}
+              </InputGroupAddon>
+            ) : null}
+            <MentionTextarea
+              key="composer-editor"
+              ref={mentionRef}
+              repoBasePath={repoBasePath}
+              repoId={repoId}
+              skillItems={skillItems}
+              skillsSettingsHref={skillsSettingsHref}
+              placeholder={placeholder}
+              initialMentionMap={seedMentionMap}
+              initialSkillMap={seedSkillMap}
+              history={messageHistory}
+              enableAttachmentPaste
+              completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
+              className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
+            />
+            {compact ? (
+              <InputGroupAddon
+                align="inline-end"
+                className="order-last gap-1 py-0 pr-1.5 pl-1 has-[>button]:mr-0"
+              >
+                {rightTools}
+              </InputGroupAddon>
+            ) : (
+              <PromptInputFooter className="max-sm:gap-y-2 px-3 pb-3 pt-0">
+                <PromptInputTools>{leftTools}</PromptInputTools>
+                {rightTools}
+              </PromptInputFooter>
+            )}
+          </PromptInput>
+        </BorderBeam>
       </div>
     </LayoutGroup>
   );
@@ -253,10 +229,12 @@ function ChatBodySubmit({
   disabled,
   isExecuting,
   hasPendingContext,
+  allowEmptySubmit,
 }: {
   disabled: boolean;
   isExecuting: boolean;
   hasPendingContext: boolean;
+  allowEmptySubmit?: boolean;
 }) {
   const { textInput, attachments } = usePromptInputController();
   const isEmpty =
@@ -264,7 +242,9 @@ function ChatBodySubmit({
 
   return (
     <PromptInputSubmit
-      disabled={disabled || (isEmpty && !hasPendingContext)}
+      disabled={
+        disabled || (isEmpty && !hasPendingContext && !allowEmptySubmit)
+      }
       className="size-9"
       title={isExecuting ? "Queue message" : "Send message"}
     />

@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Input, Spinner, Switch } from "@eva/ui";
+import { Input, Spinner, Switch, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
@@ -38,7 +39,7 @@ export function SandboxAutoStopSettingsClient() {
     );
   }
 
-  const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const browserTimeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const saveSettings = (args: {
     enabled: boolean;
@@ -75,27 +76,36 @@ export function SandboxAutoStopSettingsClient() {
             />
           }
         />
-        {settings.enabled ? (
-          <div className="px-4 py-3">
-            <SettingsField
-              label="Stop time"
-              description={`Uses ${settings.timeZone}. The sweep runs within 15 minutes of this time.`}
+        <AnimatePresence initial={false}>
+          {settings.enabled ? (
+            <m.div
+              key="sandbox-autostop-time"
+              className="px-4 py-3"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
             >
-              <Input
-                type="time"
-                className="w-40"
-                value={settings.time}
-                onChange={(event) =>
-                  saveSettings({
-                    enabled: settings.enabled,
-                    time: event.target.value,
-                    timeZone: browserTimeZone,
-                  })
-                }
-              />
-            </SettingsField>
-          </div>
-        ) : null}
+              <SettingsField
+                label="Stop time"
+                description={`Uses ${settings.timeZone}. The sweep runs within 15 minutes of this time.`}
+              >
+                <Input
+                  type="time"
+                  className="w-40"
+                  value={settings.time}
+                  onChange={(event) =>
+                    saveSettings({
+                      enabled: settings.enabled,
+                      time: event.target.value,
+                      timeZone: browserTimeZone,
+                    })
+                  }
+                />
+              </SettingsField>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
       </SettingsSection>
     </SettingsPage>
   );

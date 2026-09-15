@@ -1,4 +1,6 @@
 import type { AIModel, BackgroundAgentEntry, Id } from "@eva/backend";
+import type { ModelAccount } from "@eva/ui";
+import type { ChatBodyMessage } from "./chatBodyUtils";
 
 /**
  * Which chat a sandbox surface belongs to. Sessions, quick tasks and projects
@@ -39,6 +41,26 @@ export function chatEntityKeys(entity: ChatEntityRef): ChatEntityKeys {
 }
 
 /**
+ * What the usage-limit recovery card needs from a surface. `undefined` when
+ * this viewer cannot move the chat onto another account: a read-only session,
+ * or a task/project viewed by someone other than its owner (task and project
+ * chat are owner-sticky; the account picker is gated the same way).
+ */
+export interface UsageLimitRecoveryInputs {
+  messages: ReadonlyArray<ChatBodyMessage>;
+  accounts: ReadonlyArray<ModelAccount>;
+  /** Maps a picker id string back to the branded id from the live docs. */
+  resolveAccountId: (
+    id: string | null,
+  ) => Id<"userProviderAccounts"> | undefined;
+  /** undefined while the entity query loads; null = Team credential. */
+  currentAccountId: Id<"userProviderAccounts"> | null | undefined;
+  /** Persists the sticky account and waits for the daemon handoff. */
+  onSwitchAccount: (id: Id<"userProviderAccounts"> | null) => Promise<void>;
+  isSandboxActive: boolean;
+}
+
+/**
  * What a sandbox chat surface has to tell the shared pre-input stack
  * (`SandboxChatPreInput`). Deliberately the minimum that stack reads — extend
  * it when a shared piece actually needs more, not before.
@@ -59,6 +81,8 @@ export interface SandboxChatSurface {
    */
   compactionReadOnly: boolean;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
+  /** What the usage-limit recovery card needs, or nothing when it cannot show. */
+  usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
   /** Sends a harness slash command as a plain user message. */
   onSendCommand: (command: string) => void;
 }

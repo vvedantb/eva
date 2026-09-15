@@ -194,8 +194,11 @@ export const CURSOR_LOCAL_STATE_FILE =
   CURSOR_RUNTIME_HOME_DIR + "/" + CURSOR_STATE_FILE;
 export const CURSOR_PERSIST_STATE_FILE =
   CURSOR_PERSIST_DIR + "/" + CURSOR_STATE_FILE;
-/** Cursor SDK JSONL agent store — on the persist volume so conversation state
- * (agents/runs/checkpoints) survives sandbox stop/resume. */
+/** State root for the Cursor SDK's SQLite agent store (`index.db` plus a
+ * per-agent `store.db`) — on the persist volume so conversation state
+ * (agents/runs/checkpoints) survives sandbox stop/resume. Sandboxes that ran
+ * the earlier JSONL store may still hold its `*.ndjson` files here; they are
+ * ignored. */
 export const CURSOR_SDK_STORE_DIR = CURSOR_PERSIST_DIR + "/sdk";
 const CLAUDE_SESSION_PROJECT_DIR = WORK_DIR.replace(/\//g, "-");
 export const CLAUDE_LOCAL_PROJECT_DIR =
@@ -251,7 +254,8 @@ export const claudeEffort =
     : "";
 
 const CODEX_REASONING_EFFORT: Record<string, string> = {
-  // GPT-5.5: none/low/medium/high/xhigh. GPT-5.6 also accepts `max`.
+  // GPT-5.6 Sol/Terra/Luna: none through `max`. GPT-6 Astra accepts
+  // low through `max` — the picker never offers "off" for it.
   off: "none",
   low: "low",
   medium: "medium",
@@ -301,11 +305,11 @@ export const normalizedCodexModel = MODEL.startsWith("codex:")
 export const normalizedOpencodeModel = MODEL.startsWith("opencode:")
   ? MODEL.slice("opencode:".length)
   : MODEL;
-// Eva's cursor model ids bake a reasoning level into the slug (grok-4.5-low,
-// gpt-5.5-low). The SDK rejects those: its model list carries base ids only
-// (grok-4.5, gpt-5.5), with reasoning exposed as a per-model parameter. Split
-// here; the runner discovers the parameter id at runtime and degrades to the
-// base id when the model has none (resolveCursorModelSelection).
+// Legacy Eva cursor model ids baked a reasoning level into the slug (the
+// retired grok-4.5-low, gpt-5.5-low). The SDK rejects those: its model list
+// carries base ids only, with reasoning exposed as a per-model parameter.
+// Split here; the runner discovers the parameter id at runtime and degrades
+// to the base id when the model has none (resolveCursorModelSelection).
 // xhigh before high: "grok-4.6-xhigh".endsWith("-high") is also true.
 const CURSOR_REASONING_LEVELS = ["xhigh", "medium", "low", "high"];
 

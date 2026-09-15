@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { defineTool, type EvaTool } from "./registry";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
@@ -17,6 +16,7 @@ import {
   textResult,
   type McpCredentials,
 } from "./toolShared";
+import { defineTool, type EvaTool } from "./registry";
 
 /**
  * Tools that inspect and operate the chats a caller already has: what exists,
@@ -32,12 +32,10 @@ export function entityTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  const {
-    assertRepoAccess,
-    resolveRepoRef,
-    resolveEntityTarget,
-    tokenScopedRepoIds,
-  } = entityAccess(ctx, credentials);
+  // Chat tools use the per-user check only: every chat the user can open in
+  // Eva is reachable, whichever repo minted the token (see entityAccess).
+  const { assertUserRepoAccess, resolveRepoRef, resolveEntityTarget } =
+    entityAccess(ctx, credentials);
 
   // ───────────────────────────────────────────────────────────────────────────
   // list_entities
@@ -82,7 +80,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
         if (repoId !== undefined || repoName !== undefined) {
           const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
           if ("isError" in ref) return ref;
-          await assertRepoAccess(ref.repoId, userId);
+          await assertUserRepoAccess(ref.repoId, userId);
           repos = repos.filter((repo) => repo.id === ref.repoId);
         }
 
@@ -90,7 +88,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           internal.mcp.queries.listEntitiesForUser,
           {
             userId,
-            repoIds: tokenScopedRepoIds(repos.map((repo) => repo.id)),
+            repoIds: repos.map((repo) => repo.id),
             kind,
             status,
             limit,

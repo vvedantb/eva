@@ -38,6 +38,17 @@ const cursorSdkBundle = readFileSync(
   ),
   "utf8",
 );
+const cursorSdkSqliteBundle = readFileSync(
+  join(
+    dirname(createRequire(import.meta.url).resolve("@cursor/sdk")),
+    "../esm/sqlite.js",
+  ),
+  "utf8",
+);
+const callbackBundle = readFileSync(
+  join(testsDir, "../convex/_sandbox_runtime/callbackScript.generated.ts"),
+  "utf8",
+);
 
 const CLAUDE_AGENT_SDK_PIN = "0.3.258";
 
@@ -170,6 +181,28 @@ test("the Cursor SDK still reads the model catalog Eva hands it", () => {
   expect(cursorLoader).toContain(
     "process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog",
   );
+});
+
+// The JSONL store rewrites its whole file on every append and re-parses it on
+// every get, and a resumed `send()` issues one `checkpoints.get` per stored
+// conversation blob — so resume cost grew quadratically and stalled prod turns
+// on the 60s send budget (3 Sep 2026, sessions 174 and 176). Pin the SQLite
+// store here so nothing quietly reintroduces the JSONL one.
+test("the Cursor callback persists agents in the SDK's SQLite store, never the JSONL store", () => {
+  // The pinned SDK still exports the class from its separate sqlite entry.
+  expect(cursorSdkSqliteBundle).toContain("as SqliteLocalAgentStore}");
+
+  expect(cursorLoader).toContain(
+    'const SDK_SQLITE_ENTRY_RELPATH = "/dist/esm/sqlite.js"',
+  );
+  expect(cursorLoader).toContain("SqliteLocalAgentStore.open({");
+  expect(cursorLoader).toContain("stateRoot: CURSOR_SDK_STORE_DIR");
+  expect(cursorLoader).not.toContain("JsonlLocalAgentStore");
+
+  // The sandbox runs the generated bundle, not the source: a stale bundle would
+  // keep shipping the JSONL store no matter what the loader says.
+  expect(callbackBundle).not.toContain("JsonlLocalAgentStore");
+  expect(callbackBundle).toContain("SqliteLocalAgentStore");
 });
 
 test("older snapshots retain the user-local SDK fallback", () => {

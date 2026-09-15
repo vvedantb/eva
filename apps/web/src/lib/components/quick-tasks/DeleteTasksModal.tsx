@@ -17,19 +17,8 @@ import {
 } from "@eva/ui";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
-interface DeleteTasksModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  selectedTaskIds: Set<Id<"agentTasks">>;
-  onSuccess: () => void;
-}
-
-export function DeleteTasksModal({
-  isOpen,
-  onClose,
-  selectedTaskIds,
-  onSuccess,
-}: DeleteTasksModalProps) {
+/** Bulk-deletes selected quick tasks. Shared by the modal and Alt-click bypass. */
+export function useBulkDeleteTasks() {
   const { repoId } = useRepo();
   const removeTask = useMutation(api.agentTasks.remove).withOptimisticUpdate(
     (localStore, args) => {
@@ -45,22 +34,41 @@ export function DeleteTasksModal({
       }
     },
   );
+
+  return async (selectedTaskIds: Set<Id<"agentTasks">>) => {
+    const count = selectedTaskIds.size;
+    const successMessage = `Deleted ${count} task${count === 1 ? "" : "s"}`;
+    await withMutationToast(
+      Promise.all([...selectedTaskIds].map((id) => removeTask({ id }))),
+      successMessage,
+      "Couldn't delete tasks",
+      "tasks-bulk-delete",
+    );
+  };
+}
+
+interface DeleteTasksModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedTaskIds: Set<Id<"agentTasks">>;
+  onSuccess: () => void;
+}
+
+export function DeleteTasksModal({
+  isOpen,
+  onClose,
+  selectedTaskIds,
+  onSuccess,
+}: DeleteTasksModalProps) {
+  const deleteSelected = useBulkDeleteTasks();
   const [isLoading, setIsLoading] = useState(false);
 
   const count = selectedTaskIds.size;
 
   const handleDelete = async () => {
     setIsLoading(true);
-    // Built out here: a ternary inside the `try` bails the React Compiler out
-    // of this whole file. See CLAUDE.md.
-    const successMessage = `Deleted ${count} task${count === 1 ? "" : "s"}`;
     try {
-      await withMutationToast(
-        Promise.all([...selectedTaskIds].map((id) => removeTask({ id }))),
-        successMessage,
-        "Couldn't delete tasks",
-        "tasks-bulk-delete",
-      );
+      await deleteSelected(selectedTaskIds);
       onSuccess();
       onClose();
     } catch {

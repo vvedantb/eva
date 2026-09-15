@@ -363,7 +363,6 @@ export function ProjectCard({
     <BorderBeam
       active
       colorVariant="progress"
-      glow={false}
       className="rounded-surface"
     >
       {cardContent}

@@ -3,9 +3,11 @@ import {
   ConversationContent,
   ConversationEmptyState,
   ConversationScrollButton,
+  motionBase,
   type ModelOption,
   type ModelAccount,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
@@ -14,7 +16,7 @@ import type { TurnCheckpointContext } from "@/lib/components/chat/_components/us
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -143,6 +145,8 @@ interface ChatBodyProps {
   sandboxRunning?: boolean;
   /** Sessions only: turn diff / restore actions on assistant messages. */
   turnCheckpoint?: TurnCheckpointContext;
+  allowEmptySubmit?: boolean;
+  afterMessage?: (messageId: string) => ReactNode;
 }
 
 export function ChatBody({
@@ -184,10 +188,13 @@ export function ChatBody({
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
+  allowEmptySubmit,
+  afterMessage,
 }: ChatBodyProps) {
-  // Simple view hides diffs, sandbox lifecycle banners, and — since it has no
-  // Agents tab to open — the sub-agent CTA row. Quick task / project / session
-  // all render through ChatBody, so this is the one gate.
+  // Sandbox start/stop/reconnect banners are always omitted. Simple view also
+  // hides remaining system alerts, diffs, and — since it has no Agents tab —
+  // the sub-agent CTA row. Quick task / project / session all render through
+  // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
 
@@ -305,8 +312,8 @@ export function ChatBody({
         : undefined;
 
     return (
+      <div key={message._id} className="flex flex-col gap-3">
       <ChatMessage
-        key={message._id}
         message={message}
         repoBasePath={repoBasePath}
         isLatestAssistantTurn={message._id === latestAssistantMessageId}
@@ -330,6 +337,8 @@ export function ChatBody({
         sandboxRunning={sandboxRunning}
         turnCheckpoint={simpleView ? undefined : turnCheckpoint}
       />
+      {afterMessage?.(message._id)}
+      </div>
     );
   };
 
@@ -361,43 +370,64 @@ export function ChatBody({
         <ConversationScrollButton resetKey={conversationId} />
         <ChatJumpRail messages={jumpRailMessages} />
       </Conversation>
-      {isArchived ? null : dockedQuestions ? (
-        <ChatQuestionDock
-          questions={dockedQuestions}
-          onAnswer={handleQuestionAnswer}
-          {...(blockingQuestions
-            ? { onAnswerStructured: handleBlockingAnswer }
-            : {})}
-          isLoading={isAnsweringQuestion}
-        />
-      ) : (
-        <ChatComposer
-          repoId={repoId}
-          repoBasePath={repoBasePath}
-          conversationId={conversationId}
-          queuedMessages={queuedMessages}
-          messageHistory={messageHistory}
-          isExecuting={isExecuting}
-          isInputDisabled={isInputDisabled}
-          placeholder={placeholder}
-          model={model}
-          setModel={setModel}
-          modelOptions={modelOptions}
-          accounts={accounts}
-          accountId={accountId}
-          onAccountChange={onAccountChange}
-          displayTraits={displayTraits}
-          onTraitsChange={onTraitsChange}
-          onSend={onSend}
-          onCancel={onCancel}
-          beforeQueuedContent={beforeQueuedContent}
-          preInputContent={preInputContent}
-          streamingActivity={streamingActivity}
-          streamingTurnId={streamingTargetId}
-          draft={draft}
-          isDraftLoading={isDraftLoading}
-          hasPendingContext={hasPendingContext}
-        />
+      {isArchived ? null : (
+        <AnimatePresence mode="wait" initial={false}>
+          {dockedQuestions ? (
+            <m.div
+              key="question-dock"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionBase}
+            >
+              <ChatQuestionDock
+                questions={dockedQuestions}
+                onAnswer={handleQuestionAnswer}
+                {...(blockingQuestions
+                  ? { onAnswerStructured: handleBlockingAnswer }
+                  : {})}
+                isLoading={isAnsweringQuestion}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="composer"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionBase}
+            >
+              <ChatComposer
+                repoId={repoId}
+                repoBasePath={repoBasePath}
+                conversationId={conversationId}
+                queuedMessages={queuedMessages}
+                messageHistory={messageHistory}
+                isExecuting={isExecuting}
+                isInputDisabled={isInputDisabled}
+                placeholder={placeholder}
+                model={model}
+                setModel={setModel}
+                modelOptions={modelOptions}
+                accounts={accounts}
+                accountId={accountId}
+                onAccountChange={onAccountChange}
+                displayTraits={displayTraits}
+                onTraitsChange={onTraitsChange}
+                onSend={onSend}
+                onCancel={onCancel}
+                beforeQueuedContent={beforeQueuedContent}
+                preInputContent={preInputContent}
+                streamingActivity={streamingActivity}
+                streamingTurnId={streamingTargetId}
+                draft={draft}
+                isDraftLoading={isDraftLoading}
+                hasPendingContext={hasPendingContext}
+                allowEmptySubmit={allowEmptySubmit}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       )}
     </>
   );

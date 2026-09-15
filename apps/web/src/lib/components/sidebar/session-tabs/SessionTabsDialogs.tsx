@@ -1,6 +1,5 @@
 "use client";
 
-import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -18,6 +17,7 @@ import {
   mutationError,
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
+import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -53,11 +53,8 @@ export function SessionTabsDialogs({
   archiveTarget,
   onCloseArchive,
 }: SessionTabsDialogsProps) {
-  const navigate = useNavigate();
   const [isRenaming, setIsRenaming] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const archiveSession = useMutation(api.sessions.archive);
-  const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
+  const { archive, isArchiving } = useArchiveSession();
   const updateSession = useMutation(api.sessions.update);
 
   const saveRename = () => {
@@ -152,31 +149,7 @@ export function SessionTabsDialogs({
               disabled={isArchiving}
               onClick={() => {
                 if (!archiveTarget) return;
-                void (async () => {
-                  setIsArchiving(true);
-                  try {
-                    if (archiveTarget.session.sandboxId) {
-                      await stopSandboxMutation({
-                        sessionId: archiveTarget.session._id,
-                      });
-                    }
-                    await archiveSession({ id: archiveTarget.session._id });
-                    mutationSuccess("Session archived", "session-archive");
-                    if (
-                      pathname.includes(
-                        `/sessions/${archiveTarget.pathSegment}`,
-                      )
-                    ) {
-                      navigate({ to: "/sessions" });
-                    }
-                    onCloseArchive();
-                  } catch {
-                    mutationError("Couldn't archive session", "session-archive");
-                    setIsArchiving(false);
-                    return;
-                  }
-                  setIsArchiving(false);
-                })();
+                void archive(archiveTarget, pathname, onCloseArchive);
               }}
             >
               {isArchiving ? "Archiving…" : "Archive"}

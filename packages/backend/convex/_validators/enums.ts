@@ -36,6 +36,14 @@ export const reactionTargetValidator = v.union(
   v.literal("description"),
 );
 
+/** Composer interaction mode: Build (default) vs Claude-native Plan. */
+export const INTERACTION_MODES = ["default", "plan"] as const;
+export type InteractionMode = (typeof INTERACTION_MODES)[number];
+export const interactionModeValidator = v.union(
+  v.literal("default"),
+  v.literal("plan"),
+);
+
 export const sessionStatusValidator = v.union(
   v.literal("active"),
   v.literal("starting"),

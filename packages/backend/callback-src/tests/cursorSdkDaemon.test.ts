@@ -123,6 +123,7 @@ describe("the daemon preserves durable ownership from the claim response", () =>
       lifecycle: "durable",
       prompt: "Fix the upload.",
       attachmentUrls: ["https://example.test/input.png"],
+      interactionMode: "default",
       turnLease: { turnId: "turn-47", leaseGeneration: 3 },
     });
   });
@@ -132,6 +133,7 @@ describe("the daemon preserves durable ownership from the claim response", () =>
       lifecycle: "legacy",
       prompt: "Legacy turn",
       attachmentUrls: [],
+      interactionMode: "default",
       turnLease: null,
     });
   });
@@ -176,7 +178,13 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
         EVA_MCP_AUTH: "token-123",
         EVA_MCP_BASE_URL: "https://example.convex.site",
       },
-      { lifecycle: "legacy", prompt: "p", attachmentUrls: [], turnLease: null },
+      {
+        lifecycle: "legacy",
+        prompt: "p",
+        attachmentUrls: [],
+        interactionMode: "default",
+        turnLease: null,
+      },
       "/tmp/eva-cursor-turn-1.txt",
     );
     expect(env.EVA_MCP_AUTH).toBe("token-123");
@@ -196,6 +204,7 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
         lifecycle: "durable",
         prompt: "p",
         attachmentUrls: [],
+        interactionMode: "default",
         turnLease: { turnId: "turn-1", leaseGeneration: 3 },
       },
       "/tmp/eva-cursor-turn-2.txt",

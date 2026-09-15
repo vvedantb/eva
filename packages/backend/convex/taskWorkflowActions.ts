@@ -1,9 +1,10 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
+import type { GenericActionCtx } from "convex/server";
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "./githubAuth";
 import { extractPrNumber } from "./_github/helpers";
@@ -18,10 +19,11 @@ import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_taskWorkflow/urls";
 import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
-  mapGitHubDeploymentState,
   isTerminalDeploymentStatus,
   resolveStableDeploymentUrl,
+  type DeploymentStatus,
 } from "./_taskWorkflow/deploymentHelpers";
+import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
 
 // Re-export URL builders for backwards compatibility
 export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
@@ -740,6 +742,99 @@ export const refreshPullRequestBody = internalAction({
   },
 });
 
+type DeploymentPollArgs = {
+  installationId: number;
+  repoOwner: string;
+  repoName: string;
+  repoId: Id<"githubRepos">;
+  branchName: string;
+  deploymentProjectName?: string;
+  attempt: number;
+};
+
+/**
+ * Shared GitHub poll + retry decision. Callers persist onto the run or
+ * session row and schedule the next attempt for their own action.
+ */
+async function runDeploymentPollAttempt(
+  ctx: GenericActionCtx<DataModel>,
+  args: DeploymentPollArgs,
+  opts: {
+    logPrefix: string;
+    persistQueued: () => Promise<void>;
+    persistStatus: (
+      status: DeploymentStatus,
+      deploymentUrl: string | undefined,
+    ) => Promise<void>;
+    reschedule: () => Promise<void>;
+  },
+): Promise<void> {
+  const maybeReschedule = async (): Promise<void> => {
+    if (args.attempt < MAX_POLL_ATTEMPTS) await opts.reschedule();
+  };
+
+  try {
+    const octokit = await getInstallationOctokit(args.installationId);
+    const snapshot = await fetchGitHubDeploymentSnapshot({
+      repos: octokit.rest.repos,
+      owner: args.repoOwner,
+      repo: args.repoName,
+      branch: args.branchName,
+      deploymentProjectName: args.deploymentProjectName,
+    });
+
+    if (snapshot.kind === "missing_branch") {
+      console.log(
+        `${opts.logPrefix} Branch not found for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt} — not yet published or already deleted`,
+      );
+      await maybeReschedule();
+      return;
+    }
+    if (snapshot.kind === "no_deployments") {
+      console.log(
+        `${opts.logPrefix} No deployment found for ${args.repoOwner}/${args.repoName} branch=${args.branchName} sha=${snapshot.commitSha} attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
+      );
+      await maybeReschedule();
+      return;
+    }
+    if (snapshot.kind === "no_project_match") {
+      console.log(
+        `${opts.logPrefix} ${snapshot.environments.length} deployment(s) found but none match project=${args.deploymentProjectName}, envs=[${snapshot.environments.join(", ")}], attempt=${args.attempt}`,
+      );
+      await maybeReschedule();
+      return;
+    }
+    if (snapshot.kind === "no_status") {
+      console.log(
+        `${opts.logPrefix} Deployment ${snapshot.deploymentId} found but no statuses yet, attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
+      );
+      await opts.persistQueued();
+      await maybeReschedule();
+      return;
+    }
+
+    const { url: deploymentUrl, shouldKeepPolling } =
+      await resolveStableDeploymentUrl(
+        ctx,
+        args.repoId,
+        snapshot.perCommitUrl,
+        args.attempt,
+      );
+    console.log(
+      `${opts.logPrefix} ${args.repoOwner}/${args.repoName} branch=${args.branchName}: deployment=${snapshot.deploymentId} env=${snapshot.environment} state=${snapshot.githubState} mapped=${snapshot.mappedStatus} url=${deploymentUrl ?? "none"} project=${args.deploymentProjectName ?? "none"} keepPolling=${shouldKeepPolling}`,
+    );
+    await opts.persistStatus(snapshot.mappedStatus, deploymentUrl);
+    const shouldReschedule =
+      !isTerminalDeploymentStatus(snapshot.mappedStatus) || shouldKeepPolling;
+    if (shouldReschedule) await maybeReschedule();
+  } catch (error) {
+    console.error(
+      `${opts.logPrefix} Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    await maybeReschedule();
+  }
+}
+
 /** Polls GitHub deployment status for a task run branch, scheduling retries until terminal or max attempts. */
 export const pollDeploymentStatus = internalAction({
   args: {
@@ -754,133 +849,29 @@ export const pollDeploymentStatus = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    try {
-      const octokit = await getInstallationOctokit(args.installationId);
-
-      const { data: branch } = await octokit.rest.repos.getBranch({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        branch: args.branchName,
-      });
-      const commitSha = branch.commit.sha;
-
-      const { data: deployments } = await octokit.rest.repos.listDeployments({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        sha: commitSha,
-        per_page: 10,
-      });
-
-      if (deployments.length === 0) {
-        console.log(
-          `[deployment-poll] No deployment found for ${args.repoOwner}/${args.repoName} branch=${args.branchName} sha=${commitSha} attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
-        );
-        if (args.attempt < MAX_POLL_ATTEMPTS) {
-          await ctx.scheduler.runAfter(
-            POLL_INTERVAL_MS,
-            internal.taskWorkflowActions.pollDeploymentStatus,
-            { ...args, attempt: args.attempt + 1 },
-          );
-        }
-        return null;
-      }
-
-      const projectNameLower = args.deploymentProjectName?.toLowerCase();
-      const matchedDeployment = projectNameLower
-        ? deployments.find((d) =>
-            d.environment.toLowerCase().includes(projectNameLower),
-          )
-        : undefined;
-      const targetDeployment = matchedDeployment ?? deployments[0];
-
-      // If we have a project name filter but no match, keep polling instead of
-      // falling back to an unrelated deployment (e.g. a faster-building monorepo app).
-      if (projectNameLower && !matchedDeployment) {
-        console.log(
-          `[deployment-poll] ${deployments.length} deployment(s) found but none match project=${args.deploymentProjectName}, envs=[${deployments.map((d) => d.environment).join(", ")}], attempt=${args.attempt}`,
-        );
-        if (args.attempt < MAX_POLL_ATTEMPTS) {
-          await ctx.scheduler.runAfter(
-            POLL_INTERVAL_MS,
-            internal.taskWorkflowActions.pollDeploymentStatus,
-            { ...args, attempt: args.attempt + 1 },
-          );
-        }
-        return null;
-      }
-
-      const { data: statuses } =
-        await octokit.rest.repos.listDeploymentStatuses({
-          owner: args.repoOwner,
-          repo: args.repoName,
-          deployment_id: targetDeployment.id,
-          per_page: 1,
-        });
-
-      if (statuses.length === 0) {
-        console.log(
-          `[deployment-poll] Deployment ${targetDeployment.id} found but no statuses yet, attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
-        );
+    await runDeploymentPollAttempt(ctx, args, {
+      logPrefix: "[deployment-poll]",
+      persistQueued: async () => {
         await ctx.runMutation(internal.agentRuns.updateDeploymentStatus, {
           runId: args.runId,
           deploymentStatus: "queued",
         });
-        if (args.attempt < MAX_POLL_ATTEMPTS) {
-          await ctx.scheduler.runAfter(
-            POLL_INTERVAL_MS,
-            internal.taskWorkflowActions.pollDeploymentStatus,
-            { ...args, attempt: args.attempt + 1 },
-          );
-        }
-        return null;
-      }
-
-      const latestStatus = statuses[0];
-      const mappedStatus = mapGitHubDeploymentState(latestStatus.state);
-      const perCommitUrl =
-        latestStatus.environment_url || latestStatus.target_url || undefined;
-
-      const { url: deploymentUrl, shouldKeepPolling } =
-        await resolveStableDeploymentUrl(
-          ctx,
-          args.repoId,
-          perCommitUrl,
-          args.attempt,
-        );
-
-      console.log(
-        `[deployment-poll] ${args.repoOwner}/${args.repoName} branch=${args.branchName}: deployment=${targetDeployment.id} env=${targetDeployment.environment} state=${latestStatus.state} mapped=${mappedStatus} url=${deploymentUrl ?? "none"} project=${args.deploymentProjectName ?? "none"} keepPolling=${shouldKeepPolling}`,
-      );
-
-      await ctx.runMutation(internal.agentRuns.updateDeploymentStatus, {
-        runId: args.runId,
-        deploymentStatus: mappedStatus,
-        deploymentUrl,
-      });
-
-      // Keep polling if: (a) build isn't finished yet, or (b) build is done
-      // but we're still waiting for Vercel to attach the stable branch alias.
-      const shouldReschedule =
-        !isTerminalDeploymentStatus(mappedStatus) || shouldKeepPolling;
-      if (shouldReschedule && args.attempt < MAX_POLL_ATTEMPTS) {
+      },
+      persistStatus: async (deploymentStatus, deploymentUrl) => {
+        await ctx.runMutation(internal.agentRuns.updateDeploymentStatus, {
+          runId: args.runId,
+          deploymentStatus,
+          deploymentUrl,
+        });
+      },
+      reschedule: async () => {
         await ctx.scheduler.runAfter(
           POLL_INTERVAL_MS,
           internal.taskWorkflowActions.pollDeploymentStatus,
           { ...args, attempt: args.attempt + 1 },
         );
-      }
-    } catch (error) {
-      console.error(
-        `[deployment-poll] Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      if (args.attempt < MAX_POLL_ATTEMPTS) {
-        await ctx.scheduler.runAfter(
-          POLL_INTERVAL_MS,
-          internal.taskWorkflowActions.pollDeploymentStatus,
-          { ...args, attempt: args.attempt + 1 },
-        );
-      }
-    }
+      },
+    });
     return null;
   },
 });
@@ -899,133 +890,29 @@ export const pollSessionDeploymentStatus = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    try {
-      const octokit = await getInstallationOctokit(args.installationId);
-
-      const { data: branch } = await octokit.rest.repos.getBranch({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        branch: args.branchName,
-      });
-      const commitSha = branch.commit.sha;
-
-      const { data: deployments } = await octokit.rest.repos.listDeployments({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        sha: commitSha,
-        per_page: 10,
-      });
-
-      if (deployments.length === 0) {
-        console.log(
-          `[session-deployment-poll] No deployment found for ${args.repoOwner}/${args.repoName} branch=${args.branchName} sha=${commitSha} attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
-        );
-        if (args.attempt < MAX_POLL_ATTEMPTS) {
-          await ctx.scheduler.runAfter(
-            POLL_INTERVAL_MS,
-            internal.taskWorkflowActions.pollSessionDeploymentStatus,
-            { ...args, attempt: args.attempt + 1 },
-          );
-        }
-        return null;
-      }
-
-      const projectNameLower = args.deploymentProjectName?.toLowerCase();
-      const matchedDeployment = projectNameLower
-        ? deployments.find((d) =>
-            d.environment.toLowerCase().includes(projectNameLower),
-          )
-        : undefined;
-      const targetDeployment = matchedDeployment ?? deployments[0];
-
-      // If we have a project name filter but no match, keep polling instead of
-      // falling back to an unrelated deployment (e.g. a faster-building monorepo app).
-      if (projectNameLower && !matchedDeployment) {
-        console.log(
-          `[session-deployment-poll] ${deployments.length} deployment(s) found but none match project=${args.deploymentProjectName}, envs=[${deployments.map((d) => d.environment).join(", ")}], attempt=${args.attempt}`,
-        );
-        if (args.attempt < MAX_POLL_ATTEMPTS) {
-          await ctx.scheduler.runAfter(
-            POLL_INTERVAL_MS,
-            internal.taskWorkflowActions.pollSessionDeploymentStatus,
-            { ...args, attempt: args.attempt + 1 },
-          );
-        }
-        return null;
-      }
-
-      const { data: statuses } =
-        await octokit.rest.repos.listDeploymentStatuses({
-          owner: args.repoOwner,
-          repo: args.repoName,
-          deployment_id: targetDeployment.id,
-          per_page: 1,
-        });
-
-      if (statuses.length === 0) {
-        console.log(
-          `[session-deployment-poll] Deployment ${targetDeployment.id} found but no statuses yet, attempt=${args.attempt} project=${args.deploymentProjectName ?? "none"}`,
-        );
+    await runDeploymentPollAttempt(ctx, args, {
+      logPrefix: "[session-deployment-poll]",
+      persistQueued: async () => {
         await ctx.runMutation(internal.sessions.updateDeploymentStatus, {
           sessionId: args.sessionId,
           deploymentStatus: "queued",
         });
-        if (args.attempt < MAX_POLL_ATTEMPTS) {
-          await ctx.scheduler.runAfter(
-            POLL_INTERVAL_MS,
-            internal.taskWorkflowActions.pollSessionDeploymentStatus,
-            { ...args, attempt: args.attempt + 1 },
-          );
-        }
-        return null;
-      }
-
-      const latestStatus = statuses[0];
-      const mappedStatus = mapGitHubDeploymentState(latestStatus.state);
-      const perCommitUrl =
-        latestStatus.environment_url || latestStatus.target_url || undefined;
-
-      const { url: deploymentUrl, shouldKeepPolling } =
-        await resolveStableDeploymentUrl(
-          ctx,
-          args.repoId,
-          perCommitUrl,
-          args.attempt,
-        );
-
-      console.log(
-        `[session-deployment-poll] ${args.repoOwner}/${args.repoName} branch=${args.branchName}: deployment=${targetDeployment.id} env=${targetDeployment.environment} state=${latestStatus.state} mapped=${mappedStatus} url=${deploymentUrl ?? "none"} project=${args.deploymentProjectName ?? "none"} keepPolling=${shouldKeepPolling}`,
-      );
-
-      await ctx.runMutation(internal.sessions.updateDeploymentStatus, {
-        sessionId: args.sessionId,
-        deploymentStatus: mappedStatus,
-        deploymentUrl,
-      });
-
-      // Keep polling if: (a) build isn't finished yet, or (b) build is done
-      // but we're still waiting for Vercel to attach the stable branch alias.
-      const shouldReschedule =
-        !isTerminalDeploymentStatus(mappedStatus) || shouldKeepPolling;
-      if (shouldReschedule && args.attempt < MAX_POLL_ATTEMPTS) {
+      },
+      persistStatus: async (deploymentStatus, deploymentUrl) => {
+        await ctx.runMutation(internal.sessions.updateDeploymentStatus, {
+          sessionId: args.sessionId,
+          deploymentStatus,
+          deploymentUrl,
+        });
+      },
+      reschedule: async () => {
         await ctx.scheduler.runAfter(
           POLL_INTERVAL_MS,
           internal.taskWorkflowActions.pollSessionDeploymentStatus,
           { ...args, attempt: args.attempt + 1 },
         );
-      }
-    } catch (error) {
-      console.error(
-        `[session-deployment-poll] Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      if (args.attempt < MAX_POLL_ATTEMPTS) {
-        await ctx.scheduler.runAfter(
-          POLL_INTERVAL_MS,
-          internal.taskWorkflowActions.pollSessionDeploymentStatus,
-          { ...args, attempt: args.attempt + 1 },
-        );
-      }
-    }
+      },
+    });
     return null;
   },
 });

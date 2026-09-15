@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
   acquireTurnLease,
+  graceExpiredTurnLease,
   openSessionTurn,
   renewTurnLease,
 } from "../convex/_chat/turnStore";
@@ -197,6 +198,98 @@ describe("turn lifecycle integration", () => {
     expect(second.result.status).toBe("renewed");
     expect(second.afterExpiresAt).toBe(second.leaseExpiresAt);
     expect(second.afterState).toBe("running");
+  });
+
+  test("an expired lease on a live process is graced and stamped once", async () => {
+    const { t, turnId } = await createSessionFixture();
+    const expireLease = async () =>
+      await t.run(async (ctx) => {
+        await ctx.db.patch(turnId, {
+          state: "running",
+          leaseExpiresAt: Date.now() - 1,
+        });
+      });
+    const grace = async () =>
+      await t.run(async (ctx) => {
+        const turn = await ctx.db.get(turnId);
+        if (!turn) throw new Error("missing turn");
+        await graceExpiredTurnLease(ctx, turn, Date.now());
+        return await ctx.db.get(turnId);
+      });
+
+    await expireLease();
+    const first = await grace();
+    expect(first?.open).toBe(true);
+    expect(first?.leaseExpiresAt).toBeGreaterThan(Date.now());
+    expect(first?.silentSince).toBeGreaterThan(0);
+
+    await expireLease();
+    const second = await grace();
+    expect(second?.silentSince).toBe(first?.silentSince);
+    expect(second?.leaseExpiresAt).toBeGreaterThan(Date.now());
+  });
+
+  test("a recovered daemon's heartbeat clears the silent marker", async () => {
+    const { t, turnId } = await createSessionFixture();
+    const leaseGeneration = await t.run(async (ctx) => {
+      const turn = await ctx.db.get(turnId);
+      if (!turn) throw new Error("missing turn");
+      const identity = await acquireTurnLease(ctx, turn, "running");
+      if (!identity) throw new Error("lease not acquired");
+      await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
+      const expired = await ctx.db.get(turnId);
+      if (!expired) throw new Error("missing turn");
+      await graceExpiredTurnLease(ctx, expired, Date.now());
+      return identity.leaseGeneration;
+    });
+
+    const stamped = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(stamped?.silentSince).toBeGreaterThan(0);
+    // A full lease was just written by the grace, so the renewal throttle
+    // would normally skip the write — the silent marker must override it.
+    expect(stamped?.leaseExpiresAt).toBeGreaterThan(Date.now() + 60_000);
+
+    const renewed = await t.run(async (ctx) => {
+      const verdict = await renewTurnLease(ctx, {
+        turnId: String(turnId),
+        leaseGeneration,
+      });
+      return { verdict, turn: await ctx.db.get(turnId) };
+    });
+    expect(renewed.verdict.status).toBe("renewed");
+    expect(renewed.turn?.silentSince).toBeUndefined();
+  });
+
+  test("a silent-timeout finalisation closes the turn with the stall alert", async () => {
+    const { t, placeholderMessageId, turnId } = await createSessionFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() - 1,
+        silentSince: Date.now() - 10 * 60 * 1000,
+      });
+    });
+
+    // finalizeExpired schedules the one-shot stall retry; drain it inside the
+    // test so it never fires against a later test's database.
+    vi.useFakeTimers();
+    try {
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: "silent_timeout",
+      });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const rows = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      placeholder: await ctx.db.get(placeholderMessageId),
+    }));
+    expect(rows.turn?.open).toBe(false);
+    expect(rows.turn?.state).toBe("error");
+    expect(rows.placeholder?.content).toContain("Turn stalled");
   });
 
   test("a streaming touch within 2s does not rewrite lastUpdatedAt", async () => {

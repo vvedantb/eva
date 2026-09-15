@@ -16,6 +16,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  toast,
 } from "@eva/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -40,8 +41,15 @@ import { useState, type MouseEvent } from "react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
-import { DeleteTaskDialog } from "./_components/DeleteTaskDialog";
-import { MoveTaskDialog } from "./_components/MoveTaskDialog";
+import {
+  DeleteTaskDialog,
+  useDeleteAgentTask,
+} from "./_components/DeleteTaskDialog";
+import {
+  MoveTaskDialog,
+  useMoveAgentTask,
+} from "./_components/MoveTaskDialog";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
@@ -149,6 +157,9 @@ export function QuickTaskCard({
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
+  const altHeld = useAltHeld();
+  const deleteTask = useDeleteAgentTask();
+  const moveTask = useMoveAgentTask();
 
   // Find the app name for the move target across all codebases
   const moveTargetAppName = (() => {
@@ -180,8 +191,20 @@ export function QuickTaskCard({
     users,
     currentUserId,
     projects,
-    onDelete: () => setShowDeleteConfirm(true),
-    onMove: (targetId: Id<"githubRepos">) => setMoveTarget(targetId),
+    onDelete: () =>
+      requestConfirm(altHeld, () => setShowDeleteConfirm(true), () => {
+        void deleteTask({ id }).catch((err) => {
+          console.error("Failed to delete task:", err);
+          toast.error("Could not delete the task. Try again.");
+        });
+      }),
+    onMove: (targetId: Id<"githubRepos">) =>
+      requestConfirm(altHeld, () => setMoveTarget(targetId), () => {
+        void moveTask({ id, repoId: targetId }).catch((err) => {
+          console.error("Failed to move task:", err);
+          toast.error("Could not move the task. Try again.");
+        });
+      }),
   };
 
   const hasDialogOpen = showDeleteConfirm || moveTarget !== null;
@@ -359,7 +382,6 @@ export function QuickTaskCard({
     <BorderBeam
       active
       colorVariant="progress"
-      glow={false}
       className="rounded-surface"
     >
       {card}

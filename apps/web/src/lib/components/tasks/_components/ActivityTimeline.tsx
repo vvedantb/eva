@@ -13,9 +13,11 @@ import {
   Spinner,
   toast,
 } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IconLoader2 } from "@tabler/icons-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import type { Id } from "@eva/backend";
 import { CreatedTimelineItem } from "./CreatedTimelineItem";
 import { TaskActivityItem } from "./TaskActivityItem";
@@ -91,6 +93,7 @@ export function ActivityTimeline({
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
+  const altHeld = useAltHeld();
 
   const removeComment = useMutation(
     api.taskComments.remove,
@@ -114,17 +117,21 @@ export function ActivityTimeline({
       );
     }
   });
-  const handleDeleteComment = async () => {
-    if (!deletingCommentId) return;
+  const deleteComment = async (commentId: Id<"taskComments">) => {
     setIsDeletingComment(true);
     try {
-      await removeComment({ id: deletingCommentId });
+      await removeComment({ id: commentId });
       setDeletingCommentId(null);
     } catch (err) {
       console.error("Failed to delete comment:", err);
       toast.error("Could not delete the comment. Try again.");
     }
     setIsDeletingComment(false);
+  };
+
+  const handleDeleteComment = async () => {
+    if (!deletingCommentId) return;
+    await deleteComment(deletingCommentId);
   };
 
   const userComments = comments?.filter((c) => c.authorId) ?? [];
@@ -252,20 +259,42 @@ export function ActivityTimeline({
             if (segment.kind === "comment") {
               const comment = segment.item.comment;
               return (
-                <CommentThread
+                <ListEnter
                   key={`comment-${comment._id}`}
-                  comment={comment}
-                  taskId={taskId}
-                  users={users}
-                  repliesByParentId={repliesByParentId}
-                  onDeleteRequest={setDeletingCommentId}
-                />
+                  index={segmentIndex}
+                  fast
+                >
+                  <CommentThread
+                    comment={comment}
+                    taskId={taskId}
+                    users={users}
+                    repliesByParentId={repliesByParentId}
+                    onDeleteRequest={(commentId) =>
+                      requestConfirm(
+                        altHeld,
+                        () => setDeletingCommentId(commentId),
+                        () => {
+                          void deleteComment(commentId);
+                        },
+                      )
+                    }
+                  />
+                </ListEnter>
               );
             }
 
             return (
-              <div
-                key={`rail-${segmentIndex}`}
+              <ListEnter
+                key={`rail-${segment.items
+                  .map((item) =>
+                    item.kind === "run"
+                      ? item.run._id
+                      : item.kind === "taskActivity"
+                        ? item.activity._id
+                        : "created",
+                  )
+                  .join("-")}`}
+                index={segmentIndex}
                 className="relative flex flex-col gap-4"
               >
                 {/* Rail only through non-comment events in this contiguous block. */}
@@ -274,7 +303,7 @@ export function ActivityTimeline({
                   className="pointer-events-none absolute bottom-2 left-2 top-2 w-px -translate-x-1/2 bg-border"
                 />
                 {segment.items.map((item) => renderTimelineItem(item))}
-              </div>
+              </ListEnter>
             );
           })
         )}

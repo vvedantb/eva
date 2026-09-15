@@ -115,6 +115,7 @@ export const Route = createFileRoute(
         search: {
           diffFile: corrupted.diffFile,
           diffView: corrupted.diffView,
+          ...(corrupted.file !== undefined ? { file: corrupted.file } : {}),
         },
         replace: true,
       });

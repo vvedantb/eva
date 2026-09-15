@@ -29,11 +29,15 @@ export const listDrafts = authQuery({
   returns: v.array(agentTaskValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    // Index by status so we do not scan every task in the repo for drafts.
+    // Index by status + deletedAt so a soft-deleted draft does not linger in
+    // the quick-task modal (or the Drafts page) after Remove.
     const drafts = await ctx.db
       .query("agentTasks")
-      .withIndex("by_repo_and_status", (q) =>
-        q.eq("repoId", args.repoId).eq("status", "draft"),
+      .withIndex("by_repo_status_and_deleted", (q) =>
+        q
+          .eq("repoId", args.repoId)
+          .eq("status", "draft")
+          .eq("deletedAt", undefined),
       )
       .collect();
     return drafts
@@ -50,8 +54,11 @@ export const countDrafts = authQuery({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
     const drafts = await ctx.db
       .query("agentTasks")
-      .withIndex("by_repo_and_status", (q) =>
-        q.eq("repoId", args.repoId).eq("status", "draft"),
+      .withIndex("by_repo_status_and_deleted", (q) =>
+        q
+          .eq("repoId", args.repoId)
+          .eq("status", "draft")
+          .eq("deletedAt", undefined),
       )
       .collect();
     return drafts.filter((t) => t.createdBy === ctx.userId).length;

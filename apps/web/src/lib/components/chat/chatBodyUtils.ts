@@ -55,16 +55,35 @@ export function findHandoffBoundaryIds(
 
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
 
+const SANDBOX_LIFECYCLE_ALERTS = new Set([
+  "Sandbox started",
+  "Sandbox stopped",
+  "Sandbox reconnected",
+]);
+
+export function isSandboxLifecycleAlert(
+  message: Pick<ChatBodyMessage, "isSystemAlert" | "content">,
+): boolean {
+  return (
+    message.isSystemAlert === true &&
+    SANDBOX_LIFECYCLE_ALERTS.has(message.content)
+  );
+}
+
 /**
- * Simple view omits sandbox lifecycle / stall banners from the transcript.
+ * Simple view omits all system-alert banners. Sandbox start/stop/reconnect
+ * rows are always hidden — they spam the transcript on every VM cycle.
  * Rows stay in Convex; this only affects rendering, empty-state, and
  * last-message targeting. Execution helpers already skip `isSystemAlert`.
  */
 export function visibleChatMessages<
-  M extends Pick<ChatBodyMessage, "isSystemAlert">,
+  M extends Pick<ChatBodyMessage, "isSystemAlert" | "content">,
 >(messages: M[], hideSystemAlerts: boolean): M[] {
-  if (!hideSystemAlerts) return messages;
-  return messages.filter((message) => message.isSystemAlert !== true);
+  const hidden = (message: M) =>
+    isSandboxLifecycleAlert(message) ||
+    (hideSystemAlerts && message.isSystemAlert === true);
+  if (!messages.some(hidden)) return messages;
+  return messages.filter((message) => !hidden(message));
 }
 
 // Boundary schema for the pending-question JSON emitted by the agent. A
@@ -167,6 +186,17 @@ export function getAssistantTurnState(message: ChatBodyMessage): {
       ? collectChangedFiles(parseActivitySteps(message.activityLog) ?? [])
       : [];
   return { isStreamingPlaceholder, changedFiles };
+}
+
+/**
+ * The failure text without the harness's `Error: ` stamp. A failed turn is
+ * already framed as an error by the notice around it, so the prefix only
+ * repeats what the icon and the title say.
+ */
+export function stripErrorPrefix(content: string): string {
+  const trimmed = content.trim();
+  const prefix = /^error:\s*/i.exec(trimmed);
+  return prefix === null ? trimmed : trimmed.slice(prefix[0].length);
 }
 
 /**

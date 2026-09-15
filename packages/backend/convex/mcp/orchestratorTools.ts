@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { defineTool, type EvaTool } from "./registry";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
@@ -14,6 +13,7 @@ import {
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
+import { defineTool, type EvaTool } from "./registry";
 
 const agentKindArg = z
   .enum(["session", "task"])
@@ -247,12 +247,7 @@ export function fleetTools(
         message: z
           .string()
           .describe("The first message to run in the session."),
-        model: z
-          .enum(MCP_CLAUDE_MODELS)
-          .optional()
-          .describe(
-            'Claude model ("opus", "sonnet", "haiku", or "fable"). Defaults to the platform default (sonnet).',
-          ),
+        // No `model`: the session runs on the repo's configured default model.
         baseBranch: z
           .string()
           .optional()
@@ -260,7 +255,7 @@ export function fleetTools(
             "Branch to base work off of. If omitted, uses the repo's default base branch.",
           ),
       },
-      handler: async ({ repoName, app, title, message, model, baseBranch }) => {
+      handler: async ({ repoName, app, title, message, baseBranch }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repos = await mcpListUserRepos(ctx, userId);
         const matched = matchRepoByName(repos, repoName, app);
@@ -274,7 +269,6 @@ export function fleetTools(
             repoId: repo.id,
             title,
             message,
-            model,
             baseBranch,
             masterSessionId: tokenMasterSessionId,
           },

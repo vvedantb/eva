@@ -11,9 +11,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import type { SessionMessage } from "./useSessionSend";
 
 interface PublishRecoveryBannerProps {
@@ -38,18 +46,16 @@ export function PublishRecoveryBanner({
     null,
   );
   const forcePushBranch = useMutation(api.sessions.forcePushBranch);
+  const altHeld = useAltHeld();
 
   const newest = messages.length > 0 ? messages[messages.length - 1] : null;
-  if (
-    newest === null ||
-    newest.isSystemAlert !== true ||
-    typeof newest.errorDetail !== "string" ||
-    !publishErrorNeedsForcePush(newest.errorDetail)
-  ) {
-    return null;
-  }
-  const requested = requestedForId === newest._id;
-  const newestId = newest._id;
+  const visible =
+    newest !== null &&
+    newest.isSystemAlert === true &&
+    typeof newest.errorDetail === "string" &&
+    publishErrorNeedsForcePush(newest.errorDetail);
+  const requested = visible && newest !== null && requestedForId === newest._id;
+  const newestId = newest?._id;
 
   const handleConfirm = () => {
     setConfirmOpen(false);
@@ -58,13 +64,24 @@ export function PublishRecoveryBanner({
       "Couldn't start the force-push",
       "session-force-push",
     )
-      .then(() => setRequestedForId(newestId))
+      .then(() => {
+        if (newestId) setRequestedForId(newestId);
+      })
       .catch(() => undefined);
   };
 
   return (
     <>
-      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5">
+      <AnimatePresence initial={false}>
+        {visible && newestId ? (
+      <m.div
+        key={newestId}
+        className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={motionFast}
+      >
         <Badge
           variant="destructive"
           className="shrink-0 rounded-md px-1.5 py-0 text-[10px] font-semibold tracking-wide uppercase"
@@ -85,13 +102,24 @@ export function PublishRecoveryBanner({
             variant="destructive"
             className="h-7 shrink-0 gap-1 px-2 text-xs"
             disabled={!isSandboxActive}
-            onClick={() => setConfirmOpen(true)}
+            title={skipConfirmTitle("Force-push branch")}
+            onClick={(event) =>
+              requestConfirm(
+                altHeld,
+                () => setConfirmOpen(true),
+                handleConfirm,
+                event,
+              )
+            }
           >
             <IconUpload className="size-3.5" />
             Force-push branch
+            <ConfirmSkipHint />
           </Button>
         ) : null}
-      </div>
+      </m.div>
+        ) : null}
+      </AnimatePresence>
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>

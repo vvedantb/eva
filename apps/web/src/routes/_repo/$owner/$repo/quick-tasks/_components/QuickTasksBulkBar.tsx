@@ -23,6 +23,13 @@ import {
   IconDots,
   IconX,
 } from "@tabler/icons-react";
+import { CountPop } from "@/lib/components/ui/CountPop";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
 export type BulkAction =
   | "actions"
@@ -41,6 +48,8 @@ interface QuickTasksBulkBarProps {
   onExitSelect: () => void;
   activeBulkAction: BulkAction | null;
   onSetBulkAction: (action: BulkAction | null) => void;
+  /** Alt-click skips the confirm dialog for these actions. */
+  onSkipConfirm?: Partial<Pick<Record<BulkAction, () => void>, "delete" | "run">>;
 }
 
 interface ActionDef {
@@ -94,16 +103,19 @@ function BarButton({
   action,
   disabled,
   onClick,
+  showSkipHint,
 }: {
   action: ActionDef;
   disabled: boolean;
   onClick: () => void;
+  showSkipHint?: boolean;
 }) {
   const Icon = action.icon;
   return (
     <button
       type="button"
       aria-label={action.label}
+      title={showSkipHint ? skipConfirmTitle(action.label) : action.label}
       onClick={onClick}
       disabled={disabled}
       // `motion-press`, not `transition-colors`: the destructive Delete takes
@@ -119,6 +131,7 @@ function BarButton({
       <span className="hidden sm:inline">
         {action.shortLabel ?? action.label}
       </span>
+      {showSkipHint ? <ConfirmSkipHint /> : null}
     </button>
   );
 }
@@ -129,8 +142,22 @@ export function QuickTasksBulkBar({
   onExitSelect,
   activeBulkAction: _activeBulkAction,
   onSetBulkAction,
+  onSkipConfirm,
 }: QuickTasksBulkBarProps) {
   const hasSelection = selectedCount > 0;
+  const altHeld = useAltHeld();
+
+  const activate = (action: BulkAction) => {
+    const skip =
+      action === "delete" || action === "run"
+        ? onSkipConfirm?.[action]
+        : undefined;
+    if (skip) {
+      requestConfirm(altHeld, () => onSetBulkAction(action), skip);
+      return;
+    }
+    onSetBulkAction(action);
+  };
 
   return (
     <AnimatePresence initial={false}>
@@ -147,9 +174,10 @@ export function QuickTasksBulkBar({
             <div className="flex max-w-[calc(100vw-2rem)] items-center gap-1 overflow-x-auto rounded-surface bg-popover/95 px-2.5 py-2 backdrop-blur-md smooth-shadow-ring-lg scrollbar-none">
               {/* Prefix: selection count */}
               <div className="flex shrink-0 items-center gap-2 pl-1 pr-0.5">
-                <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums">
-                  {selectedCount}
-                </span>
+                <CountPop
+                  label={String(selectedCount)}
+                  className="rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-foreground tabular-nums"
+                />
                 <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
                   selected
                 </span>
@@ -166,7 +194,8 @@ export function QuickTasksBulkBar({
                   key={action.key}
                   action={action}
                   disabled={!hasSelection}
-                  onClick={() => onSetBulkAction(action.key)}
+                  showSkipHint={action.key === "run"}
+                  onClick={() => activate(action.key)}
                 />
               ))}
 
@@ -206,7 +235,8 @@ export function QuickTasksBulkBar({
               <BarButton
                 action={deleteAction}
                 disabled={!hasSelection}
-                onClick={() => onSetBulkAction(deleteAction.key)}
+                showSkipHint
+                onClick={() => activate(deleteAction.key)}
               />
 
               <Separator

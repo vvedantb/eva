@@ -13,10 +13,13 @@ import {
 import { trackSessionWorkflow } from "../workflowWatchdog";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
+import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
 import { startNextQueuedSessionMessage } from "../_queues/helpers";
 import { buildSessionPrompt, sessionTurnTools } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
+import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { resultTargetMessage } from "./resultTarget";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -30,18 +33,6 @@ import {
   countStallAlertsAfterLastUser,
   shouldRetryEmptyStall,
 } from "../_chat/stallRetry";
-
-async function finalizeOpenSyntheticTurnOnCancel(
-  ctx: MutationCtx,
-  syntheticTurnMessageId: Id<"messages"> | undefined,
-  streaming: Doc<"streamingActivity"> | null,
-): Promise<void> {
-  if (syntheticTurnMessageId === undefined) return;
-  const syntheticMessage = await ctx.db.get(syntheticTurnMessageId);
-  if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-    await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-  }
-}
 
 async function stageAndStartSessionTurn(
   ctx: MutationCtx,
@@ -57,6 +48,7 @@ async function stageAndStartSessionTurn(
     fastMode?: boolean;
     providerAccountId?: Id<"userProviderAccounts">;
     attachmentStorageIds?: Id<"_storage">[];
+    sourceProposedPlanId?: Id<"proposedPlans">;
   },
 ): Promise<void> {
   const stickyProviderAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -117,6 +109,7 @@ async function stageAndStartSessionTurn(
         turnId,
         attachmentStorageIds: params.attachmentStorageIds,
         model: normalizedModel,
+        interactionMode: "default" as const,
       }
     : undefined;
   await ctx.db.patch(params.session._id, {
@@ -239,6 +232,83 @@ export const retryEmptyStalledSessionTurn = internalMutation({
   },
 });
 
+/**
+ * Re-run the last user prompt on a different provider account after a
+ * usage-limit failure. No new user bubble: the original message stays, its
+ * credential label moves to the new account, and a fresh placeholder opens
+ * below the failed reply — which dismisses the recovery banner because the
+ * failed reply is no longer the newest message. Same model and reasoning as
+ * the failed turn; other traits come from the session's sticky fields.
+ */
+export const retryLastTurnWithAccount = authMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    /** null = the team credential. */
+    providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+      throw new Error("Not authorized");
+    if (
+      session.activeWorkflowId !== undefined ||
+      session.pendingTurn !== undefined
+    ) {
+      throw new Error("A turn is already running");
+    }
+
+    const recent = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .order("desc")
+      .take(20);
+    const reply = resultTargetMessage(recent);
+    if (
+      reply === undefined ||
+      reply.errorType !== "rate_limit" ||
+      reply.finishedAt === undefined
+    ) {
+      throw new Error("The last turn did not fail on a usage limit");
+    }
+
+    const userMessage = recent.find((message) => message.role === "user");
+    if (!userMessage) throw new Error("No message to retry");
+
+    const repo = await ctx.db.get(session.repoId);
+    if (!repo) throw new Error("Repository not found");
+
+    const providerAccountId = args.providerAccountId ?? undefined;
+    const ownerUserId = session.createdBy ?? session.userId;
+    await ctx.db.patch(userMessage._id, {
+      credentialSourceLabel: await resolveCredentialSourceLabel(
+        ctx.db,
+        providerAccountId,
+        ownerUserId,
+      ),
+    });
+
+    await stageAndStartSessionTurn(ctx, {
+      session,
+      repo,
+      actingUserId: ctx.userId,
+      message: userMessage.content,
+      model: userMessage.model ?? normalizeAIModel(session.lastModel),
+      reasoningLevel: userMessage.reasoningLevel ?? session.lastReasoningLevel,
+      thinkingEnabled: session.lastThinkingEnabled,
+      use1mContext: session.lastUse1mContext,
+      fastMode: session.lastFastMode,
+      providerAccountId,
+      attachmentStorageIds: userMessage.attachmentStorageIds,
+    });
+    console.log(
+      `[sessions] retryLastTurnWithAccount sessionId=${args.sessionId} providerAccountId=${String(args.providerAccountId)}`,
+    );
+    return null;
+  },
+});
+
 /** Frontend trigger to start a session execution workflow. */
 export const startExecute = authMutation({
   args: {
@@ -251,6 +321,7 @@ export const startExecute = authMutation({
     fastMode: v.optional(v.boolean()),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+    sourceProposedPlanId: v.optional(v.id("proposedPlans")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -280,6 +351,18 @@ export const startExecute = authMutation({
       session.provider,
     );
 
+    if (args.sourceProposedPlanId !== undefined) {
+      const plan = await ctx.db.get(args.sourceProposedPlanId);
+      if (plan && plan.sessionId === args.sessionId) {
+        const now = Date.now();
+        await ctx.db.patch(args.sourceProposedPlanId, {
+          implementedAt: now,
+          implementationSessionId: args.sessionId,
+          updatedAt: now,
+        });
+      }
+    }
+
     await stageAndStartSessionTurn(ctx, {
       session,
       repo,
@@ -292,6 +375,7 @@ export const startExecute = authMutation({
       fastMode: args.fastMode,
       providerAccountId: args.providerAccountId,
       attachmentStorageIds: args.attachmentStorageIds,
+      sourceProposedPlanId: args.sourceProposedPlanId,
     });
 
     return null;

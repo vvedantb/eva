@@ -26,10 +26,17 @@ import {
 } from "@eva/ui";
 import { IconChevronRight, IconPlayerPlay } from "@tabler/icons-react";
 import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
+import {
   statusConfig,
   TASK_STATUSES,
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import { isTaskAgentActive, QuickTaskCard } from "./QuickTaskCard";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
@@ -71,6 +78,7 @@ export function QuickTasksListView({
   onOpenTask,
 }: QuickTasksListViewProps) {
   const { repoId, basePath, owner, name } = useRepo();
+  const firstPaint = useFirstPaintGate();
   const currentUserId = useQuery(api.auth.me);
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
@@ -105,6 +113,7 @@ export function QuickTasksListView({
 
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const altHeld = useAltHeld();
   const [openSections, setOpenSections] = useState<Set<DisplayTaskStatus>>(
     () => new Set(TASK_STATUSES),
   );
@@ -249,7 +258,17 @@ export function QuickTasksListView({
                       {status === "todo" && todoTasks.length > 0 && (
                         <Button
                           size="sm"
-                          onClick={() => setIsConfirmOpen(true)}
+                          title={skipConfirmTitle("Run All")}
+                          onClick={(event) =>
+                            requestConfirm(
+                              altHeld,
+                              () => setIsConfirmOpen(true),
+                              () => {
+                                void handleRunAll();
+                              },
+                              event,
+                            )
+                          }
                           disabled={isRunningAll}
                           className="mr-2 min-h-[36px]"
                         >
@@ -260,6 +279,7 @@ export function QuickTasksListView({
                           )}
                           <span className="hidden sm:inline">Run All</span>
                           <span className="sm:hidden">Run</span>
+                          <ConfirmSkipHint />
                         </Button>
                       )}
                     </div>
@@ -286,6 +306,10 @@ export function QuickTasksListView({
                                   parent={status}
                                   className="pb-1.5"
                                 >
+                                  <ListEnter
+                                    index={index}
+                                    firstPaint={firstPaint.current}
+                                  >
                                   <QuickTaskCard
                                     id={task._id}
                                     title={task.title}
@@ -345,6 +369,7 @@ export function QuickTasksListView({
                                     currentUserId={currentUserId ?? undefined}
                                     projects={projectsList ?? undefined}
                                   />
+                                  </ListEnter>
                                 </ListItem>
                               );
                             }}

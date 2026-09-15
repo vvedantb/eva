@@ -28,6 +28,12 @@ import {
 } from "@tabler/icons-react";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
 interface SidebarUserMenuProps {
   name: string;
@@ -48,6 +54,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
   const { openSearch } = useSearch();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const altHeld = useAltHeld();
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -123,11 +130,21 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={() => setConfirmOpen(true)}
+            onSelect={() =>
+              requestConfirm(
+                altHeld,
+                () => setConfirmOpen(true),
+                () => {
+                  void handleSignOut();
+                },
+              )
+            }
             className="text-destructive focus:text-destructive"
+            title={skipConfirmTitle("Sign out")}
           >
             <IconLogout size={16} className="mr-2" />
             Sign out
+            <ConfirmSkipHint />
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

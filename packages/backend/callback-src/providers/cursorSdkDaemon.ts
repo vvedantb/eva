@@ -19,7 +19,8 @@ import {
   RUN_ID,
 } from "../config.js";
 import { evaMcpWorkerHandoffEnv } from "../evaMcp.js";
-import { callConvexWithRetry, fetchWithTimeout } from "../http/convexClient.js";
+import { callConvexWithRetry } from "../http/convexClient.js";
+import { ensureGithubToken } from "./githubToken.js";
 import { serializeSteps } from "../parse/stepBudget.js";
 import {
   appendDiagnosticTail,
@@ -44,7 +45,7 @@ import {
   syncCursorStateToPersist,
 } from "../session/cursorSession.js";
 import type { JsonValue, ProviderAttemptResult } from "../types.js";
-import { log, readResponseJson } from "../utils.js";
+import { log } from "../utils.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
 import {
   appendClaimedTurnCompletion,
@@ -113,7 +114,9 @@ function sleep(ms: number): Promise<void> {
 function cursorTurnWorkerEntryPath(): string {
   const entryPath = process.argv[1];
   if (!entryPath) {
-    throw new Error("Cursor turn worker could not resolve the callback entrypoint");
+    throw new Error(
+      "Cursor turn worker could not resolve the callback entrypoint",
+    );
   }
   return entryPath;
 }
@@ -129,6 +132,7 @@ function readCursorTurnWorkerClaim(): ClaimedTurn {
       lifecycle: "legacy",
       prompt,
       attachmentUrls: [],
+      interactionMode: "default",
       turnLease: null,
     };
   }
@@ -143,6 +147,7 @@ function readCursorTurnWorkerClaim(): ClaimedTurn {
     lifecycle: "durable",
     prompt,
     attachmentUrls: [],
+    interactionMode: "default",
     turnLease: {
       turnId: CURSOR_TURN_WORKER_TURN_ID,
       leaseGeneration: CURSOR_TURN_WORKER_LEASE_GENERATION,
@@ -166,7 +171,9 @@ export function cursorTurnWorkerFailureMessage(
     : `Cursor turn worker stopped unexpectedly (${exit}). The daemon remained healthy and is ready for the next message.`;
 }
 
-function waitForCursorTurnWorker(child: ChildProcess): Promise<CursorTurnWorkerExit> {
+function waitForCursorTurnWorker(
+  child: ChildProcess,
+): Promise<CursorTurnWorkerExit> {
   return new Promise((resolve) => {
     child.once("error", (error) => {
       resolve({ status: "spawn_error", message: error.message });
@@ -307,36 +314,12 @@ function resetTurnState(): void {
 }
 
 /** Sessions may push git commits; refresh the installation token like the one-shot path. */
-async function ensureGithubToken(): Promise<void> {
-  if (!REPO_ID || !CONVEX_URL || !CONVEX_TOKEN) return;
-  try {
-    const response = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN,
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json",
-      }),
-    });
-    if (!response.ok) return;
-    const data = await readResponseJson(response);
-    if (typeof data !== "object" || data === null || Array.isArray(data))
-      return;
-    const value = data.value;
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return;
-    }
-    if (typeof value.token === "string") {
-      process.env.GITHUB_TOKEN = value.token;
-      process.env.GH_TOKEN = value.token;
-    }
-  } catch {
-    /* non-fatal */
-  }
+async function refreshGithubToken(): Promise<void> {
+  await ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID,
+  });
 }
 
 /**
@@ -541,7 +524,8 @@ function startClaimWatcher(): void {
           CLAIM_MUTATION ?? "",
           entityMutationArgs({
             model: MODEL,
-            acceptTurn: !turnActive && pendingClaimedTurn === null && !cancelInFlight,
+            acceptTurn:
+              !turnActive && pendingClaimedTurn === null && !cancelInFlight,
           }),
         );
         if (readCancelRequested(claimed)) handleCancelRequested();
@@ -682,7 +666,7 @@ export async function runCursorTurnWorker(): Promise<void> {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-    await ensureGithubToken();
+    await refreshGithubToken();
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();
@@ -835,7 +819,7 @@ export async function runCursorDaemon(): Promise<void> {
     log("cursor daemon: preflight failed");
     process.exit(1);
   }
-  await ensureGithubToken();
+  await refreshGithubToken();
 
   log(
     "runCursorDaemon started (entityId=" +

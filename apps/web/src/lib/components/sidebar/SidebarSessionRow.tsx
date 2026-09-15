@@ -7,6 +7,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   motionFast,
+  toast,
 } from "@eva/ui";
 import { useState } from "react";
 import { entityPathSegment } from "@/lib/numId";
@@ -16,8 +17,12 @@ import {
   useIsRegeneratingTitle,
 } from "@/lib/components/sidebar/SessionMenuItems";
 import { SharedLayoutNavSurface } from "@/lib/components/sidebar/SharedLayoutNav";
-import { SessionReviewModal } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
+import {
+  SessionReviewModal,
+  useSendSessionForReview,
+} from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionStatus = "active" | "starting" | "stopping" | "closed";
 
@@ -80,6 +85,8 @@ export function SidebarSessionRow<T extends SessionItem>({
   // Row-local: the dialog belongs to this session and the row outlives it
   // (unlike archive, which removes the row and so is owned by the sidebar).
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const altHeld = useAltHeld();
+  const { sendForReview } = useSendSessionForReview(session._id);
 
   return (
     <>
@@ -133,7 +140,19 @@ export function SidebarSessionRow<T extends SessionItem>({
             }
             onDuplicateNavigate={onDuplicateNavigate}
             onSendForReview={
-              canSendForReview ? () => setIsReviewOpen(true) : undefined
+              canSendForReview
+                ? () =>
+                    requestConfirm(
+                      altHeld,
+                      () => setIsReviewOpen(true),
+                      () => {
+                        void sendForReview().then((ok) => {
+                          if (ok)
+                            toast.success("Sent to the team for review.");
+                        });
+                      },
+                    )
+                : undefined
             }
             onUnarchive={
               isArchivedList && onUnarchive

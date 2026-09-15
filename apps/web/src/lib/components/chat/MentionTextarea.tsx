@@ -20,6 +20,7 @@ import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { useInlineSuggestion } from "@/lib/hooks/useInlineSuggestion";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export type MentionTextareaHandle = MentionEditorHandle;
@@ -136,6 +137,9 @@ export const MentionTextarea = forwardRef<
   // Skills settings do not exist in simple view, so the chip and the empty
   // state must not point at a page that redirects straight back out.
   const simpleView = useSimpleView();
+  // Soft keyboard, not viewport: a narrow desktop window still has a physical
+  // Enter key that should send; a phone Return key should insert a newline.
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
   const handleSkillChipClick = (_skillId: string) => {
     if (simpleView) return;
@@ -209,18 +213,22 @@ export const MentionTextarea = forwardRef<
           "No available skills."
         )
       }
-      onEnterSubmit={(e) => {
-        const form = e.currentTarget.closest("form");
-        if (!(form instanceof HTMLFormElement)) return;
-        const submitButton = form.querySelector('button[type="submit"]');
-        if (
-          submitButton instanceof HTMLButtonElement &&
-          submitButton.disabled
-        ) {
-          return;
-        }
-        form.requestSubmit();
-      }}
+      onEnterSubmit={
+        isCoarsePointer
+          ? undefined
+          : (e) => {
+              const form = e.currentTarget.closest("form");
+              if (!(form instanceof HTMLFormElement)) return;
+              const submitButton = form.querySelector('button[type="submit"]');
+              if (
+                submitButton instanceof HTMLButtonElement &&
+                submitButton.disabled
+              ) {
+                return;
+              }
+              form.requestSubmit();
+            }
+      }
     />
   );
 });

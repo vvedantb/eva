@@ -7,9 +7,12 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
-import { Button, cn, LIST_ROW_CONTROL_CLASS } from "@eva/ui";
+import { Button, cn, LIST_ROW_CONTROL_CLASS, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconX, IconCheck, IconArrowBackUp } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { CountPop } from "@/lib/components/ui/CountPop";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   collectSuggestions,
   acceptSuggestion,
@@ -56,9 +59,10 @@ export function DocSuggestionsPanel({
           <span className="max-sm:truncate text-sm font-medium">
             Suggestions
           </span>
-          <span className="max-sm:shrink-0 text-xs text-muted-foreground">
-            {list.length}
-          </span>
+          <CountPop
+            label={String(list.length)}
+            className="max-sm:shrink-0 text-xs text-muted-foreground"
+          />
         </div>
         <Button
           size="icon-sm"
@@ -72,28 +76,37 @@ export function DocSuggestionsPanel({
         </Button>
       </div>
 
-      {list.length > 0 && (
-        <div className="flex max-sm:flex-wrap items-center gap-1 border-b border-border px-3 py-1.5 max-sm:gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            className={PANEL_ACTION_CLASS}
-            onClick={() => acceptAllSuggestions(editor)}
+      <AnimatePresence>
+        {list.length > 0 ? (
+          <m.div
+            key="suggestion-toolbar"
+            className="flex max-sm:flex-wrap items-center gap-1 border-b border-border px-3 py-1.5 max-sm:gap-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
           >
-            <IconCheck size={12} aria-hidden />
-            Accept all
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className={PANEL_ACTION_CLASS}
-            onClick={() => rejectAllSuggestions(editor)}
-          >
-            <IconArrowBackUp size={12} aria-hidden />
-            Reject all
-          </Button>
-        </div>
-      )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className={PANEL_ACTION_CLASS}
+              onClick={() => acceptAllSuggestions(editor)}
+            >
+              <IconCheck size={12} aria-hidden />
+              Accept all
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className={PANEL_ACTION_CLASS}
+              onClick={() => rejectAllSuggestions(editor)}
+            >
+              <IconArrowBackUp size={12} aria-hidden />
+              Reject all
+            </Button>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto">
         {list.length === 0 ? (
@@ -102,9 +115,19 @@ export function DocSuggestionsPanel({
             changes.
           </p>
         ) : (
-          list.map((s) => (
-            <SuggestionRow key={s.id} editor={editor} suggestion={s} />
-          ))
+          <AnimatePresence initial={false}>
+            {list.map((s, index) => (
+              <m.div
+                key={s.id}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <ListEnter index={index} fast>
+                  <SuggestionRow editor={editor} suggestion={s} />
+                </ListEnter>
+              </m.div>
+            ))}
+          </AnimatePresence>
         )}
       </div>
     </div>

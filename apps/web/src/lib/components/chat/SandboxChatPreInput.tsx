@@ -8,13 +8,14 @@ import {
   useCompactionBanner,
 } from "./ComposerCompactionBanner";
 import { chatEntityKeys, type SandboxChatSurface } from "./sandboxChatSurface";
+import { UsageLimitRecoveryBanner } from "./UsageLimitRecoveryBanner";
 import { useStopBackgroundAgent } from "./useStopBackgroundAgent";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /**
  * The stack every sandbox chat renders above its composer: the background
- * agents chip and the compaction offer, with slots for whatever else a surface
- * puts between or after them.
+ * agents chip, the usage-limit recovery card and the compaction offer, with
+ * slots for whatever else a surface puts between or after them.
  */
 export function SandboxChatPreInput({
   surface,
@@ -52,6 +53,8 @@ export function SandboxChatPreInput({
         />
       )}
       {beforeBanner}
+      {/* Not gated by simple view: recovery is a user action, not internals. */}
+      <UsageLimitRecoveryBanner surface={surface} />
       {compaction && !simpleView ? (
         <ComposerCompactionBanner
           usedTokens={compaction.usedTokens}

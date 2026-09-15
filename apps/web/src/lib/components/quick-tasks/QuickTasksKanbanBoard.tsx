@@ -12,6 +12,12 @@ import { RunAllDialog } from "./RunAllDialog";
 import { Button, Spinner, toast } from "@eva/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import { entityPathSegment } from "@/lib/numId";
 import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import type { DisplayTaskStatus } from "@/lib/components/tasks/TaskStatusBadge";
@@ -65,6 +71,7 @@ export function QuickTasksKanbanBoard({
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const altHeld = useAltHeld();
 
   // Respect the sort order applied by QuickTasksClient (default: updatedAt).
   // Re-sorting here would override the user's chosen sort.
@@ -145,7 +152,17 @@ export function QuickTasksKanbanBoard({
           status === "todo" && todoTasks.length > 0 ? (
             <Button
               size="sm"
-              onClick={() => setIsConfirmOpen(true)}
+              title={skipConfirmTitle("Run All")}
+              onClick={(event) =>
+                requestConfirm(
+                  altHeld,
+                  () => setIsConfirmOpen(true),
+                  () => {
+                    void handleRunAll();
+                  },
+                  event,
+                )
+              }
               disabled={isRunningAll}
             >
               {isRunningAll ? (
@@ -154,6 +171,7 @@ export function QuickTasksKanbanBoard({
                 <IconPlayerPlay size={14} />
               )}
               Run All
+              <ConfirmSkipHint />
             </Button>
           ) : null
         }
