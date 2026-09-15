@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { DataModel, Id } from "./_generated/dataModel";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import {
   isSameGitHubRepo,
   resolveSiblingReadAccess,
@@ -13,6 +13,9 @@ export const upsertForSandbox = internalMutation({
     sandboxId: v.string(),
     installationId: v.number(),
     secret: v.string(),
+    // The sandbox's own repository; see resolveCredentialRequest.
+    repoOwner: v.string(),
+    repoName: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -24,6 +27,8 @@ export const upsertForSandbox = internalMutation({
       await ctx.db.patch(existing._id, {
         installationId: args.installationId,
         secret: args.secret,
+        repoOwner: args.repoOwner,
+        repoName: args.repoName,
         createdAt: Date.now(),
       });
       return null;
@@ -32,11 +37,21 @@ export const upsertForSandbox = internalMutation({
       sandboxId: args.sandboxId,
       installationId: args.installationId,
       secret: args.secret,
+      repoOwner: args.repoOwner,
+      repoName: args.repoName,
       createdAt: Date.now(),
     });
     return null;
   },
 });
+
+/** The repository a credential row was installed for, when the row pins one. */
+function pinnedHomeRepo(
+  row: Doc<"sandboxGitCredentials">,
+): { owner: string; name: string } | null {
+  if (row.repoOwner === undefined || row.repoName === undefined) return null;
+  return { owner: row.repoOwner, name: row.repoName };
+}
 
 /**
  * Parses git's `path=` credential field into owner/name.
@@ -96,6 +111,11 @@ async function lookupSandboxOwner(
  * repository, keeps the historical behaviour: a full installation token. A
  * different repository gets a read-only, single-repository token, but only when
  * the sandbox owner can reach that repository in eva and it has not opted out.
+ *
+ * The home repository is read from the credential row first (pinned when the
+ * helper is installed), so sandboxes bound to no eva entity — snapshot
+ * seed-prep, ephemeral automation / test-gen / evaluation runs — can fetch and
+ * push their own repository. Only sibling reads need the entity's owner.
  */
 export const resolveCredentialRequest = internalQuery({
   args: { secret: v.string(), path: v.optional(v.string()) },
@@ -124,11 +144,17 @@ export const resolveCredentialRequest = internalQuery({
       return { kind: "home" as const, installationId: row.installationId };
     }
 
+    // Rows written before the pin fall through to the entity's repository.
+    const pinned = pinnedHomeRepo(row);
+    if (pinned && isSameGitHubRepo(pinned, requested)) {
+      return { kind: "home" as const, installationId: row.installationId };
+    }
+
     const entity = await lookupSandboxOwner(ctx.db, row.sandboxId);
     if (!entity) {
       return {
         kind: "denied" as const,
-        reason: "sandbox not bound to an entity",
+        reason: `sandbox ${row.sandboxId} not bound to an entity (asked for ${requested.owner}/${requested.name})`,
       };
     }
 

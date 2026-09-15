@@ -119,18 +119,26 @@ function resolveConvexSiteUrl(): string {
  * `https://github.com/...` without any token in the URL — the helper mints a
  * fresh installation token on demand via the eva backend.
  *
+ * `homeRepo` is the repository the sandbox was created for. It is pinned on the
+ * credential row so the backend can grant the home token to sandboxes bound to
+ * no eva entity (seed-prep, ephemeral automation runs) — see
+ * `sandboxGitCredentials.resolveCredentialRequest`.
+ *
  * Idempotent: re-running rotates the secret and re-writes the helper script.
  */
 export async function ensureGitCredentialHelper(
   ctx: GenericActionCtx<DataModel>,
   sandbox: SandboxHandle,
   installationId: number,
+  homeRepo: { owner: string; name: string },
 ): Promise<void> {
   const secret = randomBytes(32).toString("hex");
   await ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
     sandboxId: sandbox.id,
     installationId,
     secret,
+    repoOwner: homeRepo.owner,
+    repoName: homeRepo.name,
   });
 
   const siteUrl = resolveConvexSiteUrl();
