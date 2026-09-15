@@ -973,6 +973,13 @@ export const sandboxGitCredentialsFields = {
   sandboxId: v.string(),
   installationId: v.number(),
   secret: v.string(),
+  // GitHub repository the sandbox was created for. /api/git-credentials grants
+  // the full installation token for this repository without the sandbox being
+  // bound to a session/task/project — snapshot seed-prep and ephemeral
+  // automation sandboxes never are. Optional: rows written before the pin lack
+  // it until the helper is next reinstalled (every create/resume rotates it).
+  repoOwner: v.optional(v.string()),
+  repoName: v.optional(v.string()),
   createdAt: v.number(),
 };
 
