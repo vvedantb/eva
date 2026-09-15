@@ -6,6 +6,7 @@ import {
   IconKey,
   IconKeyboard,
   IconPalette,
+  IconPlug,
   IconServerBolt,
   IconUserCog,
 } from "@tabler/icons-react";
@@ -31,6 +32,11 @@ export const GLOBAL_SETTINGS_NAV = [
     name: "Accounts",
     href: "/settings/accounts",
     icon: IconKey,
+  },
+  {
+    name: "Connections",
+    href: "/settings/connections",
+    icon: IconPlug,
   },
   {
     name: "Notifications",

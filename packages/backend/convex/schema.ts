@@ -35,6 +35,8 @@ import {
   userProviderAccountFields,
   githubUserTokenFields,
   githubOauthStateFields,
+  connectedAccountFields,
+  connectorOauthStateFields,
   docFields,
   docCommentFields,
   docSubscriberFields,
@@ -394,6 +396,13 @@ const schema = defineSchema({
   githubOauthStates: defineTable(githubOauthStateFields).index("by_nonce", [
     "nonce",
   ]),
+  connectedAccounts: defineTable(connectedAccountFields)
+    .index("by_user", ["userId"])
+    .index("by_user_and_provider", ["userId", "provider"]),
+  connectorOauthStates: defineTable(connectorOauthStateFields).index(
+    "by_nonce",
+    ["nonce"],
+  ),
   teamEnvVars: defineTable({
     teamId: v.id("teams"),
     vars: v.array(

@@ -40,6 +40,7 @@ import { EnvVarProviderSlots } from "@/lib/components/EnvVarProviderSlots";
 import { parseEnvVars } from "./_utils/parseEnvVars";
 import {
   KNOWN_ENV_VARS,
+  CONNECTOR_ENV_VARS,
   INFRA_ENV_VARS,
   CONVEX_ENV_VARS,
   SLOT_ENV_VAR_KEYS,
@@ -264,6 +265,7 @@ export function EnvVarsTable({
 
   const parsedPreview = parseEnvVars(bulkText);
   const agentSlots = filterSlotsForScope(KNOWN_ENV_VARS, scope);
+  const connectorSlots = filterSlotsForScope(CONNECTOR_ENV_VARS, scope);
   const infraSlots = filterSlotsForScope(INFRA_ENV_VARS, scope);
   const convexSlots = filterSlotsForScope(CONVEX_ENV_VARS, scope);
   // Known slot keys are surfaced above — keep them out of the free-form table.
@@ -526,6 +528,20 @@ export function EnvVarsTable({
               onReveal={onReveal}
               onRemove={onRemove}
               readOnly={readOnly}
+            />
+          </SettingsSection>
+          <SettingsSection
+            title="Connections"
+            description="Shared API keys used when nobody has signed in via Settings → Connections."
+          >
+            <EnvVarProviderSlots
+              entries={connectorSlots}
+              vars={vars}
+              onUpsert={onUpsert}
+              onReveal={onReveal}
+              onRemove={onRemove}
+              readOnly={readOnly}
+              removeDialogDescription="Agents fall back to this key until someone connects Linear or Figma in Settings → Connections."
             />
           </SettingsSection>
           <SettingsSection title="Infrastructure">

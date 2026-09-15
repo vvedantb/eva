@@ -12,12 +12,14 @@ import {
 import type { EnvVarSlotEntry } from "./envVarSlotTypes";
 import { CONVEX_ENV_VARS } from "./convexEnvVars";
 import { INFRA_ENV_VARS } from "./infraEnvVars";
+import { CONNECTOR_ENV_VARS } from "./connectorEnvVars";
 import { slotEnvVarKeys } from "./envVarSlotTypes";
 
 export type { EnvVarSlotEntry, EnvVarScope } from "./envVarSlotTypes";
 export { filterSlotsForScope } from "./envVarSlotTypes";
 export { CONVEX_ENV_VARS } from "./convexEnvVars";
 export { INFRA_ENV_VARS } from "./infraEnvVars";
+export { CONNECTOR_ENV_VARS } from "./connectorEnvVars";
 
 /**
  * Coding-agent auth vars surfaced as first-class "paste-in" slots. `matchKeys`
@@ -69,5 +71,10 @@ export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
 
 /** Agent + infra + Convex keys owned by slots — hidden from the free-form table. */
 export const SLOT_ENV_VAR_KEYS: ReadonlySet<string> = new Set(
-  slotEnvVarKeys([...KNOWN_ENV_VARS, ...INFRA_ENV_VARS, ...CONVEX_ENV_VARS]),
+  slotEnvVarKeys([
+    ...KNOWN_ENV_VARS,
+    ...CONNECTOR_ENV_VARS,
+    ...INFRA_ENV_VARS,
+    ...CONVEX_ENV_VARS,
+  ]),
 );
