@@ -17,6 +17,9 @@ import {
   DialogFooter,
   Spinner,
   Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@eva/ui";
 import { IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { relativeTime } from "@/lib/components/artifacts/_format";
@@ -31,6 +34,9 @@ import {
   skipConfirmTitle,
   useAltHeld,
 } from "@/lib/confirm";
+
+/** Ties every sharing switch to the one visible explanation under the list. */
+const SHARING_HELP_ID = "account-sharing-help";
 
 /**
  * Per-user "bring your own account" management. A user adds their own coding
@@ -136,10 +142,7 @@ export function AccountsClient() {
                 </div>
                 {/* Not a <label>: it would re-dispatch the click to the switch
                     and toggle it twice. */}
-                <div
-                  className="flex items-center gap-2 text-xs text-muted-foreground"
-                  title="Teammates can run sessions and tasks on this account. They can never see the credentials."
-                >
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   Share with team
                   <Switch
                     checked={account.shared}
@@ -151,35 +154,56 @@ export function AccountsClient() {
                       )
                     }
                     aria-label={`Share ${PROVIDER_LABELS[account.provider]} account with team`}
+                    aria-describedby={SHARING_HELP_ID}
                   />
                 </div>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => openEdit(account)}
-                  title="Edit"
-                  className="max-sm:size-10"
-                >
-                  <IconPencil size={14} />
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={(event) =>
-                    requestConfirm(
-                      altHeld,
-                      () => setDeleteId(account._id),
-                      () => deleteAccount(account._id),
-                      event,
-                    )
-                  }
-                  title={skipConfirmTitle("Delete")}
-                  className="max-sm:size-10 text-destructive hover:text-destructive"
-                >
-                  <IconTrash size={14} />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => openEdit(account)}
+                      aria-label="Edit"
+                      className="max-sm:size-10"
+                    >
+                      <IconPencil size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={(event) =>
+                        requestConfirm(
+                          altHeld,
+                          () => setDeleteId(account._id),
+                          () => deleteAccount(account._id),
+                          event,
+                        )
+                      }
+                      aria-label="Delete"
+                      className="max-sm:size-10 text-destructive hover:text-destructive"
+                    >
+                      <IconTrash size={14} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{skipConfirmTitle("Delete")}</TooltipContent>
+                </Tooltip>
               </ListEnter>
             ))}
+            {/* The explanation of the switch, said once and visibly — it was a
+                14-word `title`, which a touch user never sees at all. Each
+                switch points at it with `aria-describedby`. */}
+            <p
+              id={SHARING_HELP_ID}
+              className="px-4 py-3 text-xs text-muted-foreground"
+            >
+              Teammates can run sessions and tasks on a shared account. They can
+              never see the credentials.
+            </p>
           </div>
         )}
       </SettingsSection>

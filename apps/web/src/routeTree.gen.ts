@@ -25,6 +25,7 @@ import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
+import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
 import { Route as GlobalSettingsAccountsRouteImport } from './routes/_global/settings/accounts'
 import { Route as GlobalSettingsExperimentalRouteImport } from './routes/_global/settings/experimental'
 import { Route as GlobalSettingsGrokBotRouteImport } from './routes/_global/settings/grok-bot'
@@ -213,6 +214,11 @@ const GlobalArtifactsArtifactIdRoute =
     path: '/artifacts/$artifactId',
     getParentRoute: () => GlobalRoute,
   } as any)
+const GlobalSettingsIndexRoute = GlobalSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GlobalSettingsRouteRoute,
+} as any)
 const GlobalSettingsAccountsRoute = GlobalSettingsAccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
@@ -877,6 +883,7 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
+  '/settings/': typeof GlobalSettingsIndexRoute
   '/teams/': typeof GlobalTeamsIndexRoute
   '/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsRouteRouteWithChildren
   '/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksRouteRouteWithChildren
@@ -977,7 +984,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
@@ -999,6 +1005,7 @@ export interface FileRoutesByTo {
   '/setup/$id': typeof GlobalSetupIdRoute
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
+  '/settings': typeof GlobalSettingsIndexRoute
   '/teams': typeof GlobalTeamsIndexRoute
   '/teams/$teamId/$teamTab': typeof GlobalTeamsTeamIdTeamTabRoute
   '/$owner/$repo/inbox': typeof RepoOwnerRepoInboxRoute
@@ -1104,6 +1111,7 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
+  '/_global/settings/': typeof GlobalSettingsIndexRoute
   '/_global/teams/': typeof GlobalTeamsIndexRoute
   '/_repo/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsRouteRouteWithChildren
   '/_repo/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksRouteRouteWithChildren
@@ -1230,6 +1238,7 @@ export interface FileRouteTypes {
     | '/$owner/$repo'
     | '/mcp/oauth/authorize'
     | '/artifacts/'
+    | '/settings/'
     | '/teams/'
     | '/$owner/$repo/automations'
     | '/$owner/$repo/quick-tasks'
@@ -1330,7 +1339,6 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
-    | '/settings'
     | '/automations'
     | '/ave'
     | '/changelog'
@@ -1352,6 +1360,7 @@ export interface FileRouteTypes {
     | '/setup/$id'
     | '/mcp/oauth/authorize'
     | '/artifacts'
+    | '/settings'
     | '/teams'
     | '/teams/$teamId/$teamTab'
     | '/$owner/$repo/inbox'
@@ -1456,6 +1465,7 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo'
     | '/mcp/oauth/authorize'
     | '/_global/artifacts/'
+    | '/_global/settings/'
     | '/_global/teams/'
     | '/_repo/$owner/$repo/automations'
     | '/_repo/$owner/$repo/quick-tasks'
@@ -1675,6 +1685,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/artifacts/$artifactId'
       preLoaderRoute: typeof GlobalArtifactsArtifactIdRouteImport
       parentRoute: typeof GlobalRoute
+    }
+    '/_global/settings/': {
+      id: '/_global/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof GlobalSettingsIndexRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/accounts': {
       id: '/_global/settings/accounts'
@@ -2445,6 +2462,7 @@ interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
   GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
   GlobalSettingsThemeRoute: typeof GlobalSettingsThemeRoute
+  GlobalSettingsIndexRoute: typeof GlobalSettingsIndexRoute
 }
 
 const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
@@ -2457,6 +2475,7 @@ const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
   GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,
   GlobalSettingsThemeRoute: GlobalSettingsThemeRoute,
+  GlobalSettingsIndexRoute: GlobalSettingsIndexRoute,
 }
 
 const GlobalSettingsRouteRouteWithChildren =

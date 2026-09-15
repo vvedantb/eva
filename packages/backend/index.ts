@@ -20,6 +20,7 @@ export {
   OPENCODE_AUTH_ENV_KEYS,
   CURSOR_AUTH_ENV_KEYS,
   findAIModelOption,
+  contextWindowForRawModel,
   getAIModelProvider,
   getVisibleAIModelOptions,
   getSimpleViewModelOptions,

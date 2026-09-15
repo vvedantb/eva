@@ -6,6 +6,7 @@ import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
 import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -336,7 +337,7 @@ export function ChatPanel({
     <div className="rounded-surface bg-secondary p-4">
       <StreamingActivityDisplay
         activity={startupStreamingActivity}
-        thinkingLabel="Starting sandbox..."
+        thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
       />
     </div>
   );
@@ -345,7 +346,7 @@ export function ChatPanel({
     <div className="flex flex-col items-center justify-center py-8">
       <StreamingActivityDisplay
         activity={startupStreamingActivity}
-        thinkingLabel="Starting sandbox..."
+        thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
       />
     </div>
   ) : null;
@@ -396,16 +397,24 @@ export function ChatPanel({
   const emptyStateTitle = isSandboxActive
     ? "No messages yet. Start the conversation!"
     : isSandboxStopping
-      ? "Stopping sandbox..."
+      ? SANDBOX_CHAT_COPY.stoppingTitle
       : isSandboxToggling
-        ? "Starting sandbox..."
-        : "Wake Eva up to begin chatting.";
+        ? SANDBOX_CHAT_COPY.startingTitle
+        : SANDBOX_CHAT_COPY.asleepTitle;
+
+  const emptyStateDescription = isSandboxActive
+    ? SANDBOX_CHAT_COPY.activeDescription
+    : isSandboxToggling
+      ? // Waking or sleeping is already the whole story; a second line would
+        // only restate the title.
+        ""
+      : SANDBOX_CHAT_COPY.asleepDescription;
 
   const placeholder = !isSandboxActive
-    ? "Wake Eva up to begin chatting..."
+    ? SANDBOX_CHAT_COPY.asleepPlaceholder
     : isSwitchingAccount
-      ? "Switching Claude account..."
-      : "Ask Eva anything... / for skills · @ to mention";
+      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+      : SANDBOX_CHAT_COPY.activePlaceholder;
 
   const readOnlyMessage = getSessionReadOnlyMessage({
     isArchived,
@@ -435,6 +444,17 @@ export function ChatPanel({
         isArchived={isReadOnly}
         placeholder={placeholder}
         emptyStateTitle={emptyStateTitle}
+        emptyStateDescription={emptyStateDescription}
+        disabledReason={
+          isSwitchingAccount
+            ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+            : SANDBOX_CHAT_COPY.asleepDisabledReason
+        }
+        onStartSandbox={
+          !isSandboxActive && !isSandboxToggling && !isReadOnly
+            ? () => onSandboxToggle("start")
+            : undefined
+        }
         emptyStateOverride={emptyStateOverride}
         beforeQueuedContent={beforeQueuedContent}
         preInputContent={preInputContent}

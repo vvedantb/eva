@@ -592,7 +592,9 @@
     --secondary: 234 235 236;
     --secondary-foreground: 23 25 27;
     --muted: 239 239 240;
-    --muted-foreground: 113 114 116;
+    /* Darkened from 113 114 116 (4.41:1 on --background, below WCAG AA).
+     * designTokens.test.ts holds the 4.5:1 floor. */
+    --muted-foreground: 100 101 103;
     --accent: 244 244 245;
     --accent-foreground: 24 24 27;
     --destructive: 255 55 60;

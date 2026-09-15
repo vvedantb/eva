@@ -73,6 +73,12 @@ export interface MentionEditorHandle {
   tokenize: (text: string) => string;
   reset: () => void;
   focus: () => void;
+  /**
+   * The editor's root element. Callers that listen on `document` use it to ask
+   * whether this editor is the visible one — several composers stay mounted at
+   * once (see `composerVisibility.ts`).
+   */
+  getElement: () => HTMLElement | null;
   /** Append an @mention chip (and trailing space) to the current draft. */
   insertMention: (item: MentionItem) => void;
   /** Append a /skill chip (and trailing space) to the current draft. */
@@ -501,6 +507,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         setSkillMap(new Map());
       },
       focus: () => editorRef.current?.focus(),
+      getElement: () => editorRef.current,
       insertMention: (item: MentionItem) => appendToken("@", item, "mention"),
       insertSkill: (item: SlashItem) => appendToken("/", item, "skill"),
       addTokenMaps: (mentions, skills) => {

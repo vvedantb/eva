@@ -200,6 +200,45 @@ export function stripErrorPrefix(content: string): string {
 }
 
 /**
+ * One wording for the sandbox across every chat panel (session, quick task,
+ * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
+ * so the transcript and the composer speak about Eva too rather than about a
+ * "sandbox" the user never named.
+ */
+export const SANDBOX_CHAT_COPY = {
+  startingTitle: "Waking Eva up…",
+  stoppingTitle: "Putting Eva to sleep…",
+  asleepTitle: "Eva is asleep",
+  asleepDescription: "Eva's sandbox is asleep.",
+  asleepPlaceholder: "Wake Eva up to send a message…",
+  /** Why the composer will not send while Eva sleeps. */
+  asleepDisabledReason: "Wake Eva up to send",
+  wakeAction: "Wake up Eva",
+  switchingAccountPlaceholder: "Switching Claude account…",
+  activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
+  /** Teaches the three composer affordances on an empty, awake chat. */
+  activeDescription: "Type / for skills, @ to mention, or drop files to attach.",
+} as const;
+
+/**
+ * The failure a send threw, as the user should read it. Convex wraps a server
+ * error in `[CONVEX …] [Request ID: …] Server Error` plus an `Uncaught Error:`
+ * line and a stack, none of which means anything outside the dashboard.
+ */
+export function readableSendError(message: string): string {
+  const cleaned = message
+    .replace(/\s+/g, " ")
+    .replace(/\[CONVEX[^\]]*\]/g, "")
+    .replace(/\[Request ID:[^\]]*\]/g, "")
+    .replace(/\bServer Error\b/g, "")
+    .replace(/\bUncaught [A-Za-z]*Error:?/g, "")
+    // Everything from the first stack frame on is for the logs, not the user.
+    .split(" at ")[0];
+  const trimmed = (cleaned ?? "").trim();
+  return trimmed.length > 0 ? trimmed : "Something went wrong";
+}
+
+/**
  * The bubble the session-scoped streaming row belongs to: the oldest empty,
  * unfinished assistant bubble. Turns execute FIFO, so when a queued turn's
  * placeholder is inserted while an older turn (a synthetic loop continuation,

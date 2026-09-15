@@ -13,8 +13,12 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import {
+  isAssistantTurnInProgress,
+  readableSendError,
+} from "@/lib/components/chat/chatBodyUtils";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { toast } from "@eva/ui";
 export type SessionMessage = NonNullable<
   FunctionReturnType<typeof api.messages.listByParent>
 >[number];
@@ -117,6 +121,7 @@ export function useSessionSend({
   const cancelExecutionMutation = useMutation(
     api.sessionWorkflow.cancelExecution,
   );
+  const setDraft = useMutation(api.drafts.set);
   const turnStatus = useHeldQuery(
     api.turns.getSessionStatus,
     isRouteActive ? { sessionId } : "skip",
@@ -178,13 +183,29 @@ export function useSessionSend({
           : {}),
       }),
     ])
-      .catch(async (error) => {
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to send message";
-        await addMessage({
-          id: sessionId,
-          role: "assistant",
-          content: `Error: ${errorMessage}`,
+      .catch((error) => {
+        // The composer has already cleared and the optimistic user bubble has
+        // rolled back, so the prompt only exists here. Writing the failure as an
+        // assistant turn used to read like Eva replying "Error: …" while the
+        // user's own message was gone — the toast says whose failure it is and
+        // hands the typed prompt back through the same `drafts` row the composer
+        // reads (ChatDraftSync pulls it live).
+        toast.error("Couldn't send your message", {
+          id: "session-send",
+          description: readableSendError(
+            error instanceof Error ? error.message : "",
+          ),
+          action: {
+            label: "Restore draft",
+            onClick: () => {
+              void setDraft({
+                target: { kind: "sessionChat", sessionId },
+                // The tokenized content the user typed, not `finalContent` —
+                // the appended review comments are not theirs to re-edit.
+                content,
+              });
+            },
+          },
         });
       })
       .finally(() => {

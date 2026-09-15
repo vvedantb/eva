@@ -3,9 +3,10 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
-import { Spinner } from "@eva/ui";
+import { SessionDetailSkeleton } from "./_components/SessionDetailSkeleton";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
 import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
@@ -69,6 +70,9 @@ export function SessionDetailClient({
     api.streaming.get,
     isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
   );
+  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
+  // stay mounted at once, and a hidden one must not title the tab.
+  useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
 
@@ -191,11 +195,7 @@ export function SessionDetailClient({
   }, [agentBrowsingAt, onSandboxTabChange, isRouteActive, chatOnly]);
 
   if (session === undefined) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <SessionDetailSkeleton />;
   }
 
   if (session === null) {

@@ -18,17 +18,24 @@ export function SandboxStartStopButton({
   isToggling,
   onToggle,
   isAssistantResponding = false,
+  hasStartError = false,
 }: {
   isActive: boolean;
   isToggling: boolean;
   onToggle: (action: "start" | "stop") => void;
   /** Makes the stop affordance inert while the assistant holds the turn. */
   isAssistantResponding?: boolean;
+  /** The last wake attempt failed — the control offers a retry, not a start. */
+  hasStartError?: boolean;
 }) {
   // Only stopping is unsafe mid-turn; a turn cannot be running on a sandbox
   // that is asleep, but if the flags ever disagree, starting stays available.
   const blockedMidTurn = isActive && isAssistantResponding;
-  const label = isActive ? "Put Eva to sleep" : "Wake up Eva";
+  const label = isActive
+    ? "Put Eva to sleep"
+    : hasStartError
+      ? "Try waking Eva again"
+      : "Wake up Eva";
 
   return (
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>

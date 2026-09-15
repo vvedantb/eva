@@ -6,6 +6,12 @@ import { api, type Id } from "@eva/backend";
 import {
   Button,
   ButtonGroup,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -31,6 +37,7 @@ import { focusPrComposer } from "./prComposerFocus";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import { PrVerdictDialog, type PrVerdict } from "./PrVerdictDialog";
 import type { PrOverview } from "./prOverviewMeta";
+import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
 
 /**
  * The header's right-hand cluster: everything a reader can *do* to this pull
@@ -66,6 +73,8 @@ export function PrHeaderActions({
   const update = useAction(api.github.updatePullRequest);
   const [verdict, setVerdict] = useState<PrVerdict | null>(null);
   const [closing, setClosing] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const altHeld = useAltHeld();
 
   const isOpen = overview.status === "open";
 
@@ -73,6 +82,7 @@ export function PrHeaderActions({
     setClosing(true);
     try {
       await update({ repoId, prNumber: overview.number, state: "closed" });
+      setConfirmingClose(false);
       toast.success("Pull request closed");
       onChanged();
     } catch (error) {
@@ -129,13 +139,26 @@ export function PrHeaderActions({
           {isOpen ? (
             <>
               <DropdownMenuSeparator />
+              {/* Closing notifies every reviewer and stops CI, so it asks
+                  first — the same bar merge is held to one control over. The
+                  Radix `onSelect` event carries no modifier, so only the
+                  Alt-held store can skip it. */}
               <DropdownMenuItem
                 className="text-destructive"
                 disabled={closing}
-                onSelect={() => void close()}
+                onSelect={() =>
+                  requestConfirm(
+                    altHeld,
+                    () => setConfirmingClose(true),
+                    () => {
+                      void close();
+                    },
+                  )
+                }
               >
                 <IconGitPullRequestClosed size={14} aria-hidden />
                 Close without merging
+                <ConfirmSkipHint />
               </DropdownMenuItem>
             </>
           ) : null}
@@ -193,6 +216,44 @@ export function PrHeaderActions({
         onClose={() => setVerdict(null)}
         onSubmitted={onChanged}
       />
+
+      <Dialog open={confirmingClose} onOpenChange={setConfirmingClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Close pull request #{overview.number} without merging?
+            </DialogTitle>
+            <DialogDescription>
+              Reviewers are notified and CI stops. You can reopen it later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmingClose(false)}
+              disabled={closing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void close()}
+              disabled={closing}
+            >
+              <CrossfadeIcon
+                show={closing}
+                trueKey="loading"
+                falseKey="idle"
+                variant="soft"
+                className="relative flex size-3.5 items-center justify-center"
+                whenTrue={<Spinner size="sm" />}
+                whenFalse={<IconGitPullRequestClosed size={14} />}
+              />
+              {closing ? "Closing" : "Close pull request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

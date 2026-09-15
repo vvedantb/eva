@@ -19,7 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DialogBody,
-  Spinner,
   toast,
   motionFast,
 } from "@eva/ui";
@@ -56,6 +55,8 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
+import { ProjectDetailSkeleton } from "./_components/ProjectsSkeletons";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 import {
   IconHammer,
@@ -136,6 +137,7 @@ export function ProjectDetailClient({
   );
 
   const project = useQuery(api.projects.get, { id: projectId });
+  useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
     api.agentRuns.getLatestDeploymentByProject,
@@ -295,11 +297,7 @@ export function ProjectDetailClient({
   };
 
   if (project === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <ProjectDetailSkeleton />;
   }
 
   if (project === null) {

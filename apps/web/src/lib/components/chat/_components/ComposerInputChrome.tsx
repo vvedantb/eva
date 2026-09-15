@@ -7,6 +7,9 @@ import {
   PromptInputSubmit,
   PromptInputTools,
   toast,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   cn,
   motionFast,
   motionSpring,
@@ -32,6 +35,9 @@ import { useId, type RefObject } from "react";
 import type { Id } from "@eva/backend";
 import { type SlashItem } from "@/lib/components/mentions";
 import { useComposerCompact } from "@/lib/components/chat/_components/useComposerCompact";
+import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";
+import { useShortcut } from "@/lib/hotkeys/useShortcut";
+import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 
 // `whitespace-pre!` rather than `nowrap`: both keep the pill on one line, but
 // `nowrap` still collapses whitespace, and Chrome then eats the trailing space
@@ -62,6 +68,9 @@ export function ComposerInputChrome({
   placeholder,
   isExecuting,
   isInputDisabled,
+  isUploading = false,
+  disabledReason,
+  onStartSandbox,
   hasPendingContext,
   onPromptSubmit,
   onCancel,
@@ -79,6 +88,12 @@ export function ComposerInputChrome({
   placeholder: string;
   isExecuting: boolean;
   isInputDisabled: boolean;
+  /** Attachments are being uploaded: the submit button spins and stops accepting. */
+  isUploading?: boolean;
+  /** Why the composer will not send, for the toast on a blocked Enter. */
+  disabledReason?: string;
+  /** Wakes the sandbox; gives that toast its action. */
+  onStartSandbox?: () => void;
   hasPendingContext: boolean;
   onPromptSubmit: (message: PromptInputMessage) => void | Promise<void>;
   onCancel: () => Promise<void>;

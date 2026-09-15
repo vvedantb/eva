@@ -51,12 +51,20 @@
       (function () {
         // Appearance: prefer FOUC hint (Convex-synced), then legacy "theme" key.
         // Neutral is dark-family: class="dark neutral".
+        // The hint carries the preference in `mode`; "system" means follow the
+        // OS now, so the stored appearance is ignored (it may be a stale
+        // resolution from the last time this device booted).
         var appearance = null;
         try {
           var hintRaw = localStorage.getItem("eva-custom-theme-hint");
           if (hintRaw) {
             var earlyHint = JSON.parse(hintRaw);
-            if (
+            if (earlyHint.mode === "system") {
+              appearance = window.matchMedia("(prefers-color-scheme: dark)")
+                .matches
+                ? "dark"
+                : "light";
+            } else if (
               earlyHint.appearance === "dark" ||
               earlyHint.appearance === "light" ||
               earlyHint.appearance === "neutral"

@@ -29,17 +29,37 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
+import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
+import {
+  RemoveMemberDialog,
+  type RemoveMemberTarget,
+} from "./RemoveMemberDialog";
 
 type Member = FunctionReturnType<typeof api.teamMembers.list>[number];
 
 interface TeamMembersTabProps {
   teamId: Id<"teams">;
+  teamName: string;
   members: Array<Member>;
   isOwner: boolean;
 }
 
+/**
+ * `teamMembers.add` throws this when the email belongs to nobody who has ever
+ * signed in. "User not found" reads as a bug in Eva rather than as the invite
+ * problem it is, so it is the one message replaced rather than surfaced.
+ */
+const NO_SUCH_USER = "User not found";
+
+/** The row's own label, so the confirmation names whoever the user just saw. */
+function memberLabel(member: Member): string {
+  return member.user?.fullName || member.user?.email || "this member";
+}
+
 export function TeamMembersTab({
   teamId,
+  teamName,
   members,
   isOwner,
 }: TeamMembersTabProps) {
@@ -84,6 +104,28 @@ export function TeamMembersTab({
     error: "",
     isSubmitting: false,
   });
+  const [removeTarget, setRemoveTarget] = useState<
+    (RemoveMemberTarget & { userId: Member["userId"] }) | null
+  >(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const altHeld = useAltHeld();
+
+  const runRemove = (userId: Member["userId"]) => {
+    setIsRemoving(true);
+    // `withMutationToast` rethrows after toasting; the dialog closes either way
+    // because the optimistic list already rolled back on failure.
+    void withMutationToast(
+      removeMember({ teamId, userId }),
+      "Member removed",
+      "Couldn't remove member",
+      "team-member-remove",
+    )
+      .catch(() => undefined)
+      .then(() => {
+        setRemoveTarget(null);
+        setIsRemoving(false);
+      });
+  };
 
   const handleDialogChange = (open: boolean) => {
     if (!open) {
@@ -105,11 +147,16 @@ export function TeamMembersTab({
       await addMember({ teamId, userEmail: dialog.email });
       setDialog({ open: false, email: "", error: "", isSubmitting: false });
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to add member";
+      const message = userFacingErrorMessage(
+        err instanceof Error ? err : null,
+        "Couldn't add that member. Try again.",
+      );
       setDialog((prev) => ({
         ...prev,
-        error: errorMessage,
+        error:
+          message === NO_SUCH_USER
+            ? "No Eva account uses that email yet. Ask them to sign in to Eva first."
+            : message,
         isSubmitting: false,
       }));
     }
@@ -238,12 +285,18 @@ export function TeamMembersTab({
                         size="icon"
                         variant="ghost"
                         aria-label="Remove member"
-                        onClick={() =>
-                          void withMutationToast(
-                            removeMember({ teamId, userId: member.userId }),
-                            "Member removed",
-                            "Couldn't remove member",
-                            "team-member-remove",
+                        title={skipConfirmTitle("Remove member")}
+                        onClick={(event) =>
+                          requestConfirm(
+                            altHeld,
+                            () =>
+                              setRemoveTarget({
+                                userId: member.userId,
+                                label: memberLabel(member),
+                                teamName,
+                              }),
+                            () => runRemove(member.userId),
+                            event,
                           )
                         }
                       >
@@ -257,6 +310,15 @@ export function TeamMembersTab({
           ))
         )}
       </div>
+
+      <RemoveMemberDialog
+        target={removeTarget}
+        isRemoving={isRemoving}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={() => {
+          if (removeTarget) runRemove(removeTarget.userId);
+        }}
+      />
     </>
   );
 }
