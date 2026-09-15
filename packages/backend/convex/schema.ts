@@ -53,6 +53,9 @@ import {
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
+  workProfileFields,
+  routedThreadFields,
+  routedMessageFields,
 } from "./validators";
 
 const schema = defineSchema({
@@ -376,6 +379,27 @@ const schema = defineSchema({
     .index("by_team_and_role", ["teamId", "role"])
     .index("by_user", ["userId"])
     .index("by_team_and_user", ["teamId", "userId"]),
+
+  workProfiles: defineTable(workProfileFields)
+    .index("by_team", ["teamId"])
+    .index("by_team_and_user", ["teamId", "userId"])
+    .index("by_team_and_role", ["teamId", "role"])
+    .index("by_user", ["userId"]),
+
+  routedThreads: defineTable(routedThreadFields)
+    .index("by_assignee_and_status", ["assigneeUserId", "status"])
+    .index("by_assignee_and_lastMessage", ["assigneeUserId", "lastMessageAt"])
+    .index("by_team_and_lastMessage", ["teamId", "lastMessageAt"])
+    .index("by_source", ["sourceKind", "sourceId"])
+    .index("by_source_assignee_topic", [
+      "sourceId",
+      "assigneeUserId",
+      "topicKey",
+    ]),
+
+  routedMessages: defineTable(routedMessageFields)
+    .index("by_thread", ["threadId"])
+    .index("by_thread_and_created", ["threadId", "createdAt"]),
   githubWebhookEvents: defineTable({
     event: v.string(),
     action: v.string(),

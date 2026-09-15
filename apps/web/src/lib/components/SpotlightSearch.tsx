@@ -89,6 +89,8 @@ function iconForPageTitle(title: string) {
       return IconHome;
     case "Inbox":
       return IconInbox;
+    case "Messages":
+      return IconInbox;
     case "Sessions":
       return IconTerminal2;
     case "Projects":

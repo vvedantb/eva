@@ -20,6 +20,9 @@ import {
   reactionTargetValidator,
   roleUserValidator,
   roleValidator,
+  routedAuthorKindValidator,
+  routedSourceKindValidator,
+  routedThreadStatusValidator,
   runModeValidator,
   runStatusValidator,
   sandboxProviderKindValidator,
@@ -1250,4 +1253,45 @@ export const proposedPlanFields = {
   implementationSessionId: v.optional(v.id("sessions")),
   createdAt: v.number(),
   updatedAt: v.number(),
+};
+
+/** Team-scoped routing directory — what a person owns and should be asked. */
+export const workProfileFields = {
+  teamId: v.id("teams"),
+  userId: v.id("users"),
+  role: v.optional(roleUserValidator),
+  headline: v.string(),
+  owns: v.string(),
+  askMeAbout: v.string(),
+  updatedAt: v.number(),
+};
+
+/** One routed question thread: one topic, one assignee, one source entity. */
+export const routedThreadFields = {
+  teamId: v.id("teams"),
+  repoId: v.id("githubRepos"),
+  assigneeUserId: v.id("users"),
+  sourceKind: routedSourceKindValidator,
+  sourceId: v.string(),
+  sourceNumId: v.optional(v.number()),
+  sourceTitle: v.string(),
+  topicKey: v.string(),
+  title: v.string(),
+  status: routedThreadStatusValidator,
+  lastMessageAt: v.number(),
+  lastPreview: v.string(),
+  createdAt: v.number(),
+  resolvedAt: v.optional(v.number()),
+};
+
+export const routedMessageFields = {
+  threadId: v.id("routedThreads"),
+  authorKind: routedAuthorKindValidator,
+  authorUserId: v.optional(v.id("users")),
+  body: v.string(),
+  /** Why Eva is asking — source work + agent briefing. Absent on older rows. */
+  context: v.optional(v.string()),
+  createdAt: v.number(),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  mirroredMessageId: v.optional(v.id("messages")),
 };
