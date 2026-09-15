@@ -6,6 +6,7 @@ import {
 } from "@/lib/components/chat/MarkdownMentionText";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { parseReviewCommentSegments } from "@/lib/reviewComments";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface ReviewCommentMessageProps {
   text: string;
@@ -77,7 +78,7 @@ export function ReviewCommentMessage({
 
   return (
     <div className="space-y-3">
-      {segments.map((segment) =>
+      {segments.map((segment, index) =>
         segment.kind === "text" ? (
           segment.text.trim().length > 0 ? (
             <MarkdownMentionText
@@ -90,15 +91,17 @@ export function ReviewCommentMessage({
             />
           ) : null
         ) : (
-          <div key={segment.comment.id} className="flex items-start gap-2">
-            <IconMessage className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <ReviewCommentCard
-              filePath={segment.comment.filePath}
-              rangeLabel={segment.comment.rangeLabel}
-              text={segment.comment.text}
-              repoBasePath={repoBasePath}
-            />
-          </div>
+          <ListEnter key={segment.comment.id} index={index} fast>
+            <div className="flex items-start gap-2">
+              <IconMessage className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <ReviewCommentCard
+                filePath={segment.comment.filePath}
+                rangeLabel={segment.comment.rangeLabel}
+                text={segment.comment.text}
+                repoBasePath={repoBasePath}
+              />
+            </div>
+          </ListEnter>
         ),
       )}
     </div>

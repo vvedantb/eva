@@ -3,11 +3,12 @@
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import { m } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   Command,
   CommandEmpty,
   CommandList,
+  motionFast,
   motionSpring,
   Popover,
   PopoverAnchor,
@@ -19,6 +20,7 @@ import type { Id } from "@eva/backend";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { ComposerStashItem } from "@/lib/components/chat/_components/ComposerStashItem";
 import { useComposerStash } from "@/lib/components/chat/_components/useComposerStash";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 /**
  * Prompt-stash drawer plus the dock the tasks/queued panels sit in. The
@@ -96,29 +98,40 @@ export function ComposerStash({
 
   const stashButton =
     entries.length > 0 ? (
-      <button
-        ref={tabRef}
-        type="button"
-        aria-expanded={open}
-        aria-label={`Prompt stash, ${entries.length} saved`}
-        title="Prompt stash"
-        className="motion-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.98]"
-        // Keep composer focus when toggling from the input.
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <IconBookmark aria-hidden className="size-3.5" />
-        <span>Stash</span>
-        <m.span
-          key={pulseKey}
-          initial={{ opacity: 0, y: 2 }}
+      <AnimatePresence>
+        <m.div
+          key="composer-stash-trigger"
+          className="inline-flex"
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={motionSpring}
-          className="font-medium tabular-nums"
+          exit={{ opacity: 0, y: 8 }}
+          transition={motionFast}
         >
-          {entries.length}
-        </m.span>
-      </button>
+          <button
+            ref={tabRef}
+            type="button"
+            aria-expanded={open}
+            aria-label={`Prompt stash, ${entries.length} saved`}
+            title="Prompt stash"
+            className="motion-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.98]"
+            // Keep composer focus when toggling from the input.
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            <IconBookmark aria-hidden className="size-3.5" />
+            <span>Stash</span>
+            <m.span
+              key={pulseKey}
+              initial={{ opacity: 0, y: 2 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={motionSpring}
+              className="font-medium tabular-nums"
+            >
+              {entries.length}
+            </m.span>
+          </button>
+        </m.div>
+      </AnimatePresence>
     ) : null;
 
   return (
@@ -185,19 +198,20 @@ export function ComposerStash({
               Nothing stashed. Press <ShortcutKbd id="stashDraft" /> with a
               draft to stash it.
             </CommandEmpty>
-            {entries.map((entry) => (
-              <ComposerStashItem
-                key={entry._id}
-                entry={entry}
-                onSelect={() => {
-                  void restore(entry).then((ok) => {
-                    if (ok) setOpen(false);
-                  });
-                }}
-                onDelete={() => {
-                  void removeEntry(entry._id);
-                }}
-              />
+            {entries.map((entry, index) => (
+              <ListEnter key={entry._id} index={index} fast>
+                <ComposerStashItem
+                  entry={entry}
+                  onSelect={() => {
+                    void restore(entry).then((ok) => {
+                      if (ok) setOpen(false);
+                    });
+                  }}
+                  onDelete={() => {
+                    void removeEntry(entry._id);
+                  }}
+                />
+              </ListEnter>
             ))}
           </CommandList>
         </Command>

@@ -18,6 +18,7 @@ import {
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
+  silentStreamDelayMs,
   thinkingHeartbeatLabel,
   thinkingHeartbeatSeconds,
   visibleActivityKey,
@@ -44,6 +45,55 @@ function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
       </span>
     </div>
   );
+}
+
+function SimpleViewHeartbeat({
+  lastOutputAt,
+  isStreaming,
+  startedAt,
+}: {
+  lastOutputAt: number;
+  isStreaming: boolean;
+  startedAt?: number;
+}) {
+  const sinceLastOutput = useElapsedSeconds(
+    lastOutputAt,
+    Boolean(isStreaming && startedAt),
+  );
+  const heartbeatSeconds = thinkingHeartbeatSeconds(sinceLastOutput);
+  if (heartbeatSeconds == null) return null;
+  return (
+    <div className="text-muted-foreground text-sm tabular-nums">
+      {thinkingHeartbeatLabel(heartbeatSeconds)}
+    </div>
+  );
+}
+
+function useSilentStreamNotice(
+  activity: string | undefined,
+  isStreaming: boolean,
+  startedAt: number | undefined,
+) {
+  const [silent, setSilent] = useState(false);
+  useEffect(() => {
+    if (!isStreaming || !isEmptyActivityPayload(activity)) {
+      setSilent(false);
+      return;
+    }
+    const remaining = silentStreamDelayMs(
+      startedAt,
+      Date.now(),
+      SILENT_STREAM_NOTICE_AFTER_SECONDS,
+    );
+    if (remaining <= 0) {
+      setSilent(true);
+      return;
+    }
+    setSilent(false);
+    const timer = window.setTimeout(() => setSilent(true), remaining);
+    return () => window.clearTimeout(timer);
+  }, [activity, isStreaming, startedAt]);
+  return silent;
 }
 
 /**
@@ -97,36 +147,23 @@ export function StreamingActivityDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
-  const elapsed = useElapsedSeconds(startedAt, isStreaming);
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
-  const sinceLastOutput = useElapsedSeconds(
-    lastOutputAt,
-    Boolean(isStreaming && startedAt),
-  );
-  const heartbeatSeconds = thinkingHeartbeatSeconds(sinceLastOutput);
+  const streamIsSilent = useSilentStreamNotice(activity, isStreaming, startedAt);
   if (simpleView) {
     if (!isStreaming) return null;
     return (
       <div className="space-y-1.5">
         <SimpleViewWorkingStatus startedAt={startedAt} />
-        {heartbeatSeconds != null ? (
-          <div className="text-muted-foreground text-sm tabular-nums">
-            {thinkingHeartbeatLabel(heartbeatSeconds)}
-          </div>
-        ) : null}
+        <SimpleViewHeartbeat
+          lastOutputAt={lastOutputAt}
+          isStreaming={isStreaming}
+          startedAt={startedAt}
+        />
       </div>
     );
   }
 
   const steps = parseActivitySteps(activity);
-
-  // An empty payload means the daemon is publishing and the provider stream
-  // has produced nothing parseable — indistinguishable from "no payload yet"
-  // to `parseActivitySteps`, and from a hang to the reader. Say so rather than
-  // shimmering "Working..." over a stream that has gone quiet.
-  const streamIsSilent =
-    isEmptyActivityPayload(activity) &&
-    elapsed >= SILENT_STREAM_NOTICE_AFTER_SECONDS;
 
   return (
     <ActivityTasks

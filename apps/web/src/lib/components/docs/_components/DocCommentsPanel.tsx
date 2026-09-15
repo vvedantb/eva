@@ -6,8 +6,10 @@ import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useQueryState } from "nuqs";
 import { docCommentFilterParser } from "@/lib/search-params";
-import { Button, cn } from "@eva/ui";
+import { Button, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconX } from "@tabler/icons-react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { DocCommentThread } from "./DocCommentThread";
 import { DocNewCommentComposer } from "./DocNewCommentComposer";
 import { DOC_SIDE_PANEL_CLASS } from "./docSidePanel";
@@ -103,40 +105,62 @@ export function DocCommentsPanel({
       </div>
 
       <div className="scrollbar scroll-fade flex-1 overflow-y-auto">
-        {composingAnchorId && (
-          <div className="border-b border-border p-3">
-            <DocNewCommentComposer
-              docId={docId}
-              anchorId={composingAnchorId}
-              anchorText={composingAnchorText ?? ""}
-              allowAskEva={allowAskEva}
-              onCancel={onCancelCompose}
-              onCreated={onCommentCreated}
-            />
-          </div>
-        )}
+        <AnimatePresence>
+          {composingAnchorId && (
+            <m.div
+              key={composingAnchorId}
+              className="border-b border-border p-3"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionFast}
+            >
+              <DocNewCommentComposer
+                docId={docId}
+                anchorId={composingAnchorId}
+                anchorText={composingAnchorText ?? ""}
+                allowAskEva={allowAskEva}
+                onCancel={onCancelCompose}
+                onCreated={onCommentCreated}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
 
-        {displayRoots.length === 0 && !composingAnchorId && (
-          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-            {filter === "open"
-              ? "No open comments. Select text to comment."
-              : "No resolved comments."}
-          </p>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          <m.div
+            key={filter}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            {displayRoots.length === 0 && !composingAnchorId && (
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                {filter === "open"
+                  ? "No open comments. Select text to comment."
+                  : "No resolved comments."}
+              </p>
+            )}
 
-        {displayRoots.map((root) => (
-          <DocCommentThread
-            key={root._id}
-            root={root}
-            replies={repliesByParent.get(root._id) ?? []}
-            docId={docId}
-            isActive={root.anchorId === activeAnchorId}
-            isOrphaned={!!root.anchorId && !presentAnchorIds.has(root.anchorId)}
-            onClick={() => {
-              if (root.anchorId) onAnchorClick(root.anchorId);
-            }}
-          />
-        ))}
+            {displayRoots.map((root, index) => (
+              <ListEnter key={root._id} index={index} fast>
+                <DocCommentThread
+                  root={root}
+                  replies={repliesByParent.get(root._id) ?? []}
+                  docId={docId}
+                  isActive={root.anchorId === activeAnchorId}
+                  isOrphaned={
+                    !!root.anchorId && !presentAnchorIds.has(root.anchorId)
+                  }
+                  onClick={() => {
+                    if (root.anchorId) onAnchorClick(root.anchorId);
+                  }}
+                />
+              </ListEnter>
+            ))}
+          </m.div>
+        </AnimatePresence>
       </div>
     </div>
   );

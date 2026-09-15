@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  silentStreamDelayMs,
   thinkingHeartbeatLabel,
   thinkingHeartbeatSeconds,
   visibleActivityKey,
@@ -76,5 +77,15 @@ describe("thinkingHeartbeatLabel", () => {
     expect(thinkingHeartbeatLabel(30)).toBe(
       "Model is thinking... (30s since last output)",
     );
+  });
+});
+
+describe("silentStreamDelayMs", () => {
+  it("waits out the remaining grace from startedAt", () => {
+    expect(silentStreamDelayMs(1_000, 21_000, 60)).toBe(40_000);
+  });
+
+  it("is zero once the grace has elapsed", () => {
+    expect(silentStreamDelayMs(1_000, 61_000, 60)).toBe(0);
   });
 });

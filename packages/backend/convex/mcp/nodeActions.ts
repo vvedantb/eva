@@ -938,14 +938,30 @@ export const createEvaDoc = internalAction({
     repoId: v.string(),
     title: v.string(),
     content: v.string(),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.string(),
-  handler: async (_ctx, { clerkUserId, repoId, title, content }) => {
+  handler: async (
+    _ctx,
+    { clerkUserId, repoId, title, content, sourceKind, sourceId },
+  ) => {
+    const createArgs: Record<string, JsonValue> = { repoId, title, content };
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const docId = await runMutationAsUser(
       getEvaConvexCloudUrl(),
       clerkUserId,
       "docs:create",
-      { repoId, title, content },
+      createArgs,
     );
     if (typeof docId !== "string") {
       throw new Error("Unexpected response from docs:create");
@@ -1044,11 +1060,24 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
   handler: async (
     _ctx,
-    { clerkUserId, name, html, description, boundTeamId, declaredTools },
+    {
+      clerkUserId,
+      name,
+      html,
+      description,
+      boundTeamId,
+      declaredTools,
+      sourceKind,
+      sourceId,
+    },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
 
@@ -1084,6 +1113,14 @@ export const createArtifact = internalAction({
       htmlStorageId: storageId,
     };
     if (description) createArgs.description = description;
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const artifactId = await runMutationAsUser(
       convexUrl,
       clerkUserId,

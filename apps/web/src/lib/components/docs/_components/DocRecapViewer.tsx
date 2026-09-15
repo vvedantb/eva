@@ -31,7 +31,10 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  motionFast,
+  CrossfadeIcon,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCopy,
@@ -201,11 +204,15 @@ export function DocRecapViewer({
                   handleCopy();
                 }}
               >
-                {copied ? (
-                  <IconCheck size={16} className="text-success" />
-                ) : (
-                  <IconCopy size={16} />
-                )}
+                <CrossfadeIcon
+                  show={copied}
+                  trueKey="copied"
+                  falseKey="copy"
+                  variant="soft"
+                  className="relative flex size-4 items-center justify-center"
+                  whenTrue={<IconCheck size={16} className="text-success" />}
+                  whenFalse={<IconCopy size={16} />}
+                />
                 Copy recap
               </DropdownMenuItem>
               <DropdownMenuItem onClick={toggleHistory}>
@@ -271,23 +278,32 @@ export function DocRecapViewer({
           ) : null}
         </div>
       ) : null}
-      {isRecapPending && !isRecapStalled && (
-        <div className="px-4 pb-3">
-          <Surface density="tight" className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Spinner size="sm" />
-              <span className="flex-1">Generating recap...</span>
-            </div>
-            {streamingSteps ? (
-              <ActivityTasks steps={streamingSteps} isStreaming />
-            ) : (
-              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
-                {streaming?.currentActivity ?? "Generating recap..."}
-              </p>
-            )}
-          </Surface>
-        </div>
-      )}
+      <AnimatePresence>
+        {isRecapPending && !isRecapStalled ? (
+          <m.div
+            key="recap-activity"
+            className="px-4 pb-3"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <Surface density="tight" className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Spinner size="sm" />
+                <span className="flex-1">Generating recap...</span>
+              </div>
+              {streamingSteps ? (
+                <ActivityTasks steps={streamingSteps} isStreaming />
+              ) : (
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  {streaming?.currentActivity ?? "Generating recap..."}
+                </p>
+              )}
+            </Surface>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <Tabs
         value={viewTab}
@@ -339,36 +355,58 @@ export function DocRecapViewer({
           </TabsList>
         </TabsBar>
 
-        <TabsContent
-          value="recap"
-          className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
-        >
-          {doc.html ? (
-            <HtmlPreviewFrame html={doc.html} title="PR recap" />
+        <AnimatePresence mode="wait" initial={false}>
+          {viewTab === "recap" ? (
+            <m.div
+              key="recap"
+              className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="recap"
+                className="mt-0 h-full min-h-0 overflow-hidden"
+              >
+                {doc.html ? (
+                  <HtmlPreviewFrame html={doc.html} title="PR recap" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {isRecapIncompleteReady || isRecapErrored
+                      ? INCOMPLETE_PR_RECAP_MESSAGE
+                      : "No recap generated yet. It is created the next time this review runs."}
+                  </p>
+                )}
+              </TabsContent>
+            </m.div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {isRecapIncompleteReady || isRecapErrored
-                ? INCOMPLETE_PR_RECAP_MESSAGE
-                : "No recap generated yet. It is created the next time this review runs."}
-            </p>
+            <m.div
+              key="summary"
+              className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="summary"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                <DocContentTab
+                  doc={doc}
+                  commentsOpen={commentsOpen}
+                  onToggleComments={toggleComments}
+                  historyOpen={historyPanelOpen}
+                  onToggleHistory={toggleHistory}
+                  suggestionsOpen={suggestionsOpen}
+                  onToggleSuggestions={toggleSuggestions}
+                  onSuggestionCount={setSuggestionCount}
+                />
+              </TabsContent>
+            </m.div>
           )}
-        </TabsContent>
-
-        <TabsContent
-          value="summary"
-          className="mt-3 min-h-0 flex-1 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col"
-        >
-          <DocContentTab
-            doc={doc}
-            commentsOpen={commentsOpen}
-            onToggleComments={toggleComments}
-            historyOpen={historyPanelOpen}
-            onToggleHistory={toggleHistory}
-            suggestionsOpen={suggestionsOpen}
-            onToggleSuggestions={toggleSuggestions}
-            onSuggestionCount={setSuggestionCount}
-          />
-        </TabsContent>
+        </AnimatePresence>
       </Tabs>
     </div>
   );

@@ -5,7 +5,9 @@ import {
   IconClipboardList,
   IconCode,
   IconDeviceDesktop,
+  IconFile,
   IconFileText,
+  IconLayoutDashboard,
   IconPalette,
   IconRobot,
   IconTerminal2,
@@ -30,6 +32,8 @@ interface BuildSandboxPaletteCommandsArgs {
   showAgentsTab: boolean;
   showPrdTab: boolean;
   showDesignsTab: boolean;
+  showArtifactsTab: boolean;
+  showDocumentsTab: boolean;
   showEditorItem: boolean;
   showDesktopItem: boolean;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
@@ -49,6 +53,8 @@ export function buildSandboxPaletteCommands({
   showAgentsTab,
   showPrdTab,
   showDesignsTab,
+  showArtifactsTab,
+  showDocumentsTab,
   showEditorItem,
   showDesktopItem,
   customTabs,
@@ -101,6 +107,24 @@ export function buildSandboxPaletteCommands({
       keywords: "view tab variations",
       icon: IconPalette,
       run: () => onTabChange("designs"),
+    });
+  }
+  if (showArtifactsTab) {
+    commands.push({
+      id: "show-artifacts",
+      label: "Show Artifacts",
+      keywords: "view tab dashboard hosted",
+      icon: IconLayoutDashboard,
+      run: () => onTabChange("artifacts"),
+    });
+  }
+  if (showDocumentsTab) {
+    commands.push({
+      id: "show-documents",
+      label: "Show Documents",
+      keywords: "view tab prd docs design",
+      icon: IconFile,
+      run: () => onTabChange("documents"),
     });
   }
   if (showEditorItem) {

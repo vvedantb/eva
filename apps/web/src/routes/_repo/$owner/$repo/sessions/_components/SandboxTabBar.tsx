@@ -25,6 +25,7 @@ import {
 } from "@/lib/hooks/useSimpleView";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { cn, Tabs, TabsList } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SandboxTabTrigger } from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
@@ -70,6 +71,14 @@ interface SandboxTabBarProps {
   showDesignsTab?: boolean;
   /** When true, shows a content indicator on the Designs tab. */
   hasDesignsContent?: boolean;
+  /** Shows the Artifacts tab (session / task / project sandbox chats). */
+  showArtifactsTab?: boolean;
+  /** When true, shows a content indicator on the Artifacts tab. */
+  hasArtifactsContent?: boolean;
+  /** Shows the Documents tab (session / task / project sandbox chats). */
+  showDocumentsTab?: boolean;
+  /** When true, shows a content indicator on the Documents tab. */
+  hasDocumentsContent?: boolean;
   /** Shows the File Viewer tab (sessions only). */
   showFilesTab?: boolean;
   /** Shows the Agents tab (content-keyed: the entity has spawned sub-agents). */
@@ -113,6 +122,10 @@ export function SandboxTabBar({
   hasPrdContent = false,
   showDesignsTab = false,
   hasDesignsContent = false,
+  showArtifactsTab = true,
+  hasArtifactsContent = false,
+  showDocumentsTab = true,
+  hasDocumentsContent = false,
   showFilesTab = false,
   showAgentsTab = false,
   hasRunningAgents = false,
@@ -160,6 +173,10 @@ export function SandboxTabBar({
     hasPrdContent,
     showDesignsTab,
     hasDesignsContent,
+    showArtifactsTab,
+    hasArtifactsContent,
+    showDocumentsTab,
+    hasDocumentsContent,
     customTabs: visibleCustomTabs,
   });
   const iconOnly = !isMobile;
@@ -185,6 +202,8 @@ export function SandboxTabBar({
     enabledTabs,
     showPrdTab,
     showDesignsTab,
+    showArtifactsTab,
+    showDocumentsTab,
     showFilesTab: showFiles,
     showAgentsTab: showAgents,
     customTabSlugs,
@@ -207,6 +226,8 @@ export function SandboxTabBar({
     showAgentsTab: showAgents,
     showPrdTab,
     showDesignsTab,
+    showArtifactsTab,
+    showDocumentsTab,
     showEditorItem,
     showDesktopItem,
     customTabs: visibleCustomTabs,
@@ -235,19 +256,25 @@ export function SandboxTabBar({
           onValueChange={handleTabChange}
         >
           <TabsList className={TAB_LIST_CLASS}>
-            {tabDescriptors.map((tab) => (
-              <SandboxTabTrigger
+            {tabDescriptors.map((tab, index) => (
+              <ListEnter
                 key={tab.value}
-                tab={tab}
-                onReselect={
-                  collapsed && tab.value === resolvedTab
-                    ? expandIfCollapsed
-                    : undefined
-                }
-                labelHidden={
-                  iconOnly || (collapseLabels && tab.value !== resolvedTab)
-                }
-              />
+                index={index}
+                fast
+                className="inline-flex"
+              >
+                <SandboxTabTrigger
+                  tab={tab}
+                  onReselect={
+                    collapsed && tab.value === resolvedTab
+                      ? expandIfCollapsed
+                      : undefined
+                  }
+                  labelHidden={
+                    iconOnly || (collapseLabels && tab.value !== resolvedTab)
+                  }
+                />
+              </ListEnter>
             ))}
           </TabsList>
         </Tabs>

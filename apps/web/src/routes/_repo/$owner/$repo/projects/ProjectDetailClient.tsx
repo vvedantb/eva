@@ -21,9 +21,12 @@ import {
   DialogBody,
   Spinner,
   toast,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -170,22 +173,39 @@ export function ProjectDetailClient({
   const isSandboxSurface = surface === "sandbox";
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
+  const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
     if (simpleView) return;
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/files`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/files`,
+      ),
       search: (prev) => ({ ...prev, file: path }),
     });
+  };
+
+  const openDiffs = (repoRelativePath?: string) => {
+    if (simpleView) return;
+    if (!projectPathSegment) return;
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/review/diffs/unified`,
+      ),
+      search: (prev) => ({
+        ...prev,
+        ...(repoRelativePath ? { diffFile: repoRelativePath } : {}),
+      }),
+    });
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const [expandRightSignal, setExpandRightSignal] = useState(0);
   const agentBrowsingAt =
     project === null || project === undefined
       ? undefined
@@ -196,7 +216,9 @@ export function ProjectDetailClient({
     if (agentBrowsingAt === undefined || prev !== undefined) return;
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/browser`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/browser`,
+      ),
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
@@ -209,7 +231,9 @@ export function ProjectDetailClient({
   const openAgentsTab = () => {
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/agents`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/agents`,
+      ),
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
@@ -379,6 +403,7 @@ export function ProjectDetailClient({
               isSandboxActive={isSandboxActive}
               isSandboxToggling={isSandboxStarting || isSandboxStopping}
               onOpenFile={openFile}
+              onViewDiff={openDiffs}
               onOpenAgentsTab={openAgentsTab}
               onSandboxToggle={
                 canStartSandbox || isSandboxActive
@@ -583,39 +608,75 @@ export function ProjectDetailClient({
       }
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        {isSandboxSurface ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {projectSandboxContent}
-          </div>
-        ) : mainTab === "overview" ? (
-          <ProjectOverviewTab
-            projectId={projectId}
-            title={project.title}
-            description={project.description}
-          />
-        ) : isDraftOrFinalized ? (
-          <ProjectTabs
-            projectId={projectId}
-            projectPhase={project.phase}
-            activeWorkflowId={project.activeWorkflowId}
-            rawInput={project.rawInput}
-            generatedSpec={project.generatedSpec}
-            conversationHistory={project.conversationHistory}
-            streamingActivity={streaming?.currentActivity}
-            sandboxStartupActivity={sandboxStartupActivity}
-            basePath={basePath}
-            repoId={repo._id}
-          />
-        ) : (
-          <ProjectActiveLayout
-            projectId={projectId}
-            project={project}
-            basePath={basePath}
-            selectedTaskId={selectedTaskId}
-            selectedTaskStatus={selectedTaskStatus}
-            detailTab={detailTab}
-          />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isSandboxSurface ? (
+            <m.div
+              key="sandbox"
+              className="min-h-0 flex-1 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {projectSandboxContent}
+            </m.div>
+          ) : mainTab === "overview" ? (
+            <m.div
+              key="overview"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectOverviewTab
+                projectId={projectId}
+                title={project.title}
+                description={project.description}
+              />
+            </m.div>
+          ) : isDraftOrFinalized ? (
+            <m.div
+              key="plan"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectTabs
+                projectId={projectId}
+                projectPhase={project.phase}
+                activeWorkflowId={project.activeWorkflowId}
+                rawInput={project.rawInput}
+                generatedSpec={project.generatedSpec}
+                conversationHistory={project.conversationHistory}
+                streamingActivity={streaming?.currentActivity}
+                sandboxStartupActivity={sandboxStartupActivity}
+                basePath={basePath}
+                repoId={repo._id}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="tasks"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectActiveLayout
+                projectId={projectId}
+                project={project}
+                basePath={basePath}
+                selectedTaskId={selectedTaskId}
+                selectedTaskStatus={selectedTaskStatus}
+                detailTab={detailTab}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Dialog

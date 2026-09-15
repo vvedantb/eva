@@ -1,8 +1,8 @@
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
 import { Spinner } from "@eva/ui";
@@ -42,20 +42,33 @@ export function SessionDetailClient({
   hideTitle?: boolean;
 }) {
   const { basePath, repo } = useRepo();
-  const session = useQuery(api.sessions.get, { id: sessionId });
-  const messages = useQuery(api.messages.listByParent, {
-    parentId: sessionId,
-  });
-  const queuedMessages = useQuery(api.queuedMessages.listByParent, {
-    parentId: sessionId,
-  });
-  const streaming = useQuery(api.streaming.get, { entityId: sessionId });
-  const summaryStreaming = useQuery(api.streaming.get, {
-    entityId: `summary:${sessionId}`,
-  });
-  const startupStreaming = useQuery(api.streaming.get, {
-    entityId: `session-startup-${sessionId}`,
-  });
+  // Hidden cached shells keep the last paint so switching back does not flash.
+  // Skipping the hot streams — and the session doc itself — is what stops a
+  // background turn from re-rendering a whole chat tree the user cannot see.
+  const session = useHeldQuery(
+    api.sessions.get,
+    isRouteActive ? { id: sessionId } : "skip",
+  );
+  const messages = useHeldQuery(
+    api.messages.listByParent,
+    isRouteActive ? { parentId: sessionId } : "skip",
+  );
+  const queuedMessages = useHeldQuery(
+    api.queuedMessages.listByParent,
+    isRouteActive ? { parentId: sessionId } : "skip",
+  );
+  const streaming = useHeldQuery(
+    api.streaming.get,
+    isRouteActive ? { entityId: sessionId } : "skip",
+  );
+  const summaryStreaming = useHeldQuery(
+    api.streaming.get,
+    isRouteActive ? { entityId: `summary:${sessionId}` } : "skip",
+  );
+  const startupStreaming = useHeldQuery(
+    api.streaming.get,
+    isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
+  );
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
 
@@ -75,13 +88,22 @@ export function SessionDetailClient({
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
   const sessionPrState = session?.prState;
   useEffect(() => {
+    // A hidden cached shell must not resume a VM the user is not looking at.
+    if (!isRouteActive) return;
     if (!sandboxId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
     // Don't prewarm (which resumes the VM) when the PR is already terminal —
     // auto-stop below owns teardown for merged/closed sessions.
     if (isSessionPrReadOnly(sessionPrState)) return;
     void prewarmDaemon({ sessionId });
-  }, [sessionId, sandboxId, sandboxStatus, sessionPrState, prewarmDaemon]);
+  }, [
+    isRouteActive,
+    sessionId,
+    sandboxId,
+    sandboxStatus,
+    sessionPrState,
+    prewarmDaemon,
+  ]);
 
   // Recover sandboxes left running after a PR merge/close (webhook may have
   // only patched prState before auto-stop existed, or the stop raced).
@@ -136,23 +158,25 @@ export function SessionDetailClient({
     }
   };
 
-  // Must stay above loading/null early returns — Phase 3 review comments
-  // introduced this hook after them and tripped React #310 on session resolve.
-  const openDiffsTab = () => {
-    if (simpleView || chatOnly) return;
-    if (onViewDiff) {
-      onViewDiff();
-      return;
-    }
-    onSandboxTabChange("review");
-  };
-
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Don't fight the user if they switch away mid-lock.
   // Skipped for chatOnly: there is no sandbox panel to switch, and the tab
   // change is a navigation — it would bounce Eva off its own `/eva` URL.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const [expandRightSignal, setExpandRightSignal] = useState(0);
+
+  // Must stay above loading/null early returns — Phase 3 review comments
+  // introduced this hook after them and tripped React #310 on session resolve.
+  const handleViewDiff = (repoRelativePath?: string) => {
+    if (simpleView || chatOnly) return;
+    if (onViewDiff) {
+      onViewDiff(repoRelativePath);
+    } else {
+      onSandboxTabChange("review");
+    }
+    setExpandRightSignal((n) => n + 1);
+  };
+
   const agentBrowsingAt =
     session === null || session === undefined
       ? undefined
@@ -220,8 +244,9 @@ export function SessionDetailClient({
       }
       chatOnly={chatOnly}
       hideTitle={hideTitle}
+      isRouteActive={isRouteActive}
       onOpenFile={chatOnly ? undefined : onOpenFile}
-      onViewDiff={chatOnly ? undefined : onViewDiff}
+      onViewDiff={chatOnly ? undefined : handleViewDiff}
       onOpenPrdTab={
         chatOnly
           ? undefined
@@ -244,14 +269,14 @@ export function SessionDetailClient({
 
   if (chatOnly) {
     return (
-      <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
+      <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
         <div className="flex min-h-0 flex-1">{chatPanel()}</div>
       </PendingReviewCommentsProvider>
     );
   }
 
   return (
-    <PendingReviewCommentsProvider onOpenDiffsTab={openDiffsTab}>
+    <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
       <SandboxWorkspace
         ownerKind="session"
         ownerId={sessionId}

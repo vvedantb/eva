@@ -13,6 +13,7 @@ import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
@@ -31,6 +32,7 @@ export function ProjectsListView({
   const { scrollParent, scrollRef } = usePersistedScrollParent(
     `${owner}/${name}/projects/list`,
   );
+  const firstPaint = useFirstPaintGate();
   const [openSections, setOpenSections] = useState<Set<ProjectPhase>>(() => {
     const nonEmpty = new Set(
       PROJECT_PHASES.filter((p) => (projectsByPhase[p] ?? []).length > 0),
@@ -99,7 +101,11 @@ export function ProjectsListView({
                       itemContent={(index) => {
                         const project = items[index];
                         return (
-                          <div className="pb-1.5">
+                          <ListEnter
+                            index={index}
+                            firstPaint={firstPaint.current}
+                            className="pb-1.5"
+                          >
                             <ProjectCard
                               projectId={project._id}
                               userId={project.userId}
@@ -128,7 +134,7 @@ export function ProjectsListView({
                                 onDelete(project._id, project.title)
                               }
                             />
-                          </div>
+                          </ListEnter>
                         );
                       }}
                     />

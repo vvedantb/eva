@@ -26,8 +26,10 @@ import {
   TooltipContent,
   TooltipTrigger,
   formatModelDisplayLabel,
+  motionBase,
   useDragSensors,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconArrowUp, IconPencil, IconTrash } from "@tabler/icons-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
@@ -267,10 +269,6 @@ export function QueuedMessagesPanel({
   // a queued message by touch never starts. The house hook arms touch on a hold.
   const sensors = useDragSensors({ sortable: true });
 
-  if (items.length === 0) {
-    return null;
-  }
-
   const draggable = Boolean(onReorder) && items.length > 1;
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -293,54 +291,69 @@ export function QueuedMessagesPanel({
 
   return (
     <>
-      {/* Flush above the composer: fills the dock column in ComposerStash,
-          which owns the inset, with a square bottom so it blends into the
-          input card (mirrors underCardLeading below). */}
-      <Queue className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
-        <QueueSection defaultOpen>
-          <QueueSectionTrigger>
-            <QueueSectionLabel count={items.length} label={label} />
-          </QueueSectionTrigger>
-          <QueueSectionContent>
-            <QueueList>
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={items.map((item) => item.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {items.map((item, index) => (
-                    <SortableQueuedItem
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      draggable={draggable}
-                      renderContent={renderContent}
-                      onEditClick={onEdit ? setEditingItem : undefined}
-                      onDeleteClick={
-                        onDelete
-                          ? (item) =>
-                              requestConfirm(
-                                altHeld,
-                                () => setDeletingItem(item),
-                                () => {
-                                  void deleteQueued(item);
-                                },
-                              )
-                          : undefined
-                      }
-                      onMoveToFront={onReorder ? handleMoveToFront : undefined}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            </QueueList>
-          </QueueSectionContent>
-        </QueueSection>
-      </Queue>
+      <AnimatePresence initial={false}>
+        {items.length > 0 ? (
+          <m.div
+            key="queued-messages"
+            className="w-full"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionBase}
+          >
+            {/* Flush above the composer: fills the dock column in ComposerStash,
+                which owns the inset, with a square bottom so it blends into the
+                input card (mirrors underCardLeading below). */}
+            <Queue className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
+              <QueueSection defaultOpen>
+                <QueueSectionTrigger>
+                  <QueueSectionLabel count={items.length} label={label} />
+                </QueueSectionTrigger>
+                <QueueSectionContent>
+                  <QueueList>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={items.map((item) => item.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {items.map((item, index) => (
+                          <SortableQueuedItem
+                            key={item.id}
+                            item={item}
+                            index={index}
+                            draggable={draggable}
+                            renderContent={renderContent}
+                            onEditClick={onEdit ? setEditingItem : undefined}
+                            onDeleteClick={
+                              onDelete
+                                ? (item) =>
+                                    requestConfirm(
+                                      altHeld,
+                                      () => setDeletingItem(item),
+                                      () => {
+                                        void deleteQueued(item);
+                                      },
+                                    )
+                                : undefined
+                            }
+                            onMoveToFront={
+                              onReorder ? handleMoveToFront : undefined
+                            }
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  </QueueList>
+                </QueueSectionContent>
+              </QueueSection>
+            </Queue>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <Dialog
         open={editingItem !== null}
