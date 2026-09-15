@@ -1,6 +1,7 @@
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import {
   registerFleetTools,
@@ -1130,6 +1131,33 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         locked: false,
       });
       return textResult({ locked: false });
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // request_local_computer — Grok Bot webhook (every MCP caller)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  server.tool(
+    "request_local_computer",
+    "Wake the user's Grok Bot via their saved webhook when you need their local computer (outside this Vercel sandbox): local files, local apps, or a command on their laptop. Requires Settings → Grok Bot. A 200 only means the Bot started a run — it does not return the result and you must not claim the work finished. The laptop and Grok Bot desktop app must be available if the task needs local execution (default is ask-every-time).",
+    {
+      task: z
+        .string()
+        .describe(
+          "Instruction for Grok Bot. Be specific about the local outcome you need.",
+        ),
+    },
+    async ({ task }) => {
+      const { userId } = await getContext();
+      const result = await ctx.runAction(internal.grokBotActions.callWebhook, {
+        userId: userId as Id<"users">,
+        task,
+      });
+      if (!result.accepted) {
+        return errorResult(result.message);
+      }
+      return textResult(result);
     },
   );
 
