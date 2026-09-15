@@ -8,8 +8,10 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { registerTools } from "./tools";
-import { registerSupabaseTools } from "./supabase";
+import { buildTools } from "./tools";
+import { supabaseTools } from "./supabase";
+import { mountFlat, type EvaTool } from "./registry";
+import { codeModeTools } from "../_mcp/codeModeTools";
 import {
   buildChatMessageCalls,
   decideSandboxStartPlan,
@@ -2201,15 +2203,20 @@ export const handleMcpRequest = internalAction({
         entityKind,
         isOrchestrator,
       };
-      registerTools(server, credentials, ctx);
+      const tools = buildTools(credentials, ctx);
+      let supabase: EvaTool[] = [];
       try {
-        await registerSupabaseTools(server, credentials, ctx);
+        supabase = await supabaseTools(credentials, ctx);
       } catch (err) {
         console.error(
           "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
           err instanceof Error ? err.message : err,
         );
       }
+      const allTools = [...tools, ...supabase];
+      // Code mode is additive: `execute` and `search_tools` sit beside the flat
+      // tools and dispatch to the same definitions.
+      mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
 
       // Create transport in stateless mode with JSON responses (no SSE).
       // WebStandardStreamableHTTPServerTransport works with Web Standard
