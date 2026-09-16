@@ -30,6 +30,7 @@ import {
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt, buildOrchestratorPrompt } from "./prompts";
+import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { z } from "zod";
 import { formatDelayedPublishFailureError } from "./resultTarget";
 import {
@@ -219,6 +220,14 @@ export async function buildSessionPrompt(
     return { prompt, branchName };
   }
 
+  // Sibling repositories this sandbox's git credentials can read (owner is the
+  // session owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    session.userId,
+    repo._id,
+  );
+
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
   // in as a rotation handoff. Session plan.md / planContent is not injected —
   // that was the old Plan/Build mode contract.
@@ -236,6 +245,7 @@ export async function buildSessionPrompt(
     repo.systemPrompt,
     session.devPort ?? repo.devPort,
     [],
+    readableRepos,
   );
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;

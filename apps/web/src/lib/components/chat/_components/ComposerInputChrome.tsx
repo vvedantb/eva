@@ -7,15 +7,16 @@ import {
   PromptInputSubmit,
   PromptInputTools,
   toast,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   cn,
+  motionFast,
   motionSpring,
-  type ModelAccount,
-  type ModelOption,
   type PromptInputMessage,
   usePromptInputController,
 } from "@eva/ui";
-import { LayoutGroup, m } from "motion/react";
-import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
 import {
   MAX_CHAT_ATTACHMENTS,
@@ -31,14 +32,12 @@ import {
 } from "@/lib/components/chat/MentionTextarea";
 import { IconPlayerStop } from "@tabler/icons-react";
 import { useId, type RefObject } from "react";
-import type {
-  AIModel,
-  Id,
-  ReasoningLevel,
-  StoredModelTraits,
-} from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { type SlashItem } from "@/lib/components/mentions";
 import { useComposerCompact } from "@/lib/components/chat/_components/useComposerCompact";
+import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";
+import { useShortcut } from "@/lib/hotkeys/useShortcut";
+import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 
 // `whitespace-pre!` rather than `nowrap`: both keep the pill on one line, but
 // `nowrap` still collapses whitespace, and Chrome then eats the trailing space
@@ -69,15 +68,10 @@ export function ComposerInputChrome({
   placeholder,
   isExecuting,
   isInputDisabled,
+  isUploading = false,
+  disabledReason,
+  onStartSandbox,
   hasPendingContext,
-  model,
-  setModel,
-  modelOptions,
-  accounts,
-  accountId,
-  onAccountChange,
-  displayTraits,
-  onTraitsChange,
   onPromptSubmit,
   onCancel,
   seedMentionMap,
@@ -94,20 +88,13 @@ export function ComposerInputChrome({
   placeholder: string;
   isExecuting: boolean;
   isInputDisabled: boolean;
+  /** Attachments are being uploaded: the submit button spins and stops accepting. */
+  isUploading?: boolean;
+  /** Why the composer will not send, for the toast on a blocked Enter. */
+  disabledReason?: string;
+  /** Wakes the sandbox; gives that toast its action. */
+  onStartSandbox?: () => void;
   hasPendingContext: boolean;
-  model: AIModel;
-  setModel: (model: AIModel) => void;
-  modelOptions: ReadonlyArray<ModelOption<AIModel>>;
-  accounts?: ReadonlyArray<ModelAccount>;
-  accountId?: string | null;
-  onAccountChange?: (accountId: string | null) => void;
-  displayTraits?: {
-    effortLevel: ReasoningLevel | undefined;
-    thinkingEnabled: boolean;
-    use1mContext: boolean;
-    fastMode: boolean;
-  };
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
   onPromptSubmit: (message: PromptInputMessage) => void | Promise<void>;
   onCancel: () => Promise<void>;
   seedMentionMap?: Map<string, string>;
@@ -126,6 +113,37 @@ export function ComposerInputChrome({
     value: textInput.value,
     fileCount: attachments.files.length,
   });
+
+  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
+  // registered here fires once per mounted composer. Only the one on screen
+  // may act — see composerVisibility.ts.
+  const isVisibleComposer = () =>
+    isComposerVisible(mentionRef.current?.getElement());
+
+  useShortcut("cancelTurn", () => {
+    if (!isExecuting) return;
+    if (!isVisibleComposer()) return;
+    void onCancel();
+  });
+
+  useShortcut("focusComposer", (event) => {
+    if (!isVisibleComposer()) return;
+    event.preventDefault();
+    mentionRef.current?.focus();
+  });
+
+  // Enter on a disabled composer swallows the keystroke either way; this is the
+  // difference between "nothing happened" and being told Eva is asleep, with
+  // the way out attached. An empty draft needs no explanation.
+  const handleBlockedSubmit = () => {
+    if (!isInputDisabled) return;
+    toast.info(disabledReason ?? "You can't send right now", {
+      id: "composer-blocked",
+      ...(onStartSandbox
+        ? { action: { label: "Wake up Eva", onClick: onStartSandbox } }
+        : {}),
+    });
+  };
 
   const leftTools = (
     <m.div
@@ -150,33 +168,45 @@ export function ComposerInputChrome({
       transition={motionSpring}
       className="flex min-w-0 items-center gap-0.5"
     >
-      <ModelSelectWithTraits
-        value={model}
-        options={modelOptions}
-        onValueChange={setModel}
-        accounts={accounts}
-        accountId={accountId}
-        onAccountChange={onAccountChange}
-        traits={displayTraits}
-        onTraitsChange={onTraitsChange}
-      />
       <ComposerSpeechButton disabled={isInputDisabled} />
-      {isExecuting ? (
-        <Button
-          size="icon-sm"
-          type="button"
-          variant="destructive"
-          className="rounded-full"
-          onClick={onCancel}
-          aria-label="Stop Eva"
-          title="Stop Eva"
-        >
-          <IconPlayerStop className="size-4" />
-        </Button>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {isExecuting ? (
+          <m.div
+            key="composer-stop"
+            className="inline-flex"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={motionFast}
+          >
+            {/* A tooltip rather than `title`: the binding is a `ShortcutKbd`
+                that follows the user's own setting, and a title attribute can
+                only hold a string. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-sm"
+                  type="button"
+                  variant="destructive"
+                  className="rounded-full"
+                  onClick={onCancel}
+                  aria-label="Stop Eva"
+                >
+                  <IconPlayerStop className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="flex items-center gap-2">
+                Stop Eva
+                <ShortcutKbd id="cancelTurn" />
+              </TooltipContent>
+            </Tooltip>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
       <ChatBodySubmit
         disabled={isInputDisabled}
         isExecuting={isExecuting}
+        isUploading={isUploading}
         hasPendingContext={hasPendingContext}
         allowEmptySubmit={allowEmptySubmit}
       />
@@ -191,62 +221,63 @@ export function ComposerInputChrome({
           colorVariant="colorful"
           className={compact ? "rounded-full" : "rounded-surface"}
         >
-        <PromptInput
-          data-mention-popup-anchor=""
-          onSubmit={onPromptSubmit}
-          accept={CHAT_ATTACHMENT_ACCEPT}
-          multiple
-          maxFiles={MAX_CHAT_ATTACHMENTS}
-          maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
-          onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
-          inputGroupClassName={cn(
-            // Height interpolates to/from `auto` so the conversation viewport
-            // grows with the composer instead of jumping when the pill snaps.
-            "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
-            compact
-              ? "h-12 items-center rounded-full py-1"
-              : "h-auto rounded-surface",
-          )}
-        >
-          <ChatAttachmentPreview />
-          {compact ? (
-            <InputGroupAddon
-              align="inline-start"
-              className="order-first gap-1 py-0 pl-1.5 pr-0 has-[>button]:ml-0"
-            >
-              {leftTools}
-            </InputGroupAddon>
-          ) : null}
-          <MentionTextarea
-            key="composer-editor"
-            ref={mentionRef}
-            repoBasePath={repoBasePath}
-            repoId={repoId}
-            skillItems={skillItems}
-            skillsSettingsHref={skillsSettingsHref}
-            placeholder={placeholder}
-            initialMentionMap={seedMentionMap}
-            initialSkillMap={seedSkillMap}
-            history={messageHistory}
-            enableAttachmentPaste
-            completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
-            className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
-          />
-          {compact ? (
-            <InputGroupAddon
-              align="inline-end"
-              className="order-last gap-1 py-0 pr-1.5 pl-1 has-[>button]:mr-0"
-            >
-              {rightTools}
-            </InputGroupAddon>
-          ) : (
-            <PromptInputFooter className="max-sm:gap-y-2 px-3 pb-3 pt-0">
-              <PromptInputTools>{leftTools}</PromptInputTools>
-              {rightTools}
-            </PromptInputFooter>
-          )}
-        </PromptInput>
-      </BorderBeam>
+          <PromptInput
+            data-mention-popup-anchor=""
+            onSubmit={onPromptSubmit}
+            accept={CHAT_ATTACHMENT_ACCEPT}
+            multiple
+            maxFiles={MAX_CHAT_ATTACHMENTS}
+            maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
+            onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
+            inputGroupClassName={cn(
+              // Height interpolates to/from `auto` so the conversation viewport
+              // grows with the composer instead of jumping when the pill snaps.
+              "[interpolate-size:allow-keywords] transition-[color,box-shadow,border-color,border-radius,height] duration-[var(--motion-base)]",
+              compact
+                ? "h-12 items-center rounded-full py-1"
+                : "h-auto rounded-surface",
+            )}
+          >
+            <ChatAttachmentPreview />
+            {compact ? (
+              <InputGroupAddon
+                align="inline-start"
+                className="order-first gap-1 py-0 pl-1.5 pr-0 has-[>button]:ml-0"
+              >
+                {leftTools}
+              </InputGroupAddon>
+            ) : null}
+            <MentionTextarea
+              key="composer-editor"
+              ref={mentionRef}
+              repoBasePath={repoBasePath}
+              repoId={repoId}
+              skillItems={skillItems}
+              skillsSettingsHref={skillsSettingsHref}
+              placeholder={placeholder}
+              initialMentionMap={seedMentionMap}
+              initialSkillMap={seedSkillMap}
+              history={messageHistory}
+              enableAttachmentPaste
+              onBlockedSubmit={handleBlockedSubmit}
+              completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
+              className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
+            />
+            {compact ? (
+              <InputGroupAddon
+                align="inline-end"
+                className="order-last gap-1 py-0 pr-1.5 pl-1 has-[>button]:mr-0"
+              >
+                {rightTools}
+              </InputGroupAddon>
+            ) : (
+              <PromptInputFooter className="max-sm:gap-y-2 px-3 pb-3 pt-0">
+                <PromptInputTools>{leftTools}</PromptInputTools>
+                {rightTools}
+              </PromptInputFooter>
+            )}
+          </PromptInput>
+        </BorderBeam>
       </div>
     </LayoutGroup>
   );
@@ -255,11 +286,14 @@ export function ComposerInputChrome({
 function ChatBodySubmit({
   disabled,
   isExecuting,
+  isUploading,
   hasPendingContext,
   allowEmptySubmit,
 }: {
   disabled: boolean;
   isExecuting: boolean;
+  /** Attachments are still uploading, so the send has not left yet. */
+  isUploading: boolean;
   hasPendingContext: boolean;
   allowEmptySubmit?: boolean;
 }) {
@@ -270,10 +304,21 @@ function ChatBodySubmit({
   return (
     <PromptInputSubmit
       disabled={
-        disabled || (isEmpty && !hasPendingContext && !allowEmptySubmit)
+        disabled ||
+        isUploading ||
+        (isEmpty && !hasPendingContext && !allowEmptySubmit)
       }
+      // "submitted" is the button's own spinner state. Fetch uploads report no
+      // bytes, so a spinner is the honest signal — a percentage would be made up.
+      {...(isUploading ? { status: "submitted" as const } : {})}
       className="size-9"
-      title={isExecuting ? "Queue message" : "Send message"}
+      title={
+        isUploading
+          ? "Uploading attachments…"
+          : isExecuting
+            ? "Queue message"
+            : "Send message"
+      }
     />
   );
 }

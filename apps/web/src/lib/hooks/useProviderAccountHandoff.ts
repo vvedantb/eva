@@ -15,16 +15,20 @@ export function useProviderAccountHandoff(args: {
   prewarm: () => Promise<unknown>;
 }): {
   isSwitchingAccount: boolean;
+  /**
+   * Resolves once the replacement daemon is warm, so a caller can sequence
+   * work (e.g. re-sending a turn) onto the new credential.
+   */
   switchProviderAccount: (
     providerAccountId: Id<"userProviderAccounts"> | null,
-  ) => void;
+  ) => Promise<void>;
 } {
   const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
 
   const switchProviderAccount = (
     providerAccountId: Id<"userProviderAccounts"> | null,
-  ) => {
-    void (async () => {
+  ): Promise<void> => {
+    return (async () => {
       setIsSwitchingAccount(true);
       // Cleanup is duplicated into the `catch` and after the `try` rather than
       // written once in a `finally`: React Compiler cannot compile a `finally`

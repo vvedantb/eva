@@ -314,6 +314,8 @@ async function resumeReusedSandbox(
   handle: SandboxHandle,
   opts: {
     installationId: number;
+    repoOwner: string;
+    repoName: string;
     branchName: string;
     baseBranch: string;
     onRestoring: () => Promise<void>;
@@ -381,7 +383,10 @@ async function resumeReusedSandbox(
   // Self-heal: rotate the per-sandbox secret + reinstall the helper every
   // resume so in-sandbox `git pull` and any subsequent fetch authenticate
   // without relying on a stale URL-embedded token.
-  await ensureGitCredentialHelper(ctx, handle, opts.installationId);
+  await ensureGitCredentialHelper(ctx, handle, opts.installationId, {
+    owner: opts.repoOwner,
+    name: opts.repoName,
+  });
   await checkoutSessionBranchWithRetry(
     handle,
     opts.branchName,
@@ -846,6 +851,8 @@ async function prepareSessionSandboxInternal(
             () =>
               resumeReusedSandbox(ctx, handle, {
                 installationId: args.installationId,
+                repoOwner: args.repoOwner,
+                repoName: args.repoName,
                 branchName: args.branchName,
                 baseBranch: args.baseBranch,
                 onRestoring: () =>
@@ -1817,6 +1824,8 @@ async function prepareTaskPreviewSandboxInternal(
     await runLoggedSessionStep("reuseTaskSandbox.prepare", sandboxDetails, () =>
       resumeReusedSandbox(ctx, handle, {
         installationId: args.installationId,
+        repoOwner: args.repoOwner,
+        repoName: args.repoName,
         branchName: args.branchName,
         baseBranch: args.baseBranch,
         onRestoring: () =>
@@ -2287,6 +2296,8 @@ async function prepareProjectPreviewSandboxInternal(
       () =>
         resumeReusedSandbox(ctx, handle, {
           installationId: args.installationId,
+          repoOwner: args.repoOwner,
+          repoName: args.repoName,
           branchName: args.branchName,
           baseBranch: args.baseBranch,
           onRestoring: () =>

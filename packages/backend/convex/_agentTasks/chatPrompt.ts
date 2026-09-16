@@ -14,6 +14,7 @@ interface BuildAgentTaskChatPromptArgs {
   customInstructionsBlock: string;
   systemPrompt: string | undefined;
   devPort: number | undefined;
+  readableRepos: ReadonlyArray<{ owner: string; name: string }>;
 }
 
 /**
@@ -44,5 +45,7 @@ ${args.message}`;
     args.customInstructionsBlock,
     args.systemPrompt,
     args.devPort,
+    [],
+    args.readableRepos,
   );
 }

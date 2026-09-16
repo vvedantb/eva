@@ -8,6 +8,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   Button,
+  CrossfadeIconSlot,
+  cn,
 } from "@eva/ui";
 import { IconPencil, IconMessageDots, IconEye } from "@tabler/icons-react";
 
@@ -34,19 +36,36 @@ export function DocModeSwitcher() {
           variant="secondary"
           aria-label={`Mode: ${current.label}`}
         >
-          <Icon size={14} aria-hidden />
-          <span className="hidden sm:inline">{current.label}</span>
+          <CrossfadeIconSlot
+            iconKey={mode}
+            className="relative flex size-3.5 items-center justify-center"
+          >
+            <Icon size={14} aria-hidden />
+          </CrossfadeIconSlot>
+          <span className="hidden sm:inline-grid">
+            {DOC_MODES.map((docMode) => (
+              <span
+                key={docMode}
+                className={cn(
+                  "col-start-1 row-start-1",
+                  docMode !== mode && "invisible",
+                )}
+              >
+                {MODE_CONFIG[docMode].label}
+              </span>
+            ))}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {DOC_MODES.map((m) => {
-          const config = MODE_CONFIG[m];
+        {DOC_MODES.map((docMode) => {
+          const config = MODE_CONFIG[docMode];
           const ModeIcon = config.icon;
           return (
             <DropdownMenuItem
-              key={m}
-              onClick={() => setMode(m)}
-              className={m === mode ? "bg-accent" : undefined}
+              key={docMode}
+              onClick={() => setMode(docMode)}
+              className={docMode === mode ? "bg-accent" : undefined}
             >
               <ModeIcon size={16} />
               {config.label}

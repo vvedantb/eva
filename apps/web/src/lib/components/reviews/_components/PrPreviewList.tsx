@@ -1,4 +1,6 @@
+import { CrossfadeIconSlot } from "@eva/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { ToneIcon, type PrOverview, type StatusTone } from "./prOverviewMeta";
 
@@ -32,10 +34,17 @@ function previewTone(state: string): StatusTone {
 export function PrPreviewList({ previews }: { previews: PrPreview[] }) {
   return (
     <ul className="space-y-1.5">
-      {previews.map((preview) => (
-        <li key={`${preview.environment}-${preview.updatedAt}`} className="min-w-0">
+      {previews.map((preview, index) => (
+        <ListEnter
+          key={`${preview.environment}-${preview.updatedAt}`}
+          as="li"
+          index={index}
+          fast
+          slide={false}
+          className="min-w-0"
+        >
           <PreviewRow preview={preview} />
-        </li>
+        </ListEnter>
       ))}
     </ul>
   );
@@ -47,7 +56,12 @@ function PreviewRow({ preview }: { preview: PrPreview }) {
   const body = (
     <>
       <span className="flex min-w-0 items-center gap-1.5">
-        <ToneIcon tone={previewTone(preview.state)} size={13} />
+        <CrossfadeIconSlot
+          iconKey={previewTone(preview.state)}
+          className="relative flex size-3.5 shrink-0 items-center justify-center"
+        >
+          <ToneIcon tone={previewTone(preview.state)} size={13} />
+        </CrossfadeIconSlot>
         <span className="min-w-0 truncate text-xs">{label}</span>
         {preview.url === null ? null : (
           <IconArrowUpRight

@@ -1,6 +1,7 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { OpenNavigationButton } from "@/lib/components/sidebar/OpenNavigationButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export const Route = createFileRoute("/_global/automations")({
@@ -21,6 +22,9 @@ function AutomationsGlobalPage() {
         icon={<IconPlayerPlay size={28} />}
         title="Select an automation"
         description="Choose one from the sidebar, or use + on an app to create one."
+        action={
+          <OpenNavigationButton label="Browse automations" className="mt-6" />
+        }
       />
     </div>
   );

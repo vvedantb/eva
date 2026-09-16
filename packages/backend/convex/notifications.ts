@@ -39,10 +39,10 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
  * Delay before an instant notification email is sent. Acts as a debounce: a
  * burst of activity within this window is swept into a single email, and the
  * send is skipped entirely if the user reads the notification in-app first.
- * Set to 30 minutes so that comment fan-out to a task's subscribers collapses
+ * Set to 15 minutes so that comment fan-out to a task's subscribers collapses
  * into one email per window rather than one per comment.
  */
-const EMAIL_SEND_DELAY_MS = 30 * 60 * 1000;
+const EMAIL_SEND_DELAY_MS = 15 * 60 * 1000;
 
 /**
  * How many unread notifications to scan per user before filtering. Larger than
@@ -188,18 +188,55 @@ const notificationValidator = v.object({
   contextLabel: v.optional(v.string()),
   emailedAt: v.optional(v.number()),
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
+  archivedAt: v.optional(v.number()),
 });
 
-/** Lists the 100 most recent notifications for the current user. */
+/** Max ids a single bulk notification mutation will accept. */
+const BULK_ID_LIMIT = 100;
+
+/**
+ * The caller's own notifications, for a bulk mutation. Ids that belong to
+ * somebody else (or no longer exist) are skipped rather than thrown on: the
+ * same owner check `markAsRead` makes, applied per row, so one stale id in a
+ * selection cannot fail the whole action.
+ */
+async function ownedNotifications(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  ids: Id<"notifications">[],
+) {
+  if (ids.length > BULK_ID_LIMIT) {
+    throw new Error(
+      `Too many notifications: ${ids.length} (max ${BULK_ID_LIMIT})`,
+    );
+  }
+  const owned = [];
+  for (const id of ids) {
+    const notification = await ctx.db.get(id);
+    if (!notification || notification.userId !== userId) continue;
+    owned.push(notification);
+  }
+  return owned;
+}
+
+/**
+ * Lists the current user's inbox: the 100 most recent notifications, then
+ * split by archive state (`archived: true` returns only archived rows, the
+ * default only unarchived ones). The window is taken before the split, so a
+ * large run of archived rows shortens the list rather than paging past them —
+ * acceptable while archiving is an inbox-sized action.
+ */
 export const list = authQuery({
-  args: {},
+  args: { archived: v.optional(v.boolean()) },
   returns: v.array(notificationValidator),
-  handler: async (ctx) => {
-    return await ctx.db
+  handler: async (ctx, args) => {
+    const recent = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
+    const wantArchived = args.archived === true;
+    return recent.filter((n) => (n.archivedAt !== undefined) === wantArchived);
   },
 });
 
@@ -214,7 +251,11 @@ export const get = authQuery({
   },
 });
 
-/** Returns the number of unread notifications for the current user (capped at 100). */
+/**
+ * Returns the number of unread notifications for the current user (capped at
+ * 100). Archived rows are excluded — archiving marks a notification read, so
+ * they should never sit behind the inbox badge.
+ */
 export const countUnread = authQuery({
   args: {},
   returns: v.number(),
@@ -225,7 +266,7 @@ export const countUnread = authQuery({
         q.eq("userId", ctx.userId).eq("read", false),
       )
       .take(100);
-    return unread.length;
+    return unread.filter((n) => n.archivedAt === undefined).length;
   },
 });
 
@@ -262,7 +303,11 @@ export const markAsUnread = authMutation({
   },
 });
 
-/** Marks all unread notifications as read for the current user. */
+/**
+ * Marks all unread notifications as read for the current user. Archived rows
+ * are left alone: they are out of the inbox, and touching them here would
+ * quietly change what the archived view shows.
+ */
 export const markAllAsRead = authMutation({
   args: {},
   returns: v.null(),
@@ -274,7 +319,72 @@ export const markAllAsRead = authMutation({
       )
       .collect();
     for (const n of unread) {
+      if (n.archivedAt !== undefined) continue;
       await ctx.db.patch(n._id, { read: true });
+    }
+    return null;
+  },
+});
+
+/** Marks every given notification the caller owns as read (inbox bulk bar). */
+export const markManyAsRead = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    for (const n of owned) {
+      if (!n.read) await ctx.db.patch(n._id, { read: true });
+    }
+    return null;
+  },
+});
+
+/** Marks every given notification the caller owns as unread. */
+export const markManyAsUnread = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    for (const n of owned) {
+      if (n.read) await ctx.db.patch(n._id, { read: false });
+    }
+    return null;
+  },
+});
+
+/**
+ * Archives notifications out of the inbox. Reversible (see `unarchiveMany`):
+ * the row stays and only `archivedAt` is stamped. Archiving also marks the
+ * notification read, so an archived item cannot keep counting as unread.
+ */
+export const archiveMany = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    const now = Date.now();
+    for (const n of owned) {
+      if (n.archivedAt !== undefined) continue;
+      await ctx.db.patch(n._id, { archivedAt: now, read: true });
+    }
+    return null;
+  },
+});
+
+/**
+ * Puts archived notifications back in the inbox. Read state is left as it is —
+ * archiving marked them read, and undoing the archive should not resurface
+ * them as unread.
+ */
+export const unarchiveMany = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    for (const n of owned) {
+      if (n.archivedAt === undefined) continue;
+      // `undefined` removes the field, which is what "not archived" means.
+      await ctx.db.patch(n._id, { archivedAt: undefined });
     }
     return null;
   },

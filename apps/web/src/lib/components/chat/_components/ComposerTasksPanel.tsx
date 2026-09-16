@@ -1,4 +1,12 @@
-import { Button, cn } from "@eva/ui";
+import {
+  Button,
+  cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  motionBase,
+} from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCircle,
@@ -178,65 +186,84 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
   const [dismissedTurnId, setDismissedTurnId] = useState<string | null>(null);
 
   const turnKey = turnId ?? "current";
-
-  if (steps.length === 0) return null;
-  if (dismissedTurnId === turnKey) return null;
-
-  const progress = deriveProgress(steps);
-  const allDone = progress.completedSteps >= progress.totalSteps;
-  const label = `Tasks: ${progress.completedSteps} of ${progress.totalSteps} complete. Current task: ${progress.step}`;
+  const visible = steps.length > 0 && dismissedTurnId !== turnKey;
+  const progress = visible ? deriveProgress(steps) : null;
+  const allDone = progress
+    ? progress.completedSteps >= progress.totalSteps
+    : false;
+  const label = progress
+    ? `Tasks: ${progress.completedSteps} of ${progress.totalSteps} complete. Current task: ${progress.step}`
+    : "Tasks";
 
   return (
-    // Flush above the input card. The dock in ComposerStash owns the inset, so
-    // this fills its column; the squared bottom matches QueuedMessagesPanel so
-    // the stack reads as one surface.
-    <div className="w-full rounded-b-none rounded-t-surface bg-muted/50">
-      <div className="flex items-center gap-1 px-3 py-1.5">
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-label={label}
-          className="motion-press flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch text-left text-xs leading-none text-muted-foreground hover:text-foreground active:scale-[0.98]"
-          onClick={() => setExpanded(!expanded)}
-          // Keep composer focus when toggling from the input.
-          onPointerDown={(event) => event.preventDefault()}
+    <AnimatePresence initial={false}>
+      {visible && progress ? (
+        <m.div
+          key={turnKey}
+          className="w-full rounded-b-none rounded-t-surface bg-muted/50"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={motionBase}
         >
-          <IconListCheck aria-hidden className="size-3.5 shrink-0" />
-          <span className="shrink-0 font-medium text-foreground">Tasks</span>
-          {expanded ? null : (
-            <span className="min-w-0 flex-1 truncate text-foreground/80">
-              {progress.step}
-            </span>
-          )}
-          <span
-            className={cn(
-              "shrink-0 font-medium tabular-nums",
-              expanded ? "ml-auto" : "",
-              allDone ? "text-success" : "text-muted-foreground",
-            )}
-          >
-            {progress.completedSteps}/{progress.totalSteps}
-          </span>
-          {expanded ? null : <TaskSegments className="w-20" steps={steps} />}
-        </button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Dismiss tasks for this turn"
-          className="shrink-0"
-          onClick={() => setDismissedTurnId(turnKey)}
-          onPointerDown={(event) => event.preventDefault()}
-        >
-          <IconX aria-hidden className="size-3" />
-        </Button>
-      </div>
-      {expanded ? (
-        <div className="space-y-px px-3 pb-3" role="list">
-          {keyedTaskSteps(steps).map(({ key, step }) => (
-            <TaskStepRow key={key} step={step} />
-          ))}
-        </div>
+          {/* Flush above the input card. The dock in ComposerStash owns the inset, so
+              this fills its column; the squared bottom matches QueuedMessagesPanel so
+              the stack reads as one surface. */}
+          <Collapsible open={expanded} onOpenChange={setExpanded}>
+            <div className="flex items-center gap-1 px-3 py-1.5">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-label={label}
+                  className="motion-press flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch text-left text-xs leading-none text-muted-foreground hover:text-foreground active:scale-[0.98]"
+                  // Keep composer focus when toggling from the input.
+                  onPointerDown={(event) => event.preventDefault()}
+                >
+                  <IconListCheck aria-hidden className="size-3.5 shrink-0" />
+                  <span className="shrink-0 font-medium text-foreground">
+                    Tasks
+                  </span>
+                  {expanded ? null : (
+                    <span className="min-w-0 flex-1 truncate text-foreground/80">
+                      {progress.step}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "shrink-0 font-medium tabular-nums",
+                      expanded ? "ml-auto" : "",
+                      allDone ? "text-success" : "text-muted-foreground",
+                    )}
+                  >
+                    {progress.completedSteps}/{progress.totalSteps}
+                  </span>
+                  {expanded ? null : (
+                    <TaskSegments className="w-20" steps={steps} />
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Dismiss tasks for this turn"
+                className="shrink-0"
+                onClick={() => setDismissedTurnId(turnKey)}
+                onPointerDown={(event) => event.preventDefault()}
+              >
+                <IconX aria-hidden className="size-3" />
+              </Button>
+            </div>
+            <CollapsibleContent>
+              <div className="space-y-px px-3 pb-3" role="list">
+                {keyedTaskSteps(steps).map(({ key, step }) => (
+                  <TaskStepRow key={key} step={step} />
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </m.div>
       ) : null}
-    </div>
+    </AnimatePresence>
   );
 }

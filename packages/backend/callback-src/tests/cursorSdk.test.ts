@@ -87,8 +87,8 @@ test("only a pre-output resumed Cursor stall is safe to replay", () => {
 
 test("only a missing Cursor store may replace the saved agent", () => {
   expect(canReplaceCursorAgent(new Error("agent_not_found"))).toBe(true);
-  const gone = new Error("Agent not found");
-  (gone as { code?: string }).code = "agent_not_found";
+  const gone: Error & { code?: string } = new Error("Agent not found");
+  gone.code = "agent_not_found";
   expect(canReplaceCursorAgent(gone)).toBe(true);
   expect(
     canReplaceCursorAgent(

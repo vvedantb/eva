@@ -13,6 +13,7 @@ import {
 import { IconGitPullRequest, IconSparkles } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
+  sandboxDisplayStatus,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,
@@ -65,6 +67,8 @@ interface SidebarSessionItemProps {
   createdAt: number;
   updatedAt?: number;
   status: SandboxStatus;
+  /** Reason the last wake attempt failed — turns the dot red on a closed row. */
+  sandboxError?: string;
   /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
   /** The user's persistent orchestrator session — marked instead of dotted. */
@@ -84,7 +88,8 @@ function SessionPrIcon({
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
 }) {
-  if (!prUrl) return null;
+  const simpleView = useSimpleView();
+  if (simpleView || !prUrl) return null;
   return (
     <IconGitPullRequest
       size={12}
@@ -161,6 +166,7 @@ export function SidebarSessionItem({
   createdAt,
   updatedAt,
   status,
+  sandboxError,
   isExecuting = false,
   isOrchestrator = false,
   isSelected,
@@ -171,7 +177,13 @@ export function SidebarSessionItem({
 }: SidebarSessionItemProps) {
   const { settings } = useSessionsSidebarSettings();
   const isFolder = settings.layout === "folder";
-  const statusStyle = SANDBOX_STATUS_STYLES[status];
+  const displayStatus = sandboxDisplayStatus({ status, sandboxError });
+  const statusStyle = SANDBOX_STATUS_STYLES[displayStatus];
+  // The row has no room for the reason, so the hover title carries it.
+  const statusLabel =
+    displayStatus === "error" && sandboxError
+      ? `${statusStyle.label} — ${sandboxError}`
+      : statusStyle.label;
   const activityAt = updatedAt ?? createdAt;
 
   const titleClass = cn(
@@ -183,7 +195,7 @@ export function SidebarSessionItem({
 
   const statusLeading = (
     <SessionStatusLeading
-      label={statusStyle.label}
+      label={statusLabel}
       dotClassName={statusStyle.dot}
       isExecuting={isExecuting}
       isOrchestrator={isOrchestrator}

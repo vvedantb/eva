@@ -243,6 +243,7 @@ export const updateConfig = authMutation({
     defaultFastMode: v.optional(v.boolean()),
     sessionsVncEnabled: v.optional(v.boolean()),
     sessionsVscodeEnabled: v.optional(v.boolean()),
+    sandboxReadExcluded: v.optional(v.boolean()),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
     devPort: v.optional(v.union(v.number(), v.null())),
@@ -277,6 +278,8 @@ export const updateConfig = authMutation({
       sharedPatch.sessionsVncEnabled = args.sessionsVncEnabled;
     if (args.sessionsVscodeEnabled !== undefined)
       sharedPatch.sessionsVscodeEnabled = args.sessionsVscodeEnabled;
+    if (args.sandboxReadExcluded !== undefined)
+      sharedPatch.sandboxReadExcluded = args.sandboxReadExcluded;
 
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {

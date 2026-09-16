@@ -2,11 +2,11 @@
 
 import { api, normalizeAIModel, type Id } from "@eva/backend";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { useSessionModel } from "@/lib/hooks/useSessionModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 
 /**
@@ -15,6 +15,7 @@ import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
  */
 export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
+  isRouteActive = true,
 ): (display: string, full: string) => Promise<void> {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
@@ -23,7 +24,7 @@ export function useSessionAnnotationSend(
     model,
     traits,
     providerAccountId: stickyProviderAccountId,
-  } = useSessionModel(sessionId, defaultModel);
+  } = useSessionModel(sessionId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,
@@ -34,12 +35,16 @@ export function useSessionAnnotationSend(
   // Owner-scoped, matching the composer picker — resolving against the
   // viewer's own accounts would drop the sticky account to Team.
   const { resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
 
-  const messages = useQuery(api.messages.listByParent, {
-    parentId: sessionId,
-  });
-  const turnStatus = useQuery(api.turns.getSessionStatus, { sessionId });
+  const messages = useHeldQuery(
+    api.messages.listByParent,
+    isRouteActive ? { parentId: sessionId } : "skip",
+  );
+  const turnStatus = useHeldQuery(
+    api.turns.getSessionStatus,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const addMessage = useMutation(api.sessions.addMessage);
   const startExecution = useMutation(api.sessionWorkflow.startExecute);
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);

@@ -10,20 +10,43 @@ function minuteSnapshot(): number {
   return Math.floor(Date.now() / MINUTE_MS);
 }
 
+function startTimer(): void {
+  if (timer !== undefined) return;
+  timer = setInterval(() => {
+    for (const notify of listeners) notify();
+  }, MINUTE_MS);
+}
+
+function stopTimer(): void {
+  if (timer === undefined) return;
+  clearInterval(timer);
+  timer = undefined;
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
-  if (timer === undefined) {
-    timer = setInterval(() => {
-      for (const notify of listeners) notify();
-    }, MINUTE_MS);
+  if (
+    typeof document === "undefined" ||
+    document.visibilityState === "visible"
+  ) {
+    startTimer();
   }
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0 && timer !== undefined) {
-      clearInterval(timer);
-      timer = undefined;
-    }
+    if (listeners.size === 0) stopTimer();
   };
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      stopTimer();
+      return;
+    }
+    if (listeners.size === 0) return;
+    startTimer();
+    for (const notify of listeners) notify();
+  });
 }
 
 /** A shared minute clock for expiry UI, without component-owned timer state. */

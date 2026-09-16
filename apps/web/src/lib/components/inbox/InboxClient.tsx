@@ -2,94 +2,51 @@
 
 import { useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
-import { PageHeader } from "@/lib/components/PageHeader";
 import { usePageTitleSync } from "@/lib/contexts/PageTitleContext";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
-import { Button, Skeleton } from "@eva/ui";
-import { IconChecks, IconInbox } from "@tabler/icons-react";
-import { inboxFilterParser, inboxSelectedParser } from "@/lib/search-params";
+import {
+  inboxFilterParser,
+  inboxGroupParser,
+  inboxSelectedParser,
+} from "@/lib/search-params";
 import { type Notification } from "@/lib/components/notifications/notification-config";
-import { InboxFilterMenu } from "@/lib/components/inbox/InboxFilterMenu";
-import { NotificationList } from "@/lib/components/inbox/NotificationList";
+import { InboxHeader } from "@/lib/components/inbox/InboxHeader";
+import { InboxBulkBar } from "@/lib/components/inbox/InboxBulkBar";
+import { InboxListPane } from "@/lib/components/inbox/InboxListPane";
 import { NotificationDetailPane } from "@/lib/components/inbox/NotificationDetailPane";
+import { useInboxActions } from "@/lib/components/inbox/useInboxActions";
+import { useInboxSelection } from "@/lib/components/inbox/useInboxSelection";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
-import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 /**
  * Two-pane inbox (Linear-style): the notification list on the left, the
  * selected notification's full content on the right. Clicking a row selects
  * it (and marks it read) instead of navigating away; the detail pane owns
- * the jump to the linked entity.
+ * the jump to the linked entity. Archive is reversible — archived rows move to
+ * their own filter rather than leaving.
  */
 export function InboxClient() {
   const navigate = useNavigate();
   usePageTitleSync("Inbox");
-  const notifications = useQuery(api.notifications.list);
+  const [filter, setFilter] = useQueryState("filter", inboxFilterParser);
+  const [group, setGroup] = useQueryState("group", inboxGroupParser);
+  const [selectedId, setSelectedId] = useQueryState(
+    "notification",
+    inboxSelectedParser,
+  );
+  const listArgs = { archived: filter === "archived" };
+  const notifications = useQuery(api.notifications.list, listArgs);
   const repos = useQuery(api.githubRepos.list, {});
   const unreadCount = useQuery(api.notifications.countUnread) ?? 0;
   const repoById = new Map<Id<"githubRepos">, RepoWithLogo>(
     (repos ?? []).map((repo) => [repo._id, repo]),
   );
-  const markAsRead = useMutation(
-    api.notifications.markAsRead,
-  ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.notifications.list, {});
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.notifications.list,
-        {},
-        current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
-      );
-    }
-    const count = localStore.getQuery(api.notifications.countUnread, {});
-    if (count !== undefined) {
-      localStore.setQuery(
-        api.notifications.countUnread,
-        {},
-        Math.max(0, count - 1),
-      );
-    }
-  });
-  const markAsUnread = useMutation(
-    api.notifications.markAsUnread,
-  ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.notifications.list, {});
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.notifications.list,
-        {},
-        current.map((n) => (n._id === args.id ? { ...n, read: false } : n)),
-      );
-    }
-    const count = localStore.getQuery(api.notifications.countUnread, {});
-    if (count !== undefined) {
-      localStore.setQuery(api.notifications.countUnread, {}, count + 1);
-    }
-  });
-  const markAllAsRead = useMutation(
-    api.notifications.markAllAsRead,
-  ).withOptimisticUpdate((localStore) => {
-    const current = localStore.getQuery(api.notifications.list, {});
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.notifications.list,
-        {},
-        current.map((n) => ({ ...n, read: true })),
-      );
-    }
-    localStore.setQuery(api.notifications.countUnread, {}, 0);
-  });
-  const [filter, setFilter] = useQueryState("filter", inboxFilterParser);
-  const [selectedId, setSelectedId] = useQueryState(
-    "notification",
-    inboxSelectedParser,
-  );
+  const { markRead, markUnread, markAllRead, markMany, archive, unarchive } =
+    useInboxActions(listArgs);
 
   const filtered =
     notifications === undefined
@@ -98,6 +55,15 @@ export function InboxClient() {
         ? notifications.filter((n) => !n.read)
         : notifications;
 
+  // Selection is scoped to what is on screen: the rendered order defines both
+  // "select all" and a shift-click range, and rows that leave the list have
+  // their selection pruned inside the hook.
+  const { isSelecting, selectedIds, start, toggle, selectAll, clear, exit } =
+    useInboxSelection((filtered ?? []).map((n) => n._id));
+  const checkedIds = (filtered ?? [])
+    .filter((n) => selectedIds.has(n._id))
+    .map((n) => n._id);
+
   // Resolved against the full list, not `filtered`: selecting an unread row on
   // the Unread tab marks it read (removing it from the tab), and the detail
   // pane must keep showing it rather than blanking out.
@@ -105,16 +71,10 @@ export function InboxClient() {
   const selectedRepo =
     selected?.repoId !== undefined ? repoById.get(selected.repoId) : undefined;
 
-  const handleMarkRead = (n: Notification) => {
-    void catchMutationError(
-      markAsRead({ id: n._id }),
-      "Couldn't mark as read",
-      "inbox-mark-read",
-    );
-  };
+  const handleMarkRead = (n: Notification) => markRead(n._id);
 
   const handleSelect = (n: Notification) => {
-    if (!n.read) handleMarkRead(n);
+    if (!n.read) markRead(n._id);
     setSelectedId(n._id);
   };
 
@@ -122,15 +82,22 @@ export function InboxClient() {
   // notification unread should not close the detail pane, and re-reading it
   // only happens when the row is clicked again.
   const handleToggleRead = (n: Notification) => {
-    if (n.read) {
-      void catchMutationError(
-        markAsUnread({ id: n._id }),
-        "Couldn't mark as unread",
-        "inbox-mark-unread",
-      );
-      return;
-    }
-    handleMarkRead(n);
+    if (n.read) markUnread(n._id);
+    else markRead(n._id);
+  };
+
+  const handleToggleArchive = (n: Notification) => {
+    if (n.archivedAt !== undefined) unarchive([n._id]);
+    else archive([n._id]);
+  };
+
+  // Every bulk action leaves selection mode: the rows it acted on have just
+  // moved or changed, so holding the selection open would leave the bar
+  // counting a list the user no longer has in front of them.
+  const runBulk = (action: (ids: Id<"notifications">[]) => void) => {
+    const ids = checkedIds;
+    exit();
+    action(ids);
   };
 
   const handleOpen = (n: Notification) => {
@@ -140,7 +107,8 @@ export function InboxClient() {
   };
 
   // Linear-style keys: arrows step the list, Enter opens the linked entity,
-  // Escape clears the selection. Skipped while typing in a field.
+  // `x` checks the focused row while selecting, and Escape backs out of
+  // selection mode first and the selected row second. Skipped while typing.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -163,13 +131,31 @@ export function InboxClient() {
         if (next) handleSelect(next);
       } else if (e.key === "Enter") {
         if (selected) handleOpen(selected);
+      } else if (e.key === "x" || e.key === "X") {
+        if (!isSelecting || selectedId === null) return;
+        e.preventDefault();
+        toggle(selectedId);
       } else if (e.key === "Escape") {
+        if (isSelecting) {
+          exit();
+          return;
+        }
         setSelectedId(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  });
+  }, [
+    filtered,
+    selected,
+    selectedId,
+    setSelectedId,
+    handleSelect,
+    handleOpen,
+    isSelecting,
+    toggle,
+    exit,
+  ]);
 
   // The header sits inside the left pane rather than above both panes, so the
   // detail pane (and the divider between them) runs the full viewport height.
@@ -183,80 +169,48 @@ export function InboxClient() {
         // The detail pane is the point of this view, so it starts open.
         defaultRightCollapsed={false}
         leftPanel={() => (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <PageHeader
-              title="Inbox"
-              headerRight={
-                <>
-                  {unreadCount > 0 ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        void catchMutationError(
-                          markAllAsRead(),
-                          "Couldn't mark all as read",
-                          "inbox-mark-all-read",
-                        );
-                      }}
-                      title="Mark all as read"
-                      aria-label="Mark all as read"
-                      className="h-7 text-xs text-muted-foreground"
-                    >
-                      <IconChecks size={14} />
-                      {/* The label is noise on narrow screens; the icon carries it. */}
-                      <span className="hidden sm:inline">Mark all read</span>
-                    </Button>
-                  ) : null}
-                  <InboxFilterMenu
-                    filter={filter}
-                    unreadCount={unreadCount}
-                    onChange={setFilter}
-                  />
-                </>
-              }
+          // `relative`: the floating bulk bar anchors to this pane, not the page.
+          <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+            <InboxHeader
+              filter={filter}
+              group={group}
+              unreadCount={unreadCount}
+              isSelecting={isSelecting}
+              onFilterChange={setFilter}
+              onGroupChange={setGroup}
+              onToggleSelecting={() => (isSelecting ? exit() : start())}
+              onMarkAllRead={markAllRead}
             />
             {/* Region divider between the header and the notification list. */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
-              {filtered === undefined ? (
-                <div
-                  className="space-y-2 p-4"
-                  aria-busy="true"
-                  aria-label="Loading inbox"
-                >
-                  <Skeleton className="h-4 w-24" />
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-14" />
-                  ))}
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="flex min-h-0 flex-1 items-center justify-center">
-                  <EmptyState
-                    icon={
-                      <IconInbox size={24} className="text-muted-foreground" />
-                    }
-                    title={
-                      filter === "unread"
-                        ? "No unread notifications"
-                        : "No notifications yet"
-                    }
-                    description="You're all caught up"
-                    animate={filter !== "unread"}
-                  />
-                </div>
-              ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto scrollbar">
-                  <NotificationList
-                    notifications={filtered}
-                    repoById={repoById}
-                    selectedId={selectedId}
-                    onSelect={handleSelect}
-                    onMarkRead={handleMarkRead}
-                    onToggleRead={handleToggleRead}
-                  />
-                </div>
-              )}
+              <InboxListPane
+                notifications={filtered}
+                filter={filter}
+                group={group}
+                repoById={repoById}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                onMarkRead={handleMarkRead}
+                onToggleRead={handleToggleRead}
+                onToggleArchive={handleToggleArchive}
+                isSelecting={isSelecting}
+                checkedIds={selectedIds}
+                onToggleCheck={(n, extend) => toggle(n._id, extend)}
+              />
             </div>
+            <InboxBulkBar
+              isSelecting={isSelecting}
+              selectedCount={checkedIds.length}
+              totalCount={(filtered ?? []).length}
+              viewingArchived={filter === "archived"}
+              onExitSelect={exit}
+              onSelectAll={selectAll}
+              onClearSelection={clear}
+              onMarkRead={() => runBulk((ids) => markMany(ids, true))}
+              onMarkUnread={() => runBulk((ids) => markMany(ids, false))}
+              onArchive={() => runBulk(archive)}
+              onUnarchive={() => runBulk(unarchive)}
+            />
           </div>
         )}
         rightPanel={() => (

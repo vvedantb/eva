@@ -36,12 +36,33 @@ export interface SandboxTabDescriptor {
   indicatorLabel?: string;
 }
 
+/**
+ * How one chip is arranged. The three cases are genuinely different shapes, so
+ * they are named rather than derived from booleans at each call site:
+ * `row` is the phone strip (icon beside label), `icon` is the 44px desktop rail
+ * and the crowded phone strip (label in a tooltip), `stacked` is the labelled
+ * desktop rail (icon over label).
+ */
+export type SandboxTabLayout = "row" | "icon" | "stacked";
+
 /* The chip: `TabsTrigger` already supplies `rounded-lg`, `motion-press`,
    `relative z-1` and the active text colour, and the active *fill* is the
    `TabsList` sliding pill gliding underneath. Only the resting/hover tones and
    the tighter panel density belong here. */
+/* `max-sm:h-10`: the phone strip is the only place these are tapped, and 32px
+   sits under the comfortable-tap floor. `hit-target` is the wrong tool here —
+   its 8px bleed would overlap the neighbouring chip across the 4px gap. */
 const TAB_CLASS =
-  "h-8 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground md:w-8 md:justify-center md:px-0";
+  "h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
+
+/* Geometry only — the `md:` prefixes hold because the two rail layouts are
+   chosen off the same 768px breakpoint the media query reads. */
+const TAB_LAYOUT_CLASS: Record<SandboxTabLayout, string> = {
+  row: "",
+  icon: "md:w-8 md:justify-center md:px-0",
+  stacked:
+    "md:h-auto md:w-full md:flex-col md:justify-center md:gap-0.5 md:px-1 md:py-1.5",
+};
 
 const ICON_CLASS = "size-4 shrink-0";
 
@@ -55,8 +76,8 @@ function TabIcon({ icon }: { icon: SandboxTabIcon }) {
 
 interface SandboxTabTriggerProps {
   tab: SandboxTabDescriptor;
-  /** Icon-only, label moved into a tooltip — desktop rail, or a crowded mobile strip. */
-  labelHidden?: boolean;
+  /** Defaults to the icon rail — the shape every surface but the phone uses. */
+  layout?: SandboxTabLayout;
   /**
    * Fired on click when this tab is already selected. Radix skips
    * `onValueChange` in that case, so a collapsed rail would otherwise ignore
@@ -67,24 +88,32 @@ interface SandboxTabTriggerProps {
 
 export function SandboxTabTrigger({
   tab,
-  labelHidden = false,
+  layout = "icon",
   onReselect,
 }: SandboxTabTriggerProps) {
+  const labelHidden = layout === "icon";
   const trigger = (
     <TabsTrigger
       value={tab.value}
       aria-label={labelHidden ? tab.label : undefined}
-      className={TAB_CLASS}
+      className={cn(TAB_CLASS, TAB_LAYOUT_CLASS[layout])}
       onClick={onReselect}
     >
       <TabIcon icon={tab.icon} />
-      {labelHidden ? null : tab.label}
+      {layout === "row" ? tab.label : null}
+      {layout === "stacked" ? (
+        /* One line, clipped: a rail that reflows per tab name would make the
+           whole column ragged, and the tooltip is gone at this width. */
+        <span className="w-full truncate text-[10px] leading-3">
+          {tab.label}
+        </span>
+      ) : null}
       {tab.indicator ? (
         <span
           aria-label={tab.indicatorLabel}
           className={cn(
             "size-1.5 shrink-0 rounded-full bg-primary",
-            labelHidden && "absolute right-0.5 top-0.5",
+            layout !== "row" && "absolute right-0.5 top-0.5",
             tab.indicator === "activity" &&
               "animate-pulse ring-2 ring-primary/30",
           )}
@@ -92,6 +121,8 @@ export function SandboxTabTrigger({
       ) : null}
     </TabsTrigger>
   );
+  // A visible label needs no tooltip repeating it.
+  if (!labelHidden) return trigger;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -99,10 +130,7 @@ export function SandboxTabTrigger({
             uses `data-state` for active/inactive. */}
         <span className="inline-flex">{trigger}</span>
       </TooltipTrigger>
-      <TooltipContent
-        side={labelHidden ? "left" : "bottom"}
-        className="text-xs"
-      >
+      <TooltipContent side="left" className="text-xs">
         {tab.label}
       </TooltipContent>
     </Tooltip>

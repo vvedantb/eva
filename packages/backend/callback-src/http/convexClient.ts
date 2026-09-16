@@ -12,7 +12,7 @@ import {
   STREAMING_HEARTBEAT_MAX_RETRIES,
 } from "../config.js";
 import type { ConvexCallType, JsonObject, JsonValue } from "../types.js";
-import { readResponseJson } from "../utils.js";
+import { log, readResponseJson } from "../utils.js";
 import {
   getCurrentTurnLease,
   noteHeartbeatResponse,
@@ -63,14 +63,16 @@ async function withRetries<T>(
       attempt++;
       if (attempt > maxRetries || !shouldRetry(error)) throw e;
       const delayMs = buildRetryDelayMs(attempt);
-      console.error(
+      // Timestamped: these lines are the only record of a daemon stalling
+      // between heartbeats, and an untimestamped one says nothing about when.
+      log(
         label +
           " attempt " +
           attempt +
           " failed, retrying in " +
           delayMs +
-          "ms:",
-        String(e),
+          "ms: " +
+          String(e),
       );
       await new Promise((r) => setTimeout(r, delayMs));
     }

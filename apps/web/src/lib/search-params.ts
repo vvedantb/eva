@@ -133,6 +133,8 @@ const sandboxTabs = [
   "agents",
   "prd",
   "designs",
+  "artifacts",
+  "documents",
 ] as const;
 export type SandboxTab = (typeof sandboxTabs)[number];
 
@@ -176,6 +178,8 @@ const taskRouteSandboxTabs = [
   "review",
   "files",
   "agents",
+  "artifacts",
+  "documents",
 ] as const;
 export type TaskRouteSandboxTab = (typeof taskRouteSandboxTabs)[number];
 
@@ -380,7 +384,10 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
-export const inboxFilters = ["all", "unread"] as const;
+// "archived" is a separate list rather than a third state of the same one: the
+// backend splits the 100-row window on `archivedAt`, so Unread only ever means
+// "unread and not archived".
+export const inboxFilters = ["all", "unread", "archived"] as const;
 export type InboxFilter = (typeof inboxFilters)[number];
 export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
   .withDefault("all")
@@ -388,6 +395,18 @@ export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
 
 export function isInboxFilter(s: string): s is InboxFilter {
   return inboxFilters.some((filter) => filter === s);
+}
+
+// How the inbox list is sectioned. Presentation, but shareable: "group by repo"
+// is part of what you are looking at, so it rides the URL with the filter.
+export const inboxGroups = ["day", "repo", "type"] as const;
+export type InboxGroup = (typeof inboxGroups)[number];
+export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
+  .withDefault("day")
+  .withOptions(searchOptions);
+
+export function isInboxGroup(s: string): s is InboxGroup {
+  return inboxGroups.some((group) => group === s);
 }
 
 // Selected notification id in the two-pane inbox, kept in the URL so the

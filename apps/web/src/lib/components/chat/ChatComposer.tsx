@@ -6,7 +6,11 @@ import {
   type ModelOption,
   type PromptInputMessage,
 } from "@eva/ui";
-import { useUploadChatAttachments } from "@/lib/components/chat/imageAttachments";
+import {
+  describeFailedAttachments,
+  useUploadChatAttachments,
+  type ChatAttachmentUploads,
+} from "@/lib/components/chat/imageAttachments";
 import { ChatDraftSync } from "@/lib/components/chat/ChatDraftSync";
 import { LocalChatDraftSync } from "@/lib/components/chat/LocalChatDraftSync";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
@@ -14,13 +18,14 @@ import { ChatTypeToFocus } from "@/lib/components/chat/ChatTypeToFocus";
 import { ChatTypingLayer } from "@/lib/components/chat/ChatTypingLayer";
 import { ComposerInputChrome } from "@/lib/components/chat/_components/ComposerInputChrome";
 import { ComposerStash } from "@/lib/components/chat/_components/ComposerStash";
+import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import {
   mergeMentionItems,
   tokenizedToEditable,
 } from "@/lib/components/mentions";
-import { useRef } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -59,6 +64,10 @@ interface ChatComposerProps {
   messageHistory: string[];
   isExecuting: boolean;
   isInputDisabled: boolean;
+  /** Why the composer will not send, for the toast on a blocked Enter. */
+  disabledReason?: string;
+  /** Wakes the sandbox; gives that toast its action. */
+  onStartSandbox?: () => void;
   placeholder: string;
   model: AIModel;
   setModel: (model: AIModel) => void;
@@ -84,7 +93,11 @@ interface ChatComposerProps {
   streamingActivity?: string;
   /** Message id of the streaming turn; scopes Tasks-panel dismissal to it. */
   streamingTurnId?: string;
-  /** Optional left-side control on the under-input card (e.g. base branch). */
+  /**
+   * Optional left-side control on the under-input bar (e.g. base branch).
+   * The bar itself always renders so the model picker has a home on every
+   * composer surface; this slot is only the extra leading control.
+   */
   underCardLeading?: React.ReactNode;
   draft?: ChatDraftSeed;
   /** Persist draft in localStorage when no Convex conversation exists yet. */
@@ -102,6 +115,8 @@ export function ChatComposer({
   messageHistory,
   isExecuting,
   isInputDisabled,
+  disabledReason,
+  onStartSandbox,
   placeholder,
   model,
   setModel,
@@ -134,6 +149,7 @@ export function ChatComposer({
   const currentUserId = useQuery(api.auth.me);
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
+  const [isUploading, setIsUploading] = useState(false);
   const { updateQueuedMessage, deleteQueuedMessage, reorderQueuedMessages } =
     useQueuedMessageMutations(queuedMessages);
   // Convex draft wins when both are passed (existing sessions).
@@ -144,23 +160,44 @@ export function ChatComposer({
     files: PromptInputMessage["files"],
   ) => {
     const visible = text.trim();
-    const attachmentStorageIds = await uploadChatAttachments(files);
-    if (files.length > 0 && attachmentStorageIds.length < files.length) {
-      toast.error("Some attachments could not be uploaded.");
+    let uploads: ChatAttachmentUploads = { ids: [], failed: [] };
+    if (files.length > 0) {
+      // Fetch uploads report no bytes, so the only honest progress signal is
+      // that the send is busy: the submit button spins and stops accepting.
+      setIsUploading(true);
+      // Reset is duplicated into the catch rather than using `finally`: the
+      // React Compiler bails on the whole file when it meets one.
+      try {
+        uploads = await uploadChatAttachments(files);
+      } catch (error) {
+        setIsUploading(false);
+        throw error;
+      }
+      setIsUploading(false);
+    }
+    if (uploads.failed.length > 0) {
+      toast.error(
+        `Couldn't upload ${describeFailedAttachments(uploads.failed)}`,
+        {
+          id: "composer-attachments",
+          description: "Remove them or try again.",
+        },
+      );
+      // Sending anyway produced a turn the user believed carried a screenshot
+      // Eva never received. PromptInput keeps the text and the files exactly
+      // when onSubmit rejects, so throwing is what preserves the composer.
+      throw new Error("Chat attachments failed to upload");
     }
     if (
       !visible &&
-      attachmentStorageIds.length === 0 &&
+      uploads.ids.length === 0 &&
       !hasPendingContext &&
       !allowEmptySubmit
     ) {
       return;
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
-    await onSend(
-      content,
-      attachmentStorageIds.length > 0 ? attachmentStorageIds : undefined,
-    );
+    await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
 
   const handlePromptSubmit = async ({ text, files }: PromptInputMessage) => {
@@ -175,6 +212,35 @@ export function ChatComposer({
     reasoningLevel: message.reasoningLevel,
     userId: message.userId,
   }));
+
+  const mutedBar = (stashButton: ReactNode) => (
+    <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
+      {/* On a phone the bar is ~340px wide and the model name is long, so a
+          `shrink-0` picker left the leading control (the base branch) one
+          letter. Both sides give width there: the leading control takes a share
+          of the free space, the picker shrinks and truncates. Desktop keeps the
+          picker at its natural width. */}
+      {underCardLeading ? (
+        <div className="min-w-0 max-sm:flex-1 max-sm:basis-0">
+          {underCardLeading}
+        </div>
+      ) : null}
+      {stashButton}
+      <div className="ml-auto min-w-0 max-sm:shrink sm:shrink-0">
+        <ModelSelectWithTraits
+          value={model}
+          options={modelOptions}
+          onValueChange={setModel}
+          accounts={accounts}
+          accountId={accountId}
+          onAccountChange={onAccountChange}
+          traits={displayTraits}
+          onTraitsChange={onTraitsChange}
+          className="h-7 w-auto max-w-full justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
@@ -192,11 +258,14 @@ export function ChatComposer({
       </AnimatePresence>
       {preInputContent}
       {isDraftLoading ? (
-        <div
-          aria-busy="true"
-          aria-label="Loading draft..."
-          className="pointer-events-none rounded-full bg-background opacity-50 min-h-12"
-        />
+        <>
+          <div
+            aria-busy="true"
+            aria-label="Loading draft..."
+            className="pointer-events-none rounded-full bg-background opacity-50 min-h-12"
+          />
+          {mutedBar(null)}
+        </>
       ) : (
         <PromptInputProvider initialInput={seed?.initialDisplay}>
           <ChatTypingLayer
@@ -262,6 +331,7 @@ export function ChatComposer({
                 />
               </>
             }
+            bar={mutedBar}
           >
             <ComposerInputChrome
               repoId={repoId}
@@ -273,15 +343,10 @@ export function ChatComposer({
               placeholder={isExecuting ? "Add a follow-up..." : placeholder}
               isExecuting={isExecuting}
               isInputDisabled={isInputDisabled}
+              isUploading={isUploading}
+              disabledReason={disabledReason}
+              onStartSandbox={onStartSandbox}
               hasPendingContext={hasPendingContext}
-              model={model}
-              setModel={setModel}
-              modelOptions={modelOptions}
-              accounts={accounts}
-              accountId={accountId}
-              onAccountChange={onAccountChange}
-              displayTraits={displayTraits}
-              onTraitsChange={onTraitsChange}
               onPromptSubmit={handlePromptSubmit}
               onCancel={onCancel}
               seedMentionMap={seed?.mentionMap}
@@ -292,11 +357,6 @@ export function ChatComposer({
           </ComposerStash>
         </PromptInputProvider>
       )}
-      {underCardLeading ? (
-        <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center rounded-b-surface bg-muted/70 px-2 py-1.5">
-          <div className="min-w-0">{underCardLeading}</div>
-        </div>
-      ) : null}
     </div>
   );
 }

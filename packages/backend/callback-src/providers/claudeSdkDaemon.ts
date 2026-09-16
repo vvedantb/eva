@@ -76,7 +76,7 @@ import {
   endTurnOwnership,
   getCurrentTurnLease,
 } from "../runtime/turnLease.js";
-import { log, readResponseJson } from "../utils.js";
+import { log } from "../utils.js";
 import { ensureGithubToken } from "./githubToken.js";
 import type { JsonObject, JsonValue } from "../types.js";
 import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";

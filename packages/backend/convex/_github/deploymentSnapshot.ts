@@ -38,6 +38,7 @@ export type GitHubReposDeploymentApi = {
 };
 
 export type GitHubDeploymentSnapshot =
+  | { kind: "missing_branch" }
   | { kind: "no_deployments"; commitSha: string }
   | { kind: "no_project_match"; commitSha: string; environments: string[] }
   | {
@@ -57,6 +58,15 @@ export type GitHubDeploymentSnapshot =
     };
 
 /**
+ * Prod (2026-09-11): `pollSessionDeploymentStatus` logged ERROR for GitHub
+ * `Branch not found` while retrying session branches that were not pushed yet
+ * or had already been deleted. That is an expected poll miss.
+ */
+export function isMissingGithubBranchError(error: Error): boolean {
+  return error.message.toLowerCase().includes("branch not found");
+}
+
+/**
  * One GitHub read for a branch's latest deployment. Callers own persist,
  * URL alias resolution, and retry scheduling.
  */
@@ -67,12 +77,20 @@ export async function fetchGitHubDeploymentSnapshot(params: {
   branch: string;
   deploymentProjectName?: string;
 }): Promise<GitHubDeploymentSnapshot> {
-  const { data: branch } = await params.repos.getBranch({
-    owner: params.owner,
-    repo: params.repo,
-    branch: params.branch,
-  });
-  const commitSha = branch.commit.sha;
+  let commitSha: string;
+  try {
+    const { data: branch } = await params.repos.getBranch({
+      owner: params.owner,
+      repo: params.repo,
+      branch: params.branch,
+    });
+    commitSha = branch.commit.sha;
+  } catch (error) {
+    if (error instanceof Error && isMissingGithubBranchError(error)) {
+      return { kind: "missing_branch" };
+    }
+    throw error;
+  }
 
   const { data: deployments } = await params.repos.listDeployments({
     owner: params.owner,

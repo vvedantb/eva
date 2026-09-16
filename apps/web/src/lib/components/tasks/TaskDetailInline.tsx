@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, cn } from "@eva/ui";
+import { Badge, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconLoader2, IconClock } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
@@ -31,7 +33,7 @@ import {
   SandboxWorkspace,
   type TerminalPanelApi,
 } from "@/lib/components/sandbox/SandboxWorkspace";
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -58,6 +60,7 @@ export function TaskDetailInline({
   allTags = [],
   routing,
 }: TaskDetailInlineProps) {
+  const navigate = useNavigate();
   const [embeddedSandboxTab, setEmbeddedSandboxTab] =
     useState<SandboxTab>("preview");
   /** Which detail pane is on screen below `md`; both show at `md` and up. */
@@ -65,6 +68,7 @@ export function TaskDetailInline({
   const [, setFileViewerPath] = useQueryState("file", fileViewerPathParser);
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
+  const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmChatDaemon = useMutation(
     api.agentTaskChatWorkflow.prewarmChatDaemon,
   );
@@ -137,6 +141,8 @@ export function TaskDetailInline({
     void prewarmChatDaemon({ taskId });
   }, [taskId, isSandboxActive, sandboxId, prewarmChatDaemon]);
 
+  const [expandRightSignal, setExpandRightSignal] = useState(0);
+
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   // Must stay above early returns so hooks order is stable.
   const openFile = (path: string) => {
@@ -147,6 +153,23 @@ export function TaskDetailInline({
     }
     void setFileViewerPath(path);
     setEmbeddedSandboxTab("files");
+  };
+
+  const openDiffs = (repoRelativePath?: string) => {
+    if (simpleView) return;
+    if (routing?.mode === "quick-sandbox") {
+      routing.quick.onViewDiff(repoRelativePath);
+      setExpandRightSignal((n) => n + 1);
+      return;
+    }
+    if (repoRelativePath) {
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, diffFile: repoRelativePath }),
+      });
+    }
+    setEmbeddedSandboxTab("review");
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Must stay above early returns — same hooks-order constraint as openFile.
@@ -166,7 +189,6 @@ export function TaskDetailInline({
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const [expandRightSignal, setExpandRightSignal] = useState(0);
   const agentBrowsingAt = task?.agentBrowsingAt;
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
@@ -195,7 +217,9 @@ export function TaskDetailInline({
 
   // A quick task's settled first run renders as the opening chat turn in the
   // sandbox view instead of a timeline accordion (see firstRunChatTurn.ts).
-  const firstRunInChat = isQuickTask ? findFirstRunChatTurnRun(runs) : undefined;
+  const firstRunInChat = isQuickTask
+    ? findFirstRunChatTurnRun(runs)
+    : undefined;
   const timelineRuns = firstRunInChat
     ? runs?.filter((run) => run._id !== firstRunInChat._id)
     : runs;
@@ -264,7 +288,7 @@ export function TaskDetailInline({
           leftDefaultSize="40%"
           leftMinWidthPx={350}
           rightMinWidthPx={300}
-          rightCollapsedSizePx={SANDBOX_RAIL_WIDTH_PX}
+          rightCollapsedSizePx={sandboxRailWidthPx}
           defaultRightCollapsed={false}
           expandRightSignal={expandRightSignal}
           mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
@@ -274,6 +298,7 @@ export function TaskDetailInline({
               isSandboxActive={isSandboxActive}
               isSandboxToggling={isSandboxStarting || isSandboxStopping}
               onOpenFile={openFile}
+              onViewDiff={openDiffs}
               onOpenAgentsTab={() => {
                 handleSandboxTabChange("agents");
                 setExpandRightSignal((n) => n + 1);
@@ -507,15 +532,31 @@ export function TaskDetailInline({
         ? createPortal(quickTaskSurfaceTabs, titleSlotElement)
         : null}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {isSandboxViewActive ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {sandboxContent}
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {detailContent}
-          </div>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isSandboxViewActive ? (
+            <m.div
+              key="sandbox"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {sandboxContent}
+            </m.div>
+          ) : (
+            <m.div
+              key="task"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {detailContent}
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
       <StopConfirmDialog
         open={showStopConfirm}

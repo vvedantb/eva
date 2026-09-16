@@ -218,7 +218,7 @@ export function ReposClient() {
                 rel={hasRepos ? "noopener noreferrer" : undefined}
               >
                 <IconPlus size={16} />
-                <span className="hidden sm:inline">{primaryLabel}</span>
+                <span className="max-sm:sr-only">{primaryLabel}</span>
               </a>
             </Button>
           ) : (
@@ -228,7 +228,7 @@ export function ReposClient() {
               className="motion-press bg-foreground font-medium text-background"
             >
               <IconPlus size={16} />
-              <span className="hidden sm:inline">{primaryLabel}</span>
+              <span className="max-sm:sr-only">{primaryLabel}</span>
             </Button>
           )}
         </div>

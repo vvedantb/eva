@@ -23,6 +23,10 @@ import {
 import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
 import {
+  COREPACK_SANDBOX_ENV,
+  renderEvaEnvFile,
+} from "./_sandbox/vercelEnvFile";
+import {
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
   isConvexBackendCommand,
@@ -317,9 +321,9 @@ export const launchSeedRun = internalAction({
       "#!/bin/bash",
       "exec > /tmp/seedrun.log 2>&1",
       "set -x",
-      // Yarn Berry / packageManager pins may prompt Corepack to download —
-      // non-interactive seed must not hang on that prompt.
-      "export COREPACK_ENABLE_DOWNLOAD_PROMPT=0",
+      // Same Corepack env as the session env file: never fetch npm `latest`
+      // for an unpinned repo, never hang on the download prompt.
+      renderEvaEnvFile(COREPACK_SANDBOX_ENV).trimEnd(),
       GITHUB_RELEASE_DOWNLOAD_FUNCTION,
       "rm -f /tmp/.seedrun-done",
     ];
@@ -452,7 +456,11 @@ export const launchSeedRun = internalAction({
       // Node: lockfile at repo root picks the manager. pnpm stays fatal (existing
       // repos); yarn/npm warn and continue so polyglot / legacy roots can still
       // finish the seed. Markers must never contain the substring SEEDRUN-FAILED.
-      'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile || { echo "SEEDRUN-FAILED:install"; exit 1; }; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
+      // pnpm output is tee'd to /tmp/seed-install.log so fetchSeedDiagnostics
+      // can surface it: pnpm 10+ skips unapproved dependency build scripts with
+      // only a warning and exit 0, which leaves e.g. the `supabase` CLI binary
+      // missing and only fails much later, in a background command.
+      'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile 2>&1 | tee /tmp/seed-install.log; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "SEEDRUN-FAILED:install"; exit 1; }; grep -q "Ignored build scripts" /tmp/seed-install.log && echo "SEEDRUN-WARN:ignored-build-scripts"; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
       // Python: independent of Node. Lazy-install compile deps only when a
       // Python manifest exists (libpq-devel for psycopg2 source builds).
       "if [ -f requirements.txt ] || [ -f pyproject.toml ]; then sudo dnf install -y gcc gcc-c++ make python3-devel libpq-devel >/tmp/py-build-deps-dnf.log 2>&1 || true; fi",
@@ -628,6 +636,19 @@ export const fetchSeedDiagnostics = internalAction({
           "( cd /tmp/repo && git rev-parse --short HEAD 2>&1; git status -s 2>&1 | head -5 )",
           'echo "== convex versions =="',
           "( cd /tmp/repo && npx convex --version 2>&1; ls -la ~/.convex/ 2>&1 | head; ls -la ~/.cache/convex/ 2>&1 | head )",
+          // Which package manager actually ran, and why: Corepack resolves the
+          // repo pin, else its Last Known Good, else (DEFAULT_TO_LATEST) npm
+          // `latest`. The pnpm 12 incident was invisible without these lines.
+          'echo "== toolchain =="',
+          "( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo \"pnpm $(pnpm --version 2>&1 | tail -n 1)\"; grep -o '\"packageManager\": *\"[^\"]*\"' package.json 2>/dev/null || echo 'packageManager: (none)'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d ' \\n') )",
+          // Install warnings pnpm prints and then forgets (ignored build
+          // scripts, peer/engine warnings). Written by the install stage.
+          'echo "== install log (warnings) =="',
+          "grep -aE 'Ignored build|ERR_PNPM|WARN|Done in .* using pnpm' /tmp/seed-install.log 2>/dev/null | tail -n 20",
+          // Fixed 32 GB disk; seeds that import large file storage hit ENOSPC
+          // mid-import and then only time out. Show the headroom at failure.
+          'echo "== disk =="',
+          "df -h / 2>&1; du -xsh /swapfile /tmp/repo/node_modules ~/.local/share/pnpm ~/.cache ~/.convex 2>/dev/null || true",
           'echo "== 3210 listening? =="',
           "curl -s -o /dev/null -w 'backend http:%{http_code}\\n' http://127.0.0.1:3210 2>&1 || echo '3210 unreachable'",
           'echo "== seedrun.log (tail) =="; tail -c 4000 /tmp/seedrun.log 2>/dev/null',

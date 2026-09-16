@@ -26,10 +26,26 @@ export function buildSystemPromptBlock(
   return `\n\n## System Prompt\n${systemPrompt}`;
 }
 
-/** Builds an instruction string directing the agent to work inside a specific root directory. */
+/** Lists sibling repositories the sandbox's git credentials can read; empty when there are none. */
+export function buildReadableReposBlock(
+  repos: ReadonlyArray<{ owner: string; name: string }>,
+): string {
+  const [first] = repos;
+  if (first === undefined) return "";
+  const list = repos.map((repo) => `${repo.owner}/${repo.name}`).join(", ");
+  return `\n\n## Other repositories you may read
+Your git credentials can also read these repositories (clone/fetch only, no push): ${list}.
+Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
+}
+
+/**
+ * Monorepo scope: which app this session/task is for. A default, not a write
+ * fence — shared packages and backend stay in scope when the change belongs
+ * there. Sibling apps under `apps/` stay out unless the user asks.
+ */
 export function buildRootDirectoryInstruction(rootDirectory: string): string {
   if (!rootDirectory) return "";
-  return `\nIMPORTANT: Unless the user mentions otherwise, all changes must be made inside the app at "${rootDirectory}".`;
+  return `\nMonorepo: this session is for "${rootDirectory}". Start there. Change shared packages and backend when the task needs them. Leave other apps alone unless asked.`;
 }
 
 /** Reply-length constraint appended to every session turn prompt. */

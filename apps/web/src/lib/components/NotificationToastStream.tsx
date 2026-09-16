@@ -17,6 +17,7 @@ import {
   type Notification,
 } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
 
 const TOAST_LIMIT = 4;
 const TOAST_TTL_MS = 9000;
@@ -30,7 +31,9 @@ type ToastEntry = {
 };
 
 export function NotificationToastStream() {
-  const notifications = useQuery(api.notifications.list);
+  // `{}` is the unarchived inbox: `notifications.list` now takes an `archived`
+  // flag, and toasts only ever announce live notifications.
+  const notifications = useQuery(api.notifications.list, {});
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
@@ -106,17 +109,19 @@ export function NotificationToastStream() {
   }, [notifications]);
 
   useEffect(() => {
-    if (toasts.length === 0) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
+    const delay = nextToastExpiryDelay(
+      toasts.map((entry) => entry.expiresAt),
+      Date.now(),
+    );
+    if (delay === null) return;
+    const timeoutId = window.setTimeout(() => {
       const now = Date.now();
       setToasts((previous) =>
         previous.filter((entry) => entry.expiresAt > now),
       );
-    }, 500);
-    return () => window.clearInterval(intervalId);
-  }, [toasts.length]);
+    }, delay);
+    return () => window.clearTimeout(timeoutId);
+  }, [toasts]);
 
   const dismissToast = (id: Id<"notifications">) => {
     setToasts((previous) =>

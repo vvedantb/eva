@@ -2,6 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
+import { z } from "zod";
+
+// Only the skill names are read; `source` pins the value shape without `unknown`.
+const lockSchema = z.object({
+  skills: z.record(z.string(), z.object({ source: z.string() })),
+});
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -12,9 +18,9 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
  * `code-structure` kept vanishing because only the Claude tree reached main.
  */
 test("locked skills that exist under .claude are mirrored under .agents", () => {
-  const lock = JSON.parse(
-    readFileSync(join(repoRoot, "skills-lock.json"), "utf8"),
-  ) as { skills: Record<string, unknown> };
+  const lock = lockSchema.parse(
+    JSON.parse(readFileSync(join(repoRoot, "skills-lock.json"), "utf8")),
+  );
 
   const missing: string[] = [];
   for (const name of Object.keys(lock.skills)) {

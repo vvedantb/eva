@@ -13,10 +13,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  motionFast,
+  CrossfadeIconSlot,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
-  IconGitPullRequest,
-  IconBrandVercel,
   IconHammer,
   IconPlayerPlay,
   IconLoader2,
@@ -28,6 +29,8 @@ import {
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
@@ -99,6 +102,7 @@ export function TaskFooter({
   onResolveConfirm,
   variant = "footer",
 }: TaskFooterProps) {
+  const simpleView = useSimpleView();
   const isHeader = variant === "header";
   const buttonSize = isHeader ? "sm" : "default";
   const iconSize = isHeader ? 16 : 18;
@@ -114,23 +118,33 @@ export function TaskFooter({
   // in the queue is no reason to refuse to sleep a sandbox. A main run has its
   // own confirmed Stop; blocking this during one is a separate call.
   const sleepBlockedMidTurn = Boolean(task?.activeChatWorkflowId);
+  // Simple view hides the git/sandbox plumbing: conflict resolution and the
+  // startup/dev/background command runners. The footer menu then has nothing
+  // left and drops out entirely; the header menu stays for Copy link.
   const showResolveConflicts =
-    !hasActiveRun && (status === "code_review" || status === "business_review");
-  const showRunDevServer = isSandboxActive && canStartSandbox;
-  const showRunBackgroundCommands = isSandboxActive && canStartSandbox;
+    !simpleView &&
+    !hasActiveRun &&
+    (status === "code_review" || status === "business_review");
+  const showRunStartupCommands = !simpleView && canStartSandbox;
+  const showRunDevServer = !simpleView && isSandboxActive && canStartSandbox;
+  const showRunBackgroundCommands =
+    !simpleView && isSandboxActive && canStartSandbox;
   const hasSandboxCommandItems =
-    canStartSandbox || showRunDevServer || showRunBackgroundCommands;
-  const hasPrLinkItems =
-    canCreatePr ||
-    Boolean(latestPrUrl) ||
-    Boolean(latestDeployment?.deploymentStatus);
+    showRunStartupCommands || showRunDevServer || showRunBackgroundCommands;
+  const prLinks = usePrLinkMenuItems({
+    createPr: {
+      enabled: canCreatePr,
+      isCreating: isCreatingPr,
+      onCreate: onCreatePr,
+    },
+    prUrl: latestPrUrl,
+    hasDeployment: Boolean(latestDeployment?.deploymentStatus),
+  });
   const showMoreMenu =
     isHeader ||
-    canStartSandbox ||
-    canCreatePr ||
     showResolveConflicts ||
-    Boolean(latestDeployment?.deploymentStatus) ||
-    Boolean(latestPrUrl);
+    hasSandboxCommandItems ||
+    prLinks.hasItems;
   const hasSecondaryContent = isHeader || showStopSandbox || showMoreMenu;
   // A run's own stored `prError` predates tagged errors, so it stays a failure.
   const shownError: ConvexErrorPresentation | null =
@@ -145,13 +159,20 @@ export function TaskFooter({
           : "space-y-2 w-full"
       }
     >
-      {!isHeader && shownError ? (
-        <p
-          className={`text-xs text-right ${errorToneClassName(shownError.tone)}`}
-        >
-          {shownError.message}
-        </p>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {!isHeader && shownError ? (
+          <m.p
+            key="footer-error"
+            className={`text-xs text-right ${errorToneClassName(shownError.tone)}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            {shownError.message}
+          </m.p>
+        ) : null}
+      </AnimatePresence>
       <div
         className={
           isHeader
@@ -159,24 +180,41 @@ export function TaskFooter({
             : "flex items-center gap-3 flex-wrap justify-end"
         }
       >
-        {isHeader && shownError ? (
-          // Truncated here, so the full prose lives on the title.
-          <p
-            title={shownError.message}
-            className={`text-xs max-w-[min(240px,40vw)] truncate ${errorToneClassName(shownError.tone)}`}
-          >
-            {shownError.message}
-          </p>
-        ) : null}
-        {showRunButton && (
-          <SplitRunButton
-            taskId={taskId}
-            scheduledAt={task?.scheduledAt}
-            isStarting={isStarting}
-            onStartExecution={onStartExecution}
-            size={buttonSize}
-          />
-        )}
+        <AnimatePresence initial={false}>
+          {isHeader && shownError ? (
+            // Truncated here, so the full prose lives on the title.
+            <m.p
+              key="header-error"
+              title={shownError.message}
+              className={`text-xs max-w-[min(240px,40vw)] truncate ${errorToneClassName(shownError.tone)}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {shownError.message}
+            </m.p>
+          ) : null}
+        </AnimatePresence>
+        <AnimatePresence initial={false} mode="popLayout">
+          {showRunButton ? (
+            <m.div
+              key="run-eva"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <SplitRunButton
+                taskId={taskId}
+                scheduledAt={task?.scheduledAt}
+                isStarting={isStarting}
+                onStartExecution={onStartExecution}
+                size={buttonSize}
+              />
+            </m.div>
+          ) : null}
+        </AnimatePresence>
         {showRunButton && hasSecondaryContent && (
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
@@ -217,7 +255,7 @@ export function TaskFooter({
                 {showResolveConflicts && hasSandboxCommandItems ? (
                   <DropdownMenuSeparator />
                 ) : null}
-                {canStartSandbox && (
+                {showRunStartupCommands && (
                   <DropdownMenuItem
                     onClick={onRunStartupCommands}
                     disabled={isRetryingStartupCommands}
@@ -261,69 +299,39 @@ export function TaskFooter({
                   </DropdownMenuItem>
                 ) : null}
                 {(showResolveConflicts || hasSandboxCommandItems) &&
-                hasPrLinkItems ? (
+                prLinks.hasItems ? (
                   <DropdownMenuSeparator />
                 ) : null}
-                {canCreatePr && (
-                  <DropdownMenuItem
-                    onClick={onCreatePr}
-                    disabled={isCreatingPr}
-                  >
-                    {isCreatingPr ? (
-                      <IconLoader2 size={14} className="animate-spin" />
-                    ) : (
-                      <IconGitPullRequest size={14} />
-                    )}
-                    Create PR
-                  </DropdownMenuItem>
-                )}
-                {latestPrUrl ? (
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={latestPrUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <IconGitPullRequest size={14} />
-                      View PR
-                    </a>
-                  </DropdownMenuItem>
-                ) : null}
-                {latestDeployment?.deploymentStatus && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <DropdownMenuItem disabled>
-                          <IconBrandVercel size={14} />
-                          View Preview
-                        </DropdownMenuItem>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Please start sandbox and view changes through the preview
-                      tab there instead
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                {prLinks.items}
                 {isHeader ? (
                   <>
                     {(showResolveConflicts ||
                       hasSandboxCommandItems ||
-                      hasPrLinkItems) && <DropdownMenuSeparator />}
+                      prLinks.hasItems) && <DropdownMenuSeparator />}
                     <CopyLinkMenuItem iconSize={14} />
                   </>
                 ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {showStopSandbox ? (
-            <SleepEvaButton
-              onStop={onStopSandbox}
-              isStopping={isSandboxStopping}
-              blockedMidTurn={sleepBlockedMidTurn}
-              size={buttonSize}
-            />
-          ) : null}
+          <AnimatePresence initial={false} mode="popLayout">
+            {showStopSandbox ? (
+              <m.div
+                key="stop-sandbox"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <SleepEvaButton
+                  onStop={onStopSandbox}
+                  isStopping={isSandboxStopping}
+                  blockedMidTurn={sleepBlockedMidTurn}
+                  size={buttonSize}
+                />
+              </m.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -370,13 +378,20 @@ function SplitRunButton({
               disabled={isStarting}
               className={`rounded-r-none ${SPLIT_BUTTON_HALF}`}
             >
-              {isStarting ? (
-                <IconLoader2 size={iconSize} className="animate-spin" />
-              ) : isScheduled ? (
-                <IconCalendarClock size={iconSize} />
-              ) : (
-                <IconPlayerPlay size={iconSize} />
-              )}
+              <CrossfadeIconSlot
+                iconKey={
+                  isStarting ? "loading" : isScheduled ? "scheduled" : "run"
+                }
+                className="relative flex size-[18px] items-center justify-center"
+              >
+                {isStarting ? (
+                  <IconLoader2 size={iconSize} className="animate-spin" />
+                ) : isScheduled ? (
+                  <IconCalendarClock size={iconSize} />
+                ) : (
+                  <IconPlayerPlay size={iconSize} />
+                )}
+              </CrossfadeIconSlot>
               {isScheduled
                 ? dayjs(scheduledAt).format("MMM D, h:mm A")
                 : "Run Eva"}

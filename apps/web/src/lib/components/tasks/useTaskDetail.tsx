@@ -36,6 +36,8 @@ type QuickTaskSandboxRouting = {
   onExitSandboxView: () => void;
   /** Opens Files tab with `?file=` set (chat file chips). */
   onOpenFile: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
+  onViewDiff: (repoRelativePath?: string) => void;
 };
 
 type ProjectTaskDetailRouting = {

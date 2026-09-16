@@ -299,7 +299,11 @@ function RepoRailView({
             !sessionsActive &&
             !automationsActive &&
             isRowActive(row, currentOwner, currentName, currentAppName);
-          const tooltip = `${displayName} · ${row.owner}/${row.name}`;
+          // Simple view hides keycap hints and the GitHub `owner/repo`
+          // identifier; the hotkeys themselves still work.
+          const tooltip = simpleView
+            ? displayName
+            : `${displayName} · ${row.owner}/${row.name}`;
           const sandboxCount = activeSandboxCounts.get(row._id);
           const sandboxLabel = countLabel(sandboxCount);
 
@@ -353,7 +357,7 @@ function RepoRailView({
                   className="flex items-center gap-2"
                 >
                   {tooltip}
-                  {hotkeySlot !== null ? (
+                  {hotkeySlot !== null && !simpleView ? (
                     <ShortcutKbd id="jumpToApp" slot={hotkeySlot} />
                   ) : null}
                 </TooltipContent>
@@ -442,7 +446,7 @@ function RepoRailView({
           </TooltipTrigger>
           <TooltipContent side="right" className="flex items-center gap-2">
             Search
-            <ShortcutKbd id="openSearch" />
+            {simpleView ? null : <ShortcutKbd id="openSearch" />}
           </TooltipContent>
         </Tooltip>
         <SidebarUserMenu name={userName} showSearch={showSearch} />

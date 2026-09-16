@@ -289,8 +289,15 @@ export function NewProjectModal({
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button onClick={handleSubmit} disabled={!canSubmit}>
+              {/* The tooltip's span is a flex item in the phone's stacked
+                  footer, so it — and the button inside — have to stretch or the
+                  primary action sits narrow above a full-width Cancel. */}
+              <span className="inline-flex max-sm:w-full">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="max-sm:w-full"
+                >
                   {isLoading && <Spinner size="sm" />}
                   Create Project
                   <ShortcutKbd

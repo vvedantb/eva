@@ -176,6 +176,10 @@ export function useSandboxFileList({
 
     return () => {
       cancelled = true;
+      // A cancelled attempt must not count as loaded: StrictMode runs this
+      // effect twice on mount, and the second run would otherwise skip the
+      // fetch the first run just abandoned, leaving the tree on its spinner.
+      loadedFor.current = "";
     };
   }, [sandboxId, isActive, repoId, listSandboxFiles]);
 

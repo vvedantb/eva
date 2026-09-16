@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   fetchGitHubDeploymentSnapshot,
+  isMissingGithubBranchError,
   type GitHubReposDeploymentApi,
 } from "../convex/_github/deploymentSnapshot";
 
@@ -69,6 +70,27 @@ describe("fetchGitHubDeploymentSnapshot", () => {
       deploymentId: 4,
       environment: "Preview",
     });
+  });
+
+  test("missing GitHub branch is a handled snapshot, not a throw", async () => {
+    const axiomFingerprint =
+      "Branch not found - https://docs.github.com/rest/branches/branches#get-a-branch";
+    expect(isMissingGithubBranchError(new Error(axiomFingerprint))).toBe(true);
+    expect(isMissingGithubBranchError(new Error("API rate limit exceeded"))).toBe(
+      false,
+    );
+
+    const snapshot = await fetchGitHubDeploymentSnapshot({
+      ...base,
+      repos: {
+        getBranch: async () => {
+          throw new Error(axiomFingerprint);
+        },
+        listDeployments: async () => ({ data: [] }),
+        listDeploymentStatuses: async () => ({ data: [] }),
+      },
+    });
+    expect(snapshot).toEqual({ kind: "missing_branch" });
   });
 
   test("maps a successful status and prefers environment_url", async () => {

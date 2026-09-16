@@ -7,10 +7,12 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   motionFast,
+  toast,
 } from "@eva/ui";
 import { useState } from "react";
 import { entityPathSegment } from "@/lib/numId";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
+import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
   SessionMenuItems,
   useIsRegeneratingTitle,
@@ -22,9 +24,6 @@ import {
 } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
-import { toast } from "@eva/ui";
-
-type SessionStatus = "active" | "starting" | "stopping" | "closed";
 
 interface SessionItem {
   _id: Id<"sessions">;
@@ -33,7 +32,9 @@ interface SessionItem {
   userId: Id<"users">;
   title: string;
   titleRegeneration?: { startedAt: number };
-  status: SessionStatus;
+  status: SandboxStatus;
+  /** Set when the last wake attempt failed; the row's dot reads as an error. */
+  sandboxError?: string;
   isExecuting?: boolean;
   isOrchestrator?: boolean;
   updatedAt?: number;
@@ -112,6 +113,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 createdAt={session._creationTime}
                 updatedAt={session.updatedAt}
                 status={session.status}
+                sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
                 isOrchestrator={session.isOrchestrator === true}
                 isSelected={isSelected}

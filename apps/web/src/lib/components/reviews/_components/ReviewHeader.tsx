@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import type { Id } from "@eva/backend";
-import { cn } from "@eva/ui";
+import { cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconArrowNarrowLeft } from "@tabler/icons-react";
 import type { ReviewTab } from "@/lib/search-params";
 import { headerBlocker } from "./prMergeState";
@@ -81,14 +82,21 @@ export function ReviewHeader({
         // state of the pull request is read before its name. `mt-0.5` optically
         // centres a 20px pill on the title's first line rather than on the block,
         // which is what `items-center` would do once the title wraps.
-        <div className="flex min-w-0 items-start gap-2">
+        //
+        // Below `sm` the row wraps and the action cluster takes a second line of
+        // its own: sharing one line, the buttons left the title ~48px and it
+        // wrapped a word per line. `sm:contents` on the wrapper means the desktop
+        // row keeps the exact three-child box model it always had.
+        <div className="flex min-w-0 items-start gap-2 max-sm:flex-wrap">
           <PrStatusPill
             status={overview.status}
             draft={overview.draft}
             className="mt-0.5"
           />
           <div className="min-w-0 flex-1">{title}</div>
-          {actions}
+          <div className="max-sm:flex max-sm:basis-full max-sm:justify-end sm:contents">
+            {actions}
+          </div>
         </div>
       )}
 
@@ -141,30 +149,39 @@ export function ReviewHeader({
         ) : null}
       </div>
 
-      {blocker === null ? null : (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span
-            className={cn(
-              "flex min-w-0 items-center gap-1.5 text-xs font-medium",
-              BLOCKER_TONE_CLASS[blocker.tone],
-            )}
+      <AnimatePresence initial={false}>
+        {blocker === null ? null : (
+          <m.div
+            key="merge-blocker"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
           >
-            <ToneIcon tone={blocker.tone} size={13} />
-            {blocker.label}
-          </span>
-          {blocker.remedy === null ? null : (
-            // Right-aligned like the two rows above it, so Refresh, the change
-            // totals, and the remedy form one rail down the header's edge.
-            <span className="ml-auto">
-              <PrRemedyButton
-                remedy={blocker.remedy}
-                headRef={overview.headRef}
-                tone={blocker.tone}
-              />
+            <span
+              className={cn(
+                "flex min-w-0 items-center gap-1.5 text-xs font-medium",
+                BLOCKER_TONE_CLASS[blocker.tone],
+              )}
+            >
+              <ToneIcon tone={blocker.tone} size={13} />
+              {blocker.label}
             </span>
-          )}
-        </div>
-      )}
+            {blocker.remedy === null ? null : (
+              // Right-aligned like the two rows above it, so Refresh, the change
+              // totals, and the remedy form one rail down the header's edge.
+              <span className="ml-auto">
+                <PrRemedyButton
+                  remedy={blocker.remedy}
+                  headRef={overview.headRef}
+                  tone={blocker.tone}
+                />
+              </span>
+            )}
+          </m.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

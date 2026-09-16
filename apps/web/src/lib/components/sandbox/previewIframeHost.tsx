@@ -187,14 +187,78 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
   );
 }
 
+let remeasureRaf = 0;
+
+/** Anchors inside `hidden` shells/tabs paint at 0×0 — skip them and their listeners. */
+function anchorNeedsLayoutTracking(anchor: HTMLElement): boolean {
+  if (document.visibilityState !== "visible") return false;
+  const rect = anchor.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function hasActiveLayoutAnchor(): boolean {
+  for (const entry of entries.values()) {
+    if (entry.anchor !== null && anchorNeedsLayoutTracking(entry.anchor)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Window-level layout listeners exist only while at least one visible
+ * placeholder needs tracking. Scroll uses capture so scrolling inside any
+ * container repositions the overlay, not just document scrolls.
+ */
+let layoutListenersAttached = false;
+function syncLayoutListeners(): void {
+  const shouldAttach = hasActiveLayoutAnchor();
+  if (shouldAttach && !layoutListenersAttached) {
+    window.addEventListener("resize", scheduleRemeasure);
+    window.addEventListener("scroll", scheduleRemeasure, true);
+    document.addEventListener("fullscreenchange", scheduleRemeasure);
+    layoutListenersAttached = true;
+  } else if (!shouldAttach && layoutListenersAttached) {
+    window.removeEventListener("resize", scheduleRemeasure);
+    window.removeEventListener("scroll", scheduleRemeasure, true);
+    document.removeEventListener("fullscreenchange", scheduleRemeasure);
+    layoutListenersAttached = false;
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      remeasureAll();
+      return;
+    }
+    syncLayoutListeners();
+  });
+}
+
+/** Coalesce scroll/resize/RO into one measure per frame. */
+function scheduleRemeasure(): void {
+  if (document.visibilityState !== "visible") return;
+  if (remeasureRaf !== 0) return;
+  remeasureRaf = requestAnimationFrame(() => {
+    remeasureRaf = 0;
+    remeasureAll();
+  });
+}
+
 /** Re-reads every anchored placeholder's rect; notifies only on change. */
 function remeasureAll(): void {
   // Mid-gesture the anchor has already moved, so re-measuring it here would
   // double-count the offsets the window is publishing.
   if (gesture !== null) return;
+  if (document.visibilityState !== "visible") {
+    syncLayoutListeners();
+    return;
+  }
   let changed = false;
   for (const [key, entry] of entries) {
     if (entry.anchor === null) continue;
+    if (!anchorNeedsLayoutTracking(entry.anchor)) continue;
     const rect = measure(entry.anchor);
     if (!sameRect(rect, entry.rect)) {
       entries.set(key, { ...entry, rect });
@@ -202,27 +266,7 @@ function remeasureAll(): void {
     }
   }
   if (changed) notify();
-}
-
-/**
- * Window-level layout listeners exist only while at least one placeholder is
- * attached. Scroll uses capture so scrolling inside any container repositions
- * the overlay, not just document scrolls.
- */
-let layoutListenerCount = 0;
-function acquireLayoutListeners(): void {
-  layoutListenerCount += 1;
-  if (layoutListenerCount > 1) return;
-  window.addEventListener("resize", remeasureAll);
-  window.addEventListener("scroll", remeasureAll, true);
-  document.addEventListener("fullscreenchange", remeasureAll);
-}
-function releaseLayoutListeners(): void {
-  layoutListenerCount -= 1;
-  if (layoutListenerCount > 0) return;
-  window.removeEventListener("resize", remeasureAll);
-  window.removeEventListener("scroll", remeasureAll, true);
-  document.removeEventListener("fullscreenchange", remeasureAll);
+  syncLayoutListeners();
 }
 
 function evictOverCap(): void {
@@ -319,22 +363,14 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
   }
 
   const observer = new ResizeObserver(() => {
-    const entry = entries.get(key);
-    if (entry === undefined || entry.anchor === null) return;
-    // See remeasureAll: a resize gesture already moves this rect by hand.
-    if (gesture !== null) return;
-    const rect = measure(entry.anchor);
-    if (sameRect(rect, entry.rect)) return;
-    entries.set(key, { ...entry, rect });
-    notify();
+    scheduleRemeasure();
   });
   observer.observe(options.anchor);
-  acquireLayoutListeners();
+  syncLayoutListeners();
   notify();
 
   return () => {
     observer.disconnect();
-    releaseLayoutListeners();
     if (onElementByKey.get(key) === options.onElement) {
       onElementByKey.delete(key);
     }
@@ -347,6 +383,7 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
       notify();
       notePreviewAnchorDetached(key);
     }
+    syncLayoutListeners();
   };
 }
 
