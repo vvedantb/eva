@@ -9,6 +9,8 @@ import {
   renewTurnLease,
 } from "../convex/_chat/turnStore";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
+import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
+import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
 import { isLegacySessionExecuting } from "../convex/_chat/turnProjection";
 import { rollbackQueuedSessionStart } from "../convex/_queues/helpers";
 import {
@@ -290,6 +292,96 @@ describe("turn lifecycle integration", () => {
     expect(rows.turn?.open).toBe(false);
     expect(rows.turn?.state).toBe("error");
     expect(rows.placeholder?.content).toContain("Turn stalled");
+  });
+
+  /**
+   * Grace is the only path that extends a lease without the daemon asking, so
+   * it is also the only one that could keep a wedged turn open forever. The
+   * 2-hour backstop must win even while the probe still reports the process
+   * alive.
+   */
+  test("grace closes a turn that passed the absolute 2-hour limit", async () => {
+    const { t, turnId } = await createSessionFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        turnStartedAt: Date.now() - RUN_TIMEOUT_MS - 1,
+        leaseExpiresAt: Date.now() - 1,
+      });
+      const turn = await ctx.db.get(turnId);
+      if (!turn) throw new Error("missing turn");
+      await graceExpiredTurnLease(ctx, turn, Date.now());
+    });
+
+    const turn = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(turn?.open).toBe(false);
+    expect(turn?.state).toBe("error");
+    expect(turn?.error).toContain("2-hour limit");
+    // No silent marker on a closed turn: nothing is waiting for it any more.
+    expect(turn?.silentSince).toBeUndefined();
+  });
+
+  /**
+   * The reconciler reads expired turns in a batch and mutates them one at a
+   * time; a daemon that renews in between must not be marked silent, or its
+   * next stall would start the 10-minute clock from a lie.
+   */
+  test("graceExpired leaves a turn whose lease was renewed in the meantime", async () => {
+    const { t, turnId } = await createSessionFixture();
+    const before = await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() + 60_000,
+      });
+      return await ctx.db.get(turnId);
+    });
+
+    await t.mutation(internal.turns.graceExpired, { turnId });
+
+    const after = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(after?.silentSince).toBeUndefined();
+    expect(after?.leaseExpiresAt).toBe(before?.leaseExpiresAt);
+    expect(after?.open).toBe(true);
+  });
+
+  /**
+   * `finalizeExpired` took a `sandboxStopped` boolean before the grace work
+   * split it into three causes. The user-visible alert is what tells a stopped
+   * VM apart from a dead agent process, so pin the mapping in both directions.
+   */
+  test.each([
+    {
+      cause: "sandbox_stopped" as const,
+      expected: "Sandbox stopped while this turn was running.",
+    },
+    { cause: "process_dead" as const, expected: STALL_ALERT_TEXT },
+  ])("finalizing with cause $cause reports its own alert", async (scenario) => {
+    const { t, placeholderMessageId, turnId } = await createSessionFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() - 1,
+      });
+    });
+
+    vi.useFakeTimers();
+    try {
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: scenario.cause,
+      });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const rows = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      placeholder: await ctx.db.get(placeholderMessageId),
+    }));
+    expect(rows.turn?.open).toBe(false);
+    expect(rows.turn?.error).toBe(scenario.expected);
+    expect(rows.placeholder?.content).toBe(scenario.expected);
   });
 
   test("a streaming touch within 2s does not rewrite lastUpdatedAt", async () => {

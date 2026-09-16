@@ -295,6 +295,44 @@ describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
     );
   });
 
+  // The write half of the fix. Every sandbox create and resume reinstalls the
+  // helper, which is how legacy rows are meant to recover — so the upsert's
+  // patch branch must pin the repository, not only its insert branch.
+  test("a first install pins the home repository on a new row", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: "sbx_orphan",
+      installationId: 9,
+      secret: SECRET,
+      repoOwner: "evalucom",
+      repoName: "carepulse-ts",
+    });
+    expect(await resolve(t, "evalucom/carepulse-ts.git")).toEqual({
+      kind: "home",
+      installationId: 9,
+    });
+  });
+
+  test("reinstalling the helper backfills the pin on a legacy row", async () => {
+    const t = await orphanFixture({ pinHome: false });
+    await t.mutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: "sbx_orphan",
+      installationId: 9,
+      secret: "rotated-secret",
+      repoOwner: "evalucom",
+      repoName: "carepulse-ts",
+    });
+
+    expect(
+      await resolve(t, "evalucom/carepulse-ts.git", "rotated-secret"),
+    ).toEqual({ kind: "home", installationId: 9 });
+    // One row per sandbox: the rotation retires the previous secret.
+    expect(await resolve(t, "evalucom/carepulse-ts.git")).toEqual({
+      kind: "denied",
+      reason: "unknown secret",
+    });
+  });
+
   test("the pin does not bypass sibling checks on a bound sandbox", async () => {
     const { t, ids } = await fixture({ ownerInTeam: false });
     await t.run(async (ctx) => {
