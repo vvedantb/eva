@@ -20,6 +20,10 @@ import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
+import {
+  SandboxErrorNotice,
+  useSessionSandboxError,
+} from "@/lib/components/sandbox/SandboxErrorNotice";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
@@ -102,6 +106,10 @@ export function useSessionChatHeader({
       prState,
       isOrchestrator: chatOnly,
     });
+  // A start that failed leaves the session `closed`, which the header would
+  // otherwise render as an ordinary sleeping sandbox. The hook reads the row
+  // itself because nothing upstream hands this header the failure.
+  const sandboxError = useSessionSandboxError(sessionId);
   const prLinks = usePrLinkMenuItems({
     prUrl,
     prState,
@@ -125,6 +133,12 @@ export function useSessionChatHeader({
 
   const headerRight = (
     <>
+      {sandboxError !== undefined ? (
+        <SandboxErrorNotice
+          sandboxError={sandboxError}
+          onRetry={() => onSandboxToggle("start")}
+        />
+      ) : null}
       <EntityContextUsage repoId={repoId} entityId={sessionId} />
       <UsageLimitsIndicator
         repoId={repoId}
@@ -137,6 +151,7 @@ export function useSessionChatHeader({
         isToggling={isSandboxToggling}
         onToggle={onSandboxToggle}
         isAssistantResponding={isAssistantResponding}
+        hasStartError={sandboxError !== undefined}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

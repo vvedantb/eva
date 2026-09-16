@@ -38,6 +38,7 @@ import {
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import { isTaskAgentActive, QuickTaskCard } from "./QuickTaskCard";
+import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
 
@@ -58,7 +59,10 @@ interface QuickTasksListViewProps {
   projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
-  onToggleSelect: (id: Id<"agentTasks">) => void;
+  onToggleSelect: (
+    id: Id<"agentTasks">,
+    options?: SelectionToggleOptions<Id<"agentTasks">>,
+  ) => void;
   selectedTaskId?: string | null;
   /**
    * Fires when a card is opened (not in selection mode). The master/detail
@@ -227,6 +231,9 @@ export function QuickTasksListView({
             if (!visibleStatuses.has(status)) return [];
             const cfg = statusConfig[status];
             const items = tasksByStatus[status] ?? [];
+            // Shift-click spans this section only — the visible order of the
+            // group the click landed in, not the whole flattened list.
+            const sectionIds = items.map((t) => t._id);
             const Icon = cfg.icon;
 
             return [
@@ -345,7 +352,10 @@ export function QuickTasksListView({
                                       isSelecting
                                         ? (event) => {
                                             event.preventDefault();
-                                            onToggleSelect(task._id);
+                                            onToggleSelect(task._id, {
+                                              range: event.shiftKey,
+                                              orderedIds: sectionIds,
+                                            });
                                           }
                                         : onOpenTask
                                           ? () => onOpenTask(task._id)
@@ -354,8 +364,11 @@ export function QuickTasksListView({
                                     isSelecting={isSelecting}
                                     isSelected={selectedIds.has(task._id)}
                                     isActive={selectedTaskId === task._id}
-                                    onToggleSelect={() =>
-                                      onToggleSelect(task._id)
+                                    onToggleSelect={(event) =>
+                                      onToggleSelect(task._id, {
+                                        range: event.shiftKey,
+                                        orderedIds: sectionIds,
+                                      })
                                     }
                                     groupedCodebases={
                                       groupedCodebases ?? undefined

@@ -20,6 +20,7 @@ import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 export function TeamsClient() {
@@ -88,11 +89,12 @@ export function TeamsClient() {
         isSubmitting: false,
       });
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to create team";
       setCreateDialog((prev) => ({
         ...prev,
-        error: errorMessage,
+        error: userFacingErrorMessage(
+          err instanceof Error ? err : null,
+          "Couldn't create the team. Try again.",
+        ),
         isSubmitting: false,
       }));
     }

@@ -20,6 +20,7 @@ import { AnimatePresence, m } from "motion/react";
 import { IconMessage } from "@tabler/icons-react";
 import { FloatingToc } from "../FloatingToc";
 import { DocCommentsPanel } from "./DocCommentsPanel";
+import { DocSaveStatus, type DocSaveState } from "./DocSaveStatus";
 import { DocHistoryPanel } from "./DocHistoryPanel";
 import { DocSuggestionsPanel } from "./DocSuggestionsPanel";
 import { DocVersionDiff } from "./DocVersionDiff";
@@ -42,6 +43,13 @@ import {
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
+
+/**
+ * How long editing has to stop before a version is snapshotted. Two minutes
+ * outlived most editing sessions, so a doc could be closed having never been
+ * snapshotted at all.
+ */
+const VERSION_IDLE_MS = 15_000;
 
 const baseEditorExtensions = [
   StarterKit.configure({
@@ -134,6 +142,9 @@ export function DocContentTab({
   const editCountRef = useRef<number>(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMigratedRef = useRef(false);
+  const [docSaveState, setDocSaveState] = useState<DocSaveState>({
+    status: "idle",
+  });
 
   // Lazy migration: ensure sync doc exists for legacy docs
   const needsMigration =
@@ -206,6 +217,33 @@ export function DocContentTab({
     };
   }, [editor]);
 
+  /**
+   * Snapshot the current document as a version. Shared by the idle timer and
+   * the status line's Retry, so a failed snapshot is recoverable without
+   * touching the text again.
+   */
+  const runSaveVersion = () => {
+    if (!editor) return;
+    setDocSaveState({ status: "saving" });
+    saveVersion({
+      docId: doc._id,
+      content: editor.getMarkdown(),
+      pmContent: JSON.stringify(editor.state.doc.toJSON()),
+    })
+      .then(() => {
+        editCountRef.current = 0;
+        setDocSaveState({ status: "saved", at: Date.now() });
+      })
+      .catch(() => setDocSaveState({ status: "error" }));
+  };
+
+  // The transaction listener is registered once per editor; the ref lets it
+  // reach the current save closure without re-registering on every render.
+  const saveVersionRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    saveVersionRef.current = runSaveVersion;
+  }, [runSaveVersion]);
+
   // Version snapshot tracking
   useEffect(() => {
     if (!editor) return;
@@ -219,6 +257,11 @@ export function DocContentTab({
       // so another user's edits don't trigger or attribute a version here.
       if (transaction.getMeta("collab$")) return;
       editCountRef.current += 1;
+      // Returning `prev` unchanged skips a re-render, so this costs nothing per
+      // keystroke once the status line already says "Unsaved version".
+      setDocSaveState((prev) =>
+        prev.status === "pending" ? prev : { status: "pending" },
+      );
 
       const now = Date.now();
       if (now - lastTouchDraftRef.current > 30_000) {
@@ -228,17 +271,8 @@ export function DocContentTab({
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
-        if (editCountRef.current > 0 && editor) {
-          const markdown = editor.getMarkdown();
-          const pmContent = JSON.stringify(editor.state.doc.toJSON());
-          saveVersion({
-            docId: doc._id,
-            content: markdown,
-            pmContent,
-          });
-          editCountRef.current = 0;
-        }
-      }, 120_000);
+        if (editCountRef.current > 0) saveVersionRef.current();
+      }, VERSION_IDLE_MS);
     };
 
     editor.on("update", handleTransaction);
@@ -246,7 +280,7 @@ export function DocContentTab({
       editor.off("update", handleTransaction);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  }, [editor, doc._id, touchDraft, saveVersion]);
+  }, [editor, doc._id, touchDraft]);
 
   // Reflect open/active anchors as highlights in the document.
   useEffect(() => {
@@ -346,6 +380,12 @@ export function DocContentTab({
     // and they position against this row.
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="flex max-sm:min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
+        {/* This tab has no toolbar of its own, so the version state sits top
+            right above the editor. It renders nothing until there is something
+            to say. */}
+        {selectedVersionId ? null : (
+          <DocSaveStatus state={docSaveState} onRetry={runSaveVersion} />
+        )}
         <AnimatePresence mode="wait" initial={false}>
           {selectedVersionId ? (
             <m.div

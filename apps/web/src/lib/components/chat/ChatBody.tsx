@@ -1,12 +1,15 @@
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
   motionBase,
   type ModelOption,
   type ModelAccount,
 } from "@eva/ui";
+import {
+  ChatEmptyState,
+  ChatTranscriptSkeleton,
+} from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
@@ -40,6 +43,7 @@ import {
   isOtherUserChatMessage,
   otherUserIdsInChat,
   parsePendingQuestion,
+  SANDBOX_CHAT_COPY,
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
@@ -54,6 +58,12 @@ interface ChatBodyProps {
   /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
   messages: ChatBodyMessage[];
+  /**
+   * True while the transcript query is still in flight. Panels collapse Convex's
+   * `undefined` into `[]`, so without this the empty state flashes before the
+   * turns arrive.
+   */
+  isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
   streamingActivity?: string;
   streamingContent?: string;
@@ -74,6 +84,22 @@ interface ChatBodyProps {
   isArchived?: boolean;
   placeholder: string;
   emptyStateTitle: string;
+  /**
+   * Second line of the empty state. Always passed explicitly by the panels —
+   * the library's default ("Start a conversation to see messages here")
+   * contradicts a chat whose sandbox is asleep.
+   */
+  emptyStateDescription?: string;
+  /**
+   * Why the composer will not send, shown when the user presses Enter on a
+   * disabled composer instead of swallowing the keystroke.
+   */
+  disabledReason?: string;
+  /**
+   * Wakes the sandbox. Set only when it is stopped and not already toggling;
+   * gives the empty state its button and the blocked-send toast its action.
+   */
+  onStartSandbox?: () => void;
   model: AIModel;
   setModel: (model: AIModel) => void;
   modelOptions: ReadonlyArray<ModelOption<AIModel>>;
@@ -154,6 +180,7 @@ export function ChatBody({
   repoBasePath,
   conversationId,
   messages,
+  isLoadingMessages = false,
   queuedMessages,
   streamingActivity,
   streamingContent,
@@ -165,6 +192,9 @@ export function ChatBody({
   isArchived,
   placeholder,
   emptyStateTitle,
+  emptyStateDescription = "",
+  disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
+  onStartSandbox,
   model,
   setModel,
   modelOptions,
@@ -299,6 +329,16 @@ export function ChatBody({
     return map;
   })();
 
+  // Retry re-sends the failed turn's prompt through the normal send path. It is
+  // withheld while a turn is running (the send would only queue behind it) and
+  // on a read-only chat, which has no composer at all.
+  const handleRetryTurn =
+    isArchived || isExecuting
+      ? undefined
+      : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
+          void onSend(content, attachmentStorageIds);
+        };
+
   const renderMessage = (message: ChatBodyMessage) => {
     const isStreamingTarget = message._id === streamingTargetId;
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
@@ -313,31 +353,33 @@ export function ChatBody({
 
     return (
       <div key={message._id} className="flex flex-col gap-3">
-      <ChatMessage
-        message={message}
-        repoBasePath={repoBasePath}
-        isLatestAssistantTurn={message._id === latestAssistantMessageId}
-        showChangedFiles={!simpleView}
-        {...(expandedByMessageId[message._id] !== undefined
-          ? { changedFilesExpanded: expandedByMessageId[message._id] }
-          : {})}
-        onChangedFilesExpandedChange={setMessageExpanded}
-        isOtherUser={isOtherUser}
-        senderFirstName={senderFirstName}
-        isHandoffBoundary={handoffBoundaryIds.has(message._id)}
-        turnModel={precedingUser?.model}
-        turnReasoningLevel={precedingUser?.reasoningLevel}
-        turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
-        streamingActivity={isStreamingTarget ? streamingActivity : undefined}
-        streamingContent={isStreamingTarget ? streamingContent : undefined}
-        onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
-        onOpenAgentsTab={simpleView ? undefined : onOpenAgentsTab}
-        backgroundAgents={backgroundAgents}
-        sandboxRunning={sandboxRunning}
-        turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-      />
-      {afterMessage?.(message._id)}
+        <ChatMessage
+          message={message}
+          repoBasePath={repoBasePath}
+          isLatestAssistantTurn={message._id === latestAssistantMessageId}
+          showChangedFiles={!simpleView}
+          {...(expandedByMessageId[message._id] !== undefined
+            ? { changedFilesExpanded: expandedByMessageId[message._id] }
+            : {})}
+          onChangedFilesExpandedChange={setMessageExpanded}
+          isOtherUser={isOtherUser}
+          senderFirstName={senderFirstName}
+          isHandoffBoundary={handoffBoundaryIds.has(message._id)}
+          turnModel={precedingUser?.model}
+          turnReasoningLevel={precedingUser?.reasoningLevel}
+          turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
+          streamingActivity={isStreamingTarget ? streamingActivity : undefined}
+          streamingContent={isStreamingTarget ? streamingContent : undefined}
+          onOpenFile={onOpenFile}
+          onViewDiff={onViewDiff}
+          onOpenAgentsTab={simpleView ? undefined : onOpenAgentsTab}
+          backgroundAgents={backgroundAgents}
+          sandboxRunning={sandboxRunning}
+          turnCheckpoint={simpleView ? undefined : turnCheckpoint}
+          onRetryTurn={handleRetryTurn}
+          precedingUser={precedingUser}
+        />
+        {afterMessage?.(message._id)}
       </div>
     );
   };
@@ -351,9 +393,23 @@ export function ChatBody({
           scrollClassName="[container-type:size]"
         >
           {displayMessages.length === 0 ? (
-            (emptyStateOverride ?? (
-              <ConversationEmptyState title={emptyStateTitle} />
-            ))
+            (emptyStateOverride ??
+            (isLoadingMessages ? (
+              <ChatTranscriptSkeleton />
+            ) : (
+              <ChatEmptyState
+                title={emptyStateTitle}
+                description={emptyStateDescription}
+                {...(isInputDisabled && onStartSandbox
+                  ? {
+                      action: {
+                        label: SANDBOX_CHAT_COPY.wakeAction,
+                        onClick: onStartSandbox,
+                      },
+                    }
+                  : {})}
+              />
+            )))
           ) : lastUserMessageIndex < 0 ? (
             displayMessages.map(renderMessage)
           ) : (
@@ -405,6 +461,8 @@ export function ChatBody({
                 messageHistory={messageHistory}
                 isExecuting={isExecuting}
                 isInputDisabled={isInputDisabled}
+                disabledReason={disabledReason}
+                onStartSandbox={onStartSandbox}
                 placeholder={placeholder}
                 model={model}
                 setModel={setModel}

@@ -13,6 +13,7 @@ export {
   update,
   updateStatus,
   remove,
+  restore,
   removeAttachment,
   createQuickTask,
   createQuickTasksBatch,

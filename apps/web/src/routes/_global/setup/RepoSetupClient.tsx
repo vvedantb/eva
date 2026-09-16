@@ -4,10 +4,16 @@ import { useAction, useMutation } from "convex/react";
 import { api, GITHUB_AUTH_REQUIRED } from "@eva/backend";
 import { Container } from "@/lib/components/ui/Container";
 import { Button, Spinner, toast } from "@eva/ui";
-import { RepoSetupCard } from "./_components/RepoSetupCard";
-import { MonorepoAppsPanel } from "./_components/MonorepoAppsPanel";
+import { RepoSetupList } from "./_components/RepoSetupList";
+import {
+  RepoSetupEmpty,
+  RepoSetupError,
+  RepoSetupLoading,
+  RepoSetupNeedsAuth,
+} from "./_components/RepoSetupStates";
 import type { GitHubRepo } from "./_components/RepoSetupCard";
 import type { MonorepoApp } from "./_components/MonorepoAppsPanel";
+import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 interface RepoSetupClientProps {
   installationId: string;
@@ -27,6 +33,10 @@ export function RepoSetupClient({
   const [needsGitHubAuth, setNeedsGitHubAuth] = useState(false);
   const [authorizing, setAuthorizing] = useState(false);
   const [addedRepos, setAddedRepos] = useState<Set<string>>(new Set());
+  const [addingRepos, setAddingRepos] = useState<Set<string>>(new Set());
+  // Key → why its last connect failed, so a partial failure is recoverable in
+  // place instead of costing the user the whole page.
+  const [failures, setFailures] = useState<Record<string, string>>({});
   const [expandedRepo, setExpandedRepo] = useState<string | null>(null);
   const [monorepoApps, setMonorepoApps] = useState<
     Record<string, MonorepoApp[]>
@@ -50,15 +60,19 @@ export function RepoSetupClient({
         setLoading(false);
       })
       .catch((err) => {
-        const message =
-          err instanceof Error ? err.message : "Failed to fetch repos";
+        const message = err instanceof Error ? err.message : "";
         // A brand-new installation is only verifiable through the user's own
         // GitHub token, so send them through the authorize hop instead of
         // showing a dead end.
         if (message.includes(GITHUB_AUTH_REQUIRED)) {
           setNeedsGitHubAuth(true);
         } else {
-          setError(message);
+          setError(
+            userFacingErrorMessage(
+              err instanceof Error ? err : null,
+              "Couldn't read this installation's repositories.",
+            ),
+          );
         }
         setLoading(false);
       });
@@ -74,12 +88,55 @@ export function RepoSetupClient({
       window.location.href = url;
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to start GitHub authorization",
+        userFacingErrorMessage(
+          err instanceof Error ? err : null,
+          "Couldn't start GitHub authorization.",
+        ),
       );
       setAuthorizing(false);
     }
+  };
+
+  /** Connects one repo (or one app inside it). Resolves to whether it landed. */
+  const addRepoEntry = async (repo: GitHubRepo, rootDirectory?: string) => {
+    const key = rootDirectory
+      ? `${repo.fullName}:${rootDirectory}`
+      : repo.fullName;
+    if (addedRepos.has(key)) return true;
+
+    setAddingRepos((prev) => new Set(prev).add(key));
+    setFailures((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+    let added = false;
+    try {
+      await connectRepo({
+        owner: repo.owner,
+        name: repo.name,
+        installationId: Number(installationId),
+        githubId: repo.id,
+        rootDirectory,
+      });
+      setAddedRepos((prev) => new Set([...prev, key]));
+      added = true;
+    } catch (err) {
+      const reason = userFacingErrorMessage(
+        err instanceof Error ? err : null,
+        "Try again.",
+      );
+      setFailures((prev) => ({ ...prev, [key]: reason }));
+      // An app inside a repo has no row of its own to hang the reason on.
+      if (rootDirectory) toast.error(`Couldn't add ${key}. ${reason}`);
+    }
+    setAddingRepos((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    return added;
   };
 
   const handleAddAll = async () => {
@@ -87,31 +144,20 @@ export function RepoSetupClient({
     setSyncing(true);
 
     const pending = repos.filter((repo) => !addedRepos.has(repo.fullName));
-    const results = await Promise.allSettled(
-      pending.map((repo) =>
-        connectRepo({
-          owner: repo.owner,
-          name: repo.name,
-          installationId: Number(installationId),
-          githubId: repo.id,
-        }).then(() => repo.fullName),
-      ),
+    const results = await Promise.all(
+      pending.map((repo) => addRepoEntry(repo)),
     );
-    setAddedRepos((prev) => {
-      const next = new Set(prev);
-      for (const result of results) {
-        if (result.status === "fulfilled") next.add(result.value);
-      }
-      return next;
-    });
-    const failed = results.filter((result) => result.status === "rejected");
+    setSyncing(false);
+
+    const failed = results.filter((added) => !added);
+    // Navigating away here used to discard the failures with the page. The
+    // per-repo Retry only exists if the user is still standing on it.
     if (failed.length > 0) {
       toast.error(
-        `Could not add ${failed.length} of ${pending.length} repositories.`,
+        `Could not add ${failed.length} of ${pending.length} repositories. Retry them below.`,
       );
+      return;
     }
-
-    setSyncing(false);
     navigate({ to: "/home" });
   };
 
@@ -146,78 +192,28 @@ export function RepoSetupClient({
     setDetectingMonorepo(null);
   };
 
-  const addRepoEntry = async (repo: GitHubRepo, rootDirectory?: string) => {
-    const key = rootDirectory
-      ? `${repo.fullName}:${rootDirectory}`
-      : repo.fullName;
-    if (addedRepos.has(key)) return;
-    try {
-      await connectRepo({
-        owner: repo.owner,
-        name: repo.name,
-        installationId: Number(installationId),
-        githubId: repo.id,
-        rootDirectory,
-      });
-      setAddedRepos((prev) => new Set([...prev, key]));
-    } catch {
-      toast.error(`Could not add ${repo.fullName}. Try again.`);
-    }
-  };
-
-  if (loading || syncing) {
-    return (
-      <Container>
-        <div className="flex flex-col items-center justify-center py-20">
-          <Spinner size="lg" className="mb-4" />
-          <p className="text-muted-foreground">
-            {syncing ? "Adding codebases..." : "Loading codebases..."}
-          </p>
-        </div>
-      </Container>
-    );
-  }
+  if (loading) return <RepoSetupLoading />;
 
   if (needsGitHubAuth) {
     return (
-      <Container>
-        <div className="max-w-md mx-auto py-20 text-center">
-          <h1 className="text-xl font-bold text-foreground mb-2">
-            Connect your GitHub account
-          </h1>
-          <p className="text-sm text-muted-foreground mb-6">
-            Eva needs to confirm you can access this installation before adding
-            its codebases.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-2 justify-center">
-            <Button onClick={handleAuthorizeGitHub} disabled={authorizing}>
-              {authorizing ? "Redirecting..." : "Continue with GitHub"}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => navigate({ to: "/home" })}
-            >
-              Cancel
-            </Button>
-          </div>
-          {error && <p className="text-destructive text-sm mt-4">{error}</p>}
-        </div>
-      </Container>
+      <RepoSetupNeedsAuth
+        authorizing={authorizing}
+        error={error}
+        onAuthorize={handleAuthorizeGitHub}
+        onCancel={() => navigate({ to: "/home" })}
+      />
     );
   }
 
   if (error) {
     return (
-      <Container>
-        <div className="flex flex-col items-center justify-center py-20">
-          <p className="text-destructive mb-4">{error}</p>
-          <Button variant="secondary" onClick={() => navigate({ to: "/home" })}>
-            Back to Codebases
-          </Button>
-        </div>
-      </Container>
+      <RepoSetupError error={error} onBack={() => navigate({ to: "/home" })} />
     );
   }
+
+  // Nothing to choose from: the install granted access to no repository, which
+  // is fixed on GitHub rather than here.
+  if (repos.length === 0) return <RepoSetupEmpty />;
 
   return (
     <Container>
@@ -229,34 +225,27 @@ export function RepoSetupClient({
           Select which codebases you want to add to Eva.
         </p>
 
-        <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
-          {repos.map((repo) => (
-            <RepoSetupCard
-              key={repo.id}
-              repo={repo}
-              isExpanded={expandedRepo === repo.fullName}
-              isAdded={addedRepos.has(repo.fullName)}
-              onToggleExpand={() => handleDetectMonorepo(repo)}
-              onAdd={() => addRepoEntry(repo)}
-            >
-              <MonorepoAppsPanel
-                apps={monorepoApps[repo.fullName] ?? []}
-                isDetecting={detectingMonorepo === repo.fullName}
-                addedRepos={addedRepos}
-                repoFullName={repo.fullName}
-                onAddApp={(path) => addRepoEntry(repo, path)}
-              />
-            </RepoSetupCard>
-          ))}
-        </div>
+        <RepoSetupList
+          repos={repos}
+          addedKeys={addedRepos}
+          addingKeys={addingRepos}
+          failures={failures}
+          expandedRepo={expandedRepo}
+          monorepoApps={monorepoApps}
+          detectingMonorepo={detectingMonorepo}
+          onToggleExpand={(repo) => void handleDetectMonorepo(repo)}
+          onAdd={(repo) => void addRepoEntry(repo)}
+          onAddApp={(repo, path) => void addRepoEntry(repo, path)}
+        />
 
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <Button
             className="flex-1"
             onClick={handleAddAll}
-            disabled={repos.length === addedRepos.size}
+            disabled={syncing || repos.length === addedRepos.size}
           >
-            Add All & Continue
+            {syncing ? <Spinner size="sm" /> : null}
+            {syncing ? "Adding codebases" : "Add All & Continue"}
           </Button>
           <Button variant="secondary" onClick={() => navigate({ to: "/home" })}>
             Done

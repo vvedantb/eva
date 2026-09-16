@@ -29,6 +29,7 @@ import { SystemAutomationSettings } from "./_components/SystemAutomationSettings
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { isAutomationTab, type AutomationTab } from "@/lib/search-params";
@@ -69,6 +70,7 @@ export function AutomationClient({
   const hasActiveRun = runs?.some(
     (r) => r.status === "queued" || r.status === "running",
   );
+  useEntityDocumentTitle(automation.title);
 
   return (
     <PageWrapper

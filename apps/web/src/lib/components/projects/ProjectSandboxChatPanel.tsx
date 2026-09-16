@@ -12,8 +12,13 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
+import { toast } from "@eva/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import {
+  isAssistantTurnInProgress,
+  readableSendError,
+  SANDBOX_CHAT_COPY,
+} from "@/lib/components/chat/chatBodyUtils";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
@@ -67,6 +72,7 @@ export function ProjectSandboxChatPanel({
     api.projectChatWorkflow.prewarmChatDaemonNow,
   );
   const updateProject = useUpdateProject(projectId);
+  const setDraft = useMutation(api.drafts.set);
   const { isSwitchingAccount, switchProviderAccount } =
     useProviderAccountHandoff({
       persist: (providerAccountId) =>
@@ -215,15 +221,25 @@ export function ProjectSandboxChatPanel({
         providerAccountId: accountId,
       });
     } catch (error) {
-      // Surface the failure in chat — a thrown startExecute rolls back the
-      // whole turn (no placeholder, no workflow), so without this the send
-      // silently vanishes (same contract as useSessionSend).
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send message";
-      await addMessage({
-        projectId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
+      // A thrown startExecute rolls the whole turn back (no placeholder, no
+      // workflow) and the composer has already cleared, so the prompt only
+      // exists here. The toast owns the failure and hands the text back through
+      // the same `drafts` row the composer reads (same contract as
+      // useSessionSend).
+      toast.error("Couldn't send your message", {
+        id: "project-chat-send",
+        description: readableSendError(
+          error instanceof Error ? error.message : "",
+        ),
+        action: {
+          label: "Restore draft",
+          onClick: () => {
+            void setDraft({
+              target: { kind: "projectChat", projectId },
+              content,
+            });
+          },
+        },
       });
     }
   };
@@ -279,6 +295,7 @@ export function ProjectSandboxChatPanel({
         repoBasePath={basePath}
         conversationId={projectId}
         messages={messages ?? []}
+        isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}
         streamingActivity={streaming?.currentActivity}
         streamingContent={streaming?.currentContent}
@@ -289,15 +306,30 @@ export function ProjectSandboxChatPanel({
         isInputDisabled={!isSandboxActive || isSwitchingAccount}
         placeholder={
           !isSandboxActive
-            ? "Wake Eva up to chat..."
+            ? SANDBOX_CHAT_COPY.asleepPlaceholder
             : isSwitchingAccount
-              ? "Switching Claude account..."
-              : "Ask Eva anything... / for skills · @ to mention"
+              ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+              : SANDBOX_CHAT_COPY.activePlaceholder
         }
         emptyStateTitle={
           isSandboxActive
             ? "Ask Eva anything about this project's running sandbox."
-            : "Wake Eva up to begin chatting."
+            : SANDBOX_CHAT_COPY.asleepTitle
+        }
+        emptyStateDescription={
+          isSandboxActive
+            ? SANDBOX_CHAT_COPY.activeDescription
+            : SANDBOX_CHAT_COPY.asleepDescription
+        }
+        disabledReason={
+          isSwitchingAccount
+            ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+            : SANDBOX_CHAT_COPY.asleepDisabledReason
+        }
+        onStartSandbox={
+          !isSandboxActive && !isSandboxToggling && onSandboxToggle
+            ? () => onSandboxToggle("start")
+            : undefined
         }
         model={model}
         setModel={setModel}

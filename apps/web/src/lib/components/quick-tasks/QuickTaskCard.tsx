@@ -102,7 +102,8 @@ interface QuickTaskCardProps {
   isSelecting?: boolean;
   isSelected?: boolean;
   isActive?: boolean;
-  onToggleSelect?: () => void;
+  /** `shiftKey` asks the owner for a range selection from its anchor. */
+  onToggleSelect?: (event: { shiftKey: boolean }) => void;
   assignedTo?: Id<"users">;
   model?: string;
   providerAccountId?: Id<"userProviderAccounts">;
@@ -250,8 +251,15 @@ export function QuickTaskCard({
         {isSelecting ? (
           <Checkbox
             checked={isSelected}
-            onCheckedChange={() => onToggleSelect?.()}
-            onClick={(e) => e.stopPropagation()}
+            // One handler, not `onClick` + `onCheckedChange`: Radix composes
+            // its own toggle after ours and skips it once the event is
+            // default-prevented, so this reads the shift modifier without
+            // toggling twice.
+            onClick={(event) => {
+              event.stopPropagation();
+              event.preventDefault();
+              onToggleSelect?.({ shiftKey: event.shiftKey });
+            }}
             className={cn("mt-0.5 shrink-0", LIST_ROW_CONTROL_CLASS)}
           />
         ) : null}

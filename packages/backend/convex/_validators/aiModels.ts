@@ -247,6 +247,13 @@ export interface AIModelOption {
   contextWindow1m?: boolean;
   contextWindowDefaultLabel?: string;
   fastMode?: boolean;
+  /**
+   * Default context window in tokens, for the usage meter. Only set where the
+   * number is known here — left undefined rather than guessed, so the meter can
+   * say "unknown" instead of inventing a denominator. A run that reports its own
+   * `contextWindow` (e.g. Claude's 1M mode) always wins over this.
+   */
+  contextWindow?: number;
 }
 
 export interface AIProviderAvailability {
@@ -266,6 +273,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
+    contextWindow: 200000,
   },
   {
     id: "claude:opus",
@@ -273,6 +281,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Opus",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
+    contextWindow: 200000,
   },
   {
     id: "claude:sonnet",
@@ -281,6 +290,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
+    contextWindow: 200000,
   },
   {
     id: "claude:haiku",
@@ -288,6 +298,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Haiku",
     requiresAuth: true,
     thinkingToggle: true,
+    contextWindow: 200000,
   },
   {
     id: "claude:opusplan",
@@ -295,6 +306,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Opus Plan",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
+    contextWindow: 200000,
   },
   {
     id: "claude:claude-opus-4-5-20251101",
@@ -302,6 +314,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Opus 4.5",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_NO_XHIGH,
+    contextWindow: 200000,
   },
   {
     id: "claude:claude-opus-4-6",
@@ -310,6 +323,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_OPUS_46,
     contextWindow1m: true,
+    contextWindow: 200000,
   },
   {
     id: "codex:gpt-6-astra",
@@ -391,6 +405,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     reasoning: CURSOR_REASONING_ASTRA,
     contextWindow1m: true,
     contextWindowDefaultLabel: "272K",
+    contextWindow: 272000,
   },
   {
     id: "cursor:gemini-3.1-pro",
@@ -743,6 +758,36 @@ export function findAIModelOption(
     label: "Sonnet",
     requiresAuth: true,
   };
+}
+
+/**
+ * The ways a result event can spell an option's id: the `AIModel` key minus its
+ * provider prefix, plus (for opencode's `openai/gpt-6-astra` style ids) the part
+ * after the slash.
+ */
+function rawIdsForOption(option: AIModelOption): ReadonlyArray<string> {
+  const withoutProvider = option.id.slice(option.id.indexOf(":") + 1);
+  const slash = withoutProvider.lastIndexOf("/");
+  if (slash === -1) return [withoutProvider];
+  return [withoutProvider, withoutProvider.slice(slash + 1)];
+}
+
+/**
+ * Context window for a raw provider model id as it appears in a result event
+ * (`claude-opus-4-6`, `gpt-6-astra`) — not the `provider:id` AIModel key.
+ *
+ * Returns null when nothing here knows the window, so the usage meter can say
+ * "unknown" rather than divide by an invented default. Where the same raw id is
+ * offered by several providers (`gpt-6-astra` on codex, opencode and cursor),
+ * the first option that declares a window wins: it is the same underlying model,
+ * so its window is the same regardless of which provider ran it.
+ */
+export function contextWindowForRawModel(rawModel: string): number | null {
+  for (const option of AI_MODEL_OPTIONS) {
+    if (option.contextWindow === undefined) continue;
+    if (rawIdsForOption(option).includes(rawModel)) return option.contextWindow;
+  }
+  return null;
 }
 
 /** Checks whether any Codex authentication environment variable is present and non-empty. */

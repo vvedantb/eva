@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
@@ -29,6 +30,7 @@ import {
   MentionPickerPopup,
   type MentionPopupLayout,
 } from "./MentionPickerPopup";
+import { optionId } from "./mentionOptionId";
 import { MentionRow, type MentionKind } from "./MentionRow";
 import {
   computeMentionPopupPlacement,
@@ -73,6 +75,12 @@ export interface MentionEditorHandle {
   tokenize: (text: string) => string;
   reset: () => void;
   focus: () => void;
+  /**
+   * The editor's root element. Callers that listen on `document` use it to ask
+   * whether this editor is the visible one — several composers stay mounted at
+   * once (see `composerVisibility.ts`).
+   */
+  getElement: () => HTMLElement | null;
   /** Append an @mention chip (and trailing space) to the current draft. */
   insertMention: (item: MentionItem) => void;
   /** Append a /skill chip (and trailing space) to the current draft. */
@@ -307,6 +315,12 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     renderSkillChipHoverCard !== undefined;
   const isPanel = popupLayout === "panel";
   const editorRef = useRef<HTMLDivElement>(null);
+  /**
+   * The listbox this combobox controls. One id is enough: the slash popup and
+   * the mention popup are two `key`s of the same slot and only one trigger can
+   * be open at a time.
+   */
+  const listboxId = useId();
   const [trigger, setTrigger] = useState<TriggerState>(CLOSED_TRIGGER);
   const [selectedIndex, setSelectedIndex] = useState(0);
   /**
@@ -501,6 +515,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         setSkillMap(new Map());
       },
       focus: () => editorRef.current?.focus(),
+      getElement: () => editorRef.current,
       insertMention: (item: MentionItem) => appendToken("@", item, "mention"),
       insertSkill: (item: SlashItem) => appendToken("/", item, "skill"),
       addTokenMaps: (mentions, skills) => {
@@ -960,8 +975,13 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
 
   const popupTitle = trigger.kind === "slash" ? "Skills" : mentionPopupTitle;
 
+  // The row the arrow keys are on, named for `aria-activedescendant`. Only the
+  // popup that is actually rendered has one.
+  const activeItem = showPopup ? popupItems[selectedIndex] : undefined;
+
   const sharedPopupProps = {
     title: popupTitle,
+    listboxId,
     selectedIndex,
   };
 
@@ -1032,11 +1052,29 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         data-suggestion={suggestion}
         contentEditable={!disabled}
         suppressContentEditableWarning
-        role="textbox"
+        /* ARIA 1.2 combobox: the editor is the input, the picker is the popup
+           it controls, and `aria-activedescendant` is how a screen reader is
+           told which row ArrowUp/ArrowDown moved to — the picker rows keep DOM
+           focus out of it entirely. Without these the popup opened silently. */
+        role="combobox"
         aria-multiline="true"
+        aria-haspopup="listbox"
+        aria-autocomplete="list"
+        aria-expanded={showPopup}
+        aria-controls={showPopup ? listboxId : undefined}
+        aria-activedescendant={
+          activeItem ? optionId(listboxId, activeItem.id) : undefined
+        }
         aria-disabled={disabled ? "true" : undefined}
         aria-label={ariaLabel ?? placeholder ?? "Editor"}
-        className={cn(DEFAULT_EDITOR_CLASS, className)}
+        className={cn(
+          DEFAULT_EDITOR_CLASS,
+          // `role="combobox"` opts into the base-layer pointer cursor meant for
+          // pickers. This one is typed into, so put the caret back — while
+          // leaving a disabled editor on the base `not-allowed`.
+          disabled ? undefined : "cursor-text",
+          className,
+        )}
         onInput={disabled ? undefined : handleInput}
         onKeyDown={disabled ? undefined : handleKeyDown}
         onClick={disabled ? undefined : handleChipClick}

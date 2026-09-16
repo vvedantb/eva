@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
+import { api, contextWindowForRawModel } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import {
+  Button,
   Context,
   ContextTrigger,
   ContextContent,
@@ -18,26 +19,7 @@ import {
 import { parseResultEvent } from "@/lib/utils/logs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
-// Model context window sizes (in tokens). Used for the usage percentage display;
-// not for cost (cost comes from Claude's `total_cost_usd` in the result event).
-const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  "claude-opus-5": 1000000,
-  "claude-sonnet-4-20250514": 200000,
-  "claude-3-5-sonnet-20241022": 200000,
-  "claude-3-5-haiku-20241022": 200000,
-  "claude-3-opus-20240229": 200000,
-  "claude-3-sonnet-20240229": 200000,
-  "claude-3-haiku-20240307": 200000,
-  "gpt-4o": 128000,
-  "gpt-4o-mini": 128000,
-  "gpt-4-turbo": 128000,
-  "gpt-4": 8192,
-  "gpt-3.5-turbo": 16385,
-};
-
-function getMaxTokens(model: string): number {
-  return MODEL_CONTEXT_WINDOWS[model] ?? 200000;
-}
+const UNKNOWN_WINDOW_TITLE = "Context window unknown for this model";
 
 type AggregatableLog = { rawResultEvent: string | undefined };
 
@@ -66,10 +48,13 @@ export function aggregateUsage(logs: AggregatableLog[] | undefined) {
     latest = parseResultEvent(first.rawResultEvent);
   }
 
+  // The run's own reported window wins (it accounts for traits like Claude's 1M
+  // mode); otherwise fall back to the catalogue, which returns null rather than
+  // a guess when it does not recognise the model.
   const maxTokens =
     latest.contextWindow > 0
       ? latest.contextWindow
-      : getMaxTokens(latest.model);
+      : contextWindowForRawModel(latest.model);
 
   return {
     usedTokens: latest.contextUsedTokens,
@@ -93,16 +78,52 @@ function ContextUsageDisplay({
 }) {
   if (!aggregated) return null;
 
+  const { maxTokens } = aggregated;
+  // `Context` requires a numeric `maxTokens`, so an unknown window passes the
+  // used tokens as the denominator and suppresses every percentage instead: a
+  // hardcoded 200k denominator is what made this meter lie in the first place.
   return (
     <Context
       usedTokens={aggregated.usedTokens}
-      maxTokens={aggregated.maxTokens}
+      maxTokens={maxTokens ?? aggregated.usedTokens}
       usage={aggregated.usage}
       costs={aggregated.costs}
     >
-      <ContextTrigger />
+      {maxTokens === null ? (
+        <ContextTrigger>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            title={UNKNOWN_WINDOW_TITLE}
+          >
+            <span className="font-medium text-muted-foreground text-xs tabular-nums">
+              —
+            </span>
+          </Button>
+        </ContextTrigger>
+      ) : (
+        <ContextTrigger />
+      )}
       <ContextContent>
-        <ContextContentHeader />
+        {maxTokens === null ? (
+          <ContextContentHeader>
+            <div className="flex items-center justify-between gap-3 text-xs tabular-nums">
+              <p title={UNKNOWN_WINDOW_TITLE}>—</p>
+              <p className="font-mono text-muted-foreground">
+                {new Intl.NumberFormat("en-US", {
+                  notation: "compact",
+                }).format(aggregated.usedTokens)}{" "}
+                used
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {UNKNOWN_WINDOW_TITLE}
+            </p>
+          </ContextContentHeader>
+        ) : (
+          <ContextContentHeader />
+        )}
         <ContextContentBody className="space-y-1">
           <ContextInputUsage />
           <ContextOutputUsage />

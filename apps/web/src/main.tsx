@@ -10,6 +10,7 @@ import { toDisplayRepoHref, toInternalRepoHref } from "./lib/utils/repoUrl";
 import { clientEnv } from "./env/client";
 import { convex } from "./lib/convex";
 import { DeploymentErrorFallback } from "./lib/components/DeploymentErrorFallback";
+import { RouteNotFound } from "./lib/components/RouteNotFound";
 import { MotionProvider } from "./lib/components/MotionProvider";
 import { isChunkLoadError } from "./lib/utils/isChunkLoadError";
 import {
@@ -102,6 +103,9 @@ const router = createRouter({
   history: createAppHistory(),
   context: { isSignedIn: false },
   defaultErrorComponent: DeploymentErrorFallback,
+  // Unmatched URLs rendered nothing at all before this — a mistyped or stale
+  // link looked like the app had failed to load.
+  defaultNotFoundComponent: RouteNotFound,
   // Fetch a route's chunk while the pointer rests on its link, so the click
   // renders from cache instead of waiting on the network. Routes with a
   // side-effecting `beforeLoad` must bail out on the `preload` flag — see
