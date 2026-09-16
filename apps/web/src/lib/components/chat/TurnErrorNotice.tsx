@@ -18,7 +18,11 @@ interface TurnErrorNoticeProps {
  * text as markdown body copy reads like Eva answering with the word "Error" in
  * it; the tone step and the icon say the turn did not run at all.
  */
-export function TurnErrorNotice({ title, detail, action }: TurnErrorNoticeProps) {
+export function TurnErrorNotice({
+  title,
+  detail,
+  action,
+}: TurnErrorNoticeProps) {
   return (
     <div className="flex items-start gap-2 rounded-surface bg-destructive/10 px-3 py-2.5">
       <IconAlertTriangle

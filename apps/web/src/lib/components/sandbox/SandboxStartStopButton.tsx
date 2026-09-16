@@ -4,7 +4,12 @@ import { Button, cn, CrossfadeIconSlot, Spinner } from "@eva/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
-import { SleepControlTooltip } from "./SleepEvaButton";
+import {
+  SleepControlTooltip,
+  SLEEP_EVA_LABEL,
+  WAKE_EVA_LABEL,
+  WAKE_EVA_RETRY_LABEL,
+} from "./SleepEvaButton";
 
 /**
  * Compact play/stop control used in session, project, and task sandbox chat.
@@ -32,10 +37,10 @@ export function SandboxStartStopButton({
   // that is asleep, but if the flags ever disagree, starting stays available.
   const blockedMidTurn = isActive && isAssistantResponding;
   const label = isActive
-    ? "Put Eva to sleep"
+    ? SLEEP_EVA_LABEL
     : hasStartError
-      ? "Try waking Eva again"
-      : "Wake up Eva";
+      ? WAKE_EVA_RETRY_LABEL
+      : WAKE_EVA_LABEL;
 
   return (
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>

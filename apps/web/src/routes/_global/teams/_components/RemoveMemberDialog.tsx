@@ -45,7 +45,7 @@ export function RemoveMemberDialog({
             Remove {target?.label} from {target?.teamName}?
           </DialogTitle>
           <DialogDescription>
-            They lose access to the team's repos, shared accounts and env vars
+            They lose access to the team&apos;s repos, shared accounts and env vars
             immediately.
           </DialogDescription>
         </DialogHeader>

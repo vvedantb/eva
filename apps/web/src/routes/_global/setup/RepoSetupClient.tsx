@@ -3,10 +3,14 @@ import { useNavigate } from "@tanstack/react-router";
 import { useAction, useMutation } from "convex/react";
 import { api, GITHUB_AUTH_REQUIRED } from "@eva/backend";
 import { Container } from "@/lib/components/ui/Container";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { Button, Spinner, toast } from "@eva/ui";
-import { IconBrandGithub } from "@tabler/icons-react";
 import { RepoSetupList } from "./_components/RepoSetupList";
+import {
+  RepoSetupEmpty,
+  RepoSetupError,
+  RepoSetupLoading,
+  RepoSetupNeedsAuth,
+} from "./_components/RepoSetupStates";
 import type { GitHubRepo } from "./_components/RepoSetupCard";
 import type { MonorepoApp } from "./_components/MonorepoAppsPanel";
 import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
@@ -188,82 +192,28 @@ export function RepoSetupClient({
     setDetectingMonorepo(null);
   };
 
-  if (loading) {
-    return (
-      <Container>
-        <div className="flex flex-col items-center justify-center py-20">
-          <Spinner size="lg" className="mb-4" />
-          <p className="text-muted-foreground">Loading codebases...</p>
-        </div>
-      </Container>
-    );
-  }
+  if (loading) return <RepoSetupLoading />;
 
   if (needsGitHubAuth) {
     return (
-      <Container>
-        <div className="max-w-md mx-auto py-20 text-center">
-          <h1 className="text-xl font-bold text-foreground mb-2">
-            Connect your GitHub account
-          </h1>
-          <p className="text-sm text-muted-foreground mb-6">
-            Eva needs to confirm you can access this installation before adding
-            its codebases.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-2 justify-center">
-            <Button onClick={handleAuthorizeGitHub} disabled={authorizing}>
-              {authorizing ? "Redirecting..." : "Continue with GitHub"}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => navigate({ to: "/home" })}
-            >
-              Cancel
-            </Button>
-          </div>
-          {error && <p className="text-destructive text-sm mt-4">{error}</p>}
-        </div>
-      </Container>
+      <RepoSetupNeedsAuth
+        authorizing={authorizing}
+        error={error}
+        onAuthorize={handleAuthorizeGitHub}
+        onCancel={() => navigate({ to: "/home" })}
+      />
     );
   }
 
   if (error) {
     return (
-      <Container>
-        <div className="flex flex-col items-center justify-center py-20">
-          <p className="text-destructive mb-4">{error}</p>
-          <Button variant="secondary" onClick={() => navigate({ to: "/home" })}>
-            Back to Codebases
-          </Button>
-        </div>
-      </Container>
+      <RepoSetupError error={error} onBack={() => navigate({ to: "/home" })} />
     );
   }
 
   // Nothing to choose from: the install granted access to no repository, which
   // is fixed on GitHub rather than here.
-  if (repos.length === 0) {
-    return (
-      <Container>
-        <EmptyState
-          icon={<IconBrandGithub size={24} />}
-          title="This installation has no repositories Eva can see"
-          description="Grant the Eva GitHub App access to repositories, then come back here."
-          action={
-            <Button asChild className="mt-6">
-              <a
-                href="https://github.com/settings/installations"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Manage GitHub access
-              </a>
-            </Button>
-          }
-        />
-      </Container>
-    );
-  }
+  if (repos.length === 0) return <RepoSetupEmpty />;
 
   return (
     <Container>

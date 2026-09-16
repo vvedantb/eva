@@ -114,6 +114,37 @@ export function ComposerInputChrome({
     fileCount: attachments.files.length,
   });
 
+  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
+  // registered here fires once per mounted composer. Only the one on screen
+  // may act — see composerVisibility.ts.
+  const isVisibleComposer = () =>
+    isComposerVisible(mentionRef.current?.getElement());
+
+  useShortcut("cancelTurn", () => {
+    if (!isExecuting) return;
+    if (!isVisibleComposer()) return;
+    void onCancel();
+  });
+
+  useShortcut("focusComposer", (event) => {
+    if (!isVisibleComposer()) return;
+    event.preventDefault();
+    mentionRef.current?.focus();
+  });
+
+  // Enter on a disabled composer swallows the keystroke either way; this is the
+  // difference between "nothing happened" and being told Eva is asleep, with
+  // the way out attached. An empty draft needs no explanation.
+  const handleBlockedSubmit = () => {
+    if (!isInputDisabled) return;
+    toast.info(disabledReason ?? "You can't send right now", {
+      id: "composer-blocked",
+      ...(onStartSandbox
+        ? { action: { label: "Wake up Eva", onClick: onStartSandbox } }
+        : {}),
+    });
+  };
+
   const leftTools = (
     <m.div
       layout="position"
@@ -148,23 +179,34 @@ export function ComposerInputChrome({
             exit={{ opacity: 0, scale: 0.96 }}
             transition={motionFast}
           >
-            <Button
-              size="icon-sm"
-              type="button"
-              variant="destructive"
-              className="rounded-full"
-              onClick={onCancel}
-              aria-label="Stop Eva"
-              title="Stop Eva"
-            >
-              <IconPlayerStop className="size-4" />
-            </Button>
+            {/* A tooltip rather than `title`: the binding is a `ShortcutKbd`
+                that follows the user's own setting, and a title attribute can
+                only hold a string. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-sm"
+                  type="button"
+                  variant="destructive"
+                  className="rounded-full"
+                  onClick={onCancel}
+                  aria-label="Stop Eva"
+                >
+                  <IconPlayerStop className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="flex items-center gap-2">
+                Stop Eva
+                <ShortcutKbd id="cancelTurn" />
+              </TooltipContent>
+            </Tooltip>
           </m.div>
         ) : null}
       </AnimatePresence>
       <ChatBodySubmit
         disabled={isInputDisabled}
         isExecuting={isExecuting}
+        isUploading={isUploading}
         hasPendingContext={hasPendingContext}
         allowEmptySubmit={allowEmptySubmit}
       />
@@ -217,6 +259,7 @@ export function ComposerInputChrome({
               initialSkillMap={seedSkillMap}
               history={messageHistory}
               enableAttachmentPaste
+              onBlockedSubmit={handleBlockedSubmit}
               completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
               className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
             />
@@ -243,11 +286,14 @@ export function ComposerInputChrome({
 function ChatBodySubmit({
   disabled,
   isExecuting,
+  isUploading,
   hasPendingContext,
   allowEmptySubmit,
 }: {
   disabled: boolean;
   isExecuting: boolean;
+  /** Attachments are still uploading, so the send has not left yet. */
+  isUploading: boolean;
   hasPendingContext: boolean;
   allowEmptySubmit?: boolean;
 }) {
@@ -258,10 +304,21 @@ function ChatBodySubmit({
   return (
     <PromptInputSubmit
       disabled={
-        disabled || (isEmpty && !hasPendingContext && !allowEmptySubmit)
+        disabled ||
+        isUploading ||
+        (isEmpty && !hasPendingContext && !allowEmptySubmit)
       }
+      // "submitted" is the button's own spinner state. Fetch uploads report no
+      // bytes, so a spinner is the honest signal — a percentage would be made up.
+      {...(isUploading ? { status: "submitted" as const } : {})}
       className="size-9"
-      title={isExecuting ? "Queue message" : "Send message"}
+      title={
+        isUploading
+          ? "Uploading attachments…"
+          : isExecuting
+            ? "Queue message"
+            : "Send message"
+      }
     />
   );
 }

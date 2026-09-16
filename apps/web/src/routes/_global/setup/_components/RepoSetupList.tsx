@@ -88,7 +88,7 @@ export function RepoSetupList({
           {failures[repo.fullName] ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-surface bg-destructive/10 px-3 py-2">
               <p className="min-w-0 text-xs text-destructive">
-                Couldn't add {repo.fullName} — {failures[repo.fullName]}
+                Couldn&apos;t add {repo.fullName} — {failures[repo.fullName]}
               </p>
               <Button
                 size="sm"

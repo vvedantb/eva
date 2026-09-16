@@ -353,33 +353,33 @@ export function ChatBody({
 
     return (
       <div key={message._id} className="flex flex-col gap-3">
-      <ChatMessage
-        message={message}
-        repoBasePath={repoBasePath}
-        isLatestAssistantTurn={message._id === latestAssistantMessageId}
-        showChangedFiles={!simpleView}
-        {...(expandedByMessageId[message._id] !== undefined
-          ? { changedFilesExpanded: expandedByMessageId[message._id] }
-          : {})}
-        onChangedFilesExpandedChange={setMessageExpanded}
-        isOtherUser={isOtherUser}
-        senderFirstName={senderFirstName}
-        isHandoffBoundary={handoffBoundaryIds.has(message._id)}
-        turnModel={precedingUser?.model}
-        turnReasoningLevel={precedingUser?.reasoningLevel}
-        turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
-        streamingActivity={isStreamingTarget ? streamingActivity : undefined}
-        streamingContent={isStreamingTarget ? streamingContent : undefined}
-        onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
-        onOpenAgentsTab={simpleView ? undefined : onOpenAgentsTab}
-        backgroundAgents={backgroundAgents}
-        sandboxRunning={sandboxRunning}
-        turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-        onRetryTurn={handleRetryTurn}
-        precedingUser={precedingUser}
-      />
-      {afterMessage?.(message._id)}
+        <ChatMessage
+          message={message}
+          repoBasePath={repoBasePath}
+          isLatestAssistantTurn={message._id === latestAssistantMessageId}
+          showChangedFiles={!simpleView}
+          {...(expandedByMessageId[message._id] !== undefined
+            ? { changedFilesExpanded: expandedByMessageId[message._id] }
+            : {})}
+          onChangedFilesExpandedChange={setMessageExpanded}
+          isOtherUser={isOtherUser}
+          senderFirstName={senderFirstName}
+          isHandoffBoundary={handoffBoundaryIds.has(message._id)}
+          turnModel={precedingUser?.model}
+          turnReasoningLevel={precedingUser?.reasoningLevel}
+          turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
+          streamingActivity={isStreamingTarget ? streamingActivity : undefined}
+          streamingContent={isStreamingTarget ? streamingContent : undefined}
+          onOpenFile={onOpenFile}
+          onViewDiff={onViewDiff}
+          onOpenAgentsTab={simpleView ? undefined : onOpenAgentsTab}
+          backgroundAgents={backgroundAgents}
+          sandboxRunning={sandboxRunning}
+          turnCheckpoint={simpleView ? undefined : turnCheckpoint}
+          onRetryTurn={handleRetryTurn}
+          precedingUser={precedingUser}
+        />
+        {afterMessage?.(message._id)}
       </div>
     );
   };
@@ -394,22 +394,22 @@ export function ChatBody({
         >
           {displayMessages.length === 0 ? (
             (emptyStateOverride ??
-              (isLoadingMessages ? (
-                <ChatTranscriptSkeleton />
-              ) : (
-                <ChatEmptyState
-                  title={emptyStateTitle}
-                  description={emptyStateDescription}
-                  {...(isInputDisabled && onStartSandbox
-                    ? {
-                        action: {
-                          label: SANDBOX_CHAT_COPY.wakeAction,
-                          onClick: onStartSandbox,
-                        },
-                      }
-                    : {})}
-                />
-              )))
+            (isLoadingMessages ? (
+              <ChatTranscriptSkeleton />
+            ) : (
+              <ChatEmptyState
+                title={emptyStateTitle}
+                description={emptyStateDescription}
+                {...(isInputDisabled && onStartSandbox
+                  ? {
+                      action: {
+                        label: SANDBOX_CHAT_COPY.wakeAction,
+                        onClick: onStartSandbox,
+                      },
+                    }
+                  : {})}
+              />
+            )))
           ) : lastUserMessageIndex < 0 ? (
             displayMessages.map(renderMessage)
           ) : (

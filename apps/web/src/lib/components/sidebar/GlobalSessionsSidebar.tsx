@@ -43,6 +43,17 @@ interface GlobalSessionsSidebarProps {
 }
 
 /**
+ * One app's rows out of the `useQueries` map. A failed query is reported as an
+ * `Error` value; a group treats that the same as "still loading" rather than
+ * rendering a half-built list.
+ */
+function listedSessions(
+  result: SessionListItem[] | Error | undefined,
+): SessionListItem[] | undefined {
+  return result === undefined || result instanceof Error ? undefined : result;
+}
+
+/**
  * Cross-repo Sessions list for the rail entry point: every accessible app as a
  * collapsible group, with Active / Archived list modes.
  */
@@ -88,7 +99,8 @@ export function GlobalSessionsSidebar({
   };
   const updateSession = useMutation(api.sessions.update);
 
-  // Stable identity required by useQueries; deduped with each group's list watch.
+  // Stable identity required by useQueries. This is the only watch on the
+  // list: the rows are handed to each group as a prop.
   const sessionListQueries = useMemo(() => {
     if (repos === undefined) return {};
     return Object.fromEntries(
@@ -163,6 +175,9 @@ export function GlobalSessionsSidebar({
                       key={repo._id}
                       repo={repo}
                       pathname={pathname}
+                      activeSessions={listedSessions(
+                        sessionsByRepoId[repo._id],
+                      )}
                       open={isGroupOpen(repo)}
                       onOpenChange={(open) => {
                         setGroupOpen(repo._id, open);

@@ -217,7 +217,8 @@ export const SANDBOX_CHAT_COPY = {
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
   /** Teaches the three composer affordances on an empty, awake chat. */
-  activeDescription: "Type / for skills, @ to mention, or drop files to attach.",
+  activeDescription:
+    "Type / for skills, @ to mention, or drop files to attach.",
 } as const;
 
 /**

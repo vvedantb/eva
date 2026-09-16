@@ -57,16 +57,21 @@ describe("cached session shells are isolated per repo", () => {
 
 /**
  * `passive` is what makes a background RepoProvider safe: it resolves the repo
- * for its subtree but never drives navigation.
+ * for its subtree but never drives navigation and never renders anything the
+ * user could act on. A missing repo used to redirect to /home, which is why
+ * this once guarded two navigation effects; it now renders `RepoNotFound`
+ * instead, so the second guard moved into the load-state resolver.
  */
-describe("a passive RepoProvider never navigates", () => {
-  test("both navigation effects bail out when passive", () => {
+describe("a passive RepoProvider stays inert", () => {
+  test("every navigation effect bails out when passive", () => {
     const effects = repoContext
       .split("useEffect(() => {")
       .slice(1)
       .filter((body) => body.includes("navigate({"));
+    // Only URL canonicalization navigates now. A second one appearing here
+    // without its own guard is the regression this counts against.
     expect(effects, "the RepoProvider navigation effects moved").toHaveLength(
-      2,
+      1,
     );
     for (const body of effects) {
       const bailAt = body.indexOf("if (passive) return;");
@@ -78,7 +83,19 @@ describe("a passive RepoProvider never navigates", () => {
     }
   });
 
-  test("passive defaults to false, so routed trees keep redirecting", () => {
+  /**
+   * The not-found screen is the other thing a hidden shell must not do: three
+   * session shells stay mounted at once, so a background repo the viewer cannot
+   * read would otherwise explain itself over the session they are looking at.
+   */
+  test("a missing repo leaves passive trees on the pending state", () => {
+    expect(
+      repoContext.replace(/\s+/g, " "),
+      "a hidden shell would render RepoNotFound over the visible session",
+    ).toContain("return passive ? PENDING");
+  });
+
+  test("passive defaults to false, so routed trees keep canonicalizing", () => {
     expect(repoContext).toContain("passive = false");
   });
 });

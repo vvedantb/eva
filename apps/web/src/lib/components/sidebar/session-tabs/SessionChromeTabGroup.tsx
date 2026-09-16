@@ -1,12 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Spinner, cn, motionFast } from "@eva/ui";
-import { AnimatePresence, m } from "motion/react";
+import { Spinner, cn } from "@eva/ui";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
   repoBasePaths,
@@ -14,20 +11,28 @@ import {
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { sortSessionsForSidebar } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
-  SessionChromeTab,
-  TAB_PREFERRED_WIDTH_REM,
-} from "@/lib/components/sidebar/session-tabs/SessionChromeTab";
+  SessionChromeTabStrip,
+  type ChromeTabEntry,
+} from "@/lib/components/sidebar/session-tabs/SessionChromeTabStrip";
+import { mergeSessionTabOrder } from "@/lib/components/sidebar/session-tabs/sessionTabOrder";
 import { tabGroupColorForId } from "@/lib/components/sidebar/session-tabs/tabGroupColors";
+import { useClosedSessionTabs } from "@/lib/components/sidebar/session-tabs/useClosedSessionTabs";
+import { useSessionTabOrder } from "@/lib/components/sidebar/session-tabs/useSessionTabOrder";
 import { entityPathSegment } from "@/lib/numId";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { isSessionSidebarActive } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
-import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 
 interface SessionChromeTabGroupProps {
   repo: RepoWithLogo;
   pathname: string;
+  /**
+   * This app's active sessions, already watched once by the tab bar. The group
+   * used to run its own `sessions.list` watch through a different cache, so
+   * every app in the strip held two live subscriptions to the same rows.
+   */
+  activeSessions: SessionListItem[] | undefined;
   /** Collapsed groups show only the pill (plus the tab you are looking at). */
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,7 +46,7 @@ interface SessionChromeTabGroupProps {
  * Chrome tab group: a group-name pill, that app's active session tabs, and the
  * coloured line Chrome draws underneath to tie them together. Selection is
  * resolved here rather than per tab so a tab knows whether its neighbour is
- * selected â€” Chrome drops the separator hairline next to the selected tab.
+ * selected — Chrome drops the separator hairline next to the selected tab.
  *
  * Clicking the pill collapses the group to a chip, as in Chrome. A collapsed
  * group still shows the selected tab: hiding the session you are reading would
@@ -50,6 +55,7 @@ interface SessionChromeTabGroupProps {
 export function SessionChromeTabGroup({
   repo,
   pathname,
+  activeSessions,
   isOpen,
   onOpenChange,
   onRenameRequest,
@@ -57,15 +63,21 @@ export function SessionChromeTabGroup({
   hideWhenEmpty = true,
 }: SessionChromeTabGroupProps) {
   const navigate = useNavigate();
-  const sessions = useQuery(api.sessions.list, { repoId: repo._id });
-  const createSession = useMutation(api.sessions.create);
+  const { isClosed, close } = useClosedSessionTabs();
+  const { orderFor, setOrderFor } = useSessionTabOrder();
   const label = repoDisplayLabel(repo);
   const baseUrl = `${repoBasePaths(repo)[0]}/sessions`;
   const colors = tabGroupColorForId(repo._id);
-  const isLoading = sessions === undefined;
-  const tabs = sortSessionsForSidebar(
-    (sessions ?? []).filter(isSessionSidebarActive),
-    "updated_at",
+  const isLoading = activeSessions === undefined;
+  // Creation order, with the user's own drag order on top. Sorting by activity
+  // moved the tab out from under the pointer every time an agent finished a
+  // turn somewhere else in the strip.
+  const tabs: ChromeTabEntry[] = mergeSessionTabOrder(
+    sortSessionsForSidebar(
+      (activeSessions ?? []).filter(isSessionSidebarActive),
+      "created_at",
+    ),
+    orderFor(repo._id),
   ).map((session) => {
     const pathSegment = entityPathSegment(session);
     const href = pathSegment ? `${baseUrl}/${pathSegment}` : baseUrl;
@@ -80,10 +92,27 @@ export function SessionChromeTabGroup({
     return null;
   }
 
-  const visibleTabs = isOpen ? tabs : tabs.filter((tab) => tab.isSelected);
+  // A closed tab stays out of the strip until it is opened again from the
+  // overflow menu — except the session being read, which is always shown.
+  const openTabs = tabs.filter(
+    (tab) => tab.isSelected || !isClosed(tab.session._id),
+  );
+  const visibleTabs = isOpen
+    ? openTabs
+    : openTabs.filter((tab) => tab.isSelected);
+
+  /** Closing the tab you are reading hands the page to its neighbour. */
+  const handleClose = (entry: ChromeTabEntry) => {
+    close(entry.session._id);
+    if (!entry.isSelected) return;
+    const next = openTabs.find(
+      (tab) => tab.session._id !== entry.session._id,
+    );
+    navigate({ to: next ? next.href : "/sessions" });
+  };
 
   return (
-    // Only open groups give up width â€” their tabs shrink first, so a collapsed
+    // Only open groups give up width — their tabs shrink first, so a collapsed
     // chip never loses characters to someone else's tabs.
     <div
       className={cn(
@@ -94,7 +123,7 @@ export function SessionChromeTabGroup({
         isOpen ? "min-w-0" : "shrink-0",
       )}
     >
-      {/* Chrome marks a group with a coloured line beneath it â€” no tinted fill
+      {/* Chrome marks a group with a coloured line beneath it — no tinted fill
           behind the tabs. The selected tab's card covers the line it crosses.
           Collapsed chips are just the pill (+ selected tab), so no underline. */}
       {isOpen ? (
@@ -106,7 +135,7 @@ export function SessionChromeTabGroup({
           )}
         />
       ) : null}
-      {/* Group label pill â€” Chrome puts the name first, then its tabs. The row
+      {/* Group label pill — Chrome puts the name first, then its tabs. The row
           is tab-height so a collapsed chip lines up with expanded groups. */}
       <div className="flex h-9 shrink-0 items-center">
         <button
@@ -141,62 +170,17 @@ export function SessionChromeTabGroup({
           <Spinner size="sm" />
         </div>
       ) : (
-        // Chrome tabs touch each other; separation comes from the hairline.
-        // The row asks for one preferred tab width per tab and shrinks from
-        // there, so tabs stay equal width whatever their titles say. The width
-        // has to be stated rather than measured: a tab is a container query,
-        // which means it cannot also be sized by its own contents.
-        <div
-          className="flex min-w-0 items-end"
-          style={{
-            width: `${visibleTabs.length * TAB_PREFERRED_WIDTH_REM}rem`,
-          }}
-        >
-          <AnimatePresence initial={false} mode="popLayout">
-          {visibleTabs.map(({ session, href, isSelected }, index) => (
-            <m.div
-              key={session._id}
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionFast}
-              className="flex min-w-8"
-              style={{
-                flexBasis: `${TAB_PREFERRED_WIDTH_REM}rem`,
-                flexGrow: 1,
-                flexShrink: 1,
-              }}
-            >
-            <SessionChromeTab
-              session={session}
-              href={href}
-              isSelected={isSelected}
-              showSeparator={
-                index > 0 && !isSelected && !visibleTabs[index - 1]?.isSelected
-              }
-              groupColor={colors}
-              onRenameRequest={() => onRenameRequest(session, repo)}
-              onArchiveRequest={() => onArchiveRequest(session, repo)}
-              onDuplicate={async () => {
-                const { numId } = await catchMutationError(
-                  createSession({
-                    repoId: repo._id,
-                    title: `${session.title} (copy)`,
-                  }),
-                  "Couldn't duplicate session",
-                  "session-duplicate",
-                );
-                return String(numId);
-              }}
-              onDuplicateNavigate={(segment) => {
-                navigate({ to: `${baseUrl}/${segment}` });
-              }}
-            />
-            </m.div>
-          ))}
-          </AnimatePresence>
-        </div>
+        <SessionChromeTabStrip
+          repo={repo}
+          baseUrl={baseUrl}
+          groupColor={colors}
+          tabs={tabs}
+          visibleTabs={visibleTabs}
+          onReorder={(orderedIds) => setOrderFor(repo._id, orderedIds)}
+          onRenameRequest={(session) => onRenameRequest(session, repo)}
+          onArchiveRequest={(session) => onArchiveRequest(session, repo)}
+          onClose={handleClose}
+        />
       )}
     </div>
   );

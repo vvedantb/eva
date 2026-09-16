@@ -15,6 +15,7 @@ import { ReviewTabsPanel } from "./ReviewTabsPanel";
 import { PrBreadcrumb } from "./_components/PrBreadcrumb";
 import { usePrRefresh } from "./usePrOverview";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 /**
  * Standalone Reviews page for one pull request. Owns the PR title block and the
@@ -50,6 +51,11 @@ export function ReviewDetailClient({
   // Handed to the tab panel so the header's overflow menu is the only place it
   // appears.
   const { refresh, refreshing } = usePrRefresh(repoId, prNumber);
+
+  // Tab title matches how a PR is named everywhere else: "#123 Fix the thing".
+  useEntityDocumentTitle(
+    prHeader === undefined ? null : `#${prHeader.number} ${prHeader.title}`,
+  );
 
   const goToTab = (nextTab: string) => {
     // basePath is already the router's internal `--` form on main

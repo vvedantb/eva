@@ -6,12 +6,6 @@ import { api, type Id } from "@eva/backend";
 import {
   Button,
   ButtonGroup,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -34,6 +28,7 @@ import {
 } from "@tabler/icons-react";
 import type { ReviewTab } from "@/lib/search-params";
 import { focusPrComposer } from "./prComposerFocus";
+import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import { PrVerdictDialog, type PrVerdict } from "./PrVerdictDialog";
 import type { PrOverview } from "./prOverviewMeta";
@@ -217,43 +212,13 @@ export function PrHeaderActions({
         onSubmitted={onChanged}
       />
 
-      <Dialog open={confirmingClose} onOpenChange={setConfirmingClose}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Close pull request #{overview.number} without merging?
-            </DialogTitle>
-            <DialogDescription>
-              Reviewers are notified and CI stops. You can reopen it later.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setConfirmingClose(false)}
-              disabled={closing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void close()}
-              disabled={closing}
-            >
-              <CrossfadeIcon
-                show={closing}
-                trueKey="loading"
-                falseKey="idle"
-                variant="soft"
-                className="relative flex size-3.5 items-center justify-center"
-                whenTrue={<Spinner size="sm" />}
-                whenFalse={<IconGitPullRequestClosed size={14} />}
-              />
-              {closing ? "Closing" : "Close pull request"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PrCloseDialog
+        prNumber={overview.number}
+        open={confirmingClose}
+        onOpenChange={setConfirmingClose}
+        onConfirm={() => void close()}
+        closing={closing}
+      />
     </div>
   );
 }

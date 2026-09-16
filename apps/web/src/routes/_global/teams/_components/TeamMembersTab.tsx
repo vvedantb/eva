@@ -8,20 +8,13 @@ import {
   Card,
   CardContent,
   Button,
-  Input,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
   Select,
   SelectTrigger,
   SelectContent,
   SelectItem,
   SelectValue,
 } from "@eva/ui";
-import { IconTrash, IconUserPlus, IconUsers } from "@tabler/icons-react";
+import { IconTrash, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -29,8 +22,8 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
+import { AddTeamMemberDialog } from "./AddTeamMemberDialog";
 import {
   RemoveMemberDialog,
   type RemoveMemberTarget,
@@ -45,13 +38,6 @@ interface TeamMembersTabProps {
   isOwner: boolean;
 }
 
-/**
- * `teamMembers.add` throws this when the email belongs to nobody who has ever
- * signed in. "User not found" reads as a bug in Eva rather than as the invite
- * problem it is, so it is the one message replaced rather than surfaced.
- */
-const NO_SUCH_USER = "User not found";
-
 /** The row's own label, so the confirmation names whoever the user just saw. */
 function memberLabel(member: Member): string {
   return member.user?.fullName || member.user?.email || "this member";
@@ -64,7 +50,6 @@ export function TeamMembersTab({
   isOwner,
 }: TeamMembersTabProps) {
   const currentUserId = useQuery(api.auth.me);
-  const addMember = useMutation(api.teamMembers.add);
   const removeMember = useMutation(api.teamMembers.remove).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.teamMembers.list, {
@@ -98,12 +83,6 @@ export function TeamMembersTab({
     }
   });
 
-  const [dialog, setDialog] = useState({
-    open: false,
-    email: "",
-    error: "",
-    isSubmitting: false,
-  });
   const [removeTarget, setRemoveTarget] = useState<
     (RemoveMemberTarget & { userId: Member["userId"] }) | null
   >(null);
@@ -127,97 +106,10 @@ export function TeamMembersTab({
       });
   };
 
-  const handleDialogChange = (open: boolean) => {
-    if (!open) {
-      setDialog({ open: false, email: "", error: "", isSubmitting: false });
-    } else {
-      setDialog((prev) => ({ ...prev, open: true }));
-    }
-  };
-
-  const handleAddMember = async () => {
-    if (!dialog.email.trim()) {
-      setDialog((prev) => ({ ...prev, error: "Email is required" }));
-      return;
-    }
-
-    setDialog((prev) => ({ ...prev, error: "", isSubmitting: true }));
-
-    try {
-      await addMember({ teamId, userEmail: dialog.email });
-      setDialog({ open: false, email: "", error: "", isSubmitting: false });
-    } catch (err) {
-      const message = userFacingErrorMessage(
-        err instanceof Error ? err : null,
-        "Couldn't add that member. Try again.",
-      );
-      setDialog((prev) => ({
-        ...prev,
-        error:
-          message === NO_SUCH_USER
-            ? "No Eva account uses that email yet. Ask them to sign in to Eva first."
-            : message,
-        isSubmitting: false,
-      }));
-    }
-  };
-
   return (
     <>
       <div className="mb-4 flex justify-end">
-        {isOwner && (
-          <Dialog open={dialog.open} onOpenChange={handleDialogChange}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <IconUserPlus size={16} className="mr-1.5" />
-                Add Member
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Team Member</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Input
-                    type="email"
-                    value={dialog.email}
-                    onChange={(e) =>
-                      setDialog((prev) => ({
-                        ...prev,
-                        email: e.target.value,
-                        error: "",
-                      }))
-                    }
-                    placeholder="Email address"
-                    disabled={dialog.isSubmitting}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
-                  />
-                </div>
-                {dialog.error && (
-                  <div className="rounded-surface border border-destructive/50 bg-destructive/10 p-3">
-                    <p className="text-sm text-destructive">{dialog.error}</p>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => handleDialogChange(false)}
-                  disabled={dialog.isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddMember}
-                  disabled={dialog.isSubmitting}
-                >
-                  {dialog.isSubmitting ? "Adding..." : "Add"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+        {isOwner ? <AddTeamMemberDialog teamId={teamId} /> : null}
       </div>
       <div className="space-y-2">
         {members.length === 0 ? (

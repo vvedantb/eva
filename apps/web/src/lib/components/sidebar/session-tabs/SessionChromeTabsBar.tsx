@@ -45,6 +45,17 @@ interface SessionChromeTabsBarProps {
 }
 
 /**
+ * One app's rows out of a `useQueries` map. A failed query is reported as an
+ * `Error` value; the groups treat that the same as "still loading" rather than
+ * rendering a half-built strip.
+ */
+function listedSessions(
+  result: SessionListItem[] | Error | undefined,
+): SessionListItem[] | undefined {
+  return result === undefined || result instanceof Error ? undefined : result;
+}
+
+/**
  * Chrome-style horizontal session tabs: repo groups of active sessions, plus
  * overflow (full active list) and Archived (archived ∪ merged/closed) menus.
  */
@@ -173,6 +184,7 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
                 key={repo._id}
                 repo={repo}
                 pathname={pathname}
+                activeSessions={listedSessions(sessionsByRepoId[repo._id])}
                 isOpen={isGroupOpen(repo)}
                 onOpenChange={(open) => {
                   setGroupOpen(repo._id, open);

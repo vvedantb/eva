@@ -40,7 +40,7 @@ export function DocSaveStatus({
       ) : null}
       {state.status === "error" ? (
         <>
-          <span className="text-destructive">Couldn't save a version</span>
+          <span className="text-destructive">Couldn&apos;t save a version</span>
           <Button
             size="sm"
             variant="ghost"
