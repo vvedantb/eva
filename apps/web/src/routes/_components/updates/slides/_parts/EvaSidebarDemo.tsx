@@ -7,19 +7,22 @@ import {
   EvaSidebarGroupLabel,
   NAV_GROUPS,
   SESSION_ROWS,
-  TOP_NAV,
 } from "./EvaSidebarNav";
 
 /** The step at which the deck switches the demo into Simple Mode. */
 const SIMPLE_STEP = 2;
 
-/** Window size on the slide, and the app-sized surface drawn inside it. */
-const WINDOW_WIDTH = 500;
-const WINDOW_HEIGHT = 350;
+/**
+ * The app surface is drawn at its real pixel sizes (rail 64, panel 288, a slim
+ * faded strip of main area) and scaled down to fit the slide. The window takes
+ * its width from that scale so there is no dead space to the right.
+ */
+const WINDOW_HEIGHT = 400;
 const TITLE_BAR = 36;
-const SURFACE_WIDTH = 868;
-const SURFACE_HEIGHT = 545;
+const SURFACE_WIDTH = 64 + 288 + 120;
+const SURFACE_HEIGHT = 452;
 const SCALE = (WINDOW_HEIGHT - TITLE_BAR) / SURFACE_HEIGHT;
+const WINDOW_WIDTH = Math.round(SURFACE_WIDTH * SCALE);
 
 /** The repo panel: workspace shortcuts, sessions, then Ship / Test / More. */
 function EvaNavPanel({ simple }: { simple: boolean }) {
@@ -33,12 +36,7 @@ function EvaNavPanel({ simple }: { simple: boolean }) {
           carepulse-ts
         </span>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 px-2 py-2">
-        <div className="space-y-1">
-          {TOP_NAV.map((item, index) => (
-            <EvaNavRow key={item.name} item={item} index={index} />
-          ))}
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-2 py-2">
         <div>
           <EvaSidebarGroupLabel label="Sessions" />
           <div className="space-y-1">
@@ -47,20 +45,29 @@ function EvaNavPanel({ simple }: { simple: boolean }) {
             ))}
           </div>
         </div>
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label}>
-            <EvaSidebarGroupLabel label={group.label} />
-            <div className="space-y-1">
-              <AnimatePresence initial={false}>
-                {group.items
-                  .filter((item) => !(simple && item.simpleHidden === true))
-                  .map((item, index) => (
+        {NAV_GROUPS.map((group) => {
+          const visible = group.items.filter(
+            (item) => !(simple && item.simpleHidden === true),
+          );
+          return (
+            // A group whose every row Simple Mode hides fades out with them,
+            // as the real sidebar drops the label rather than leaving it empty.
+            <m.div
+              key={group.label}
+              animate={{ opacity: visible.length === 0 ? 0 : 1 }}
+              transition={{ duration: 0.32, ease: EASE_OUT, delay: 0.2 }}
+            >
+              <EvaSidebarGroupLabel label={group.label} />
+              <div className="space-y-1">
+                <AnimatePresence initial={false}>
+                  {visible.map((item, index) => (
                     <EvaNavRow key={item.name} item={item} index={index} />
                   ))}
-              </AnimatePresence>
-            </div>
-          </div>
-        ))}
+                </AnimatePresence>
+              </div>
+            </m.div>
+          );
+        })}
       </div>
     </div>
   );

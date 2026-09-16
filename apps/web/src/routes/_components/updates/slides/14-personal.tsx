@@ -83,22 +83,15 @@ export function Slide14Personal() {
           </Reveal>
         </div>
 
-        <div className="w-[560px] shrink-0">
+        <div className="flex w-[560px] shrink-0 flex-col items-center">
           <EvaSidebarDemo />
-          <Reveal step={2} delay={0.8} className="mt-3">
-            <p className="text-sm text-white/55">
-              Simple Mode is exactly this: Eva with the parts you never use
-              removed.
-            </p>
-          </Reveal>
         </div>
       </div>
 
-      <Reveal step={3} className="mt-6">
+      <Reveal step={3} className="mt-4">
         <p className="text-lg text-white/85">
-          Notion began as a notes app and kept adding features most people never
-          open. The future is software that fits <Accent>one person</Accent>,
-          not everyone.
+          Notion began as notes and kept adding features most people never open.
+          The future fits <Accent>one person</Accent>, not everyone.
         </p>
       </Reveal>
 

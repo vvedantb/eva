@@ -3,12 +3,10 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
   DocumentsIcon,
-  DraftsIcon,
   ProjectsIcon,
   QuickTasksIcon,
   ReviewsIcon,
   SettingsIcon,
-  StatsIcon,
   TestingArenaIcon,
 } from "@/lib/components/sidebar/icons/AnimatedNavIcons";
 import {
@@ -36,14 +34,10 @@ export interface EvaNavGroup {
 }
 
 /**
- * Above the pipeline groups, as in `RepoTopNav`. Today is left out: the real
- * entry only appears while the daily standup automation is installed.
+ * The real Ship / Test / More groups, in the order the app renders them.
+ * Drafts, Today and Stats are left out so the panel fits the slide at a scale
+ * a projector audience can read; nothing shown here is invented.
  */
-export const TOP_NAV: readonly EvaNavItem[] = [
-  { name: "Drafts", icon: DraftsIcon, badge: "3" },
-];
-
-/** The real Ship / Test / More groups, in the order the app renders them. */
 export const NAV_GROUPS: readonly EvaNavGroup[] = [
   {
     label: "Ship",
@@ -62,10 +56,7 @@ export const NAV_GROUPS: readonly EvaNavGroup[] = [
   },
   {
     label: "More",
-    items: [
-      { name: "Stats", icon: StatsIcon },
-      { name: "Settings", icon: SettingsIcon, simpleHidden: true },
-    ],
+    items: [{ name: "Settings", icon: SettingsIcon, simpleHidden: true }],
   },
 ];
 
