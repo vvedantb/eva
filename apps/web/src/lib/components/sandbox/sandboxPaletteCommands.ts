@@ -8,6 +8,7 @@ import {
   IconFile,
   IconFileText,
   IconLayoutDashboard,
+  IconLetterCase,
   IconPalette,
   IconRobot,
   IconTerminal2,
@@ -43,6 +44,9 @@ interface BuildSandboxPaletteCommandsArgs {
   onNewPreview: () => void;
   newPreviewDisabled: boolean;
   simpleView?: boolean;
+  /** Desktop rail: tab labels under the icons. */
+  showRailLabels: boolean;
+  onToggleRailLabels: () => void;
 }
 
 /** Builds the shared, context-aware command palette vocabulary. */
@@ -64,6 +68,8 @@ export function buildSandboxPaletteCommands({
   onNewPreview,
   newPreviewDisabled,
   simpleView = false,
+  showRailLabels,
+  onToggleRailLabels,
 }: BuildSandboxPaletteCommandsArgs): SandboxPaletteCommand[] {
   const commands: SandboxPaletteCommand[] = tabs.map((tab) => ({
     id: `show-${tab.value}`,
@@ -154,6 +160,16 @@ export function buildSandboxPaletteCommands({
       run: () => onTabChange(slugifyAppTabName(tab.name)),
     });
   }
+
+  // Outside the `simpleView` gate: the rail is there either way, and this is
+  // how a reader who cannot place the icons finds out the labels exist.
+  commands.push({
+    id: "toggle-rail-labels",
+    label: showRailLabels ? "Hide tab labels" : "Show tab labels",
+    keywords: "sandbox rail sidebar icon text names wide",
+    icon: IconLetterCase,
+    run: onToggleRailLabels,
+  });
 
   if (!simpleView) {
     commands.push({

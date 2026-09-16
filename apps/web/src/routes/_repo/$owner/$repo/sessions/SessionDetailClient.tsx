@@ -9,7 +9,7 @@ import { SandboxPanel } from "./SandboxPanel";
 import { SessionDetailSkeleton } from "./_components/SessionDetailSkeleton";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
@@ -43,6 +43,7 @@ export function SessionDetailClient({
   hideTitle?: boolean;
 }) {
   const { basePath, repo } = useRepo();
+  const sandboxRailWidthPx = useSandboxRailWidthPx();
   // Hidden cached shells keep the last paint so switching back does not flash.
   // Skipping the hot streams — and the session doc itself — is what stops a
   // background turn from re-rendering a whole chat tree the user cannot see.
@@ -337,7 +338,7 @@ export function SessionDetailClient({
             leftDefaultSize="40%"
             leftMinWidthPx={350}
             rightMinWidthPx={300}
-            rightCollapsedSizePx={SANDBOX_RAIL_WIDTH_PX}
+            rightCollapsedSizePx={sandboxRailWidthPx}
             storageKey="sandbox-collapsed"
             expandRightSignal={expandRightSignal}
             hotkeyEnabled={isRouteActive}

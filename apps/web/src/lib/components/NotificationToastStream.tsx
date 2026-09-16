@@ -31,7 +31,9 @@ type ToastEntry = {
 };
 
 export function NotificationToastStream() {
-  const notifications = useQuery(api.notifications.list);
+  // `{}` is the unarchived inbox: `notifications.list` now takes an `archived`
+  // flag, and toasts only ever announce live notifications.
+  const notifications = useQuery(api.notifications.list, {});
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
