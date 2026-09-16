@@ -1,18 +1,8 @@
 import { IconRobot } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
-import {
-  EASE_OUT,
-  Reveal,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
-
-/** What the one person types. Short enough to sit on a single line. */
-const MESSAGES = [
-  "Ship the referral export fix",
-  "Review overnight bug reports",
-  "Draft the September changelog",
-];
+import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { EvaChatWindow } from "./EvaChatWindow";
 
 const TILES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -63,20 +53,7 @@ export function AgentFleet() {
 
   return (
     <div className="flex items-center justify-center gap-8">
-      <div className="w-[300px] rounded-2xl bg-white/[0.06] p-5">
-        <div className="text-[11px] tracking-[0.18em] text-white/35 uppercase">
-          Chat
-        </div>
-        <div className="mt-4 space-y-3">
-          {MESSAGES.map((message, index) => (
-            <Reveal key={message} delay={0.3 + index * 0.45} from="left">
-              <div className="rounded-xl rounded-br-sm bg-white/[0.08] px-3 py-2 text-sm leading-snug text-white/80">
-                {message}
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
+      <EvaChatWindow />
 
       <div>
         <div className="grid grid-cols-3 gap-3">

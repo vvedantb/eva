@@ -11,7 +11,7 @@ import {
   StaggerItem,
   Title,
 } from "../_components/DeckPrimitives";
-import { PersonalAppMock } from "./_parts/PersonalAppMock";
+import { EvaSidebarDemo } from "./_parts/EvaSidebarDemo";
 
 const SIMILAR: readonly string[] = [
   "Cursor background agents",
@@ -84,10 +84,11 @@ export function Slide14Personal() {
         </div>
 
         <div className="w-[560px] shrink-0">
-          <PersonalAppMock />
+          <EvaSidebarDemo />
           <Reveal step={2} delay={0.8} className="mt-3">
             <p className="text-sm text-white/55">
-              Remove what you never use. Add what only you need.
+              Simple Mode is exactly this: Eva with the parts you never use
+              removed.
             </p>
           </Reveal>
         </div>

@@ -6,7 +6,7 @@ import {
   Shell,
   Title,
 } from "../_components/DeckPrimitives";
-import { ModelPickerMock } from "./_parts/ModelPickerMock";
+import { RealModelPicker } from "./_parts/RealModelPicker";
 
 export function Slide05SimpleMode() {
   return (
@@ -35,7 +35,7 @@ export function Slide05SimpleMode() {
         </div>
 
         <div className="flex w-[600px] shrink-0 items-center justify-center">
-          <ModelPickerMock />
+          <RealModelPicker />
         </div>
       </div>
 
