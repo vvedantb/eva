@@ -18,7 +18,7 @@ export function rangeBetween(
   if (anchorAt === -1 || targetAt === -1) return [targetId];
   const start = Math.min(anchorAt, targetAt);
   const end = Math.max(anchorAt, targetAt);
-  return [...orderedIds.slice(start, end + 1)];
+  return orderedIds.slice(start, end + 1);
 }
 
 export interface InboxSelection {

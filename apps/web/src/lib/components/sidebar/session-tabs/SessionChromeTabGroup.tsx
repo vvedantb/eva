@@ -1,7 +1,7 @@
 "use client";
 
 import { useNavigate } from "@tanstack/react-router";
-import { api } from "@eva/backend";
+import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { Spinner, cn } from "@eva/ui";
 import { RepoLogo } from "@/lib/components/RepoLogo";
