@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { SLIDES } from "./slides/index";
+import type { DeckSlide } from "./slides/types";
 import { DeckStepContext, EASE_OUT } from "./_components/DeckPrimitives";
 import { DeckAmbient } from "./_components/DeckAmbient";
 import { DeckChrome } from "./_components/DeckChrome";
@@ -9,9 +9,9 @@ import { DeckOutline } from "./_components/DeckOutline";
 
 const DESIGN_W = 1280;
 const DESIGN_H = 720;
-const TOTAL = SLIDES.length;
 
-interface UpdatesDeckProps {
+interface DeckProps {
+  slides: readonly DeckSlide[];
   slide: number;
   onNavigate: (slide: number) => void;
 }
@@ -60,7 +60,7 @@ const slideVariants = {
   }),
 };
 
-export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
+export function Deck({ slides, slide, onNavigate }: DeckProps) {
   const [deckState, setDeckState] = useState<DeckState>({
     slide,
     step: 0,
@@ -68,6 +68,8 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
   });
   const [scale, setScale] = useState(1);
   const [outlineOpen, setOutlineOpen] = useState(false);
+
+  const total = slides.length;
 
   const onCurrentSlide = deckState.slide === slide;
   const step = onCurrentSlide ? deckState.step : 0;
@@ -77,11 +79,11 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
       ? 1
       : -1;
 
-  const index = clamp(slide - 1, 0, TOTAL - 1);
-  const entry = SLIDES[index];
+  const index = clamp(slide - 1, 0, total - 1);
+  const entry = slides[index];
 
   function goTo(target: number) {
-    const destination = clamp(target, 1, TOTAL);
+    const destination = clamp(target, 1, total);
     if (destination === slide) return;
     setDeckState({
       slide: destination,
@@ -96,7 +98,7 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
       setDeckState({ slide, step: step + 1, direction });
       return;
     }
-    if (slide < TOTAL) goTo(slide + 1);
+    if (slide < total) goTo(slide + 1);
   }
 
   function prev() {
@@ -108,7 +110,7 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
     // Step back onto the *finished* previous slide rather than replaying its build.
     setDeckState({
       slide: slide - 1,
-      step: SLIDES[slide - 2].steps,
+      step: slides[slide - 2].steps,
       direction: -1,
     });
     onNavigate(slide - 1);
@@ -138,7 +140,7 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
         return;
       case "End":
         event.preventDefault();
-        goTo(TOTAL);
+        goTo(total);
         return;
       case "f":
         event.preventDefault();
@@ -191,6 +193,7 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
       <DeckAmbient />
 
       <DeckOutline
+        slides={slides}
         open={outlineOpen}
         slide={slide}
         onNavigate={goTo}
@@ -244,7 +247,7 @@ export function UpdatesDeck({ slide, onNavigate }: UpdatesDeckProps) {
 
         <DeckChrome
           slide={slide}
-          total={TOTAL}
+          total={total}
           onToggleOutline={() => setOutlineOpen((open) => !open)}
         />
       </div>

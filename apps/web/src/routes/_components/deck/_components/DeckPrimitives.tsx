@@ -5,7 +5,7 @@ import { cn } from "@eva/ui";
 
 /**
  * The current build step of the active slide. 0 = the slide's resting state,
- * before the presenter has clicked. `UpdatesDeck` provides it; the default of 0
+ * before the presenter has clicked. `Deck` provides it; the default of 0
  * means a slide rendered on its own still shows its step-0 content.
  */
 export const DeckStepContext = createContext<number>(0);

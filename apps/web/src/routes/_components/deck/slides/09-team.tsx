@@ -22,6 +22,8 @@ interface Person {
   headlines: string[];
   count: number;
   countLabel: string;
+  /** Month this person first used Eva. */
+  since: string;
 }
 
 /** Spotlight order, left to right. */
@@ -34,8 +36,9 @@ const PEOPLE: Person[] = [
       "Referral dashboard",
       "Referral tabs and cancellation reasons",
     ],
-    count: 14,
+    count: 27,
     countLabel: "sessions and quick tasks",
+    since: "Since May",
   },
   {
     name: "Zuza",
@@ -45,8 +48,9 @@ const PEOPLE: Person[] = [
       "Admin KPI dashboards",
       "KPI cards, badges and tables polish",
     ],
-    count: 78,
+    count: 237,
     countLabel: "sessions and quick tasks",
+    since: "Since March",
   },
   {
     name: "Kezia",
@@ -56,8 +60,9 @@ const PEOPLE: Person[] = [
       "Broker and borough filters",
       "Automated decline and expiry emails",
     ],
-    count: 24,
-    countLabel: "quick tasks and one project",
+    count: 39,
+    countLabel: "quick tasks",
+    since: "Since May",
   },
   {
     name: "Vedant",
@@ -67,8 +72,9 @@ const PEOPLE: Person[] = [
       "Nursing home SUPA archive",
       "eProcurement fixes",
     ],
-    count: 60,
-    countLabel: "CarePulse sessions",
+    count: 912,
+    countLabel: "sessions and quick tasks",
+    since: "Since January",
   },
 ];
 
@@ -98,7 +104,7 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
         }}
         transition={{ type: "spring", bounce: 0, duration: 0.6 }}
       >
-        <Card className="relative flex h-[330px] flex-col p-6">
+        <Card className="relative flex h-[344px] flex-col p-6">
           <div
             className={`flex size-11 items-center justify-center rounded-full text-lg font-semibold text-white ${BRAND_GRADIENT}`}
           >
@@ -113,6 +119,7 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
           <div className="mt-1 h-8 text-xs leading-4 tracking-[0.18em] text-white/40 uppercase">
             {person.role}
           </div>
+          <div className="text-xs text-white/40">{person.since}</div>
 
           <ul className="mt-4 space-y-2">
             {person.headlines.map((headline) => (
@@ -169,7 +176,7 @@ export function Slide09Team() {
       <Reveal step={4} delay={0.4} className="mt-7">
         <p className="text-lg text-white/70">
           <Accent>
-            <CountUp value={116} step={4} delay={0.4} />
+            <CountUp value={303} step={4} delay={0.4} />
           </Accent>{" "}
           pieces of work raised by colleagues, straight from the people who
           needed them.
@@ -177,8 +184,8 @@ export function Slide09Team() {
       </Reveal>
 
       <Footnote>
-        Counts are sessions, quick tasks and projects created in Eva between 1
-        June and 10 September 2026, including items later cancelled.
+        Sessions, quick tasks and projects created in Eva between 11 January and
+        16 September 2026, including items later cancelled.
       </Footnote>
     </Shell>
   );

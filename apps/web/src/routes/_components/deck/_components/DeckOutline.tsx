@@ -1,8 +1,9 @@
 import { AnimatePresence, m } from "motion/react";
 import { cn, motionSpring } from "@eva/ui";
-import { SLIDES } from "../slides/index";
+import type { DeckSlide } from "../slides/types";
 
 interface DeckOutlineProps {
+  slides: readonly DeckSlide[];
   open: boolean;
   slide: number;
   onNavigate: (slide: number) => void;
@@ -11,6 +12,7 @@ interface DeckOutlineProps {
 
 /** Left drawer listing every slide. Picking one jumps there and closes the drawer. */
 export function DeckOutline({
+  slides,
   open,
   slide,
   onNavigate,
@@ -28,7 +30,7 @@ export function DeckOutline({
           className="pointer-events-auto z-20 flex w-72 shrink-0 flex-col gap-1 overflow-y-auto bg-zinc-900/90 p-4 backdrop-blur-md"
           aria-label="Slide outline"
         >
-          {SLIDES.map((entry, index) => {
+          {slides.map((entry, index) => {
             const number = index + 1;
             const active = number === slide;
             return (

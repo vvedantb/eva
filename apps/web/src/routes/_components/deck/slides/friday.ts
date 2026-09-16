@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { DeckSlide } from "./types";
 import { Slide01Title } from "./01-title";
 import { Slide02Numbers } from "./02-numbers";
 import { Slide03Cloud } from "./03-cloud";
@@ -7,7 +7,6 @@ import { Slide05SimpleMode } from "./05-simple-mode";
 import { Slide06Automerge } from "./06-automerge";
 import { Slide07Sandbox } from "./07-sandbox";
 import { Slide08More } from "./08-more";
-import { Slide09Team } from "./09-team";
 import { Slide10CodeReviews } from "./10-code-reviews";
 import { Slide11WhatsNext } from "./11-whats-next";
 import { Slide12Future } from "./12-future";
@@ -15,18 +14,8 @@ import { Slide13Developer } from "./13-developer";
 import { Slide14Personal } from "./14-personal";
 import { Slide15Closing } from "./15-closing";
 
-export interface DeckSlide {
-  /** Stable id, mirrors the file name. */
-  id: string;
-  /** Shown in the outline panel. */
-  title: string;
-  Component: ComponentType;
-  /** Number of extra build steps after the slide's resting state. */
-  steps: number;
-}
-
-/** Deck order. The index here is the slide number minus one. */
-export const SLIDES: DeckSlide[] = [
+/** Friday session deck order. The index here is the slide number minus one. */
+export const FRIDAY_SLIDES: DeckSlide[] = [
   { id: "01-title", title: "Title", Component: Slide01Title, steps: 0 },
   // TODO(slide-agents): content slides 02–08 are placeholders.
   {
@@ -62,7 +51,6 @@ export const SLIDES: DeckSlide[] = [
   { id: "07-sandbox", title: "Sandboxes", Component: Slide07Sandbox, steps: 1 },
   { id: "08-more", title: "And more", Component: Slide08More, steps: 0 },
   // End TODO(slide-agents).
-  { id: "09-team", title: "The team", Component: Slide09Team, steps: 4 },
   {
     id: "10-code-reviews",
     title: "Code reviews",

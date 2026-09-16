@@ -13,8 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
+import { Route as AnnualCdmRouteImport } from './routes/annual-cdm'
+import { Route as FridaySessionRouteImport } from './routes/friday-session'
 import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
-import { Route as UpdatesToEvaRouteImport } from './routes/updates-to-eva'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -152,14 +153,19 @@ const AgentCallbackRoute = AgentCallbackRouteImport.update({
   path: '/agent-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnnualCdmRoute = AnnualCdmRouteImport.update({
+  id: '/annual-cdm',
+  path: '/annual-cdm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FridaySessionRoute = FridaySessionRouteImport.update({
+  id: '/friday-session',
+  path: '/friday-session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PreviewAuthRoute = PreviewAuthRouteImport.update({
   id: '/preview-auth',
   path: '/preview-auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UpdatesToEvaRoute = UpdatesToEvaRouteImport.update({
-  id: '/updates-to-eva',
-  path: '/updates-to-eva',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
@@ -852,8 +858,9 @@ const RepoOwnerRepoQuickTasksNumIdSandboxReviewDiffsDiffViewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
+  '/annual-cdm': typeof AnnualCdmRoute
+  '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/updates-to-eva': typeof UpdatesToEvaRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -976,8 +983,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
+  '/annual-cdm': typeof AnnualCdmRoute
+  '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/updates-to-eva': typeof UpdatesToEvaRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -1079,8 +1087,9 @@ export interface FileRoutesById {
   '/_global': typeof GlobalRouteWithChildren
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
+  '/annual-cdm': typeof AnnualCdmRoute
+  '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/updates-to-eva': typeof UpdatesToEvaRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1205,8 +1214,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent-callback'
+    | '/annual-cdm'
+    | '/friday-session'
     | '/preview-auth'
-    | '/updates-to-eva'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1329,8 +1339,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agent-callback'
+    | '/annual-cdm'
+    | '/friday-session'
     | '/preview-auth'
-    | '/updates-to-eva'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1431,8 +1442,9 @@ export interface FileRouteTypes {
     | '/_global'
     | '/_repo'
     | '/agent-callback'
+    | '/annual-cdm'
+    | '/friday-session'
     | '/preview-auth'
-    | '/updates-to-eva'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1558,8 +1570,9 @@ export interface RootRouteChildren {
   GlobalRoute: typeof GlobalRouteWithChildren
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
+  AnnualCdmRoute: typeof AnnualCdmRoute
+  FridaySessionRoute: typeof FridaySessionRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
-  UpdatesToEvaRoute: typeof UpdatesToEvaRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1593,18 +1606,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/annual-cdm': {
+      id: '/annual-cdm'
+      path: '/annual-cdm'
+      fullPath: '/annual-cdm'
+      preLoaderRoute: typeof AnnualCdmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/friday-session': {
+      id: '/friday-session'
+      path: '/friday-session'
+      fullPath: '/friday-session'
+      preLoaderRoute: typeof FridaySessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/preview-auth': {
       id: '/preview-auth'
       path: '/preview-auth'
       fullPath: '/preview-auth'
       preLoaderRoute: typeof PreviewAuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/updates-to-eva': {
-      id: '/updates-to-eva'
-      path: '/updates-to-eva'
-      fullPath: '/updates-to-eva'
-      preLoaderRoute: typeof UpdatesToEvaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -3063,8 +3083,9 @@ const rootRouteChildren: RootRouteChildren = {
   GlobalRoute: GlobalRouteWithChildren,
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
+  AnnualCdmRoute: AnnualCdmRoute,
+  FridaySessionRoute: FridaySessionRoute,
   PreviewAuthRoute: PreviewAuthRoute,
-  UpdatesToEvaRoute: UpdatesToEvaRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport
