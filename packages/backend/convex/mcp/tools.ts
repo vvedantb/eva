@@ -5,6 +5,7 @@ import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
 import { defineTool, type EvaTool } from "./registry";
+import { evaluateTool } from "../_mcp/evaluateTool";
 import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
 import {
   entityAccess,
@@ -469,6 +470,18 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         });
       },
     }),
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // evaluate — typed decisions from TypeSafe Jev via AI Gateway
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // No repo or entity access check: the tool reads nothing of the user's and
+  // only forwards what the caller hands it, so every MCP caller gets it.
+  tools.push(
+    evaluateTool((input) =>
+      ctx.runAction(internal.mcp.evaluate.runEvaluate, input),
+    ),
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
