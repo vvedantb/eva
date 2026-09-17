@@ -8,6 +8,7 @@ import {
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
   otherUserIdsInChat,
+  readableSendError,
   stripErrorPrefix,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
@@ -250,6 +251,32 @@ describe("stripErrorPrefix", () => {
 
   test("only the leading stamp goes", () => {
     expect(stripErrorPrefix("Error: Error: twice")).toBe("Error: twice");
+  });
+});
+
+/**
+ * A send that throws no longer writes an `Error:` turn into the transcript; it
+ * raises a toast with "Restore draft" instead, and this is the toast's body.
+ * The three send paths (session, task, project) all read it, so a Convex
+ * envelope leaking through would be shown to the user in all three.
+ */
+describe("readableSendError", () => {
+  test("keeps only the thrown message from a Convex server error", () => {
+    expect(
+      readableSendError(
+        "[CONVEX M(sessions:sendMessage)] [Request ID: 7c1a] Server Error\nUncaught Error: Eva is asleep\n    at handler (../convex/sessions.ts:42:9)",
+      ),
+    ).toBe("Eva is asleep");
+  });
+
+  test("leaves a message that was written for the user alone", () => {
+    expect(readableSendError("You are offline")).toBe("You are offline");
+  });
+
+  test("falls back when the envelope was the whole message", () => {
+    expect(
+      readableSendError("[CONVEX M(sessions:sendMessage)] Server Error"),
+    ).toBe("Something went wrong");
   });
 });
 

@@ -54,6 +54,18 @@ const idScoped = publicFunctions.filter((entry) =>
   entry.body.includes('id: v.id("notifications")'),
 );
 
+/**
+ * The bulk functions: the inbox bulk bar sends a whole selection at once, so
+ * these take an array of caller-supplied ids instead of one. Same exposure as
+ * `markAsRead` — an id names no owner — multiplied by the size of the batch,
+ * and a hand-mirrored fifth bulk mutation is exactly where the per-row check
+ * gets dropped. Each must resolve its rows through `ownedNotifications`, which
+ * is the one place the owner comparison and the batch cap live.
+ */
+const bulkScoped = publicFunctions.filter((entry) =>
+  entry.body.includes('ids: v.array(v.id("notifications"))'),
+);
+
 describe("notification ownership", () => {
   // Guards the scan itself: a rename of `authMutation` or of the file would
   // otherwise leave every assertion below passing over an empty list.
@@ -85,6 +97,43 @@ describe("notification ownership", () => {
     expect(body.indexOf("userId !== ctx.userId")).toBeLessThan(
       body.indexOf("ctx.db.patch"),
     );
+  });
+
+  it("finds the notification functions that take a batch of row ids", () => {
+    expect(bulkScoped.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining([
+        "markManyAsRead",
+        "markManyAsUnread",
+        "archiveMany",
+        "unarchiveMany",
+      ]),
+    );
+  });
+
+  it.each(bulkScoped.map((entry) => entry.name))(
+    "%s resolves its rows through ownedNotifications before patching",
+    (name) => {
+      const body = bulkScoped.find(
+        (candidate) => candidate.name === name,
+      )?.body;
+      expect(body).toBeDefined();
+      if (body === undefined) return;
+      expect(body).toContain("ownedNotifications(ctx, ctx.userId");
+      expect(body.indexOf("ownedNotifications(")).toBeLessThan(
+        body.indexOf("ctx.db.patch"),
+      );
+    },
+  );
+
+  // Every bulk mutation delegates its guard here, so this is where the owner
+  // comparison and the batch cap have to stay.
+  it("ownedNotifications drops other users' rows and caps the batch", () => {
+    const helper = source.slice(
+      source.indexOf("async function ownedNotifications"),
+    );
+    const body = helper.slice(0, helper.indexOf("\n}\n") + 2);
+    expect(body).toContain("notification.userId !== userId");
+    expect(body).toContain("BULK_ID_LIMIT");
   });
 
   // The bulk mutation takes no id, so its guard is the index range instead: it
