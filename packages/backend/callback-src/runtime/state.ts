@@ -1,4 +1,5 @@
 import type { WriteStream } from "fs";
+import { parseQuestionInput } from "../parse/questionInput.js";
 import type {
   JsonValue,
   ProgressStep,
@@ -108,6 +109,27 @@ function parsePriorStep(value: JsonValue): ProgressStep | null {
       step.todos = todos;
     }
   }
+  if (Array.isArray(value.questions)) {
+    const questions = parseQuestionInput({ questions: value.questions });
+    if (questions) {
+      step.questions = questions;
+    }
+  }
+  if (
+    value.answers &&
+    typeof value.answers === "object" &&
+    !Array.isArray(value.answers)
+  ) {
+    const answers: Record<string, string> = {};
+    for (const [question, answer] of Object.entries(value.answers)) {
+      if (typeof answer === "string") {
+        answers[question] = answer;
+      }
+    }
+    if (Object.keys(answers).length > 0) {
+      step.answers = answers;
+    }
+  }
   return step;
 }
 
@@ -164,6 +186,9 @@ type CallbackState = {
   /** Current todo checklist for this turn, rebuilt from TodoWrite/TaskCreate/
    * TaskUpdate calls and mirrored into the single "todos" activity step. */
   todoState: TodoItem[];
+  /** Answers a user gave to a blocking AskUserQuestion, keyed by tool_use id.
+   * Consumed by the tool_result handler so the step records the exact answers. */
+  questionAnswers: Map<string, Record<string, string>>;
   /** True while a turn is paused inside canUseTool waiting for the user's answer
    * to a blocking AskUserQuestion. Suspends the per-turn watchdog so a genuinely
    * waiting turn is never killed for producing no SDK messages. */
@@ -226,6 +251,7 @@ export const callbackState: CallbackState = {
   cursorKnownToolIds: new Set<string>(),
   cursorTerminalToolIds: new Set<string>(),
   todoState: [],
+  questionAnswers: new Map<string, Record<string, string>>(),
   awaitingQuestionAnswer: false,
   usageLimitSnapshot: null,
   lastReportedUsageLimits: "",
@@ -305,6 +331,7 @@ export function resetAttemptState(): void {
   callbackState.codexToolItemIds.clear();
   callbackState.cursorKnownToolIds.clear();
   callbackState.cursorTerminalToolIds.clear();
+  callbackState.questionAnswers.clear();
 }
 
 /** @internal test-only state resets */
@@ -326,6 +353,7 @@ export function resetStateForTests(): void {
   callbackState.streamedAssistantTextThisMessage = false;
   callbackState.pendingParagraphBreak = false;
   callbackState.todoState.length = 0;
+  callbackState.questionAnswers.clear();
   callbackState.awaitingQuestionAnswer = false;
   callbackState.usageLimitSnapshot = null;
   callbackState.lastReportedUsageLimits = "";

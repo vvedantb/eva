@@ -43,6 +43,20 @@ export interface ActivityStepEdit {
   newText: string;
 }
 
+/** One choice offered by an AskUserQuestion prompt. */
+export interface ActivityQuestionOption {
+  label: string;
+  description?: string;
+}
+
+/** One question of an AskUserQuestion prompt, with the choices shown. */
+export interface ActivityQuestion {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: ActivityQuestionOption[];
+}
+
 export interface ActivityStep {
   type:
     | "read"
@@ -89,6 +103,10 @@ export interface ActivityStep {
   isError?: boolean;
   /** Wall time from push → complete (ms). */
   durationMs?: number;
+  /** AskUserQuestion prompt (type "question" only): the questions and options shown to the user. */
+  questions?: ActivityQuestion[];
+  /** AskUserQuestion answers keyed by question text. Absent when the turn ended without a structured answer. */
+  answers?: Record<string, string>;
 }
 
 /** True when the step has expandable rich detail to show. */

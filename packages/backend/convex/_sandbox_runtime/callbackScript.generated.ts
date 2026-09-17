@@ -373,6 +373,36 @@ import {
   writeFileSync
 } from "fs";
 
+// callback-src/parse/questionInput.ts
+function parseQuestionOptions(value) {
+  if (!Array.isArray(value)) return [];
+  const options = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (typeof raw.label !== "string" || !raw.label) continue;
+    options.push({
+      label: raw.label,
+      description: typeof raw.description === "string" && raw.description ? raw.description : void 0
+    });
+  }
+  return options;
+}
+function parseQuestionInput(input) {
+  if (!Array.isArray(input.questions)) return void 0;
+  const questions = [];
+  for (const raw of input.questions) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (typeof raw.question !== "string" || !raw.question) continue;
+    questions.push({
+      question: raw.question,
+      header: typeof raw.header === "string" && raw.header ? raw.header : void 0,
+      multiSelect: raw.multiSelect === true ? true : void 0,
+      options: parseQuestionOptions(raw.options)
+    });
+  }
+  return questions.length > 0 ? questions : void 0;
+}
+
 // callback-src/runtime/state.ts
 function parsePriorStep(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -456,6 +486,23 @@ function parsePriorStep(value) {
       step.todos = todos;
     }
   }
+  if (Array.isArray(value.questions)) {
+    const questions = parseQuestionInput({ questions: value.questions });
+    if (questions) {
+      step.questions = questions;
+    }
+  }
+  if (value.answers && typeof value.answers === "object" && !Array.isArray(value.answers)) {
+    const answers = {};
+    for (const [question, answer] of Object.entries(value.answers)) {
+      if (typeof answer === "string") {
+        answers[question] = answer;
+      }
+    }
+    if (Object.keys(answers).length > 0) {
+      step.answers = answers;
+    }
+  }
   return step;
 }
 var callbackState = {
@@ -496,6 +543,7 @@ var callbackState = {
   cursorKnownToolIds: /* @__PURE__ */ new Set(),
   cursorTerminalToolIds: /* @__PURE__ */ new Set(),
   todoState: [],
+  questionAnswers: /* @__PURE__ */ new Map(),
   awaitingQuestionAnswer: false,
   usageLimitSnapshot: null,
   lastReportedUsageLimits: "",
@@ -560,6 +608,7 @@ function resetAttemptState() {
   callbackState.codexToolItemIds.clear();
   callbackState.cursorKnownToolIds.clear();
   callbackState.cursorTerminalToolIds.clear();
+  callbackState.questionAnswers.clear();
 }
 
 // callback-src/utils.ts
@@ -1695,12 +1744,16 @@ function toolCallToStep(name, input) {
       return { type: "tool", label: "Updating tasks...", status: "active" };
     case "TodoRead":
       return { type: "tool", label: "Reading tasks...", status: "active" };
-    case "AskUserQuestion":
+    case "AskUserQuestion": {
+      const questions = parseQuestionInput(input);
       return {
         type: "question",
         label: "Asking a question...",
+        detail: questions ? questions[0].question : void 0,
+        questions,
         status: "active"
       };
+    }
     default:
       return {
         type: "tool",
@@ -3237,14 +3290,23 @@ function completeStatusOnNonStatusMessage(event) {
 }
 
 // callback-src/providers/claude.ts
-function claudeToolCompleteResult(resultText, isError) {
+function claudeToolCompleteResult(resultText, isError, toolUseId) {
+  let answers;
+  if (toolUseId !== void 0) {
+    const stored = callbackState.questionAnswers.get(toolUseId);
+    if (stored) {
+      answers = stored;
+      callbackState.questionAnswers.delete(toolUseId);
+    }
+  }
   const output = buildStepOutput(resultText);
-  if (!output && !isError) {
+  if (!output && !isError && !answers) {
     return void 0;
   }
   return {
     output,
-    isError: isError ? true : void 0
+    isError: isError ? true : void 0,
+    answers
   };
 }
 function extractToolResultText(content) {
@@ -3338,7 +3400,7 @@ function claudeParseLine(event) {
     if (toolUseId) {
       trackClaudeToolResult(toolUseId, resultText, isError);
     }
-    const result = claudeToolCompleteResult(resultText, isError);
+    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
     events.push(
       result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
     );
@@ -3354,7 +3416,7 @@ function claudeParseLine(event) {
         const resultText = block.content !== void 0 ? extractToolResultText(block.content) : "";
         const isError = block.is_error === true;
         trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError);
+        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
         events.push(
           result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
         );
@@ -4132,6 +4194,9 @@ function mergeToolResult(step, result) {
   }
   if (result.durationMs !== void 0) {
     step.durationMs = result.durationMs;
+  }
+  if (result.answers) {
+    step.answers = result.answers;
   }
 }
 function markStepComplete(step) {
@@ -4943,10 +5008,17 @@ function buildCanUseTool() {
       if (answerJson === null) {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      return {
-        behavior: "allow",
-        updatedInput: { ...input, answers: parseAnswers(answerJson) }
-      };
+      const answers = parseAnswers(answerJson);
+      if (toolUseId) {
+        const stringAnswers = {};
+        for (const [question, answer] of Object.entries(answers)) {
+          if (typeof answer === "string") {
+            stringAnswers[question] = answer;
+          }
+        }
+        callbackState.questionAnswers.set(toolUseId, stringAnswers);
+      }
+      return { behavior: "allow", updatedInput: { ...input, answers } };
     } finally {
       callbackState.awaitingQuestionAnswer = false;
     }
