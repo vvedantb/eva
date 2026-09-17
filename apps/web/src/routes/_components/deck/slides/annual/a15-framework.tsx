@@ -1,6 +1,9 @@
 import { IconCheck, IconMinus } from "@tabler/icons-react";
 import { m } from "motion/react";
+import { motionSpring } from "@eva/ui";
 import { CountUp } from "../../_components/CountUp";
+import { Camera } from "../../_components/DeckCamera";
+import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
   Card,
@@ -31,6 +34,18 @@ const THIN = [
   "No designer or researcher",
 ];
 
+/**
+ * The grid starts as a board seen from slightly above, then straightens as the
+ * ticks arrive: all nine evidenced, read square on. It stays there for the thin
+ * evidence and the closing figures.
+ */
+const FRAMEWORK_SHOTS: readonly CameraShot[] = [
+  { rotateX: 7, translateZ: -30 },
+  {},
+  {},
+  {},
+];
+
 function CapabilityCard({
   name,
   index,
@@ -48,25 +63,33 @@ function CapabilityCard({
       animate={{ opacity: 1, y: evidenced ? -5 : 0, scale: 1 }}
       transition={{ type: "spring", bounce: 0, duration: 0.55, delay }}
     >
-      <Card className="relative flex h-[76px] items-center p-5">
-        <span className="text-base leading-snug font-medium text-white">
-          {name}
-        </span>
-        <m.span
-          aria-hidden
-          className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
-          initial={false}
-          animate={{ scale: evidenced ? 1 : 0, opacity: evidenced ? 1 : 0 }}
-          transition={{
-            type: "spring",
-            bounce: 0.35,
-            duration: 0.5,
-            delay: evidenced ? index * 0.06 : 0,
-          }}
-        >
-          <IconCheck size={13} stroke={3} className="text-white" />
-        </m.span>
-      </Card>
+      {/* Its own viewing distance, so the hover tilts the card about its own
+          centre rather than the grid's. */}
+      <m.div
+        style={{ transformPerspective: 900, transformStyle: "preserve-3d" }}
+        whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
+        transition={motionSpring}
+      >
+        <Card className="relative flex h-[76px] items-center p-5">
+          <span className="text-base leading-snug font-medium text-white">
+            {name}
+          </span>
+          <m.span
+            aria-hidden
+            className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
+            initial={false}
+            animate={{ scale: evidenced ? 1 : 0, opacity: evidenced ? 1 : 0 }}
+            transition={{
+              type: "spring",
+              bounce: 0.35,
+              duration: 0.5,
+              delay: evidenced ? index * 0.06 : 0,
+            }}
+          >
+            <IconCheck size={13} stroke={3} className="text-white" />
+          </m.span>
+        </Card>
+      </m.div>
     </m.div>
   );
 }
@@ -83,16 +106,18 @@ export function AnnualFramework() {
         <Title size="md">Senior engineer, mapped.</Title>
       </Reveal>
 
-      <div className="mt-9 grid grid-cols-3 gap-4">
-        {CAPABILITIES.map((name, index) => (
-          <CapabilityCard
-            key={name}
-            name={name}
-            index={index}
-            evidenced={evidenced}
-          />
-        ))}
-      </div>
+      <Camera shots={FRAMEWORK_SHOTS} className="mt-9">
+        <div className="grid grid-cols-3 gap-4 [transform-style:preserve-3d]">
+          {CAPABILITIES.map((name, index) => (
+            <CapabilityCard
+              key={name}
+              name={name}
+              index={index}
+              evidenced={evidenced}
+            />
+          ))}
+        </div>
+      </Camera>
 
       <Reveal step={1} className="mt-4">
         <p className="text-sm text-white/45">

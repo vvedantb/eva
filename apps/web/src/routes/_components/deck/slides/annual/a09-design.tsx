@@ -12,8 +12,22 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import { Camera } from "../../_components/DeckCamera";
+import type { CameraShot } from "../../_components/DeckCamera";
 import type { AnnualPhase } from "../_parts/AnnualPhasePipeline";
 import { AnnualPhasePipeline } from "../_parts/AnnualPhasePipeline";
+
+/**
+ * The rail earns the strongest move on the deck: as the light runs through the
+ * phases the camera swings in from the left and the far phases recede, then it
+ * straightens to read the restore figure and settles square on.
+ */
+const DESIGN_SHOTS: readonly CameraShot[] = [
+  {},
+  { rotateY: 10, translateZ: -40, x: -30 },
+  { rotateY: 3, translateZ: 20 },
+  {},
+];
 
 /** The migration, in the order the phases shipped. */
 const PHASES: readonly AnnualPhase[] = [
@@ -48,9 +62,9 @@ export function AnnualDesign() {
         </Body>
       </Reveal>
 
-      <div className="mt-16">
+      <Camera shots={DESIGN_SHOTS} className="mt-16">
         <AnnualPhasePipeline phases={PHASES} active={step >= 1} />
-      </div>
+      </Camera>
 
       <Reveal step={2} className="mt-16">
         <div className="flex items-baseline justify-center gap-4">

@@ -1,4 +1,5 @@
 import { m } from "motion/react";
+import { Layer } from "../../_components/DeckCamera";
 import { BRAND, EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
 
 /** Design size of the timeline box. */
@@ -12,6 +13,8 @@ const INSET = 90;
 const SPAN_DAYS = 248;
 /** Stem lengths for the two label lanes. */
 const LANE: readonly number[] = [30, 100];
+/** How far the milestone dots sit in front of the axis they mark. */
+const DOT_DEPTH = 30;
 
 interface Milestone {
   /** Days after 11 January 2026. */
@@ -90,7 +93,14 @@ function MilestoneMark({ item }: { item: Milestone }) {
   const delay = item.order * 0.12;
 
   return (
-    <div className="absolute" style={{ left: xFor(item.day), top: LINE_Y }}>
+    <div
+      className="absolute"
+      style={{
+        left: xFor(item.day),
+        top: LINE_Y,
+        transformStyle: "preserve-3d",
+      }}
+    >
       <m.div
         aria-hidden
         className="absolute w-px bg-white/15"
@@ -104,21 +114,25 @@ function MilestoneMark({ item }: { item: Milestone }) {
         }}
       />
 
-      <m.div
-        aria-hidden
-        className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_18px_rgba(139,63,184,0.6)]"
-        style={{
-          background: `linear-gradient(135deg, ${BRAND.purple}, ${BRAND.blue})`,
-        }}
-        initial={{ scale: 0 }}
-        animate={{ scale: active ? 1 : 0 }}
-        transition={{
-          type: "spring",
-          bounce: 0.25,
-          duration: 0.6,
-          delay: active ? delay : 0,
-        }}
-      />
+      {/* The dot rides in front of the axis, so it keeps its own mark as the
+          camera dollies along the line. */}
+      <Layer depth={DOT_DEPTH}>
+        <m.div
+          aria-hidden
+          className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_18px_rgba(139,63,184,0.6)]"
+          style={{
+            background: `linear-gradient(135deg, ${BRAND.purple}, ${BRAND.blue})`,
+          }}
+          initial={{ scale: 0 }}
+          animate={{ scale: active ? 1 : 0 }}
+          transition={{
+            type: "spring",
+            bounce: 0.25,
+            duration: 0.6,
+            delay: active ? delay : 0,
+          }}
+        />
+      </Layer>
 
       <m.div
         className="absolute -translate-x-1/2 text-center"
@@ -147,40 +161,49 @@ function MilestoneMark({ item }: { item: Milestone }) {
 /** The five beats of Eva's first eight months, drawn along one axis. */
 export function AnnualOriginTimeline() {
   return (
-    <div className="relative" style={{ width: TRACK_W, height: BOX_H }}>
-      <svg
-        aria-hidden
-        width={TRACK_W}
-        height={BOX_H}
-        className="absolute inset-0"
-      >
-        <defs>
-          {/* userSpaceOnUse: a horizontal line has a zero-height bounding box,
+    <div
+      className="relative"
+      style={{
+        width: TRACK_W,
+        height: BOX_H,
+        transformStyle: "preserve-3d",
+      }}
+    >
+      <Layer depth={0}>
+        <svg
+          aria-hidden
+          width={TRACK_W}
+          height={BOX_H}
+          className="absolute inset-0"
+        >
+          <defs>
+            {/* userSpaceOnUse: a horizontal line has a zero-height bounding box,
               so the default objectBoundingBox gradient collapses. */}
-          <linearGradient
-            id="annual-origin-line"
-            gradientUnits="userSpaceOnUse"
-            x1={0}
-            x2={TRACK_W}
-            y1={LINE_Y}
-            y2={LINE_Y}
-          >
-            <stop offset="0%" stopColor={BRAND.purple} stopOpacity="0.25" />
-            <stop offset="45%" stopColor={BRAND.purple} />
-            <stop offset="100%" stopColor={BRAND.blue} />
-          </linearGradient>
-        </defs>
-        <m.path
-          d={`M 16 ${LINE_Y} L ${TRACK_W - 16} ${LINE_Y}`}
-          stroke="url(#annual-origin-line)"
-          strokeWidth={2}
-          strokeLinecap="round"
-          fill="none"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 1.4, ease: EASE_OUT, delay: 0.4 }}
-        />
-      </svg>
+            <linearGradient
+              id="annual-origin-line"
+              gradientUnits="userSpaceOnUse"
+              x1={0}
+              x2={TRACK_W}
+              y1={LINE_Y}
+              y2={LINE_Y}
+            >
+              <stop offset="0%" stopColor={BRAND.purple} stopOpacity="0.25" />
+              <stop offset="45%" stopColor={BRAND.purple} />
+              <stop offset="100%" stopColor={BRAND.blue} />
+            </linearGradient>
+          </defs>
+          <m.path
+            d={`M 16 ${LINE_Y} L ${TRACK_W - 16} ${LINE_Y}`}
+            stroke="url(#annual-origin-line)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 1.4, ease: EASE_OUT, delay: 0.4 }}
+          />
+        </svg>
+      </Layer>
 
       {MILESTONES.map((item) => (
         <MilestoneMark key={item.label} item={item} />

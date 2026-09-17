@@ -1,3 +1,5 @@
+import { Camera } from "../../_components/DeckCamera";
+import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Body,
   Card,
@@ -10,6 +12,18 @@ import {
   Title,
 } from "../../_components/DeckPrimitives";
 import { AnnualAdoptionChart } from "../_parts/AnnualAdoptionChart";
+
+/**
+ * A three-quarter view gives the bars some body, then the camera swings
+ * towards the July-onwards months as they are picked out, and squares up for
+ * the summary. The angles stay shallow because the month labels and the count
+ * above each bar are 12px and have to survive the rotation.
+ */
+const ADOPTION_SHOTS: readonly CameraShot[] = [
+  { rotateY: -8, rotateX: 5, translateZ: -20 },
+  { rotateY: -4, rotateX: 3, x: 30 },
+  {},
+];
 
 const ROWS: readonly string[] = [
   "13 people beyond the developer have raised work in Eva",
@@ -33,9 +47,9 @@ export function AnnualAdoption() {
         </Body>
       </Reveal>
 
-      <div className="mt-4">
+      <Camera shots={ADOPTION_SHOTS} className="mt-4">
         <AnnualAdoptionChart />
-      </div>
+      </Camera>
 
       <Reveal step={2} className="mt-5">
         <Card className="py-4">

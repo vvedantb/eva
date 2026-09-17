@@ -5,6 +5,8 @@ import {
   IconMessageOff,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
+import { Camera, Layer } from "../../_components/DeckCamera";
+import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
   BRAND,
@@ -16,6 +18,20 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+
+/**
+ * The camera leans towards whichever incident has just landed, left then
+ * centre then right, and pulls back as the closing line takes over.
+ */
+const PEOPLE_SHOTS: readonly CameraShot[] = [
+  { rotateY: 6, translateZ: 20, x: 30 },
+  { translateZ: 20 },
+  { rotateY: -6, translateZ: 20, x: -30 },
+  { translateZ: -40, scale: 0.96 },
+];
+
+/** How far each incident card stands off the rail joining them. */
+const CARD_DEPTH = 20;
 
 interface Incident {
   icon: Icon;
@@ -44,58 +60,75 @@ export function AnnualPeople() {
         <Title size="md">Their problems set the agenda.</Title>
       </Reveal>
 
-      <m.div
-        className="mt-20 flex origin-center items-stretch justify-center"
-        animate={
-          step >= 3 ? { scale: 0.86, opacity: 0.25 } : { scale: 1, opacity: 1 }
-        }
-        transition={{ type: "spring", bounce: 0, duration: 0.7 }}
-      >
-        {INCIDENTS.map((incident, index) => {
-          const landed = step >= index;
+      <Camera shots={PEOPLE_SHOTS} className="mt-20">
+        <m.div
+          className="flex origin-center items-stretch justify-center"
+          style={{ transformStyle: "preserve-3d" }}
+          animate={
+            step >= 3
+              ? { scale: 0.86, opacity: 0.25 }
+              : { scale: 1, opacity: 1 }
+          }
+          transition={{ type: "spring", bounce: 0, duration: 0.7 }}
+        >
+          {INCIDENTS.map((incident, index) => {
+            const landed = step >= index;
 
-          return (
-            <div key={incident.heading} className="flex items-center">
-              {index > 0 && (
-                <m.div
-                  aria-hidden
-                  className="h-px w-[60px] origin-left rounded-full"
-                  style={{
-                    background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
-                  }}
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: landed ? 1 : 0 }}
-                  transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.15 }}
-                />
-              )}
-
-              <m.div
-                className="flex h-[180px] w-[300px] flex-col justify-between rounded-2xl bg-white/[0.05] p-6"
-                initial={{ opacity: 0, y: 26, scale: 0.92 }}
-                animate={{
-                  opacity: landed ? (index < newest ? 0.5 : 1) : 0,
-                  y: landed ? 0 : 26,
-                  scale: landed ? 1 : 0.92,
-                }}
-                transition={{ type: "spring", bounce: 0, duration: 0.6 }}
+            return (
+              <div
+                key={incident.heading}
+                className="flex items-center"
+                style={{ transformStyle: "preserve-3d" }}
               >
-                <incident.icon
-                  size={26}
-                  stroke={1.6}
-                  className="text-white/70"
-                  aria-hidden
-                />
-                <div className="text-xl leading-snug font-semibold text-white">
-                  {incident.heading}
-                </div>
-                <span className="self-start rounded-full bg-white/[0.08] px-3 py-1 text-xs text-white/55">
-                  {incident.date}
-                </span>
-              </m.div>
-            </div>
-          );
-        })}
-      </m.div>
+                {index > 0 && (
+                  <Layer depth={0}>
+                    <m.div
+                      aria-hidden
+                      className="h-px w-[60px] origin-left rounded-full"
+                      style={{
+                        background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
+                      }}
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: landed ? 1 : 0 }}
+                      transition={{
+                        duration: 0.5,
+                        ease: EASE_OUT,
+                        delay: 0.15,
+                      }}
+                    />
+                  </Layer>
+                )}
+
+                <Layer depth={CARD_DEPTH}>
+                  <m.div
+                    className="flex h-[180px] w-[300px] flex-col justify-between rounded-2xl bg-white/[0.05] p-6"
+                    initial={{ opacity: 0, y: 26, scale: 0.92 }}
+                    animate={{
+                      opacity: landed ? (index < newest ? 0.5 : 1) : 0,
+                      y: landed ? 0 : 26,
+                      scale: landed ? 1 : 0.92,
+                    }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.6 }}
+                  >
+                    <incident.icon
+                      size={26}
+                      stroke={1.6}
+                      className="text-white/70"
+                      aria-hidden
+                    />
+                    <div className="text-xl leading-snug font-semibold text-white">
+                      {incident.heading}
+                    </div>
+                    <span className="self-start rounded-full bg-white/[0.08] px-3 py-1 text-xs text-white/55">
+                      {incident.date}
+                    </span>
+                  </m.div>
+                </Layer>
+              </div>
+            );
+          })}
+        </m.div>
+      </Camera>
 
       <Reveal step={3} className="mt-16 text-center">
         <p className="text-3xl text-white/90">

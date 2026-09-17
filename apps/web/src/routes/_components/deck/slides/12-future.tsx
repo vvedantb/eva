@@ -9,7 +9,22 @@ import {
   Reveal,
   Shell,
 } from "../_components/DeckPrimitives";
+import { Camera } from "../_components/DeckCamera";
+import type { CameraShot } from "../_components/DeckCamera";
 import { AgentFleet } from "./_parts/AgentFleet";
+
+/**
+ * Starts off-axis, looking in at the fleet from the side, then straightens and
+ * pushes in as the nine agents light up on the last step.
+ */
+const FLEET_SHOTS: readonly CameraShot[] = [
+  { rotateY: 8, translateZ: -40 },
+  { rotateY: 5, translateZ: -20 },
+  { rotateY: 2, translateZ: 0 },
+  // The final push is small and paired with a scale-down: at translateZ 70 the
+  // fleet grew past the top of the 720px stage and clipped the chat window.
+  { rotateY: 0, translateZ: 30, scale: 0.94 },
+];
 
 interface Shift {
   step: number;
@@ -74,9 +89,12 @@ export function Slide12Future() {
           </div>
         </div>
 
-        <div className="flex h-full items-center justify-center">
+        <Camera
+          shots={FLEET_SHOTS}
+          className="flex h-full items-center justify-center"
+        >
           <AgentFleet />
-        </div>
+        </Camera>
       </div>
 
       <Footnote>

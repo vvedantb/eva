@@ -11,7 +11,19 @@ import {
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
+import { Camera } from "../_components/DeckCamera";
+import type { CameraShot } from "../_components/DeckCamera";
 import { LinearCount, RaceLane } from "./_parts/BootRace";
+
+/**
+ * The lanes tilt away like a track once the race starts. The angle is kept low
+ * on purpose: the timing readouts have to stay readable from the back of the
+ * room, and anything past about 8 degrees starts to thin the digits out.
+ */
+const RACE_SHOTS: readonly CameraShot[] = [
+  {},
+  { rotateX: 8, translateZ: 40, y: -10 },
+];
 
 export function Slide07Sandbox() {
   const running = useDeckStep() >= 1;
@@ -35,7 +47,7 @@ export function Slide07Sandbox() {
         Press → to start both workspaces
       </m.div>
 
-      <div className="mt-2">
+      <Camera shots={RACE_SHOTS} className="mt-2">
         <RaceLane
           label="Before · Daytona"
           running={running}
@@ -84,7 +96,7 @@ export function Slide07Sandbox() {
             </m.div>
           }
         />
-      </div>
+      </Camera>
 
       <Reveal step={1} delay={4.2} className="mt-6">
         <p className="max-w-4xl text-2xl leading-snug text-white/85">

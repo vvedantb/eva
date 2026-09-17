@@ -1,4 +1,6 @@
 import { CountUp } from "../_components/CountUp";
+import { Camera } from "../_components/DeckCamera";
+import type { CameraShot } from "../_components/DeckCamera";
 import {
   Body,
   Card,
@@ -11,6 +13,16 @@ import {
   Title,
 } from "../_components/DeckPrimitives";
 import { CloudVisual } from "./_parts/cloud-visual";
+
+/**
+ * Square on while the laptop is still the story, swinging round as the work
+ * moves to the cloud, then easing back as the counters take the eye.
+ */
+const CLOUD_SHOTS: readonly CameraShot[] = [
+  {},
+  { rotateY: -10, rotateX: 6, translateZ: 60 },
+  { rotateY: -4, rotateX: 3, translateZ: 20, scale: 0.96 },
+];
 
 export function Slide03Cloud() {
   return (
@@ -68,9 +80,9 @@ export function Slide03Cloud() {
           </Stagger>
         </div>
 
-        <div className="h-[560px]">
+        <Camera shots={CLOUD_SHOTS} className="h-[560px]">
           <CloudVisual />
-        </div>
+        </Camera>
       </div>
 
       <Footnote>

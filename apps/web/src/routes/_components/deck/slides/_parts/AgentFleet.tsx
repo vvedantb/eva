@@ -1,6 +1,7 @@
 import { IconRobot } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
+import { Layer } from "../../_components/DeckCamera";
 import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
 import { EvaChatWindow } from "./EvaChatWindow";
 
@@ -47,15 +48,23 @@ function AgentTile({ index, lit }: { index: number; lit: boolean }) {
 /**
  * One chat window driving nine agents. The tiles only light up at the final
  * step, which is the point of the slide: the person stays in the chat.
+ *
+ * The chat sits in front of the grid on separate `Layer` depths, so the slide's
+ * `Camera` gives the person real standing over the fleet behind them.
  */
 export function AgentFleet() {
   const lit = useDeckStep() >= LIT_STEP;
 
   return (
-    <div className="flex items-center justify-center gap-8">
-      <EvaChatWindow />
+    <div
+      className="flex items-center justify-center gap-8"
+      style={{ transformStyle: "preserve-3d" }}
+    >
+      <Layer depth={40}>
+        <EvaChatWindow />
+      </Layer>
 
-      <div>
+      <Layer depth={-20}>
         <div className="grid grid-cols-3 gap-3">
           {TILES.map((index) => (
             <AgentTile key={index} index={index} lit={lit} />
@@ -69,7 +78,7 @@ export function AgentFleet() {
         >
           One person, many agents. Each in its own sandbox.
         </m.div>
-      </div>
+      </Layer>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type { DeckSlide } from "../slides/types";
 import { getSpeakerNotes } from "../speakerNotes";
 import { DeckStepContext } from "./DeckPrimitives";
 import { DeckAmbient } from "./DeckAmbient";
+import { STAGE_PERSPECTIVE } from "./DeckCamera";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./deckStage";
 import {
   handleStepKey,
@@ -73,6 +74,12 @@ export function PresenterView({
               height: DESIGN_H,
               transform: `scale(${stage.scale})`,
               transformOrigin: "center",
+              // Same viewing distance as the stage, so a camera shot reads
+              // identically in the preview. The rounded clip below keeps this
+              // element itself flat, which is fine: every camera carries its
+              // own perspective, so nothing depends on it chaining deeper.
+              perspective: STAGE_PERSPECTIVE,
+              perspectiveOrigin: "50% 50%",
             }}
             // The frame sits on the canvas itself, so the border hugs the slide
             // rather than the letterboxed pane around it.

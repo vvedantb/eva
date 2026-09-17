@@ -78,14 +78,24 @@ export function Slide08More() {
         <Title>And a great deal more.</Title>
       </Reveal>
 
+      {/* No build steps here, so no camera moves. The depth instead lives in
+          the hover: each card carries its own viewing distance, which tilts it
+          about its own centre rather than the grid's. */}
       <Stagger
         delayChildren={0.4}
         staggerChildren={0.07}
-        className="mt-22 grid grid-cols-4 gap-4"
+        className="mt-22 grid grid-cols-4 gap-4 [transform-style:preserve-3d]"
       >
         {ITEMS.map((item) => (
           <StaggerItem key={item.title}>
-            <m.div whileHover={{ y: -3 }} transition={motionSpring}>
+            <m.div
+              style={{
+                transformPerspective: 900,
+                transformStyle: "preserve-3d",
+              }}
+              whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
+              transition={motionSpring}
+            >
               <Card className="h-[152px] p-5">
                 <item.icon size={22} stroke={1.6} className="text-white/70" />
                 <div className="mt-4 text-lg font-semibold text-white">

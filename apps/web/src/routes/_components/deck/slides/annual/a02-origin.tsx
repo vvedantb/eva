@@ -1,4 +1,6 @@
 import { CountUp } from "../../_components/CountUp";
+import { Camera } from "../../_components/DeckCamera";
+import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
   Body,
@@ -9,6 +11,18 @@ import {
   Title,
 } from "../../_components/DeckPrimitives";
 import { AnnualOriginTimeline } from "../_parts/AnnualOriginTimeline";
+
+/**
+ * The camera dollies along the axis as the milestones arrive: pulled back and
+ * slightly above the whole span, in towards the January cluster, right to the
+ * summer beats, then square on while the closing figures count up.
+ */
+const ORIGIN_SHOTS: readonly CameraShot[] = [
+  { rotateX: 6, translateZ: -50 },
+  { rotateX: 4, translateZ: 10, x: -40 },
+  { rotateX: 3, translateZ: 20, x: 40 },
+  {},
+];
 
 export function AnnualOrigin() {
   return (
@@ -26,9 +40,9 @@ export function AnnualOrigin() {
         </Body>
       </Reveal>
 
-      <div className="mt-6">
+      <Camera shots={ORIGIN_SHOTS} className="mt-6">
         <AnnualOriginTimeline />
-      </div>
+      </Camera>
 
       <Reveal step={3} delay={0.2}>
         <p className="text-lg text-white/85">

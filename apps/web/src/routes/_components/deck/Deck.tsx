@@ -4,6 +4,7 @@ import { AnimatePresence, m } from "motion/react";
 import type { DeckSlide } from "./slides/types";
 import { DeckStepContext, EASE_OUT } from "./_components/DeckPrimitives";
 import { DeckAmbient } from "./_components/DeckAmbient";
+import { STAGE_PERSPECTIVE } from "./_components/DeckCamera";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./_components/deckStage";
@@ -26,25 +27,27 @@ interface DeckProps {
   basePath: string;
 }
 
+/**
+ * Slides arrive out of depth rather than sliding across. No animated `filter`:
+ * blurring a full-screen layer every frame is the expensive path, and the push
+ * in Z carries the same "this replaces that" reading for free.
+ */
 const slideVariants = {
   enter: (dir: number) => ({
     opacity: 0,
-    x: dir * 48,
-    scale: 0.985,
-    filter: "blur(8px)",
+    rotateY: dir * 12,
+    z: -220,
   }),
   center: {
     opacity: 1,
-    x: 0,
-    scale: 1,
-    filter: "blur(0px)",
+    rotateY: 0,
+    z: 0,
     transition: { duration: 0.55, ease: EASE_OUT },
   },
   exit: (dir: number) => ({
     opacity: 0,
-    x: dir * -32,
-    scale: 0.99,
-    filter: "blur(6px)",
+    rotateY: dir * -8,
+    z: -120,
     transition: { duration: 0.3, ease: EASE_OUT },
   }),
 };
@@ -140,12 +143,18 @@ export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
         role="presentation"
         ref={stage.measure}
       >
+        {/* The canvas owns both the fit-to-pane scale and the viewing distance,
+            so the slide layers directly inside it can move in depth. Nothing
+            here clips its overflow: that would flatten the 3D context. */}
         <div
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
             transform: `scale(${stage.scale})`,
             transformOrigin: "center",
+            perspective: STAGE_PERSPECTIVE,
+            perspectiveOrigin: "50% 50%",
+            transformStyle: "preserve-3d",
           }}
           className="relative shrink-0"
         >
