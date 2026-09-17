@@ -1,121 +1,128 @@
-import { IconArrowRight, IconCheck } from "@tabler/icons-react";
+import { IconArrowRight } from "@tabler/icons-react";
+import { m } from "motion/react";
 import {
   Accent,
-  Body,
-  Card,
+  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
   Shell,
-  Stagger,
-  StaggerItem,
   Title,
+  useDeckStep,
 } from "../../_components/DeckPrimitives";
 
 interface Change {
-  label: string;
   before: string;
   after: string;
 }
 
 /** Top to bottom, in the order they were decided. */
 const CHANGES: Change[] = [
-  {
-    label: "Too much on screen",
-    before: "Reviews, differences, meters, consoles",
-    after: "Simple Mode: the conversation and a preview",
-  },
-  {
-    label: "Choosing a model",
-    before: "A searchable list of twenty",
-    after: "One slider, cheapest to strongest",
-  },
-  {
-    label: "Wording",
-    before: "Plan mode was called PRD",
-    after: "Called Plan, because that is what people meant",
-  },
-  {
-    label: "The daily summary",
-    before: "Written for engineers",
-    after: "Plain language, no file names or jargon",
-  },
+  { before: "Reviews, diffs, meters", after: "The conversation and a preview" },
+  { before: "A list of twenty models", after: "One slider" },
+  { before: "Called PRD", after: "Called Plan" },
+  { before: "Written for engineers", after: "Written in plain language" },
 ];
 
-const FOLLOW_ONS = [
-  "Every screen made usable on a phone, twice audited",
-  "Keyboard shortcuts made visible and changeable",
-  "Landing pages that said 'pick something from the sidebar' removed, because on a phone the sidebar is closed",
+const CHIPS = [
+  "Usable on a phone",
+  "Shortcuts made visible",
+  "Dead-end pages removed",
 ];
+
+/** The before phrases land first, then each is struck out in turn. */
+const STRIKE_START = 0.7;
+const STRIKE_GAP = 0.18;
+
+function ChangeRow({ before, after, index }: Change & { index: number }) {
+  const strike = STRIKE_START + index * STRIKE_GAP;
+
+  return (
+    <div className="flex items-center gap-7">
+      <m.div
+        className="w-[420px] shrink-0 text-2xl leading-snug text-white/45"
+        initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        transition={{ duration: 0.5, ease: EASE_OUT, delay: index * 0.1 }}
+      >
+        <span className="relative inline-block">
+          {before}
+          <m.span
+            aria-hidden
+            className="absolute top-1/2 left-0 h-[2px] w-full origin-left rounded-full bg-white/40"
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.45, ease: EASE_OUT, delay: strike }}
+          />
+        </span>
+      </m.div>
+
+      <m.div
+        className="flex items-center gap-4"
+        initial={{ opacity: 0, y: 16, filter: "blur(6px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        transition={{
+          type: "spring",
+          bounce: 0,
+          duration: 0.6,
+          delay: strike + 0.14,
+        }}
+      >
+        <IconArrowRight size={20} className="text-[#3B7DD8]" aria-hidden />
+        <span className="text-2xl leading-snug text-white/95">{after}</span>
+      </m.div>
+    </div>
+  );
+}
 
 export function AnnualUsers() {
+  const step = useDeckStep();
+  const chipsIn = step >= 1;
+
   return (
     <Shell className="py-10">
       <Reveal>
         <Kicker>The people using it</Kicker>
         <Title size="md">Built for who is actually looking at it.</Title>
-        <Body className="mt-3 max-w-5xl text-base">
-          Most people opening Eva are not engineers. Several of the year&apos;s
-          decisions exist only because of that.
-        </Body>
       </Reveal>
 
-      <Stagger
-        delayChildren={0.25}
-        staggerChildren={0.09}
-        className="mt-6 flex flex-col gap-[10px]"
-      >
-        {CHANGES.map((change) => (
-          <StaggerItem key={change.label}>
-            <Card className="flex h-[62px] w-[1010px] items-center gap-4 px-5 py-0">
-              <div className="w-[190px] shrink-0 text-xs tracking-[0.16em] text-white/35 uppercase">
-                {change.label}
-              </div>
-              <div className="w-[310px] shrink-0 text-base text-white/45 line-through decoration-white/25">
-                {change.before}
-              </div>
-              <IconArrowRight
-                size={18}
-                className="shrink-0 text-[#3B7DD8]"
-                aria-hidden
-              />
-              <div className="text-base leading-snug text-white/90">
-                {change.after}
-              </div>
-            </Card>
-          </StaggerItem>
+      <div className="mt-12 flex flex-col gap-8">
+        {CHANGES.map((change, index) => (
+          <ChangeRow
+            key={change.before}
+            before={change.before}
+            after={change.after}
+            index={index}
+          />
         ))}
-      </Stagger>
+      </div>
 
-      <Reveal step={1} className="mt-4">
-        <Card className="w-[1010px] p-5">
-          <Stagger
-            step={1}
-            delayChildren={0.2}
-            staggerChildren={0.08}
-            className="flex flex-col gap-2"
+      <div className="mt-12 flex gap-3">
+        {CHIPS.map((chip, index) => (
+          <m.div
+            key={chip}
+            initial={false}
+            animate={
+              chipsIn
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 14, scale: 0.96 }
+            }
+            transition={{
+              type: "spring",
+              bounce: 0,
+              duration: 0.5,
+              delay: chipsIn ? index * 0.09 : 0,
+            }}
+            className="rounded-full bg-white/[0.07] px-5 py-2.5 text-sm text-white/80"
           >
-            {FOLLOW_ONS.map((row) => (
-              <StaggerItem key={row} className="flex gap-2">
-                <IconCheck
-                  size={16}
-                  stroke={2}
-                  className="mt-[3px] shrink-0 text-[#3B7DD8]"
-                  aria-hidden
-                />
-                <span className="text-sm leading-snug text-white/75">
-                  {row}
-                </span>
-              </StaggerItem>
-            ))}
-          </Stagger>
-        </Card>
-      </Reveal>
+            {chip}
+          </m.div>
+        ))}
+      </div>
 
-      <Reveal step={2} className="mt-4">
-        <p className="w-[1010px] text-lg leading-snug text-white/85">
-          None of this made the software cleverer. It made it{" "}
-          <Accent>usable by the people who asked for it</Accent>.
+      <Reveal step={2} className="mt-10">
+        <p className="text-center text-3xl font-medium text-white/90">
+          Not cleverer. <Accent>Usable.</Accent>
         </p>
       </Reveal>
 

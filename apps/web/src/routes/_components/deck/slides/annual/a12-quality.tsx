@@ -1,7 +1,7 @@
+import { m } from "motion/react";
 import { CountUp } from "../../_components/CountUp";
 import {
-  Body,
-  Card,
+  Accent,
   Footnote,
   Kicker,
   Reveal,
@@ -9,109 +9,101 @@ import {
   Stagger,
   StaggerItem,
   Title,
+  useDeckStep,
 } from "../../_components/DeckPrimitives";
 
 interface Stat {
   value: number;
   label: string;
-  note: string;
+  delay: number;
+  accent?: boolean;
 }
 
 /** Left to right, biggest number first. */
-const STATS: Stat[] = [
-  {
-    value: 303,
-    label: "automated tests",
-    note: "Across the app, the backend and the shared components",
-  },
-  {
-    value: 79,
-    label: "contract tests",
-    note: "They fail if two parts of the system drift apart",
-  },
-  {
-    value: 46,
-    label: "test backfills",
-    note: "A nightly routine writes tests for past fixes",
-  },
-  {
-    value: 4,
-    label: "custom code rules",
-    note: "Written by hand where off-the-shelf rules could not express the standard",
-  },
+const STATS: readonly Stat[] = [
+  { value: 303, label: "tests", delay: 0.5, accent: true },
+  { value: 79, label: "contract tests", delay: 0.65 },
+  { value: 46, label: "test backfills", delay: 0.8 },
+  { value: 4, label: "custom rules", delay: 0.95 },
 ];
 
 const RULES = [
-  "No unsafe type escapes",
-  "Parse untrusted data at the edge",
-  "No banned React patterns",
-  "Type check and lint before shipping",
-  "Release notes for anything substantial",
+  "No unsafe types",
+  "Parse at the edge",
+  "No banned patterns",
+  "Type check before shipping",
+  "Release notes",
 ];
 
+const NUMBER_CLASS = "text-7xl leading-none font-semibold tabular-nums";
+
 export function AnnualQuality() {
+  const step = useDeckStep();
+
   return (
-    <Shell className="py-12">
+    <Shell className="py-14">
       <Reveal>
         <Kicker>Quality</Kicker>
         <Title size="md">The bar is enforced, not remembered.</Title>
-        <Body className="mt-4 max-w-5xl text-base">
-          Standards live in the repository and run automatically, so they hold
-          whether a person or an agent is writing the code.
-        </Body>
       </Reveal>
 
       <Stagger
-        delayChildren={0.3}
-        staggerChildren={0.1}
-        className="mt-8 flex gap-5"
+        delayChildren={0.4}
+        staggerChildren={0.15}
+        className="mt-24 grid grid-cols-4 gap-6"
       >
         {STATS.map((stat) => (
           <StaggerItem key={stat.label}>
-            <Card className="flex h-[160px] w-[250px] flex-col p-5">
-              <CountUp
-                value={stat.value}
-                delay={0.3}
-                className="text-5xl font-semibold tabular-nums text-white"
-              />
-              <div className="mt-2 text-base leading-snug text-white/80">
-                {stat.label}
-              </div>
-              <div className="mt-2 text-xs leading-snug text-white/45">
-                {stat.note}
-              </div>
-            </Card>
+            <div className={NUMBER_CLASS}>
+              {stat.accent ? (
+                <Accent>
+                  <CountUp
+                    value={stat.value}
+                    duration={1.6}
+                    delay={stat.delay}
+                  />
+                </Accent>
+              ) : (
+                <span className="text-white">
+                  <CountUp
+                    value={stat.value}
+                    duration={1.6}
+                    delay={stat.delay}
+                  />
+                </span>
+              )}
+            </div>
+            <div className="mt-4 text-base text-white/50">{stat.label}</div>
           </StaggerItem>
         ))}
       </Stagger>
 
-      <Reveal step={1} className="mt-6">
-        <Card className="w-[1060px] p-5">
-          <div className="text-base font-semibold text-white">
-            Written rules, applied to every change
-          </div>
-          <Stagger
-            step={1}
-            delayChildren={0.2}
-            staggerChildren={0.07}
-            className="mt-3 flex flex-wrap gap-2"
+      <div className="mt-24 flex gap-3">
+        {RULES.map((rule, index) => (
+          <m.div
+            key={rule}
+            className="rounded-full bg-white/[0.07] px-4 py-2 text-sm text-white/80"
+            initial={{ opacity: 0, y: 14, scale: 0.94 }}
+            animate={
+              step >= 1
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 14, scale: 0.94 }
+            }
+            transition={{
+              type: "spring",
+              bounce: 0,
+              duration: 0.55,
+              delay: step >= 1 ? index * 0.08 : 0,
+            }}
           >
-            {RULES.map((rule) => (
-              <StaggerItem
-                key={rule}
-                className="rounded-full bg-white/[0.07] px-3 py-1 text-sm text-white/80"
-              >
-                {rule}
-              </StaggerItem>
-            ))}
-          </Stagger>
-        </Card>
-      </Reveal>
+            {rule}
+          </m.div>
+        ))}
+      </div>
 
-      <Reveal step={2} className="mt-6">
-        <p className="w-[1060px] text-base leading-relaxed text-white/60">
-          When a test goes permanently red it is treated as a defect in the
-          test, because a suite people stop reading protects nothing.
+      <Reveal step={2} className="mt-20 text-center">
+        <p className="text-3xl text-white/85">
+          A permanently red test is <Accent>a broken test</Accent>.
         </p>
       </Reveal>
 

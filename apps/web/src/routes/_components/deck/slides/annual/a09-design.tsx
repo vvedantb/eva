@@ -1,13 +1,14 @@
-import { IconAlertTriangle, IconCheck } from "@tabler/icons-react";
+import { m } from "motion/react";
+import { cn } from "@eva/ui";
+import { CountUp } from "../../_components/CountUp";
 import {
+  Accent,
   Body,
-  Card,
+  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
   Shell,
-  Stagger,
-  StaggerItem,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
@@ -24,105 +25,88 @@ const PHASES: readonly AnnualPhase[] = [
   { label: "Old code removed", date: "29 Jul" },
 ];
 
-/** What the written spike concluded, good news and bad. */
-const FINDINGS = [
-  {
-    icon: IconCheck,
-    iconClass: "text-emerald-400/70",
-    textClass: "text-white/85",
-    text: "A 6GB workspace restores in about a third of a second",
-  },
-  {
-    icon: IconAlertTriangle,
-    iconClass: "text-white/40",
-    textClass: "text-white/60",
-    text: "Some features deliberately left for later, and said so at the time",
-  },
+/** Options that were measured and then put down, kept on the record. */
+const OPTIONS: readonly { text: string; rejected: boolean }[] = [
+  { text: "7 plans shelved", rejected: false },
+  { text: "11% worse — rejected", rejected: true },
+  { text: "5× more painting — rejected", rejected: true },
 ];
 
-/** Options that were considered, measured and then rejected. */
-const REJECTED = [
-  "7 abandoned plans kept in writing",
-  "A faster effect rejected: measured 11% worse",
-  "A caching trick rejected: 5× more painting",
-];
-
-const CARD_TITLE = "text-sm font-medium text-white/85";
+/** 33 hundredths, shown as seconds: the count reads 0.00s up to 0.33s. */
+const seconds = (n: number) => (n / 100).toFixed(2);
 
 export function AnnualDesign() {
-  const running = useDeckStep() >= 1;
+  const step = useDeckStep();
 
   return (
-    <Shell className="py-10">
+    <Shell className="py-12">
       <Reveal>
         <Kicker>Design</Kicker>
         <Title size="md">Decided on paper first.</Title>
-        <Body className="mt-3 max-w-4xl text-lg">
-          The biggest change of the year replaced the engine every workspace
-          runs on. It shipped in phases, with a written go or no-go before any
-          of it was built.
+        <Body className="mt-3 max-w-3xl text-lg">
+          The engine every workspace runs on, replaced in six phases.
         </Body>
       </Reveal>
 
-      <div className="mt-7">
-        <AnnualPhasePipeline phases={PHASES} active={running} />
+      <div className="mt-16">
+        <AnnualPhasePipeline phases={PHASES} active={step >= 1} />
       </div>
 
-      <div className="mt-6 flex items-stretch gap-6">
-        <Reveal step={2} className="w-[532px]">
-          <Card className="flex h-[206px] flex-col p-5">
-            <div className={CARD_TITLE}>What the spike answered</div>
-            <div className="mt-4 flex flex-col gap-3">
-              {FINDINGS.map((finding) => (
-                <div key={finding.text} className="flex items-start gap-3">
-                  <finding.icon
-                    size={18}
-                    className={`mt-0.5 shrink-0 ${finding.iconClass}`}
-                    aria-hidden
-                  />
-                  <span
-                    className={`text-[15px] leading-snug ${finding.textClass}`}
-                  >
-                    {finding.text}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-auto pt-3 text-xs leading-snug text-white/45">
-              The spike&apos;s conclusion was a written GO, with the numbers
-              behind it.
-            </div>
-          </Card>
-        </Reveal>
+      <Reveal step={2} className="mt-16">
+        <div className="flex items-baseline justify-center gap-4">
+          <span className="text-xl text-white/55">
+            A 6GB workspace restores in
+          </span>
+          <span className="text-5xl leading-none font-semibold tracking-[-0.02em]">
+            <Accent>
+              <CountUp
+                value={33}
+                step={2}
+                duration={1.2}
+                delay={0.2}
+                format={seconds}
+                suffix="s"
+              />
+            </Accent>
+          </span>
+        </div>
+      </Reveal>
 
-        <Reveal step={3} className="w-[532px]" from="right">
-          <Card className="flex h-[206px] flex-col p-5">
-            <div className={CARD_TITLE}>Options that lost, kept on purpose</div>
-            <Stagger
-              step={3}
-              staggerChildren={0.08}
-              className="mt-4 flex flex-col items-start gap-2"
-            >
-              {REJECTED.map((option) => (
-                <StaggerItem
-                  key={option}
-                  className="rounded-full bg-white/[0.07] px-3 py-1 text-[13px] text-white/80"
-                >
-                  {option}
-                </StaggerItem>
-              ))}
-            </Stagger>
-            <div className="mt-auto pt-3 text-xs leading-snug text-white/45">
-              Rejections are recorded with the measurement that killed them, so
-              nobody re-litigates them from memory.
-            </div>
-          </Card>
-        </Reveal>
+      <div className="mt-16 flex justify-center gap-4">
+        {OPTIONS.map((option, index) => (
+          <m.div
+            key={option.text}
+            initial={{ opacity: 0, y: 14, scale: 0.92 }}
+            animate={
+              step >= 3
+                ? { opacity: option.rejected ? 0.6 : 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 14, scale: 0.92 }
+            }
+            transition={
+              step >= 3
+                ? {
+                    type: "spring",
+                    bounce: 0,
+                    duration: 0.55,
+                    delay: index * 0.12,
+                  }
+                : { duration: 0.2, ease: EASE_OUT }
+            }
+            className={cn(
+              "rounded-full px-6 py-3 text-[15px]",
+              option.rejected
+                ? "bg-white/[0.04] text-white/90"
+                : "bg-white/[0.08] text-white",
+            )}
+          >
+            {option.text}
+          </m.div>
+        ))}
       </div>
 
       <Footnote>
-        Sandbox provider migration, 6 to 29 July 2026. Rejected options from the
-        animation performance work, 5 September 2026.
+        Sandbox migration, 6 to 29 July 2026. Rejected options, 5 September
+        2026.
       </Footnote>
     </Shell>
   );
