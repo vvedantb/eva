@@ -16,6 +16,7 @@ import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
 import { Route as AnnualCdmRouteImport } from './routes/annual-cdm'
 import { Route as FridaySessionRouteImport } from './routes/friday-session'
 import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
+import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -166,6 +167,11 @@ const FridaySessionRoute = FridaySessionRouteImport.update({
 const PreviewAuthRoute = PreviewAuthRouteImport.update({
   id: '/preview-auth',
   path: '/preview-auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesRoute = SlidesRouteImport.update({
+  id: '/slides',
+  path: '/slides',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
@@ -861,6 +867,7 @@ export interface FileRoutesByFullPath {
   '/annual-cdm': typeof AnnualCdmRoute
   '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -986,6 +993,7 @@ export interface FileRoutesByTo {
   '/annual-cdm': typeof AnnualCdmRoute
   '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -1090,6 +1098,7 @@ export interface FileRoutesById {
   '/annual-cdm': typeof AnnualCdmRoute
   '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1217,6 +1226,7 @@ export interface FileRouteTypes {
     | '/annual-cdm'
     | '/friday-session'
     | '/preview-auth'
+    | '/slides'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1342,6 +1352,7 @@ export interface FileRouteTypes {
     | '/annual-cdm'
     | '/friday-session'
     | '/preview-auth'
+    | '/slides'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1445,6 +1456,7 @@ export interface FileRouteTypes {
     | '/annual-cdm'
     | '/friday-session'
     | '/preview-auth'
+    | '/slides'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1573,6 +1585,7 @@ export interface RootRouteChildren {
   AnnualCdmRoute: typeof AnnualCdmRoute
   FridaySessionRoute: typeof FridaySessionRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
+  SlidesRoute: typeof SlidesRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1625,6 +1638,13 @@ declare module '@tanstack/react-router' {
       path: '/preview-auth'
       fullPath: '/preview-auth'
       preLoaderRoute: typeof PreviewAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides': {
+      id: '/slides'
+      path: '/slides'
+      fullPath: '/slides'
+      preLoaderRoute: typeof SlidesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -3086,6 +3106,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnnualCdmRoute: AnnualCdmRoute,
   FridaySessionRoute: FridaySessionRoute,
   PreviewAuthRoute: PreviewAuthRoute,
+  SlidesRoute: SlidesRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport
