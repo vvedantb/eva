@@ -1,15 +1,21 @@
 import { AnimatePresence, m } from "motion/react";
-import { IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
+import { IconLayoutSidebarLeftExpand, IconNotes } from "@tabler/icons-react";
 import { motionSlow } from "@eva/ui";
 
 interface DeckChromeProps {
   slide: number;
   total: number;
   onToggleOutline: () => void;
+  onOpenPresenter: () => void;
 }
 
-/** Progress bar, counter, outline toggle and the first-slide keyboard hint. */
-export function DeckChrome({ slide, total, onToggleOutline }: DeckChromeProps) {
+/** Progress bar, counter, outline and presenter toggles, first-slide hint. */
+export function DeckChrome({
+  slide,
+  total,
+  onToggleOutline,
+  onOpenPresenter,
+}: DeckChromeProps) {
   const pct = `${(slide / total) * 100}%`;
 
   return (
@@ -35,6 +41,15 @@ export function DeckChrome({ slide, total, onToggleOutline }: DeckChromeProps) {
         <IconLayoutSidebarLeftExpand size={18} />
       </button>
 
+      <button
+        type="button"
+        onClick={onOpenPresenter}
+        aria-label="Open presenter view"
+        className="pointer-events-auto absolute bottom-3 left-12 rounded-md p-1.5 text-white/40 transition-colors hover:text-white/80"
+      >
+        <IconNotes size={18} />
+      </button>
+
       <AnimatePresence>
         {slide === 1 && (
           <m.div
@@ -45,7 +60,7 @@ export function DeckChrome({ slide, total, onToggleOutline }: DeckChromeProps) {
             transition={motionSlow}
             className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-white/[0.06] px-4 py-1.5 text-xs text-white/45"
           >
-            ← → navigate · F fullscreen · O outline
+            ← → navigate · F fullscreen · O outline · P notes
           </m.div>
         )}
       </AnimatePresence>

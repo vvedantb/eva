@@ -6,35 +6,24 @@ import { DeckStepContext, EASE_OUT } from "./_components/DeckPrimitives";
 import { DeckAmbient } from "./_components/DeckAmbient";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
-
-const DESIGN_W = 1280;
-const DESIGN_H = 720;
+import { DESIGN_H, DESIGN_W, useStageScale } from "./_components/deckStage";
+import {
+  handleStepKey,
+  isTypingTarget,
+  useDeckNavigation,
+} from "./_components/deckNavigation";
+import { deckSyncRef } from "./_components/deckSyncRef";
+import {
+  openPresenterWindow,
+  postDeckMessage,
+} from "./_components/presenterSync";
 
 interface DeckProps {
   slides: readonly DeckSlide[];
   slide: number;
   onNavigate: (slide: number) => void;
-}
-
-/**
- * Where the build is up to, plus which slide that build belongs to and which
- * way we travelled to get there. Keeping all three in one state object is what
- * lets an external slide change (URL, outline click, browser back) implicitly
- * reset the build to step 0 without an effect.
- */
-interface DeckState {
-  slide: number;
-  step: number;
-  direction: number;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(target.closest("input, textarea, [contenteditable='true']"));
+  /** The deck's own route path, e.g. "/annual-cdm". Also the sync channel key. */
+  basePath: string;
 }
 
 const slideVariants = {
@@ -60,88 +49,26 @@ const slideVariants = {
   }),
 };
 
-export function Deck({ slides, slide, onNavigate }: DeckProps) {
-  const [deckState, setDeckState] = useState<DeckState>({
-    slide,
-    step: 0,
-    direction: 1,
-  });
-  const [scale, setScale] = useState(1);
+export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
+  const nav = useDeckNavigation(slides, slide, onNavigate, (next, step) =>
+    postDeckMessage({ deck: basePath, slide: next, step }),
+  );
+  const stage = useStageScale();
+  const syncRef = deckSyncRef(basePath, nav.applyRemote);
   const [outlineOpen, setOutlineOpen] = useState(false);
 
-  const total = slides.length;
+  const { entry, step, direction, total } = nav;
 
-  const onCurrentSlide = deckState.slide === slide;
-  const step = onCurrentSlide ? deckState.step : 0;
-  const direction = onCurrentSlide
-    ? deckState.direction
-    : slide >= deckState.slide
-      ? 1
-      : -1;
-
-  const index = clamp(slide - 1, 0, total - 1);
-  const entry = slides[index];
-
-  function goTo(target: number) {
-    const destination = clamp(target, 1, total);
-    if (destination === slide) return;
-    setDeckState({
-      slide: destination,
-      step: 0,
-      direction: destination >= slide ? 1 : -1,
-    });
-    onNavigate(destination);
-  }
-
-  function next() {
-    if (step < entry.steps) {
-      setDeckState({ slide, step: step + 1, direction });
-      return;
-    }
-    if (slide < total) goTo(slide + 1);
-  }
-
-  function prev() {
-    if (step > 0) {
-      setDeckState({ slide, step: step - 1, direction });
-      return;
-    }
-    if (slide <= 1) return;
-    // Step back onto the *finished* previous slide rather than replaying its build.
-    setDeckState({
-      slide: slide - 1,
-      step: slides[slide - 2].steps,
-      direction: -1,
-    });
-    onNavigate(slide - 1);
+  function openPresenter() {
+    openPresenterWindow(basePath, slide);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (isTypingTarget(event.target)) return;
+    if (handleStepKey(event, nav)) return;
     const root = event.currentTarget;
 
     switch (event.key) {
-      case "ArrowRight":
-      case " ":
-      case "PageDown":
-      case "j":
-        event.preventDefault();
-        next();
-        return;
-      case "ArrowLeft":
-      case "PageUp":
-      case "k":
-        event.preventDefault();
-        prev();
-        return;
-      case "Home":
-        event.preventDefault();
-        goTo(1);
-        return;
-      case "End":
-        event.preventDefault();
-        goTo(total);
-        return;
       case "f":
         event.preventDefault();
         if (document.fullscreenElement) {
@@ -153,6 +80,10 @@ export function Deck({ slides, slide, onNavigate }: DeckProps) {
       case "o":
         event.preventDefault();
         setOutlineOpen((open) => !open);
+        return;
+      case "p":
+        event.preventDefault();
+        openPresenter();
         return;
       case "Escape":
         if (!outlineOpen) return;
@@ -172,8 +103,8 @@ export function Deck({ slides, slide, onNavigate }: DeckProps) {
       return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    if (event.clientX - rect.left < rect.width * 0.25) prev();
-    else next();
+    if (event.clientX - rect.left < rect.width * 0.25) nav.prev();
+    else nav.next();
   }
 
   return (
@@ -183,9 +114,12 @@ export function Deck({ slides, slide, onNavigate }: DeckProps) {
       tabIndex={-1}
       autoFocus
       // The deck owns the keys, so it has to hold focus from the first paint —
-      // `autoFocus` alone does not land on a non-form host element.
+      // `autoFocus` alone does not land on a non-form host element. The same
+      // callback attaches the presenter-window sync.
       ref={(el) => {
-        el?.focus();
+        if (!el) return;
+        el.focus();
+        return syncRef(el);
       }}
       onKeyDown={handleKeyDown}
       className="fixed inset-0 flex overflow-hidden bg-zinc-950 font-sans text-white outline-none select-none"
@@ -196,7 +130,7 @@ export function Deck({ slides, slide, onNavigate }: DeckProps) {
         slides={slides}
         open={outlineOpen}
         slide={slide}
-        onNavigate={goTo}
+        onNavigate={nav.goTo}
         onClose={() => setOutlineOpen(false)}
       />
 
@@ -204,24 +138,13 @@ export function Deck({ slides, slide, onNavigate }: DeckProps) {
         className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden"
         onClick={handleStageClick}
         role="presentation"
-        ref={(el) => {
-          if (!el) return;
-          const measure = () => {
-            const { width, height } = el.getBoundingClientRect();
-            if (width === 0 || height === 0) return;
-            setScale(Math.min(width / DESIGN_W, height / DESIGN_H));
-          };
-          measure();
-          const observer = new ResizeObserver(measure);
-          observer.observe(el);
-          return () => observer.disconnect();
-        }}
+        ref={stage.measure}
       >
         <div
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
-            transform: `scale(${scale})`,
+            transform: `scale(${stage.scale})`,
             transformOrigin: "center",
           }}
           className="relative shrink-0"
@@ -249,6 +172,7 @@ export function Deck({ slides, slide, onNavigate }: DeckProps) {
           slide={slide}
           total={total}
           onToggleOutline={() => setOutlineOpen((open) => !open)}
+          onOpenPresenter={openPresenter}
         />
       </div>
     </div>

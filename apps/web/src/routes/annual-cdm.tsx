@@ -1,10 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Deck } from "./_components/deck/Deck";
+import { PresenterView } from "./_components/deck/_components/PresenterView";
 import { ANNUAL_SLIDES } from "./_components/deck/slides/annual";
+
+const BASE_PATH = "/annual-cdm";
 
 const searchSchema = z.object({
   slide: z.coerce.number().int().min(1).optional().default(1),
+  /** `presenter` swaps the stage for the second-screen notes view. */
+  view: z.enum(["presenter"]).optional(),
 });
 
 /**
@@ -18,19 +23,32 @@ export const Route = createFileRoute("/annual-cdm")({
 });
 
 function AnnualCdmPage() {
-  const { slide } = Route.useSearch();
-  const navigate = useNavigate({ from: "/annual-cdm" });
+  const { slide, view } = Route.useSearch();
+  const navigate = useNavigate({ from: BASE_PATH });
+
+  const onNavigate = (next: number) =>
+    navigate({
+      search: (prev) => ({ ...prev, slide: next }),
+      replace: true,
+    });
+
+  if (view === "presenter") {
+    return (
+      <PresenterView
+        slides={ANNUAL_SLIDES}
+        slide={slide}
+        onNavigate={onNavigate}
+        basePath={BASE_PATH}
+      />
+    );
+  }
 
   return (
     <Deck
       slides={ANNUAL_SLIDES}
       slide={slide}
-      onNavigate={(next) =>
-        navigate({
-          search: (prev) => ({ ...prev, slide: next }),
-          replace: true,
-        })
-      }
+      onNavigate={onNavigate}
+      basePath={BASE_PATH}
     />
   );
 }
