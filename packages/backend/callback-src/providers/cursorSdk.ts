@@ -34,6 +34,7 @@ import {
   appendToRawLogFile,
   recordSdkAttemptFailure,
   recordSdkRetry,
+  trimBufferHead,
 } from "../runtime/buffers.js";
 import { callbackState as S, resetAttemptState } from "../runtime/state.js";
 import {
