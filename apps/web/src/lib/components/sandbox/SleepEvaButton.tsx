@@ -19,9 +19,20 @@ const MID_TURN_SLEEP_HINT =
   "Eva is working — use Stop Eva in the composer first";
 
 /**
- * Tooltip for the icon-only sleep/wake controls: names the action, or explains
- * the block while a turn is in flight. Always mounted so the label stays
- * reachable — these buttons carry no visible text.
+ * The wake/sleep vocabulary for the icon-only sandbox controls, shared so the
+ * session, task and project headers cannot drift apart — and so it matches the
+ * status labels in `sandboxStatusStyles.ts` (Awake / Waking up / Asleep).
+ */
+export const SLEEP_EVA_LABEL = "Put Eva to sleep";
+export const WAKE_EVA_LABEL = "Wake up Eva";
+/** After a failed start the control is a retry, not a first attempt. */
+export const WAKE_EVA_RETRY_LABEL = "Try waking Eva again";
+
+/**
+ * Tooltip for the icon-only sleep/wake controls: names the action (one of
+ * {@link SLEEP_EVA_LABEL}, {@link WAKE_EVA_LABEL}, {@link WAKE_EVA_RETRY_LABEL}),
+ * or explains the block while a turn is in flight. Always mounted so the label
+ * stays reachable — these buttons carry no visible text.
  */
 export function SleepControlTooltip({
   blocked,
@@ -65,11 +76,11 @@ export function SleepEvaButton({
   size?: "sm" | "default";
 }) {
   return (
-    <SleepControlTooltip blocked={blockedMidTurn} label="Put Eva to sleep">
+    <SleepControlTooltip blocked={blockedMidTurn} label={SLEEP_EVA_LABEL}>
       <Button
         variant="destructive"
         size={size === "sm" ? "icon-sm" : "icon"}
-        aria-label="Put Eva to sleep"
+        aria-label={SLEEP_EVA_LABEL}
         onClick={() => {
           if (blockedMidTurn) return;
           onStop();

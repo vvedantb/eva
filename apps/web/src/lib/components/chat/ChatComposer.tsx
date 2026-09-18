@@ -6,7 +6,11 @@ import {
   type ModelOption,
   type PromptInputMessage,
 } from "@eva/ui";
-import { useUploadChatAttachments } from "@/lib/components/chat/imageAttachments";
+import {
+  describeFailedAttachments,
+  useUploadChatAttachments,
+  type ChatAttachmentUploads,
+} from "@/lib/components/chat/imageAttachments";
 import { ChatDraftSync } from "@/lib/components/chat/ChatDraftSync";
 import { LocalChatDraftSync } from "@/lib/components/chat/LocalChatDraftSync";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
@@ -21,7 +25,7 @@ import {
   mergeMentionItems,
   tokenizedToEditable,
 } from "@/lib/components/mentions";
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -60,6 +64,10 @@ interface ChatComposerProps {
   messageHistory: string[];
   isExecuting: boolean;
   isInputDisabled: boolean;
+  /** Why the composer will not send, for the toast on a blocked Enter. */
+  disabledReason?: string;
+  /** Wakes the sandbox; gives that toast its action. */
+  onStartSandbox?: () => void;
   placeholder: string;
   model: AIModel;
   setModel: (model: AIModel) => void;
@@ -107,6 +115,8 @@ export function ChatComposer({
   messageHistory,
   isExecuting,
   isInputDisabled,
+  disabledReason,
+  onStartSandbox,
   placeholder,
   model,
   setModel,
@@ -139,6 +149,7 @@ export function ChatComposer({
   const currentUserId = useQuery(api.auth.me);
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
+  const [isUploading, setIsUploading] = useState(false);
   const { updateQueuedMessage, deleteQueuedMessage, reorderQueuedMessages } =
     useQueuedMessageMutations(queuedMessages);
   // Convex draft wins when both are passed (existing sessions).
@@ -149,23 +160,44 @@ export function ChatComposer({
     files: PromptInputMessage["files"],
   ) => {
     const visible = text.trim();
-    const attachmentStorageIds = await uploadChatAttachments(files);
-    if (files.length > 0 && attachmentStorageIds.length < files.length) {
-      toast.error("Some attachments could not be uploaded.");
+    let uploads: ChatAttachmentUploads = { ids: [], failed: [] };
+    if (files.length > 0) {
+      // Fetch uploads report no bytes, so the only honest progress signal is
+      // that the send is busy: the submit button spins and stops accepting.
+      setIsUploading(true);
+      // Reset is duplicated into the catch rather than using `finally`: the
+      // React Compiler bails on the whole file when it meets one.
+      try {
+        uploads = await uploadChatAttachments(files);
+      } catch (error) {
+        setIsUploading(false);
+        throw error;
+      }
+      setIsUploading(false);
+    }
+    if (uploads.failed.length > 0) {
+      toast.error(
+        `Couldn't upload ${describeFailedAttachments(uploads.failed)}`,
+        {
+          id: "composer-attachments",
+          description: "Remove them or try again.",
+        },
+      );
+      // Sending anyway produced a turn the user believed carried a screenshot
+      // Eva never received. PromptInput keeps the text and the files exactly
+      // when onSubmit rejects, so throwing is what preserves the composer.
+      throw new Error("Chat attachments failed to upload");
     }
     if (
       !visible &&
-      attachmentStorageIds.length === 0 &&
+      uploads.ids.length === 0 &&
       !hasPendingContext &&
       !allowEmptySubmit
     ) {
       return;
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
-    await onSend(
-      content,
-      attachmentStorageIds.length > 0 ? attachmentStorageIds : undefined,
-    );
+    await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
 
   const handlePromptSubmit = async ({ text, files }: PromptInputMessage) => {
@@ -311,6 +343,9 @@ export function ChatComposer({
               placeholder={isExecuting ? "Add a follow-up..." : placeholder}
               isExecuting={isExecuting}
               isInputDisabled={isInputDisabled}
+              isUploading={isUploading}
+              disabledReason={disabledReason}
+              onStartSandbox={onStartSandbox}
               hasPendingContext={hasPendingContext}
               onPromptSubmit={handlePromptSubmit}
               onCancel={onCancel}

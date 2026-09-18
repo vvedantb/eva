@@ -295,6 +295,10 @@ const schema = defineSchema({
     // Set once this notification has been included in an email (instant send or
     // daily digest), so neither path emails the same notification twice.
     emailedAt: v.optional(v.number()),
+    // When the user archived this notification out of the inbox. Absent means
+    // "in the inbox" — archiving is reversible, so the row is kept and only
+    // this stamp moves. Archived rows never count as unread.
+    archivedAt: v.optional(v.number()),
     // The comment this notification was generated from, when it came from one.
     // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
     // field so the anchor survives independently of the href string. Absent on

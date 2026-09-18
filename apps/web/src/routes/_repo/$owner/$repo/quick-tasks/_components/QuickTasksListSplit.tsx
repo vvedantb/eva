@@ -6,6 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { Spinner } from "@eva/ui";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { QuickTasksListView } from "@/lib/components/quick-tasks/QuickTasksListView";
+import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 import { QuickTaskSplitDetailPane } from "./QuickTaskSplitDetailPane";
 import { QuickTaskSplitDetailHeader } from "./QuickTaskSplitDetailHeader";
 import { QuickTaskHeaderActionsSlotProvider } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
@@ -23,7 +24,10 @@ interface QuickTasksListSplitProps {
   projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
-  onToggleSelect: (id: Id<"agentTasks">) => void;
+  onToggleSelect: (
+    id: Id<"agentTasks">,
+    options?: SelectionToggleOptions<Id<"agentTasks">>,
+  ) => void;
   selectedTaskId?: Id<"agentTasks">;
   /** Resolve status of the numId in the URL; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;

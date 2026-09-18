@@ -76,6 +76,10 @@ export const userFields = {
   // The user's single persistent orchestrator ("master") session. Absent until
   // first opened; repointed if the master is archived/deleted and recreated.
   orchestratorSessionId: v.optional(v.id("sessions")),
+  /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
+  grokBotWebhookUrl: v.optional(v.string()),
+  /** AES-GCM ciphertext of the routine bearer key (`enc:…`). Never returned. */
+  grokBotWebhookKey: v.optional(v.string()),
 };
 
 /** Heartbeat/path writes. Isolated so they do not invalidate `users` subscribers. */
@@ -206,6 +210,12 @@ export const turnFields = {
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  /**
+   * Set by the lease reconciler the first time it finds the lease expired
+   * while the sandbox process was still alive; cleared by the next successful
+   * lease renewal. Bounds how long a silent-but-alive turn is tolerated.
+   */
+  silentSince: v.optional(v.number()),
 };
 
 export const pendingTurnFields = {
@@ -408,6 +418,14 @@ export const sessionFields = {
   /** Live PR status (open/draft) Eva closed when archiving. Unarchive reopens it. */
   prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
+  /**
+   * Short, user-safe reason the last wake attempt failed (≤200 chars, stack and
+   * request-id noise stripped). Set wherever a failed start puts the row back to
+   * `closed`; cleared at the start of every new attempt and on every transition
+   * to `active`. Without it a failed start is indistinguishable from a sleeping
+   * sandbox — a grey dot with no explanation and no retry.
+   */
+  sandboxError: v.optional(v.string()),
   /** Earliest time an archived session's sandbox may be deleted (48h grace). */
   sandboxDeleteAfter: v.optional(v.number()),
   ptySessionId: v.optional(v.string()),
@@ -963,6 +981,13 @@ export const sandboxGitCredentialsFields = {
   sandboxId: v.string(),
   installationId: v.number(),
   secret: v.string(),
+  // GitHub repository the sandbox was created for. /api/git-credentials grants
+  // the full installation token for this repository without the sandbox being
+  // bound to a session/task/project — snapshot seed-prep and ephemeral
+  // automation sandboxes never are. Optional: rows written before the pin lack
+  // it until the helper is next reinstalled (every create/resume rotates it).
+  repoOwner: v.optional(v.string()),
+  repoName: v.optional(v.string()),
   createdAt: v.number(),
 };
 

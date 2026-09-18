@@ -53,6 +53,12 @@ interface MentionTextareaProps {
    * "Composer autocomplete" flag is on; otherwise ignored.
    */
   completionContext?: string;
+  /**
+   * Called when Enter would have submitted but the submit button is disabled.
+   * The keystroke is still swallowed — this only lets the composer say why,
+   * instead of Enter doing nothing at all on a sleeping sandbox.
+   */
+  onBlockedSubmit?: () => void;
   className?: string;
 }
 
@@ -71,6 +77,7 @@ export const MentionTextarea = forwardRef<
     history,
     enableAttachmentPaste,
     completionContext,
+    onBlockedSubmit,
     className,
   },
   ref,
@@ -224,6 +231,10 @@ export const MentionTextarea = forwardRef<
                 submitButton instanceof HTMLButtonElement &&
                 submitButton.disabled
               ) {
+                // Enter on a disabled composer used to do nothing at all, which
+                // reads as the app ignoring the user. The caller decides whether
+                // there is anything worth saying (an empty draft: no).
+                onBlockedSubmit?.();
                 return;
               }
               form.requestSubmit();

@@ -7,7 +7,7 @@ import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useTeamLogoUpload } from "@/lib/hooks/useTeamLogoUpload";
 import { useTeamBackgroundUpload } from "@/lib/hooks/useTeamBackgroundUpload";
-import { Tabs, TabsList, TabsTrigger, Button } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger, Button, Skeleton } from "@eva/ui";
 import { IconUsers, IconPhoto, IconPhotoOff } from "@tabler/icons-react";
 import { TeamActivityTab } from "./_components/TeamActivityTab";
 import { TeamMembersTab } from "./_components/TeamMembersTab";
@@ -56,7 +56,22 @@ export function TeamDetailClient({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
-  if (!team) {
+  // `useQuery` is `undefined` while the subscription is still in flight, so a
+  // single `!team` branch flashed "Team not found" on every cold load of a team
+  // that exists. Only `null` is a real miss.
+  if (team === undefined) {
+    return (
+      <PageWrapper title="Team">
+        <div aria-busy className="space-y-3">
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (team === null) {
     return (
       <PageWrapper title="Team">
         <EntityNotFound entityLabel="team" backTo="/teams" />
@@ -222,7 +237,12 @@ export function TeamDetailClient({
 
       {tab === "activity" ? <TeamActivityTab members={members} /> : null}
       {tab === "members" ? (
-        <TeamMembersTab teamId={team._id} members={members} isOwner={isOwner} />
+        <TeamMembersTab
+          teamId={team._id}
+          teamName={displayName}
+          members={members}
+          isOwner={isOwner}
+        />
       ) : null}
       {simpleView ? null : tab === "codebases" ? (
         <TeamReposTab

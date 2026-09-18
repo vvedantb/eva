@@ -959,7 +959,12 @@ export function deriveStepRowPresentation(
       }
       return { text: step.label };
     }
-    case "question":
+    case "question": {
+      if (isActive) {
+        return { text: "Waiting for your answer" };
+      }
+      return { text: step.detail ? `Asked: ${step.detail}` : step.label };
+    }
     case "thinking":
     case "reasoning":
     case "response":

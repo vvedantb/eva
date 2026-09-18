@@ -36,25 +36,64 @@ export {
 
 export { UserMessageAttachments };
 
+/** What came back from an upload attempt: the ids that stuck, and what did not. */
+export interface ChatAttachmentUploads {
+  ids: Id<"_storage">[];
+  /** Files the agent will never see — disallowed kinds and failed uploads. */
+  failed: Array<{ name: string }>;
+}
+
 /**
  * Uploads composer attachments to Convex storage.
- * Disallowed / failed files are dropped.
+ *
+ * Failures are reported rather than dropped: sending anyway produced a turn
+ * where the user had attached a screenshot, Eva never received it, and only a
+ * toast that had already faded said so.
  */
 export function useUploadChatAttachments() {
   const uploadBlobs = useUploadBlobs();
   return async (
     files: PromptInputMessage["files"],
-  ): Promise<Id<"_storage">[]> => {
-    const allowed = files.filter((file) => isAllowedAttachmentFile(file));
+  ): Promise<ChatAttachmentUploads> => {
+    const allowed: PromptInputMessage["files"] = [];
+    const failed: Array<{ name: string }> = [];
+    for (const file of files) {
+      if (isAllowedAttachmentFile(file)) {
+        allowed.push(file);
+        continue;
+      }
+      failed.push({ name: labelForAttachment(file.filename, file.mediaType) });
+    }
     const items = await Promise.all(
       allowed.map(async (file) => {
         const blob = await (await fetch(file.url)).blob();
         return { blob, contentType: contentTypeForUpload(file, blob.type) };
       }),
     );
-    const ids = await uploadBlobs(items);
-    return ids.filter((id): id is Id<"_storage"> => id !== null);
+    const uploaded = await uploadBlobs(items);
+    const ids: Id<"_storage">[] = [];
+    for (const [index, id] of uploaded.entries()) {
+      if (id !== null) {
+        ids.push(id);
+        continue;
+      }
+      const file = allowed[index];
+      failed.push({
+        name: labelForAttachment(file?.filename, file?.mediaType),
+      });
+    }
+    return { ids, failed };
   };
+}
+
+/** Failed attachments as one line of toast copy: up to three names, then a count. */
+export function describeFailedAttachments(
+  failed: ReadonlyArray<{ name: string }>,
+): string {
+  const names = failed.map((file) => file.name);
+  const shown = names.slice(0, 3).join(", ");
+  const rest = names.length - 3;
+  return rest > 0 ? `${shown} +${rest} more` : shown;
 }
 
 /**

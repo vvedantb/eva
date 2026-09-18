@@ -477,6 +477,30 @@ export const remove = authMutation({
   },
 });
 
+/**
+ * Clears a soft delete, putting the task back in the lists it vanished from —
+ * the Undo behind bulk delete.
+ *
+ * Only the row returns. `softDeleteAgentTask` also cancels the task's scheduled
+ * run, drops its run summary and queues its sandbox for deletion; none of those
+ * can be undone, so a restored task comes back without them.
+ */
+export const restore = authMutation({
+  args: { id: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+      throw new Error("Task not found");
+    if (task.deletedAt === undefined) return null;
+    await ctx.db.patch(args.id, {
+      deletedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 /** Creates a single task in "todo" status, optionally assigned to a project. */
 export const createQuickTask = authMutation({
   args: {

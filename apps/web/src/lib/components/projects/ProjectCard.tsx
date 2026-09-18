@@ -16,6 +16,7 @@ import {
   ContextMenuContent,
   BorderBeam,
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -63,6 +64,10 @@ interface ProjectCardProps {
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
   isActive?: boolean;
+  isSelecting?: boolean;
+  isSelected?: boolean;
+  /** `shiftKey` asks the owner for a range selection from its anchor. */
+  onToggleSelect?: (event: { shiftKey: boolean }) => void;
   /** Public (slash) path; rendered via router Link so rewrites own the href. */
   href?: string;
   /**
@@ -90,6 +95,9 @@ export function ProjectCard({
   isBuilding = false,
   sandboxStatus,
   isActive,
+  isSelecting,
+  isSelected,
+  onToggleSelect,
   href,
   onClick,
   onDelete,
@@ -182,7 +190,7 @@ export function ProjectCard({
 
   const cardContent = (
     <ListRow
-      className="shrink-0"
+      className={cn("shrink-0", isSelected && "ring-2 ring-primary/40")}
       accentClassName={accentColor}
       selected={isActive}
       link={
@@ -191,10 +199,17 @@ export function ProjectCard({
         ) : undefined
       }
       onClick={
-        editOpen || onClick
+        editOpen || isSelecting || onClick
           ? (event) => {
               if (editOpen) {
                 event.preventDefault();
+                return;
+              }
+              // While selecting, the whole card is a selection target — the
+              // stretched link would otherwise navigate away mid-selection.
+              if (isSelecting) {
+                event.preventDefault();
+                onToggleSelect?.({ shiftKey: event.shiftKey });
                 return;
               }
               onClick?.(event);
@@ -205,6 +220,21 @@ export function ProjectCard({
       contentClassName="flex flex-col gap-1.5 px-3 py-2.5 pl-3.5"
     >
       <div className="flex min-w-0 items-start gap-2">
+        {isSelecting ? (
+          <Checkbox
+            checked={isSelected}
+            // One handler, not `onClick` + `onCheckedChange`: Radix composes
+            // its own toggle after ours and skips it once the event is
+            // default-prevented, so this reads the shift modifier without
+            // toggling twice.
+            onClick={(event) => {
+              event.stopPropagation();
+              event.preventDefault();
+              onToggleSelect?.({ shiftKey: event.shiftKey });
+            }}
+            className={cn("mt-0.5 shrink-0", LIST_ROW_CONTROL_CLASS)}
+          />
+        ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-baseline gap-1.5">
             <EntityNumLabel numId={numId} />

@@ -22,6 +22,7 @@ import {
   findAIModelOption,
   getReasoningLevelLabel,
   type BackgroundAgentEntry,
+  type Id,
 } from "@eva/backend";
 import { VideoPreview } from "@/lib/components/MediaPreview";
 import { ImageGalleryPreview } from "@/lib/components/MediaGallery";
@@ -45,9 +46,12 @@ import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
 import {
+  collectQuestionSteps,
   getAssistantTurnState,
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
+import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
@@ -132,6 +136,19 @@ interface ChatMessageProps {
    * on assistant turns that carry checkpoint shas.
    */
   turnCheckpoint?: TurnCheckpointContext;
+  /**
+   * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
+   * is read-only, which is what hides the Retry action on a failed turn.
+   */
+  onRetryTurn?: (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => void;
+  /** The preceding user turn, i.e. what Retry re-sends. */
+  precedingUser?: {
+    content: string;
+    attachmentStorageIds?: Id<"_storage">[];
+  };
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -155,6 +172,8 @@ export const ChatMessage = memo(function ChatMessage({
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
+  onRetryTurn,
+  precedingUser,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -171,8 +190,14 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const { isStreamingPlaceholder, changedFiles } =
+  const { isStreamingPlaceholder, changedFiles, questionSteps } =
     getAssistantTurnState(message);
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
+  const streamingQuestionSteps = isStreamingPlaceholder
+    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+    : [];
 
   const copySource =
     message.content.trim().length > 0
@@ -217,6 +242,29 @@ export const ChatMessage = memo(function ChatMessage({
     agentSpawn && onOpenAgentsTab ? (
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
+
+  // Both failure classes are failures, not replies: as markdown they read as
+  // Eva answering "Error: …" in body copy. Only "rate_limit" used to get the
+  // notice, so every other failed turn looked like an answer.
+  const turnErrorTitle =
+    message.errorType === "rate_limit"
+      ? "Claude usage limit reached"
+      : message.errorType === "generic"
+        ? "This turn failed"
+        : null;
+  // Retrying means re-sending the prompt this turn answered, so it needs the
+  // turn before it; a failure with nothing above it has nothing to repeat.
+  const retryAction =
+    onRetryTurn && precedingUser
+      ? {
+          label: "Retry",
+          onClick: () =>
+            onRetryTurn(
+              precedingUser.content,
+              precedingUser.attachmentStorageIds,
+            ),
+        }
+      : null;
 
   return (
     <>
@@ -322,6 +370,7 @@ export const ChatMessage = memo(function ChatMessage({
                         onOpenFile={onOpenFile}
                       />
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
                         <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
                           {streamingContent}
@@ -342,10 +391,9 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                       )}
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={questionSteps} />
                       <AnimatePresence mode="wait" initial={false}>
-                        {message.errorType === "rate_limit" ? (
-                          // A limit failure is not a reply: as markdown it read
-                          // as Eva answering "Error: …" in body copy.
+                        {turnErrorTitle !== null ? (
                           <m.div
                             key="turn-error"
                             initial={{ opacity: 0 }}
@@ -354,8 +402,9 @@ export const ChatMessage = memo(function ChatMessage({
                             transition={motionFast}
                           >
                             <TurnErrorNotice
-                              title="Claude usage limit reached"
+                              title={turnErrorTitle}
                               detail={stripErrorPrefix(message.content)}
+                              {...(retryAction ? { action: retryAction } : {})}
                             />
                           </m.div>
                         ) : (

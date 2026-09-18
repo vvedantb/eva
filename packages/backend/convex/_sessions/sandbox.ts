@@ -23,6 +23,29 @@ import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 
+/** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
+const SANDBOX_ERROR_MAX_LENGTH = 200;
+
+/**
+ * Turns a thrown start error into the short line the UI shows next to
+ * "Eva couldn't wake up". Action errors arrive with a Convex prefix, a request
+ * id, and a stack — none of which mean anything to the person reading them, and
+ * all of which would blow past the 200-char budget.
+ */
+export function toUserFacingSandboxError(raw: string): string {
+  const cleaned = (raw.split("\n")[0] ?? "")
+    .replace(/\[Request ID:[^\]]*\]/g, "")
+    .replace(/\[CONVEX[^\]]*\]/g, "")
+    .replace(/^(Uncaught\s+)?[A-Za-z]*Error:\s*/, "")
+    .replace(/\s+at\s+\S+\s*\(.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return "The sandbox did not start.";
+  return cleaned.length > SANDBOX_ERROR_MAX_LENGTH
+    ? `${cleaned.slice(0, SANDBOX_ERROR_MAX_LENGTH - 1).trimEnd()}…`
+    : cleaned;
+}
+
 /** Updates sandbox-related fields (sandbox ID, branch, PR URL) on a session. */
 export const updateSandbox = authMutation({
   args: {
@@ -57,7 +80,9 @@ export const clearSandbox = authMutation({
     await markAllRunningExited(ctx.db, args.id);
     await ctx.db.patch(args.id, {
       sandboxId: undefined,
-
+      // The association is being reset, so a previous wake failure no longer
+      // describes anything the user can act on.
+      sandboxError: undefined,
       status: "closed",
     });
     return null;
@@ -82,6 +107,9 @@ export const startSandbox = authMutation({
     const baseBranch = resolveSessionBaseBranch(session, repo);
     await ctx.db.patch(args.sessionId, {
       status: "starting",
+      // A new attempt owns the outcome: drop the previous failure so the dot
+      // leaves "Couldn't wake up" the moment Try again is pressed.
+      sandboxError: undefined,
       updatedAt: Date.now(),
     });
     // Seed startup streaming immediately so the UI shows a real step instead of
@@ -375,6 +403,7 @@ export const markSandboxClosed = internalMutation({
       // VM is still running — keep UI active so Stop can be retried.
       await ctx.db.patch(args.sessionId, {
         status: "active",
+        sandboxError: undefined,
         updatedAt: Date.now(),
       });
       return null;
@@ -468,6 +497,8 @@ export const sandboxReady = internalMutation({
       sandboxId: args.sandboxId,
       branchName: args.branchName,
       status: "active",
+      // Awake: whatever the last attempt failed on is history.
+      sandboxError: undefined,
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
       ...(args.markSetupPending ? { sandboxSetupPending: true } : {}),
@@ -548,6 +579,9 @@ export const sandboxError = internalMutation({
     });
     await ctx.db.patch(args.sessionId, {
       status: "closed",
+      // Read by the sidebar dot and the chat header's retry notice — a start
+      // that fails is otherwise indistinguishable from a sleeping sandbox.
+      sandboxError: toUserFacingSandboxError(args.error),
       updatedAt: Date.now(),
     });
     // A watched child whose sandbox never started will never reach the

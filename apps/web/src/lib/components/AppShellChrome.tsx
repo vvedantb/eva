@@ -6,11 +6,13 @@ import { Sidebar } from "@/lib/components/Sidebar";
 import { SpotlightSearch } from "@/lib/components/SpotlightSearch";
 import { NotificationToastStream } from "@/lib/components/NotificationToastStream";
 import { UpdateAvailableToast } from "@/lib/components/UpdateAvailableToast";
+import { ConnectionStatusToast } from "@/lib/components/ConnectionStatusToast";
 import { FollowProvider } from "@/lib/contexts/FollowContext";
 import { SidebarProvider } from "@/lib/contexts/SidebarContext";
 import { PageTitleProvider } from "@/lib/contexts/PageTitleContext";
 import { SearchProvider } from "@/lib/contexts/SearchContext";
 import { ShortcutsProvider } from "@/lib/hotkeys/ShortcutsContext";
+import { ShortcutsCheatsheet } from "@/lib/hotkeys/ShortcutsCheatsheet";
 
 /**
  * The signed-in app chrome. Split from `AppShell` so the sidebar, spotlight
@@ -56,9 +58,12 @@ export function AppShellChrome({
                   {embedded ? null : (
                     <>
                       <SpotlightSearch />
+                      {/* Inside ShortcutsProvider: it lists that registry. */}
+                      <ShortcutsCheatsheet />
                       <FollowOverlay />
                       <NotificationToastStream />
                       <UpdateAvailableToast />
+                      <ConnectionStatusToast />
                     </>
                   )}
                 </FollowProvider>

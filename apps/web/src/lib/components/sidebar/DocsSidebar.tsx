@@ -364,6 +364,9 @@ export function DocsSidebar({
                       {doc.source && docSourceRoute(doc.source) ? (
                         <ContextMenuItem
                           onClick={() => {
+                            // The guard above narrows the JSX, not this
+                            // callback, so the source is re-checked here.
+                            if (!doc.source) return;
                             const route = docSourceRoute(doc.source);
                             if (!route) return;
                             void navigate({

@@ -37,6 +37,7 @@
     "@convex-dev/workflow": "^0.3.4",
     "@cursor/sdk": "1.0.28",
     "@eva/shared": "workspace:*",
+    "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@octokit/auth-app": "^8.1.2",
     "@openai/codex-sdk": "^0.146.0",
@@ -54,8 +55,10 @@
     "marked": "^18.0.0",
     "octokit": "^5.0.5",
     "pg": "^8.21.0",
+    "quickjs-emscripten-core": "^0.32.0",
     "shell-quote": "^1.9.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/node": "^22.18.5",

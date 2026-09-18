@@ -33,7 +33,7 @@ import {
   SandboxWorkspace,
   type TerminalPanelApi,
 } from "@/lib/components/sandbox/SandboxWorkspace";
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -68,6 +68,7 @@ export function TaskDetailInline({
   const [, setFileViewerPath] = useQueryState("file", fileViewerPathParser);
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
+  const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmChatDaemon = useMutation(
     api.agentTaskChatWorkflow.prewarmChatDaemon,
   );
@@ -287,7 +288,7 @@ export function TaskDetailInline({
           leftDefaultSize="40%"
           leftMinWidthPx={350}
           rightMinWidthPx={300}
-          rightCollapsedSizePx={SANDBOX_RAIL_WIDTH_PX}
+          rightCollapsedSizePx={sandboxRailWidthPx}
           defaultRightCollapsed={false}
           expandRightSignal={expandRightSignal}
           mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}

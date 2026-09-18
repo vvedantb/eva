@@ -156,3 +156,25 @@ test("one ownership state answers both the lease and the heartbeat gate", () => 
   );
   expect(lifecycle).not.toContain("let activeClaimState");
 });
+
+/**
+ * The lease-terminal exit used to be the one exit path that skipped the
+ * durability push, so a turn the server finalised as stalled left the agent's
+ * finished edits uncommitted in the sandbox (session 66, 11 Sep 2026). Source
+ * text is the only handle on it: the exit calls `process.exit`, which no unit
+ * test can run.
+ */
+test("a lease-terminal exit persists the turn's work before exiting", () => {
+  const heartbeats = source("../callback-src/runtime/heartbeats.ts");
+  const startAt = heartbeats.indexOf("function enforceTurnLease");
+  expect(startAt, "enforceTurnLease moved or was renamed").toBeGreaterThan(-1);
+  const body = heartbeats.slice(startAt, heartbeats.indexOf("\n}", startAt));
+  const persistAt = body.indexOf("persistTurnWork();");
+  const exitAt = body.indexOf("process.exit(0)");
+  expect(persistAt, "the lease-terminal exit lost its durability push")
+    .toBeGreaterThan(-1);
+  expect(exitAt, "the lease-terminal exit moved").toBeGreaterThan(-1);
+  expect(persistAt).toBeLessThan(exitAt);
+  // A superseded daemon shares the worktree with its winner; its commit races.
+  expect(body).toContain('decision.reason !== "superseded"');
+});

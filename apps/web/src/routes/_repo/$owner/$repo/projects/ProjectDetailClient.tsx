@@ -19,7 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DialogBody,
-  Spinner,
   toast,
   motionFast,
 } from "@eva/ui";
@@ -43,7 +42,7 @@ import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandbo
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -56,6 +55,8 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
+import { ProjectDetailSkeleton } from "./_components/ProjectsSkeletons";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 import {
   IconHammer,
@@ -113,6 +114,7 @@ export function ProjectDetailClient({
   const navigate = useNavigate();
   const { basePath, repo } = useRepo();
   const simpleView = useSimpleView();
+  const sandboxRailWidthPx = useSandboxRailWidthPx();
   const [isBuildModalOpen, setIsBuildModalOpen] = useState(false);
   const [isStartingBuild, setIsStartingBuild] = useState(false);
   const [isStoppingBuild, setIsStoppingBuild] = useState(false);
@@ -136,6 +138,7 @@ export function ProjectDetailClient({
   );
 
   const project = useQuery(api.projects.get, { id: projectId });
+  useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
     api.agentRuns.getLatestDeploymentByProject,
@@ -295,11 +298,7 @@ export function ProjectDetailClient({
   };
 
   if (project === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <ProjectDetailSkeleton />;
   }
 
   if (project === null) {
@@ -393,7 +392,7 @@ export function ProjectDetailClient({
           leftDefaultSize="40%"
           leftMinWidthPx={350}
           rightMinWidthPx={300}
-          rightCollapsedSizePx={SANDBOX_RAIL_WIDTH_PX}
+          rightCollapsedSizePx={sandboxRailWidthPx}
           defaultRightCollapsed={false}
           expandRightSignal={expandRightSignal}
           mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}

@@ -247,7 +247,14 @@ describe("resolveCredentialRequest — sibling repositories", () => {
     });
   });
 
-  test("a sandbox bound to no entity cannot ask about another repo", async () => {
+});
+
+describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
+  // Snapshot seed-prep sandboxes and ephemeral automation / test-gen /
+  // evaluation runs have no session, task or project row. The helper install
+  // pins their home repository on the credential row instead; without that
+  // pin every private-repo fetch and push 403'd (prod, 10–15 Sep 2026).
+  async function orphanFixture(options: { pinHome: boolean }) {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
       await ctx.db.insert("sandboxGitCredentials", {
@@ -255,16 +262,95 @@ describe("resolveCredentialRequest — sibling repositories", () => {
         installationId: 9,
         secret: SECRET,
         createdAt: Date.now(),
+        ...(options.pinHome
+          ? { repoOwner: "evalucom", repoName: "carepulse-ts" }
+          : {}),
       });
     });
-    expect(
-      await t.query(internal.sandboxGitCredentials.resolveCredentialRequest, {
-        secret: SECRET,
-        path: "AcmeOrg/design-system.git",
-      }),
-    ).toEqual({
+    return t;
+  }
+
+  test.each([
+    "evalucom/carepulse-ts.git",
+    "/Evalucom/CarePulse-TS.git",
+    "evalucom/carepulse-ts",
+  ])("pinned home repository %s gets the full installation token", async (path) => {
+    const t = await orphanFixture({ pinHome: true });
+    expect(await resolve(t, path)).toEqual({ kind: "home", installationId: 9 });
+  });
+
+  test("a pinned sandbox asking about another repo is still denied", async () => {
+    const t = await orphanFixture({ pinHome: true });
+    expect(await resolve(t, "AcmeOrg/design-system.git")).toEqual({
       kind: "denied",
-      reason: "sandbox not bound to an entity",
+      reason:
+        "sandbox sbx_orphan not bound to an entity (asked for AcmeOrg/design-system)",
+    });
+  });
+
+  test("a row written before the pin is denied for every path", async () => {
+    const t = await orphanFixture({ pinHome: false });
+    expect((await resolve(t, "evalucom/carepulse-ts.git")).kind).toBe(
+      "denied",
+    );
+  });
+
+  // The write half of the fix. Every sandbox create and resume reinstalls the
+  // helper, which is how legacy rows are meant to recover — so the upsert's
+  // patch branch must pin the repository, not only its insert branch.
+  test("a first install pins the home repository on a new row", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: "sbx_orphan",
+      installationId: 9,
+      secret: SECRET,
+      repoOwner: "evalucom",
+      repoName: "carepulse-ts",
+    });
+    expect(await resolve(t, "evalucom/carepulse-ts.git")).toEqual({
+      kind: "home",
+      installationId: 9,
+    });
+  });
+
+  test("reinstalling the helper backfills the pin on a legacy row", async () => {
+    const t = await orphanFixture({ pinHome: false });
+    await t.mutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: "sbx_orphan",
+      installationId: 9,
+      secret: "rotated-secret",
+      repoOwner: "evalucom",
+      repoName: "carepulse-ts",
+    });
+
+    expect(
+      await resolve(t, "evalucom/carepulse-ts.git", "rotated-secret"),
+    ).toEqual({ kind: "home", installationId: 9 });
+    // One row per sandbox: the rotation retires the previous secret.
+    expect(await resolve(t, "evalucom/carepulse-ts.git")).toEqual({
+      kind: "denied",
+      reason: "unknown secret",
+    });
+  });
+
+  test("the pin does not bypass sibling checks on a bound sandbox", async () => {
+    const { t, ids } = await fixture({ ownerInTeam: false });
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("sandboxGitCredentials")
+        .withIndex("by_sandbox_id", (q) => q.eq("sandboxId", SANDBOX_ID))
+        .unique();
+      if (!row) throw new Error("fixture row missing");
+      await ctx.db.patch(row._id, { repoOwner: "vvedantb", repoName: "eva" });
+    });
+    expect(ids.homeRepoId).toBeDefined();
+    expect(await resolve(t, "vvedantb/eva.git")).toEqual({
+      kind: "home",
+      installationId: 1,
+    });
+    expect(await resolve(t, "AcmeOrg/design-system.git")).toEqual({
+      kind: "denied",
+      reason: "no access to AcmeOrg/design-system",
     });
   });
 });
@@ -374,5 +460,10 @@ describe("in-sandbox credential helper contract", () => {
 
   test("the requested path is posted as JSON built by jq", () => {
     expect(source).toContain("{path:$p}");
+  });
+
+  test("the install pins the sandbox's home repository on the row", () => {
+    expect(source).toContain("repoOwner: homeRepo.owner");
+    expect(source).toContain("repoName: homeRepo.name");
   });
 });
