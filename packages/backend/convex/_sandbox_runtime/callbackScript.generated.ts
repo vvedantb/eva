@@ -7756,7 +7756,10 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   const sqlite = await loadCursorSdkSqlite();
   mkdirSync7(CURSOR_SDK_STORE_DIR, { recursive: true });
   const store4 = await sqlite.SqliteLocalAgentStore.open({
-    workspaceRef: WORK_DIR,
+    // Same directory the agent runs in, so stored agents stay keyed to the
+    // workspace they were created against (AGENT_CWD is WORK_DIR unless a
+    // multi-repo session roots the harness at the workspace instead).
+    workspaceRef: AGENT_CWD,
     stateRoot: CURSOR_SDK_STORE_DIR
   });
   const options = {
