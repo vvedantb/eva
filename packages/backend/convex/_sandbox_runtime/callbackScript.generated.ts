@@ -2293,13 +2293,13 @@ async function uploadMediaFile(filePath, mimeType) {
   }
   throw new Error("Missing storageId in upload response");
 }
-async function attachChatMediaIfAny(uploaded, target) {
+async function attachChatMediaIfAny(uploaded, target2) {
   if (uploaded.length === 0) return;
   const mediaArgs = {
     parentId: ENTITY_ID ?? "",
     mediaStorageIds: uploaded.map((item) => item.storageId)
   };
-  if (target.messageId) mediaArgs.messageId = target.messageId;
+  if (target2.messageId) mediaArgs.messageId = target2.messageId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 async function deliverCompletionWithMedia(completionArgs) {
@@ -2316,7 +2316,7 @@ function archivePostedFile(dir, file) {
   mkdirSync2(postedDir, { recursive: true });
   renameSync(dir + "/" + file, postedDir + "/" + file);
 }
-async function uploadAndAttachSandboxMedia(target) {
+async function uploadAndAttachSandboxMedia(target2) {
   if (RUN_ID) return;
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
@@ -2368,7 +2368,7 @@ async function uploadAndAttachSandboxMedia(target) {
     }
   }
   try {
-    await attachChatMediaIfAny(uploaded, target);
+    await attachChatMediaIfAny(uploaded, target2);
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }
@@ -4207,9 +4207,9 @@ function markStepComplete(step) {
     step.label = "Used " + step.label.slice(6, -3);
   }
   if (step.durationMs === void 0) {
-    const started = stepStartedAt.get(step);
-    if (started !== void 0) {
-      step.durationMs = Date.now() - started;
+    const started2 = stepStartedAt.get(step);
+    if (started2 !== void 0) {
+      step.durationMs = Date.now() - started2;
     }
   }
 }
@@ -4430,9 +4430,20 @@ function measureTickStallMs(input) {
   return lateBy > input.toleranceMs ? lateBy : 0;
 }
 
-// callback-src/runtime/turnPersist.ts
+// callback-src/runtime/gitExec.ts
 import { spawnSync as spawnSync3 } from "child_process";
 var GIT_STEP_TIMEOUT_MS = 2e4;
+function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
+  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  const out = ((result.stdout || "") + (result.stderr || "")).trim();
+  return { ok: result.status === 0, out };
+}
+
+// callback-src/runtime/turnPersist.ts
 var PUSH_TIMEOUT_MS = 6e4;
 var COMMIT_ADD_ARGS = [
   "add",
@@ -4450,15 +4461,6 @@ var COMMIT_ADD_ARGS = [
   ":!recordings/",
   ":!plan.md"
 ];
-function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
-  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
-  });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
 function localBranchRewroteOwnHistory(branch, remoteRef) {
   const remoteTip = git(["rev-parse", "--verify", remoteRef]);
   const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
@@ -7159,13 +7161,13 @@ async function establishThread(client, sessionMode) {
       );
     }
   }
-  const started = await client.request("thread/start", {
+  const started2 = await client.request("thread/start", {
     model: normalizedCodexModel,
     cwd: WORK_DIR,
     approvalPolicy: "never",
     serviceName: "eva"
   });
-  const threadId = nestedId(started, "thread");
+  const threadId = nestedId(started2, "thread");
   if (!threadId) throw new Error("Codex App Server did not return a thread id");
   return threadId;
 }
@@ -8752,12 +8754,140 @@ function materializeSystemSkills() {
   }
 }
 
+// callback-src/runtime/branchWatcher.ts
+import { statSync as statSync2, watch } from "fs";
+var GIT_TIMEOUT_MS = 5e3;
+var POLL_INTERVAL_MS3 = 15e3;
+var DEBOUNCE_MS = 300;
+function resolveBranchTarget(field, id) {
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "taskId") return { kind: "task", taskId: id };
+  if (field === "projectId") return { kind: "project", projectId: id };
+  return null;
+}
+function formatBranch(abbrevRef, shortSha) {
+  const ref = abbrevRef.trim();
+  if (ref.length === 0) return null;
+  if (ref !== "HEAD") return ref;
+  const sha = shortSha.trim();
+  return sha.length > 0 ? sha : null;
+}
+function decideBranchReport(input) {
+  if (input.current === null) return null;
+  if (input.current === input.lastReported) return null;
+  return input.current;
+}
+function readCurrentBranch() {
+  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
+  if (!abbrev.ok) return null;
+  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
+  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
+  return formatBranch(abbrev.out, short.ok ? short.out : "");
+}
+var target = null;
+var lastReported = null;
+var pollInterval = null;
+var debounceTimer = null;
+var headWatcher = null;
+var checkInFlight = false;
+var recheckQueued = false;
+var started = false;
+async function runCheckLoop() {
+  const activeTarget = target;
+  if (activeTarget === null) return;
+  if (checkInFlight) {
+    recheckQueued = true;
+    return;
+  }
+  checkInFlight = true;
+  recheckQueued = false;
+  try {
+    let again = true;
+    while (again) {
+      again = false;
+      const branch = decideBranchReport({
+        current: readCurrentBranch(),
+        lastReported
+      });
+      if (branch !== null) {
+        try {
+          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
+            target: activeTarget,
+            branch
+          });
+          lastReported = branch;
+        } catch (error) {
+          log(
+            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
+          );
+        }
+      }
+      if (recheckQueued) {
+        recheckQueued = false;
+        again = true;
+      }
+    }
+  } finally {
+    checkInFlight = false;
+  }
+}
+function scheduleCheck() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    void runCheckLoop();
+  }, DEBOUNCE_MS);
+  debounceTimer.unref();
+}
+function watchHeadIn(gitDir) {
+  try {
+    headWatcher = watch(gitDir, (_event, filename) => {
+      if (filename !== "HEAD") return;
+      scheduleCheck();
+    });
+    headWatcher.unref();
+  } catch (error) {
+    log(
+      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
+    );
+  }
+}
+function startBranchWatcher() {
+  if (started) return;
+  started = true;
+  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
+  if (target === null) {
+    log(
+      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
+    );
+    return;
+  }
+  const gitDir = WORK_DIR + "/.git";
+  let gitDirIsDirectory = false;
+  try {
+    gitDirIsDirectory = statSync2(gitDir).isDirectory();
+  } catch {
+    gitDirIsDirectory = false;
+  }
+  if (gitDirIsDirectory) {
+    watchHeadIn(gitDir);
+  } else {
+    log("branchWatcher: " + gitDir + " is not a directory; polling only");
+  }
+  pollInterval = setInterval(() => {
+    void runCheckLoop();
+  }, POLL_INTERVAL_MS3);
+  pollInterval.unref();
+  void runCheckLoop();
+}
+
 // ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { spawn as spawn3 } from "child_process";
-import { statSync as statSync2 } from "fs";
+import { statSync as statSync3 } from "fs";
 import path2 from "path";
 import readline from "readline";
 import { createRequire } from "module";
@@ -9242,14 +9372,14 @@ function pathEnvKey(env, platform) {
 }
 function isFile(filePath) {
   try {
-    return statSync2(filePath).isFile();
+    return statSync3(filePath).isFile();
   } catch {
     return false;
   }
 }
 function isDirectory(filePath) {
   try {
-    return statSync2(filePath).isDirectory();
+    return statSync3(filePath).isDirectory();
   } catch {
     return false;
   }
@@ -9437,7 +9567,7 @@ import {
   openSync,
   readFileSync as readFileSync12,
   rmSync as rmSync2,
-  statSync as statSync3,
+  statSync as statSync4,
   writeFileSync as writeFileSync13
 } from "fs";
 var SERVER_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.json";
@@ -9563,7 +9693,7 @@ function acquireStartupLock() {
     return true;
   } catch {
     try {
-      const ageMs = Date.now() - statSync3(SERVER_LOCK_DIR).mtimeMs;
+      const ageMs = Date.now() - statSync4(SERVER_LOCK_DIR).mtimeMs;
       if (ageMs > LOCK_STALE_MS) {
         rmSync2(SERVER_LOCK_DIR, { recursive: true, force: true });
         mkdirSync9(SERVER_LOCK_DIR);
@@ -10091,6 +10221,7 @@ try {
 }
 callbackState.lastStepType = "thinking";
 materializeSystemSkills();
+startBranchWatcher();
 if (CLAIM_MUTATION) {
   if (PROVIDER === "claude") {
     await runSdkDaemon();

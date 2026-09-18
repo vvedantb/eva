@@ -354,6 +354,13 @@ export const agentTaskFields = {
   // Orchestrator session watching this task for completion notifications
   // (mirrors sessions.watchedByOrchestrator).
   watchedByOrchestrator: v.optional(v.id("sessions")),
+  /**
+   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
+   * daemon (see callback-src/runtime/branchWatcher.ts). Tasks store no intended
+   * branch — that is derived as `eva/task-<id>` — so this is the only record of
+   * where the checkout really is. Detached HEAD is reported as the short sha.
+   */
+  sandboxBranch: v.optional(v.string()),
 };
 
 export const agentRunFields = {
@@ -498,6 +505,13 @@ export const sessionFields = {
   // implicitly when the master touches this session (send/create) or via
   // watch_agent; cleared by unwatch_agent or when the master is gone.
   watchedByOrchestrator: v.optional(v.id("sessions")),
+  /**
+   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
+   * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
+   * `branchName`, which is what Eva asked the sandbox to check out at boot.
+   * Detached HEAD is reported as the short commit sha.
+   */
+  sandboxBranch: v.optional(v.string()),
 };
 
 export const syncSettingFields = {
@@ -744,6 +758,13 @@ export const projectFields = {
   // Soft UX lock while the agent drives the shared desktop Chrome via
   // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
   agentBrowsingAt: v.optional(v.number()),
+  /**
+   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
+   * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
+   * `branchName`, which is what Eva asked the sandbox to check out at boot.
+   * Detached HEAD is reported as the short commit sha.
+   */
+  sandboxBranch: v.optional(v.string()),
 };
 
 export const projectDetailsFields = {
