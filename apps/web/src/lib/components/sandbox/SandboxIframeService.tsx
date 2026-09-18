@@ -14,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 export type SandboxIframeServiceState =
   | "idle"
@@ -187,7 +188,7 @@ export function SandboxIframeService({
         }
         pollTimer.current = setTimeout(check, 3000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : loadFailedError);
+        setError(convexErrorMessage(err, loadFailedError));
         setState("error");
       }
     };
@@ -231,7 +232,7 @@ export function SandboxIframeService({
       }
       await pollForReady();
     } catch (err) {
-      setError(err instanceof Error ? err.message : startFailedError);
+      setError(convexErrorMessage(err, startFailedError));
       setState("error");
     }
   };

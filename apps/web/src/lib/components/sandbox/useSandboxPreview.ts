@@ -7,6 +7,7 @@ import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { previewPortParser } from "@/lib/search-params";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import {
   dropPreviewGroup,
   getPreviewMeta,
@@ -179,7 +180,7 @@ export function useSandboxPreview({
       }
     } catch (err) {
       if (generation !== generationRef.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load preview");
+      setError(convexErrorMessage(err, "Failed to load preview"));
       setIsLoading(false);
     }
   };

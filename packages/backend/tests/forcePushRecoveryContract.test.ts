@@ -137,10 +137,16 @@ describe("the automatic publish only replaces the sandbox's own old history", ()
     const pushAt = push.indexOf("git push ${lease}");
     expect(leaseAt, "the lease is no longer conditional").toBeGreaterThan(-1);
     expect(pushAt, "the push no longer carries the lease").toBeGreaterThan(leaseAt);
-    // A lease rejection re-syncs rather than failing the turn.
-    expect(push).toContain("isNonFastForwardPushError(message)");
+    // A lease rejection re-syncs rather than failing the turn: the classifier
+    // tags "stale info" as non-fast-forward, and the push pipeline retries
+    // that tag by re-running the sync (which recomputes the lease).
+    expect(push).toContain('failure._tag === "GitNonFastForwardError"');
+    expect(push).toContain("while: isRetryablePushFailure");
     expect(
-      functionBody(sandboxGit, "function isNonFastForwardPushError("),
+      functionBody(
+        readSource("_git/gitErrors.ts"),
+        "function isNonFastForwardPushMessage(",
+      ),
     ).toContain('"stale info"');
   });
 });

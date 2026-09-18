@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Build output and Convex codegen: collapse in GitHub diffs, exclude from language stats
+*.generated.ts linguist-generated=true
+packages/backend/convex/_generated/** linguist-generated=true

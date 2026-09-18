@@ -41,14 +41,12 @@ class FakeNotOk extends Error {
 
 describe("in-sandbox failures can never condemn the sandbox", () => {
   test("a SQL relation error from inside the VM is not a gone sandbox", () => {
-    const error = new SandboxCommandFailedError(
-      'Sandbox command failed (exit 1): ERROR: relation "public.CqcDiscoveryCandidate" does not exist',
-      {
-        exitCode: 1,
-        output:
-          'ERROR: relation "public.CqcDiscoveryCandidate" does not exist',
-      },
-    );
+    const error = new SandboxCommandFailedError({
+      message:
+        'Sandbox command failed (exit 1): ERROR: relation "public.CqcDiscoveryCandidate" does not exist',
+      exitCode: 1,
+      output: 'ERROR: relation "public.CqcDiscoveryCandidate" does not exist',
+    });
     expect(classifySandboxError(error)).toEqual({
       kind: "unknown",
       signal: "in-vm-command",
@@ -59,20 +57,24 @@ describe("in-sandbox failures can never condemn the sandbox", () => {
   test("in-VM output naming the sandbox is still not a gone sandbox", () => {
     // The exact string the old regex was built to catch. The type, not the
     // wording, is what rules it out now.
-    const error = new SandboxCommandFailedError(
-      "Sandbox command failed (exit 2): fatal: sandbox volume not found",
-      { exitCode: 2, output: "fatal: sandbox volume not found" },
-    );
+    const error = new SandboxCommandFailedError({
+      message:
+        "Sandbox command failed (exit 2): fatal: sandbox volume not found",
+      exitCode: 2,
+      output: "fatal: sandbox volume not found",
+    });
     expect(isSandboxGoneError(error)).toBe(false);
   });
 
   test("a missing binary inside the VM is not a gone sandbox", () => {
     expect(
       isSandboxGoneError(
-        new SandboxCommandFailedError(
-          "Sandbox command failed (exit 127): bash: jq: command not found",
-          { exitCode: 127, output: "bash: jq: command not found" },
-        ),
+        new SandboxCommandFailedError({
+          message:
+            "Sandbox command failed (exit 127): bash: jq: command not found",
+          exitCode: 127,
+          output: "bash: jq: command not found",
+        }),
       ),
     ).toBe(false);
   });
@@ -123,10 +125,12 @@ describe("structured provider signals", () => {
 
   test("the status survives eva wrapping the SDK error", () => {
     // vercelProvider.start() wraps its resume failure but carries the status.
-    const wrapped = new SandboxProviderError(
-      "vercel start: sandbox crimson-butterfly did not reach running within 180s",
-      { httpStatus: 404, detail: '{"message":"Status code 404 is not ok"}' },
-    );
+    const wrapped = new SandboxProviderError({
+      message:
+        "vercel start: sandbox crimson-butterfly did not reach running within 180s",
+      httpStatus: 404,
+      detail: '{"message":"Status code 404 is not ok"}',
+    });
     expect(classifySandboxError(wrapped)).toEqual({
       kind: "sandbox-gone",
       signal: "http-status",
@@ -137,10 +141,11 @@ describe("structured provider signals", () => {
   test("a start timeout with no failed resume is not gone", () => {
     expect(
       isSandboxGoneError(
-        new SandboxProviderError(
-          "vercel start: sandbox crimson-butterfly did not reach running within 180s (state: starting)",
-          { detail: "" },
-        ),
+        new SandboxProviderError({
+          message:
+            "vercel start: sandbox crimson-butterfly did not reach running within 180s (state: starting)",
+          detail: "",
+        }),
       ),
     ).toBe(false);
   });
@@ -160,7 +165,8 @@ describe("provider message fallback", () => {
     // a 400 status — the one case the text fallback still earns its keep.
     expect(
       isSandboxGoneError(
-        new SandboxProviderError("vercel start failed", {
+        new SandboxProviderError({
+          message: "vercel start failed",
           httpStatus: 400,
           detail: '{"error":{"code":"snapshot_not_found"}}',
         }),
@@ -172,10 +178,12 @@ describe("provider message fallback", () => {
     // The message carries the command text eva interpolated for logging. If it
     // were matched, any command mentioning a missing sandbox would condemn a
     // live VM — the original bug, one layer up.
-    const error = new SandboxProviderError(
-      'vercel exec failed (cmd=psql -c \'select * from sandbox where name = "does not exist"\')',
-      { httpStatus: 400, detail: '{"message":"Status code 400 is not ok"}' },
-    );
+    const error = new SandboxProviderError({
+      message:
+        "vercel exec failed (cmd=psql -c 'select * from sandbox where name = \"does not exist\"')",
+      httpStatus: 400,
+      detail: '{"message":"Status code 400 is not ok"}',
+    });
     expect(isSandboxGoneError(error)).toBe(false);
   });
 
@@ -198,18 +206,19 @@ describe("unresponsive-VM signals", () => {
   // timeouts from an OOM-wedged VM (silver-strategic-buzzard, 2026-09-01).
   // These mean "restart or report unhealthy", never "mint a replacement".
   test("exit 137 on a trivial command is unresponsive, never gone", () => {
-    const error = new SandboxCommandFailedError(
-      'Sandbox command failed with exit code 137 (cmd="echo 1")',
-      { exitCode: 137, output: "" },
-    );
+    const error = new SandboxCommandFailedError({
+      message: 'Sandbox command failed with exit code 137 (cmd="echo 1")',
+      exitCode: 137,
+      output: "",
+    });
     expect(isSandboxUnresponsiveError(error)).toBe(true);
     expect(isSandboxGoneError(error)).toBe(false);
   });
 
   test("a client-side exec timeout is unresponsive, never gone", () => {
-    const error = new SandboxExecTimeoutError(
-      "Sandbox exec (10s) timed out after 25000ms",
-    );
+    const error = new SandboxExecTimeoutError({
+      message: "Sandbox exec (10s) timed out after 25000ms",
+    });
     expect(isSandboxUnresponsiveError(error)).toBe(true);
     expect(isSandboxGoneError(error)).toBe(false);
   });
@@ -217,7 +226,8 @@ describe("unresponsive-VM signals", () => {
   test("ordinary command failures are not unresponsive", () => {
     expect(
       isSandboxUnresponsiveError(
-        new SandboxCommandFailedError("Sandbox command failed (exit 1): nope", {
+        new SandboxCommandFailedError({
+          message: "Sandbox command failed (exit 1): nope",
           exitCode: 1,
           output: "nope",
         }),
@@ -231,16 +241,18 @@ describe("unresponsive-VM signals", () => {
 describe("eva's own verdict survives a rethrow", () => {
   test("an unresumable handle state is gone", () => {
     expect(
-      isSandboxGoneError(new SandboxGoneError("sandbox unresumable state: gone")),
+      isSandboxGoneError(
+        new SandboxGoneError({ message: "sandbox unresumable state: gone" }),
+      ),
     ).toBe(true);
   });
 
   test("a refresh that already proved gone stays gone", () => {
     expect(
       classifySandboxError(
-        new SandboxGoneError(
-          "sandbox gone on refresh: Status code 404 is not ok",
-        ),
+        new SandboxGoneError({
+          message: "sandbox gone on refresh: Status code 404 is not ok",
+        }),
       ).signal,
     ).toBe("eva-verdict");
   });
