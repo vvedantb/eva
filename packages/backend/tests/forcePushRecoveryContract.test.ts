@@ -96,17 +96,10 @@ describe("the automatic publish only replaces the sandbox's own old history", ()
     "export async function pushBranchToOrigin(",
   );
 
-<<<<<<< HEAD
-  test("the replace is offered only after the rewrite classifier, for eva/ branches, with the remote tip in the local reflog", () => {
-    const rewriteAt = sync.indexOf("divergedPublishLooksLikeRewrite(");
-    const ownedAt = sync.indexOf("isEvaOwnedBranch(branchName)");
+  test("the replace is offered only when the remote tip is in the local reflog, and only for eva/ branches", () => {
     // Call only, not its argument list: multi-repo publishes pass a
     // per-checkout `workspaceDir` override, so the args span several lines.
     const reflogAt = sync.indexOf("localBranchReflogShas(");
-=======
-  test("the replace is offered only when the remote tip is in the local reflog, and only for eva/ branches", () => {
-    const reflogAt = sync.indexOf("localBranchReflogShas(sandbox, branchName)");
->>>>>>> origin/main
     const ownHistoryAt = sync.indexOf("rewrittenBranchIsOwnHistory(");
     const ownedAt = sync.indexOf("isEvaOwnedBranch(branchName)");
     const replaceAt = sync.indexOf("replaceRemoteTip: remoteTip");

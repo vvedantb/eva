@@ -5,10 +5,6 @@ import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import { streamingHeartbeatHmacMessage } from "./_sandbox_runtime/callbackAuth";
-import {
-  isInstallationAllowed,
-  parseRepoPath,
-} from "./_sandbox_runtime/gitCredentialsPath";
 
 const http = httpRouter();
 
@@ -282,7 +278,6 @@ function extractBearerSecret(request: Request): string | null {
   return secret.length > 0 ? secret : null;
 }
 
-<<<<<<< HEAD
 /**
  * Body the in-sandbox credential helper posts. `path` is git's `path=`
  * component (e.g. `owner/name.git`), present once `credential.useHttpPath` is
@@ -290,9 +285,6 @@ function extractBearerSecret(request: Request): string | null {
  * Any other shape (or unparsable JSON) degrades to `{}` rather than erroring —
  * a malformed body must not break the credential handshake.
  */
-const gitCredentialsRequestSchema = z.object({ path: z.string().optional() });
-=======
-/** The repository git asked about, sent by the in-sandbox credential helper. */
 const gitCredentialsBodySchema = z.object({ path: z.string().optional() });
 
 /** Reads the requested repository path from the helper's body, if any. */
@@ -300,7 +292,6 @@ function parseGitCredentialsPath(body: unknown): string | undefined {
   const parsed = gitCredentialsBodySchema.safeParse(body);
   return parsed.success ? parsed.data.path : undefined;
 }
->>>>>>> origin/main
 
 http.route({
   path: "/api/git-credentials",
@@ -310,15 +301,8 @@ http.route({
     if (!secret) {
       return new Response("Unauthorized", { status: 401 });
     }
-<<<<<<< HEAD
-    const credential = await ctx.runQuery(
-      internal.sandboxGitCredentials.lookupCredentialBySecret,
-      { secret },
-    );
-    if (credential === null) {
-      return new Response("Unauthorized", { status: 401 });
-=======
-    const body: unknown = await request.json().catch(() => null);
+    // Old baked helper scripts send an empty body; treat unparseable as `{}`.
+    const body: unknown = await request.json().catch(() => ({}));
     const resolved = await ctx.runQuery(
       internal.sandboxGitCredentials.resolveCredentialRequest,
       { secret, path: parseGitCredentialsPath(body) },
@@ -343,33 +327,13 @@ http.route({
         username: "x-access-token",
         token: siblingToken,
       });
->>>>>>> origin/main
     }
-
-    // Old baked helper scripts send an empty body; treat unparseable as `{}`.
-    const parsedBody = gitCredentialsRequestSchema.safeParse(
-      await request.json().catch(() => ({})),
-    );
-    const path = parsedBody.success ? parsedBody.data.path : undefined;
-
-    // No path (old baked helper scripts, or the primary's own fetch before
-    // `useHttpPath` rolled out): mint for the sandbox's primary installation.
-    let installationId = credential.installationId;
-    if (path) {
-      const repoPath = parseRepoPath(path);
-      const repoInstallationId: number | null = repoPath
-        ? await ctx.runQuery(
-            internal.githubRepos.getInstallationIdByOwnerAndName,
-            { owner: repoPath.owner, name: repoPath.name },
-          )
-        : null;
-      if (
-        repoInstallationId === null ||
-        !isInstallationAllowed(repoInstallationId, credential)
-      ) {
-        return new Response("Forbidden", { status: 403 });
-      }
-      installationId = repoInstallationId;
+    if (resolved.kind === "linked") {
+      // A multi-repo session's linked repo: a full token, but for that repo's
+      // own installation rather than the primary's.
+      console.log(
+        `[git-credentials][linked-repo] sandbox=${resolved.sandboxId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+      );
     }
 
     const token: string = await ctx.runAction(

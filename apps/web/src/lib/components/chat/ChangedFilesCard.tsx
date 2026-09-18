@@ -173,7 +173,6 @@ export function ChangedFilesCard({
     !isExpanded && shouldPreviewChangedFiles(files, isLatestAssistantTurn)
       ? selectChangedFilePreview(files)
       : [];
-  const changedFileGroups = groupChangedFilesByRepo(visibleFiles);
 
   const handleViewDiff = () => {
     const firstPath = files[0]?.path;
@@ -184,73 +183,6 @@ export function ChangedFilesCard({
 
   return (
     <Surface density="none" className="mt-2">
-<<<<<<< HEAD
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <button
-          type="button"
-          aria-expanded={isExpanded}
-          onClick={toggleExpanded}
-          className="flex min-w-0 items-center gap-1.5 text-left text-xs font-medium text-foreground"
-        >
-          <IconChevronDown
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-fast)]",
-              !isExpanded && "-rotate-90",
-            )}
-          />
-          <span>Changed files ({files.length})</span>
-        </button>
-        {onViewDiff ? (
-          <button
-            type="button"
-            onClick={handleViewDiff}
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            View diff
-          </button>
-        ) : null}
-      </div>
-      {visibleFiles.length > 0 ? (
-        <ul className="grid gap-0.5 px-1.5 pb-1.5">
-          {changedFileGroups.length <= 1
-            ? // Single group (always true for an ordinary, single-repo
-              // session): today's exact flat markup, no heading.
-              visibleFiles.map((file) => (
-                <FileListItem
-                  key={file.path}
-                  file={file}
-                  onOpenFile={onOpenFile}
-                />
-              ))
-            : changedFileGroups.map((group) => (
-                <li key={group.repoName ?? "-"}>
-                  {group.repoName ? (
-                    <div className="px-1.5 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 first:pt-0">
-                      {group.repoName}/
-                    </div>
-                  ) : null}
-                  <ul className="grid gap-0.5">
-                    {group.files.map((file) => (
-                      <FileListItem
-                        key={file.path}
-                        file={file}
-                        onOpenFile={onOpenFile}
-                      />
-                    ))}
-                  </ul>
-                </li>
-              ))}
-          {!isExpanded && visibleFiles.length < files.length ? (
-            <li>
-              <button
-                type="button"
-                onClick={toggleExpanded}
-                className="w-full rounded-md px-1.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                Show all {files.length} files
-              </button>
-            </li>
-=======
       <Collapsible open={isExpanded} onOpenChange={onExpandedChange}>
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <CollapsibleTrigger asChild>
@@ -276,7 +208,6 @@ export function ChangedFilesCard({
             >
               View diff
             </button>
->>>>>>> origin/main
           ) : null}
         </div>
         {previewFiles.length > 0 ? (
@@ -313,31 +244,6 @@ export function ChangedFilesCard({
   );
 }
 
-<<<<<<< HEAD
-function FileListItem({
-  file,
-  onOpenFile,
-}: {
-  file: ChangedFile;
-  onOpenFile?: (path: string) => void;
-}) {
-  return (
-    <li>
-      {onOpenFile ? (
-        <button
-          type="button"
-          onClick={() => onOpenFile(file.path)}
-          className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
-        >
-          <FileRow file={file} />
-        </button>
-      ) : (
-        <div className="flex items-center gap-2 px-1.5 py-1.5">
-          <FileRow file={file} />
-        </div>
-      )}
-    </li>
-=======
 function FileList({
   files,
   onOpenFile,
@@ -351,31 +257,74 @@ function FileList({
   className: string;
   footer?: ReactNode;
 }) {
-  const clickable = Boolean(onViewDiff || onOpenFile);
+  // Multi-repo sessions get a heading per linked repo; a single-repo session
+  // has one group and keeps the flat list.
+  const groups = groupChangedFilesByRepo(files);
   return (
     <ul className={cn("grid gap-0.5", className)}>
-      {files.map((file, index) => (
-        <ListEnter key={file.path} as="li" index={index} fast slide={false}>
-          {clickable ? (
-            <button
-              type="button"
-              onClick={() =>
-                openChangedFile(file.path, { onViewDiff, onOpenFile })
-              }
-              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
-            >
-              <FileRow file={file} />
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 px-1.5 py-1.5">
-              <FileRow file={file} />
-            </div>
-          )}
-        </ListEnter>
-      ))}
+      {groups.length <= 1
+        ? files.map((file, index) => (
+            <FileListItem
+              key={file.path}
+              file={file}
+              index={index}
+              onOpenFile={onOpenFile}
+              onViewDiff={onViewDiff}
+            />
+          ))
+        : groups.map((group) => (
+            <li key={group.repoName ?? "-"}>
+              {group.repoName ? (
+                <div className="px-1.5 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 first:pt-0">
+                  {group.repoName}/
+                </div>
+              ) : null}
+              <ul className="grid gap-0.5">
+                {group.files.map((file, index) => (
+                  <FileListItem
+                    key={file.path}
+                    file={file}
+                    index={index}
+                    onOpenFile={onOpenFile}
+                    onViewDiff={onViewDiff}
+                  />
+                ))}
+              </ul>
+            </li>
+          ))}
       {footer}
     </ul>
->>>>>>> origin/main
+  );
+}
+
+function FileListItem({
+  file,
+  index,
+  onOpenFile,
+  onViewDiff,
+}: {
+  file: ChangedFile;
+  index: number;
+  onOpenFile?: (path: string) => void;
+  onViewDiff?: (repoRelativePath?: string) => void;
+}) {
+  const clickable = Boolean(onViewDiff || onOpenFile);
+  return (
+    <ListEnter as="li" index={index} fast slide={false}>
+      {clickable ? (
+        <button
+          type="button"
+          onClick={() => openChangedFile(file.path, { onViewDiff, onOpenFile })}
+          className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
+        >
+          <FileRow file={file} />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 px-1.5 py-1.5">
+          <FileRow file={file} />
+        </div>
+      )}
+    </ListEnter>
   );
 }
 

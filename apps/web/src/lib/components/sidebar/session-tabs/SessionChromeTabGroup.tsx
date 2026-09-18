@@ -17,12 +17,8 @@ import {
 } from "@/lib/components/sidebar/session-tabs/SessionChromeTabStrip";
 import { mergeSessionTabOrder } from "@/lib/components/sidebar/session-tabs/sessionTabOrder";
 import { tabGroupColorForId } from "@/lib/components/sidebar/session-tabs/tabGroupColors";
-<<<<<<< HEAD
-=======
 import { useClosedSessionTabs } from "@/lib/components/sidebar/session-tabs/useClosedSessionTabs";
 import { useSessionTabOrder } from "@/lib/components/sidebar/session-tabs/useSessionTabOrder";
-import { entityPathSegment } from "@/lib/numId";
->>>>>>> origin/main
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { isSessionSidebarActive } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
 
@@ -72,17 +68,6 @@ export function SessionChromeTabGroup({
   const label = repoDisplayLabel(repo);
   const baseUrl = `${repoBasePaths(repo)[0]}/sessions`;
   const colors = tabGroupColorForId(repo._id);
-<<<<<<< HEAD
-  const isLoading = sessions === undefined;
-  const tabs = sortSessionsForSidebar(
-    (sessions ?? []).filter(isSessionSidebarActive),
-    "updated_at",
-  ).map((session) => ({
-    session,
-    href: sessionHrefForRow(repo, session),
-    isSelected: sessionRowMatchesPath(repo, session, pathname),
-  }));
-=======
   const isLoading = activeSessions === undefined;
   // Creation order, with the user's own drag order on top. Sorting by activity
   // moved the tab out from under the pointer every time an agent finished a
@@ -93,16 +78,12 @@ export function SessionChromeTabGroup({
       "created_at",
     ),
     orderFor(repo._id),
-  ).map((session) => {
-    const pathSegment = entityPathSegment(session);
-    const href = pathSegment ? `${baseUrl}/${pathSegment}` : baseUrl;
-    return {
-      session,
-      href,
-      isSelected: sessionMatchesPath(repo, pathSegment, pathname),
-    };
-  });
->>>>>>> origin/main
+  ).map((session) => ({
+    session,
+    // Linked-in rows resolve under their primary repo, not this group's app.
+    href: sessionHrefForRow(repo, session),
+    isSelected: sessionRowMatchesPath(repo, session, pathname),
+  }));
 
   if (hideWhenEmpty && !isLoading && tabs.length === 0) {
     return null;

@@ -229,8 +229,8 @@ export async function buildSessionPrompt(
   );
 
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
-<<<<<<< HEAD
-  // in as a rotation handoff.
+  // in as a rotation handoff. Session plan.md / planContent is not injected —
+  // that was the old Plan/Build mode contract.
   const linkedRepoRows = await ctx.db
     .query("sessionRepos")
     .withIndex("by_session", (q) => q.eq("sessionId", session._id))
@@ -242,10 +242,6 @@ export async function buildSessionPrompt(
     branchName: row.branchName,
     baseBranch: row.baseBranch,
   }));
-=======
-  // in as a rotation handoff. Session plan.md / planContent is not injected —
-  // that was the old Plan/Build mode contract.
->>>>>>> origin/main
   let prompt = buildEditPrompt(
     {
       owner: repo.owner,
@@ -260,11 +256,8 @@ export async function buildSessionPrompt(
     repo.systemPrompt,
     session.devPort ?? repo.devPort,
     [],
-<<<<<<< HEAD
-    linkedRepos,
-=======
     readableRepos,
->>>>>>> origin/main
+    linkedRepos,
   );
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
@@ -1020,14 +1013,10 @@ export const saveResult = internalMutation({
       extraPatch.beforeSha = args.beforeSha;
       extraPatch.afterSha = args.afterSha;
     }
-<<<<<<< HEAD
     if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      patch.beforeShas = args.beforeShas;
-      patch.afterShas = args.afterShas;
+      extraPatch.beforeShas = args.beforeShas;
+      extraPatch.afterShas = args.afterShas;
     }
-    await ctx.db.patch(last._id, patch);
-=======
->>>>>>> origin/main
 
     const outcome = await applyChatTurnResult(ctx, {
       parentId: args.sessionId,

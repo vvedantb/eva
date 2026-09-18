@@ -182,11 +182,8 @@ import type * as _sandbox_runtime_envFile from "../_sandbox_runtime/envFile.js";
 import type * as _sandbox_runtime_execution from "../_sandbox_runtime/execution.js";
 import type * as _sandbox_runtime_git from "../_sandbox_runtime/git.js";
 import type * as _sandbox_runtime_gitCredentials from "../_sandbox_runtime/gitCredentials.js";
-<<<<<<< HEAD
 import type * as _sandbox_runtime_gitCredentialsPath from "../_sandbox_runtime/gitCredentialsPath.js";
-=======
 import type * as _sandbox_runtime_gitRemoteCommand from "../_sandbox_runtime/gitRemoteCommand.js";
->>>>>>> origin/main
 import type * as _sandbox_runtime_helpers from "../_sandbox_runtime/helpers.js";
 import type * as _sandbox_runtime_httpReadyProbe from "../_sandbox_runtime/httpReadyProbe.js";
 import type * as _sandbox_runtime_launch from "../_sandbox_runtime/launch.js";
@@ -596,11 +593,8 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/execution": typeof _sandbox_runtime_execution;
   "_sandbox_runtime/git": typeof _sandbox_runtime_git;
   "_sandbox_runtime/gitCredentials": typeof _sandbox_runtime_gitCredentials;
-<<<<<<< HEAD
   "_sandbox_runtime/gitCredentialsPath": typeof _sandbox_runtime_gitCredentialsPath;
-=======
   "_sandbox_runtime/gitRemoteCommand": typeof _sandbox_runtime_gitRemoteCommand;
->>>>>>> origin/main
   "_sandbox_runtime/helpers": typeof _sandbox_runtime_helpers;
   "_sandbox_runtime/httpReadyProbe": typeof _sandbox_runtime_httpReadyProbe;
   "_sandbox_runtime/launch": typeof _sandbox_runtime_launch;

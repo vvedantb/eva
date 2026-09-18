@@ -8,7 +8,7 @@ import { IconGitPullRequest } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { repoTileColor } from "@/lib/utils/repoTileColor";
-import { prStateIconClass } from "../_utils/-prStateIconClass";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
 
 interface SessionRepoBadgesProps {
   sessionId: Id<"sessions">;

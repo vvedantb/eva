@@ -1268,10 +1268,7 @@ async function synchronizeBranchForPublish(
     prune: false,
     timeoutSeconds: 60,
     retryAttempts: 2,
-<<<<<<< HEAD
     workspaceDir,
-=======
->>>>>>> origin/main
   });
   const remoteRefName = `refs/remotes/origin/${branchName}`;
   const quotedRemoteRef = quote([remoteRefName]);
@@ -1316,43 +1313,14 @@ async function synchronizeBranchForPublish(
         10,
       )
     ).trim();
-    const reflogShas = await localBranchReflogShas(sandbox, branchName);
+    const reflogShas = await localBranchReflogShas(
+      sandbox,
+      branchName,
+      workspaceDir,
+    );
     if (rewrittenBranchIsOwnHistory(remoteTip, reflogShas)) {
       if (!isEvaOwnedBranch(branchName)) {
-<<<<<<< HEAD
-        throw new Error(
-          rewrittenBranchPublishError(
-            branchName,
-            remoteOnly,
-            localChanged.length,
-            "branch-not-eva-owned",
-          ),
-        );
-      }
-      const remoteTip = (
-        await execGitCommand(
-          sandbox,
-          `cd ${workspaceDir} && git rev-parse --verify ${quotedRemoteRef}`,
-          10,
-        )
-      ).trim();
-      const reflogShas = await localBranchReflogShas(
-        sandbox,
-        branchName,
-        workspaceDir,
-      );
-      if (!rewrittenBranchIsOwnHistory(remoteTip, reflogShas)) {
-        throw new Error(
-          rewrittenBranchPublishError(
-            branchName,
-            remoteOnly,
-            localChanged.length,
-            "remote-holds-foreign-commits",
-          ),
-        );
-=======
         throw new Error(rewrittenBranchPublishError(branchName));
->>>>>>> origin/main
       }
       logGit(
         `synchronizeBranchForPublish: origin/${branchName} tip ${remoteTip.slice(0, 7)} is in the local branch reflog (${reflogShas.length} entries); the local branch rewrote its own history — publishing leased on that tip (${remoteOnlyCommits} remote-only commits vs ${localOnlyCommits} local)`,

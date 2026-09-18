@@ -109,9 +109,13 @@ export const prepareLinkedRepo = internalAction({
 
       // 2. Credentials: linked repos can live under a different GitHub App
       // installation than the primary, so the helper must mint tokens for both.
-      await ensureGitCredentialHelper(ctx, sandbox, primaryRepo.installationId, [
-        row.installationId,
-      ]);
+      await ensureGitCredentialHelper(
+        ctx,
+        sandbox,
+        primaryRepo.installationId,
+        { owner: primaryRepo.owner, name: primaryRepo.name },
+        [row.installationId],
+      );
 
       const completed: ProgressStep[] = [];
       const cloneLabel = `Cloning ${row.name}...`;

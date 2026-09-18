@@ -95,27 +95,6 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           },
         );
 
-<<<<<<< HEAD
-      const entities = result.entities.map((entity) => ({
-        kind: entity.kind,
-        id: entity.id,
-        numId: entity.numId,
-        title: entity.title,
-        status: entity.status,
-        sandboxStatus: entity.sandboxStatus,
-        isExecuting: entity.isExecuting,
-        archived: entity.archived,
-        prUrl: entity.prUrl,
-        branch: entity.branchName,
-        updatedAt: entity.updatedAt,
-        repo: `${entity.repoOwner}/${entity.repoName}`,
-        path: entityPath(entity),
-        // Only sessions carry this, and only when they have linked repos.
-        ...(entity.linkedRepoCount
-          ? { linkedRepoCount: entity.linkedRepoCount }
-          : {}),
-      }));
-=======
         const entities = result.entities.map((entity) => ({
           kind: entity.kind,
           id: entity.id,
@@ -130,8 +109,11 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           updatedAt: entity.updatedAt,
           repo: `${entity.repoOwner}/${entity.repoName}`,
           path: entityPath(entity),
+          // Only sessions carry this, and only when they have linked repos.
+          ...(entity.linkedRepoCount
+            ? { linkedRepoCount: entity.linkedRepoCount }
+            : {}),
         }));
->>>>>>> origin/main
 
         return textResult({
           entities,

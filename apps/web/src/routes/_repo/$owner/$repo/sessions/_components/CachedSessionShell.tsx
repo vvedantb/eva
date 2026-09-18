@@ -89,14 +89,9 @@ function CachedSessionShellInner({
     // file. `undefined` drops a stale root when a primary file is opened.
     const filesRoot = workspaceRootPath(path) ?? undefined;
     void navigate({
-<<<<<<< HEAD
-      to: `${basePath}/sessions/${numId}/files`,
-      search: (prev) => ({ ...prev, file: path, filesRoot }),
-=======
       to: "/$owner/$repo/sessions/$numId/$sandboxTab",
       params: { ...sessionParams, sandboxTab: "files" },
-      search: (prev) => ({ ...prev, file: path }),
->>>>>>> origin/main
+      search: (prev) => ({ ...prev, file: path, filesRoot }),
     });
   };
 

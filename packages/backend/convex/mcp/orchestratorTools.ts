@@ -222,138 +222,6 @@ export function fleetTools(
   // create_session
   // ───────────────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
-  server.tool(
-    "create_session",
-    "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes.",
-    {
-      repoName: z
-        .string()
-        .describe(
-          'Repo to open the session in (e.g. "eva" or "vvedantb/eva"). Resolved against your connected repos.',
-        ),
-      app: z
-        .string()
-        .optional()
-        .describe(
-          'App name within a monorepo (e.g. "web"). Required when a repo has multiple apps.',
-        ),
-      title: z
-        .string()
-        .optional()
-        .describe("Session title. A title is generated if omitted."),
-      message: z.string().describe("The first message to run in the session."),
-      model: z
-        .enum(MCP_CLAUDE_MODELS)
-        .optional()
-        .describe(
-          'Claude model ("opus", "sonnet", "haiku", or "fable"). Defaults to the platform default (sonnet).',
-        ),
-      baseBranch: z
-        .string()
-        .optional()
-        .describe(
-          "Branch to base work off of. If omitted, uses the repo's default base branch.",
-        ),
-      linkedRepos: z
-        .array(z.string())
-        .optional()
-        .describe(
-          'Extra repos to clone into the same sandbox beside repoName, each on its own branch and PR (e.g. ["eva", "vvedantb/other-repo"]). Same "name" or "owner/name" grammar as repoName. Mutually exclusive with "group".',
-        ),
-      group: z
-        .string()
-        .optional()
-        .describe(
-          'Name of a saved codebase group (see list_repos) whose linked repos prefill the selection. Its saved primary repo must match repoName. Mutually exclusive with "linkedRepos".',
-        ),
-      installDependencies: z
-        .boolean()
-        .optional()
-        .describe(
-          "Whether linked repos install dependencies on clone. Defaults to true.",
-        ),
-    },
-    async ({
-      repoName,
-      app,
-      title,
-      message,
-      model,
-      baseBranch,
-      linkedRepos,
-      group,
-      installDependencies,
-    }) => {
-      const { userId } = await mcpGetContext(ctx, clerkUserId);
-      const repos = await mcpListUserRepos(ctx, userId);
-      const matched = matchRepoByName(repos, repoName, app);
-      if ("isError" in matched) return matched;
-      const { repo } = matched;
-
-      if (linkedRepos && linkedRepos.length > 0 && group) {
-        return errorResult(
-          'Pass "linkedRepos" or "group", not both — they are two ways to pick the same session\'s extra repos.',
-        );
-      }
-
-      let linkedRepoIds: string[] | undefined;
-      if (linkedRepos && linkedRepos.length > 0) {
-        linkedRepoIds = [];
-        for (const linkedName of linkedRepos) {
-          const matchedLinked = matchRepoByName(repos, linkedName, undefined);
-          if ("isError" in matchedLinked) return matchedLinked;
-          linkedRepoIds.push(matchedLinked.repo.id);
-        }
-      }
-
-      let repoGroupId: string | undefined;
-      if (group) {
-        const groups = await ctx.runQuery(
-          internal.repoGroups.listForUserInternal,
-          { userId },
-        );
-        const normalized = group.trim().toLowerCase();
-        const matches = groups.filter((g) => g.name.toLowerCase() === normalized);
-        if (matches.length === 0) {
-          const available = groups.map((g) => g.name).join(", ") || "(none)";
-          return errorResult(
-            `Codebase group "${group}" not found. Your groups: ${available}`,
-          );
-        }
-        if (matches.length > 1) {
-          return errorResult(
-            `Multiple codebase groups are named "${group}". Rename one in Eva to disambiguate.`,
-          );
-        }
-        const [found] = matches;
-        if (found.primaryRepoId !== repo.id) {
-          const primaryLabel = found.primaryRepo
-            ? `${found.primaryRepo.owner}/${found.primaryRepo.name}`
-            : "a repo you can no longer reach";
-          return errorResult(
-            `Codebase group "${group}" is saved for ${primaryLabel}, not ${repoRefLabel(repo)}. Pass repoName="${primaryLabel}", or drop "group".`,
-          );
-        }
-        repoGroupId = String(found._id);
-      }
-
-      const created = await ctx.runAction(
-        internal.mcp.nodeActions.orchestratorCreateSession,
-        {
-          clerkUserId,
-          repoId: repo.id,
-          title,
-          message,
-          model,
-          baseBranch,
-          masterSessionId: tokenMasterSessionId,
-          linkedRepoIds,
-          repoGroupId,
-          installDependencies,
-        },
-      );
-=======
   tools.push(
     defineTool({
       name: "create_session",
@@ -386,13 +254,89 @@ export function fleetTools(
           .describe(
             "Branch to base work off of. If omitted, uses the repo's default base branch.",
           ),
+        linkedRepos: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Extra repos to clone into the same sandbox beside repoName, each on its own branch and PR (e.g. ["eva", "vvedantb/other-repo"]). Same "name" or "owner/name" grammar as repoName. Mutually exclusive with "group".',
+          ),
+        group: z
+          .string()
+          .optional()
+          .describe(
+            'Name of a saved codebase group (see list_repos) whose linked repos prefill the selection. Its saved primary repo must match repoName. Mutually exclusive with "linkedRepos".',
+          ),
+        installDependencies: z
+          .boolean()
+          .optional()
+          .describe(
+            "Whether linked repos install dependencies on clone. Defaults to true.",
+          ),
       },
-      handler: async ({ repoName, app, title, message, baseBranch }) => {
+      handler: async ({
+        repoName,
+        app,
+        title,
+        message,
+        baseBranch,
+        linkedRepos,
+        group,
+        installDependencies,
+      }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repos = await mcpListUserRepos(ctx, userId);
         const matched = matchRepoByName(repos, repoName, app);
         if ("isError" in matched) return matched;
         const { repo } = matched;
+
+        if (linkedRepos && linkedRepos.length > 0 && group) {
+          return errorResult(
+            'Pass "linkedRepos" or "group", not both — they are two ways to pick the same session\'s extra repos.',
+          );
+        }
+
+        let linkedRepoIds: string[] | undefined;
+        if (linkedRepos && linkedRepos.length > 0) {
+          linkedRepoIds = [];
+          for (const linkedName of linkedRepos) {
+            const matchedLinked = matchRepoByName(repos, linkedName, undefined);
+            if ("isError" in matchedLinked) return matchedLinked;
+            linkedRepoIds.push(matchedLinked.repo.id);
+          }
+        }
+
+        let repoGroupId: string | undefined;
+        if (group) {
+          const groups = await ctx.runQuery(
+            internal.repoGroups.listForUserInternal,
+            { userId },
+          );
+          const normalized = group.trim().toLowerCase();
+          const matches = groups.filter(
+            (g) => g.name.toLowerCase() === normalized,
+          );
+          if (matches.length === 0) {
+            const available = groups.map((g) => g.name).join(", ") || "(none)";
+            return errorResult(
+              `Codebase group "${group}" not found. Your groups: ${available}`,
+            );
+          }
+          if (matches.length > 1) {
+            return errorResult(
+              `Multiple codebase groups are named "${group}". Rename one in Eva to disambiguate.`,
+            );
+          }
+          const [found] = matches;
+          if (found.primaryRepoId !== repo.id) {
+            const primaryLabel = found.primaryRepo
+              ? `${found.primaryRepo.owner}/${found.primaryRepo.name}`
+              : "a repo you can no longer reach";
+            return errorResult(
+              `Codebase group "${group}" is saved for ${primaryLabel}, not ${repoRefLabel(repo)}. Pass repoName="${primaryLabel}", or drop "group".`,
+            );
+          }
+          repoGroupId = String(found._id);
+        }
 
         const created = await ctx.runAction(
           internal.mcp.nodeActions.orchestratorCreateSession,
@@ -403,9 +347,11 @@ export function fleetTools(
             message,
             baseBranch,
             masterSessionId: tokenMasterSessionId,
+            linkedRepoIds,
+            repoGroupId,
+            installDependencies,
           },
         );
->>>>>>> origin/main
 
         const basePath = repoBasePath({
           owner: repo.owner,
@@ -413,27 +359,16 @@ export function fleetTools(
           rootDirectory: repo.rootDirectory ?? undefined,
         });
 
-<<<<<<< HEAD
-      return textResult({
-        sessionId: created.sessionId,
-        numId: created.numId,
-        repo: repoRefLabel(repo),
-        path: `${basePath}/sessions/${created.numId}`,
-        linkedRepos: created.linkedRepos,
-        status: "created",
-      });
-    },
-=======
         return textResult({
           sessionId: created.sessionId,
           numId: created.numId,
           repo: repoRefLabel(repo),
           path: `${basePath}/sessions/${created.numId}`,
+          linkedRepos: created.linkedRepos,
           status: "created",
         });
       },
     }),
->>>>>>> origin/main
   );
 
   // ───────────────────────────────────────────────────────────────────────────

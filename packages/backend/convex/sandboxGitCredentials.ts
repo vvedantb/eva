@@ -6,6 +6,10 @@ import {
   isSameGitHubRepo,
   resolveSiblingReadAccess,
 } from "./_githubRepos/sandboxRead";
+import {
+  isInstallationAllowed,
+  parseRepoPath,
+} from "./_sandbox_runtime/gitCredentialsPath";
 
 /** Upserts the credential row for a sandbox, replacing any prior secret. */
 export const upsertForSandbox = internalMutation({
@@ -66,17 +70,6 @@ export const upsertForSandbox = internalMutation({
   },
 });
 
-<<<<<<< HEAD
-/** Returns the installations bound to a given bearer secret, or null. */
-export const lookupCredentialBySecret = internalQuery({
-  args: { secret: v.string() },
-  returns: v.union(
-    v.object({
-      installationId: v.number(),
-      installationIds: v.optional(v.array(v.number())),
-    }),
-    v.null(),
-=======
 /** The repository a credential row was installed for, when the row pins one. */
 function pinnedHomeRepo(
   row: Doc<"sandboxGitCredentials">,
@@ -85,34 +78,27 @@ function pinnedHomeRepo(
   return { owner: row.repoOwner, name: row.repoName };
 }
 
-/**
- * Parses git's `path=` credential field into owner/name.
- * Returns null when absent or not a two-segment GitHub repository path.
- */
-function parseRepoPath(
-  path: string | undefined,
-): { owner: string; name: string } | null {
-  if (path === undefined) return null;
-  let trimmed = path.trim();
-  if (trimmed.startsWith("/")) trimmed = trimmed.slice(1);
-  if (trimmed.endsWith(".git")) trimmed = trimmed.slice(0, -".git".length);
-  const segments = trimmed.split("/").filter((part) => part.length > 0);
-  if (segments.length !== 2) return null;
-  const [owner, name] = segments;
-  if (owner === undefined || name === undefined) return null;
-  return { owner, name };
-}
-
 /** The eva entity a sandbox belongs to: who owns it and which repo is its home. */
 async function lookupSandboxOwner(
   db: GenericDatabaseReader<DataModel>,
   sandboxId: string,
-): Promise<{ userId: Id<"users">; repoId: Id<"githubRepos"> } | null> {
+): Promise<{
+  userId: Id<"users">;
+  repoId: Id<"githubRepos">;
+  /** Only sessions can carry linked repos (multi-repo sessions). */
+  sessionId?: Id<"sessions">;
+} | null> {
   const session = await db
     .query("sessions")
     .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
     .first();
-  if (session) return { userId: session.userId, repoId: session.repoId };
+  if (session) {
+    return {
+      userId: session.userId,
+      repoId: session.repoId,
+      sessionId: session._id,
+    };
+  }
 
   const project = await db
     .query("projects")
@@ -136,13 +122,33 @@ async function lookupSandboxOwner(
 }
 
 /**
+ * The `sessionRepos` row for a repository a multi-repo session cloned beside
+ * its primary, or null when the session did not link that repository.
+ */
+async function linkedSessionRepo(
+  db: GenericDatabaseReader<DataModel>,
+  sessionId: Id<"sessions">,
+  repo: { owner: string; name: string },
+): Promise<Doc<"sessionRepos"> | null> {
+  const rows = await db
+    .query("sessionRepos")
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+    .collect();
+  return rows.find((row) => isSameGitHubRepo(row, repo)) ?? null;
+}
+
+/**
  * Decides what token a sandbox credential request may have.
  *
  * `path` is the repository git asked about (`owner/repo.git`, sent because the
  * helper sets `credential.useHttpPath`). No path, or the sandbox's own home
  * repository, keeps the historical behaviour: a full installation token. A
- * different repository gets a read-only, single-repository token, but only when
- * the sandbox owner can reach that repository in eva and it has not opted out.
+ * linked repo of a multi-repo session gets a full token too, for its own
+ * installation, which may differ from the primary's — but only from the
+ * allow-list recorded on the credential row, so a sandbox can never mint for an
+ * installation its session does not use. Any other repository gets a read-only,
+ * single-repository token, and only when the sandbox owner can reach that
+ * repository in eva and it has not opted out.
  *
  * The home repository is read from the credential row first (pinned when the
  * helper is installed), so sandboxes bound to no eva entity — snapshot
@@ -154,6 +160,13 @@ export const resolveCredentialRequest = internalQuery({
   returns: v.union(
     v.object({ kind: v.literal("home"), installationId: v.number() }),
     v.object({
+      kind: v.literal("linked"),
+      installationId: v.number(),
+      owner: v.string(),
+      name: v.string(),
+      sandboxId: v.string(),
+    }),
+    v.object({
       kind: v.literal("sibling"),
       installationId: v.number(),
       owner: v.string(),
@@ -163,21 +176,18 @@ export const resolveCredentialRequest = internalQuery({
       userId: v.id("users"),
     }),
     v.object({ kind: v.literal("denied"), reason: v.string() }),
->>>>>>> origin/main
   ),
   handler: async (ctx, args) => {
     const row = await ctx.db
       .query("sandboxGitCredentials")
       .withIndex("by_secret", (q) => q.eq("secret", args.secret))
       .unique();
-<<<<<<< HEAD
-    return row
-      ? { installationId: row.installationId, installationIds: row.installationIds }
-      : null;
-=======
     if (!row) return { kind: "denied" as const, reason: "unknown secret" };
 
-    const requested = parseRepoPath(args.path);
+    // No path: an old baked helper script, or a fetch from before
+    // `useHttpPath` rolled out. Mint for the sandbox's primary installation.
+    const requested =
+      args.path === undefined ? null : parseRepoPath(args.path);
     if (!requested) {
       return { kind: "home" as const, installationId: row.installationId };
     }
@@ -204,6 +214,26 @@ export const resolveCredentialRequest = internalQuery({
       return { kind: "home" as const, installationId: row.installationId };
     }
 
+    // A multi-repo session's linked repo needs a full token to push, and it may
+    // live under another GitHub App installation than the primary. Two guards:
+    // the session must actually have linked that repository, and the
+    // installation must be on the allow-list the helper install recorded — so a
+    // sandbox can never mint for an installation its own session does not use.
+    // Checked after the home repository (which keeps the primary installation)
+    // and before the sibling read (which is read-only).
+    const linked = entity.sessionId
+      ? await linkedSessionRepo(ctx.db, entity.sessionId, requested)
+      : null;
+    if (linked && isInstallationAllowed(linked.installationId, row)) {
+      return {
+        kind: "linked" as const,
+        installationId: linked.installationId,
+        owner: linked.owner,
+        name: linked.name,
+        sandboxId: row.sandboxId,
+      };
+    }
+
     const sibling = await resolveSiblingReadAccess(
       ctx.db,
       entity.userId,
@@ -227,7 +257,6 @@ export const resolveCredentialRequest = internalQuery({
       sandboxId: row.sandboxId,
       userId: entity.userId,
     };
->>>>>>> origin/main
   },
 });
 

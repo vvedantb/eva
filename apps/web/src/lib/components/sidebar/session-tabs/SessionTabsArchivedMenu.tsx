@@ -19,7 +19,7 @@ import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
   sessionHrefForRow,
   sessionRowMatchesPath,
-  type RepoPathRef,
+  type RepoPathParts,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
@@ -33,7 +33,7 @@ interface ArchivedMenuSession {
   updatedAt?: number;
   _creationTime: number;
   /** Linked-in row: the session's primary repo owns its URL. */
-  linkedFrom?: RepoPathRef;
+  linkedFrom?: RepoPathParts;
 }
 
 export interface ArchivedMenuGroup {

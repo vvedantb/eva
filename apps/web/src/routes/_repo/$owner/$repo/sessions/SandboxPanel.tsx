@@ -1,22 +1,18 @@
 import { useEffect } from "react";
-<<<<<<< HEAD
-import { useMutation, useQuery } from "convex/react";
-import { useQueryState } from "nuqs";
-=======
 import { useMutation } from "convex/react";
+import { useQueryState } from "nuqs";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
->>>>>>> origin/main
 import {
   api,
   type BackgroundAgentEntry,
   type Id,
   type SandboxOwner,
 } from "@eva/backend";
-<<<<<<< HEAD
-import { filesRootParser, isSessionSandboxTab } from "@/lib/search-params";
-=======
-import { isSessionSandboxTab, sandboxTabIdFromParam } from "@/lib/search-params";
->>>>>>> origin/main
+import {
+  filesRootParser,
+  isSessionSandboxTab,
+  sandboxTabIdFromParam,
+} from "@/lib/search-params";
 import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
 import { IconClipboardList } from "@tabler/icons-react";
 import { SandboxTabBar } from "./_components/SandboxTabBar";
@@ -58,15 +54,9 @@ import {
   type SessionDesignMessage,
 } from "./_utils/designVariations";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
-<<<<<<< HEAD
 import { previewPortOptions } from "./_utils";
-import {
-  APPROVE_PLAN_PROMPT,
-  designVariationPrompt,
-} from "./_utils/composerPrompts";
-=======
 import { designVariationPrompt } from "./_utils/composerPrompts";
->>>>>>> origin/main
+
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
   sandboxId: string | undefined;
@@ -203,7 +193,7 @@ export function SandboxPanel({
   // Multi-repo sessions: which checkout the Files tab browses. "" is the
   // primary repo; a linked repo's `sessionRepos.path` otherwise.
   const [filesRoot, setFilesRoot] = useQueryState("filesRoot", filesRootParser);
-  const sessionRepos = useQuery(api.sessions.listRepos, { sessionId });
+  const sessionRepos = useHeldQuery(api.sessions.listRepos, { sessionId });
   const fileList = useSandboxFileList({
     sandboxId,
     repoId,

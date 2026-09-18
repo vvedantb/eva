@@ -20,7 +20,7 @@ import {
   repoSessionsIndexPath,
   sessionHrefForRow,
   sessionRowMatchesPath,
-  type RepoPathRef,
+  type RepoPathParts,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 
@@ -31,7 +31,7 @@ interface OverflowSession {
   updatedAt?: number;
   _creationTime: number;
   /** Linked-in row: the session's primary repo owns its URL. */
-  linkedFrom?: RepoPathRef;
+  linkedFrom?: RepoPathParts;
 }
 
 export interface OverflowGroup {
@@ -41,7 +41,7 @@ export interface OverflowGroup {
 
 interface SessionTabsOverflowMenuProps {
   groups: OverflowGroup[];
-  /** All apps â€” so empty apps still get a New session entry. */
+  /** All apps - so empty apps still get a New session entry. */
   allRepos: RepoWithLogo[];
   pathname: string;
 }
@@ -108,22 +108,13 @@ export function SessionTabsOverflowMenu({
                     </p>
                   ) : (
                     sessions.map((session) => {
-<<<<<<< HEAD
                       const href = sessionHrefForRow(repo, session);
                       const isSelected = sessionRowMatchesPath(
                         repo,
                         session,
                         pathname,
                       );
-=======
-                      const pathSegment = entityPathSegment(session);
-                      const href = pathSegment
-                        ? `${baseUrl}/${pathSegment}`
-                        : baseUrl;
-                      const isSelected =
-                        pathname === href || pathname.startsWith(`${href}/`);
                       const closed = isClosed(session._id);
->>>>>>> origin/main
                       return (
                         <DropdownMenuItem
                           key={session._id}

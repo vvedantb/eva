@@ -22,15 +22,12 @@ import {
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
-<<<<<<< HEAD
-import type { RepoPathRef } from "@/lib/components/sidebar/_utils/repoSessionPaths";
+import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
-export type SessionLinkedFrom = RepoPathRef;
-=======
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
->>>>>>> origin/main
+export type SessionLinkedFrom = RepoPathParts;
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,

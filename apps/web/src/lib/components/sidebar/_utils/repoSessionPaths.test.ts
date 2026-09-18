@@ -1,124 +1,11 @@
-<<<<<<< HEAD
-import { describe, expect, test } from "vitest";
-=======
 import { describe, expect, it } from "vitest";
->>>>>>> origin/main
 import {
   repoBasePaths,
   repoMatchesPath,
   repoSessionsIndexPath,
-<<<<<<< HEAD
   sessionHrefForRow,
-  sessionRowMatchesPath,
-} from "./repoSessionPaths";
-
-const rootRepo = { owner: "acme", name: "eva" };
-const appRepo = { owner: "acme", name: "eva", rootDirectory: "apps/web" };
-const linkedFrom = { owner: "acme", name: "backend" };
-
-describe("repoBasePaths", () => {
-  test("root repo has one base", () => {
-    expect(repoBasePaths(rootRepo)).toEqual(["/acme/eva"]);
-  });
-
-  test("monorepo app has slash and `--` bases", () => {
-    expect(repoBasePaths(appRepo)).toEqual(["/acme/eva/web", "/acme/eva--web"]);
-  });
-
-  test("repoMatchesPath accepts either form", () => {
-    expect(repoMatchesPath(appRepo, "/acme/eva--web/sessions")).toBe(true);
-    expect(repoMatchesPath(appRepo, "/acme/eva/web/sessions")).toBe(true);
-    expect(repoMatchesPath(appRepo, "/acme/other/sessions")).toBe(false);
-  });
-
-  test("sessions index is the slash form", () => {
-    expect(repoSessionsIndexPath(appRepo)).toBe("/acme/eva/web/sessions");
-  });
-});
-
-describe("sessionHrefForRow", () => {
-  test("own row links under its app", () => {
-    expect(sessionHrefForRow(rootRepo, { numId: 7 })).toBe(
-      "/acme/eva/sessions/7",
-    );
-  });
-
-  test("monorepo app row uses the router-internal `--` form", () => {
-    expect(sessionHrefForRow(appRepo, { numId: 7 })).toBe(
-      "/acme/eva--web/sessions/7",
-    );
-  });
-
-  test("linked-in row links to the primary repo's session URL", () => {
-    expect(sessionHrefForRow(rootRepo, { numId: 7, linkedFrom })).toBe(
-      "/acme/backend/sessions/7",
-    );
-  });
-
-  test("linked-in row honours the primary's monorepo app", () => {
-    expect(
-      sessionHrefForRow(rootRepo, {
-        numId: 7,
-        linkedFrom: { ...linkedFrom, rootDirectory: "services/api" },
-      }),
-    ).toBe("/acme/backend--api/sessions/7");
-  });
-
-  test("falls back to the sessions index without a numId", () => {
-    expect(sessionHrefForRow(rootRepo, {})).toBe("/acme/eva/sessions");
-  });
-});
-
-describe("sessionRowMatchesPath", () => {
-  test("matches its own app in either URL form", () => {
-    expect(
-      sessionRowMatchesPath(appRepo, { numId: 7 }, "/acme/eva--web/sessions/7"),
-    ).toBe(true);
-    expect(
-      sessionRowMatchesPath(appRepo, { numId: 7 }, "/acme/eva/web/sessions/7"),
-    ).toBe(true);
-  });
-
-  test("matches sub-pages of the session", () => {
-    expect(
-      sessionRowMatchesPath(
-        rootRepo,
-        { numId: 7 },
-        "/acme/eva/sessions/7/review/diffs",
-      ),
-    ).toBe(true);
-  });
-
-  test("a linked-in row is active on the primary repo's URL, not this app's", () => {
-    expect(
-      sessionRowMatchesPath(
-        rootRepo,
-        { numId: 7, linkedFrom },
-        "/acme/backend/sessions/7",
-      ),
-    ).toBe(true);
-    expect(
-      sessionRowMatchesPath(
-        rootRepo,
-        { numId: 7, linkedFrom },
-        "/acme/eva/sessions/7",
-      ),
-    ).toBe(false);
-  });
-
-  test("never matches without a numId", () => {
-    expect(sessionRowMatchesPath(rootRepo, {}, "/acme/eva/sessions")).toBe(
-      false,
-    );
-  });
-
-  test("does not match a different session", () => {
-    expect(
-      sessionRowMatchesPath(rootRepo, { numId: 7 }, "/acme/eva/sessions/70"),
-    ).toBe(false);
-  });
-=======
   sessionMatchesPath,
+  sessionRowMatchesPath,
   type RepoPathParts,
 } from "./repoSessionPaths";
 
@@ -132,6 +19,7 @@ function repo(
 
 const eva = repo("vvedantb", "eva");
 const web = repo("vvedantb", "eva", "apps/web");
+const linkedFrom = repo("vvedantb", "backend");
 
 describe("repoBasePaths", () => {
   it("is the single slash path for a root repo", () => {
@@ -159,6 +47,12 @@ describe("repoMatchesPath", () => {
   it("matches the repo root and any sub-page", () => {
     expect(repoMatchesPath(eva, "/vvedantb/eva")).toBe(true);
     expect(repoMatchesPath(eva, "/vvedantb/eva/sessions/12")).toBe(true);
+  });
+
+  it("accepts either URL form for a monorepo app", () => {
+    expect(repoMatchesPath(web, "/vvedantb/eva--web/sessions")).toBe(true);
+    expect(repoMatchesPath(web, "/vvedantb/eva/web/sessions")).toBe(true);
+    expect(repoMatchesPath(web, "/vvedantb/other/sessions")).toBe(false);
   });
 
   it("does not match a repo whose name merely starts the same", () => {
@@ -202,18 +96,18 @@ describe("sessionMatchesPath", () => {
     expect(sessionMatchesPath(web, "12", "/vvedantb/eva/sessions/12")).toBe(
       false,
     );
-    expect(
-      sessionMatchesPath(eva, "12", "/vvedantb/other/sessions/12"),
-    ).toBe(false);
+    expect(sessionMatchesPath(eva, "12", "/vvedantb/other/sessions/12")).toBe(
+      false,
+    );
   });
 
   it("matches a monorepo app on both the slash and `--` forms", () => {
-    expect(
-      sessionMatchesPath(web, "12", "/vvedantb/eva/web/sessions/12"),
-    ).toBe(true);
-    expect(
-      sessionMatchesPath(web, "12", "/vvedantb/eva--web/sessions/12"),
-    ).toBe(true);
+    expect(sessionMatchesPath(web, "12", "/vvedantb/eva/web/sessions/12")).toBe(
+      true,
+    );
+    expect(sessionMatchesPath(web, "12", "/vvedantb/eva--web/sessions/12")).toBe(
+      true,
+    );
   });
 
   it("matches nothing when the session has no path segment", () => {
@@ -225,5 +119,83 @@ describe("sessionMatchesPath", () => {
     ).toBe(false);
     expect(sessionMatchesPath(eva, "", "/vvedantb/eva/sessions/")).toBe(false);
   });
->>>>>>> origin/main
+});
+
+describe("sessionHrefForRow", () => {
+  it("own row links under its app", () => {
+    expect(sessionHrefForRow(eva, { numId: 7 })).toBe("/vvedantb/eva/sessions/7");
+  });
+
+  it("monorepo app row uses the router-internal `--` form", () => {
+    expect(sessionHrefForRow(web, { numId: 7 })).toBe(
+      "/vvedantb/eva--web/sessions/7",
+    );
+  });
+
+  it("linked-in row links to the primary repo's session URL", () => {
+    expect(sessionHrefForRow(eva, { numId: 7, linkedFrom })).toBe(
+      "/vvedantb/backend/sessions/7",
+    );
+  });
+
+  it("linked-in row honours the primary's monorepo app", () => {
+    expect(
+      sessionHrefForRow(eva, {
+        numId: 7,
+        linkedFrom: { ...linkedFrom, rootDirectory: "services/api" },
+      }),
+    ).toBe("/vvedantb/backend--api/sessions/7");
+  });
+
+  it("falls back to the sessions index without a numId", () => {
+    expect(sessionHrefForRow(eva, {})).toBe("/vvedantb/eva/sessions");
+  });
+});
+
+describe("sessionRowMatchesPath", () => {
+  it("matches its own app in either URL form", () => {
+    expect(
+      sessionRowMatchesPath(web, { numId: 7 }, "/vvedantb/eva--web/sessions/7"),
+    ).toBe(true);
+    expect(
+      sessionRowMatchesPath(web, { numId: 7 }, "/vvedantb/eva/web/sessions/7"),
+    ).toBe(true);
+  });
+
+  it("matches sub-pages of the session", () => {
+    expect(
+      sessionRowMatchesPath(
+        eva,
+        { numId: 7 },
+        "/vvedantb/eva/sessions/7/review/diffs",
+      ),
+    ).toBe(true);
+  });
+
+  it("a linked-in row is active on the primary repo's URL, not this app's", () => {
+    expect(
+      sessionRowMatchesPath(
+        eva,
+        { numId: 7, linkedFrom },
+        "/vvedantb/backend/sessions/7",
+      ),
+    ).toBe(true);
+    expect(
+      sessionRowMatchesPath(
+        eva,
+        { numId: 7, linkedFrom },
+        "/vvedantb/eva/sessions/7",
+      ),
+    ).toBe(false);
+  });
+
+  it("never matches without a numId", () => {
+    expect(sessionRowMatchesPath(eva, {}, "/vvedantb/eva/sessions")).toBe(false);
+  });
+
+  it("does not match a different session", () => {
+    expect(
+      sessionRowMatchesPath(eva, { numId: 7 }, "/vvedantb/eva/sessions/70"),
+    ).toBe(false);
+  });
 });

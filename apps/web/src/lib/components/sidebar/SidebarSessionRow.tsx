@@ -14,7 +14,7 @@ import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem"
 import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
   sessionHrefForRow,
-  type RepoPathRef,
+  type RepoPathParts,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import {
   SessionMenuItems,
@@ -50,7 +50,7 @@ interface SessionItem {
    * Set only on rows this app sees through a linked checkout: the session's
    * primary repo, which owns its URL (see `sessionHrefForRow`).
    */
-  linkedFrom?: RepoPathRef;
+  linkedFrom?: RepoPathParts;
   /** Linked repos cloned beside the primary; drives the `+N` badge. */
   linkedRepoCount?: number;
 }
@@ -59,7 +59,7 @@ interface SidebarSessionRowProps<T extends SessionItem> {
   session: T;
   isSelected: boolean;
   /** The app whose sidebar this row sits in; the row's own repo unless linked in. */
-  repo: RepoPathRef;
+  repo: RepoPathParts;
   onNavigate?: () => void;
   onRename?: (session: T, newTitle: string) => Promise<void>;
   onDuplicate?: (session: T) => Promise<string>;

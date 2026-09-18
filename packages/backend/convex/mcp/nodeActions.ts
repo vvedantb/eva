@@ -24,11 +24,8 @@ import {
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
-<<<<<<< HEAD
-import { normalizeAIModel, prStateValidator } from "../validators";
+import { prStateValidator } from "../validators";
 import type { McpLinkedRepo } from "./queries";
-=======
->>>>>>> origin/main
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
@@ -1203,31 +1200,6 @@ export const listArtifacts = internalAction({
 const agentKindValidator = v.union(v.literal("session"), v.literal("task"));
 type AgentKind = "session" | "task";
 
-type AgentStateTranscript = {
-  role: string;
-  content: string;
-  timestamp: number;
-  truncated: boolean;
-};
-
-type AgentStateResult = {
-  kind: AgentKind;
-  id: string;
-  numId?: number;
-  title: string;
-  status: string;
-  isExecuting: boolean;
-  model?: string;
-  updatedAt: number;
-  deploymentUrl?: string;
-  deploymentStatus?: string;
-  currentActivity?: string;
-  currentContent?: string;
-  pendingQuestion?: string;
-  queuedMessageCount: number;
-  transcript: AgentStateTranscript[];
-};
-
 /**
  * Sending a message reaches one surface more than the fleet tools do: a
  * project's sandbox chat. Listing, state and stop stay on `agentKindValidator`
@@ -1553,42 +1525,11 @@ export const orchestratorGetAgentState = internalAction({
     id: v.string(),
     transcriptTail: v.number(),
   },
-<<<<<<< HEAD
   returns: orchestratorAgentStateValidator,
   handler: async (
     ctx,
     { clerkUserId, kind, id, transcriptTail },
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
-=======
-  returns: v.object({
-    kind: agentKindValidator,
-    id: v.string(),
-    numId: v.optional(v.number()),
-    title: v.string(),
-    status: v.string(),
-    isExecuting: v.boolean(),
-    model: v.optional(v.string()),
-    updatedAt: v.number(),
-    deploymentUrl: v.optional(v.string()),
-    deploymentStatus: v.optional(v.string()),
-    currentActivity: v.optional(v.string()),
-    currentContent: v.optional(v.string()),
-    pendingQuestion: v.optional(v.string()),
-    queuedMessageCount: v.number(),
-    transcript: v.array(
-      v.object({
-        role: v.string(),
-        content: v.string(),
-        timestamp: v.number(),
-        truncated: v.boolean(),
-      }),
-    ),
-  }),
-  handler: async (
-    ctx,
-    { clerkUserId, kind, id, transcriptTail },
-  ): Promise<AgentStateResult> => {
->>>>>>> origin/main
     const convexUrl = getEvaConvexCloudUrl();
     const streamingEntityId =
       kind === "session" ? id : `${TASK_CHAT_STREAM_PREFIX}${id}`;
@@ -2123,24 +2064,18 @@ export const orchestratorCreateSession = internalAction({
     linkedRepos: v.array(v.object({ repo: v.string(), path: v.string() })),
   }),
   handler: async (
-<<<<<<< HEAD
     ctx,
     {
       clerkUserId,
       repoId,
       title,
       message,
-      model,
       baseBranch,
       masterSessionId,
       linkedRepoIds,
       repoGroupId,
       installDependencies,
     },
-=======
-    _ctx,
-    { clerkUserId, repoId, title, message, baseBranch, masterSessionId },
->>>>>>> origin/main
   ) => {
     // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
     // Passing normalizeAIModel(undefined) here used to force claude:sonnet on

@@ -16,12 +16,9 @@ import { repoTileColor } from "@/lib/utils/repoTileColor";
 import { fileViewerPathParser } from "@/lib/search-params";
 import { FileViewerPanel } from "./FileViewerPanel";
 import { SandboxFileTree } from "./_components/SandboxFileTree";
-<<<<<<< HEAD
-import type { SessionRepoListItem } from "./_utils";
-=======
 import { ViewerNotice } from "./_components/ViewerNotice";
+import type { SessionRepoListItem } from "./_utils";
 import { fileTreeSideFromStorage } from "./_utils/-fileTreeSide";
->>>>>>> origin/main
 
 interface FilesPanelProps {
   sandboxId: string | undefined;
@@ -151,8 +148,9 @@ export function FilesPanel({
   const handleRootSelect = (nextRoot: string) => {
     if (nextRoot === (activeRoot ?? "")) return;
     onRootChange?.(nextRoot || null);
-    // The previously open file belongs to the repo we are leaving.
-    void setFile(null);
+    // The previously open file belongs to the repo we are leaving. Same
+    // TanStack-search rule as `handleSelectFile`, not nuqs.
+    void navigate({ to: ".", search: (prev) => ({ ...prev, file: undefined }) });
   };
 
   if (!sandboxId || !isActive) {
@@ -162,68 +160,12 @@ export function FilesPanel({
   const showRootSelector = repos !== undefined && repos.length > 1;
 
   return (
-<<<<<<< HEAD
     <div className="flex h-full min-h-0 flex-col">
       {showRootSelector ? (
         <FilesRootSelector
           repos={repos}
           activeRoot={activeRoot ?? ""}
           onSelect={handleRootSelect}
-=======
-    <ResizableSidebar
-      storageKey="sandbox-file-tree"
-      mobilePaneLabels={{ left: "Files", right: "Viewer" }}
-      showContentSignal={showContentSignal}
-      side={side}
-      // The 160/320 defaults add up to a 481px floor, which overflows the
-      // sandbox pane on a tablet (and on a narrow desktop pane). Both sides
-      // scroll their own content, so they can go narrower than the default.
-      minSidebarWidthPx={140}
-      minContentWidthPx={200}
-      sidebar={
-        listState.kind === "loading" || listState.kind === "idle" ? (
-          <div className="flex h-full items-center justify-center">
-            <Spinner size="sm" />
-          </div>
-        ) : listState.kind === "not_running" ? (
-          <ViewerNotice message="Wake Eva up to browse files" />
-        ) : listState.kind === "error" ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
-            <pre className="max-h-48 max-w-full overflow-auto scroll-fade whitespace-pre-wrap rounded-lg bg-destructive/5 p-3 text-sm text-destructive">
-              {listState.message}
-            </pre>
-            <Button size="sm" variant="secondary" onClick={refresh}>
-              <IconRefresh className="mr-1 size-4" />
-              Retry
-            </Button>
-          </div>
-        ) : listState.paths.length === 0 ? (
-          <ViewerNotice message="No files found in the repository" />
-        ) : (
-          <SandboxFileTree
-            key={`${sandboxId}:${listState.version}`}
-            paths={listState.paths}
-            truncated={listState.truncated}
-            selectedPath={selectedPath}
-            isRefreshing={isRefreshing}
-            onRefresh={refresh}
-            onSelectFile={handleSelectFile}
-            rootLabel={rootLabel}
-            side={side}
-            onToggleSide={() => {
-              setStoredSide(side === "left" ? "right" : "left");
-            }}
-          />
-        )
-      }
-    >
-      <div className="min-h-0 flex-1">
-        <FileViewerPanel
-          sandboxId={sandboxId}
-          repoId={repoId}
-          isActive={isActive}
-          root={root}
->>>>>>> origin/main
         />
       ) : null}
       <div className="min-h-0 flex-1">
@@ -231,6 +173,7 @@ export function FilesPanel({
           storageKey="sandbox-file-tree"
           mobilePaneLabels={{ left: "Files", right: "Viewer" }}
           showContentSignal={showContentSignal}
+          side={side}
           // The 160/320 defaults add up to a 481px floor, which overflows the
           // sandbox pane on a tablet (and on a narrow desktop pane). Both sides
           // scroll their own content, so they can go narrower than the default.
@@ -264,6 +207,11 @@ export function FilesPanel({
                 isRefreshing={isRefreshing}
                 onRefresh={refresh}
                 onSelectFile={handleSelectFile}
+                rootLabel={rootLabel}
+                side={side}
+                onToggleSide={() => {
+                  setStoredSide(side === "left" ? "right" : "left");
+                }}
               />
             )
           }
@@ -273,6 +221,7 @@ export function FilesPanel({
               sandboxId={sandboxId}
               repoId={repoId}
               isActive={isActive}
+              root={root}
             />
           </div>
         </ResizableSidebar>

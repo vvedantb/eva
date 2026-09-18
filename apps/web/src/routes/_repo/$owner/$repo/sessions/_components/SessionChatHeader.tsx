@@ -25,11 +25,7 @@ import {
   useSessionSandboxError,
 } from "@/lib/components/sandbox/SandboxErrorNotice";
 import { SessionSwitcher } from "./SessionSwitcher";
-<<<<<<< HEAD
 import { SessionRepoBadges } from "./SessionRepoBadges";
-import { prStateIconClass } from "../_utils/-prStateIconClass";
-=======
->>>>>>> origin/main
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
