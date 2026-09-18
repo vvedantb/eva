@@ -19,6 +19,7 @@ import {
   NO_OUTPUT_TIMEOUT_MS,
   SYSTEM_PROMPT,
   WORK_DIR,
+  WORKSPACE_ROOT,
   claudeEffort,
   claudeThinkingDisabled,
   normalizedClaudeModel,
@@ -411,6 +412,9 @@ function buildSdkOptionsFromParts(
 
   return {
     cwd: WORK_DIR,
+    // Multi-repo sessions only: lets Claude read/edit linked repo clones
+    // under the workspace root without moving cwd off the primary repo.
+    ...(WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {}),
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
     systemPrompt: SYSTEM_PROMPT

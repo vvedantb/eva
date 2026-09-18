@@ -7,6 +7,7 @@ import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import { useSessionByNumId } from "@/lib/useResolveByNumId";
 import { SessionDetailClient } from "../SessionDetailClient";
 import { useSessionRouteSandboxTab } from "../_utils/useSessionRouteSandboxTab";
+import { workspaceRootPath } from "@/lib/components/chat/ChangedFilesCard";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
@@ -83,10 +84,14 @@ function CachedSessionShellInner({
 
   const openFile = (path: string) => {
     if (simpleView) return;
+    // A file the agent touched in a linked checkout has to select that repo's
+    // root, or the Files tree would list the primary beside another repo's
+    // file. `undefined` drops a stale root when a primary file is opened.
+    const filesRoot = workspaceRootPath(path) ?? undefined;
     void navigate({
       to: "/$owner/$repo/sessions/$numId/$sandboxTab",
       params: { ...sessionParams, sandboxTab: "files" },
-      search: (prev) => ({ ...prev, file: path }),
+      search: (prev) => ({ ...prev, file: path, filesRoot }),
     });
   };
 

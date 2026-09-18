@@ -1,10 +1,10 @@
 import { readFileSync } from "fs";
 import {
+  AGENT_CWD,
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
   SYSTEM_PROMPT,
-  WORK_DIR,
   normalizedOpencodeModel,
 } from "../config.js";
 import { evaMcpServers } from "../evaMcp.js";
@@ -352,7 +352,11 @@ export async function runOpencodeSdkAttempt(
   const baseUrl = await ensureOpencodeServer();
   const client: OpencodeClientLike = sdk.createOpencodeClient({
     baseUrl,
-    directory: WORK_DIR,
+    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
+    // Opencode can edit outside cwd in a multi-repo session; if not, set
+    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
+    // rebuild needed.
+    directory: AGENT_CWD,
   });
   await ensureEvaMcpServers(client);
 

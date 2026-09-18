@@ -12,6 +12,8 @@ import {
   agentTaskFields,
   agentRunFields,
   sessionFields,
+  sessionRepoFields,
+  repoGroupFields,
   githubRepoFields,
   teamFields,
   syncSettingFields,
@@ -171,6 +173,16 @@ const schema = defineSchema({
     "by_session",
     ["sessionId"],
   ),
+  // Extra repos cloned into a session's sandbox beside the primary (which stays
+  // on `sessions.repoId`). One row per linked repo per session.
+  sessionRepos: defineTable(sessionRepoFields)
+    .index("by_session", ["sessionId"])
+    .index("by_repo", ["repoId"])
+    .index("by_pr_url", ["prUrl"]),
+  // Saved codebase groups that prefill a new session's repo selection.
+  repoGroups: defineTable(repoGroupFields)
+    .index("by_created_by", ["createdBy"])
+    .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
     .index("by_entity_open", ["surface", "entityId", "open"])
     .index("by_repo_open", ["repoId", "open"])

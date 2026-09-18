@@ -254,13 +254,89 @@ export function fleetTools(
           .describe(
             "Branch to base work off of. If omitted, uses the repo's default base branch.",
           ),
+        linkedRepos: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Extra repos to clone into the same sandbox beside repoName, each on its own branch and PR (e.g. ["eva", "vvedantb/other-repo"]). Same "name" or "owner/name" grammar as repoName. Mutually exclusive with "group".',
+          ),
+        group: z
+          .string()
+          .optional()
+          .describe(
+            'Name of a saved codebase group (see list_repos) whose linked repos prefill the selection. Its saved primary repo must match repoName. Mutually exclusive with "linkedRepos".',
+          ),
+        installDependencies: z
+          .boolean()
+          .optional()
+          .describe(
+            "Whether linked repos install dependencies on clone. Defaults to true.",
+          ),
       },
-      handler: async ({ repoName, app, title, message, baseBranch }) => {
+      handler: async ({
+        repoName,
+        app,
+        title,
+        message,
+        baseBranch,
+        linkedRepos,
+        group,
+        installDependencies,
+      }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repos = await mcpListUserRepos(ctx, userId);
         const matched = matchRepoByName(repos, repoName, app);
         if ("isError" in matched) return matched;
         const { repo } = matched;
+
+        if (linkedRepos && linkedRepos.length > 0 && group) {
+          return errorResult(
+            'Pass "linkedRepos" or "group", not both — they are two ways to pick the same session\'s extra repos.',
+          );
+        }
+
+        let linkedRepoIds: string[] | undefined;
+        if (linkedRepos && linkedRepos.length > 0) {
+          linkedRepoIds = [];
+          for (const linkedName of linkedRepos) {
+            const matchedLinked = matchRepoByName(repos, linkedName, undefined);
+            if ("isError" in matchedLinked) return matchedLinked;
+            linkedRepoIds.push(matchedLinked.repo.id);
+          }
+        }
+
+        let repoGroupId: string | undefined;
+        if (group) {
+          const groups = await ctx.runQuery(
+            internal.repoGroups.listForUserInternal,
+            { userId },
+          );
+          const normalized = group.trim().toLowerCase();
+          const matches = groups.filter(
+            (g) => g.name.toLowerCase() === normalized,
+          );
+          if (matches.length === 0) {
+            const available = groups.map((g) => g.name).join(", ") || "(none)";
+            return errorResult(
+              `Codebase group "${group}" not found. Your groups: ${available}`,
+            );
+          }
+          if (matches.length > 1) {
+            return errorResult(
+              `Multiple codebase groups are named "${group}". Rename one in Eva to disambiguate.`,
+            );
+          }
+          const [found] = matches;
+          if (found.primaryRepoId !== repo.id) {
+            const primaryLabel = found.primaryRepo
+              ? `${found.primaryRepo.owner}/${found.primaryRepo.name}`
+              : "a repo you can no longer reach";
+            return errorResult(
+              `Codebase group "${group}" is saved for ${primaryLabel}, not ${repoRefLabel(repo)}. Pass repoName="${primaryLabel}", or drop "group".`,
+            );
+          }
+          repoGroupId = String(found._id);
+        }
 
         const created = await ctx.runAction(
           internal.mcp.nodeActions.orchestratorCreateSession,
@@ -271,6 +347,9 @@ export function fleetTools(
             message,
             baseBranch,
             masterSessionId: tokenMasterSessionId,
+            linkedRepoIds,
+            repoGroupId,
+            installDependencies,
           },
         );
 
@@ -285,6 +364,7 @@ export function fleetTools(
           numId: created.numId,
           repo: repoRefLabel(repo),
           path: `${basePath}/sessions/${created.numId}`,
+          linkedRepos: created.linkedRepos,
           status: "created",
         });
       },

@@ -10,9 +10,9 @@ import {
   writeFileSync,
 } from "fs";
 import {
+  AGENT_CWD,
   OPENCODE_RUNTIME_HOME_DIR,
   OPENCODE_SERVER_PORT,
-  WORK_DIR,
   opencodeCommand,
 } from "../config.js";
 import { log, tryParseJson } from "../utils.js";
@@ -127,7 +127,11 @@ function spawnServer(): number {
         "--port=" + String(OPENCODE_SERVER_PORT),
       ],
       {
-        cwd: WORK_DIR,
+        // Manual smoke test (tests/linkedReposHarness.manual.md) decides
+        // whether Opencode can edit outside cwd in a multi-repo session; if
+        // not, set EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace
+        // instead — no rebuild needed.
+        cwd: AGENT_CWD,
         env: { ...process.env },
         // Detached: the server must outlive this turn's callback process so the
         // next turn reuses it instead of paying a cold start.

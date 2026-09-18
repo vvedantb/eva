@@ -44,6 +44,7 @@ import {
   evalIssueValidator,
   experimentalFlagsValidator,
   logEntryValidator,
+  repoShaValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
   userFlowValidator,
@@ -398,6 +399,14 @@ export const agentRunFields = {
   model: v.optional(aiModelValidator),
 };
 
+/** Lifecycle of a pull request Eva opened, shared by every surface that tracks one. */
+export const prStateValidator = v.union(
+  v.literal("draft"),
+  v.literal("open"),
+  v.literal("merged"),
+  v.literal("closed"),
+);
+
 export const sessionFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -414,14 +423,7 @@ export const sessionFields = {
   // silently falling back to the repo default.
   baseBranch: v.optional(v.string()),
   prUrl: v.optional(v.string()),
-  prState: v.optional(
-    v.union(
-      v.literal("draft"),
-      v.literal("open"),
-      v.literal("merged"),
-      v.literal("closed"),
-    ),
-  ),
+  prState: v.optional(prStateValidator),
   /** Live PR status (open/draft) Eva closed when archiving. Unarchive reopens it. */
   prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
@@ -512,6 +514,62 @@ export const sessionFields = {
    * Detached HEAD is reported as the short commit sha.
    */
   sandboxBranch: v.optional(v.string()),
+  // Saved codebase group the session was created from, when one prefilled the
+  // linked repo selection. Informational: the `sessionRepos` rows are the
+  // source of truth, so editing the group later never rewrites this session.
+  repoGroupId: v.optional(v.id("repoGroups")),
+  // How many `sessionRepos` rows this session has. Denormalised so list rows
+  // and resume paths can tell a multi-repo session apart without a join.
+  linkedRepoCount: v.optional(v.number()),
+};
+
+/**
+ * One extra GitHub repo cloned into a session's sandbox alongside the primary.
+ * The primary stays at `/tmp/repo` (symlinked into the workspace); every linked
+ * repo is a whole checkout at `/tmp/workspace/<name>` on the same branch name as
+ * the primary, with its own optional pull request.
+ *
+ * A row is always the entire repository — monorepo sibling app rows share one
+ * checkout, so `rootDirectory` has no meaning here and is deliberately absent.
+ */
+export const sessionRepoFields = {
+  sessionId: v.id("sessions"),
+  repoId: v.id("githubRepos"),
+  owner: v.string(),
+  name: v.string(),
+  installationId: v.number(),
+  /** Absolute clone path in the sandbox: `/tmp/workspace/<name>`. */
+  path: v.string(),
+  /** The session branch, identical to the primary's `eva/session-<id>`. */
+  branchName: v.string(),
+  baseBranch: v.string(),
+  prUrl: v.optional(v.string()),
+  prState: v.optional(prStateValidator),
+  installDependencies: v.boolean(),
+  /** Set once the sandbox has finished cloning this repo. */
+  clonedAt: v.optional(v.number()),
+  devPort: v.optional(v.number()),
+  devCommand: v.optional(v.string()),
+};
+
+/**
+ * A saved "codebase group": one primary repo plus the linked repos that should
+ * be cloned with it. Prefills the new-session picker; never edits live sessions.
+ */
+export const repoGroupFields = {
+  name: v.string(),
+  createdBy: v.id("users"),
+  /** Copied from the primary repo so teammates see the group. */
+  teamId: v.optional(v.id("teams")),
+  primaryRepoId: v.id("githubRepos"),
+  linkedRepoIds: v.array(v.id("githubRepos")),
+  installDependencies: v.optional(v.boolean()),
+  // Seeded multi-repo snapshot captured for this exact membership, and the
+  // fingerprint of the inputs it was built from (mirrors `githubRepos`).
+  seededSnapshotName: v.optional(v.string()),
+  seededFingerprint: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.optional(v.number()),
 };
 
 export const syncSettingFields = {
@@ -897,6 +955,12 @@ export const messageFields = {
   // callback bundles and on task runs.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
+  // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
+  // filed under "/tmp/repo" and each linked repo under its workspace path.
+  // Supersede `beforeSha`/`afterSha` when present; single-repo sessions keep
+  // writing only the scalars.
+  beforeShas: v.optional(v.array(repoShaValidator)),
+  afterShas: v.optional(v.array(repoShaValidator)),
 };
 
 export const queuedMessageFields = {
@@ -1001,6 +1065,11 @@ export const appSettingsFields = {
 export const sandboxGitCredentialsFields = {
   sandboxId: v.string(),
   installationId: v.number(),
+  // Every installation the sandbox may mint a token for. A multi-repo session
+  // clones repos from more than one GitHub App installation, so the helper's
+  // single `installationId` above is only the primary's. Absent on rows written
+  // before linked repos existed; readers fall back to `[installationId]`.
+  installationIds: v.optional(v.array(v.number())),
   secret: v.string(),
   // GitHub repository the sandbox was created for. /api/git-credentials grants
   // the full installation token for this repository without the sandbox being

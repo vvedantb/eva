@@ -456,3 +456,29 @@ const logViews = ["overview", "type", "project"] as const;
 export const logViewParser = parseAsStringLiteral(logViews)
   .withDefault("overview")
   .withOptions(searchOptions);
+
+// New-session "linked codebases" picker (multi-repo sessions). Comma-separated
+// repo ids resolved against `githubRepos.list` by the picker — stale/unknown
+// ids are dropped rather than passed into `sessions.create` unbranded. Saved
+// codebase groups whose primary is a DIFFERENT repo deep-link here with these
+// same keys prefilled (see CodebasesPicker.tsx).
+export const linkedRepoIdsParser = parseAsArrayOf(parseAsString)
+  .withDefault([])
+  .withOptions(searchOptions);
+
+export const repoGroupIdParser = parseAsString
+  .withDefault("")
+  .withOptions(searchOptions);
+
+const installDependenciesValues = ["1", "0"] as const;
+export const installDependenciesParser = parseAsStringLiteral(
+  installDependenciesValues,
+)
+  .withDefault("1")
+  .withOptions(searchOptions);
+
+// Session Files tab root selector (multi-repo sessions): "" is the primary
+// repo (/tmp/repo), otherwise a linked repo's sandbox path.
+export const filesRootParser = parseAsString
+  .withDefault("")
+  .withOptions(searchOptions);

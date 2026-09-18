@@ -1,5 +1,10 @@
 import { spawnSync } from "child_process";
-import { ENTITY_ID_FIELD, RUN_ID, WORK_DIR } from "../config.js";
+import {
+  ENTITY_ID_FIELD,
+  REPO_CHECKOUT_DIRS,
+  RUN_ID,
+  WORK_DIR,
+} from "../config.js";
 import type { JsonObject } from "../types.js";
 import { readGitHeadSha } from "../utils.js";
 
@@ -10,16 +15,39 @@ import { readGitHeadSha } from "../utils.js";
  * land on the assistant message, where "Diff this turn" and "Restore to before
  * this turn" read them. Pushed commits are the only durable store — the VM
  * filesystem is not — so no hidden refs are kept.
+ *
+ * `beforeShas`/`afterShas` are the multi-repo extension: one `{ path, sha }`
+ * entry per checked-out repo (primary first, then linked repos), so a
+ * multi-repo session can diff/restore every repo it touched, not just the
+ * primary. Sent alongside the scalar `beforeSha`/`afterSha` — which stay
+ * primary-only — so old Convex deployments that don't know about the array
+ * fields keep working.
  */
+type RepoSha = { path: string; sha: string };
+
 let turnStartSha = "";
+let turnStartShas: RepoSha[] = [];
+
+/** Reads `{ path, sha }` for every checked-out repo, skipping unreadable dirs. */
+function readAllRepoShas(): RepoSha[] {
+  const shas: RepoSha[] = [];
+  for (const path of REPO_CHECKOUT_DIRS) {
+    const sha = readGitHeadSha(path);
+    if (sha === "") continue;
+    shas.push({ path, sha });
+  }
+  return shas;
+}
 
 /** Records HEAD at turn start. Call once per turn, before the provider runs. */
 export function beginTurnCheckpoint(): void {
   turnStartSha = readGitHeadSha();
+  turnStartShas = readAllRepoShas();
 }
 
 export function resetTurnCheckpoint(): void {
   turnStartSha = "";
+  turnStartShas = [];
 }
 
 function currentBranch(): string {
@@ -51,4 +79,6 @@ export function appendTurnCheckpoint(args: JsonObject): void {
   if (afterSha === "") return;
   args.beforeSha = turnStartSha;
   args.afterSha = afterSha;
+  args.beforeShas = turnStartShas;
+  args.afterShas = readAllRepoShas();
 }

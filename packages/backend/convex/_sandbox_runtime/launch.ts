@@ -16,6 +16,7 @@ import { CLAUDE_CODE_VERSION } from "./claudeCliVersion";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
+import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
 
 // Paths baked into the callback script env for each CLI's config directory.
 // These originated as Daytona persistence-volume mount paths; the *_RUNTIME_*
@@ -328,6 +329,8 @@ export async function launchScript(
     completeSyntheticTurnMutation?: string;
     updateBackgroundAgentsMutation?: string;
     harnessCatalogToken?: string;
+    /** Multi-repo sessions only: the session's linked repo clones. */
+    linkedRepos?: LinkedRepoEnvRow[];
   } = {},
 ): Promise<void> {
   const launchStartedAt = Date.now();
@@ -470,6 +473,14 @@ export async function launchScript(
   if (opts.mcpBaseUrl && opts.mcpToken) {
     envParts.push(`EVA_MCP_AUTH=${quote([opts.mcpToken])}`);
     envParts.push(`EVA_MCP_BASE_URL=${quote([opts.mcpBaseUrl])}`);
+  }
+  // Multi-repo sessions only: every provider's env gains the same two keys —
+  // absent entirely for an ordinary single-repo session (see
+  // buildLinkedReposEnv). The callback (callback-src/config.ts) is the reader.
+  for (const [key, val] of Object.entries(
+    buildLinkedReposEnv(opts.linkedRepos ?? []),
+  )) {
+    envParts.push(`${key}=${quote([val])}`);
   }
   envParts.push(`CALLBACK_SCRIPT_FP=${quote([CALLBACK_SCRIPT_FINGERPRINT])}`);
   const exportLines = envParts.map((part) => `export ${part}`);

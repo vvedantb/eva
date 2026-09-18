@@ -9,7 +9,11 @@ export {
   connectRepo,
 } from "./_github/api";
 
-export { createSessionPr, createDraftSessionPr } from "./_github/prFlow";
+export {
+  createSessionPr,
+  createDraftSessionPr,
+  createDraftSessionRepoPr,
+} from "./_github/prFlow";
 
 export { generatePrDescription } from "./_github/prDescription";
 

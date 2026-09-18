@@ -36,6 +36,46 @@ var evaMcpServers = consumed.servers;
 var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
 var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
 
+// callback-src/linkedRepos.ts
+function isLinkedRepo(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return typeof value.owner === "string" && typeof value.name === "string" && typeof value.path === "string" && typeof value.branchName === "string" && typeof value.baseBranch === "string";
+}
+function parseLinkedReposEnv(raw) {
+  if (!raw) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.error(
+      "EVA_LINKED_REPOS: invalid JSON \\u2014 ignoring, running single-repo"
+    );
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    console.error(
+      "EVA_LINKED_REPOS: unexpected shape \\u2014 ignoring, running single-repo"
+    );
+    return [];
+  }
+  const repos = [];
+  for (const entry of parsed) {
+    if (!isLinkedRepo(entry)) {
+      console.error(
+        "EVA_LINKED_REPOS: unexpected shape \\u2014 ignoring, running single-repo"
+      );
+      return [];
+    }
+    repos.push(entry);
+  }
+  return repos;
+}
+function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
+  return useRoot && workspaceRoot ? workspaceRoot : workDir;
+}
+
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
 var ANTHROPIC_PRICING_AS_OF = "2026-09-01";
@@ -125,6 +165,18 @@ var CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
 var IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 var SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
 var WORK_DIR = existsSync("/tmp/repo") ? "/tmp/repo" : existsSync("/workspace/repo") ? "/workspace/repo" : "/tmp/repo";
+var WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
+var LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
+var REPO_CHECKOUT_DIRS = [
+  WORK_DIR,
+  ...LINKED_REPOS.map((repo) => repo.path)
+];
+var LINKED_REPOS_CWD_ROOT = process.env.EVA_LINKED_REPOS_CWD_ROOT === "1";
+var AGENT_CWD = resolveAgentCwd(
+  WORK_DIR,
+  WORKSPACE_ROOT,
+  LINKED_REPOS_CWD_ROOT
+);
 var NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000"
 );
@@ -694,8 +746,8 @@ function runTimedBashSync(script, label) {
   }
   return true;
 }
-function readGitHeadSha() {
-  const result = spawnSync("git", ["-C", WORK_DIR, "rev-parse", "HEAD"], {
+function readGitHeadSha(dir = WORK_DIR) {
+  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
     encoding: "utf8",
     timeout: CLAUDE_SYNC_TIMEOUT_MS
   });
@@ -1967,11 +2019,23 @@ function mediaSearchDirs(workDir, rootDirectory) {
 // callback-src/runtime/turnCheckpoint.ts
 import { spawnSync as spawnSync2 } from "child_process";
 var turnStartSha = "";
+var turnStartShas = [];
+function readAllRepoShas() {
+  const shas = [];
+  for (const path3 of REPO_CHECKOUT_DIRS) {
+    const sha = readGitHeadSha(path3);
+    if (sha === "") continue;
+    shas.push({ path: path3, sha });
+  }
+  return shas;
+}
 function beginTurnCheckpoint() {
   turnStartSha = readGitHeadSha();
+  turnStartShas = readAllRepoShas();
 }
 function resetTurnCheckpoint() {
   turnStartSha = "";
+  turnStartShas = [];
 }
 function currentBranch() {
   const result = spawnSync2(
@@ -1989,6 +2053,8 @@ function appendTurnCheckpoint(args) {
   if (afterSha === "") return;
   args.beforeSha = turnStartSha;
   args.afterSha = afterSha;
+  args.beforeShas = turnStartShas;
+  args.afterShas = readAllRepoShas();
 }
 
 // callback-src/runtime/completion.ts
@@ -5195,6 +5261,9 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   const thinkingOption = claudeThinkingDisabled ? {} : { thinking: { type: "adaptive", display: "summarized" } };
   return {
     cwd: WORK_DIR,
+    // Multi-repo sessions only: lets Claude read/edit linked repo clones
+    // under the workspace root without moving cwd off the primary repo.
+    ...WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {},
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
     systemPrompt: SYSTEM_PROMPT ? {
@@ -7693,7 +7762,11 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   const options = {
     apiKey: (process.env.CURSOR_API_KEY || "").trim(),
     model: await resolveCursorModelSelection(sdk),
-    local: { cwd: WORK_DIR, store: store4 },
+    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
+    // Cursor can edit outside cwd in a multi-repo session; if not, set
+    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
+    // rebuild needed.
+    local: { cwd: AGENT_CWD, store: store4 },
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...NO_WRITES ? { disallowedTools: [...CURSOR_WRITE_TOOLS] } : {}
   };
@@ -9638,7 +9711,11 @@ function spawnServer() {
         "--port=" + String(OPENCODE_SERVER_PORT)
       ],
       {
-        cwd: WORK_DIR,
+        // Manual smoke test (tests/linkedReposHarness.manual.md) decides
+        // whether Opencode can edit outside cwd in a multi-repo session; if
+        // not, set EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace
+        // instead — no rebuild needed.
+        cwd: AGENT_CWD,
         env: { ...process.env },
         // Detached: the server must outlive this turn's callback process so the
         // next turn reuses it instead of paying a cold start.
@@ -9902,7 +9979,11 @@ async function runOpencodeSdkAttempt(sessionMode) {
   const baseUrl = await ensureOpencodeServer();
   const client = sdk.createOpencodeClient({
     baseUrl,
-    directory: WORK_DIR
+    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
+    // Opencode can edit outside cwd in a multi-repo session; if not, set
+    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
+    // rebuild needed.
+    directory: AGENT_CWD
   });
   await ensureEvaMcpServers(client);
   const persistSessionId = (sessionId2) => {
