@@ -97,6 +97,12 @@
       "skillPath": "skills/features/clerk-webhooks/SKILL.md",
       "computedHash": "4764eeeef1e80ce9757759ef119a3a5e77322383e8a37975d7c8ea718c259ec9"
     },
+    "code-structure": {
+      "source": "michaelshimeles/skills",
+      "sourceType": "github",
+      "skillPath": "code-structure/SKILL.md",
+      "computedHash": "181ee2eab452ed87903b62709ea96ac65a674b5466823c1a107e9a19ebb0d0fa"
+    },
     "commit": {
       "source": "vvedantb/skills",
       "sourceType": "github",

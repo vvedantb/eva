@@ -3,7 +3,8 @@
 import { useQueryState } from "nuqs";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Skeleton } from "@eva/ui";
+import { Skeleton, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   timeRangeParser,
@@ -23,6 +24,7 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { groupLogsByType, logTotals, parseResultEvent } from "./logs/_utils";
 import { LogsPeriodSummary } from "./logs/_components/LogsPeriodSummary";
 import { LogsViewTabs } from "./logs/_components/LogsViewTabs";
@@ -133,70 +135,94 @@ export function UsageClient() {
         </div>
       }
     >
-      {isOverview ? (
-        <UsageOverviewView
-          repoId={repo._id}
-          range={timeRange}
-          now={now}
-          title={periodTitle}
-        />
-      ) : isLoading ? (
-        <>
-          <section
-            className="flex flex-col gap-1 px-4"
-            aria-busy="true"
-            aria-label="Loading logs"
+      <AnimatePresence mode="wait" initial={false}>
+        {isOverview ? (
+          <m.div
+            key="overview"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
           >
-            <h3 className="text-sm font-semibold text-foreground">
-              {periodTitle}
-            </h3>
-            <Skeleton className="h-9 w-28" />
-            <Skeleton className="mt-1 h-4 w-48" />
-          </section>
-          <SettingsSection title="Completions" bodyVariant="list">
-            <Skeleton className="h-14 rounded-none" />
-            <Skeleton className="h-14 rounded-none" />
-            <Skeleton className="h-14 rounded-none" />
-          </SettingsSection>
-        </>
-      ) : isEmpty ? (
-        <SettingsSection title={periodTitle} bodyVariant="list">
-          <SettingsEmptyState
-            icon={IconFileOff}
-            title={
-              isProjectView ? "No project spending" : "No completions logged"
-            }
-            description={
-              isProjectView
-                ? "Nothing was billed to a project in this range."
-                : "Nothing ran in this range. Widen it or clear search."
-            }
-          />
-        </SettingsSection>
-      ) : (
-        <>
-          {totals ? (
-            <LogsPeriodSummary title={periodTitle} totals={totals} />
-          ) : null}
-          {isProjectView
-            ? projectGroups?.map((group) => (
-                <ProjectSpendingGroup
-                  key={group.projectId}
-                  projectTitle={group.projectTitle}
-                  logs={group.logs}
-                  totalCost={group.totalCost}
+            <UsageOverviewView
+              repoId={repo._id}
+              range={timeRange}
+              now={now}
+              title={periodTitle}
+            />
+          </m.div>
+        ) : (
+          <m.div
+            key="ledger"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            {isLoading ? (
+              <>
+                <section
+                  className="flex flex-col gap-1 px-4"
+                  aria-busy="true"
+                  aria-label="Loading logs"
+                >
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {periodTitle}
+                  </h3>
+                  <Skeleton className="h-9 w-28" />
+                  <Skeleton className="mt-1 h-4 w-48" />
+                </section>
+                <SettingsSection title="Completions" bodyVariant="list">
+                  <Skeleton className="h-14 rounded-none" />
+                  <Skeleton className="h-14 rounded-none" />
+                  <Skeleton className="h-14 rounded-none" />
+                </SettingsSection>
+              </>
+            ) : isEmpty ? (
+              <SettingsSection title={periodTitle} bodyVariant="list">
+                <SettingsEmptyState
+                  icon={IconFileOff}
+                  title={
+                    isProjectView
+                      ? "No project spending"
+                      : "No completions logged"
+                  }
+                  description={
+                    isProjectView
+                      ? "Nothing was billed to a project in this range."
+                      : "Nothing ran in this range. Widen it or clear search."
+                  }
                 />
-              ))
-            : grouped.map((group) => (
-                <LogEntryGroup
-                  key={group.type}
-                  type={group.type}
-                  logs={group.logs}
-                  total={group.total}
-                />
-              ))}
-        </>
-      )}
+              </SettingsSection>
+            ) : (
+              <>
+                {totals ? (
+                  <LogsPeriodSummary title={periodTitle} totals={totals} />
+                ) : null}
+                {isProjectView
+                  ? projectGroups?.map((group, index) => (
+                      <ListEnter key={group.projectId} index={index}>
+                        <ProjectSpendingGroup
+                          projectTitle={group.projectTitle}
+                          logs={group.logs}
+                          totalCost={group.totalCost}
+                        />
+                      </ListEnter>
+                    ))
+                  : grouped.map((group, index) => (
+                      <ListEnter key={group.type} index={index}>
+                        <LogEntryGroup
+                          type={group.type}
+                          logs={group.logs}
+                          total={group.total}
+                        />
+                      </ListEnter>
+                    ))}
+              </>
+            )}
+          </m.div>
+        )}
+      </AnimatePresence>
     </SettingsPage>
   );
 }

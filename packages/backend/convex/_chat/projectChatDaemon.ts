@@ -20,6 +20,7 @@ import {
 import { PROJECT_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
 import { pendingTurnAlreadyClaimed } from "./pendingTurnRestage";
+import { resolveStorageUrls } from "./storageUrls";
 
 function projectChatStreamEntityId(projectId: Id<"projects">): string {
   return `${PROJECT_CHAT_STREAM_PREFIX}${String(projectId)}`;
@@ -83,8 +84,7 @@ export const claimPendingTurn = authMutation({
 
     // Level-triggered until the refresh action clears it — old callbacks must
     // not consume the chip's request as a no-op.
-    const usageRefreshRequested =
-      project.usageRefreshRequestedAt !== undefined;
+    const usageRefreshRequested = project.usageRefreshRequestedAt !== undefined;
 
     // A prewarm is killing this daemon right now. See the session copy in
     // `_sessions/workflow.ts`: claiming here strands the turn on a dying
@@ -146,13 +146,9 @@ export const claimPendingTurn = authMutation({
     }
 
     const prompt = project.pendingTurn.prompt;
-    const resolvedUrls = await Promise.all(
-      (project.pendingTurn.attachmentStorageIds ?? []).map((id) =>
-        ctx.storage.getUrl(id),
-      ),
-    );
-    const attachmentUrls = resolvedUrls.filter(
-      (url): url is string => url !== null,
+    const attachmentUrls = await resolveStorageUrls(
+      (id) => ctx.storage.getUrl(id),
+      project.pendingTurn.attachmentStorageIds,
     );
     // The stamp is what tells `ensurePendingTurn` this prompt left
     // `pendingTurn` via a claim rather than a cancel. See

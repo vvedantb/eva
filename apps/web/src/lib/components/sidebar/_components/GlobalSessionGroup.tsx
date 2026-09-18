@@ -44,6 +44,12 @@ type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 interface GlobalSessionGroupProps {
   repo: RepoWithLogo;
   pathname: string;
+  /**
+   * This app's active sessions, already watched once by the sidebar. The group
+   * used to run its own `sessions.list` watch through a different cache, so
+   * every app in the list held two live subscriptions to the same rows.
+   */
+  activeSessions: SessionListItem[] | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
@@ -62,6 +68,7 @@ interface GlobalSessionGroupProps {
 export function GlobalSessionGroup({
   repo,
   pathname,
+  activeSessions,
   open,
   onOpenChange,
   onNavigate,
@@ -73,10 +80,6 @@ export function GlobalSessionGroup({
 }: GlobalSessionGroupProps) {
   const navigate = useNavigate();
   const [isListExpanded, setIsListExpanded] = useState(false);
-  const activeSessions = useQuery(
-    api.sessions.list,
-    listMode === "active" ? { repoId: repo._id } : "skip",
-  );
   const archivedSessions = useQuery(
     api.sessions.listArchived,
     listMode === "archived" ? { repoId: repo._id } : "skip",

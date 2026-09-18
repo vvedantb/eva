@@ -26,11 +26,19 @@ import {
 } from "@eva/ui";
 import { IconChevronRight, IconPlayerPlay } from "@tabler/icons-react";
 import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
+import {
   statusConfig,
   TASK_STATUSES,
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import { isTaskAgentActive, QuickTaskCard } from "./QuickTaskCard";
+import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
 
@@ -51,7 +59,10 @@ interface QuickTasksListViewProps {
   projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
-  onToggleSelect: (id: Id<"agentTasks">) => void;
+  onToggleSelect: (
+    id: Id<"agentTasks">,
+    options?: SelectionToggleOptions<Id<"agentTasks">>,
+  ) => void;
   selectedTaskId?: string | null;
   /**
    * Fires when a card is opened (not in selection mode). The master/detail
@@ -71,6 +82,7 @@ export function QuickTasksListView({
   onOpenTask,
 }: QuickTasksListViewProps) {
   const { repoId, basePath, owner, name } = useRepo();
+  const firstPaint = useFirstPaintGate();
   const currentUserId = useQuery(api.auth.me);
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
@@ -105,6 +117,7 @@ export function QuickTasksListView({
 
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const altHeld = useAltHeld();
   const [openSections, setOpenSections] = useState<Set<DisplayTaskStatus>>(
     () => new Set(TASK_STATUSES),
   );
@@ -218,6 +231,9 @@ export function QuickTasksListView({
             if (!visibleStatuses.has(status)) return [];
             const cfg = statusConfig[status];
             const items = tasksByStatus[status] ?? [];
+            // Shift-click spans this section only — the visible order of the
+            // group the click landed in, not the whole flattened list.
+            const sectionIds = items.map((t) => t._id);
             const Icon = cfg.icon;
 
             return [
@@ -249,7 +265,17 @@ export function QuickTasksListView({
                       {status === "todo" && todoTasks.length > 0 && (
                         <Button
                           size="sm"
-                          onClick={() => setIsConfirmOpen(true)}
+                          title={skipConfirmTitle("Run All")}
+                          onClick={(event) =>
+                            requestConfirm(
+                              altHeld,
+                              () => setIsConfirmOpen(true),
+                              () => {
+                                void handleRunAll();
+                              },
+                              event,
+                            )
+                          }
                           disabled={isRunningAll}
                           className="mr-2 min-h-[36px]"
                         >
@@ -260,6 +286,7 @@ export function QuickTasksListView({
                           )}
                           <span className="hidden sm:inline">Run All</span>
                           <span className="sm:hidden">Run</span>
+                          <ConfirmSkipHint />
                         </Button>
                       )}
                     </div>
@@ -286,6 +313,10 @@ export function QuickTasksListView({
                                   parent={status}
                                   className="pb-1.5"
                                 >
+                                  <ListEnter
+                                    index={index}
+                                    firstPaint={firstPaint.current}
+                                  >
                                   <QuickTaskCard
                                     id={task._id}
                                     title={task.title}
@@ -321,7 +352,10 @@ export function QuickTasksListView({
                                       isSelecting
                                         ? (event) => {
                                             event.preventDefault();
-                                            onToggleSelect(task._id);
+                                            onToggleSelect(task._id, {
+                                              range: event.shiftKey,
+                                              orderedIds: sectionIds,
+                                            });
                                           }
                                         : onOpenTask
                                           ? () => onOpenTask(task._id)
@@ -330,8 +364,11 @@ export function QuickTasksListView({
                                     isSelecting={isSelecting}
                                     isSelected={selectedIds.has(task._id)}
                                     isActive={selectedTaskId === task._id}
-                                    onToggleSelect={() =>
-                                      onToggleSelect(task._id)
+                                    onToggleSelect={(event) =>
+                                      onToggleSelect(task._id, {
+                                        range: event.shiftKey,
+                                        orderedIds: sectionIds,
+                                      })
                                     }
                                     groupedCodebases={
                                       groupedCodebases ?? undefined
@@ -345,6 +382,7 @@ export function QuickTasksListView({
                                     currentUserId={currentUserId ?? undefined}
                                     projects={projectsList ?? undefined}
                                   />
+                                  </ListEnter>
                                 </ListItem>
                               );
                             }}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueries } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -15,7 +14,9 @@ import {
   DialogTitle,
   Input,
   Skeleton,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
 import {
@@ -30,6 +31,8 @@ import {
   mutationError,
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
+import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -40,6 +43,17 @@ interface GlobalSessionsSidebarProps {
 }
 
 /**
+ * One app's rows out of the `useQueries` map. A failed query is reported as an
+ * `Error` value; a group treats that the same as "still loading" rather than
+ * rendering a half-built list.
+ */
+function listedSessions(
+  result: SessionListItem[] | Error | undefined,
+): SessionListItem[] | undefined {
+  return result === undefined || result instanceof Error ? undefined : result;
+}
+
+/**
  * Cross-repo Sessions list for the rail entry point: every accessible app as a
  * collapsible group, with Active / Archived list modes.
  */
@@ -47,8 +61,9 @@ export function GlobalSessionsSidebar({
   pathname,
   onNavigate,
 }: GlobalSessionsSidebarProps) {
-  const navigate = useNavigate();
   const { settings, setListMode } = useSessionsSidebarSettings();
+  const altHeld = useAltHeld();
+  const { archive, isArchiving } = useArchiveSession();
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/sessions",
@@ -65,10 +80,6 @@ export function GlobalSessionsSidebar({
     repo: RepoRow;
     pathSegment: string;
   } | null>(null);
-  const [isArchiving, setIsArchiving] = useState(false);
-
-  const archiveSession = useMutation(api.sessions.archive);
-
   const saveSessionRename = async () => {
     if (!sessionToRename || !renameValue.trim()) return;
     setIsRenaming(true);
@@ -86,10 +97,10 @@ export function GlobalSessionsSidebar({
     }
     setIsRenaming(false);
   };
-  const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
   const updateSession = useMutation(api.sessions.update);
 
-  // Stable identity required by useQueries; deduped with each group's list watch.
+  // Stable identity required by useQueries. This is the only watch on the
+  // list: the rows are handed to each group as a prop.
   const sessionListQueries = useMemo(() => {
     if (repos === undefined) return {};
     return Object.fromEntries(
@@ -130,55 +141,76 @@ export function GlobalSessionsSidebar({
           />
         </div>
         <div className="pt-1.5">
-        {orderedRepos === undefined ? (
-          <div
-            className="min-h-48 space-y-2 px-3"
-            aria-busy="true"
-            aria-label="Loading sessions"
-          >
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-9" />
-            ))}
-          </div>
-        ) : orderedRepos.length === 0 ? (
-          <div className="px-3 py-8 text-center">
-            <p className="text-sm font-medium text-foreground">No apps yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Connect a codebase from Home.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {orderedRepos.map((repo) => (
-              <GlobalSessionGroup
-                key={repo._id}
-                repo={repo}
-                pathname={pathname}
-                open={isGroupOpen(repo)}
-                onOpenChange={(open) => {
-                  setGroupOpen(repo._id, open);
-                }}
-                onNavigate={onNavigate}
-                sessionSortOrder={settings.sessionSortOrder}
-                sessionPreviewCount={settings.sessionPreviewCount}
-                listMode={settings.listMode}
-                onRenameRequest={(session, groupRepo) => {
-                  setSessionToRename({ session, repo: groupRepo });
-                  setRenameValue(session.title);
-                }}
-                onArchiveRequest={(session, groupRepo) => {
-                  const pathSegment = entityPathSegment(session);
-                  if (!pathSegment) return;
-                  setSessionToArchive({
-                    session,
-                    repo: groupRepo,
-                    pathSegment,
-                  });
-                }}
-              />
-            ))}
-          </div>
-        )}
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={settings.listMode}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {orderedRepos === undefined ? (
+                <div
+                  className="min-h-48 space-y-2 px-3"
+                  aria-busy="true"
+                  aria-label="Loading sessions"
+                >
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-9" />
+                  ))}
+                </div>
+              ) : orderedRepos.length === 0 ? (
+                <div className="px-3 py-8 text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    No apps yet
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Connect a codebase from Home.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orderedRepos.map((repo) => (
+                    <GlobalSessionGroup
+                      key={repo._id}
+                      repo={repo}
+                      pathname={pathname}
+                      activeSessions={listedSessions(
+                        sessionsByRepoId[repo._id],
+                      )}
+                      open={isGroupOpen(repo)}
+                      onOpenChange={(open) => {
+                        setGroupOpen(repo._id, open);
+                      }}
+                      onNavigate={onNavigate}
+                      sessionSortOrder={settings.sessionSortOrder}
+                      sessionPreviewCount={settings.sessionPreviewCount}
+                      listMode={settings.listMode}
+                      onRenameRequest={(session, groupRepo) => {
+                        setSessionToRename({ session, repo: groupRepo });
+                        setRenameValue(session.title);
+                      }}
+                      onArchiveRequest={(session, groupRepo) => {
+                        const pathSegment = entityPathSegment(session);
+                        if (!pathSegment) return;
+                        const target = { session, repo: groupRepo, pathSegment };
+                        requestConfirm(
+                          altHeld,
+                          () => setSessionToArchive(target),
+                          () => {
+                            void archive(target, pathname, () => {
+                              setSessionToArchive(null);
+                              if (onNavigate) onNavigate();
+                            });
+                          },
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </m.div>
+          </AnimatePresence>
         </div>
       </div>
 
@@ -252,37 +284,10 @@ export function GlobalSessionsSidebar({
               disabled={isArchiving}
               onClick={() => {
                 if (!sessionToArchive) return;
-                void (async () => {
-                  setIsArchiving(true);
-                  try {
-                    if (sessionToArchive.session.sandboxId) {
-                      await stopSandboxMutation({
-                        sessionId: sessionToArchive.session._id,
-                      });
-                    }
-                    await archiveSession({
-                      id: sessionToArchive.session._id,
-                    });
-                    mutationSuccess("Session archived", "session-archive");
-                    if (
-                      pathname.includes(
-                        `/sessions/${sessionToArchive.pathSegment}`,
-                      )
-                    ) {
-                      navigate({ to: "/sessions" });
-                    }
-                    setSessionToArchive(null);
-                    // `if` rather than `?.`, and the reset duplicated into the
-                    // catch rather than a `finally`: React Compiler bails on
-                    // the whole file for either.
-                    if (onNavigate) onNavigate();
-                  } catch {
-                    mutationError("Couldn't archive session", "session-archive");
-                    setIsArchiving(false);
-                    return;
-                  }
-                  setIsArchiving(false);
-                })();
+                void archive(sessionToArchive, pathname, () => {
+                  setSessionToArchive(null);
+                  if (onNavigate) onNavigate();
+                });
               }}
             >
               {isArchiving ? "Archiving…" : "Archive"}

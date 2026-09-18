@@ -87,7 +87,8 @@ export async function readSdkPlanUsage(
     try {
       await handle.initializationResult();
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText =
+        error instanceof Error ? error.message : String(error);
       log("usage limits: initialization wait failed — " + messageText);
     }
   }
@@ -113,7 +114,7 @@ let cachedGlobalNpmRoots: string[] | null = null;
  * is independent of whichever user's npm config is in effect. The `npm root -g`
  * answer stays as a second candidate for images that install elsewhere.
  */
-export function globalNpmRoots(): string[] {
+function globalNpmRoots(): string[] {
   if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
   const roots: string[] = [
     dirname(dirname(process.execPath)) + "/lib/node_modules",
@@ -534,9 +535,7 @@ export async function runClaudeSdkAttempt(
       const json = sdkMessageJson(line);
       if (json !== null && isZeroWorkTaskNotificationResult(json)) {
         sawZeroWorkTaskNotification = true;
-        log(
-          "runClaudeSdkAttempt: ignored zero-work task notification result",
-        );
+        log("runClaudeSdkAttempt: ignored zero-work task notification result");
         continue;
       }
       appendToRawLogFile(line);

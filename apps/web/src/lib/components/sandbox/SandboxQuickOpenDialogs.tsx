@@ -6,7 +6,7 @@ import {
   type ComponentType,
 } from "react";
 import { formatForDisplay } from "@tanstack/react-hotkeys";
-import { useQueryState } from "nuqs";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Button,
   Command,
@@ -20,7 +20,6 @@ import {
   DialogContent,
 } from "@eva/ui";
 import { IconFileCode, IconRefresh } from "@tabler/icons-react";
-import { fileViewerPathParser } from "@/lib/search-params";
 import {
   useShortcut,
   useShortcutBinding,
@@ -78,7 +77,7 @@ export function SandboxQuickOpenDialogs({
   const [fileSearch, setFileSearch] = useState("");
   const [actionSearch, setActionSearch] = useState("");
   const deferredFileSearch = useDeferredValue(fileSearch);
-  const [, setFile] = useQueryState("file", fileViewerPathParser);
+  const navigate = useNavigate();
   const openFileBinding = useShortcutBinding("openSandboxFile");
   const toggleConsoleBinding = useShortcutBinding("togglePreviewConsole");
 
@@ -118,7 +117,13 @@ export function SandboxQuickOpenDialogs({
   };
   const handleSelectFile = (relativePath: string) => {
     if (!loaded) return;
-    void setFile(`${loaded.root}/${relativePath}`);
+    void navigate({
+      to: ".",
+      search: (prev) => ({
+        ...prev,
+        file: `${loaded.root}/${relativePath}`,
+      }),
+    });
     onShowFiles();
     setFileOpen(false);
     setFileSearch("");

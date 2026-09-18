@@ -115,7 +115,10 @@ export function groupActivityRows(rows: ActivityRow[]): ActivitySegment[] {
  * type + path/command + occurrence in the list being keyed (never the visible
  * overflow slice — callers must pass the full-list index).
  */
-export function activityStepKey(step: ActivityStep, occurrence: number): string {
+export function activityStepKey(
+  step: ActivityStep,
+  occurrence: number,
+): string {
   const id = step.toolUseId;
   if (id !== undefined && id.length > 0) {
     return `id:${id}`;

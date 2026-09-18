@@ -66,7 +66,7 @@ export interface PrRemedy {
   prompt: string;
 }
 
-export type PrBlockerKind =
+type PrBlockerKind =
   | "draft"
   | "checking"
   | "conflicts"

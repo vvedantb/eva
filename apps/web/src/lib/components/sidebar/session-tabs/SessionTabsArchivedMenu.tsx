@@ -22,12 +22,9 @@ import {
   type RepoPathRef,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
-export interface ArchivedMenuSession {
+interface ArchivedMenuSession {
   _id: Id<"sessions">;
   numId?: number;
   title: string;

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouterState } from "@tanstack/react-router";
-import { AveLauncherContext } from "@/lib/components/ave/aveLauncherContext";
+import { AveLauncherProviderContext } from "@/lib/components/ave/AveLauncherContext";
 import { AveLauncherSurface } from "@/lib/components/ave/AveLauncherSurface";
 
 /**
@@ -16,8 +16,7 @@ interface AveLauncherProviderProps {
   children: ReactNode;
   /**
    * Embedded documents (the inbox preview pane) render content only — the host
-   * window already owns the launcher. The context stays mounted regardless so
-   * callers never have to know which surface they are on.
+   * window already owns the launcher.
    */
   enabled: boolean;
 }
@@ -29,6 +28,10 @@ interface AveLauncherProviderProps {
  *
  * The popover chrome is eager so the first click can play its spring. The
  * session tree stays in `AvePanelBody`, loaded on hover/focus or first open.
+ *
+ * The same state is published on a context because below `lg` the summon
+ * button is not the floating launcher at all — it is a header button rendered
+ * by `Sidebar`, which sits inside this provider for exactly that reason.
  */
 export function AveLauncherProvider({
   children,
@@ -45,25 +48,27 @@ export function AveLauncherProvider({
 
   const minimize = () =>
     setPanel((prev) => (prev === "closed" ? prev : "minimized"));
-
-  const value = {
-    isOpen: panel === "open",
-    open: () => setPanel("open"),
-    minimize,
-  };
+  const open = () => setPanel("open");
+  const isOpen = panel === "open";
 
   return (
-    <AveLauncherContext.Provider value={value}>
+    <AveLauncherProviderContext
+      value={{
+        isOpen,
+        isHidden: onAveRoute,
+        toggle: isOpen ? minimize : open,
+      }}
+    >
       {children}
       {enabled ? (
         <AveLauncherSurface
-          isOpen={panel === "open"}
+          isOpen={isOpen}
           isMounted={panel !== "closed"}
           isHidden={onAveRoute}
-          onOpen={() => setPanel("open")}
+          onOpen={open}
           onMinimize={minimize}
         />
       ) : null}
-    </AveLauncherContext.Provider>
+    </AveLauncherProviderContext>
   );
 }

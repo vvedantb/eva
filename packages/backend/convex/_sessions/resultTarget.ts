@@ -13,8 +13,31 @@ type AssistantReply = {
   finishedAt?: number;
 };
 
-const PUBLISH_FAILURE_MARKER =
+export const PUBLISH_FAILURE_MARKER =
   "but Eva could not publish the branch to GitHub";
+
+/** Which lead-in the delayed-publish alert uses — must contain the marker. */
+export type PublishFailureScope = "session" | "chat" | "task";
+
+const PUBLISH_FAILURE_LEAD: Record<PublishFailureScope, string> = {
+  session: "Session completed locally",
+  chat: "Chat completed locally",
+  task: "Task committed locally",
+};
+
+/**
+ * The error string a workflow posts back through `saveResult` after the
+ * assistant reply was already saved. `delayedPublishFailureError` recognises
+ * this by the shared marker; a typo in either half used to re-run the generic
+ * finaliser and replace the answer with "Error: …".
+ */
+export function formatDelayedPublishFailureError(
+  scope: PublishFailureScope,
+  cause: unknown,
+): string {
+  const detail = cause instanceof Error ? cause.message : String(cause);
+  return `${PUBLISH_FAILURE_LEAD[scope]}, ${PUBLISH_FAILURE_MARKER}. The sandbox was preserved for recovery. ${detail}`;
+}
 
 /**
  * A publish failure reported after the assistant reply was already saved.
@@ -71,6 +94,17 @@ export function orphanPlaceholderMessages<M extends AssistantReply>(
       message.content === "" &&
       message.finishedAt === undefined,
   );
+}
+
+/** Default assistant bubble text when the caller does not override it. */
+export function assistantReplyContent(args: {
+  success: boolean;
+  result: string | null;
+  error: string | null;
+}): string {
+  return args.success
+    ? args.result || "I couldn't process your message."
+    : `Error: ${args.error || "Unknown error during execution."}`;
 }
 
 /** An assistant bubble this turn owns — not an alert, not a synthetic turn. */

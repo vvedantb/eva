@@ -222,7 +222,11 @@ export function ModelSelect<TModel extends string>({
               size={14}
             />
           )}
-          <span className="whitespace-nowrap text-left">
+          {/* On a phone the composer's under-bar is only a few hundred pixels
+              wide, so the label gives up width to the control beside it rather
+              than pushing it out of the row. `min-w-0` is the load-bearing half
+              — a flex child defaults to `min-width: auto` and never shrinks. */}
+          <span className="whitespace-nowrap text-left max-sm:min-w-0 max-sm:truncate">
             {triggerLabel}
             {triggerSuffix ? (
               <span className="text-muted-foreground/70">

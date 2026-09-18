@@ -18,8 +18,11 @@ import {
   ProviderIcon,
   formatModelDisplayLabel,
   findModelOption,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconLoader2, IconPlayerStop } from "@tabler/icons-react";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import dayjs, { formatExactDateTime } from "@eva/shared/dates";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";
@@ -124,6 +127,7 @@ export function RunTimelineItem({
       </Tooltip>
     ) : null;
 
+  const statusLabel = getRunStatusLabel(run, hasRunComment);
   const modelProvider = run.model ? getAIModelProvider(run.model) : null;
   const modelDisplayLabel =
     run.model && modelProvider
@@ -157,19 +161,30 @@ export function RunTimelineItem({
                       {getUserDisplayName(requester)}
                     </span>
                   ) : null}
-                  <Badge
-                    variant={
-                      run.status === "running"
-                        ? "warning"
-                        : run.status === "error"
-                          ? "destructive"
-                          : run.status === "success"
-                            ? "success"
-                            : "secondary"
-                    }
-                  >
-                    {getRunStatusLabel(run, hasRunComment)}
-                  </Badge>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <m.span
+                      key={statusLabel}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={motionFast}
+                      className="inline-flex"
+                    >
+                      <Badge
+                        variant={
+                          run.status === "running"
+                            ? "warning"
+                            : run.status === "error"
+                              ? "destructive"
+                              : run.status === "success"
+                                ? "success"
+                                : "secondary"
+                        }
+                      >
+                        {statusLabel}
+                      </Badge>
+                    </m.span>
+                  </AnimatePresence>
                   {modelProvider && modelDisplayLabel ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -207,6 +222,7 @@ export function RunTimelineItem({
                       variant="destructive"
                       size="sm"
                       className="h-6 px-2 text-xs"
+                      title={skipConfirmTitle("Stop")}
                       onClick={(e) => {
                         e.stopPropagation();
                         onStopConfirm();
@@ -219,6 +235,7 @@ export function RunTimelineItem({
                         <IconPlayerStop size={14} />
                       )}
                       Stop
+                      <ConfirmSkipHint />
                     </Button>
                   </div>
                 </TooltipTrigger>

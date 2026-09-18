@@ -106,11 +106,14 @@ var CLAUDE_PRICING_PER_MILLION = {
 };
 var CODEX_PRICING_PER_MILLION = {
   // OpenAI API list prices (per 1M tokens).
+  // GPT-6 Astra — third-party report of the OpenAI pricing page, read
+  // 2026-09-11; verify against https://developers.openai.com/api/docs/pricing.
+  "gpt-6-astra": { input: 10, cached: 1, output: 50 },
   "gpt-5.6-sol": { input: 5, cached: 0.5, output: 30 },
   "gpt-5.6-terra": { input: 2, cached: 0.2, output: 12 },
   "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
-  "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
   // Legacy — kept so in-flight sandboxes still cost-account correctly.
+  "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
   "gpt-5.5-pro": { input: 30, cached: 30, output: 180 },
   "gpt-5.4": { input: 1.25, cached: 0.125, output: 10 },
   "gpt-5.4-mini": { input: 0.25, cached: 0.025, output: 2 },
@@ -284,7 +287,8 @@ var AI_FAST_MODE = process.env.AI_FAST_MODE || "";
 var CLAUDE_EFFORT_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh", "max"]);
 var claudeEffort = PROVIDER === "claude" && CLAUDE_EFFORT_LEVELS.has(REASONING_EFFORT) ? REASONING_EFFORT : "";
 var CODEX_REASONING_EFFORT = {
-  // GPT-5.5: none/low/medium/high/xhigh. GPT-5.6 also accepts \`max\`.
+  // GPT-5.6 Sol/Terra/Luna: none through \`max\`. GPT-6 Astra accepts
+  // low through \`max\` — the picker never offers "off" for it.
   off: "none",
   low: "low",
   medium: "medium",
@@ -421,6 +425,36 @@ import {
   writeFileSync
 } from "fs";
 
+// callback-src/parse/questionInput.ts
+function parseQuestionOptions(value) {
+  if (!Array.isArray(value)) return [];
+  const options = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (typeof raw.label !== "string" || !raw.label) continue;
+    options.push({
+      label: raw.label,
+      description: typeof raw.description === "string" && raw.description ? raw.description : void 0
+    });
+  }
+  return options;
+}
+function parseQuestionInput(input) {
+  if (!Array.isArray(input.questions)) return void 0;
+  const questions = [];
+  for (const raw of input.questions) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (typeof raw.question !== "string" || !raw.question) continue;
+    questions.push({
+      question: raw.question,
+      header: typeof raw.header === "string" && raw.header ? raw.header : void 0,
+      multiSelect: raw.multiSelect === true ? true : void 0,
+      options: parseQuestionOptions(raw.options)
+    });
+  }
+  return questions.length > 0 ? questions : void 0;
+}
+
 // callback-src/runtime/state.ts
 function parsePriorStep(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -504,6 +538,23 @@ function parsePriorStep(value) {
       step.todos = todos;
     }
   }
+  if (Array.isArray(value.questions)) {
+    const questions = parseQuestionInput({ questions: value.questions });
+    if (questions) {
+      step.questions = questions;
+    }
+  }
+  if (value.answers && typeof value.answers === "object" && !Array.isArray(value.answers)) {
+    const answers = {};
+    for (const [question, answer] of Object.entries(value.answers)) {
+      if (typeof answer === "string") {
+        answers[question] = answer;
+      }
+    }
+    if (Object.keys(answers).length > 0) {
+      step.answers = answers;
+    }
+  }
   return step;
 }
 var callbackState = {
@@ -544,6 +595,7 @@ var callbackState = {
   cursorKnownToolIds: /* @__PURE__ */ new Set(),
   cursorTerminalToolIds: /* @__PURE__ */ new Set(),
   todoState: [],
+  questionAnswers: /* @__PURE__ */ new Map(),
   awaitingQuestionAnswer: false,
   usageLimitSnapshot: null,
   lastReportedUsageLimits: "",
@@ -608,6 +660,7 @@ function resetAttemptState() {
   callbackState.codexToolItemIds.clear();
   callbackState.cursorKnownToolIds.clear();
   callbackState.cursorTerminalToolIds.clear();
+  callbackState.questionAnswers.clear();
 }
 
 // callback-src/utils.ts
@@ -885,9 +938,8 @@ async function withRetries(label, maxRetries, run, shouldRetry = () => true) {
       attempt++;
       if (attempt > maxRetries || !shouldRetry(error)) throw e;
       const delayMs = buildRetryDelayMs(attempt);
-      console.error(
-        label + " attempt " + attempt + " failed, retrying in " + delayMs + "ms:",
-        String(e)
+      log(
+        label + " attempt " + attempt + " failed, retrying in " + delayMs + "ms: " + String(e)
       );
       await new Promise((r) => setTimeout(r, delayMs));
     }
@@ -1744,12 +1796,16 @@ function toolCallToStep(name, input) {
       return { type: "tool", label: "Updating tasks...", status: "active" };
     case "TodoRead":
       return { type: "tool", label: "Reading tasks...", status: "active" };
-    case "AskUserQuestion":
+    case "AskUserQuestion": {
+      const questions = parseQuestionInput(input);
       return {
         type: "question",
         label: "Asking a question...",
+        detail: questions ? questions[0].question : void 0,
+        questions,
         status: "active"
       };
+    }
     default:
       return {
         type: "tool",
@@ -2921,7 +2977,7 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
 function captureClaudeUsageLimitError(error) {
   if (!error) return;
   const message = error.toLowerCase();
-  if (!message.includes("out of extra usage") && !message.includes("rate limit") && !message.includes("usage limit") && !message.includes("spend limit") && !message.includes("token limit exceeded")) {
+  if (!message.includes("out of extra usage") && !message.includes("rate limit") && !message.includes("usage limit") && !message.includes("session limit") && !message.includes("spend limit") && !message.includes("token limit exceeded")) {
     return;
   }
   const snapshot = ensureSnapshot();
@@ -3300,14 +3356,23 @@ function completeStatusOnNonStatusMessage(event) {
 }
 
 // callback-src/providers/claude.ts
-function claudeToolCompleteResult(resultText, isError) {
+function claudeToolCompleteResult(resultText, isError, toolUseId) {
+  let answers;
+  if (toolUseId !== void 0) {
+    const stored = callbackState.questionAnswers.get(toolUseId);
+    if (stored) {
+      answers = stored;
+      callbackState.questionAnswers.delete(toolUseId);
+    }
+  }
   const output = buildStepOutput(resultText);
-  if (!output && !isError) {
+  if (!output && !isError && !answers) {
     return void 0;
   }
   return {
     output,
-    isError: isError ? true : void 0
+    isError: isError ? true : void 0,
+    answers
   };
 }
 function extractToolResultText(content) {
@@ -3401,7 +3466,7 @@ function claudeParseLine(event) {
     if (toolUseId) {
       trackClaudeToolResult(toolUseId, resultText, isError);
     }
-    const result = claudeToolCompleteResult(resultText, isError);
+    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
     events.push(
       result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
     );
@@ -3417,7 +3482,7 @@ function claudeParseLine(event) {
         const resultText = block.content !== void 0 ? extractToolResultText(block.content) : "";
         const isError = block.is_error === true;
         trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError);
+        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
         events.push(
           result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
         );
@@ -3445,7 +3510,7 @@ function claudeParseLine(event) {
         });
         continue;
       }
-      if (block.name === "TodoRead" || block.name === "TaskGet" || block.name === "TaskList") {
+      if (block.name === "TodoRead" || block.name === "TaskGet" || block.name === "TaskList" || block.name === "ExitPlanMode") {
         continue;
       }
       const step = toolCallToStep(block.name, input);
@@ -4196,6 +4261,9 @@ function mergeToolResult(step, result) {
   if (result.durationMs !== void 0) {
     step.durationMs = result.durationMs;
   }
+  if (result.answers) {
+    step.answers = result.answers;
+  }
 }
 function markStepComplete(step) {
   step.status = "complete";
@@ -4419,6 +4487,177 @@ function appendStreamedContent(text, isBlockBoundary = false) {
 
 // callback-src/runtime/heartbeats.ts
 import { writeFileSync as writeFileSync7 } from "fs";
+import { freemem, loadavg } from "os";
+
+// callback-src/runtime/eventLoopStall.ts
+var EVENT_LOOP_STALL_LOG_MS = 3e4;
+function measureTickStallMs(input) {
+  const lateBy = input.now - input.previousTickAt - input.intervalMs;
+  return lateBy > input.toleranceMs ? lateBy : 0;
+}
+
+// callback-src/runtime/turnPersist.ts
+import { spawnSync as spawnSync3 } from "child_process";
+var GIT_STEP_TIMEOUT_MS = 2e4;
+var PUSH_TIMEOUT_MS = 6e4;
+var COMMIT_ADD_ARGS = [
+  "add",
+  "-A",
+  "--",
+  ":!*.png",
+  ":!*.jpg",
+  ":!*.jpeg",
+  ":!*.gif",
+  ":!*.webp",
+  ":!*.webm",
+  ":!*.mp4",
+  ":!*.mov",
+  ":!screenshots/",
+  ":!recordings/",
+  ":!plan.md"
+];
+function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
+  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  const out = ((result.stdout || "") + (result.stderr || "")).trim();
+  return { ok: result.status === 0, out };
+}
+function localBranchRewroteOwnHistory(branch, remoteRef) {
+  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
+  const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
+  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
+  return reflog.out.split("\\n").map((line) => line.trim()).includes(remoteTip.out);
+}
+function isMissingRemoteRef(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
+}
+function isNonFastForwardPush(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
+}
+function synchronizeForPush(branch) {
+  const remoteRef = \`refs/remotes/origin/\${branch}\`;
+  const fetch2 = git(
+    [
+      "fetch",
+      "--no-tags",
+      "origin",
+      \`+refs/heads/\${branch}:\${remoteRef}\`
+    ],
+    PUSH_TIMEOUT_MS
+  );
+  if (!fetch2.ok) {
+    if (isMissingRemoteRef(fetch2.out)) {
+      git(["update-ref", "-d", remoteRef]);
+      return { status: "ready", remoteExists: false };
+    }
+    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
+    return { status: "failed" };
+  }
+  const divergence = git([
+    "rev-list",
+    "--left-right",
+    "--count",
+    \`\${remoteRef}...refs/heads/\${branch}\`
+  ]);
+  if (!divergence.ok) {
+    log(
+      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
+    );
+    return { status: "failed" };
+  }
+  if (/^0\\s+\\d+\$/.test(divergence.out)) {
+    return { status: "ready", remoteExists: true };
+  }
+  if (/^[1-9]\\d*\\s+0\$/.test(divergence.out)) {
+    const fastForward = git(["merge", "--ff-only", remoteRef]);
+    if (fastForward.ok) {
+      return { status: "ready", remoteExists: true };
+    }
+    log(
+      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
+    );
+    return { status: "failed" };
+  }
+  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.out)) {
+    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
+      log(
+        \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
+      );
+      return { status: "failed" };
+    }
+    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
+    if (merge.ok) {
+      return { status: "ready", remoteExists: true };
+    }
+    git(["merge", "--abort"]);
+    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
+    return { status: "failed" };
+  }
+  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
+  return { status: "failed" };
+}
+function tipAlreadyPublished(exclusion) {
+  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
+  return unpushed.ok && unpushed.out === "0";
+}
+function persistTurnWork() {
+  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  const startedAt = Date.now();
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch.ok || !branch.out.startsWith("eva/")) {
+    if (branch.ok && branch.out) {
+      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
+    }
+    return;
+  }
+  const dirty = git(["status", "--porcelain"]);
+  if (dirty.ok && dirty.out.length > 0) {
+    git(COMMIT_ADD_ARGS);
+    const staged = git(["diff", "--cached", "--quiet"]);
+    if (!staged.ok) {
+      const commit = git([
+        "commit",
+        "-m",
+        "task: checkpoint uncommitted work at turn end"
+      ]);
+      log(
+        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
+      );
+    }
+  }
+  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
+  const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const sync = synchronizeForPush(branch.out);
+    if (sync.status === "failed") return;
+    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
+    if (tipAlreadyPublished(exclusion)) return;
+    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
+    if (push.ok) {
+      log(
+        \`persistTurnWork: push ok branch=\${branch.out} in \${Date.now() - startedAt}ms\`
+      );
+      return;
+    }
+    if (attempt < 2 && isNonFastForwardPush(push.out)) {
+      log(
+        \`persistTurnWork: remote moved during push; refetching branch=\${branch.out}\`
+      );
+      continue;
+    }
+    log(
+      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
+    );
+    return;
+  }
+}
+
+// callback-src/runtime/heartbeats.ts
 var flushInterval = null;
 var heartbeatInterval = null;
 var activeFlush = null;
@@ -4452,12 +4691,11 @@ function noteHeartbeatFailure(error) {
   if (callbackState.consecutiveHeartbeatFailures === 1) {
     callbackState.heartbeatFailureStreakStartedAt = Date.now();
   }
-  console.error(
-    "Heartbeat failed (consecutive: " + callbackState.consecutiveHeartbeatFailures + "):",
-    message
+  log(
+    "Heartbeat failed (consecutive: " + callbackState.consecutiveHeartbeatFailures + "): " + message
   );
   if (callbackState.consecutiveHeartbeatFailures === 2 || callbackState.consecutiveHeartbeatFailures === 4) {
-    console.error(
+    log(
       "[streaming-heartbeat] degraded: " + callbackState.consecutiveHeartbeatFailures + " consecutive post-retry failures (burstFatal>=" + HEARTBEAT_FATAL_BURST + " or slowFatal>=" + HEARTBEAT_FATAL_SLOW_COUNT + " over " + HEARTBEAT_FATAL_SLOW_WINDOW_MS + "ms)"
     );
   }
@@ -4613,13 +4851,32 @@ async function initialHeartbeat() {
     }
   }
 }
+var HEARTBEAT_TICK_MS = 1e4;
+var lastHeartbeatTickAt = 0;
+function logEventLoopStall(now) {
+  const stalledMs = measureTickStallMs({
+    previousTickAt: lastHeartbeatTickAt,
+    now,
+    intervalMs: HEARTBEAT_TICK_MS,
+    toleranceMs: EVENT_LOOP_STALL_LOG_MS
+  });
+  lastHeartbeatTickAt = now;
+  if (stalledMs === 0) return;
+  const mb = (bytes) => String(Math.round(bytes / 1024 / 1024));
+  const memory = process.memoryUsage();
+  log(
+    "event loop stalled for " + stalledMs + "ms (rss=" + mb(memory.rss) + "MB heapUsed=" + mb(memory.heapUsed) + "MB freemem=" + mb(freemem()) + "MB loadavg=" + loadavg().map((n) => n.toFixed(2)).join(",") + ")"
+  );
+}
 function startStreamingLoops() {
   flushInterval = setInterval(() => {
     void flushStreaming().then(enforceTurnLease);
   }, 150);
+  lastHeartbeatTickAt = Date.now();
   heartbeatInterval = setInterval(() => {
+    logEventLoopStall(Date.now());
     void heartbeatPing().then(enforceTurnLease);
-  }, 1e4);
+  }, HEARTBEAT_TICK_MS);
 }
 async function stopStreamingLoops() {
   if (callbackState.streamingLoopsStopped) return;
@@ -4642,6 +4899,12 @@ function enforceTurnLease() {
   if (flushInterval) clearInterval(flushInterval);
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   callbackState.streamingLoopsStopped = true;
+  if (decision.reason !== "superseded") {
+    log(
+      "persisting turn work before lease-terminal exit (" + decision.reason + ")"
+    );
+    persistTurnWork();
+  }
   setTimeout(() => process.exit(0), LEASE_EXIT_GRACE_MS).unref();
   return true;
 }
@@ -4811,10 +5074,17 @@ function buildCanUseTool() {
       if (answerJson === null) {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      return {
-        behavior: "allow",
-        updatedInput: { ...input, answers: parseAnswers(answerJson) }
-      };
+      const answers = parseAnswers(answerJson);
+      if (toolUseId) {
+        const stringAnswers = {};
+        for (const [question, answer] of Object.entries(answers)) {
+          if (typeof answer === "string") {
+            stringAnswers[question] = answer;
+          }
+        }
+        callbackState.questionAnswers.set(toolUseId, stringAnswers);
+      }
+      return { behavior: "allow", updatedInput: { ...input, answers } };
     } finally {
       callbackState.awaitingQuestionAnswer = false;
     }
@@ -5077,9 +5347,7 @@ async function runClaudeSdkAttempt(sessionMode) {
       const json = sdkMessageJson(line);
       if (json !== null && isZeroWorkTaskNotificationResult(json)) {
         sawZeroWorkTaskNotification = true;
-        log(
-          "runClaudeSdkAttempt: ignored zero-work task notification result"
-        );
+        log("runClaudeSdkAttempt: ignored zero-work task notification result");
         continue;
       }
       appendToRawLogFile(line);
@@ -5212,193 +5480,59 @@ async function materializeTurnAttachments(turn) {
   turn.prompt += "\\n\\n---\\nThe user attached the following file(s). Read them with your file-reading tool before responding:\\n" + paths2.map((path3) => \`- \${path3}\`).join("\\n");
 }
 
-// callback-src/runtime/turnPersist.ts
-import { spawnSync as spawnSync3 } from "child_process";
-var GIT_STEP_TIMEOUT_MS = 2e4;
-var PUSH_TIMEOUT_MS = 6e4;
-var COMMIT_ADD_ARGS = [
-  "add",
-  "-A",
-  "--",
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md"
-];
-function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
-  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+// callback-src/providers/githubToken.ts
+function tokenFromActionResponse(data) {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return null;
+  }
+  const value = data.value;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  return typeof value.token === "string" ? value.token : null;
+}
+async function fetchInstallationToken(params) {
+  try {
+    const fetchFn = params.fetchFn ?? fetchWithTimeout;
+    const response = await fetchFn(params.convexUrl + "/api/action", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + params.convexToken
+      },
+      body: JSON.stringify({
+        path: "github:getInstallationTokenAction",
+        args: { repoId: params.repoId },
+        format: "json"
+      })
+    });
+    if (!response.ok) return { token: null };
+    const token = tokenFromActionResponse(await readResponseJson(response));
+    return token ? { token } : { token: null };
+  } catch {
+    return { token: null };
+  }
+}
+function applyGithubTokenToEnv(env, token) {
+  env.GITHUB_TOKEN = token;
+  env.GH_TOKEN = token;
+}
+async function ensureGithubToken(params) {
+  const convexUrl = params.convexUrl;
+  const convexToken = params.convexToken;
+  const repoId = params.repoId;
+  if (!convexUrl || !convexToken || !repoId) {
+    return { refreshed: false };
+  }
+  const result = await fetchInstallationToken({
+    convexUrl,
+    convexToken,
+    repoId,
+    fetchFn: params.fetchFn
   });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
-var REWRITE_REMOTE_ONLY_FILE_THRESHOLD = 20;
-function parseGitNameOnlyList(output) {
-  const names = [];
-  for (const line of output.split("\\n")) {
-    const name = line.trim();
-    if (name.length > 0) names.push(name);
-  }
-  return names;
-}
-function remoteOnlyChangedFileCount(localChangedFiles, remoteChangedFiles) {
-  const local = new Set(localChangedFiles);
-  let count = 0;
-  for (const file of remoteChangedFiles) {
-    if (!local.has(file)) count += 1;
-  }
-  return count;
-}
-function divergedPublishLooksLikeRewrite(localChangedFiles, remoteChangedFiles) {
-  const remoteOnly = remoteOnlyChangedFileCount(
-    localChangedFiles,
-    remoteChangedFiles
-  );
-  return remoteOnly > REWRITE_REMOTE_ONLY_FILE_THRESHOLD && remoteOnly > localChangedFiles.length;
-}
-function isMissingRemoteRef(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
-}
-function isNonFastForwardPush(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
-}
-function synchronizeForPush(branch) {
-  const remoteRef = \`refs/remotes/origin/\${branch}\`;
-  const fetch2 = git(
-    [
-      "fetch",
-      "--no-tags",
-      "origin",
-      \`+refs/heads/\${branch}:\${remoteRef}\`
-    ],
-    PUSH_TIMEOUT_MS
-  );
-  if (!fetch2.ok) {
-    if (isMissingRemoteRef(fetch2.out)) {
-      git(["update-ref", "-d", remoteRef]);
-      return { status: "ready", remoteExists: false };
-    }
-    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  const divergence = git([
-    "rev-list",
-    "--left-right",
-    "--count",
-    \`\${remoteRef}...refs/heads/\${branch}\`
-  ]);
-  if (!divergence.ok) {
-    log(
-      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^0\\s+\\d+\$/.test(divergence.out)) {
-    return { status: "ready", remoteExists: true };
-  }
-  if (/^[1-9]\\d*\\s+0\$/.test(divergence.out)) {
-    const fastForward = git(["merge", "--ff-only", remoteRef]);
-    if (fastForward.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    log(
-      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.out)) {
-    const localRef = \`refs/heads/\${branch}\`;
-    const mergeBase = git(["merge-base", remoteRef, localRef]);
-    if (mergeBase.ok) {
-      const localChanged = parseGitNameOnlyList(
-        git(["diff", "--name-only", mergeBase.out, localRef]).out
-      );
-      const remoteChanged = parseGitNameOnlyList(
-        git(["diff", "--name-only", mergeBase.out, remoteRef]).out
-      );
-      if (divergedPublishLooksLikeRewrite(localChanged, remoteChanged)) {
-        log(
-          \`persistTurnWork: skipped merge \\u2014 rewritten local branch vs origin/\${branch}\`
-        );
-        return { status: "failed" };
-      }
-    }
-    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
-    if (merge.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    git(["merge", "--abort"]);
-    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
-  return { status: "failed" };
-}
-function tipAlreadyPublished(exclusion) {
-  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
-  return unpushed.ok && unpushed.out === "0";
-}
-function persistTurnWork() {
-  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
-  const startedAt = Date.now();
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch.ok || !branch.out.startsWith("eva/")) {
-    if (branch.ok && branch.out) {
-      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
-    }
-    return;
-  }
-  const dirty = git(["status", "--porcelain"]);
-  if (dirty.ok && dirty.out.length > 0) {
-    git(COMMIT_ADD_ARGS);
-    const staged = git(["diff", "--cached", "--quiet"]);
-    if (!staged.ok) {
-      const commit = git([
-        "commit",
-        "-m",
-        "task: checkpoint uncommitted work at turn end"
-      ]);
-      log(
-        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
-      );
-    }
-  }
-  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
-  const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const sync = synchronizeForPush(branch.out);
-    if (sync.status === "failed") return;
-    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
-    if (tipAlreadyPublished(exclusion)) return;
-    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
-    if (push.ok) {
-      log(
-        \`persistTurnWork: push ok branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-      );
-      return;
-    }
-    if (attempt < 2 && isNonFastForwardPush(push.out)) {
-      log(
-        \`persistTurnWork: remote moved during push; refetching branch=\${branch.out}\`
-      );
-      continue;
-    }
-    log(
-      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-    );
-    return;
-  }
+  if (result.token === null) return { refreshed: false };
+  applyGithubTokenToEnv(params.env ?? process.env, result.token);
+  return { refreshed: true };
 }
 
 // callback-src/runtime/daemonSupervisor.ts
@@ -5575,6 +5709,7 @@ function readClaimedTurn(result) {
   const attachmentUrls = Array.isArray(payload.attachmentUrls) ? payload.attachmentUrls.filter(
     (url) => typeof url === "string"
   ) : [];
+  const interactionMode = "default";
   const turnLease = readTurnLeaseIdentity(result);
   if (lifecycle === "durable" && turnLease === null) {
     throw new Error("Durable claimed turn did not include a lease identity");
@@ -5587,6 +5722,7 @@ function readClaimedTurn(result) {
       lifecycle: "durable",
       prompt: payload.prompt,
       attachmentUrls,
+      interactionMode,
       turnLease
     };
   }
@@ -5594,6 +5730,7 @@ function readClaimedTurn(result) {
     lifecycle: "legacy",
     prompt: payload.prompt,
     attachmentUrls,
+    interactionMode,
     turnLease: null
   };
 }
@@ -5814,41 +5951,12 @@ function createPromptStream() {
   };
   return { push, iterable };
 }
-async function ensureGithubToken() {
-  if (!REPO_ID || !CONVEX_URL || !CONVEX_TOKEN) return;
-  try {
-    const res = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json"
-      })
-    });
-    if (!res.ok) return;
-    const data = await readResponseJson(res);
-    const token = readGithubToken(data);
-    if (token) {
-      process.env.GITHUB_TOKEN = token;
-      process.env.GH_TOKEN = token;
-    }
-  } catch {
-  }
-}
-function readGithubToken(data) {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    return null;
-  }
-  const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
-  }
-  const payload = value;
-  return typeof payload.token === "string" ? payload.token : null;
+async function refreshGithubToken() {
+  await ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID
+  });
 }
 function resetTurnState() {
   callbackState.accumulatedSteps.length = 0;
@@ -6317,7 +6425,7 @@ async function finalizeSyntheticTurn(output) {
   agentTurnOutput = "";
   log("daemon: synthetic turn finalized success=" + success);
 }
-function startRealAgentTurn(turn, agentRunner) {
+async function startRealAgentTurn(turn, agentRunner) {
   resetTurnState();
   if (!supervisor.startTurn({ kind: "real" })) {
     log("daemon: claimed turn could not enter running state");
@@ -6328,6 +6436,7 @@ function startRealAgentTurn(turn, agentRunner) {
   sawFirstMessageThisTurn = { value: false };
   sawAssistantThisTurn = { value: false };
   beginWatchedTurn();
+  await agentRunner.setPermissionMode("default");
   agentRunner.push(turn.prompt);
   callbackState.activeAttemptStartedAt = agentTurnStartedAt;
   agentTurnOutput = "";
@@ -6436,7 +6545,7 @@ async function runDaemonMessagePump(agentRunner) {
     if (supervisor.currentTurn === null && supervisor.pendingClaim !== null) {
       const turn = supervisor.takeClaim();
       if (turn === null) continue;
-      startRealAgentTurn(turn, agentRunner);
+      await startRealAgentTurn(turn, agentRunner);
       continue;
     }
     if (!supervisor.hasWork && unsettledBackgroundAgents.size === 0 && Date.now() - lastIdleActivityAtMs > IDLE_EXIT_MS) {
@@ -6539,7 +6648,7 @@ async function runDaemonMessagePump(agentRunner) {
     if (supervisor.pendingClaim !== null && supervisor.currentTurn === null) {
       const parked = supervisor.takeClaim();
       if (parked === null) continue;
-      startRealAgentTurn(parked, agentRunner);
+      await startRealAgentTurn(parked, agentRunner);
     }
   }
 }
@@ -6625,6 +6734,19 @@ function createWarmAgentRunner(sdk, options) {
     }
     log("daemon: interrupt unavailable on SDK query handle");
   };
+  const setPermissionMode = async (mode) => {
+    if (typeof query.setPermissionMode !== "function") {
+      log("daemon: setPermissionMode unavailable on SDK query handle");
+      return;
+    }
+    try {
+      await query.setPermissionMode(mode === "plan" ? "plan" : "default");
+      log("daemon: permission mode set to " + mode);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log("daemon: setPermissionMode failed \\u2014 " + message);
+    }
+  };
   const readUsage = () => readSdkPlanUsage(query);
   return {
     push,
@@ -6633,7 +6755,8 @@ function createWarmAgentRunner(sdk, options) {
     hasPending,
     stopTask,
     interrupt,
-    readUsage
+    readUsage,
+    setPermissionMode
   };
 }
 function callbackScriptWentStaleOnDisk() {
@@ -6692,7 +6815,7 @@ async function runSdkDaemon() {
     process.exit(1);
   }
   startStreamingLoops();
-  await ensureGithubToken();
+  await refreshGithubToken();
   const sessionMode = prepareClaudeSessionState();
   const options = buildSdkOptions(sessionMode);
   const sdk = await loadSdk();
@@ -7083,30 +7206,12 @@ function processNotification(notification) {
     supervisor2.settleTurn();
   });
 }
-async function ensureGithubToken2() {
-  if (!REPO_ID || !CONVEX_URL || !CONVEX_TOKEN) return;
-  try {
-    const response = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json"
-      })
-    });
-    if (!response.ok) return;
-    const payload = objectValue2(await readResponseJson(response) ?? null);
-    const token = stringField(payload.value, "token");
-    if (token) {
-      process.env.GITHUB_TOKEN = token;
-      process.env.GH_TOKEN = token;
-    }
-  } catch {
-  }
+async function refreshGithubToken2() {
+  await ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID
+  });
 }
 async function establishThread(client, sessionMode) {
   if (sessionMode.sessionId) {
@@ -7202,7 +7307,7 @@ async function runCodexAppServerDaemon() {
   const preflightOk2 = await runPreflightHeartbeat();
   if (!preflightOk2) process.exit(1);
   startStreamingLoops();
-  await ensureGithubToken2();
+  await refreshGithubToken2();
   const client = new CodexAppServerClient();
   try {
     const sessionMode = prepareCodexSessionState();
@@ -7302,10 +7407,11 @@ import { mkdirSync as mkdirSync7, readFileSync as readFileSync8 } from "fs";
 var SDK_PACKAGE2 = "@cursor/sdk";
 var SDK_VERSION2 = "1.0.28";
 var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
+var SDK_SQLITE_ENTRY_RELPATH = "/dist/esm/sqlite.js";
 var CURSOR_AGENT_SETUP_TIMEOUT_MS = 3e4;
 var CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV = "CURSOR_SDK_LOCAL_MODEL_CATALOG_JSON";
 var CURSOR_SEND_START_TIMEOUT_MS = 6e4;
-var CURSOR_FIRST_VISIBLE_EVENT_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS;
+var CURSOR_FIRST_VISIBLE_EVENT_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var CURSOR_POST_EVENT_SILENCE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var CURSOR_RESULT_SETTLE_TIMEOUT_MS = 3e4;
 var CursorPhaseTimeoutError = class extends Error {
@@ -7340,6 +7446,9 @@ function shouldRetryStalledCursorResume(error) {
 }
 function shouldRetryStalledCursorCreate(error) {
   return error instanceof CursorPhaseTimeoutError && error.phase === "creating a fresh agent";
+}
+function canReplaceCursorAgent(error) {
+  return isAgentNotFound(error);
 }
 function cursorEventHasVisibleActivity(type) {
   return type === "thinking" || type === "assistant" || type === "tool_call";
@@ -7383,6 +7492,7 @@ var CURSOR_WRITE_TOOLS = [
   "applyAgentDiff"
 ];
 var loadedSdk = null;
+var loadedSdkSqlite = null;
 async function loadCursorSdk() {
   if (loadedSdk) return loadedSdk;
   const mod = await import(resolvePinnedSdkEntry({
@@ -7391,6 +7501,16 @@ async function loadCursorSdk() {
     entryRelPath: SDK_ENTRY_RELPATH
   }));
   loadedSdk = mod;
+  return mod;
+}
+async function loadCursorSdkSqlite() {
+  if (loadedSdkSqlite) return loadedSdkSqlite;
+  const mod = await import(resolvePinnedSdkEntry({
+    packageName: SDK_PACKAGE2,
+    version: SDK_VERSION2,
+    entryRelPath: SDK_SQLITE_ENTRY_RELPATH
+  }));
+  loadedSdkSqlite = mod;
   return mod;
 }
 function readPromptText2() {
@@ -7631,8 +7751,12 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     cancelRun();
   });
   const sdk = await loadCursorSdk();
+  const sqlite = await loadCursorSdkSqlite();
   mkdirSync7(CURSOR_SDK_STORE_DIR, { recursive: true });
-  const store4 = new sdk.JsonlLocalAgentStore(CURSOR_SDK_STORE_DIR);
+  const store4 = await sqlite.SqliteLocalAgentStore.open({
+    workspaceRef: WORK_DIR,
+    stateRoot: CURSOR_SDK_STORE_DIR
+  });
   const options = {
     apiKey: (process.env.CURSOR_API_KEY || "").trim(),
     model: await resolveCursorModelSelection(sdk),
@@ -7696,26 +7820,34 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
       resumedExistingAgent = true;
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error);
-      log(
-        "runCursorSdkAttempt: resume failed \\u2014 retrying the saved agent (" + messageText + ")"
-      );
-      appendToRawLogFile("[sdk-retry] resume failed: " + messageText + "\\n");
-      if (error instanceof Error && !isAgentNotFound(error)) {
+      if (error instanceof Error && canReplaceCursorAgent(error)) {
+        log(
+          "runCursorSdkAttempt: saved agent gone \\u2014 starting a fresh agent (" + messageText + ")"
+        );
+        appendToRawLogFile("[sdk-retry] resume failed: " + messageText + "\\n");
+        agent = await createFreshAgent();
+      } else {
+        log(
+          "runCursorSdkAttempt: resume failed \\u2014 retrying the saved agent (" + messageText + ")"
+        );
+        appendToRawLogFile("[sdk-retry] resume failed: " + messageText + "\\n");
         try {
           agent = await resumeSavedAgent(sessionMode.sessionId);
           resumedExistingAgent = true;
         } catch (retryError) {
-          const retryMessageText = retryError instanceof Error ? retryError.message : String(retryError);
-          log(
-            "runCursorSdkAttempt: resume retry failed \\u2014 starting a fresh agent (" + retryMessageText + ")"
-          );
-          appendToRawLogFile(
-            "[sdk-retry] resume retry failed: " + retryMessageText + "\\n"
-          );
-          agent = await createFreshAgent();
+          if (retryError instanceof Error && canReplaceCursorAgent(retryError)) {
+            const retryMessageText = retryError.message;
+            log(
+              "runCursorSdkAttempt: saved agent gone on retry \\u2014 starting a fresh agent (" + retryMessageText + ")"
+            );
+            appendToRawLogFile(
+              "[sdk-retry] resume retry failed: " + retryMessageText + "\\n"
+            );
+            agent = await createFreshAgent();
+          } else {
+            throw retryError;
+          }
         }
-      } else {
-        agent = await createFreshAgent();
       }
     }
   } else {
@@ -7885,18 +8017,28 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     try {
       await runTurnWithRetries(agent, !resumedExistingAgent);
     } catch (error) {
-      const retryStalledResume = error instanceof Error && shouldRetryStalledCursorResume(error);
-      if (!resumedExistingAgent || !(error instanceof Error) || !(isAgentNotFound(error) || retryStalledResume)) {
+      if (!resumedExistingAgent || !(error instanceof Error)) {
         throw error;
       }
-      log(
-        "runCursorSdkAttempt: resumed agent run failed \\u2014 recovering (" + error.message + ")"
-      );
-      appendToRawLogFile("[sdk-retry] " + error.message + "\\n");
-      resetForRecovery(agent);
       const savedSessionId = callbackState.activeCursorSessionId || sessionMode.sessionId;
-      let recoveredOnSameAgent = false;
-      if (retryStalledResume && savedSessionId) {
+      if (canReplaceCursorAgent(error)) {
+        log(
+          "runCursorSdkAttempt: saved agent gone mid-run \\u2014 starting a fresh agent (" + error.message + ")"
+        );
+        appendToRawLogFile("[sdk-retry] " + error.message + "\\n");
+        resetForRecovery(agent);
+        pushNoticeStep2(
+          "Started a fresh Cursor agent",
+          "The saved agent could not be restored, so Eva recovered with a clean context."
+        );
+        agent = await createFreshAgent();
+        await runTurnWithRetries(agent, true);
+      } else if (shouldRetryStalledCursorResume(error) && savedSessionId) {
+        log(
+          "runCursorSdkAttempt: resumed agent run stalled \\u2014 retrying the same agent (" + error.message + ")"
+        );
+        appendToRawLogFile("[sdk-retry] " + error.message + "\\n");
+        resetForRecovery(agent);
         pushNoticeStep2(
           "Retrying the saved Cursor agent",
           "The run stalled before any output, so Eva reopened the same agent to keep its context."
@@ -7904,24 +8046,25 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
         try {
           agent = await resumeSavedAgent(savedSessionId);
           await runTurnWithRetries(agent, false);
-          recoveredOnSameAgent = true;
         } catch (retryError) {
-          const retryIsRecoverable = retryError instanceof Error && (isAgentNotFound(retryError) || shouldRetryStalledCursorResume(retryError) || retryError instanceof CursorPhaseTimeoutError && retryError.phase === "restoring saved context");
-          if (!retryIsRecoverable) throw retryError;
-          log(
-            "runCursorSdkAttempt: same-agent retry failed \\u2014 starting a fresh agent (" + retryError.message + ")"
-          );
-          appendToRawLogFile("[sdk-retry] " + retryError.message + "\\n");
-          resetForRecovery(agent);
+          if (retryError instanceof Error && canReplaceCursorAgent(retryError)) {
+            log(
+              "runCursorSdkAttempt: saved agent gone on stall retry \\u2014 starting a fresh agent (" + retryError.message + ")"
+            );
+            appendToRawLogFile("[sdk-retry] " + retryError.message + "\\n");
+            resetForRecovery(agent);
+            pushNoticeStep2(
+              "Started a fresh Cursor agent",
+              "The saved agent could not be restored, so Eva recovered with a clean context."
+            );
+            agent = await createFreshAgent();
+            await runTurnWithRetries(agent, true);
+          } else {
+            throw retryError;
+          }
         }
-      }
-      if (!recoveredOnSameAgent) {
-        pushNoticeStep2(
-          "Started a fresh Cursor agent",
-          retryStalledResume ? "The saved agent stopped responding twice, so Eva recovered with a clean context." : "The saved agent could not be restored, so Eva recovered with a clean context."
-        );
-        agent = await createFreshAgent();
-        await runTurnWithRetries(agent, true);
+      } else {
+        throw error;
       }
     }
   } catch (error) {
@@ -7935,6 +8078,10 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     clearInterval(healthTimer);
     try {
       agent.close();
+    } catch {
+    }
+    try {
+      await store4.dispose();
     } catch {
     }
   }
@@ -7994,7 +8141,9 @@ function sleep4(ms) {
 function cursorTurnWorkerEntryPath() {
   const entryPath = process.argv[1];
   if (!entryPath) {
-    throw new Error("Cursor turn worker could not resolve the callback entrypoint");
+    throw new Error(
+      "Cursor turn worker could not resolve the callback entrypoint"
+    );
   }
   return entryPath;
 }
@@ -8008,6 +8157,7 @@ function readCursorTurnWorkerClaim() {
       lifecycle: "legacy",
       prompt,
       attachmentUrls: [],
+      interactionMode: "default",
       turnLease: null
     };
   }
@@ -8018,6 +8168,7 @@ function readCursorTurnWorkerClaim() {
     lifecycle: "durable",
     prompt,
     attachmentUrls: [],
+    interactionMode: "default",
     turnLease: {
       turnId: CURSOR_TURN_WORKER_TURN_ID,
       leaseGeneration: CURSOR_TURN_WORKER_LEASE_GENERATION
@@ -8130,35 +8281,12 @@ function resetTurnState3() {
   callbackState.todoState.length = 0;
   callbackState.lastStepType = "thinking";
 }
-async function ensureGithubToken3() {
-  if (!REPO_ID || !CONVEX_URL || !CONVEX_TOKEN) return;
-  try {
-    const response = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json"
-      })
-    });
-    if (!response.ok) return;
-    const data = await readResponseJson(response);
-    if (typeof data !== "object" || data === null || Array.isArray(data))
-      return;
-    const value = data.value;
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return;
-    }
-    if (typeof value.token === "string") {
-      process.env.GITHUB_TOKEN = value.token;
-      process.env.GH_TOKEN = value.token;
-    }
-  } catch {
-  }
+async function refreshGithubToken3() {
+  await ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID
+  });
 }
 function buildTurnCompletion(attempt) {
   const resultEvent = extractResultEvent(attempt.output);
@@ -8417,7 +8545,7 @@ async function runCursorTurnWorker() {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-    await ensureGithubToken3();
+    await refreshGithubToken3();
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();
@@ -8529,7 +8657,7 @@ async function runCursorDaemon() {
     log("cursor daemon: preflight failed");
     process.exit(1);
   }
-  await ensureGithubToken3();
+  await refreshGithubToken3();
   log(
     "runCursorDaemon started (entityId=" + (ENTITY_ID ?? "none") + ", model=" + MODEL + ")"
   );
@@ -10067,30 +10195,11 @@ for (const d of [WORK_DIR + "/screenshots", WORK_DIR + "/recordings"]) {
   } catch {
   }
 }
-if (REPO_ID && CONVEX_URL && CONVEX_TOKEN) {
-  try {
-    const res = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json"
-      })
-    });
-    if (res.ok) {
-      const data = await readResponseJson(res);
-      if (data && typeof data === "object" && !Array.isArray(data) && data.value && typeof data.value === "object" && !Array.isArray(data.value) && typeof data.value.token === "string") {
-        process.env.GITHUB_TOKEN = data.value.token;
-        process.env.GH_TOKEN = data.value.token;
-      }
-    }
-  } catch {
-  }
-}
+await ensureGithubToken({
+  convexUrl: CONVEX_URL,
+  convexToken: CONVEX_TOKEN,
+  repoId: REPO_ID
+});
 log(
   "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasMcpConfig ? "yes" : "no")
 );

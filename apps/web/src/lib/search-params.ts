@@ -133,6 +133,8 @@ const sandboxTabs = [
   "agents",
   "prd",
   "designs",
+  "artifacts",
+  "documents",
 ] as const;
 export type SandboxTab = (typeof sandboxTabs)[number];
 
@@ -176,6 +178,8 @@ const taskRouteSandboxTabs = [
   "review",
   "files",
   "agents",
+  "artifacts",
+  "documents",
 ] as const;
 export type TaskRouteSandboxTab = (typeof taskRouteSandboxTabs)[number];
 
@@ -240,37 +244,46 @@ export function reviewPathFromSearch(search: {
   return { kind: "diffs", diffView };
 }
 /**
- * Nuqs's TanStack adapter used to do `to: pathname + '?diffFile=…'`. TanStack
- * resolvePath keeps the `?…` inside `$sandboxTab`, so beforeLoad must peel it
- * off and redirect to a clean tab + real search params.
+ * Nuqs's TanStack adapter concatenates `pathname + '?file=…'`. TanStack
+ * resolvePath keeps the `?…` inside `$sandboxTab`, so the tab id must be
+ * peeled before comparing or falling back to Preview.
+ */
+export function sandboxTabIdFromParam(raw: string): string {
+  const q = raw.indexOf("?");
+  return q === -1 ? raw : raw.slice(0, q);
+}
+
+function decodeCorruptedSearchValue(raw: string | null): string | undefined {
+  if (raw === null) return undefined;
+  try {
+    return raw.includes("%") ? decodeURIComponent(raw) : raw;
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Peel a corrupted `$sandboxTab` (`files?file=/abs/path`) into a clean tab
+ * plus the search keys that were trapped in the segment.
  */
 export function splitCorruptedSandboxTabParam(raw: string): {
   tab: string;
   diffFile?: string;
   diffView?: DiffView;
+  file?: string;
 } | null {
   const q = raw.indexOf("?");
   if (q === -1) return null;
   const tab = raw.slice(0, q);
   const params = new URLSearchParams(raw.slice(q + 1));
-  const diffFileRaw = params.get("diffFile");
-  let diffFile: string | undefined;
-  if (diffFileRaw !== null) {
-    try {
-      // Old nuqs serialize double-encoded; decode until stable or one pass.
-      diffFile = diffFileRaw.includes("%")
-        ? decodeURIComponent(diffFileRaw)
-        : diffFileRaw;
-    } catch {
-      diffFile = diffFileRaw;
-    }
-  }
+  const diffFile = decodeCorruptedSearchValue(params.get("diffFile"));
+  const file = decodeCorruptedSearchValue(params.get("file"));
   const diffViewRaw = params.get("diffView");
   const diffView: DiffView | undefined =
     diffViewRaw === "unified" || diffViewRaw === "split"
       ? diffViewRaw
       : undefined;
-  return { tab, diffFile, diffView };
+  return { tab, diffFile, diffView, file };
 }
 
 /** Search fields used by the PR/Diffs tab (quick-tasks validateSearch must allow these). */
@@ -371,7 +384,10 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
-export const inboxFilters = ["all", "unread"] as const;
+// "archived" is a separate list rather than a third state of the same one: the
+// backend splits the 100-row window on `archivedAt`, so Unread only ever means
+// "unread and not archived".
+export const inboxFilters = ["all", "unread", "archived"] as const;
 export type InboxFilter = (typeof inboxFilters)[number];
 export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
   .withDefault("all")
@@ -379,6 +395,18 @@ export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
 
 export function isInboxFilter(s: string): s is InboxFilter {
   return inboxFilters.some((filter) => filter === s);
+}
+
+// How the inbox list is sectioned. Presentation, but shareable: "group by repo"
+// is part of what you are looking at, so it rides the URL with the filter.
+export const inboxGroups = ["day", "repo", "type"] as const;
+export type InboxGroup = (typeof inboxGroups)[number];
+export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
+  .withDefault("day")
+  .withOptions(searchOptions);
+
+export function isInboxGroup(s: string): s is InboxGroup {
+  return inboxGroups.some((group) => group === s);
 }
 
 // Selected notification id in the two-pane inbox, kept in the URL so the
@@ -423,10 +451,6 @@ export type TeamDetailTab = (typeof teamDetailTabs)[number];
 export function isTeamDetailTab(s: string): s is TeamDetailTab {
   return teamDetailTabs.some((tab) => tab === s);
 }
-
-export const logEntityTypesParser = parseAsArrayOf(parseAsString)
-  .withDefault([])
-  .withOptions(searchOptions);
 
 const logViews = ["overview", "type", "project"] as const;
 export const logViewParser = parseAsStringLiteral(logViews)

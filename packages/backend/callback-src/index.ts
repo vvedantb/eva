@@ -24,7 +24,8 @@ import {
   runCursorDaemon,
   runCursorTurnWorker,
 } from "./providers/cursorSdkDaemon.js";
-import { fetchWithTimeout, callConvexWithRetry } from "./http/convexClient.js";
+import { callConvexWithRetry } from "./http/convexClient.js";
+import { ensureGithubToken } from "./providers/githubToken.js";
 import { callbackState as S } from "./runtime/state.js";
 import {
   appendCurrentTurnLease,
@@ -58,12 +59,7 @@ import {
   syncProviderStateToPersist,
 } from "./providers/attempts.js";
 import type { JsonObject } from "./types.js";
-import {
-  hasNewTaskCommitSince,
-  log,
-  readGitHeadSha,
-  readResponseJson,
-} from "./utils.js";
+import { hasNewTaskCommitSince, log, readGitHeadSha } from "./utils.js";
 import { serializeSteps } from "./parse/stepBudget.js";
 
 // Cursor chat turns run in disposable children so the SDK cannot retain heap
@@ -151,39 +147,11 @@ for (const d of [WORK_DIR + "/screenshots", WORK_DIR + "/recordings"]) {
   }
 }
 
-if (REPO_ID && CONVEX_URL && CONVEX_TOKEN) {
-  try {
-    const res = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN,
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json",
-      }),
-    });
-    if (res.ok) {
-      const data = await readResponseJson(res);
-      if (
-        data &&
-        typeof data === "object" &&
-        !Array.isArray(data) &&
-        data.value &&
-        typeof data.value === "object" &&
-        !Array.isArray(data.value) &&
-        typeof data.value.token === "string"
-      ) {
-        process.env.GITHUB_TOKEN = data.value.token;
-        process.env.GH_TOKEN = data.value.token;
-      }
-    }
-  } catch {
-    /* ignore github token fetch errors */
-  }
-}
+await ensureGithubToken({
+  convexUrl: CONVEX_URL,
+  convexToken: CONVEX_TOKEN,
+  repoId: REPO_ID,
+});
 
 log(
   "entityId=" +

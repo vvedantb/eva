@@ -1,7 +1,8 @@
 "use client";
 
 import { api, getAIModelProvider, type AIModel, type Id } from "@eva/backend";
-import { Button, cn } from "@eva/ui";
+import { Button, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconArrowsDiagonalMinimize2 } from "@tabler/icons-react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useLocalStorage } from "usehooks-ts";
@@ -11,12 +12,12 @@ import { formatTokens, parseResultEvent } from "@/lib/utils/logs";
  * Adopted from t3code (`CLAUDE_RESUME_COMPACTION_TOKENS`): below this occupancy
  * a resumed session is cheap enough that compacting costs more than it saves.
  */
-export const COMPACTION_RECOMMEND_TOKENS = 100_000;
+const COMPACTION_RECOMMEND_TOKENS = 100_000;
 /**
  * Adopted from t3code (`CLAUDE_RESUME_COMPACTION_MINUTES`): the gap that marks
  * the context as "an older session" rather than the turn you just watched run.
  */
-export const COMPACTION_RECOMMEND_IDLE_MINUTES = 70;
+const COMPACTION_RECOMMEND_IDLE_MINUTES = 70;
 
 /** Claude harness built-in; sent verbatim as a user message. */
 export const COMPACT_COMMAND = "/compact";
@@ -114,40 +115,46 @@ export function ComposerCompactionBanner({
   className,
 }: ComposerCompactionBannerProps) {
   return (
-    <div
-      className={cn(
-        "mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5",
-        className,
-      )}
-    >
-      <IconArrowsDiagonalMinimize2 className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="shrink-0 text-sm font-medium">
-        Resume with less context
-      </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-        {formatTokens(usedTokens)} tokens from an older session
-      </span>
-      <div className="flex shrink-0 items-center gap-1.5 max-sm:[&_button]:h-9">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={onDismiss}
-        >
-          Keep full history
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={onCompact}
-        >
-          <IconArrowsDiagonalMinimize2 className="size-3.5" />
-          Compact
-        </Button>
-      </div>
-    </div>
+    <AnimatePresence initial={false}>
+      <m.div
+        className={cn(
+          "mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5",
+          className,
+        )}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={motionFast}
+      >
+        <IconArrowsDiagonalMinimize2 className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 text-sm font-medium">
+          Resume with less context
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          {formatTokens(usedTokens)} tokens from an older session
+        </span>
+        <div className="flex shrink-0 items-center gap-1.5 max-sm:[&_button]:h-9">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={onDismiss}
+          >
+            Keep full history
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={onCompact}
+          >
+            <IconArrowsDiagonalMinimize2 className="size-3.5" />
+            Compact
+          </Button>
+        </div>
+      </m.div>
+    </AnimatePresence>
   );
 }

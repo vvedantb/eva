@@ -24,8 +24,10 @@ import {
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useSandboxRailLabels } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { cn, Tabs, TabsList } from "@eva/ui";
-import { SandboxTabTrigger } from "./SandboxTabTrigger";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
+import { SandboxTabTrigger, type SandboxTabLayout } from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
 
@@ -37,6 +39,13 @@ import { SandboxTabBarTools } from "./SandboxTabBarTools";
 const TAB_BAR_CLASS =
   "flex shrink-0 items-center gap-1 px-1.5 py-1 md:relative md:z-20 md:h-full md:w-11 md:flex-col md:items-center md:overflow-hidden md:px-1 md:py-1.5";
 
+/* `SANDBOX_RAIL_LABELLED_WIDTH_PX` as a class — Tailwind needs the literal, and
+   the panel this bar sits in collapses to that same number. The list goes
+   `w-full` with it: it is `inline-flex`, so it would otherwise size itself to
+   the widest label and overflow the rail instead of truncating inside it. */
+const LABELLED_TAB_BAR_CLASS = "md:w-[76px]";
+const LABELLED_TAB_LIST_CLASS = "md:w-full";
+
 /* `justify-start` matters: the primitive centres its list, and centred content
    that overflows spills past *both* edges while `scrollLeft` cannot go
    negative. Desktop is a column; the same sliding pill marks the active tab. */
@@ -45,7 +54,7 @@ const TAB_LIST_CLASS =
 
 /**
  * Past this many tabs the inactive mobile labels collapse to icon-only (label
- * moves to a tooltip). Desktop is always icon-only.
+ * moves to a tooltip). Desktop is icon-only until the reader turns labels on.
  */
 const MAX_LABELLED_TABS = 6;
 
@@ -70,6 +79,14 @@ interface SandboxTabBarProps {
   showDesignsTab?: boolean;
   /** When true, shows a content indicator on the Designs tab. */
   hasDesignsContent?: boolean;
+  /** Shows the Artifacts tab (session / task / project sandbox chats). */
+  showArtifactsTab?: boolean;
+  /** When true, shows a content indicator on the Artifacts tab. */
+  hasArtifactsContent?: boolean;
+  /** Shows the Documents tab (session / task / project sandbox chats). */
+  showDocumentsTab?: boolean;
+  /** When true, shows a content indicator on the Documents tab. */
+  hasDocumentsContent?: boolean;
   /** Shows the File Viewer tab (sessions only). */
   showFilesTab?: boolean;
   /** Shows the Agents tab (content-keyed: the entity has spawned sub-agents). */
@@ -113,6 +130,10 @@ export function SandboxTabBar({
   hasPrdContent = false,
   showDesignsTab = false,
   hasDesignsContent = false,
+  showArtifactsTab = true,
+  hasArtifactsContent = false,
+  showDocumentsTab = true,
+  hasDocumentsContent = false,
   showFilesTab = false,
   showAgentsTab = false,
   hasRunningAgents = false,
@@ -129,6 +150,7 @@ export function SandboxTabBar({
 }: SandboxTabBarProps) {
   const simpleView = useSimpleView();
   const isMobile = useMediaQuery("(max-width: 767px)");
+  const { showLabels, setShowLabels } = useSandboxRailLabels();
   const tabs = enabledTabs
     ? allTabs.filter((tab) => enabledTabs.includes(tab.value))
     : allTabs.filter((tab) => tab.value !== "browser");
@@ -160,10 +182,21 @@ export function SandboxTabBar({
     hasPrdContent,
     showDesignsTab,
     hasDesignsContent,
+    showArtifactsTab,
+    hasArtifactsContent,
+    showDocumentsTab,
+    hasDocumentsContent,
     customTabs: visibleCustomTabs,
   });
-  const iconOnly = !isMobile;
-  const collapseLabels = !iconOnly && tabDescriptors.length > MAX_LABELLED_TABS;
+  // Desktop is icon-only unless the reader has asked for the labelled rail.
+  const iconOnly = !isMobile && !showLabels;
+  // Phone-only rule: the desktop rail decides its own labels above.
+  const collapseLabels = isMobile && tabDescriptors.length > MAX_LABELLED_TABS;
+
+  const tabLayout = (value: string): SandboxTabLayout => {
+    if (!isMobile) return iconOnly ? "icon" : "stacked";
+    return collapseLabels && value !== resolvedTab ? "icon" : "row";
+  };
 
   const expandIfCollapsed = () => {
     if (collapsed && onToggle) onToggle();
@@ -185,6 +218,8 @@ export function SandboxTabBar({
     enabledTabs,
     showPrdTab,
     showDesignsTab,
+    showArtifactsTab,
+    showDocumentsTab,
     showFilesTab: showFiles,
     showAgentsTab: showAgents,
     customTabSlugs,
@@ -200,6 +235,8 @@ export function SandboxTabBar({
     enabled: hotkeysEnabled,
   });
 
+  const toggleRailLabels = () => setShowLabels(!showLabels);
+
   const commands = buildSandboxPaletteCommands({
     activeTab: resolvedTab,
     tabs,
@@ -207,6 +244,8 @@ export function SandboxTabBar({
     showAgentsTab: showAgents,
     showPrdTab,
     showDesignsTab,
+    showArtifactsTab,
+    showDocumentsTab,
     showEditorItem,
     showDesktopItem,
     customTabs: visibleCustomTabs,
@@ -216,11 +255,19 @@ export function SandboxTabBar({
     onNewPreview: handleNewPreview,
     newPreviewDisabled,
     simpleView,
+    showRailLabels: showLabels,
+    onToggleRailLabels: toggleRailLabels,
   });
 
   return (
     <>
-      <div className={cn(TAB_BAR_CLASS, className)}>
+      <div
+        className={cn(
+          TAB_BAR_CLASS,
+          showLabels ? LABELLED_TAB_BAR_CLASS : undefined,
+          className,
+        )}
+      >
         {onToggle ? (
           <div className="hidden md:flex">
             <SandboxPanelToggleButton
@@ -234,20 +281,34 @@ export function SandboxTabBar({
           value={resolvedTab}
           onValueChange={handleTabChange}
         >
-          <TabsList className={TAB_LIST_CLASS}>
-            {tabDescriptors.map((tab) => (
-              <SandboxTabTrigger
+          <TabsList
+            className={cn(
+              TAB_LIST_CLASS,
+              showLabels ? LABELLED_TAB_LIST_CLASS : undefined,
+            )}
+          >
+            {tabDescriptors.map((tab, index) => (
+              <ListEnter
                 key={tab.value}
-                tab={tab}
-                onReselect={
-                  collapsed && tab.value === resolvedTab
-                    ? expandIfCollapsed
-                    : undefined
-                }
-                labelHidden={
-                  iconOnly || (collapseLabels && tab.value !== resolvedTab)
-                }
-              />
+                index={index}
+                fast
+                /* The stacked chip fills the rail, so its wrapper has to as
+                   well — an `inline-flex` box is content-sized. */
+                className={cn(
+                  "inline-flex",
+                  showLabels ? "md:w-full" : undefined,
+                )}
+              >
+                <SandboxTabTrigger
+                  tab={tab}
+                  onReselect={
+                    collapsed && tab.value === resolvedTab
+                      ? expandIfCollapsed
+                      : undefined
+                  }
+                  layout={tabLayout(tab.value)}
+                />
+              </ListEnter>
             ))}
           </TabsList>
         </Tabs>
@@ -256,6 +317,8 @@ export function SandboxTabBar({
             onNewPreview={handleNewPreview}
             newPreviewDisabled={newPreviewDisabled}
             terminalPanel={terminalPanel}
+            showLabels={showLabels}
+            onToggleLabels={toggleRailLabels}
           />
         )}
       </div>

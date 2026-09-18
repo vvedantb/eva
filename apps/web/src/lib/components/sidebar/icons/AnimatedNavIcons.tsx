@@ -74,48 +74,6 @@ export function ProjectsIcon({ size = 24, className }: IconProps) {
   );
 }
 
-export function DesignsIcon({ size = 24, className }: IconProps) {
-  return (
-    <svg {...baseSvgProps(size, className)}>
-      <g className="nav-icon-palette">
-        <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.9 1.7-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.6 1.7-1.6h1.7a3 3 0 0 0 3-3v-1A8 8 0 0 0 12 3z" />
-        <circle
-          cx="7.2"
-          cy="13"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-1"
-        />
-        <circle
-          cx="9.8"
-          cy="8.5"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-2"
-        />
-        <circle
-          cx="14.5"
-          cy="7.2"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-3"
-        />
-        <circle
-          cx="17.5"
-          cy="11"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-4"
-        />
-      </g>
-    </svg>
-  );
-}
-
 export function QuickTasksIcon({ size = 28, className }: IconProps) {
   return (
     <svg {...baseSvgProps(size, className)}>

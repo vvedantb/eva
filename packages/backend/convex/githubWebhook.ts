@@ -107,6 +107,7 @@ export function sessionPrArchiveNotificationCopy(args: {
   sessionTitle: string;
   prs: SessionArchiveTriggerPr[];
 }): { title: string; message: string } {
+<<<<<<< HEAD
   const refs = args.prs.map((pr) =>
     pr.prNumber !== undefined ? `PR #${pr.prNumber}` : pr.url,
   );
@@ -124,13 +125,27 @@ export function sessionPrArchiveNotificationCopy(args: {
           title: `${refsList} closed — "${args.sessionTitle}" archived`,
           message: `Your session was archived because GitHub closed ${pr.url} without merging.`,
         };
+=======
+  const number = args.prNumber ?? extractPrNumberFromUrl(args.prUrl);
+  const prRef = number !== null ? `PR #${number}` : args.prUrl;
+  if (args.merged) {
+    return {
+      title: `${prRef} merged — "${args.sessionTitle}" archived`,
+      message: `${prRef} was merged on GitHub (${args.prUrl}). Your session was archived.`,
+    };
+>>>>>>> origin/main
   }
 
   const allMerged = args.prs.every((pr) => pr.merged);
   const verb = allMerged ? "merged" : "closed";
   return {
+<<<<<<< HEAD
     title: `${refsList} ${verb} — "${args.sessionTitle}" archived`,
     message: `Your session was archived because every pull request it opened is now closed: ${urlsList}.`,
+=======
+    title: `${prRef} closed — "${args.sessionTitle}" archived`,
+    message: `${prRef} was closed on GitHub without merging (${args.prUrl}). Your session was archived.`,
+>>>>>>> origin/main
   };
 }
 

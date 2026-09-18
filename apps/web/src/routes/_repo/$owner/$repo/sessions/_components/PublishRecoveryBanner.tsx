@@ -12,10 +12,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+<<<<<<< HEAD
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+=======
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
+>>>>>>> origin/main
 import type { SessionMessage } from "./useSessionSend";
 
 interface PublishRecoveryBannerProps {
@@ -102,6 +113,7 @@ export function PublishRecoveryBanner({
   );
   const [requestedOffers, setRequestedOffers] = useState<readonly string[]>([]);
   const forcePushBranch = useMutation(api.sessions.forcePushBranch);
+<<<<<<< HEAD
   const repos = useQuery(api.sessions.listRepos, { sessionId });
 
   const newest = messages.length > 0 ? messages[messages.length - 1] : null;
@@ -133,6 +145,18 @@ export function PublishRecoveryBanner({
               ]
             : [],
         );
+=======
+  const altHeld = useAltHeld();
+
+  const newest = messages.length > 0 ? messages[messages.length - 1] : null;
+  const visible =
+    newest !== null &&
+    newest.isSystemAlert === true &&
+    typeof newest.errorDetail === "string" &&
+    publishErrorNeedsForcePush(newest.errorDetail);
+  const requested = visible && newest !== null && requestedForId === newest._id;
+  const newestId = newest?._id;
+>>>>>>> origin/main
 
   const handleConfirm = (target: ForcePushTarget) => {
     setConfirmTarget(null);
@@ -147,13 +171,28 @@ export function PublishRecoveryBanner({
       "Couldn't start the force-push",
       "session-force-push",
     )
+<<<<<<< HEAD
       .then(() => setRequestedOffers((keys) => [...keys, key]))
+=======
+      .then(() => {
+        if (newestId) setRequestedForId(newestId);
+      })
+>>>>>>> origin/main
       .catch(() => undefined);
   };
 
   return (
     <>
-      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5">
+      <AnimatePresence initial={false}>
+        {visible && newestId ? (
+      <m.div
+        key={newestId}
+        className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={motionFast}
+      >
         <Badge
           variant="destructive"
           className="shrink-0 rounded-md px-1.5 py-0 text-[10px] font-semibold tracking-wide uppercase"
@@ -174,12 +213,26 @@ export function PublishRecoveryBanner({
             variant="destructive"
             className="h-7 shrink-0 gap-1 px-2 text-xs"
             disabled={!isSandboxActive}
+<<<<<<< HEAD
             onClick={() => setConfirmTarget({})}
+=======
+            title={skipConfirmTitle("Force-push branch")}
+            onClick={(event) =>
+              requestConfirm(
+                altHeld,
+                () => setConfirmOpen(true),
+                handleConfirm,
+                event,
+              )
+            }
+>>>>>>> origin/main
           >
             <IconUpload className="size-3.5" />
             Force-push branch
+            <ConfirmSkipHint />
           </Button>
         ) : null}
+<<<<<<< HEAD
       </div>
       {linkedTargets.map((target) => (
         <LinkedRepoRecoveryRow
@@ -196,6 +249,12 @@ export function PublishRecoveryBanner({
           if (!open) setConfirmTarget(null);
         }}
       >
+=======
+      </m.div>
+        ) : null}
+      </AnimatePresence>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+>>>>>>> origin/main
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

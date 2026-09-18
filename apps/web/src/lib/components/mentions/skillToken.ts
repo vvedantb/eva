@@ -17,7 +17,7 @@ export function systemSkillTokenId(name: string): string {
   return `${SYSTEM_SKILL_TOKEN_PREFIX}${name.replace(/-/g, "_")}`;
 }
 
-export function isSystemSkillTokenId(id: string): boolean {
+function isSystemSkillTokenId(id: string): boolean {
   return id.startsWith(SYSTEM_SKILL_TOKEN_PREFIX);
 }
 

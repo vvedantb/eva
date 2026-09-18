@@ -7,7 +7,8 @@ import {
   type MouseEvent,
 } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
-import { cn } from "@eva/ui";
+import { cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 
 /** Matches t3code `TIMELINE_MINIMAP_ITEM_SPACING` — compact rail, not full-height. */
@@ -239,24 +240,31 @@ export function ChatJumpRail({ messages }: ChatJumpRailProps) {
               />
             );
           })}
-          {activeTick ? (
-            <span
-              className="pointer-events-none absolute left-8 w-80 rounded-xl bg-popover/95 p-3 text-left text-popover-foreground smooth-shadow-ring-xl shadow-black/25 backdrop-blur-sm"
-              style={{
-                top: `${activeTopPercent}%`,
-                transform: `translateY(${activeTooltipTranslate})`,
-              }}
-            >
-              <span className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-5">
-                {activeTick.userText}
-              </span>
-              {activeTick.assistantText ? (
-                <span className="mt-1 line-clamp-3 text-sm leading-5 text-muted-foreground">
-                  {activeTick.assistantText}
+          <AnimatePresence>
+            {activeTick ? (
+              <m.span
+                key={activeTick.id}
+                className="pointer-events-none absolute left-8 w-80 rounded-xl bg-popover/95 p-3 text-left text-popover-foreground smooth-shadow-ring-xl shadow-black/25 backdrop-blur-sm"
+                style={{
+                  top: `${activeTopPercent}%`,
+                  transform: `translateY(${activeTooltipTranslate})`,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <span className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-5">
+                  {activeTick.userText}
                 </span>
-              ) : null}
-            </span>
-          ) : null}
+                {activeTick.assistantText ? (
+                  <span className="mt-1 line-clamp-3 text-sm leading-5 text-muted-foreground">
+                    {activeTick.assistantText}
+                  </span>
+                ) : null}
+              </m.span>
+            ) : null}
+          </AnimatePresence>
         </button>
       </div>
     </div>

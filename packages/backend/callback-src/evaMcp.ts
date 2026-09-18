@@ -1,4 +1,4 @@
-export type HttpMcpServerConfig = {
+type HttpMcpServerConfig = {
   type: "http";
   url: string;
   headers: Record<string, string>;
@@ -43,9 +43,7 @@ export function consumeEvaMcpEnvironment(env: EvaMcpEnvironment): {
   return {
     servers,
     workerHandoffEnv:
-      auth && baseUrl
-        ? { EVA_MCP_AUTH: auth, EVA_MCP_BASE_URL: baseUrl }
-        : {},
+      auth && baseUrl ? { EVA_MCP_AUTH: auth, EVA_MCP_BASE_URL: baseUrl } : {},
   };
 }
 

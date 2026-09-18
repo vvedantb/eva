@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿import { entityPathSegment } from "@/lib/numId";
 import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
 
@@ -16,12 +17,29 @@ export interface SessionRowRef {
   numId?: number;
   linkedFrom?: RepoPathRef;
 }
+=======
+﻿import { repoHref } from "@/lib/utils/repoUrl";
+
+/**
+ * The only fields these helpers read off a repo row, so callers holding just a
+ * repo's identity (and tests) do not have to carry the whole Convex document.
+ */
+export type RepoPathParts = {
+  owner: string;
+  name: string;
+  rootDirectory?: string;
+};
+>>>>>>> origin/main
 
 /**
  * Base path(s) for a repo/app row. Public slash form plus internal `--` form
  * so path matching works against both `publicHref` and `location.pathname`.
  */
+<<<<<<< HEAD
 export function repoBasePaths(repo: RepoPathRef): string[] {
+=======
+export function repoBasePaths(repo: RepoPathParts): string[] {
+>>>>>>> origin/main
   const slash = repoHref(repo.owner, repo.name, repo.rootDirectory);
   if (!repo.rootDirectory) return [slash];
   const leaf = repo.rootDirectory.split("/").pop();
@@ -31,12 +49,20 @@ export function repoBasePaths(repo: RepoPathRef): string[] {
 }
 
 /** Sessions index URL for an app (`â€¦/sessions` composer landing). */
+<<<<<<< HEAD
 export function repoSessionsIndexPath(repo: RepoPathRef): string {
+=======
+export function repoSessionsIndexPath(repo: RepoPathParts): string {
+>>>>>>> origin/main
   return `${repoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions`;
 }
 
 /** Whether `pathname` is under this repo/app (any sub-page). */
+<<<<<<< HEAD
 export function repoMatchesPath(repo: RepoPathRef, pathname: string): boolean {
+=======
+export function repoMatchesPath(repo: RepoPathParts, pathname: string): boolean {
+>>>>>>> origin/main
   return repoBasePaths(repo).some(
     (base) => pathname === base || pathname.startsWith(`${base}/`),
   );
@@ -47,6 +73,7 @@ export function repoMatchesPath(repo: RepoPathRef, pathname: string): boolean {
  * sidebar only because the session clones this repo still belongs to the
  * session's primary repo, so its link and selection must resolve there.
  */
+<<<<<<< HEAD
 function sessionRowRepo(
   repo: RepoPathRef,
   session: SessionRowRef,
@@ -77,6 +104,11 @@ export function sessionHrefForRow(
 export function sessionRowMatchesPath(
   repo: RepoPathRef,
   session: SessionRowRef,
+=======
+export function sessionMatchesPath(
+  repo: RepoPathParts,
+  pathSegment: string | null | undefined,
+>>>>>>> origin/main
   pathname: string,
 ): boolean {
   const segment = entityPathSegment(session);

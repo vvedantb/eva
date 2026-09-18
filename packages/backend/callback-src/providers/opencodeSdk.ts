@@ -60,7 +60,7 @@ const IDLE_PROBE_STREAK = 2;
  * client is generated for one server release, so a drifted global install is
  * worse than no install: see resolvePinnedSdkEntry.
  */
-export async function loadOpencodeSdk(): Promise<OpencodeSdkModule> {
+async function loadOpencodeSdk(): Promise<OpencodeSdkModule> {
   const mod: OpencodeSdkModule = await import(
     resolvePinnedSdkEntry({
       packageName: SDK_PACKAGE,

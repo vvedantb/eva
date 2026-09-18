@@ -3,6 +3,7 @@ import {
   isSessionSandboxTab,
   isTaskRouteSandboxTab,
   parseDiffSearchFields,
+  sandboxTabIdFromParam,
   splitCorruptedSandboxTabParam,
 } from "./search-params";
 
@@ -12,6 +13,8 @@ describe("isTaskRouteSandboxTab", () => {
     expect(isTaskRouteSandboxTab("pr")).toBe(false);
     expect(isTaskRouteSandboxTab("browser")).toBe(true);
     expect(isTaskRouteSandboxTab("files")).toBe(true);
+    expect(isTaskRouteSandboxTab("artifacts")).toBe(true);
+    expect(isTaskRouteSandboxTab("documents")).toBe(true);
     expect(isTaskRouteSandboxTab("terminal")).toBe(false);
   });
 
@@ -29,6 +32,8 @@ describe("isTaskRouteSandboxTab", () => {
 describe("isSessionSandboxTab", () => {
   it("keeps terminals out of the right-panel route vocabulary", () => {
     expect(isSessionSandboxTab("preview")).toBe(true);
+    expect(isSessionSandboxTab("artifacts")).toBe(true);
+    expect(isSessionSandboxTab("documents")).toBe(true);
     expect(isSessionSandboxTab("terminal")).toBe(false);
   });
 });
@@ -48,6 +53,7 @@ describe("splitCorruptedSandboxTabParam", () => {
       tab: "diffs",
       diffFile: path,
       diffView: "split",
+      file: undefined,
     });
   });
 
@@ -59,7 +65,30 @@ describe("splitCorruptedSandboxTabParam", () => {
       tab: "diffs",
       diffFile: "apps/web/foo.tsx",
       diffView: undefined,
+      file: undefined,
     });
+  });
+
+  it("peels a file-viewer path trapped in the files tab", () => {
+    expect(
+      splitCorruptedSandboxTabParam(
+        "files?file=/vercel/sandbox/apps/web/src/foo.tsx",
+      ),
+    ).toEqual({
+      tab: "files",
+      diffFile: undefined,
+      diffView: undefined,
+      file: "/vercel/sandbox/apps/web/src/foo.tsx",
+    });
+  });
+});
+
+describe("sandboxTabIdFromParam", () => {
+  it("returns a clean tab id when nuqs stuffed search into the segment", () => {
+    expect(
+      sandboxTabIdFromParam("files?file=/vercel/sandbox/package.json"),
+    ).toBe("files");
+    expect(sandboxTabIdFromParam("preview")).toBe("preview");
   });
 });
 

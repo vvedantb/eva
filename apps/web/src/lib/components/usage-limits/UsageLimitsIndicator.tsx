@@ -11,6 +11,7 @@ import {
   usageRowsForAccount,
   USAGE_TONE_TEXT_CLASS,
 } from "./_utils";
+import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 import { UsageBar } from "./UsageBar";
 import { UsageLimitsDetails } from "./UsageLimitsDetails";
 import { useMinuteNow } from "./_useMinuteNow";
@@ -49,9 +50,6 @@ export function UsageLimitsIndicator({
     api.usageLimits.getForViewer,
     simpleView ? "skip" : { repoId, now },
   );
-  if (simpleView) return null;
-  if (entries === undefined) return null;
-
   const accountScope =
     providerAccountId === undefined
       ? undefined
@@ -59,11 +57,18 @@ export function UsageLimitsIndicator({
           providerAccountId,
           accountLabel,
         });
-  const rows = snapshotsOf(entries);
+  const rows = snapshotsOf(entries ?? []);
   const chipRows = accountScope
     ? usageRowsForAccount(rows, accountScope)
     : rows;
-  const summary = chipSummaryForActive(chipRows, now, model);
+  const summary =
+    entries === undefined
+      ? undefined
+      : chipSummaryForActive(chipRows, now, model);
+  const chipLabel = useCountUpDisplay(summary?.label ?? "—");
+
+  if (simpleView) return null;
+  if (entries === undefined) return null;
 
   return (
     <Popover>
@@ -77,7 +82,7 @@ export function UsageLimitsIndicator({
           <span
             className={`font-medium text-xs tabular-nums ${USAGE_TONE_TEXT_CLASS[summary?.tone ?? "neutral"]}`}
           >
-            {summary?.label ?? "—"}
+            {chipLabel}
           </span>
           {summary?.utilization !== undefined && (
             <UsageBar

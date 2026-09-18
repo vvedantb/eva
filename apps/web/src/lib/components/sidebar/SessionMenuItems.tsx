@@ -18,7 +18,9 @@ import {
 } from "@tabler/icons-react";
 import { useAction } from "convex/react";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 export interface SessionMenuSession {
   _id: Id<"sessions">;
@@ -73,8 +75,11 @@ export function SessionMenuItems({
   onUnarchive,
 }: SessionMenuItemsProps) {
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
-  const branchName = session.branchName;
-  const prUrl = session.prUrl;
+  // Simple view hides branch/PR actions, matching the hidden PR chip on the
+  // row: dropping the values here drops Copy branch name, Open PR and Review.
+  const simpleView = useSimpleView();
+  const branchName = simpleView ? undefined : session.branchName;
+  const prUrl = simpleView ? undefined : session.prUrl;
 
   return (
     <>
@@ -150,12 +155,16 @@ export function SessionMenuItems({
           Open PR
         </ContextMenuItem>
       ) : null}
-      {onSendForReview ? (
+      {onSendForReview && !simpleView ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onSelect={onSendForReview}>
+          <ContextMenuItem
+            onSelect={onSendForReview}
+            title={skipConfirmTitle("Send for Review")}
+          >
             <IconEye size={16} className="text-status-code-review" />
             Send for Review
+            <ConfirmSkipHint />
           </ContextMenuItem>
         </>
       ) : null}
@@ -175,9 +184,14 @@ export function SessionMenuItems({
       {onArchiveRequest ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-warning" onSelect={onArchiveRequest}>
+          <ContextMenuItem
+            className="text-warning"
+            onSelect={onArchiveRequest}
+            title={skipConfirmTitle("Archive")}
+          >
             <IconArchive size={16} />
             Archive
+            <ConfirmSkipHint />
           </ContextMenuItem>
         </>
       ) : null}

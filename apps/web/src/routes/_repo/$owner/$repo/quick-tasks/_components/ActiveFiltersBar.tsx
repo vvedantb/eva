@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { IconX } from "@tabler/icons-react";
+import { motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 
 interface ActiveFiltersBarProps {
   filters: Array<{ key: string; label: ReactNode }>;
@@ -17,7 +19,15 @@ export function ActiveFiltersBar({
     // grow to the 40px floor below `sm` rather than taking `hit-target`:
     // a chip's neighbour is 6px away, so the 8px ::after bleed on each of them
     // would overlap and one chip would clear the other's filter.
-    <div className="max-sm:flex flex-wrap max-sm:items-center gap-1.5 pb-2">
+    <AnimatePresence>
+      <m.div
+        key="active-filters"
+        className="max-sm:flex flex-wrap max-sm:items-center gap-1.5 pb-2"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={motionFast}
+      >
       <span className="text-xs text-muted-foreground mr-0.5">Filtered by</span>
       {filters.map((f) => (
         <button
@@ -44,6 +54,7 @@ export function ActiveFiltersBar({
           Clear all
         </button>
       )}
-    </div>
+      </m.div>
+    </AnimatePresence>
   );
 }

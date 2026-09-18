@@ -41,42 +41,20 @@ type BranchSyncResult =
   | { status: "ready"; remoteExists: boolean }
   | { status: "failed" };
 
-/** Keep in sync with convex/_sandbox_runtime/divergedPublish.ts */
-const REWRITE_REMOTE_ONLY_FILE_THRESHOLD = 20;
-
-function parseGitNameOnlyList(output: string): string[] {
-  const names: string[] = [];
-  for (const line of output.split("\n")) {
-    const name = line.trim();
-    if (name.length > 0) names.push(name);
-  }
-  return names;
-}
-
-function remoteOnlyChangedFileCount(
-  localChangedFiles: readonly string[],
-  remoteChangedFiles: readonly string[],
-): number {
-  const local = new Set(localChangedFiles);
-  let count = 0;
-  for (const file of remoteChangedFiles) {
-    if (!local.has(file)) count += 1;
-  }
-  return count;
-}
-
-function divergedPublishLooksLikeRewrite(
-  localChangedFiles: readonly string[],
-  remoteChangedFiles: readonly string[],
-): boolean {
-  const remoteOnly = remoteOnlyChangedFileCount(
-    localChangedFiles,
-    remoteChangedFiles,
-  );
-  return (
-    remoteOnly > REWRITE_REMOTE_ONLY_FILE_THRESHOLD &&
-    remoteOnly > localChangedFiles.length
-  );
+/**
+ * Keep in sync with `rewrittenBranchIsOwnHistory` in
+ * convex/_sandbox_runtime/divergedPublish.ts: the local branch rewrote its own
+ * history exactly when its reflog holds the remote tip. Any other remote tip
+ * was pushed by someone else and is merged, whatever it touched.
+ */
+function localBranchRewroteOwnHistory(branch: string, remoteRef: string): boolean {
+  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
+  const reflog = git(["reflog", "show", "--format=%H", `refs/heads/${branch}`]);
+  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
+  return reflog.out
+    .split("\n")
+    .map((line) => line.trim())
+    .includes(remoteTip.out);
 }
 
 function isMissingRemoteRef(message: string): boolean {
@@ -147,23 +125,14 @@ function synchronizeForPush(branch: string): BranchSyncResult {
     // base commit since the fork local-only, and a rebase replays all of them
     // onto the remote tip (see synchronizeBranchForPublish in
     // _sandbox_runtime/git.ts for the prod case this cost us).
-    // Skip that merge when the unique remote tree looks like a rewritten base
-    // (task 231): merging the old tip back in conflicts only inside publish.
-    const localRef = `refs/heads/${branch}`;
-    const mergeBase = git(["merge-base", remoteRef, localRef]);
-    if (mergeBase.ok) {
-      const localChanged = parseGitNameOnlyList(
-        git(["diff", "--name-only", mergeBase.out, localRef]).out,
+    // Skip that merge when the local branch rewrote its own history (task
+    // 231): merging the old tip back in conflicts only inside publish, and the
+    // workflow's publish step replaces origin with a leased push instead.
+    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
+      log(
+        `persistTurnWork: skipped merge — local branch rewrote its own history vs origin/${branch}; left to the workflow publish`,
       );
-      const remoteChanged = parseGitNameOnlyList(
-        git(["diff", "--name-only", mergeBase.out, remoteRef]).out,
-      );
-      if (divergedPublishLooksLikeRewrite(localChanged, remoteChanged)) {
-        log(
-          `persistTurnWork: skipped merge — rewritten local branch vs origin/${branch}`,
-        );
-        return { status: "failed" };
-      }
+      return { status: "failed" };
     }
     const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
     if (merge.ok) {

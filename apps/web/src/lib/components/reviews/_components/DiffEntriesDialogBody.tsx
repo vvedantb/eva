@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DialogBody } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   DiffCountBar,
   FileStatusChip,
@@ -18,9 +19,9 @@ import { useThemeMode } from "@/lib/hooks/useThemeMode";
  */
 export function DiffEntriesDialogBody({
   entries,
-  additions = entries.reduce((sum, entry) => sum + entry.additions, 0),
-  deletions = entries.reduce((sum, entry) => sum + entry.deletions, 0),
-  changedFiles = entries.length,
+  additions: additionsProp,
+  deletions: deletionsProp,
+  changedFiles: changedFilesProp,
   truncatedNotice,
 }: {
   entries: readonly DiffFileEntry[];
@@ -31,6 +32,13 @@ export function DiffEntriesDialogBody({
   truncatedNotice: ReactNode;
 }) {
   const { resolvedTheme } = useThemeMode();
+  // Computed as statements rather than parameter defaults: React Compiler
+  // cannot reorder calls/member access in a default initialiser and bails.
+  const additions =
+    additionsProp ?? entries.reduce((sum, entry) => sum + entry.additions, 0);
+  const deletions =
+    deletionsProp ?? entries.reduce((sum, entry) => sum + entry.deletions, 0);
+  const changedFiles = changedFilesProp ?? entries.length;
 
   return (
     <DialogBody className="space-y-3">
@@ -45,9 +53,12 @@ export function DiffEntriesDialogBody({
           drafted here would land on the wrong lines of the pull request diff. */}
       <NoPendingReviewComments>
         <div className="space-y-3">
-          {entries.map((entry) => (
-            <div
+          {entries.map((entry, index) => (
+            <ListEnter
               key={entry.path}
+              index={index}
+              fast
+              slide={false}
               className="overflow-hidden rounded-md border border-border"
             >
               <div className="flex min-w-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
@@ -79,7 +90,7 @@ export function DiffEntriesDialogBody({
                   hideFileHeader
                 />
               )}
-            </div>
+            </ListEnter>
           ))}
         </div>
       </NoPendingReviewComments>

@@ -2,6 +2,7 @@
 
 import type { Id } from "@eva/backend";
 import { Button, Spinner, Surface, cn } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { usePrCommits } from "../usePrOverview";
 import { PrCommitRow } from "./PrCommitRow";
 import { NOTICE_CLASS, type PrOverview } from "./prOverviewMeta";
@@ -37,9 +38,11 @@ export function PrCommitsPanel({
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4">
         <Surface density="none" className="overflow-hidden py-1">
           <ul>
-            {commits.map((commit) => (
+            {commits.map((commit, index) => (
               <li key={commit.sha} className="min-w-0">
-                <PrCommitRow repoId={repoId} commit={commit} showAuthor />
+                <ListEnter index={index} fast>
+                  <PrCommitRow repoId={repoId} commit={commit} showAuthor />
+                </ListEnter>
               </li>
             ))}
           </ul>

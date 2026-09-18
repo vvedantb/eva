@@ -5,14 +5,14 @@ import type {
 } from "@pierre/diffs";
 import { z } from "zod";
 
-export type ReviewCommentSide = "LEFT" | "RIGHT";
+type ReviewCommentSide = "LEFT" | "RIGHT";
 
 /**
  * Where a comment attaches in GitHub's review model: a line number on one side
  * of the diff (`LEFT` is the base file, `RIGHT` the head file), plus a start
  * line for a multi-line comment.
  */
-export interface ReviewCommentAnchor {
+interface ReviewCommentAnchor {
   readonly line: number;
   readonly side: ReviewCommentSide;
   readonly startLine: number | null;

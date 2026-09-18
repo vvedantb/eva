@@ -77,7 +77,17 @@ import { ProjectPicker } from "./_components/ProjectPicker";
 import { TaskFilesSection } from "./_components/TaskFilesSection";
 import { useTaskAttachments } from "./useTaskAttachments";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
+import {
+  draftCountAfterRemove,
+  draftsAfterRemove,
+  visibleDrafts,
+} from "./_utils/draftVisibility";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -133,6 +143,7 @@ export function QuickTaskModal({
   );
   const [confirmDeleteId, setConfirmDeleteId] =
     useState<Id<"agentTasks"> | null>(null);
+  const altHeld = useAltHeld();
   const [selectedProjectId, setSelectedProjectId] = useState<
     Id<"projects"> | undefined
   >(initialDraft?.projectId ?? projectId);
@@ -169,8 +180,34 @@ export function QuickTaskModal({
   const createQuickTask = useMutation(api.agentTasks.createQuickTask);
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
-  const removeDraft = useMutation(api.agentTasks.remove);
-  const drafts = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
+  const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.agentTasks.listDrafts, {
+        repoId: repo._id,
+      });
+      if (current !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.listDrafts,
+          { repoId: repo._id },
+          draftsAfterRemove(current, args.id),
+        );
+      }
+      const count = localStore.getQuery(api.agentTasks.countDrafts, {
+        repoId: repo._id,
+      });
+      if (count !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.countDrafts,
+          { repoId: repo._id },
+          draftCountAfterRemove(count),
+        );
+      }
+    },
+  );
+  const draftRows = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
+  // `remove` only sets `deletedAt`; until listDrafts is deployed with that
+  // index range, the query still returns the row and the trash looks broken.
+  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
 
   const attachments = useTaskAttachments();
   // Files already saved on the open draft, so reopening it keeps them.
@@ -342,10 +379,19 @@ export function QuickTaskModal({
   };
 
   const handleDeleteDraft = async (draftId: Id<"agentTasks">) => {
-    await removeDraft({ id: draftId });
-    setConfirmDeleteId(null);
-    if (activeDraftId === draftId) {
-      resetForm();
+    try {
+      await withMutationToast(
+        removeDraft({ id: draftId }),
+        "Draft deleted",
+        "Couldn't delete draft",
+        "draft-delete",
+      );
+      setConfirmDeleteId(null);
+      if (activeDraftId === draftId) {
+        resetForm();
+      }
+    } catch {
+      return;
     }
   };
 
@@ -732,8 +778,17 @@ export function QuickTaskModal({
                               <button
                                 type="button"
                                 aria-label={`Delete draft ${draft.title || "Untitled"}`}
+                                title={skipConfirmTitle("Delete draft")}
                                 className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
-                                onClick={() => setConfirmDeleteId(draft._id)}
+                                onClick={() =>
+                                  requestConfirm(
+                                    altHeld,
+                                    () => setConfirmDeleteId(draft._id),
+                                    () => {
+                                      void handleDeleteDraft(draft._id);
+                                    },
+                                  )
+                                }
                               >
                                 <IconTrash size={14} />
                               </button>

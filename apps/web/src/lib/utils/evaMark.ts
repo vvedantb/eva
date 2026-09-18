@@ -14,22 +14,6 @@ export const EVA_MARK_PURPLE = "#8B3FB8";
 export const EVA_MARK_BLUE = "#3B7DD8";
 
 /**
- * The mark's disc colour per theme, mirroring `--card` in globals.css
- * (`:root`, `.dark`, `.dark.neutral`). Hardcoded rather than read back off
- * `documentElement` because `ThemeModeProvider` is an ancestor: its
- * class-applying effect runs after its children's, so a child reading computed
- * styles would see the previous appearance.
- *
- * In-app only (`EvaIcon`). The tab favicon uses `FAVICON_SURFACE` instead —
- * card-dark `#17181A` disappears into dark browser chrome.
- */
-export const MARK_SURFACE: Record<ThemeAppearance, string> = {
-  light: "#FFFFFF",
-  dark: "#17181A",
-  neutral: "#303134",
-};
-
-/**
  * Favicon disc colours. Must read against OS tab chrome, not the app shell.
  * Discord keeps one bright mark; we do the same — light tile in every theme
  * so the disc silhouette never vanishes on a dark tab bar.

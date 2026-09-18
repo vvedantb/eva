@@ -1,13 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
-  divergedPublishLooksLikeRewrite,
   isEvaOwnedBranch,
   parseGitNameOnlyList,
   publishErrorNeedsForcePush,
-  remoteOnlyChangedFileCount,
   rewrittenBranchIsOwnHistory,
   rewrittenBranchPublishError,
-  REWRITE_REMOTE_ONLY_FILE_THRESHOLD,
 } from "../convex/_sandbox_runtime/divergedPublish";
 
 describe("parseGitNameOnlyList", () => {
@@ -18,45 +15,10 @@ describe("parseGitNameOnlyList", () => {
   });
 });
 
-describe("divergedPublishLooksLikeRewrite", () => {
-  test("a handful of remote-only files is concurrent work, not a rewrite", () => {
-    expect(
-      divergedPublishLooksLikeRewrite(
-        ["apps/web/a.tsx"],
-        ["apps/web/a.tsx", "apps/web/b.tsx"],
-      ),
-    ).toBe(false);
-  });
-
-  test("the task 231 shape — one local file vs a huge remote unique tree — is a rewrite", () => {
-    const remote = Array.from(
-      { length: REWRITE_REMOTE_ONLY_FILE_THRESHOLD + 5 },
-      (_, i) => `apps/eprocurement/file-${i}.ts`,
-    );
-    expect(
-      divergedPublishLooksLikeRewrite(
-        ["apps/web/app/(commissioner)/care_homes/map/CHMapPage.tsx"],
-        remote,
-      ),
-    ).toBe(true);
-    expect(remoteOnlyChangedFileCount(["local.ts"], remote)).toBe(remote.length);
-  });
-});
-
 describe("publishErrorNeedsForcePush", () => {
   test("matches the rewritten-branch refusal, including the workflow's prefixed form", () => {
-    const raw = rewrittenBranchPublishError(
-      "eva/session-abc",
-      290,
-      220,
-      "remote-holds-foreign-commits",
-    );
+    const raw = rewrittenBranchPublishError("feature/x");
     expect(publishErrorNeedsForcePush(raw)).toBe(true);
-    expect(
-      publishErrorNeedsForcePush(
-        rewrittenBranchPublishError("feature/x", 290, 220, "branch-not-eva-owned"),
-      ),
-    ).toBe(true);
     // sessionWorkflow prefixes the git error before storing it as errorDetail.
     expect(
       publishErrorNeedsForcePush(
@@ -68,7 +30,7 @@ describe("publishErrorNeedsForcePush", () => {
   test("does not match ambiguous diverged-publish failures where force-push could destroy work", () => {
     expect(
       publishErrorNeedsForcePush(
-        "Could not merge origin/eva/session-abc into the local branch. The sandbox was left clean — there are no conflict markers to resolve. If you rewrote history, force-push; if both sides committed, merge the remote branch in the sandbox and retry.",
+        "Could not merge origin/eva/session-abc (118 commits this sandbox never had) into the local branch (1 unpublished commits). The sandbox was left clean — there are no conflict markers to resolve. If you rewrote history, force-push; if both sides committed, merge the remote branch in the sandbox and retry.",
       ),
     ).toBe(false);
     expect(publishErrorNeedsForcePush("pushBranchToOrigin exhausted retries")).toBe(
@@ -79,22 +41,10 @@ describe("publishErrorNeedsForcePush", () => {
 
 describe("rewrittenBranchPublishError", () => {
   test("tells the reader why Eva did not force-push and what to do", () => {
-    const foreign = rewrittenBranchPublishError(
-      "eva/task-abc",
-      532,
-      1,
-      "remote-holds-foreign-commits",
-    );
-    expect(foreign).toContain("532 remote-only files vs 1 local");
-    expect(foreign).toContain("commits this sandbox never had");
-    expect(foreign).toContain("git push --force-with-lease origin eva/task-abc");
-    const unowned = rewrittenBranchPublishError(
-      "release/1.2",
-      532,
-      1,
-      "branch-not-eva-owned",
-    );
+    const unowned = rewrittenBranchPublishError("release/1.2");
     expect(unowned).toContain("release/1.2 is not one");
+    expect(unowned).toContain("used to hold");
+    expect(unowned).toContain("git push --force-with-lease origin release/1.2");
   });
 });
 
@@ -120,13 +70,15 @@ describe("rewrittenBranchIsOwnHistory", () => {
     ).toBe(true);
   });
 
-  test("a remote tip the branch never held was pushed by someone else", () => {
+  test("a remote tip the branch never held was pushed by someone else, however much it changed", () => {
+    // Quick task 220: 118 commits and 532 files landed on GitHub that the
+    // sandbox never fetched. That is concurrent work to merge, not a rewrite.
     expect(
       rewrittenBranchIsOwnHistory(foreignTip, [rewrittenTip, oldTip]),
     ).toBe(false);
   });
 
-  test("no reflog or no tip means refuse, not guess", () => {
+  test("no reflog or no tip means merge, not force", () => {
     expect(rewrittenBranchIsOwnHistory(oldTip, [])).toBe(false);
     expect(rewrittenBranchIsOwnHistory("", [oldTip])).toBe(false);
   });

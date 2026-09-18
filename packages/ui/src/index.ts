@@ -13,6 +13,11 @@ export {
   DRAG_ACTIVATION_DISTANCE_PX,
 } from "./utils/gesture";
 export { useDragSensors } from "./utils/useDragSensors";
+export { ensureRuntimeVisibility } from "./utils/runtimeVisibility";
+export {
+  quantizedSnapshot,
+  subscribeQuantized,
+} from "./utils/sharedClock";
 
 export * from "./ui/accordion";
 export * from "./ui/alert";

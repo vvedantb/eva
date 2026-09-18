@@ -2,6 +2,7 @@
 
 import type { Octokit } from "octokit";
 import { z } from "zod";
+import { decodeGitHubContent } from "../_repoSkills/decodeGitHubContent";
 
 const packageJsonSchema = z.object({
   scripts: z.object({ dev: z.string() }).partial().optional(),
@@ -41,7 +42,7 @@ export async function detectAppsForRepo(
           path: `${appPath}/package.json`,
         });
         if ("content" in appPkg) {
-          const decoded = Buffer.from(appPkg.content, "base64").toString();
+          const decoded = decodeGitHubContent(appPkg.content);
           const parsed = packageJsonSchema.safeParse(JSON.parse(decoded));
           hasDevScript = typeof parsed.data?.scripts?.dev === "string";
         }

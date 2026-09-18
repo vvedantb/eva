@@ -7,7 +7,7 @@ import { workflow } from "./workflowManager";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import { isEntityDeleted } from "./numId";
-import { normalizeAIModel } from "./validators";
+import { launchTraitsFromStored, normalizeAIModel } from "./validators";
 import {
   decideChildOutcome,
   orchestratorNotifyChildValidator,
@@ -190,10 +190,16 @@ export const notifyOrchestratorOfChild = internalMutation({
         sessionId: master._id,
         message: content,
         model,
-        reasoningLevel: master.lastReasoningLevel,
-        thinkingEnabled: master.lastThinkingEnabled,
-        use1mContext: master.lastUse1mContext,
-        fastMode: master.lastFastMode,
+        // Normalised, not forwarded raw: the sticky traits store model defaults
+        // (e.g. reasoning "high"), and the workflow feeds these straight into
+        // prewarmSessionDaemon — a raw default yields a different opts sig from
+        // the page-open prewarm and kills its daemon.
+        ...launchTraitsFromStored(model, {
+          reasoningLevel: master.lastReasoningLevel,
+          thinkingEnabled: master.lastThinkingEnabled,
+          use1mContext: master.lastUse1mContext,
+          fastMode: master.lastFastMode,
+        }),
         providerAccountId: master.providerAccountId,
         credentialOwnerUserId: ownerUserId,
         userId: ownerUserId,

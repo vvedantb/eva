@@ -12,6 +12,9 @@ const tabBar = read(`${sessions}/SandboxTabBar.tsx`);
 const cycle = read("./useCycleSandboxTabHotkey.ts");
 const palette = read("./sandboxPaletteCommands.ts");
 const simpleView = read("../../hooks/useSimpleView.ts");
+const desktopPanel = read(
+  "../../../routes/_repo/$owner/$repo/sessions/DesktopPanel.tsx",
+);
 
 /**
  * The sandbox rail is one list of tabs assembled in four places that nothing
@@ -129,6 +132,20 @@ describe("simple view hides exactly the tabs it cannot resolve", () => {
   test("the palette drops its non-tab commands in simple view", () => {
     // New Preview and the terminals have no simple-view home to open into.
     expect(palette).toContain("if (!simpleView) {");
+  });
+});
+
+describe("the Browser pane beams while the agent browses", () => {
+  test("the colorful composer beam wraps the desktop panel", () => {
+    expect(desktopPanel).toContain("<BorderBeam");
+    expect(desktopPanel).toContain('colorVariant="colorful"');
+    expect(desktopPanel).toContain("beam-inset");
+    expect(desktopPanel).toContain("beamPane");
+  });
+
+  test("the inset lock ring is not used on the Browser surface", () => {
+    expect(desktopPanel).toContain("beamPane ? null");
+    expect(desktopPanel).toContain("ring-[3px] ring-inset ring-primary/70");
   });
 });
 

@@ -27,6 +27,15 @@ describe("launchTraitsFromStored", () => {
     expect(launchTraitsFromStored("claude:claude-fable-5-1", stored)).toEqual(
       {},
     );
+
+    // Session 166's exact payload: the composer overrides reasoningLevel with
+    // the display value, so the server receives the default "high" explicitly.
+    // Sending the defaults must launch identically to omitting them — otherwise
+    // the turn prewarm's opts sig has `|high|` where the page-open prewarm has
+    // `||`, and the second prewarm kills the daemon the first just booted.
+    expect(launchTraitsFromStored("claude:claude-fable-5-1", stored)).toEqual(
+      launchTraitsFromStored("claude:claude-fable-5-1", {}),
+    );
   });
 
   test("matches the composer payload for the same traits", () => {

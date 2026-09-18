@@ -14,6 +14,7 @@ import { useCommentAnchorId } from "@/lib/hooks/useCommentAnchor";
 import {
   ActivityTasks,
   Button,
+  CrossfadeIcon,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -25,7 +26,9 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCopy,
@@ -48,6 +51,12 @@ import { DocTestGenDialog } from "./DocTestGenDialog";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -88,6 +97,7 @@ export function DocPrdViewer({
   const [interviewOpen, setInterviewOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [testGenConfirmOpen, setTestGenConfirmOpen] = useState(false);
+  const altHeld = useAltHeld();
   const [isTriggeringTestGen, setIsTriggeringTestGen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -230,11 +240,14 @@ export function DocPrdViewer({
                   handleCopy();
                 }}
               >
-                {copied ? (
-                  <IconCheck size={16} className="text-success" />
-                ) : (
-                  <IconCopy size={16} />
-                )}
+                <CrossfadeIcon
+                  show={copied}
+                  trueKey="copied"
+                  falseKey="copy"
+                  className="relative flex size-4 items-center justify-center"
+                  whenTrue={<IconCheck size={16} className="text-success" />}
+                  whenFalse={<IconCopy size={16} />}
+                />
                 Copy PRD
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setInterviewOpen(true)}>
@@ -254,11 +267,21 @@ export function DocPrdViewer({
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem
-                  onClick={() => setTestGenConfirmOpen(true)}
+                  title={skipConfirmTitle("Generate Tests")}
+                  onClick={() =>
+                    requestConfirm(
+                      altHeld,
+                      () => setTestGenConfirmOpen(true),
+                      () => {
+                        void handleGenerateTests();
+                      },
+                    )
+                  }
                   disabled={isGeneratingTests}
                 >
                   <IconTestPipe size={16} />
                   Generate Tests
+                  <ConfirmSkipHint />
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={toggleHistory}>
@@ -291,37 +314,50 @@ export function DocPrdViewer({
         onOpenChange={setTestGenConfirmOpen}
         onConfirm={handleGenerateTests}
       />
-      {streaming && (
-        <div className="px-4 pb-3">
-          <Surface density="tight" className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Spinner size="sm" />
-              <span className="flex-1">
-                {isGeneratingTests
-                  ? "Generating tests..."
-                  : "Processing PRD..."}
-              </span>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={handleStopTestGen}
-                disabled={isStopping}
-              >
-                {isStopping ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <IconPlayerStop size={14} />
-                )}
-                Stop
-              </Button>
-            </div>
-            {streamingSteps ? (
-              <ActivityTasks steps={streamingSteps} isStreaming />
-            ) : null}
-          </Surface>
-        </div>
-      )}
+      <AnimatePresence>
+        {streaming ? (
+          <m.div
+            key="prd-activity"
+            className="px-4 pb-3"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <Surface density="tight" className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Spinner size="sm" />
+                <span className="flex-1">
+                  {isGeneratingTests
+                    ? "Generating tests..."
+                    : "Processing PRD..."}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={handleStopTestGen}
+                  disabled={isStopping}
+                >
+                  <CrossfadeIcon
+                    show={isStopping}
+                    trueKey="loading"
+                    falseKey="idle"
+                    variant="soft"
+                    className="relative flex size-3.5 items-center justify-center"
+                    whenTrue={<Spinner size="sm" />}
+                    whenFalse={<IconPlayerStop size={14} />}
+                  />
+                  Stop
+                </Button>
+              </div>
+              {streamingSteps ? (
+                <ActivityTasks steps={streamingSteps} isStreaming />
+              ) : null}
+            </Surface>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <Tabs
         value={activeTab}
@@ -373,34 +409,56 @@ export function DocPrdViewer({
           </TabsList>
         </TabsBar>
 
-        <TabsContent
-          value="content"
-          className="mt-3 min-h-0 flex-1 overflow-hidden data-[state=active]:flex data-[state=active]:flex-col"
-        >
-          <DocContentTab
-            doc={doc}
-            commentsOpen={commentsOpen}
-            onToggleComments={toggleComments}
-            historyOpen={historyPanelOpen}
-            onToggleHistory={toggleHistory}
-            suggestionsOpen={suggestionsOpen}
-            onToggleSuggestions={toggleSuggestions}
-            onSuggestionCount={setSuggestionCount}
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="html"
-          className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
-        >
-          {doc.html ? (
-            <HtmlPreviewFrame html={doc.html} title="HTML preview" />
+        <AnimatePresence mode="wait" initial={false}>
+          {activeTab === "content" ? (
+            <m.div
+              key="content"
+              className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="content"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                <DocContentTab
+                  doc={doc}
+                  commentsOpen={commentsOpen}
+                  onToggleComments={toggleComments}
+                  historyOpen={historyPanelOpen}
+                  onToggleHistory={toggleHistory}
+                  suggestionsOpen={suggestionsOpen}
+                  onToggleSuggestions={toggleSuggestions}
+                  onSuggestionCount={setSuggestionCount}
+                />
+              </TabsContent>
+            </m.div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No HTML for this document yet.
-            </p>
+            <m.div
+              key="html"
+              className="mt-3 min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <TabsContent
+                value="html"
+                className="mt-0 h-full min-h-0 overflow-hidden"
+              >
+                {doc.html ? (
+                  <HtmlPreviewFrame html={doc.html} title="HTML preview" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No HTML for this document yet.
+                  </p>
+                )}
+              </TabsContent>
+            </m.div>
           )}
-        </TabsContent>
+        </AnimatePresence>
       </Tabs>
     </div>
   );

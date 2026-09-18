@@ -81,6 +81,18 @@ describe("the shared claimed-turn lifecycle", () => {
     ).toBe(false);
   });
 
+  test("claimed turns always run as build", () => {
+    expect(
+      readClaimedTurn({
+        prompt: "Plan the checkout",
+        interactionMode: "plan",
+      }),
+    ).toMatchObject({ interactionMode: "default" });
+    expect(readClaimedTurn({ prompt: "Ship it" })).toMatchObject({
+      interactionMode: "default",
+    });
+  });
+
   test("keeps explicitly legacy claims unfenced", () => {
     const turn = readClaimedTurn({
       prompt: "Legacy task chat",

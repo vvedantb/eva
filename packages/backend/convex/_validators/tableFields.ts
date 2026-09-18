@@ -24,6 +24,7 @@ import {
   runStatusValidator,
   sandboxProviderKindValidator,
   sessionStatusValidator,
+  interactionModeValidator,
   snapshotBuildKindValidator,
   snapshotBuildStatusValidator,
   snapshotBuildTriggerValidator,
@@ -76,6 +77,10 @@ export const userFields = {
   // The user's single persistent orchestrator ("master") session. Absent until
   // first opened; repointed if the master is archived/deleted and recreated.
   orchestratorSessionId: v.optional(v.id("sessions")),
+  /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
+  grokBotWebhookUrl: v.optional(v.string()),
+  /** AES-GCM ciphertext of the routine bearer key (`enc:…`). Never returned. */
+  grokBotWebhookKey: v.optional(v.string()),
 };
 
 /** Heartbeat/path writes. Isolated so they do not invalidate `users` subscribers. */
@@ -206,6 +211,12 @@ export const turnFields = {
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  /**
+   * Set by the lease reconciler the first time it finds the lease expired
+   * while the sandbox process was still alive; cleared by the next successful
+   * lease renewal. Bounds how long a silent-but-alive turn is tolerated.
+   */
+  silentSince: v.optional(v.number()),
 };
 
 export const pendingTurnFields = {
@@ -214,6 +225,8 @@ export const pendingTurnFields = {
   turnId: v.optional(v.id("turns")),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: v.optional(aiModelValidator),
+  /** Build vs plan; the daemon maps this onto Claude `setPermissionMode`. */
+  interactionMode: v.optional(interactionModeValidator),
 };
 
 export const pendingTurnValidator = v.optional(v.object(pendingTurnFields));
@@ -407,6 +420,14 @@ export const sessionFields = {
   /** Live PR status (open/draft) Eva closed when archiving. Unarchive reopens it. */
   prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
+  /**
+   * Short, user-safe reason the last wake attempt failed (≤200 chars, stack and
+   * request-id noise stripped). Set wherever a failed start puts the row back to
+   * `closed`; cleared at the start of every new attempt and on every transition
+   * to `active`. Without it a failed start is indistinguishable from a sleeping
+   * sandbox — a grey dot with no explanation and no retry.
+   */
+  sandboxError: v.optional(v.string()),
   /** Earliest time an archived session's sandbox may be deleted (48h grace). */
   sandboxDeleteAfter: v.optional(v.number()),
   ptySessionId: v.optional(v.string()),
@@ -416,6 +437,8 @@ export const sessionFields = {
   summary: v.optional(v.array(v.string())),
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
+  /** Sticky Plan/Build toggle. Absent sessions are Build. */
+  lastInteractionMode: v.optional(interactionModeValidator),
   activeWorkflowId: v.optional(v.string()),
   /**
    * Set the first time this session opens a durable Turn. Missing sessions may
@@ -668,6 +691,9 @@ export const githubRepoFields = {
   defaultFastMode: v.optional(v.boolean()),
   sessionsVncEnabled: v.optional(v.boolean()),
   sessionsVscodeEnabled: v.optional(v.boolean()),
+  // Opt-out: when true, other sandboxes may not mint read tokens for this
+  // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
+  sandboxReadExcluded: v.optional(v.boolean()),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -868,6 +894,10 @@ export const messageFields = {
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
   errorDetail: v.optional(v.string()),
+  // Assistant rows: why the turn failed, when the client needs to react to the
+  // class of failure (the usage-limit recovery banner). Only "rate_limit" is
+  // stamped today; unclassified failures leave it unset.
+  errorType: v.optional(errorTypeValidator),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),
@@ -932,6 +962,7 @@ export const queuedMessageFields = {
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   responseLength: v.optional(v.string()),
+  interactionMode: v.optional(interactionModeValidator),
   // Carried from the composer through the queue to the started user message.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   // Set when a child-completion wake-up had to be queued because the master was
@@ -1019,6 +1050,13 @@ export const sandboxGitCredentialsFields = {
   // before linked repos existed; readers fall back to `[installationId]`.
   installationIds: v.optional(v.array(v.number())),
   secret: v.string(),
+  // GitHub repository the sandbox was created for. /api/git-credentials grants
+  // the full installation token for this repository without the sandbox being
+  // bound to a session/task/project — snapshot seed-prep and ephemeral
+  // automation sandboxes never are. Optional: rows written before the pin lack
+  // it until the helper is next reinstalled (every create/resume rotates it).
+  repoOwner: v.optional(v.string()),
+  repoName: v.optional(v.string()),
   createdAt: v.number(),
 };
 
@@ -1027,6 +1065,15 @@ export const docFields = {
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
+  // Chat that created this doc (`create_eva_doc` from a sandbox token, or
+  // Save-as-document from a session plan). Manual New Document leaves these
+  // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -1193,6 +1240,14 @@ export const artifactFields = {
   htmlStorageId: v.id("_storage"),
   uploadedBy: v.id("users"),
   createdAt: v.number(),
+  // Chat that created this artifact (`create_artifact` from a sandbox token).
+  // Manual uploads leave these unset. Indexes skip rows with no source.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port
@@ -1269,4 +1324,18 @@ export const agentUsageLimitFields = {
    * treat that as "unknown", not as any of the three states.
    */
   completeness: v.optional(usageLimitCompletenessValidator),
+};
+
+/** A captured ExitPlanMode plan, linked to the turn that proposed it. */
+export const proposedPlanFields = {
+  sessionId: v.id("sessions"),
+  turnId: v.optional(v.id("turns")),
+  messageId: v.optional(v.id("messages")),
+  planMarkdown: v.string(),
+  /** Dedup key: `tool:<toolUseId>` or `plan:<markdown>`. */
+  captureKey: v.string(),
+  implementedAt: v.optional(v.number()),
+  implementationSessionId: v.optional(v.id("sessions")),
+  createdAt: v.number(),
+  updatedAt: v.number(),
 };

@@ -30,11 +30,12 @@
       "project": ["src/**/*.{ts,tsx}"]
     }
   },
-  "ignoreDependencies": ["@tiptap/pm", "lint-staged"],
-  "ignoreBinaries": ["ps"],
+  "ignoreDependencies": ["@tiptap/pm", "lint-staged", "shadow-plugin"],
+  "ignoreBinaries": ["setsid"],
   "ignoreIssues": {
     ".husky/**": ["binaries"],
-    "packages/backend/convex/prosemirrorSync.ts": ["exports"]
+    "packages/backend/convex/prosemirrorSync.ts": ["exports"],
+    "apps/web/src/lib/components/mentions/mentionChipStyles.ts": ["duplicates"]
   },
   "rules": {
     "files": "error",

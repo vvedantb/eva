@@ -52,6 +52,7 @@ import {
   snapshotBuildFields,
   sessionDaemonStateFields,
   turnFields,
+  proposedPlanFields,
   agentUsageLimitFields,
   logFields,
 } from "./validators";
@@ -65,7 +66,10 @@ const schema = defineSchema({
 
   artifacts: defineTable(artifactFields)
     .index("by_team", ["boundTeamId"])
-    .index("by_uploader", ["uploadedBy"]),
+    .index("by_uploader", ["uploadedBy"])
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"]),
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])
@@ -184,6 +188,10 @@ const schema = defineSchema({
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
+  proposedPlans: defineTable(proposedPlanFields)
+    .index("by_session", ["sessionId"])
+    .index("by_session_and_capture_key", ["sessionId", "captureKey"])
+    .index("by_message", ["messageId"]),
   // Latest agent plan usage-limit reading per credential, upserted by the
   // sandbox callback at the end of every turn (usageLimits:report). Plan limits
   // belong to the credential, not the repo it ran on, so a user with two Claude
@@ -238,6 +246,9 @@ const schema = defineSchema({
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_session", ["sessionId"])
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
 
@@ -296,6 +307,10 @@ const schema = defineSchema({
     // Set once this notification has been included in an email (instant send or
     // daily digest), so neither path emails the same notification twice.
     emailedAt: v.optional(v.number()),
+    // When the user archived this notification out of the inbox. Absent means
+    // "in the inbox" — archiving is reversible, so the row is kept and only
+    // this stamp moves. Archived rows never count as unread.
+    archivedAt: v.optional(v.number()),
     // The comment this notification was generated from, when it came from one.
     // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
     // field so the anchor survives independently of the href string. Absent on

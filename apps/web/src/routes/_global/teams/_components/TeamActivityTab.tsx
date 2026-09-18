@@ -8,6 +8,7 @@ import { IconEye, IconEyeOff, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { useFollow } from "@/lib/contexts/FollowContext";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { describeLocation } from "../_utils";
 
 type Member = FunctionReturnType<typeof api.teamMembers.list>[number];
@@ -58,7 +59,7 @@ export function TeamActivityTab({ members }: { members: Array<Member> }) {
 
   return (
     <div className="space-y-2">
-      {onlineMembers.map((member) => {
+      {onlineMembers.map((member, index) => {
         const name = getDisplayName(member.user);
         const location = describeLocation(member.user?.lastSeenPath);
         const isSelf = member.userId === currentUserId;
@@ -66,53 +67,55 @@ export function TeamActivityTab({ members }: { members: Array<Member> }) {
         const canFollow = !isSelf && !!member.user?.lastSeenPath;
 
         return (
-          <Card key={member._id}>
-            <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
-              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-                <UserInitials userId={member.userId} hideLastSeen size="md" />
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-sm font-medium">
-                    <span data-pii className="truncate">
-                      {name}
-                    </span>
-                    {isSelf ? (
-                      <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                        You
+          <ListEnter key={member._id} index={index} fast>
+            <Card>
+              <CardContent className="flex items-center justify-between gap-2 p-3 sm:p-4">
+                <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                  <UserInitials userId={member.userId} hideLastSeen size="md" />
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 text-sm font-medium">
+                      <span data-pii className="truncate">
+                        {name}
                       </span>
-                    ) : null}
-                  </p>
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span
-                      className="size-1.5 shrink-0 rounded-full bg-success"
-                      aria-hidden
-                    />
-                    <span className="truncate">{location ?? "Online"}</span>
-                  </p>
+                      {isSelf ? (
+                        <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                          You
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span
+                        className="size-1.5 shrink-0 rounded-full bg-success"
+                        aria-hidden
+                      />
+                      <span className="truncate">{location ?? "Online"}</span>
+                    </p>
+                  </div>
                 </div>
-              </div>
-              {isFollowing ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="shrink-0"
-                  onClick={stopFollowing}
-                >
-                  <IconEyeOff size={14} className="mr-1.5" />
-                  Stop following
-                </Button>
-              ) : canFollow ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => startFollowing(member.userId, name)}
-                >
-                  <IconEye size={14} className="mr-1.5" />
-                  Follow
-                </Button>
-              ) : null}
-            </CardContent>
-          </Card>
+                {isFollowing ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={stopFollowing}
+                  >
+                    <IconEyeOff size={14} className="mr-1.5" />
+                    Stop following
+                  </Button>
+                ) : canFollow ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => startFollowing(member.userId, name)}
+                  >
+                    <IconEye size={14} className="mr-1.5" />
+                    Follow
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          </ListEnter>
         );
       })}
     </div>

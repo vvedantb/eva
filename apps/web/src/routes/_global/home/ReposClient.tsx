@@ -28,6 +28,12 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
 import { HiddenReposSheet } from "./_components/HiddenReposSheet";
@@ -46,6 +52,7 @@ export function ReposClient() {
   const [syncing, setSyncing] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const altHeld = useAltHeld();
   const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
     // Sync read avoids banner mount/unmount flash after hydration (CLS).
     // Only the storage read is wrapped: React Compiler bails on the whole file
@@ -140,13 +147,23 @@ export function ReposClient() {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={syncing}
-                    onClick={() => setSyncConfirmOpen(true)}
+                    title={skipConfirmTitle("Sync Repos")}
+                    onClick={() =>
+                      requestConfirm(
+                        altHeld,
+                        () => setSyncConfirmOpen(true),
+                        () => {
+                          void handleSync();
+                        },
+                      )
+                    }
                   >
                     <IconRefresh
                       size={16}
                       className={syncing ? "animate-spin" : ""}
                     />
                     {syncing ? "Syncing..." : "Sync Repos"}
+                    <ConfirmSkipHint />
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -201,7 +218,7 @@ export function ReposClient() {
                 rel={hasRepos ? "noopener noreferrer" : undefined}
               >
                 <IconPlus size={16} />
-                <span className="hidden sm:inline">{primaryLabel}</span>
+                <span className="max-sm:sr-only">{primaryLabel}</span>
               </a>
             </Button>
           ) : (
@@ -211,7 +228,7 @@ export function ReposClient() {
               className="motion-press bg-foreground font-medium text-background"
             >
               <IconPlus size={16} />
-              <span className="hidden sm:inline">{primaryLabel}</span>
+              <span className="max-sm:sr-only">{primaryLabel}</span>
             </Button>
           )}
         </div>

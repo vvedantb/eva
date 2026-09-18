@@ -1,4 +1,3 @@
-import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -14,6 +13,7 @@ import {
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
+import { defineTool, type EvaTool } from "./registry";
 
 const agentKindArg = z
   .enum(["session", "task"])
@@ -43,8 +43,7 @@ function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
   const { clerkUserId, entityId, entityKind } = credentials;
 
   /** The master's own session id, carried on its sandbox token when present. */
-  const tokenMasterSessionId =
-    entityKind === "session" ? entityId : undefined;
+  const tokenMasterSessionId = entityKind === "session" ? entityId : undefined;
 
   async function resolveRepoScope(
     repoName: string | undefined,
@@ -94,11 +93,11 @@ function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
  * send_agent_message stays behind the orchestrator gate — it is the one tool
  * that is defined as speaking *as the master session*.
  */
-export function registerFleetTools(
-  server: McpServer,
+export function fleetTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
-): void {
+): EvaTool[] {
+  const tools: EvaTool[] = [];
   const {
     clerkUserId,
     entityId,
@@ -111,106 +110,119 @@ export function registerFleetTools(
   // list_agents
   // ───────────────────────────────────────────────────────────────────────────
 
-  server.tool(
-    "list_agents",
-    "List the other Eva agents running under your user across every repo you can access — sessions and quick tasks alike. Use this first to find an agent id for get_agent_state, send_agent_message, or stop_agent. Your own master session is never listed.",
-    {
-      repoName: z
-        .string()
-        .optional()
-        .describe(
-          'Limit to one repo (e.g. "eva" or "vvedantb/eva"). Omit to list agents across all your repos.',
-        ),
-      app: z
-        .string()
-        .optional()
-        .describe(
-          'App name within a monorepo (e.g. "web"). Used with repoName when a repo has multiple apps.',
-        ),
-      includeIdle: z
-        .boolean()
-        .default(false)
-        .describe(
-          "By default only agents with a turn in flight are returned. Set true to also include idle sessions and not-yet-started tasks.",
-        ),
-    },
-    async ({ repoName, app, includeIdle }) => {
-      const { userId } = await mcpGetContext(ctx, clerkUserId);
-      const scope = await resolveRepoScope(repoName, app, userId);
-      if ("isError" in scope) return scope;
+  tools.push(
+    defineTool({
+      name: "list_agents",
+      description:
+        "List the other Eva agents running under your user across every repo you can access — sessions and quick tasks alike. Use this first to find an agent id for get_agent_state, send_agent_message, or stop_agent. Your own master session is never listed.",
+      mutating: false,
+      input: {
+        repoName: z
+          .string()
+          .optional()
+          .describe(
+            'Limit to one repo (e.g. "eva" or "vvedantb/eva"). Omit to list agents across all your repos.',
+          ),
+        app: z
+          .string()
+          .optional()
+          .describe(
+            'App name within a monorepo (e.g. "web"). Used with repoName when a repo has multiple apps.',
+          ),
+        includeIdle: z
+          .boolean()
+          .default(false)
+          .describe(
+            "By default only agents with a turn in flight are returned. Set true to also include idle sessions and not-yet-started tasks.",
+          ),
+      },
+      handler: async ({ repoName, app, includeIdle }) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const scope = await resolveRepoScope(repoName, app, userId);
+        if ("isError" in scope) return scope;
 
-      const agents = await ctx.runAction(
-        internal.mcp.nodeActions.orchestratorListAgents,
-        {
-          clerkUserId,
-          repos: scope.repos.map((repo) => ({
-            id: repo.id,
-            // App-qualified so a monorepo's app rows are distinguishable in
-            // the fleet table (they are separate repo records sharing a name).
-            fullName: repoRefLabel(repo),
-          })),
-          includeIdle,
-          excludeEntityId: entityId,
-        },
-      );
+        const agents = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorListAgents,
+          {
+            clerkUserId,
+            repos: scope.repos.map((repo) => ({
+              id: repo.id,
+              // App-qualified so a monorepo's app rows are distinguishable in
+              // the fleet table (they are separate repo records sharing a name).
+              fullName: repoRefLabel(repo),
+            })),
+            includeIdle,
+            excludeEntityId: entityId,
+          },
+        );
 
-      return textResult({ agents, count: agents.length });
-    },
+        return textResult({ agents, count: agents.length });
+      },
+    }),
   );
 
   // ───────────────────────────────────────────────────────────────────────────
   // get_agent_state
   // ───────────────────────────────────────────────────────────────────────────
 
-  server.tool(
-    "get_agent_state",
-    "Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated.",
-    {
-      kind: agentKindArg,
-      id: agentIdArg,
-      transcriptTail: z
-        .number()
-        .min(0)
-        .max(50)
-        .default(10)
-        .describe("How many of the most recent messages to return."),
-    },
-    async ({ kind, id, transcriptTail }) => {
-      await mcpGetContext(ctx, clerkUserId);
-      const state = await ctx.runAction(
-        internal.mcp.nodeActions.orchestratorGetAgentState,
-        { clerkUserId, kind, id, transcriptTail },
-      );
-      return textResult({ agent: state });
-    },
+  tools.push(
+    defineTool({
+      name: "get_agent_state",
+      description:
+        "Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated.",
+      mutating: false,
+      input: {
+        kind: agentKindArg,
+        id: agentIdArg,
+        transcriptTail: z
+          .number()
+          .min(0)
+          .max(50)
+          .default(10)
+          .describe("How many of the most recent messages to return."),
+      },
+      handler: async ({ kind, id, transcriptTail }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        const state = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorGetAgentState,
+          { clerkUserId, kind, id, transcriptTail },
+        );
+        return textResult({ agent: state });
+      },
+    }),
   );
 
   // ───────────────────────────────────────────────────────────────────────────
   // stop_agent
   // ───────────────────────────────────────────────────────────────────────────
 
-  server.tool(
-    "stop_agent",
-    "Cancel the agent's in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again.",
-    {
-      kind: agentKindArg,
-      id: agentIdArg,
-    },
-    async ({ kind, id }) => {
-      await mcpGetContext(ctx, clerkUserId);
-      await ctx.runAction(internal.mcp.nodeActions.orchestratorStopAgent, {
-        clerkUserId,
-        kind,
-        id,
-      });
-      return textResult({ kind, id, status: "cancel_requested" });
-    },
+  tools.push(
+    defineTool({
+      name: "stop_agent",
+      description:
+        "Cancel the agent's in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again.",
+      mutating: true,
+      input: {
+        kind: agentKindArg,
+        id: agentIdArg,
+      },
+      handler: async ({ kind, id }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        await ctx.runAction(internal.mcp.nodeActions.orchestratorStopAgent, {
+          clerkUserId,
+          kind,
+          id,
+        });
+        return textResult({ kind, id, status: "cancel_requested" });
+      },
+    }),
   );
 
   // ───────────────────────────────────────────────────────────────────────────
   // create_session
   // ───────────────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
   server.tool(
     "create_session",
     "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes.",
@@ -341,13 +353,67 @@ export function registerFleetTools(
           installDependencies,
         },
       );
+=======
+  tools.push(
+    defineTool({
+      name: "create_session",
+      description:
+        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes.",
+      mutating: true,
+      input: {
+        repoName: z
+          .string()
+          .describe(
+            'Repo to open the session in (e.g. "eva" or "vvedantb/eva"). Resolved against your connected repos.',
+          ),
+        app: z
+          .string()
+          .optional()
+          .describe(
+            'App name within a monorepo (e.g. "web"). Required when a repo has multiple apps.',
+          ),
+        title: z
+          .string()
+          .optional()
+          .describe("Session title. A title is generated if omitted."),
+        message: z
+          .string()
+          .describe("The first message to run in the session."),
+        // No `model`: the session runs on the repo's configured default model.
+        baseBranch: z
+          .string()
+          .optional()
+          .describe(
+            "Branch to base work off of. If omitted, uses the repo's default base branch.",
+          ),
+      },
+      handler: async ({ repoName, app, title, message, baseBranch }) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const repos = await mcpListUserRepos(ctx, userId);
+        const matched = matchRepoByName(repos, repoName, app);
+        if ("isError" in matched) return matched;
+        const { repo } = matched;
 
-      const basePath = repoBasePath({
-        owner: repo.owner,
-        name: repo.name,
-        rootDirectory: repo.rootDirectory ?? undefined,
-      });
+        const created = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorCreateSession,
+          {
+            clerkUserId,
+            repoId: repo.id,
+            title,
+            message,
+            baseBranch,
+            masterSessionId: tokenMasterSessionId,
+          },
+        );
+>>>>>>> origin/main
 
+        const basePath = repoBasePath({
+          owner: repo.owner,
+          name: repo.name,
+          rootDirectory: repo.rootDirectory ?? undefined,
+        });
+
+<<<<<<< HEAD
       return textResult({
         sessionId: created.sessionId,
         numId: created.numId,
@@ -357,97 +423,119 @@ export function registerFleetTools(
         status: "created",
       });
     },
+=======
+        return textResult({
+          sessionId: created.sessionId,
+          numId: created.numId,
+          repo: repoRefLabel(repo),
+          path: `${basePath}/sessions/${created.numId}`,
+          status: "created",
+        });
+      },
+    }),
+>>>>>>> origin/main
   );
 
   // ───────────────────────────────────────────────────────────────────────────
   // watch_agent / unwatch_agent
   // ───────────────────────────────────────────────────────────────────────────
 
-  server.tool(
-    "watch_agent",
-    "Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken).",
-    {
-      kind: agentKindArg,
-      id: agentIdArg,
-    },
-    async ({ kind, id }) => {
-      const master = await resolveWatchMasterSessionId();
-      if (typeof master !== "string") return master;
-      await mcpGetContext(ctx, clerkUserId);
-      await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
-        clerkUserId,
-        kind,
-        id,
-        masterSessionId: master,
-      });
-      return textResult({ kind, id, watched: true });
-    },
+  tools.push(
+    defineTool({
+      name: "watch_agent",
+      description:
+        "Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken).",
+      mutating: true,
+      input: {
+        kind: agentKindArg,
+        id: agentIdArg,
+      },
+      handler: async ({ kind, id }) => {
+        const master = await resolveWatchMasterSessionId();
+        if (typeof master !== "string") return master;
+        await mcpGetContext(ctx, clerkUserId);
+        await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
+          clerkUserId,
+          kind,
+          id,
+          masterSessionId: master,
+        });
+        return textResult({ kind, id, watched: true });
+      },
+    }),
   );
 
-  server.tool(
-    "unwatch_agent",
-    "Stop being woken when this agent finishes.",
-    {
-      kind: agentKindArg,
-      id: agentIdArg,
-    },
-    async ({ kind, id }) => {
-      await mcpGetContext(ctx, clerkUserId);
-      await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
-        clerkUserId,
-        kind,
-        id,
-        masterSessionId: undefined,
-      });
-      return textResult({ kind, id, watched: false });
-    },
+  tools.push(
+    defineTool({
+      name: "unwatch_agent",
+      description: "Stop being woken when this agent finishes.",
+      mutating: true,
+      input: {
+        kind: agentKindArg,
+        id: agentIdArg,
+      },
+      handler: async ({ kind, id }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
+          clerkUserId,
+          kind,
+          id,
+          masterSessionId: undefined,
+        });
+        return textResult({ kind, id, watched: false });
+      },
+    }),
   );
+
+  return tools;
 }
 
 /**
  * Tools that only the user's master ("orchestrator") session gets.
  * send_agent_message stays here because it is defined as the master speaking.
  */
-export function registerOrchestratorTools(
-  server: McpServer,
+export function orchestratorTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
-): void {
-  const { clerkUserId, tokenMasterSessionId } = fleetHelpers(
-    credentials,
-    ctx,
-  );
+): EvaTool[] {
+  const tools: EvaTool[] = [];
+  const { clerkUserId, tokenMasterSessionId } = fleetHelpers(credentials, ctx);
 
   // ───────────────────────────────────────────────────────────────────────────
   // send_agent_message
   // ───────────────────────────────────────────────────────────────────────────
 
-  server.tool(
-    "send_agent_message",
-    `Send a chat message to another agent as yourself. If the agent is mid-turn the message is queued and runs when the current turn finishes; if it is idle a new turn starts immediately. Returns which of the two happened.
+  tools.push(
+    defineTool({
+      name: "send_agent_message",
+      description: `Send a chat message to another agent as yourself. If the agent is mid-turn the message is queued and runs when the current turn finishes; if it is idle a new turn starts immediately. Returns which of the two happened.
 
 The message is marked as sent via MCP, and the agent is registered so you are notified when it finishes.`,
-    {
-      kind: agentKindArg,
-      id: agentIdArg,
-      message: z.string().describe("The message to send to the agent."),
-      model: modelArg,
-    },
-    async ({ kind, id, message, model }) => {
-      await mcpGetContext(ctx, clerkUserId);
-      const result = await ctx.runAction(
-        internal.mcp.nodeActions.orchestratorSendMessage,
-        {
-          clerkUserId,
-          kind,
-          id,
-          message,
-          model,
-          masterSessionId: tokenMasterSessionId,
-          sentViaOrchestrator: true,
-        },
-      );
-      return textResult({ kind, id, ...result });
-    },
+      mutating: true,
+      input: {
+        kind: agentKindArg,
+        id: agentIdArg,
+        message: z.string().describe("The message to send to the agent."),
+        model: modelArg,
+      },
+      handler: async ({ kind, id, message, model }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        const result = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorSendMessage,
+          {
+            clerkUserId,
+            kind,
+            id,
+            message,
+            model,
+            masterSessionId: tokenMasterSessionId,
+            sentViaOrchestrator: true,
+          },
+        );
+        return textResult({ kind, id, ...result });
+      },
+    }),
   );
+
+  return tools;
 }

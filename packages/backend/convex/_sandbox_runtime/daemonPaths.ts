@@ -64,22 +64,49 @@ export function buildDaemonAliveCheckCmd(
   return `${branch(scoped)}; else echo cold; fi`;
 }
 
-/** Kills the entity-scoped daemon (and legacy session markers when applicable). */
+/**
+ * Kills the entity-scoped daemon (and legacy session markers when applicable).
+ *
+ * Kills the whole descendant TREE and waits for the root to exit, because a
+ * lone SIGTERM to the daemon pid is not enough on either count:
+ *
+ * - The daemon boots a `query()` at startup, which spawns the Claude Code CLI
+ *   as a child. The runner is launched under `flock -n -E 217` (launch.ts), so
+ *   that child inherits the lock fd and keeps the per-entity spawn lock held
+ *   after the daemon itself is gone. The relaunch ~1s later then loses the
+ *   flock and exits 217, leaving nobody polling claimPendingTurn — observed in
+ *   prod as a session stuck on "Working…" after a model/tools respawn.
+ * - SIGTERM is asynchronous, so the relaunch can race a daemon that has not
+ *   finished exiting. We poll `kill -0` for ~3s and escalate to SIGKILL.
+ *
+ * The root is signalled before its descendants: the daemon has no SIGTERM
+ * handler and dies at once, whereas killing its CLI child first would let the
+ * still-live daemon see its query pump fail and post a bogus "daemon failed"
+ * completion. Descendant pids are collected before the root dies so orphans are
+ * still reached. `pgrep -P` walks the tree by parent pid, so unlike `pgrep -f`
+ * it cannot match this command's own `bash -lc` wrapper. Callers allow a 10s
+ * exec timeout; at most two pidfiles are reaped, so the worst case is ~6s of
+ * waiting.
+ */
 export function buildKillEntityDaemonCmd(
   entityIdField: string,
   entityId: string,
 ): string {
-  const scoped = entityDaemonPaths(entityIdField, entityId);
   const parts = [
-    `kill "$(cat ${shellQuote(scoped.pid)} 2>/dev/null)" 2>/dev/null || true`,
-    `rm -f ${shellQuote(scoped.pid)} ${shellQuote(scoped.opts)} ${shellQuote(scoped.entity)}`,
+    `kill_tree() { kids="$(pgrep -P "$1" 2>/dev/null)"; kill -"$2" "$1" 2>/dev/null || true; for c in $kids; do kill_tree "$c" "$2"; done; }`,
+    `reap() { pid="$(cat "$1" 2>/dev/null)"; [ -n "$pid" ] || return 0; kill -0 "$pid" 2>/dev/null || return 0; kill_tree "$pid" TERM; for i in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done; kill_tree "$pid" KILL; }`,
   ];
+
+  function reapParts(paths: DaemonPaths): string[] {
+    return [
+      `reap ${shellQuote(paths.pid)}`,
+      `rm -f ${shellQuote(paths.pid)} ${shellQuote(paths.opts)} ${shellQuote(paths.entity)}`,
+    ];
+  }
+
+  parts.push(...reapParts(entityDaemonPaths(entityIdField, entityId)));
   if (entityIdField === "sessionId") {
-    const legacy = LEGACY_SESSION_DAEMON_PATHS;
-    parts.push(
-      `kill "$(cat ${shellQuote(legacy.pid)} 2>/dev/null)" 2>/dev/null || true`,
-      `rm -f ${shellQuote(legacy.pid)} ${shellQuote(legacy.opts)} ${shellQuote(legacy.entity)}`,
-    );
+    parts.push(...reapParts(LEGACY_SESSION_DAEMON_PATHS));
   }
   parts.push("true");
   return parts.join("; ");

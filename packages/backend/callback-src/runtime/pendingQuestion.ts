@@ -115,10 +115,20 @@ export function buildCanUseTool(): SdkCanUseTool {
       if (answerJson === null) {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      return {
-        behavior: "allow",
-        updatedInput: { ...input, answers: parseAnswers(answerJson) },
-      };
+      const answers = parseAnswers(answerJson);
+      if (toolUseId) {
+        // The tool_result handler in providers/claude.ts moves this onto the
+        // step, so the activity row carries the exact answers the user picked
+        // rather than the SDK's prose retelling of them.
+        const stringAnswers: Record<string, string> = {};
+        for (const [question, answer] of Object.entries(answers)) {
+          if (typeof answer === "string") {
+            stringAnswers[question] = answer;
+          }
+        }
+        S.questionAnswers.set(toolUseId, stringAnswers);
+      }
+      return { behavior: "allow", updatedInput: { ...input, answers } };
     } finally {
       S.awaitingQuestionAnswer = false;
     }

@@ -24,6 +24,11 @@ import {
 } from "@tabler/icons-react";
 import type { EnvVar } from "@/lib/components/EnvVarsTable";
 import type { EnvVarSlotEntry } from "@/lib/components/_utils/envVarSlotTypes";
+import {
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
 interface EnvVarProviderSlotsProps {
   entries: ReadonlyArray<EnvVarSlotEntry>;
@@ -64,6 +69,7 @@ export function EnvVarProviderSlots({
   const [revealingKey, setRevealingKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
+  const altHeld = useAltHeld();
 
   const matchOf = (entry: EnvVarSlotEntry): EnvVar | undefined =>
     vars?.find((v) => entry.matchKeys.includes(v.key));
@@ -127,12 +133,12 @@ export function EnvVarProviderSlots({
     setTimeout(() => setCopiedKey(null), 1500);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteKey || !onRemove) return;
-    await onRemove(deleteKey);
+  const confirmDelete = async (key: string | null = deleteKey) => {
+    if (!key || !onRemove) return;
+    await onRemove(key);
     setRevealed((prev) => {
       const next = { ...prev };
-      delete next[deleteKey];
+      delete next[key];
       return next;
     });
     setDeleteKey(null);
@@ -333,8 +339,17 @@ export function EnvVarProviderSlots({
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        onClick={() => setDeleteKey(matched.key)}
-                        title="Remove"
+                        title={skipConfirmTitle("Remove")}
+                        onClick={(event) =>
+                          requestConfirm(
+                            altHeld,
+                            () => setDeleteKey(matched.key),
+                            () => {
+                              void confirmDelete(matched.key);
+                            },
+                            event,
+                          )
+                        }
                         className="max-sm:hit-target text-destructive hover:text-destructive"
                       >
                         <IconTrash size={14} />
@@ -373,7 +388,11 @@ export function EnvVarProviderSlots({
             >
               Cancel
             </Button>
-            <Button size="sm" variant="destructive" onClick={confirmDelete}>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => void confirmDelete()}
+            >
               Remove
             </Button>
           </DialogFooter>

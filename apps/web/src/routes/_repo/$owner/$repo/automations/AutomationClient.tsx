@@ -15,7 +15,9 @@ import {
   Textarea,
   ModelSelect,
   toast,
+  motionFast,
 } from "@eva/ui";
+import { m } from "motion/react";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { SettingsStack } from "@/lib/components/settings/SettingsStack";
@@ -27,10 +29,17 @@ import { SystemAutomationSettings } from "./_components/SystemAutomationSettings
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { isAutomationTab, type AutomationTab } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import {
   catchMutationError,
   withMutationToast,
@@ -61,6 +70,7 @@ export function AutomationClient({
   const hasActiveRun = runs?.some(
     (r) => r.status === "queued" || r.status === "running",
   );
+  useEntityDocumentTitle(automation.title);
 
   return (
     <PageWrapper
@@ -128,7 +138,13 @@ export function AutomationClient({
       }
     >
       <div className="flex flex-col gap-4">
-        {activeTab === "latest" && (
+        {/* Keep panes mounted so Settings form state survives tab switches. */}
+        <m.div
+          initial={false}
+          animate={{ opacity: activeTab === "latest" ? 1 : 0 }}
+          transition={motionFast}
+          className={activeTab !== "latest" ? "hidden" : undefined}
+        >
           <LatestRun
             run={runs?.[0]}
             loading={runs === undefined}
@@ -136,19 +152,29 @@ export function AutomationClient({
             repoOwner={repoOwner}
             repoName={repoName}
           />
-        )}
+        </m.div>
 
-        {activeTab === "run-history" && (
+        <m.div
+          initial={false}
+          animate={{ opacity: activeTab === "run-history" ? 1 : 0 }}
+          transition={motionFast}
+          className={activeTab !== "run-history" ? "hidden" : undefined}
+        >
           <RunHistory
             runs={runs?.slice(1)}
             actionsEnabled={automation.actionsEnabled === true}
             repoOwner={repoOwner}
             repoName={repoName}
           />
-        )}
+        </m.div>
 
-        {activeTab === "settings" &&
-          (automation.systemKey === undefined ? (
+        <m.div
+          initial={false}
+          animate={{ opacity: activeTab === "settings" ? 1 : 0 }}
+          transition={motionFast}
+          className={activeTab !== "settings" ? "hidden" : undefined}
+        >
+          {automation.systemKey === undefined ? (
             <SettingsForm
               automation={automation}
               repoOwner={repoOwner}
@@ -161,7 +187,8 @@ export function AutomationClient({
               repoOwner={repoOwner}
               repoName={repoName}
             />
-          ))}
+          )}
+        </m.div>
       </div>
     </PageWrapper>
   );
@@ -216,6 +243,7 @@ function SettingsForm({
   const [cronDraft, setCronDraft] = useState(automation.cronSchedule);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const altHeld = useAltHeld();
   const titleFieldId = useId();
   const promptFieldId = useId();
   const model = normalizeAIModel(automation.model ?? repo.defaultModel);
@@ -370,10 +398,21 @@ function SettingsForm({
         <Button
           variant="destructive"
           size="sm"
-          onClick={() => setShowDeleteDialog(true)}
+          title={skipConfirmTitle("Delete")}
+          onClick={(event) =>
+            requestConfirm(
+              altHeld,
+              () => setShowDeleteDialog(true),
+              () => {
+                void handleDelete();
+              },
+              event,
+            )
+          }
         >
           <IconTrash size={14} />
           Delete
+          <ConfirmSkipHint />
         </Button>
       </SettingsSection>
 

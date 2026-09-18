@@ -19,7 +19,7 @@ import type { Id } from "@eva/backend";
  * because the unmount is precisely the moment it is needed.
  */
 
-export type PreviewMiniPlayerMode = "auto" | "manual";
+type PreviewMiniPlayerMode = "auto" | "manual";
 
 /** What the pane knows and the host does not: where the preview belongs. */
 export interface PreviewMiniPlayerSource {
@@ -37,6 +37,11 @@ export interface PreviewMiniPlayerTarget extends PreviewMiniPlayerSource {
   group: string;
   src: string;
   epoch: number;
+  /**
+   * Guest CSS viewport to contain inside the window. Missing = 1280×800, so a
+   * fill pane still letterboxes instead of reflowing into the chrome.
+   */
+  logicalSize?: { width: number; height: number };
 }
 
 export interface PreviewMiniPlayerEntry extends PreviewMiniPlayerTarget {

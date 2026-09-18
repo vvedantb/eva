@@ -20,6 +20,7 @@ import {
 import { TASK_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
 import { pendingTurnAlreadyClaimed } from "./pendingTurnRestage";
+import { resolveStorageUrls } from "./storageUrls";
 
 function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
   return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
@@ -146,13 +147,9 @@ export const claimPendingTurn = authMutation({
     }
 
     const prompt = task.pendingTurn.prompt;
-    const resolvedUrls = await Promise.all(
-      (task.pendingTurn.attachmentStorageIds ?? []).map((id) =>
-        ctx.storage.getUrl(id),
-      ),
-    );
-    const attachmentUrls = resolvedUrls.filter(
-      (url): url is string => url !== null,
+    const attachmentUrls = await resolveStorageUrls(
+      (id) => ctx.storage.getUrl(id),
+      task.pendingTurn.attachmentStorageIds,
     );
     // The stamp is what tells `ensurePendingTurn` this prompt left
     // `pendingTurn` via a claim rather than a cancel. See

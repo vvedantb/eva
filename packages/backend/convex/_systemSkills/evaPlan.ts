@@ -21,9 +21,8 @@ Write or revise the implementation plan for this session. Explore first, then le
 
 ## Step 1 — Read the current plan
 1. \`cat /tmp/repo/plan.md 2>/dev/null || echo "no plan yet"\`
-2. Eva also injects the session's stored plan into the turn prompt as an "Approved plan" block.
 
-If either shows an existing plan, REVISE it. Keep the parts that still hold, and change only what the user's message asks for. Do not rewrite it from scratch unless the user asks for a fresh plan — the plan accumulates across turns and rewriting it loses agreed decisions.
+If that shows an existing plan, REVISE it. Keep the parts that still hold, and change only what the user's message asks for. Do not rewrite it from scratch unless the user asks for a fresh plan — the plan accumulates across turns and rewriting it loses agreed decisions.
 
 ## Step 2 — Explore the codebase
 Use Glob, Grep, and Read to find the files the work actually touches. Read them rather than guessing from names. Check how similar features are already built in this repo and follow those conventions in the plan.
@@ -40,7 +39,7 @@ Write the plan to \`/tmp/repo/plan.md\` covering:
 Prefer the simplest approach that works. Name assumptions instead of hiding them. Ask the user about anything genuinely ambiguous rather than picking silently.
 
 ## Step 4 — Report
-Reply with a short summary of what the plan says and what changed since the last revision. Eva harvests \`plan.md\` into the session's PRD tab once the turn ends, so do not paste the whole plan into chat.
+Reply with a short summary of what the plan says and what changed since the last revision. Do not paste the whole plan into chat.
 
 ## Rules
 - Write \`plan.md\` only. Do not edit source files or implement the plan in this turn.

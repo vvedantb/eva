@@ -12,6 +12,7 @@ import {
   WORKSPACE_DIR,
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
+import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
 const HELPER_SCRIPT_PATH = "/home/eva/.local/bin/git-credential-eva";
 const HELPER_CONFIG_DIR = "/home/eva/.config/eva";
@@ -22,6 +23,7 @@ const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
 // install so git uses our credential helper instead of stale URL credentials.
 const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 
+<<<<<<< HEAD
 // Bash credential helper. Git invokes it with `get` and supplies protocol, host
 // and (with `credential.useHttpPath`) the repository path on stdin. We forward
 // the path to the eva backend with the per-sandbox bearer secret, and it mints a
@@ -30,6 +32,16 @@ const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 // cache, keyed by repository so tokens never cross installations, trims
 // duplicate mints during a single git operation (clone/fetch/push fan out into
 // several helper invocations).
+=======
+// Bash credential helper. Git invokes it with `get` and supplies the
+// host/proto/path on stdin; we read the `path=` line (git sends it because the
+// install sets `credential.useHttpPath`) and forward it. We POST the
+// per-sandbox bearer secret plus that path to the eva backend, which mints a
+// full installation token for the sandbox's own repo and a read-only,
+// single-repository token for any other repo its owner can reach in eva.
+// A short per-path file cache trims duplicate mints during a single git
+// operation (clone/fetch/push fan out into several helper invocations).
+>>>>>>> origin/main
 const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
 
@@ -38,6 +50,7 @@ if [ "\${1:-}" != "get" ]; then
   exit 0
 fi
 
+<<<<<<< HEAD
 REQ_HOST=""
 REQ_PATH=""
 while IFS= read -r line; do
@@ -56,6 +69,14 @@ esac
 # Repo names cannot contain anything outside this set, so dropping the rest
 # keeps the JSON body below safe without a quoting pass.
 REQ_PATH=$(printf '%s' "$REQ_PATH" | tr -cd 'A-Za-z0-9._/-')
+=======
+REQ_PATH=""
+while IFS= read -r LINE; do
+  case "$LINE" in
+    path=*) REQ_PATH="\${LINE#path=}" ;;
+  esac
+done
+>>>>>>> origin/main
 
 CONFIG_FILE="${HELPER_CONFIG_PATH}"
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -71,6 +92,7 @@ if [ -z "\${EVA_SANDBOX_SECRET:-}" ] || [ -z "\${CONVEX_SITE_URL:-}" ]; then
   exit 1
 fi
 
+<<<<<<< HEAD
 # A multi-repo session's linked repos can live under a different GitHub App
 # installation than the primary, so the cache is keyed by the repository path
 # git supplied — a cache hit for one repo must never serve another repo's
@@ -80,6 +102,9 @@ if [ -n "$REQ_PATH" ]; then
 else
   CACHE_KEY="default"
 fi
+=======
+CACHE_KEY=$(printf '%s' "\${REQ_PATH:-home}" | cksum | cut -d' ' -f1)
+>>>>>>> origin/main
 CACHE_FILE="/tmp/git-cred-cache-$CACHE_KEY"
 CACHE_TTL_SECONDS=3000
 
@@ -97,17 +122,27 @@ if [ -f "$CACHE_FILE" ]; then
 fi
 
 if [ -n "$REQ_PATH" ]; then
+<<<<<<< HEAD
   BODY='{"path":"'"$REQ_PATH"'"}'
 else
   BODY='{}'
+=======
+  REQ_BODY=$(jq -cn --arg p "$REQ_PATH" '{path:$p}')
+else
+  REQ_BODY='{}'
+>>>>>>> origin/main
 fi
 
 RESPONSE=$(curl -fsSL -X POST \\
   -H "Authorization: Bearer $EVA_SANDBOX_SECRET" \\
   -H "Content-Type: application/json" \\
+<<<<<<< HEAD
   --data "$BODY" \\
+=======
+  --data "$REQ_BODY" \\
+>>>>>>> origin/main
   "$CONVEX_SITE_URL/api/git-credentials") || {
-    echo "git-credential-eva: token fetch failed" >&2
+    echo "git-credential-eva: token fetch failed (no access?)" >&2
     exit 1
   }
 
@@ -125,10 +160,10 @@ printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 
 /** Resolves the public Convex site URL used by the in-sandbox credential helper. */
 function resolveConvexSiteUrl(): string {
-  const configured = process.env.CONVEX_SITE_URL;
-  if (configured) return configured;
-  const cloudUrl = requireEnv("CONVEX_CLOUD_URL");
-  return cloudUrl.replace(".convex.cloud", ".convex.site");
+  return (
+    resolvePublicConvexSiteUrl(process.env) ??
+    requireEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
+  );
 }
 
 /**
@@ -137,6 +172,11 @@ function resolveConvexSiteUrl(): string {
  * this runs, the sandbox can run `git fetch`/`git push` against
  * `https://github.com/...` without any token in the URL — the helper mints a
  * fresh installation token on demand via the eva backend.
+ *
+ * `homeRepo` is the repository the sandbox was created for. It is pinned on the
+ * credential row so the backend can grant the home token to sandboxes bound to
+ * no eva entity (seed-prep, ephemeral automation runs) — see
+ * `sandboxGitCredentials.resolveCredentialRequest`.
  *
  * Idempotent: re-running rotates the secret and re-writes the helper script.
  *
@@ -150,7 +190,11 @@ export async function ensureGitCredentialHelper(
   ctx: GenericActionCtx<DataModel>,
   sandbox: SandboxHandle,
   installationId: number,
+<<<<<<< HEAD
   extraInstallationIds: number[] = [],
+=======
+  homeRepo: { owner: string; name: string },
+>>>>>>> origin/main
 ): Promise<void> {
   const secret = randomBytes(32).toString("hex");
   await ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
@@ -160,6 +204,8 @@ export async function ensureGitCredentialHelper(
       new Set([installationId, ...extraInstallationIds]),
     ),
     secret,
+    repoOwner: homeRepo.owner,
+    repoName: homeRepo.name,
   });
 
   const siteUrl = resolveConvexSiteUrl();
@@ -188,7 +234,11 @@ export async function ensureGitCredentialHelper(
       `chmod 600 ${HELPER_CONFIG_PATH}`,
       `chmod 755 ${HELPER_SCRIPT_PATH}`,
       // Stale cache from a prior secret/token must not be reused under the new secret.
+<<<<<<< HEAD
       `rm -f /tmp/git-cred-cache-*`,
+=======
+      `rm -f /tmp/git-cred-cache /tmp/git-cred-cache-*`,
+>>>>>>> origin/main
       // Wipe any inherited URL-embedded token / extraheader before switching to the helper.
       `git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true`,
       // Sends the repository path to `/api/git-credentials` (git's `path=`
@@ -203,6 +253,9 @@ export async function ensureGitCredentialHelper(
       `git config --global --add credential.helper ''`,
       `git config --global --add credential.helper ${HELPER_SCRIPT_PATH}`,
       `git config --global --replace-all credential.https://github.com.helper ${HELPER_SCRIPT_PATH}`,
+      // Makes git send `path=owner/repo.git` on stdin so the helper can ask for
+      // a read-only token for a sibling repo instead of the sandbox's own.
+      `git config --global credential.https://github.com.useHttpPath true`,
       // Agents often `git pull` without a strategy; modern git fatals otherwise.
       `git config --global pull.rebase true`,
       ...repoCleanupSteps,

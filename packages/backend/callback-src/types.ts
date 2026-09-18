@@ -20,12 +20,22 @@ export type StepEdit = {
   newText: string;
 };
 
+export type StepQuestionOption = { label: string; description?: string };
+
+export type StepQuestion = {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: StepQuestionOption[];
+};
+
 /** Optional payload attached when a tool call finishes (merged onto the step). */
 export type ToolCompleteResult = {
   output?: StepOutput;
   isError?: boolean;
   files?: string[];
   durationMs?: number;
+  answers?: Record<string, string>;
 };
 
 export type ProgressStep = {
@@ -57,6 +67,10 @@ export type ProgressStep = {
   isError?: boolean;
   /** Wall time from push → complete (ms). */
   durationMs?: number;
+  /** AskUserQuestion prompt (type "question" only): the questions and options shown to the user. */
+  questions?: StepQuestion[];
+  /** AskUserQuestion answers keyed by question text (blocking questions only). */
+  answers?: Record<string, string>;
 };
 
 export type TodoItem = {
@@ -88,7 +102,7 @@ export type UsageLimitWindow = {
  * - `refused`: the provider answered `rate_limits_available: false`, i.e. it
  *   declined to report. Distinct from having reported nothing at all.
  */
-export type UsageLimitCompleteness = "complete" | "partial" | "refused";
+type UsageLimitCompleteness = "complete" | "partial" | "refused";
 
 /**
  * Plan usage-limit state observed during this run, upserted to Convex at the end

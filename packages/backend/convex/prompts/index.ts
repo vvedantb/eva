@@ -1,6 +1,7 @@
 export {
   buildRootDirectoryInstruction,
   buildCustomInstructionsBlock,
+  buildReadableReposBlock,
   buildSystemPromptBlock,
   buildLinkedReposSection,
   RESPONSE_LENGTH_INSTRUCTION,

@@ -6,7 +6,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner } from "@eva/ui";
 import { IconRefresh } from "@tabler/icons-react";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
@@ -61,7 +61,15 @@ export function RecapGenerateControls({
         onClick={onGenerate}
         disabled={disabled || isGenerating}
       >
-        {isGenerating ? <Spinner size="sm" /> : <IconRefresh size={14} />}
+        <CrossfadeIcon
+          show={isGenerating}
+          trueKey="loading"
+          falseKey="idle"
+          variant="soft"
+          className="relative flex size-3.5 items-center justify-center"
+          whenTrue={<Spinner size="sm" />}
+          whenFalse={<IconRefresh size={14} />}
+        />
         {label}
       </Button>
     </div>

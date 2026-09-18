@@ -1,7 +1,7 @@
 import type { ChangedFile } from "@/lib/components/chat/ChangedFilesCard";
 
-export const CHANGED_FILES_AUTO_EXPAND_LIMIT = 5;
-export const CHANGED_FILES_PREVIEW_LIMIT = 3;
+const CHANGED_FILES_AUTO_EXPAND_LIMIT = 5;
+const CHANGED_FILES_PREVIEW_LIMIT = 3;
 
 function topLevelScope(path: string): string {
   const normalized = path

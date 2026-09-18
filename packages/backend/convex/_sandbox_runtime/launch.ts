@@ -5,6 +5,10 @@ import { quote } from "shell-quote";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
 import { execHandle, requireEnv } from "./helpers";
+import {
+  resolvePublicConvexCloudUrl,
+  resolvePublicConvexSiteUrl,
+} from "../_env/publicConvexUrls";
 import { writeSandboxFile } from "./sandboxFiles";
 import { streamingHeartbeatHmacMessage } from "./callbackAuth";
 import { entityDaemonPaths } from "./daemonPaths";
@@ -113,15 +117,17 @@ function computeScopedHmac(message: string): string | null {
  * reserved by Convex and cannot be overridden, hence the EVA_ pair.
  */
 function publicConvexUrl(): string {
-  return process.env.EVA_PUBLIC_CONVEX_URL ?? requireEnv("CONVEX_CLOUD_URL");
+  return (
+    resolvePublicConvexCloudUrl(process.env) ?? requireEnv("CONVEX_CLOUD_URL")
+  );
 }
 
 /** Resolves the Convex site URL used for HTTP actions, falling back from cloud URL. */
 function resolveConvexSiteUrl(convexCloudUrl: string): string {
-  const configured =
-    process.env.EVA_PUBLIC_CONVEX_SITE_URL ?? process.env.CONVEX_SITE_URL;
-  if (configured) return configured;
-  return convexCloudUrl.replace(".convex.cloud", ".convex.site");
+  return (
+    resolvePublicConvexSiteUrl(process.env, convexCloudUrl) ??
+    convexCloudUrl.replace(".convex.cloud", ".convex.site")
+  );
 }
 
 /**
@@ -518,6 +524,17 @@ export async function launchScript(
     sandbox,
     "/tmp/eva-launch-runner.sh",
     runnerLaunchScript,
+  );
+  // Clear the previous runner's markers synchronously first. The detached
+  // launcher removes them too, but execDetached returns before the script runs,
+  // so the first ready poll could otherwise accept a dead predecessor's marker
+  // (observed in prod: a relaunch that lost the spawn flock with exit 217
+  // reported "runner ready" in 827ms, then no daemon ever polled
+  // claimPendingTurn and the session hung on "Working…").
+  await execHandle(
+    sandbox,
+    "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/run-design.done",
+    5,
   );
   // Use the provider-native detached path; waitForRunnerReady confirms the
   // backgrounded runner actually started.

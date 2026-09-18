@@ -38,7 +38,7 @@ function authorFirstName(user: {
 }
 
 /** Avatar + display name for sidebar hover footers (sessions, docs, automations). */
-export function HoverCardAuthor({ userId }: { userId: Id<"users"> }) {
+function HoverCardAuthor({ userId }: { userId: Id<"users"> }) {
   const user = useQuery(api.users.get, { id: userId });
   if (!user) {
     return (

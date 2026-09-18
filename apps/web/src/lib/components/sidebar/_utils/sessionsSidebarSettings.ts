@@ -10,7 +10,7 @@ export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
 export const SESSION_SORT_ORDERS = ["updated_at", "created_at"] as const;
 export type SessionSortOrder = (typeof SESSION_SORT_ORDERS)[number];
 
-export const SESSION_LIST_MODES = ["active", "archived"] as const;
+const SESSION_LIST_MODES = ["active", "archived"] as const;
 export type SessionListMode = (typeof SESSION_LIST_MODES)[number];
 
 /** Row density: single-line list vs two-line folder. */
@@ -114,9 +114,7 @@ export function sortSessionsForSidebar<
     isOrchestrator?: boolean;
   },
 >(sessions: T[], order: SessionSortOrder): T[] {
-  const listed = sessions.filter(
-    (session) => session.isOrchestrator !== true,
-  );
+  const listed = sessions.filter((session) => session.isOrchestrator !== true);
   if (order === "updated_at") {
     return listed.toSorted(
       (a, b) => sessionActivityAt(b) - sessionActivityAt(a),

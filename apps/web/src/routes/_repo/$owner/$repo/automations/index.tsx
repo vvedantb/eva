@@ -4,7 +4,9 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import { Skeleton } from "@eva/ui";
+import { Skeleton, motionBase, motionStagger } from "@eva/ui";
+import { m } from "motion/react";
+import { CountPop } from "@/lib/components/ui/CountPop";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SystemAutomationCard } from "./_components/SystemAutomationCard";
@@ -84,9 +86,12 @@ function AutomationsHubPage() {
               </p>
             </div>
             {systemAutomations !== undefined && (
-              <p className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+              <CountPop
+                label={`${installedCount}/${systemAutomations.length}`}
+                className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+              >
                 {installedCount} of {systemAutomations.length} installed
-              </p>
+              </CountPop>
             )}
           </div>
         </div>
@@ -103,9 +108,14 @@ function AutomationsHubPage() {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {systemAutomations.map((entry) => (
-              <SystemAutomationCard
+            {systemAutomations.map((entry, index) => (
+              <m.div
                 key={entry.key}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...motionBase, delay: motionStagger(index) }}
+              >
+              <SystemAutomationCard
                 entryKey={entry.key}
                 readOnly={entry.readOnly}
                 title={entry.title}
@@ -131,6 +141,7 @@ function AutomationsHubPage() {
                   );
                 }}
               />
+              </m.div>
             ))}
           </div>
         )}

@@ -6,7 +6,7 @@ import type { PrOverview } from "./prOverviewMeta";
  * so the review tests that only care about two or three fields do not each keep
  * their own copy of the shape and drift apart when the validator grows.
  */
-export const BASE_OVERVIEW: PrOverview = {
+const BASE_OVERVIEW: PrOverview = {
   number: 1,
   title: "Add feature",
   status: "open",

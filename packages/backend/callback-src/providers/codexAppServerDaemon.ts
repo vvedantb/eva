@@ -16,7 +16,8 @@ import {
   codexReasoningEffort,
   normalizedCodexModel,
 } from "../config.js";
-import { callConvexWithRetry, fetchWithTimeout } from "../http/convexClient.js";
+import { callConvexWithRetry } from "../http/convexClient.js";
+import { ensureGithubToken } from "./githubToken.js";
 import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
 import { serializeSteps } from "../parse/stepBudget.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
@@ -44,7 +45,7 @@ import {
   writeCodexSessionState,
 } from "../session/codexSession.js";
 import type { JsonObject, JsonValue, SessionMode } from "../types.js";
-import { attemptElapsedMs, log, readResponseJson } from "../utils.js";
+import { attemptElapsedMs, log } from "../utils.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
 import {
   appendClaimedTurnCompletion,
@@ -327,31 +328,12 @@ function processNotification(
   });
 }
 
-async function ensureGithubToken(): Promise<void> {
-  if (!REPO_ID || !CONVEX_URL || !CONVEX_TOKEN) return;
-  try {
-    const response = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN,
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json",
-      }),
-    });
-    if (!response.ok) return;
-    const payload = objectValue((await readResponseJson(response)) ?? null);
-    const token = stringField(payload.value, "token");
-    if (token) {
-      process.env.GITHUB_TOKEN = token;
-      process.env.GH_TOKEN = token;
-    }
-  } catch {
-    /* non-fatal */
-  }
+async function refreshGithubToken(): Promise<void> {
+  await ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID,
+  });
 }
 
 async function establishThread(
@@ -470,7 +452,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
   const preflightOk = await runPreflightHeartbeat();
   if (!preflightOk) process.exit(1);
   startStreamingLoops();
-  await ensureGithubToken();
+  await refreshGithubToken();
 
   const client = new CodexAppServerClient();
   try {

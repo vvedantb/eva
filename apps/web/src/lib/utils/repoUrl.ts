@@ -21,7 +21,7 @@ export const KNOWN_REPO_SUB_PAGES = new Set([
 ]);
 
 /** Global first segments that are never `/$owner/$repo/...`. */
-export const NON_REPO_PATH_PREFIXES = new Set([
+const NON_REPO_PATH_PREFIXES = new Set([
   "home",
   "sign-in",
   "sign-up",

@@ -6,6 +6,30 @@ import { api } from "@eva/backend";
 import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
+/** Resets Manager Ave. Shared by the confirm dialog and Alt-click bypass. */
+export function useResetOrchestratorChat() {
+  const resetChat = useMutation(api.sessions.resetOrchestratorSession);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const reset = async (): Promise<boolean> => {
+    setIsResetting(true);
+    try {
+      await withMutationToast(
+        resetChat({}),
+        "Started a new Manager Ave chat",
+        "Couldn't start a new chat",
+        "ave-reset-chat",
+      );
+    } catch {
+      setIsResetting(false);
+      return false;
+    }
+    return true;
+  };
+
+  return { reset, isResetting };
+}
+
 /**
  * Confirmation for "Start new chat" in Manager Ave's header menu.
  *
@@ -24,23 +48,11 @@ export function AveResetChatDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const resetChat = useMutation(api.sessions.resetOrchestratorSession);
-  const [isResetting, setIsResetting] = useState(false);
+  const { reset, isResetting } = useResetOrchestratorChat();
 
   const handleConfirm = async () => {
-    setIsResetting(true);
-    try {
-      await withMutationToast(
-        resetChat({}),
-        "Started a new Manager Ave chat",
-        "Couldn't start a new chat",
-        "ave-reset-chat",
-      );
-    } catch {
-      setIsResetting(false);
-      return;
-    }
-    onOpenChange(false);
+    const ok = await reset();
+    if (ok) onOpenChange(false);
   };
 
   return (

@@ -1,12 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { errorResult } from "./toolShared";
+import { defineTool, type EvaTool } from "./registry";
 
 const SUPABASE_PREFIX = "supabase_";
 const TOOL_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -173,11 +173,10 @@ interface McpCredentials {
   scopedRepoId?: string;
 }
 
-export async function registerSupabaseTools(
-  server: McpServer,
+export async function supabaseTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
-): Promise<void> {
+): Promise<EvaTool[]> {
   const { clerkUserId } = credentials;
 
   // Try to resolve Supabase token
@@ -188,12 +187,12 @@ export async function registerSupabaseTools(
     });
   } catch (err) {
     console.error("Supabase: failed to resolve token:", err);
-    return;
+    return [];
   }
 
   if (!token) {
     console.log("Supabase: no SUPABASE_ACCESS_TOKEN found, skipping");
-    return;
+    return [];
   }
 
   let tools: Tool[];
@@ -201,12 +200,12 @@ export async function registerSupabaseTools(
     tools = await discoverTools(token);
   } catch (err) {
     console.error("Supabase: failed to discover tools:", err);
-    return;
+    return [];
   }
 
   if (tools.length === 0) {
     console.log("Supabase: no tools discovered");
-    return;
+    return [];
   }
 
   const visibleTools = tools.filter((tool) =>
@@ -215,75 +214,81 @@ export async function registerSupabaseTools(
 
   if (visibleTools.length === 0) {
     console.log("Supabase: no allowed read-only tools discovered");
-    return;
+    return [];
   }
 
+  const evaTools: EvaTool[] = [];
   for (const tool of visibleTools) {
     const prefixedName = `${SUPABASE_PREFIX}${tool.name}`;
     const zodShape = toolSchemaToZodShape(tool.inputSchema);
 
-    server.tool(
-      prefixedName,
-      `[Supabase] ${tool.description ?? tool.name}`,
-      zodShape,
-      async (args: Record<string, unknown>) => {
-        // Re-resolve token in case it expired
-        const currentToken = await ctx.runAction(
-          internal.mcp.nodeActions.resolveSupabaseToken,
-          { clerkUserId },
-        );
-        if (!currentToken) {
-          return errorResult("SUPABASE_ACCESS_TOKEN is no longer available.");
-        }
-
-        try {
-          const client = await connectClient(currentToken);
-          try {
-            const result = await withTimeout(
-              client.callTool({ name: tool.name, arguments: args }),
-              CALL_TIMEOUT_MS,
-              `Supabase tool ${tool.name}`,
-            );
-
-            const parsedResult = toolResultContentSchema.safeParse(result);
-            if (!parsedResult.success) {
-              return {
-                content: [
-                  {
-                    type: "text" as const,
-                    text: JSON.stringify(result),
-                  },
-                ],
-              };
-            }
-
-            const textContent = parsedResult.data.content.flatMap((item) => {
-              const parsedItem = textContentItemSchema.safeParse(item);
-              return parsedItem.success ? [parsedItem.data] : [];
-            });
-
-            return {
-              content:
-                textContent.length > 0
-                  ? textContent
-                  : [
-                      {
-                        type: "text" as const,
-                        text: JSON.stringify(parsedResult.data.content),
-                      },
-                    ],
-              isError: toolResultErrorSchema.safeParse(result).success
-                ? true
-                : undefined,
-            };
-          } finally {
-            await client.close();
+    evaTools.push(
+      defineTool({
+        name: prefixedName,
+        description: `[Supabase] ${tool.description ?? tool.name}`,
+        mutating: false,
+        input: zodShape,
+        handler: async (args: Record<string, unknown>) => {
+          // Re-resolve token in case it expired
+          const currentToken = await ctx.runAction(
+            internal.mcp.nodeActions.resolveSupabaseToken,
+            { clerkUserId },
+          );
+          if (!currentToken) {
+            return errorResult("SUPABASE_ACCESS_TOKEN is no longer available.");
           }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return errorResult(`Supabase tool error: ${message}`);
-        }
-      },
+
+          try {
+            const client = await connectClient(currentToken);
+            try {
+              const result = await withTimeout(
+                client.callTool({ name: tool.name, arguments: args }),
+                CALL_TIMEOUT_MS,
+                `Supabase tool ${tool.name}`,
+              );
+
+              const parsedResult = toolResultContentSchema.safeParse(result);
+              if (!parsedResult.success) {
+                return {
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: JSON.stringify(result),
+                    },
+                  ],
+                };
+              }
+
+              const textContent = parsedResult.data.content.flatMap((item) => {
+                const parsedItem = textContentItemSchema.safeParse(item);
+                return parsedItem.success ? [parsedItem.data] : [];
+              });
+
+              return {
+                content:
+                  textContent.length > 0
+                    ? textContent
+                    : [
+                        {
+                          type: "text" as const,
+                          text: JSON.stringify(parsedResult.data.content),
+                        },
+                      ],
+                isError: toolResultErrorSchema.safeParse(result).success
+                  ? true
+                  : undefined,
+              };
+            } finally {
+              await client.close();
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return errorResult(`Supabase tool error: ${message}`);
+          }
+        },
+      }),
     );
   }
+
+  return evaTools;
 }

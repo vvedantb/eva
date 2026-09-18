@@ -2,6 +2,7 @@ import { useParams, useRouterState } from "@tanstack/react-router";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import {
   isTaskRouteSandboxTab,
+  sandboxTabIdFromParam,
   type TaskRouteSandboxTab,
 } from "@/lib/search-params";
 
@@ -36,7 +37,10 @@ export function useQuickTaskRouteState(): QuickTaskRouteState | null {
     };
   }
 
-  const sandboxTab = params.sandboxTab;
+  const sandboxTab =
+    typeof params.sandboxTab === "string"
+      ? sandboxTabIdFromParam(params.sandboxTab)
+      : params.sandboxTab;
   if (typeof sandboxTab === "string" && isTaskRouteSandboxTab(sandboxTab)) {
     return {
       surface: "sandbox",

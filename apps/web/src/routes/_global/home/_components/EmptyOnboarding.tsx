@@ -78,7 +78,7 @@ export function EmptyOnboarding({ connectUrl }: { connectUrl: string }) {
       </div>
 
       <div className="w-full max-w-lg">
-        <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+        <p className="mb-3 text-center text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
           What you&apos;ll get access to
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

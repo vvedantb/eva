@@ -8,6 +8,7 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import {
+  CrossfadeIconSlot,
   PromptInputButton,
   getSpeechRecognition,
   usePromptInputController,
@@ -60,30 +61,43 @@ function GatewaySpeechButton({
   setInput: (value: string) => void;
 }) {
   const { isListening, isConnecting, toggle } = useGatewayDictation(setInput);
-  const { isPolishing, handleToggle } = useTranscriptPolish({ value, setInput });
+  const { isPolishing, handleToggle } = useTranscriptPolish({
+    value,
+    setInput,
+  });
+
+  const label = isPolishing
+    ? "Polishing…"
+    : isConnecting
+      ? "Connecting…"
+      : isListening
+        ? "Stop recording"
+        : "Voice input";
+  const iconKey =
+    isConnecting || isPolishing
+      ? "connecting"
+      : isListening
+        ? "listening"
+        : "idle";
 
   return (
     <PromptInputButton
-      tooltip={
-        isPolishing
-          ? "Polishing…"
-          : isConnecting
-            ? "Connecting…"
-            : isListening
-              ? "Stop recording"
-              : "Voice input"
-      }
+      tooltip={label}
+      // The tooltip is hover-only, so on touch this is the button's only name.
+      aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
       disabled={disabled || isConnecting || isPolishing}
       className={isListening && !isConnecting ? "text-destructive" : undefined}
     >
-      {isConnecting || isPolishing ? (
-        <IconLoader2 className="size-4 animate-spin" />
-      ) : isListening ? (
-        <IconPlayerStop className="size-4" />
-      ) : (
-        <IconMicrophone className="size-4" />
-      )}
+      <CrossfadeIconSlot iconKey={iconKey}>
+        {iconKey === "connecting" ? (
+          <IconLoader2 className="size-4 animate-spin" />
+        ) : iconKey === "listening" ? (
+          <IconPlayerStop className="size-4" />
+        ) : (
+          <IconMicrophone className="size-4" />
+        )}
+      </CrossfadeIconSlot>
     </PromptInputButton>
   );
 }
@@ -98,28 +112,39 @@ function WebSpeechButton({
   setInput: (value: string) => void;
 }) {
   const { isListening, toggle } = useSpeechRecognition(setInput);
-  const { isPolishing, handleToggle } = useTranscriptPolish({ value, setInput });
+  const { isPolishing, handleToggle } = useTranscriptPolish({
+    value,
+    setInput,
+  });
+
+  const label = isPolishing
+    ? "Polishing…"
+    : isListening
+      ? "Stop recording"
+      : "Voice input";
+  const iconKey = isPolishing
+    ? "connecting"
+    : isListening
+      ? "listening"
+      : "idle";
 
   return (
     <PromptInputButton
-      tooltip={
-        isPolishing
-          ? "Polishing…"
-          : isListening
-            ? "Stop recording"
-            : "Voice input"
-      }
+      tooltip={label}
+      aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
       disabled={disabled || isPolishing}
       className={isListening ? "text-destructive" : undefined}
     >
-      {isPolishing ? (
-        <IconLoader2 className="size-4 animate-spin" />
-      ) : isListening ? (
-        <IconPlayerStop className="size-4" />
-      ) : (
-        <IconMicrophone className="size-4" />
-      )}
+      <CrossfadeIconSlot iconKey={iconKey}>
+        {iconKey === "connecting" ? (
+          <IconLoader2 className="size-4 animate-spin" />
+        ) : iconKey === "listening" ? (
+          <IconPlayerStop className="size-4" />
+        ) : (
+          <IconMicrophone className="size-4" />
+        )}
+      </CrossfadeIconSlot>
     </PromptInputButton>
   );
 }

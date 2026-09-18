@@ -31,6 +31,8 @@ import {
 } from "@/lib/components/sidebar/session-tabs/SessionTabsOverflowMenu";
 import { partitionSessionsForChromeTabs } from "@/lib/components/sidebar/session-tabs/sessionTabsPartition";
 import { entityPathSegment } from "@/lib/numId";
+import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type ArchivedListItem = FunctionReturnType<
@@ -43,11 +45,24 @@ interface SessionChromeTabsBarProps {
 }
 
 /**
+ * One app's rows out of a `useQueries` map. A failed query is reported as an
+ * `Error` value; the groups treat that the same as "still loading" rather than
+ * rendering a half-built strip.
+ */
+function listedSessions(
+  result: SessionListItem[] | Error | undefined,
+): SessionListItem[] | undefined {
+  return result === undefined || result instanceof Error ? undefined : result;
+}
+
+/**
  * Chrome-style horizontal session tabs: repo groups of active sessions, plus
  * overflow (full active list) and Archived (archived ∪ merged/closed) menus.
  */
 export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
   const { settings } = useSessionsSidebarSettings();
+  const altHeld = useAltHeld();
+  const { archive } = useArchiveSession();
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/sessions",
@@ -169,6 +184,7 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
                 key={repo._id}
                 repo={repo}
                 pathname={pathname}
+                activeSessions={listedSessions(sessionsByRepoId[repo._id])}
                 isOpen={isGroupOpen(repo)}
                 onOpenChange={(open) => {
                   setGroupOpen(repo._id, open);
@@ -181,11 +197,16 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
                 onArchiveRequest={(session, groupRepo) => {
                   const pathSegment = entityPathSegment(session);
                   if (!pathSegment) return;
-                  setSessionToArchive({
-                    session,
-                    repo: groupRepo,
-                    pathSegment,
-                  });
+                  const target = { session, repo: groupRepo, pathSegment };
+                  requestConfirm(
+                    altHeld,
+                    () => setSessionToArchive(target),
+                    () => {
+                      void archive(target, pathname, () =>
+                        setSessionToArchive(null),
+                      );
+                    },
+                  );
                 }}
               />
             ))

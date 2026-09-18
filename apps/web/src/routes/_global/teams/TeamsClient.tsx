@@ -18,7 +18,10 @@ import {
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 export function TeamsClient() {
   const teams = useQuery(api.teams.list);
@@ -41,13 +44,16 @@ export function TeamsClient() {
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const altHeld = useAltHeld();
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleDelete = async (
+    target: { id: Id<"teams">; name: string } | null = deleteTarget,
+  ) => {
+    if (!target) return;
     setIsDeleting(true);
     try {
       await withMutationToast(
-        deleteTeam({ id: deleteTarget.id }),
+        deleteTeam({ id: target.id }),
         "Team deleted",
         "Couldn't delete team",
         "team-delete",
@@ -83,11 +89,12 @@ export function TeamsClient() {
         isSubmitting: false,
       });
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to create team";
       setCreateDialog((prev) => ({
         ...prev,
-        error: errorMessage,
+        error: userFacingErrorMessage(
+          err instanceof Error ? err : null,
+          "Couldn't create the team. Try again.",
+        ),
         isSubmitting: false,
       }));
     }
@@ -135,8 +142,21 @@ export function TeamsClient() {
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {teams.map((team) => (
-            <TeamCard key={team._id} team={team} onDelete={setDeleteTarget} />
+          {teams.map((team, index) => (
+            <ListEnter key={team._id} index={index}>
+              <TeamCard
+                team={team}
+                onDelete={(target) =>
+                  requestConfirm(
+                    altHeld,
+                    () => setDeleteTarget(target),
+                    () => {
+                      void handleDelete(target);
+                    },
+                  )
+                }
+              />
+            </ListEnter>
           ))}
         </div>
       )}
@@ -184,7 +204,7 @@ export function TeamsClient() {
       <TeamDeleteDialog
         team={deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
+        onConfirm={() => handleDelete()}
         isDeleting={isDeleting}
       />
     </SettingsPage>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
 
-export type LoadedSandboxFileList = {
+type LoadedSandboxFileList = {
   kind: "loaded";
   root: string;
   paths: string[];
@@ -12,7 +12,7 @@ export type LoadedSandboxFileList = {
   version: number;
 };
 
-export type SandboxFileListState =
+type SandboxFileListState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "not_running" }
@@ -192,6 +192,10 @@ export function useSandboxFileList({
 
     return () => {
       cancelled = true;
+      // A cancelled attempt must not count as loaded: StrictMode runs this
+      // effect twice on mount, and the second run would otherwise skip the
+      // fetch the first run just abandoned, leaving the tree on its spinner.
+      loadedFor.current = "";
     };
   }, [sandboxId, isActive, repoId, rootPath, listSandboxFiles]);
 

@@ -282,6 +282,7 @@ function extractBearerSecret(request: Request): string | null {
   return secret.length > 0 ? secret : null;
 }
 
+<<<<<<< HEAD
 /**
  * Body the in-sandbox credential helper posts. `path` is git's `path=`
  * component (e.g. `owner/name.git`), present once `credential.useHttpPath` is
@@ -290,6 +291,16 @@ function extractBearerSecret(request: Request): string | null {
  * a malformed body must not break the credential handshake.
  */
 const gitCredentialsRequestSchema = z.object({ path: z.string().optional() });
+=======
+/** The repository git asked about, sent by the in-sandbox credential helper. */
+const gitCredentialsBodySchema = z.object({ path: z.string().optional() });
+
+/** Reads the requested repository path from the helper's body, if any. */
+function parseGitCredentialsPath(body: unknown): string | undefined {
+  const parsed = gitCredentialsBodySchema.safeParse(body);
+  return parsed.success ? parsed.data.path : undefined;
+}
+>>>>>>> origin/main
 
 http.route({
   path: "/api/git-credentials",
@@ -299,12 +310,40 @@ http.route({
     if (!secret) {
       return new Response("Unauthorized", { status: 401 });
     }
+<<<<<<< HEAD
     const credential = await ctx.runQuery(
       internal.sandboxGitCredentials.lookupCredentialBySecret,
       { secret },
     );
     if (credential === null) {
       return new Response("Unauthorized", { status: 401 });
+=======
+    const body: unknown = await request.json().catch(() => null);
+    const resolved = await ctx.runQuery(
+      internal.sandboxGitCredentials.resolveCredentialRequest,
+      { secret, path: parseGitCredentialsPath(body) },
+    );
+    if (resolved.kind === "denied") {
+      console.warn(`[git-credentials][denied] ${resolved.reason}`);
+      return new Response("Forbidden", { status: 403 });
+    }
+    if (resolved.kind === "sibling") {
+      console.log(
+        `[git-credentials][sibling-read] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+      );
+      const siblingToken: string = await ctx.runAction(
+        internal.githubAuth.mintReadOnlyRepoToken,
+        {
+          installationId: resolved.installationId,
+          githubId: resolved.githubId,
+          name: resolved.name,
+        },
+      );
+      return Response.json({
+        username: "x-access-token",
+        token: siblingToken,
+      });
+>>>>>>> origin/main
     }
 
     // Old baked helper scripts send an empty body; treat unparseable as `{}`.
@@ -335,7 +374,7 @@ http.route({
 
     const token: string = await ctx.runAction(
       internal.githubAuth.mintInstallationToken,
-      { installationId },
+      { installationId: resolved.installationId },
     );
     return Response.json({ username: "x-access-token", token });
   }),

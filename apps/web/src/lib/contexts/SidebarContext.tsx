@@ -59,6 +59,14 @@ function rubberbandSidebarWidth(width: number): number {
 interface SidebarContextType {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  /**
+   * Whether the below-`lg` drawer is showing. Owned here rather than by
+   * `Sidebar` because the drawer is the only way to reach a list on a phone,
+   * so pages whose whole content is "select something from the sidebar" have
+   * to be able to open it (`OpenNavigationButton`).
+   */
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
   /** Sticky entry point for Sessions: rail → global list, in-repo nav → per-repo list. */
   sessionsNavMode: SessionsNavMode;
   setSessionsNavMode: (mode: SessionsNavMode) => void;
@@ -87,6 +95,9 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     SIDEBAR_DEFAULT_WIDTH_PX,
   );
   const [dragWidth, setDragWidth] = useState<number | null>(null);
+  // Not persisted: a drawer that reopens itself on the next visit is a bug, and
+  // navigation closes it (see `Sidebar`), so the only meaningful value is now.
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const setCollapsed = (value: boolean) => {
     setCollapsedState(value);
@@ -119,6 +130,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       value={{
         collapsed,
         setCollapsed,
+        mobileOpen,
+        setMobileOpen,
         sessionsNavMode,
         setSessionsNavMode,
         sidebarWidth: displayWidth,

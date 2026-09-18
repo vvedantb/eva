@@ -35,6 +35,9 @@ function mergeToolResult(step: ProgressStep, result: ToolCompleteResult): void {
   if (result.durationMs !== undefined) {
     step.durationMs = result.durationMs;
   }
+  if (result.answers) {
+    step.answers = result.answers;
+  }
 }
 
 /** Flips one step to complete and swaps its in-progress label for the past-tense one. */
@@ -177,7 +180,7 @@ export function updateThinkingStep(label: string, detail?: string): void {
 }
 
 /** Removes startup/thinking filler once durable activity or text begins. */
-export function clearThinkingStep(): void {
+function clearThinkingStep(): void {
   S.transientThinkingStep = null;
 }
 

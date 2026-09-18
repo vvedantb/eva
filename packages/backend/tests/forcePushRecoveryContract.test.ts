@@ -78,11 +78,13 @@ describe("the force-push recovery cannot silently discard remote commits", () =>
 });
 
 /**
- * The automatic publish may replace origin/<branch> too, but only for a
- * rewritten eva/ branch whose remote tip the local branch itself once pointed
- * at (task m57dve3m, 2 Sep 2026: the agent rebased, publish refused, the task
- * chat had no recovery). Each guard below is what keeps that from ever
- * discarding a commit the sandbox never held.
+ * The automatic publish may replace origin/<branch> too, but only for an eva/
+ * branch whose remote tip the local branch itself once pointed at — the
+ * sandbox rewrote history it already held. Each guard below is what keeps that
+ * from ever discarding a commit the sandbox never held. The decision rests on
+ * the reflog alone: a file-count classifier misread quick task 220 (2–3 Sep
+ * 2026, 118 foreign commits on GitHub vs one local) as a rewrite and refused
+ * a publish that a merge completes.
  */
 describe("the automatic publish only replaces the sandbox's own old history", () => {
   const sync = functionBody(
@@ -94,27 +96,37 @@ describe("the automatic publish only replaces the sandbox's own old history", ()
     "export async function pushBranchToOrigin(",
   );
 
+<<<<<<< HEAD
   test("the replace is offered only after the rewrite classifier, for eva/ branches, with the remote tip in the local reflog", () => {
     const rewriteAt = sync.indexOf("divergedPublishLooksLikeRewrite(");
     const ownedAt = sync.indexOf("isEvaOwnedBranch(branchName)");
     // Call only, not its argument list: multi-repo publishes pass a
     // per-checkout `workspaceDir` override, so the args span several lines.
     const reflogAt = sync.indexOf("localBranchReflogShas(");
+=======
+  test("the replace is offered only when the remote tip is in the local reflog, and only for eva/ branches", () => {
+    const reflogAt = sync.indexOf("localBranchReflogShas(sandbox, branchName)");
+>>>>>>> origin/main
     const ownHistoryAt = sync.indexOf("rewrittenBranchIsOwnHistory(");
+    const ownedAt = sync.indexOf("isEvaOwnedBranch(branchName)");
     const replaceAt = sync.indexOf("replaceRemoteTip: remoteTip");
-    expect(rewriteAt, "the rewrite classifier moved").toBeGreaterThan(-1);
-    expect(ownedAt, "the eva/ ownership guard is gone").toBeGreaterThan(rewriteAt);
-    expect(reflogAt, "the reflog read is gone").toBeGreaterThan(ownedAt);
+    const mergeAt = sync.indexOf("git merge --no-edit ${quotedRemoteRef}");
+    expect(reflogAt, "the reflog read is gone").toBeGreaterThan(-1);
     expect(ownHistoryAt, "the own-history check is gone").toBeGreaterThan(reflogAt);
-    expect(replaceAt, "the replace is no longer offered").toBeGreaterThan(ownHistoryAt);
-    // Both refusals keep the banner-matched wording and say why.
-    expect(sync).toContain('"branch-not-eva-owned"');
-    expect(sync).toContain('"remote-holds-foreign-commits"');
-    // The merge that glues the old history back on must stay unreachable.
-    expect(replaceAt).toBeLessThan(sync.indexOf("git merge --no-edit ${quotedRemoteRef}"));
+    expect(ownedAt, "the eva/ ownership guard is gone").toBeGreaterThan(ownHistoryAt);
+    expect(replaceAt, "the replace is no longer offered").toBeGreaterThan(ownedAt);
+    // The refusal keeps the banner-matched wording; it is the only refusal left.
+    expect(sync).toContain("rewrittenBranchPublishError(branchName)");
+    expect(sync).not.toContain("remote-holds-foreign-commits");
+    // A foreign remote tip is merged, never refused and never forced: the merge
+    // must follow the own-history branch, and no file-count classifier may sit
+    // in front of either.
+    expect(replaceAt).toBeLessThan(mergeAt);
+    expect(sync).not.toContain("divergedPublishLooksLikeRewrite");
+    expect(sync).not.toContain("git diff --name-only");
   });
 
-  test("a missing reflog refuses instead of guessing", () => {
+  test("a missing reflog merges instead of guessing", () => {
     const reflog = functionBody(
       sandboxGit,
       "async function localBranchReflogShas(",

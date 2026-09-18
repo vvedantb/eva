@@ -113,7 +113,8 @@ export function useComposerStash({
     let attachmentStorageIds: Id<"_storage">[] = [];
     try {
       if (filesSnapshot.length > 0) {
-        attachmentStorageIds = await uploadChatAttachments(filesSnapshot);
+        const uploads = await uploadChatAttachments(filesSnapshot);
+        attachmentStorageIds = uploads.ids;
         // Stricter than send: stash clears the composer, so partial upload
         // must abort and leave the draft untouched.
         if (attachmentStorageIds.length !== filesSnapshot.length) {

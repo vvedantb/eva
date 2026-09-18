@@ -29,7 +29,7 @@ export const GOOGLE_FONT_HREFS: Record<FontFamily, string | null> = {
 
 const injectedHrefs = new Set<string>();
 
-export function injectGoogleFontStylesheet(href: string): void {
+function injectGoogleFontStylesheet(href: string): void {
   if (typeof document === "undefined") return;
   if (injectedHrefs.has(href)) return;
   const links = document.querySelectorAll("link[data-eva-font-href]");

@@ -268,7 +268,9 @@ export function QuickTasksToolbar({
                   onClick={onStartSelecting}
                 >
                   <IconCheckbox size={16} />
-                  <span className="hidden sm:inline">Select</span>
+                  {/* `sr-only`, not `hidden`: the tooltip below is hover-only,
+                      so on touch this span is the button's only name. */}
+                  <span className="max-sm:sr-only">Select</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="sm:hidden">Select</TooltipContent>
@@ -285,7 +287,7 @@ export function QuickTasksToolbar({
               className="motion-press hover:scale-[1.01] active:scale-[0.96]"
             >
               <IconSettings size={16} />
-              <span className="hidden sm:inline">Options</span>
+              <span className="max-sm:sr-only">Options</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
@@ -502,7 +504,7 @@ export function QuickTasksToolbar({
         onClick={onCreateTask}
       >
         <IconPlus size={16} />
-        <span className="hidden sm:inline">New Task</span>
+        <span className="max-sm:sr-only">New Task</span>
       </Button>
     </div>
   );

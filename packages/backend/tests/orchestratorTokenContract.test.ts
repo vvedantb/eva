@@ -14,7 +14,7 @@ const launchHelpers = readSource("_sandbox_runtime/helpers.ts");
 /**
  * Orchestrator tools are authorised by one HS256 claim on the MCP-internal
  * token. Nothing else gates them, so the claim has to survive minting, parsing,
- * and the hand-off to registerTools — and must never appear on a normal launch.
+ * and the hand-off to buildTools — and must never appear on a normal launch.
  */
 describe("the orchestrator claim survives the token round-trip", () => {
   const claims = objectBody(
@@ -36,7 +36,7 @@ describe("the orchestrator claim survives the token round-trip", () => {
     expect(verify).toContain("isOrchestrator: claims.data.orchestrator");
   });
 
-  test("the credentials passed to registerTools carry it", () => {
+  test("the credentials passed to buildTools carry it", () => {
     // McpCredentials lives in the shared leaf so orchestratorTools can import
     // it without closing an import cycle back into tools.ts.
     expect(toolShared).toContain("isOrchestrator?: boolean;");
@@ -80,7 +80,7 @@ describe("orchestrator tools are registered only for the master", () => {
   });
 
   test("the single registration sits behind that flag", () => {
-    const registerAt = tools.indexOf("registerOrchestratorTools(server");
+    const registerAt = tools.indexOf("tools.push(...orchestratorTools(");
     expect(registerAt, "the registration moved").toBeGreaterThan(-1);
     const guardAt = tools.lastIndexOf("if (isOrchestrator) {", registerAt);
     expect(guardAt, "the registration escaped its guard").toBeGreaterThan(-1);
@@ -89,7 +89,7 @@ describe("orchestrator tools are registered only for the master", () => {
       "the guard must not close before the registration",
     ).not.toContain("}");
     expect(
-      tools.indexOf("registerOrchestratorTools(server", registerAt + 1),
+      tools.indexOf("tools.push(...orchestratorTools(", registerAt + 1),
       "a second registration would need its own guard",
     ).toBe(-1);
   });

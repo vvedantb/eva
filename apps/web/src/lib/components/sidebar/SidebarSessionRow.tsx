@@ -7,9 +7,11 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   motionFast,
+  toast,
 } from "@eva/ui";
 import { useState } from "react";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
+import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
   sessionHrefForRow,
   type RepoPathRef,
@@ -19,10 +21,12 @@ import {
   useIsRegeneratingTitle,
 } from "@/lib/components/sidebar/SessionMenuItems";
 import { SharedLayoutNavSurface } from "@/lib/components/sidebar/SharedLayoutNav";
-import { SessionReviewModal } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
+import {
+  SessionReviewModal,
+  useSendSessionForReview,
+} from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
-
-type SessionStatus = "active" | "starting" | "stopping" | "closed";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface SessionItem {
   _id: Id<"sessions">;
@@ -31,7 +35,9 @@ interface SessionItem {
   userId: Id<"users">;
   title: string;
   titleRegeneration?: { startedAt: number };
-  status: SessionStatus;
+  status: SandboxStatus;
+  /** Set when the last wake attempt failed; the row's dot reads as an error. */
+  sandboxError?: string;
   isExecuting?: boolean;
   isOrchestrator?: boolean;
   updatedAt?: number;
@@ -90,6 +96,8 @@ export function SidebarSessionRow<T extends SessionItem>({
   // Row-local: the dialog belongs to this session and the row outlives it
   // (unlike archive, which removes the row and so is owned by the sidebar).
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const altHeld = useAltHeld();
+  const { sendForReview } = useSendSessionForReview(session._id);
 
   return (
     <>
@@ -115,6 +123,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 createdAt={session._creationTime}
                 updatedAt={session.updatedAt}
                 status={session.status}
+                sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
                 isOrchestrator={session.isOrchestrator === true}
                 isSelected={isSelected}
@@ -145,7 +154,19 @@ export function SidebarSessionRow<T extends SessionItem>({
             }
             onDuplicateNavigate={onDuplicateNavigate}
             onSendForReview={
-              canSendForReview ? () => setIsReviewOpen(true) : undefined
+              canSendForReview
+                ? () =>
+                    requestConfirm(
+                      altHeld,
+                      () => setIsReviewOpen(true),
+                      () => {
+                        void sendForReview().then((ok) => {
+                          if (ok)
+                            toast.success("Sent to the team for review.");
+                        });
+                      },
+                    )
+                : undefined
             }
             onUnarchive={
               isArchivedList && onUnarchive

@@ -9,7 +9,7 @@ import {
 import { Kpi, KpiGroup } from "@/lib/components/analytics/Kpi";
 import { formatCost, formatTokens } from "../_utils";
 
-export interface UsageOverviewTotals {
+interface UsageOverviewTotals {
   costUsd: number;
   cacheSavingsUsd: number;
   inputTokens: number;

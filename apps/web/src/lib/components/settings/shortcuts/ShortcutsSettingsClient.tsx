@@ -8,6 +8,7 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { ShortcutRow } from "@/lib/components/settings/shortcuts/_components/ShortcutRow";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { EDITING_KEYS } from "@/lib/components/settings/shortcuts/editingKeys";
 import { Kbd } from "@/lib/components/ui/Kbd";
 import {
@@ -121,17 +122,18 @@ export function ShortcutsSettingsClient() {
             ) : undefined
           }
         >
-          {section.ids.map((id) => (
-            <ShortcutRow
-              key={id}
-              id={id}
-              binding={resolveBinding(id, overrides)}
-              isOverridden={overrides[id] !== undefined}
-              conflictsWith={(conflicts[id] ?? []).map(
-                (other) => SHORTCUT_DEFS[other].name,
-              )}
-              onRecord={(hotkey) => record(id, hotkey)}
-            />
+          {section.ids.map((id, rowIndex) => (
+            <ListEnter key={id} index={rowIndex} fast staggerMax={8}>
+              <ShortcutRow
+                id={id}
+                binding={resolveBinding(id, overrides)}
+                isOverridden={overrides[id] !== undefined}
+                conflictsWith={(conflicts[id] ?? []).map(
+                  (other) => SHORTCUT_DEFS[other].name,
+                )}
+                onRecord={(hotkey) => record(id, hotkey)}
+              />
+            </ListEnter>
           ))}
         </SettingsSection>
       ))}

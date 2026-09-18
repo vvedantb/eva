@@ -46,6 +46,8 @@ const sessionListItemValidator = v.object({
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   sandboxId: v.optional(v.string()),
+  /** Last wake failure — the row's dot turns red instead of reading "Asleep". */
+  sandboxError: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
   archived: v.optional(v.boolean()),
@@ -99,6 +101,7 @@ function toSessionListItem(
     prUrl: session.prUrl,
     prState: session.prState,
     sandboxId: session.sandboxId,
+    sandboxError: session.sandboxError,
     updatedAt: session.updatedAt,
     status: session.status,
     archived: session.archived,

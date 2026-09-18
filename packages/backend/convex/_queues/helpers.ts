@@ -5,7 +5,12 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { internal } from "../_generated/api";
 import { workflow } from "../workflowManager";
-import { DEFAULT_AI_MODEL, getAIModelProvider } from "../validators";
+import {
+  DEFAULT_AI_MODEL,
+  getAIModelProvider,
+  launchTraitsFromStored,
+  normalizeAIModel,
+} from "../validators";
 import type { AIProvider } from "../validators";
 import { queuedMessageFields } from "../_validators/tableFields";
 import {
@@ -402,10 +407,16 @@ const sessionQueueConfig: ChatQueueConfig<
           sessionId: id,
           message: next.content,
           model: prepared.model,
-          reasoningLevel: next.reasoningLevel,
-          thinkingEnabled: next.thinkingEnabled,
-          use1mContext: next.use1mContext,
-          fastMode: next.fastMode,
+          // Normalised, not forwarded raw: the composer enqueues model defaults
+          // explicitly (e.g. reasoning "high"), and the workflow feeds these
+          // straight into prewarmSessionDaemon — a raw default yields a
+          // different opts sig from the page-open prewarm and kills its daemon.
+          ...launchTraitsFromStored(normalizeAIModel(prepared.model), {
+            reasoningLevel: next.reasoningLevel,
+            thinkingEnabled: next.thinkingEnabled,
+            use1mContext: next.use1mContext,
+            fastMode: next.fastMode,
+          }),
           providerAccountId: prepared.providerAccountId,
           credentialOwnerUserId: session.createdBy ?? session.userId,
           userId: next.userId,
@@ -518,10 +529,19 @@ const projectChatQueueConfig: ChatQueueConfig<
         projectId: id,
         message: next.content,
         model: next.model ?? DEFAULT_AI_MODEL,
-        reasoningLevel: next.reasoningLevel,
-        thinkingEnabled: next.thinkingEnabled,
-        use1mContext: next.use1mContext,
-        fastMode: next.fastMode,
+        // Normalised, not forwarded raw: the composer enqueues model defaults
+        // explicitly (e.g. reasoning "high"), and the workflow feeds these
+        // straight into prewarmEntityDaemon — a raw default yields a different
+        // opts sig from the page-open prewarm and kills its daemon.
+        ...launchTraitsFromStored(
+          normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+          {
+            reasoningLevel: next.reasoningLevel,
+            thinkingEnabled: next.thinkingEnabled,
+            use1mContext: next.use1mContext,
+            fastMode: next.fastMode,
+          },
+        ),
         providerAccountId: prepared.providerAccountId,
         credentialOwnerUserId: project.userId,
         userId: next.userId,
@@ -600,10 +620,19 @@ const taskChatQueueConfig: ChatQueueConfig<
         taskId: id,
         message: next.content,
         model: next.model ?? DEFAULT_AI_MODEL,
-        reasoningLevel: next.reasoningLevel,
-        thinkingEnabled: next.thinkingEnabled,
-        use1mContext: next.use1mContext,
-        fastMode: next.fastMode,
+        // Normalised, not forwarded raw: the composer enqueues model defaults
+        // explicitly (e.g. reasoning "high"), and the workflow feeds these
+        // straight into prewarmEntityDaemon — a raw default yields a different
+        // opts sig from the page-open prewarm and kills its daemon.
+        ...launchTraitsFromStored(
+          normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+          {
+            reasoningLevel: next.reasoningLevel,
+            thinkingEnabled: next.thinkingEnabled,
+            use1mContext: next.use1mContext,
+            fastMode: next.fastMode,
+          },
+        ),
         providerAccountId: prepared.providerAccountId,
         credentialOwnerUserId: task.createdBy,
         userId: next.userId,

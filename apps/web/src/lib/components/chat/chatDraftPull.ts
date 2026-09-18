@@ -20,7 +20,7 @@ export function rememberOwnSave(
 }
 
 /** Why a remote draft write was left alone — one per guard, for debugging. */
-export type DraftPullSkipReason =
+type DraftPullSkipReason =
   /** Subscription has not resolved yet. */
   | "loading"
   /** Row deleted or emptied; the editor is never wiped from under the user. */

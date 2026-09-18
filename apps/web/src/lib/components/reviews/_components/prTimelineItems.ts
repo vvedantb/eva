@@ -6,7 +6,7 @@ import type {
 } from "./prOverviewMeta";
 
 /** A standalone comment: an issue comment, or an inline comment with no review. */
-export interface TimelineCommentItem {
+interface TimelineCommentItem {
   readonly kind: "comment";
   readonly key: string;
   readonly at: number;
@@ -26,7 +26,7 @@ export interface TimelineReviewItem {
  * A run of consecutive commits, grouped as GitHub groups a push: one eva pull
  * request can carry dozens of commits, and a row each would bury the discussion.
  */
-export interface TimelineCommitsItem {
+interface TimelineCommitsItem {
   readonly kind: "commits";
   readonly key: string;
   readonly at: number;
@@ -63,7 +63,9 @@ interface CommitsGroup {
  * Collapses each run of adjacent commits into a single item. Anything said in
  * between splits the run, so the conversation still reads in order.
  */
-function groupConsecutiveCommits(items: readonly SortableItem[]): TimelineItem[] {
+function groupConsecutiveCommits(
+  items: readonly SortableItem[],
+): TimelineItem[] {
   const grouped: (TimelineCommentItem | TimelineReviewItem | CommitsGroup)[] =
     [];
 

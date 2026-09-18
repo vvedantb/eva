@@ -24,6 +24,66 @@ const waitForRunnerReadyBody = (() => {
     .replace(/^\s*\/\/.*$/gm, "");
 })();
 
+/** `launchScript`'s body with `//` comments stripped, for the same reason. */
+const launchScriptBody = (() => {
+  const startAt = launchSource.indexOf("export async function launchScript(");
+  expect(startAt, "launchScript moved or was renamed").toBeGreaterThan(-1);
+  const nextAt = launchSource.indexOf("\nasync function ", startAt + 1);
+  return launchSource
+    .slice(startAt, nextAt < 0 ? undefined : nextAt)
+    .replace(/^\s*\/\/.*$/gm, "");
+})();
+
+/**
+ * `execDetached` returns as soon as the launcher is spawned, so the in-script
+ * `rm -f` of the runner markers has not necessarily run by the time
+ * `waitForRunnerReady` takes its first poll. If a previous runner for this
+ * entity left `/tmp/run-design.ready` behind — a daemon killed a second
+ * earlier by a "model/tools changed" respawn — that first poll reads the dead
+ * predecessor's marker and the launch reports success while the new runner sits
+ * dead on exit 217. Observed in prod as "runner ready in 827ms" followed by a
+ * session hung on "Working…" with no daemon ever claiming the turn.
+ *
+ * Clearing the markers synchronously BEFORE the detached spawn is the whole
+ * fix, and it is invisible at runtime — a reordering would look harmless and
+ * silently restore the hang. Pin the order.
+ */
+describe("stale runner markers are cleared before the detached launch", () => {
+  const detachedAt = launchScriptBody.indexOf("execDetached(");
+  const preClearPattern =
+    /execHandle\(\s*sandbox,\s*"rm -f (?<markers>[^"]*run-design\.done[^"]*)"/;
+
+  test("the launcher whose start we race is the runner launch script", () => {
+    expect(detachedAt, "the detached runner launch moved").toBeGreaterThan(-1);
+    expect(launchScriptBody.slice(detachedAt)).toContain(
+      "/tmp/eva-launch-runner.sh",
+    );
+  });
+
+  test("a synchronous execHandle rm -f precedes execDetached", () => {
+    const beforeDetached = launchScriptBody.slice(0, detachedAt);
+    expect(
+      preClearPattern.test(beforeDetached),
+      "the marker pre-clear must be awaited before the detached spawn, not after",
+    ).toBe(true);
+  });
+
+  test("every marker the readiness probes trust is pre-cleared", () => {
+    const markers = launchScriptBody.match(preClearPattern)?.groups?.markers;
+    expect(markers, "no synchronous marker pre-clear found").toBeDefined();
+    for (const marker of [
+      // waitForRunnerReady's success signal.
+      "/tmp/run-design.ready",
+      // waitForRunnerReady's `alive` probe.
+      "/tmp/run-design.pid",
+      // CALLBACK_LIVENESS_COMMAND requires this absent (lifecycle.ts).
+      "/tmp/run-design.done",
+    ]) {
+      expect(markers).toContain(marker);
+    }
+  });
+});
+
 /**
  * A runner that loses the spawn flock exits before writing the ready file, so
  * `waitForRunnerReady` has to decide whether the incumbent lock holder is the

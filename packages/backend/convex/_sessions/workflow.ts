@@ -14,6 +14,7 @@ import {
   sessionStatusValidator,
   turnCheckpointArgs,
   usesChatDaemon,
+  interactionModeValidator,
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
@@ -29,12 +30,14 @@ import {
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt, buildOrchestratorPrompt } from "./prompts";
+import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { z } from "zod";
+import { formatDelayedPublishFailureError } from "./resultTarget";
 import {
-  delayedPublishFailureError,
-  orphanPlaceholderMessages,
-  resultTargetMessage,
-} from "./resultTarget";
+  applyChatTurnResult,
+  insertAssistantPlaceholderIfNeeded,
+} from "../_chat/chatResult";
+import { resolveStorageUrls } from "../_chat/storageUrls";
 import { isUnclaimedOpenTurn } from "./pendingTurnRecovery";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -145,9 +148,6 @@ function parseDesignResult(
   return parsed.success ? parsed.data : null;
 }
 
-const WORKSPACE_DIR = "/tmp/repo";
-const LEGACY_WORKSPACE_DIR = "/workspace/repo";
-
 /** Finalizes and clears an open synthetic-turn placeholder on session hygiene paths. */
 async function finalizeOpenSyntheticTurn(
   ctx: MutationCtx,
@@ -220,9 +220,16 @@ export async function buildSessionPrompt(
     return { prompt, branchName };
   }
 
-  // The stored plan still feeds implementation turns, and gives `eva-plan` its
-  // iteration context after a sandbox is recreated without plan.md on disk.
+  // Sibling repositories this sandbox's git credentials can read (owner is the
+  // session owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    session.userId,
+    repo._id,
+  );
+
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
+<<<<<<< HEAD
   // in as a rotation handoff.
   const linkedRepoRows = await ctx.db
     .query("sessionRepos")
@@ -235,6 +242,10 @@ export async function buildSessionPrompt(
     branchName: row.branchName,
     baseBranch: row.baseBranch,
   }));
+=======
+  // in as a rotation handoff. Session plan.md / planContent is not injected —
+  // that was the old Plan/Build mode contract.
+>>>>>>> origin/main
   let prompt = buildEditPrompt(
     {
       owner: repo.owner,
@@ -242,14 +253,18 @@ export async function buildSessionPrompt(
       baseBranch: resolveSessionBaseBranch(session, repo),
     },
     branchName,
-    session.planContent || "",
+    "",
     resolvedMessage,
     rootDirectory,
     customInstructionsBlock,
     repo.systemPrompt,
     session.devPort ?? repo.devPort,
     [],
+<<<<<<< HEAD
     linkedRepos,
+=======
+    readableRepos,
+>>>>>>> origin/main
   );
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
@@ -561,23 +576,6 @@ export const sessionExecuteWorkflow = workflow.define({
 
     const result = await step.awaitEvent(sessionCompleteEvent);
 
-    // Content-keyed, not mode-keyed: any turn may have written plan.md (the
-    // `eva-plan` skill does), so harvest it on every success and let saveResult
-    // decide whether it actually changed.
-    let planContent: string | undefined;
-
-    if (result.success && sandboxId) {
-      const planRaw = await step.runAction(internal.sandbox.runSandboxCommand, {
-        sandboxId,
-        command: `cat ${WORKSPACE_DIR}/plan.md 2>/dev/null || cat ${LEGACY_WORKSPACE_DIR}/plan.md 2>/dev/null || echo ""`,
-        timeoutSeconds: 10,
-        repoId: data.repoId,
-      });
-      if (planRaw.trim()) {
-        planContent = planRaw.trim();
-      }
-    }
-
     // Persist the assistant reply BEFORE publish. A hung/slow git push used to
     // leave the UI on "Working…" forever even after the daemon had completed —
     // streamed tokens may also be empty for short conversational-ish agent
@@ -590,7 +588,6 @@ export const sessionExecuteWorkflow = workflow.define({
       error: result.error,
       activityLog: result.activityLog,
       model: args.model,
-      planContent,
       pendingQuestion: result.pendingQuestion,
       beforeSha: result.beforeSha,
       afterSha: result.afterSha,
@@ -625,7 +622,7 @@ export const sessionExecuteWorkflow = workflow.define({
         pushedCommits = pushResult.pushed;
         branchPublished = pushResult.published;
       } catch (error) {
-        const publishError = `Session completed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${error instanceof Error ? error.message : String(error)}`;
+        const publishError = formatDelayedPublishFailureError("session", error);
         console.error(
           `[sessionWorkflow] pushSandboxBranch failed sessionId=${args.sessionId}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -636,7 +633,6 @@ export const sessionExecuteWorkflow = workflow.define({
           result: result.result,
           error: publishError,
           activityLog: result.activityLog,
-          planContent,
           pendingQuestion: result.pendingQuestion,
         });
       }
@@ -866,34 +862,13 @@ export const addAssistantPlaceholder = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
 
-    const recent = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .order("desc")
-      .take(10);
     // Ignore system alerts (e.g. draft-PR failures) sitting on top — startExecute
     // may already have staged an empty placeholder underneath them.
-    const lastTurnMessage = recent.find(
-      (message) => message.isSystemAlert !== true,
-    );
-    if (
-      lastTurnMessage &&
-      lastTurnMessage.role === "assistant" &&
-      lastTurnMessage.content === "" &&
-      lastTurnMessage.finishedAt === undefined &&
-      lastTurnMessage.isSyntheticTurn !== true
-    ) {
-      return null;
-    }
-
-    await ctx.db.insert("messages", {
+    await insertAssistantPlaceholderIfNeeded(ctx, {
       parentId: args.sessionId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      activityLog: "",
+      recentLimit: 10,
+      skipSystemAlerts: true,
     });
-    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
     return null;
   },
 });
@@ -1015,52 +990,10 @@ export const saveResult = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
 
-    // The reply is saved before Eva pushes the branch. If that slower push
-    // later fails, a newer turn may already be running. Report the publish
-    // failure independently: running normal result finalisation again would
-    // overwrite the newer placeholder and clear its streaming state.
-    const publishError = delayedPublishFailureError(args.result, args.error);
-    if (publishError !== undefined) {
-      await ctx.db.insert("messages", {
-        parentId: args.sessionId,
-        role: "assistant",
-        content: "Failed to publish session branch",
-        timestamp: Date.now(),
-        isSystemAlert: true,
-        errorDetail: publishError,
-      });
-      await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
-      return null;
-    }
-
-    // A disposable provider worker can die too hard to serialize its local
-    // steps (for example V8 heap OOM). Preserve the last durable streaming
-    // snapshot when its supervisor reports a null/empty activity log.
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", String(args.sessionId)))
-      .first();
-    const activityLog = args.activityLog || streaming?.currentActivity;
-    await clearStreamingActivity(ctx, String(args.sessionId));
-
-    const recent = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .order("desc")
-      .take(20);
-    const last = resultTargetMessage(recent);
-    if (!last) return null;
-
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
     const designParsed = args.success ? parseDesignResult(args.result) : null;
-
-    const patch: {
-      content: string;
-      activityLog?: string;
-      finishedAt?: number;
-      pendingQuestion?: string;
-      model?: Doc<"messages">["model"];
+    const extraPatch: {
       isSystemAlert?: boolean;
       errorDetail?: string;
       beforeSha?: string;
@@ -1073,49 +1006,46 @@ export const saveResult = internalMutation({
         filePath?: string;
       }>;
     } = {
-      content:
-        designParsed !== null
-          ? designParsed.summary || "Here are the design variations:"
-          : args.success
-            ? args.result || "I couldn't process your message."
-            : `Error: ${args.error || "Unknown error during execution."}`,
-      finishedAt: Date.now(),
       isSystemAlert: undefined,
       errorDetail: undefined,
     };
     if (designParsed) {
-      patch.variations = designParsed.variations.map((variation) => ({
+      extraPatch.variations = designParsed.variations.map((variation) => ({
         label: variation.label,
         route: variation.route,
         filePath: variation.filePath,
       }));
     }
-    if (activityLog) {
-      patch.activityLog = activityLog;
-    }
-    // Only a successful reply is a checkpoint: a failed turn's provider never
-    // saw the conversation, so it must not suppress a later catch-up.
-    if (args.success && args.model !== undefined) {
-      patch.model = normalizeAIModel(args.model);
-    }
-    if (args.pendingQuestion) {
-      patch.pendingQuestion = args.pendingQuestion;
-    }
     if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      patch.beforeSha = args.beforeSha;
-      patch.afterSha = args.afterSha;
+      extraPatch.beforeSha = args.beforeSha;
+      extraPatch.afterSha = args.afterSha;
     }
+<<<<<<< HEAD
     if (args.beforeShas !== undefined && args.afterShas !== undefined) {
       patch.beforeShas = args.beforeShas;
       patch.afterShas = args.afterShas;
     }
     await ctx.db.patch(last._id, patch);
+=======
+>>>>>>> origin/main
 
-    // Drop any orphan empty placeholders left when a system alert sat on top
-    // and addAssistantPlaceholder / startExecute staged a second bubble.
-    for (const message of orphanPlaceholderMessages(recent, last)) {
-      await ctx.db.delete(message._id);
-    }
+    const outcome = await applyChatTurnResult(ctx, {
+      parentId: args.sessionId,
+      streamingEntityId: String(args.sessionId),
+      success: args.success,
+      result: args.result,
+      error: args.error,
+      activityLog: args.activityLog,
+      alertTitle: "Failed to publish session branch",
+      pendingQuestion: args.pendingQuestion,
+      model: args.model,
+      content:
+        designParsed !== null
+          ? designParsed.summary || "Here are the design variations:"
+          : undefined,
+      extraPatch,
+    });
+    if (outcome === "publish-failure" || outcome === "no-target") return null;
 
     const sessionPatch: {
       activeWorkflowId?: string;
@@ -1128,9 +1058,6 @@ export const saveResult = internalMutation({
       // Crash hygiene: drop stale soft-lock if the agent forgot browser_unlock.
       agentBrowsingAt: undefined,
     };
-    // plan.md is now harvested after every successful turn, so only write it
-    // back when it actually changed — an unchanged reread must not touch the
-    // session (and reorder nothing downstream of planContent).
     if (args.planContent && args.planContent !== session.planContent) {
       sessionPatch.planContent = args.planContent;
     }
@@ -1181,6 +1108,7 @@ export const claimPendingTurn = authMutation({
       stopTaskToolUseIds: v.array(v.string()),
       cancelRequested: v.boolean(),
       usageRefreshRequested: v.boolean(),
+      interactionMode: v.optional(interactionModeValidator),
     }),
     v.object({
       prompt: v.string(),
@@ -1191,6 +1119,7 @@ export const claimPendingTurn = authMutation({
       stopTaskToolUseIds: v.array(v.string()),
       cancelRequested: v.boolean(),
       usageRefreshRequested: v.boolean(),
+      interactionMode: v.optional(interactionModeValidator),
     }),
   ),
   handler: async (ctx, args) => {
@@ -1320,13 +1249,9 @@ export const claimPendingTurn = authMutation({
 
     const prompt = daemonState.pendingTurn.prompt;
     const claimWaitMs = Date.now() - daemonState.pendingTurn.requestedAt;
-    const resolvedUrls = await Promise.all(
-      (daemonState.pendingTurn.attachmentStorageIds ?? []).map((id) =>
-        ctx.storage.getUrl(id),
-      ),
-    );
-    const attachmentUrls = resolvedUrls.filter(
-      (url): url is string => url !== null,
+    const attachmentUrls = await resolveStorageUrls(
+      (id) => ctx.storage.getUrl(id),
+      daemonState.pendingTurn.attachmentStorageIds,
     );
     let turnLease: { turnId: Id<"turns">; leaseGeneration: number } | null =
       null;
@@ -1364,6 +1289,7 @@ export const claimPendingTurn = authMutation({
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
+      interactionMode: "default" as const,
     };
     if (turnLease === null) {
       const turnLifecycle = "legacy" as const;
@@ -1480,6 +1406,7 @@ export const ensurePendingTurn = internalMutation({
       ...(args.model !== undefined
         ? { model: normalizeAIModel(args.model) }
         : {}),
+      interactionMode: "default" as const,
     };
     await ctx.db.patch(args.sessionId, {
       pendingTurn,
@@ -1568,6 +1495,7 @@ export const restageOpenTurn = internalMutation({
       ...(openTurn ? { turnId: openTurn._id } : {}),
       attachmentStorageIds: lastUser.attachmentStorageIds,
       ...(session.lastModel !== undefined ? { model: session.lastModel } : {}),
+      interactionMode: "default" as const,
     };
     await ctx.db.patch(args.sessionId, {
       pendingTurn,
