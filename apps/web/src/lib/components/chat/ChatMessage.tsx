@@ -46,9 +46,12 @@ import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
 import {
+  collectQuestionSteps,
   getAssistantTurnState,
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
+import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
@@ -187,8 +190,14 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const { isStreamingPlaceholder, changedFiles } =
+  const { isStreamingPlaceholder, changedFiles, questionSteps } =
     getAssistantTurnState(message);
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
+  const streamingQuestionSteps = isStreamingPlaceholder
+    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+    : [];
 
   const copySource =
     message.content.trim().length > 0
@@ -361,6 +370,7 @@ export const ChatMessage = memo(function ChatMessage({
                         onOpenFile={onOpenFile}
                       />
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
                         <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
                           {streamingContent}
@@ -381,6 +391,7 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                       )}
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={questionSteps} />
                       <AnimatePresence mode="wait" initial={false}>
                         {turnErrorTitle !== null ? (
                           <m.div

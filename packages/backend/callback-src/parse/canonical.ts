@@ -35,6 +35,9 @@ function mergeToolResult(step: ProgressStep, result: ToolCompleteResult): void {
   if (result.durationMs !== undefined) {
     step.durationMs = result.durationMs;
   }
+  if (result.answers) {
+    step.answers = result.answers;
+  }
 }
 
 /** Flips one step to complete and swaps its in-progress label for the past-tense one. */

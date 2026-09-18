@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import type { ActivityStep } from "@eva/ui";
 import {
+  collectQuestionSteps,
   findHandoffBoundaryIds,
   findStreamingTargetMessage,
   visibleChatMessages,
@@ -182,10 +184,7 @@ describe("chatNeedsOtherUserDirectory", () => {
   test("solo chats do not subscribe to the user directory", () => {
     expect(
       chatNeedsOtherUserDirectory(
-        [
-          { role: "user", userId: "me" },
-          { role: "assistant" },
-        ],
+        [{ role: "user", userId: "me" }, { role: "assistant" }],
         "me",
       ),
     ).toBe(false);
@@ -194,10 +193,7 @@ describe("chatNeedsOtherUserDirectory", () => {
   test("a teammate bubble needs the directory", () => {
     expect(
       chatNeedsOtherUserDirectory(
-        [
-          { role: "user", userId: "them" },
-          { role: "assistant" },
-        ],
+        [{ role: "user", userId: "them" }, { role: "assistant" }],
         "me",
       ),
     ).toBe(true);
@@ -277,6 +273,62 @@ describe("readableSendError", () => {
     expect(
       readableSendError("[CONVEX M(sessions:sendMessage)] Server Error"),
     ).toBe("Something went wrong");
+  });
+});
+
+/**
+ * The transcript card is a record of an answered question. A question still on
+ * screen in the composer dock must not also render as a card, and a legacy
+ * step written before the options were persisted has nothing to show.
+ */
+describe("collectQuestionSteps", () => {
+  const questions: ActivityStep["questions"] = [
+    {
+      question: "Which surface owns this?",
+      options: [{ label: "Composer" }, { label: "Transcript" }],
+    },
+  ];
+
+  test("an open question is left to the composer dock", () => {
+    const step: ActivityStep = {
+      type: "question",
+      label: "Asking a question...",
+      status: "active",
+      questions,
+    };
+    expect(collectQuestionSteps([step])).toEqual([]);
+  });
+
+  test("a complete question with no persisted options is skipped", () => {
+    const noQuestions: ActivityStep = {
+      type: "question",
+      label: "Asked a question",
+      status: "complete",
+    };
+    const emptyQuestions: ActivityStep = {
+      type: "question",
+      label: "Asked a question",
+      status: "complete",
+      questions: [],
+    };
+    expect(collectQuestionSteps([noQuestions, emptyQuestions])).toEqual([]);
+  });
+
+  test("keeps only the answered question steps", () => {
+    const answered: ActivityStep = {
+      type: "question",
+      label: "Asked a question",
+      status: "complete",
+      questions,
+      answers: { "Which surface owns this?": "Transcript" },
+    };
+    const otherStep: ActivityStep = {
+      type: "edit",
+      label: "Edited file",
+      status: "complete",
+      path: "/tmp/repo/a.ts",
+    };
+    expect(collectQuestionSteps([otherStep, answered])).toEqual([answered]);
   });
 });
 

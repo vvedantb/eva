@@ -4,6 +4,7 @@ import {
   applyCanonicalEvents,
   updateThinkingStep,
 } from "../parse/canonical.js";
+import { toolCallToStep } from "../parse/toolSteps.js";
 import { buildStreamingPayload } from "../runtime/heartbeats.js";
 import {
   callbackState as S,
@@ -193,7 +194,9 @@ test("consecutive reasoning deltas coalesce into a single step", () => {
 test("a growing reasoning snapshot supersedes rather than concatenating", () => {
   resetStateForTests();
   applyCanonicalEvents([{ kind: "update_reasoning", text: "Step one" }]);
-  applyCanonicalEvents([{ kind: "update_reasoning", text: "Step one, step two" }]);
+  applyCanonicalEvents([
+    { kind: "update_reasoning", text: "Step one, step two" },
+  ]);
   expect(S.accumulatedSteps.length).toBe(1);
   expect(S.accumulatedSteps[0]?.detail).toBe("Step one, step two");
   resetStateForTests();
@@ -228,7 +231,9 @@ test("a tool call between reasoning bursts opens a second reasoning step", () =>
 
 test("reasoning prose is head-capped so one burst cannot dominate the payload", () => {
   resetStateForTests();
-  applyCanonicalEvents([{ kind: "update_reasoning", text: "x".repeat(10_000) }]);
+  applyCanonicalEvents([
+    { kind: "update_reasoning", text: "x".repeat(10_000) },
+  ]);
   expect(S.accumulatedSteps[0]?.detail?.length).toBe(6000);
   resetStateForTests();
 });
@@ -460,4 +465,103 @@ test("an existing newline boundary is not doubled into a paragraph break", () =>
   applyCanonicalEvents([{ kind: "append_text", text: "\nLine two" }]);
   expect(S.currentStreamedContent).toBe("Line one\nLine two");
   resetStateForTests();
+});
+
+test("toolCallToStep captures AskUserQuestion questions and options", () => {
+  const step = toolCallToStep("AskUserQuestion", {
+    questions: [
+      {
+        question: "Which database?",
+        header: "Storage",
+        multiSelect: true,
+        options: [
+          { label: "Postgres", description: "Relational" },
+          { label: "Convex" },
+          { description: "no label — dropped" },
+          "not an option",
+        ],
+      },
+      { question: "", options: [] },
+    ],
+  });
+  expect(step.type).toBe("question");
+  expect(step.label).toBe("Asking a question...");
+  expect(step.status).toBe("active");
+  expect(step.detail).toBe("Which database?");
+  expect(step.questions).toEqual([
+    {
+      question: "Which database?",
+      header: "Storage",
+      multiSelect: true,
+      options: [
+        { label: "Postgres", description: "Relational" },
+        { label: "Convex", description: undefined },
+      ],
+    },
+  ]);
+});
+
+test("toolCallToStep leaves AskUserQuestion questions unset when malformed", () => {
+  const step = toolCallToStep("AskUserQuestion", { questions: "nope" });
+  expect(step.type).toBe("question");
+  expect(step.questions).toBe(undefined);
+  expect(step.detail).toBe(undefined);
+});
+
+test("complete_tool merges AskUserQuestion answers onto the question step", () => {
+  resetStateForTests();
+  applyCanonicalEvents([
+    {
+      kind: "push_step",
+      trackingId: "toolu_q",
+      step: {
+        type: "question",
+        label: "Asking a question...",
+        toolUseId: "toolu_q",
+        questions: [{ question: "Which?", options: [{ label: "A" }] }],
+        status: "active",
+      },
+    },
+  ]);
+  applyCanonicalEvents([
+    {
+      kind: "complete_tool",
+      trackingId: "toolu_q",
+      result: { answers: { "Which?": "A" } },
+    },
+  ]);
+  const step = S.accumulatedSteps[S.accumulatedSteps.length - 1];
+  expect(step.status).toBe("complete");
+  expect(step.answers).toEqual({ "Which?": "A" });
+  expect(step.questions).toEqual([
+    { question: "Which?", options: [{ label: "A" }] },
+  ]);
+  resetStateForTests();
+});
+
+test("parsePriorStepForTest round-trips questions and answers", () => {
+  const step = parsePriorStepForTest({
+    type: "question",
+    label: "Asked a question",
+    status: "complete",
+    questions: [
+      {
+        question: "Which database?",
+        header: "Storage",
+        options: [{ label: "Postgres" }, { bad: true }],
+      },
+      { options: [] },
+    ],
+    answers: { "Which database?": "Postgres", skipped: 3 },
+  });
+  expect(step).not.toBe(null);
+  expect(step?.questions).toEqual([
+    {
+      question: "Which database?",
+      header: "Storage",
+      multiSelect: undefined,
+      options: [{ label: "Postgres", description: undefined }],
+    },
+  ]);
+  expect(step?.answers).toEqual({ "Which database?": "Postgres" });
 });
