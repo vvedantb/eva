@@ -108,6 +108,16 @@ export function NewSessionComposer() {
     // Resolved before the try: React Compiler bails on the whole file when a
     // nullish-coalescing expression sits inside a try/catch.
     const accountId = resolveAccountId(providerAccountId) ?? null;
+    // Only sent when the codebases picker actually links other repos — an
+    // empty array would still be a meaningful signal server-side.
+    const linkedCodebases =
+      codebases.linkedRepoIds.length > 0
+        ? {
+            linkedRepoIds: codebases.linkedRepoIds,
+            repoGroupId: codebases.repoGroupId ?? undefined,
+            installDependencies: codebases.installDependencies,
+          }
+        : {};
     try {
       const { numId } = await createSession({
         repoId: repo._id,
@@ -123,15 +133,7 @@ export function NewSessionComposer() {
         fastMode: displayTraits.fastMode,
         providerAccountId: accountId,
         attachmentStorageIds,
-        // Only sent when the codebases picker actually links other repos —
-        // an empty array would still be a meaningful signal server-side.
-        ...(codebases.linkedRepoIds.length > 0
-          ? {
-              linkedRepoIds: codebases.linkedRepoIds,
-              repoGroupId: codebases.repoGroupId ?? undefined,
-              installDependencies: codebases.installDependencies,
-            }
-          : {}),
+        ...linkedCodebases,
       });
       clearDraft();
       codebases.clear();
