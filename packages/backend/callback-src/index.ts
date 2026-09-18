@@ -38,6 +38,7 @@ import {
   beginTurnCheckpoint,
 } from "./runtime/turnCheckpoint.js";
 import { materializeSystemSkills } from "./runtime/systemSkills.js";
+import { startBranchWatcher } from "./runtime/branchWatcher.js";
 import {
   flushStreaming,
   runPreflightHeartbeat,
@@ -112,6 +113,12 @@ S.lastStepType = "thinking";
 // Before either provider path starts — the agent scans `.agents/skills` on
 // startup, so installed Eva skills must already be on disk.
 materializeSystemSkills();
+
+// Above the provider split on purpose: each daemon below blocks for the life of
+// the process, so this is the one place that runs exactly once per daemon
+// process for Claude, Codex and Cursor alike (and for one-shot job runs). The
+// Cursor turn worker exited further up, so it never doubles the reports.
+startBranchWatcher();
 
 // Interactive chats keep one provider process warm and claim staged turns.
 // Jobs (tasks / automations / arena) omit CLAIM_MUTATION and stay one-shot.

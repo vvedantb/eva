@@ -36,6 +36,46 @@ var evaMcpServers = consumed.servers;
 var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
 var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
 
+// callback-src/linkedRepos.ts
+function isLinkedRepo(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return typeof value.owner === "string" && typeof value.name === "string" && typeof value.path === "string" && typeof value.branchName === "string" && typeof value.baseBranch === "string";
+}
+function parseLinkedReposEnv(raw) {
+  if (!raw) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.error(
+      "EVA_LINKED_REPOS: invalid JSON \\u2014 ignoring, running single-repo"
+    );
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    console.error(
+      "EVA_LINKED_REPOS: unexpected shape \\u2014 ignoring, running single-repo"
+    );
+    return [];
+  }
+  const repos = [];
+  for (const entry of parsed) {
+    if (!isLinkedRepo(entry)) {
+      console.error(
+        "EVA_LINKED_REPOS: unexpected shape \\u2014 ignoring, running single-repo"
+      );
+      return [];
+    }
+    repos.push(entry);
+  }
+  return repos;
+}
+function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
+  return useRoot && workspaceRoot ? workspaceRoot : workDir;
+}
+
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
 var ANTHROPIC_PRICING_AS_OF = "2026-09-01";
@@ -125,6 +165,18 @@ var CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
 var IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 var SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
 var WORK_DIR = existsSync("/tmp/repo") ? "/tmp/repo" : existsSync("/workspace/repo") ? "/workspace/repo" : "/tmp/repo";
+var WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
+var LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
+var REPO_CHECKOUT_DIRS = [
+  WORK_DIR,
+  ...LINKED_REPOS.map((repo) => repo.path)
+];
+var LINKED_REPOS_CWD_ROOT = process.env.EVA_LINKED_REPOS_CWD_ROOT === "1";
+var AGENT_CWD = resolveAgentCwd(
+  WORK_DIR,
+  WORKSPACE_ROOT,
+  LINKED_REPOS_CWD_ROOT
+);
 var NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000"
 );
@@ -711,8 +763,8 @@ function runTimedBashSync(script, label) {
   }
   return true;
 }
-function readGitHeadSha() {
-  const result = spawnSync("git", ["-C", WORK_DIR, "rev-parse", "HEAD"], {
+function readGitHeadSha(dir = WORK_DIR) {
+  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
     encoding: "utf8",
     timeout: CLAUDE_SYNC_TIMEOUT_MS
   });
@@ -2024,11 +2076,23 @@ function readTurnLeaseIdentity(result) {
 // callback-src/runtime/turnCheckpoint.ts
 import { spawnSync as spawnSync2 } from "child_process";
 var turnStartSha = "";
+var turnStartShas = [];
+function readAllRepoShas() {
+  const shas = [];
+  for (const path3 of REPO_CHECKOUT_DIRS) {
+    const sha = readGitHeadSha(path3);
+    if (sha === "") continue;
+    shas.push({ path: path3, sha });
+  }
+  return shas;
+}
 function beginTurnCheckpoint() {
   turnStartSha = readGitHeadSha();
+  turnStartShas = readAllRepoShas();
 }
 function resetTurnCheckpoint() {
   turnStartSha = "";
+  turnStartShas = [];
 }
 function currentBranch() {
   const result = spawnSync2(
@@ -2046,6 +2110,8 @@ function appendTurnCheckpoint(args) {
   if (afterSha === "") return;
   args.beforeSha = turnStartSha;
   args.afterSha = afterSha;
+  args.beforeShas = turnStartShas;
+  args.afterShas = readAllRepoShas();
 }
 
 // callback-src/providers/claimedTurnLifecycle.ts
@@ -2143,9 +2209,9 @@ function pidAlive(pid) {
     return false;
   }
 }
-function writeOomScoreAdj(target, score) {
-  if (target !== "self" && !target) return;
-  const path3 = target === "self" ? "/proc/self/oom_score_adj" : \`/proc/\${target}/oom_score_adj\`;
+function writeOomScoreAdj(target2, score) {
+  if (target2 !== "self" && !target2) return;
+  const path3 = target2 === "self" ? "/proc/self/oom_score_adj" : \`/proc/\${target2}/oom_score_adj\`;
   try {
     writeFileSync2(path3, score);
   } catch {
@@ -2231,9 +2297,20 @@ function startDaemonDepositionFence(params) {
   };
 }
 
-// callback-src/runtime/turnPersist.ts
+// callback-src/runtime/gitExec.ts
 import { spawnSync as spawnSync3 } from "child_process";
 var GIT_STEP_TIMEOUT_MS = 2e4;
+function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
+  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  const out = ((result.stdout || "") + (result.stderr || "")).trim();
+  return { ok: result.status === 0, out };
+}
+
+// callback-src/runtime/turnPersist.ts
 var PUSH_TIMEOUT_MS = 6e4;
 var COMMIT_ADD_ARGS = [
   "add",
@@ -2251,15 +2328,6 @@ var COMMIT_ADD_ARGS = [
   ":!recordings/",
   ":!plan.md"
 ];
-function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
-  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
-  });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
 function localBranchRewroteOwnHistory(branch, remoteRef) {
   const remoteTip = git(["rev-parse", "--verify", remoteRef]);
   const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
@@ -4222,9 +4290,9 @@ function markStepComplete(step) {
     step.label = "Used " + step.label.slice(6, -3);
   }
   if (step.durationMs === void 0) {
-    const started = stepStartedAt.get(step);
-    if (started !== void 0) {
-      step.durationMs = Date.now() - started;
+    const started2 = stepStartedAt.get(step);
+    if (started2 !== void 0) {
+      step.durationMs = Date.now() - started2;
     }
   }
 }
@@ -5101,13 +5169,13 @@ async function uploadMediaFile(filePath, mimeType) {
   }
   throw new Error("Missing storageId in upload response");
 }
-async function attachChatMediaIfAny(uploaded, target) {
+async function attachChatMediaIfAny(uploaded, target2) {
   if (uploaded.length === 0) return;
   const mediaArgs = {
     parentId: ENTITY_ID ?? "",
     mediaStorageIds: uploaded.map((item) => item.storageId)
   };
-  if (target.messageId) mediaArgs.messageId = target.messageId;
+  if (target2.messageId) mediaArgs.messageId = target2.messageId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 async function deliverCompletionWithMedia(completionArgs) {
@@ -5124,7 +5192,7 @@ function archivePostedFile(dir, file) {
   mkdirSync6(postedDir, { recursive: true });
   renameSync(dir + "/" + file, postedDir + "/" + file);
 }
-async function uploadAndAttachSandboxMedia(target) {
+async function uploadAndAttachSandboxMedia(target2) {
   if (RUN_ID) return;
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
@@ -5176,7 +5244,7 @@ async function uploadAndAttachSandboxMedia(target) {
     }
   }
   try {
-    await attachChatMediaIfAny(uploaded, target);
+    await attachChatMediaIfAny(uploaded, target2);
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }
@@ -5533,6 +5601,9 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   const thinkingOption = claudeThinkingDisabled ? {} : { thinking: { type: "adaptive", display: "summarized" } };
   return {
     cwd: WORK_DIR,
+    // Multi-repo sessions only: lets Claude read/edit linked repo clones
+    // under the workspace root without moving cwd off the primary repo.
+    ...WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {},
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
     systemPrompt: SYSTEM_PROMPT ? {
@@ -7230,13 +7301,13 @@ async function establishThread(client, sessionMode) {
       );
     }
   }
-  const started = await client.request("thread/start", {
+  const started2 = await client.request("thread/start", {
     model: normalizedCodexModel,
     cwd: WORK_DIR,
     approvalPolicy: "never",
     serviceName: "eva"
   });
-  const threadId = nestedId(started, "thread");
+  const threadId = nestedId(started2, "thread");
   if (!threadId) throw new Error("Codex App Server did not return a thread id");
   return threadId;
 }
@@ -7772,13 +7843,20 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   const sqlite = await loadCursorSdkSqlite();
   mkdirSync7(CURSOR_SDK_STORE_DIR, { recursive: true });
   const store4 = await sqlite.SqliteLocalAgentStore.open({
-    workspaceRef: WORK_DIR,
+    // Same directory the agent runs in, so stored agents stay keyed to the
+    // workspace they were created against (AGENT_CWD is WORK_DIR unless a
+    // multi-repo session roots the harness at the workspace instead).
+    workspaceRef: AGENT_CWD,
     stateRoot: CURSOR_SDK_STORE_DIR
   });
   const options = {
     apiKey: (process.env.CURSOR_API_KEY || "").trim(),
     model: await resolveCursorModelSelection(sdk),
-    local: { cwd: WORK_DIR, store: store4 },
+    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
+    // Cursor can edit outside cwd in a multi-repo session; if not, set
+    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
+    // rebuild needed.
+    local: { cwd: AGENT_CWD, store: store4 },
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...NO_WRITES ? { disallowedTools: [...CURSOR_WRITE_TOOLS] } : {}
   };
@@ -8712,12 +8790,140 @@ function materializeSystemSkills() {
   }
 }
 
+// callback-src/runtime/branchWatcher.ts
+import { statSync as statSync2, watch } from "fs";
+var GIT_TIMEOUT_MS = 5e3;
+var POLL_INTERVAL_MS3 = 15e3;
+var DEBOUNCE_MS = 300;
+function resolveBranchTarget(field, id) {
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "taskId") return { kind: "task", taskId: id };
+  if (field === "projectId") return { kind: "project", projectId: id };
+  return null;
+}
+function formatBranch(abbrevRef, shortSha) {
+  const ref = abbrevRef.trim();
+  if (ref.length === 0) return null;
+  if (ref !== "HEAD") return ref;
+  const sha = shortSha.trim();
+  return sha.length > 0 ? sha : null;
+}
+function decideBranchReport(input) {
+  if (input.current === null) return null;
+  if (input.current === input.lastReported) return null;
+  return input.current;
+}
+function readCurrentBranch() {
+  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
+  if (!abbrev.ok) return null;
+  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
+  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
+  return formatBranch(abbrev.out, short.ok ? short.out : "");
+}
+var target = null;
+var lastReported = null;
+var pollInterval = null;
+var debounceTimer = null;
+var headWatcher = null;
+var checkInFlight = false;
+var recheckQueued = false;
+var started = false;
+async function runCheckLoop() {
+  const activeTarget = target;
+  if (activeTarget === null) return;
+  if (checkInFlight) {
+    recheckQueued = true;
+    return;
+  }
+  checkInFlight = true;
+  recheckQueued = false;
+  try {
+    let again = true;
+    while (again) {
+      again = false;
+      const branch = decideBranchReport({
+        current: readCurrentBranch(),
+        lastReported
+      });
+      if (branch !== null) {
+        try {
+          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
+            target: activeTarget,
+            branch
+          });
+          lastReported = branch;
+        } catch (error) {
+          log(
+            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
+          );
+        }
+      }
+      if (recheckQueued) {
+        recheckQueued = false;
+        again = true;
+      }
+    }
+  } finally {
+    checkInFlight = false;
+  }
+}
+function scheduleCheck() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    void runCheckLoop();
+  }, DEBOUNCE_MS);
+  debounceTimer.unref();
+}
+function watchHeadIn(gitDir) {
+  try {
+    headWatcher = watch(gitDir, (_event, filename) => {
+      if (filename !== "HEAD") return;
+      scheduleCheck();
+    });
+    headWatcher.unref();
+  } catch (error) {
+    log(
+      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
+    );
+  }
+}
+function startBranchWatcher() {
+  if (started) return;
+  started = true;
+  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
+  if (target === null) {
+    log(
+      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
+    );
+    return;
+  }
+  const gitDir = WORK_DIR + "/.git";
+  let gitDirIsDirectory = false;
+  try {
+    gitDirIsDirectory = statSync2(gitDir).isDirectory();
+  } catch {
+    gitDirIsDirectory = false;
+  }
+  if (gitDirIsDirectory) {
+    watchHeadIn(gitDir);
+  } else {
+    log("branchWatcher: " + gitDir + " is not a directory; polling only");
+  }
+  pollInterval = setInterval(() => {
+    void runCheckLoop();
+  }, POLL_INTERVAL_MS3);
+  pollInterval.unref();
+  void runCheckLoop();
+}
+
 // ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { spawn as spawn3 } from "child_process";
-import { statSync as statSync2 } from "fs";
+import { statSync as statSync3 } from "fs";
 import path2 from "path";
 import readline from "readline";
 import { createRequire } from "module";
@@ -9202,14 +9408,14 @@ function pathEnvKey(env, platform) {
 }
 function isFile(filePath) {
   try {
-    return statSync2(filePath).isFile();
+    return statSync3(filePath).isFile();
   } catch {
     return false;
   }
 }
 function isDirectory(filePath) {
   try {
-    return statSync2(filePath).isDirectory();
+    return statSync3(filePath).isDirectory();
   } catch {
     return false;
   }
@@ -9386,7 +9592,7 @@ import {
   openSync,
   readFileSync as readFileSync11,
   rmSync as rmSync2,
-  statSync as statSync3,
+  statSync as statSync4,
   writeFileSync as writeFileSync12
 } from "fs";
 var SERVER_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.json";
@@ -9454,7 +9660,11 @@ function spawnServer() {
         "--port=" + String(OPENCODE_SERVER_PORT)
       ],
       {
-        cwd: WORK_DIR,
+        // Manual smoke test (tests/linkedReposHarness.manual.md) decides
+        // whether Opencode can edit outside cwd in a multi-repo session; if
+        // not, set EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace
+        // instead — no rebuild needed.
+        cwd: AGENT_CWD,
         env: { ...process.env },
         // Detached: the server must outlive this turn's callback process so the
         // next turn reuses it instead of paying a cold start.
@@ -9495,7 +9705,7 @@ function acquireStartupLock() {
     return true;
   } catch {
     try {
-      const ageMs = Date.now() - statSync3(SERVER_LOCK_DIR).mtimeMs;
+      const ageMs = Date.now() - statSync4(SERVER_LOCK_DIR).mtimeMs;
       if (ageMs > LOCK_STALE_MS) {
         rmSync2(SERVER_LOCK_DIR, { recursive: true, force: true });
         mkdirSync9(SERVER_LOCK_DIR);
@@ -9704,7 +9914,11 @@ async function runOpencodeSdkAttempt(sessionMode) {
   const baseUrl = await ensureOpencodeServer();
   const client = sdk.createOpencodeClient({
     baseUrl,
-    directory: WORK_DIR
+    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
+    // Opencode can edit outside cwd in a multi-repo session; if not, set
+    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
+    // rebuild needed.
+    directory: AGENT_CWD
   });
   await ensureEvaMcpServers(client);
   const persistSessionId = (sessionId2) => {
@@ -10009,6 +10223,7 @@ try {
 writeOomScoreAdj("self", "-600");
 callbackState.lastStepType = "thinking";
 materializeSystemSkills();
+startBranchWatcher();
 if (CLAIM_MUTATION) {
   if (PROVIDER === "claude") {
     await runSdkDaemon();

@@ -5,7 +5,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -131,10 +131,16 @@ export const startSandbox = authMutation({
       branchName,
       baseBranch,
       repoId: session.repoId,
+      hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
     };
     // Vercel: schedule the start action directly. Workflow step scheduling was
     // measured at ~6s before the first action ran.
-    if (reusableSandboxId) {
+    // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
+    // arms `sandboxSetupPending` for them and only the workflow's
+    // `prepareLinkedRepo` steps clear it again, so a direct schedule would
+    // leave the gate armed forever (and re-clone nothing when a failed resume
+    // falls back to a fresh sandbox).
+    if (reusableSandboxId && !startArgs.hasLinkedRepos) {
       await ctx.scheduler.runAfter(
         0,
         internal.sandbox.startSessionSandbox,
@@ -155,9 +161,16 @@ export const startSandbox = authMutation({
  * User-confirmed recovery for the rewritten-branch publish refusal: replaces
  * origin/<branch> with the sandbox's local branch. Fire-and-forget — the
  * scheduled action posts the outcome into the session chat as a system alert.
+ *
+ * `sessionRepoId` selects one of a multi-repo session's linked clones instead
+ * of the primary — the recovery banner renders one row per diverged repo, and
+ * each row recovers only its own branch.
  */
 export const forcePushBranch = authMutation({
-  args: { sessionId: v.id("sessions") },
+  args: {
+    sessionId: v.id("sessions"),
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(
@@ -168,25 +181,40 @@ export const forcePushBranch = authMutation({
     if (session.status !== "active" || !session.sandboxId) {
       throw new Error("Start the sandbox before force-pushing");
     }
-    if (!session.branchName) {
+    // Access is the session's; the linked row must still belong to it, or a
+    // session id the caller can reach would rewrite an unrelated branch.
+    let linkedRepo: Doc<"sessionRepos"> | null = null;
+    if (args.sessionRepoId !== undefined) {
+      linkedRepo = await ctx.db.get(args.sessionRepoId);
+      if (!linkedRepo || linkedRepo.sessionId !== args.sessionId) {
+        throw new Error("Linked repository not found for this session");
+      }
+    }
+    const branchName = linkedRepo
+      ? linkedRepo.branchName
+      : session.branchName;
+    if (!branchName) {
       throw new Error("Session has no branch to publish");
     }
     // Only eva-owned session branches may ever be rewritten on GitHub; a base
     // branch must never be reachable through this path.
-    if (!isEvaOwnedBranch(session.branchName)) {
-      throw new Error(
-        `Refusing to force-push non-session branch ${session.branchName}`,
-      );
+    if (!isEvaOwnedBranch(branchName)) {
+      throw new Error(`Refusing to force-push non-session branch ${branchName}`);
     }
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
     await ctx.scheduler.runAfter(0, internal.sandbox.performForcePushBranch, {
       sessionId: args.sessionId,
       sandboxId: session.sandboxId,
+      // The sandbox (and therefore its provider credentials) always belongs to
+      // the primary repo, linked clones included.
       repoId: session.repoId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: session.branchName,
+      branchName,
+      ...(args.sessionRepoId !== undefined
+        ? { sessionRepoId: args.sessionRepoId }
+        : {}),
     });
     return null;
   },

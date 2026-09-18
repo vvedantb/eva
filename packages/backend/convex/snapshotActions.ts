@@ -1028,6 +1028,16 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
         {},
       ),
     );
+    // Group seeded snapshots (repoGroups.seededSnapshotName) never appear as a
+    // sandbox's currentSnapshotId or a repo's own seeded/base id, so they need
+    // their own entry in the protected set — otherwise the very first purge
+    // after a group build deletes it as an orphan.
+    for (const name of await ctx.runQuery(
+      internal.repoGroups.listAllGroupSnapshotNames,
+      {},
+    )) {
+      protectedIds.add(name);
+    }
     const knownSandboxIds = new Set(
       await ctx.runQuery(internal.repoSnapshots.listReferencedSandboxIds, {}),
     );

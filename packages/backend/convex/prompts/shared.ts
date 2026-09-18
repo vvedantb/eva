@@ -1,4 +1,5 @@
 import { PERSONALISATION_PRESETS } from "../validators";
+import { primaryLinkPath } from "../_sandbox_runtime/workspaceLayout";
 
 /** Builds the custom instructions block from a user's role preset and custom instructions. */
 export function buildCustomInstructionsBlock(
@@ -51,3 +52,40 @@ export function buildRootDirectoryInstruction(rootDirectory: string): string {
 /** Reply-length constraint appended to every session turn prompt. */
 export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
+
+/** One linked repo, as the prompt needs to describe it to the agent. */
+export type LinkedRepoPromptRow = {
+  owner: string;
+  name: string;
+  path: string;
+  branchName: string;
+  baseBranch: string;
+};
+
+/**
+ * Builds the "Linked repositories" prompt block for a multi-repo session.
+ * Empty string for an ordinary single-repo session (no `linkedRepos`) — every
+ * other prompt section stays byte-identical to before multi-repo sessions
+ * existed.
+ */
+export function buildLinkedReposSection(
+  primary: { owner: string; name: string; branchName: string },
+  linkedRepos: LinkedRepoPromptRow[],
+  commitMessage: string,
+): string {
+  if (linkedRepos.length === 0) return "";
+  const primaryLine = `- ${primary.owner}/${primary.name}   ${primaryLinkPath(primary.name)}   (primary, your cwd)   branch ${primary.branchName}`;
+  const linkedLines = linkedRepos.map(
+    (repo) =>
+      `- ${repo.owner}/${repo.name}   ${repo.path}   branch ${repo.branchName}   base ${repo.baseBranch}`,
+  );
+  return `
+
+## Linked repositories
+This session spans several repos. All are checked out under /tmp/workspace:
+${[primaryLine, ...linkedLines].join("\n")}
+Commit in each repo you change: cd <path> && git add -A -- ':!*.png' ':!*.jpg' ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}".
+Before running a linked repo's commands, load its env: cd <path> && set -a && . ./.env.eva && set +a (the file is absent when the repo has no Eva env vars).
+Never push. Eva pushes every repo that has new commits and opens one PR per repo after the turn.
+Keep plan.md, screenshots/ and recordings/ in /tmp/repo.`;
+}

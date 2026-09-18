@@ -97,7 +97,9 @@ describe("the automatic publish only replaces the sandbox's own old history", ()
   );
 
   test("the replace is offered only when the remote tip is in the local reflog, and only for eva/ branches", () => {
-    const reflogAt = sync.indexOf("localBranchReflogShas(sandbox, branchName)");
+    // Call only, not its argument list: multi-repo publishes pass a
+    // per-checkout `workspaceDir` override, so the args span several lines.
+    const reflogAt = sync.indexOf("localBranchReflogShas(");
     const ownHistoryAt = sync.indexOf("rewrittenBranchIsOwnHistory(");
     const ownedAt = sync.indexOf("isEvaOwnedBranch(branchName)");
     const replaceAt = sync.indexOf("replaceRemoteTip: remoteTip");

@@ -134,6 +134,8 @@ interface ChatBodyProps {
   preInputContent?: React.ReactNode;
   /** Replaces the default empty-state component when there are zero messages. */
   emptyStateOverride?: React.ReactNode;
+  /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
+  underCardLeading?: React.ReactNode;
   /**
    * Draft seed to restore. When provided, the PromptInputProvider is seeded
    * with the stored draft text and mention maps, and a ChatDraftSync child
@@ -209,6 +211,7 @@ export function ChatBody({
   beforeQueuedContent,
   preInputContent,
   emptyStateOverride,
+  underCardLeading,
   draft,
   isDraftLoading,
   onOpenFile,
@@ -478,6 +481,7 @@ export function ChatBody({
                 preInputContent={preInputContent}
                 streamingActivity={streamingActivity}
                 streamingTurnId={streamingTargetId}
+                underCardLeading={underCardLeading}
                 draft={draft}
                 isDraftLoading={isDraftLoading}
                 hasPendingContext={hasPendingContext}

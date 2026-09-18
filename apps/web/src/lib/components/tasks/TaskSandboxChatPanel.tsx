@@ -16,6 +16,7 @@ import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { toast } from "@eva/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
   readableSendError,
@@ -358,6 +359,12 @@ export function TaskSandboxChatPanel({
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+        underCardLeading={
+          <SandboxBranchChip
+            branch={task?.sandboxBranch}
+            isSandboxActive={isSandboxActive}
+          />
+        }
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}

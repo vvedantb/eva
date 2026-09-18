@@ -10,6 +10,12 @@ import {
   roleValidator,
 } from "./enums";
 
+/** Git HEAD of one checked-out repo, keyed by its sandbox path. */
+export const repoShaValidator = v.object({
+  path: v.string(),
+  sha: v.string(),
+});
+
 /**
  * Turn checkpoint shas the sandbox callback stamps on every completion it posts
  * (`callback-src/runtime/turnCheckpoint.ts`), whatever the surface. Every
@@ -21,6 +27,14 @@ import {
 export const turnCheckpointArgs = {
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
+  /**
+   * Multi-repo turn checkpoints (see `messageFields.beforeShas`): one entry
+   * per checked-out repo. Every completion receiver accepts these so the
+   * sandbox callback's argument shape stays uniform across surfaces; only
+   * sessions persist them.
+   */
+  beforeShas: v.optional(v.array(repoShaValidator)),
+  afterShas: v.optional(v.array(repoShaValidator)),
 };
 
 export const workflowCompleteValidator = v.object({
