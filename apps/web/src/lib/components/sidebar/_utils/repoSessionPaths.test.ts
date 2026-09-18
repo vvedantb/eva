@@ -3,7 +3,9 @@ import {
   repoBasePaths,
   repoMatchesPath,
   repoSessionsIndexPath,
+  sessionHrefForRow,
   sessionMatchesPath,
+  sessionRowMatchesPath,
   type RepoPathParts,
 } from "./repoSessionPaths";
 
@@ -17,6 +19,7 @@ function repo(
 
 const eva = repo("vvedantb", "eva");
 const web = repo("vvedantb", "eva", "apps/web");
+const linkedFrom = repo("vvedantb", "backend");
 
 describe("repoBasePaths", () => {
   it("is the single slash path for a root repo", () => {
@@ -44,6 +47,12 @@ describe("repoMatchesPath", () => {
   it("matches the repo root and any sub-page", () => {
     expect(repoMatchesPath(eva, "/vvedantb/eva")).toBe(true);
     expect(repoMatchesPath(eva, "/vvedantb/eva/sessions/12")).toBe(true);
+  });
+
+  it("accepts either URL form for a monorepo app", () => {
+    expect(repoMatchesPath(web, "/vvedantb/eva--web/sessions")).toBe(true);
+    expect(repoMatchesPath(web, "/vvedantb/eva/web/sessions")).toBe(true);
+    expect(repoMatchesPath(web, "/vvedantb/other/sessions")).toBe(false);
   });
 
   it("does not match a repo whose name merely starts the same", () => {
@@ -87,18 +96,18 @@ describe("sessionMatchesPath", () => {
     expect(sessionMatchesPath(web, "12", "/vvedantb/eva/sessions/12")).toBe(
       false,
     );
-    expect(
-      sessionMatchesPath(eva, "12", "/vvedantb/other/sessions/12"),
-    ).toBe(false);
+    expect(sessionMatchesPath(eva, "12", "/vvedantb/other/sessions/12")).toBe(
+      false,
+    );
   });
 
   it("matches a monorepo app on both the slash and `--` forms", () => {
-    expect(
-      sessionMatchesPath(web, "12", "/vvedantb/eva/web/sessions/12"),
-    ).toBe(true);
-    expect(
-      sessionMatchesPath(web, "12", "/vvedantb/eva--web/sessions/12"),
-    ).toBe(true);
+    expect(sessionMatchesPath(web, "12", "/vvedantb/eva/web/sessions/12")).toBe(
+      true,
+    );
+    expect(sessionMatchesPath(web, "12", "/vvedantb/eva--web/sessions/12")).toBe(
+      true,
+    );
   });
 
   it("matches nothing when the session has no path segment", () => {
@@ -109,5 +118,84 @@ describe("sessionMatchesPath", () => {
       sessionMatchesPath(eva, undefined, "/vvedantb/eva/sessions/12"),
     ).toBe(false);
     expect(sessionMatchesPath(eva, "", "/vvedantb/eva/sessions/")).toBe(false);
+  });
+});
+
+describe("sessionHrefForRow", () => {
+  it("own row links under its app", () => {
+    expect(sessionHrefForRow(eva, { numId: 7 })).toBe("/vvedantb/eva/sessions/7");
+  });
+
+  it("monorepo app row uses the router-internal `--` form", () => {
+    expect(sessionHrefForRow(web, { numId: 7 })).toBe(
+      "/vvedantb/eva--web/sessions/7",
+    );
+  });
+
+  it("linked-in row links to the primary repo's session URL", () => {
+    expect(sessionHrefForRow(eva, { numId: 7, linkedFrom })).toBe(
+      "/vvedantb/backend/sessions/7",
+    );
+  });
+
+  it("linked-in row honours the primary's monorepo app", () => {
+    expect(
+      sessionHrefForRow(eva, {
+        numId: 7,
+        linkedFrom: { ...linkedFrom, rootDirectory: "services/api" },
+      }),
+    ).toBe("/vvedantb/backend--api/sessions/7");
+  });
+
+  it("falls back to the sessions index without a numId", () => {
+    expect(sessionHrefForRow(eva, {})).toBe("/vvedantb/eva/sessions");
+  });
+});
+
+describe("sessionRowMatchesPath", () => {
+  it("matches its own app in either URL form", () => {
+    expect(
+      sessionRowMatchesPath(web, { numId: 7 }, "/vvedantb/eva--web/sessions/7"),
+    ).toBe(true);
+    expect(
+      sessionRowMatchesPath(web, { numId: 7 }, "/vvedantb/eva/web/sessions/7"),
+    ).toBe(true);
+  });
+
+  it("matches sub-pages of the session", () => {
+    expect(
+      sessionRowMatchesPath(
+        eva,
+        { numId: 7 },
+        "/vvedantb/eva/sessions/7/review/diffs",
+      ),
+    ).toBe(true);
+  });
+
+  it("a linked-in row is active on the primary repo's URL, not this app's", () => {
+    expect(
+      sessionRowMatchesPath(
+        eva,
+        { numId: 7, linkedFrom },
+        "/vvedantb/backend/sessions/7",
+      ),
+    ).toBe(true);
+    expect(
+      sessionRowMatchesPath(
+        eva,
+        { numId: 7, linkedFrom },
+        "/vvedantb/eva/sessions/7",
+      ),
+    ).toBe(false);
+  });
+
+  it("never matches without a numId", () => {
+    expect(sessionRowMatchesPath(eva, {}, "/vvedantb/eva/sessions")).toBe(false);
+  });
+
+  it("does not match a different session", () => {
+    expect(
+      sessionRowMatchesPath(eva, { numId: 7 }, "/vvedantb/eva/sessions/70"),
+    ).toBe(false);
   });
 });

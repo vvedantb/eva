@@ -31,6 +31,11 @@ import {
   scheduleSessionSandboxGraceDelete,
 } from "../sandboxCleanup";
 import { livePrState, scheduleSessionPrSync } from "./prArchive";
+import {
+  assertValidRepoGroupMembers,
+  getRepoGroupForSession,
+} from "../repoGroups";
+import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 
 /** Loads a session by id, throwing if it does not exist. */
 async function getSessionOrThrow(
@@ -62,6 +67,15 @@ const createSessionArgs = v.object({
   isOrchestrator: v.optional(v.boolean()),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
+  /**
+   * Extra repos to clone into the same sandbox beside `repoId`. Each becomes a
+   * `sessionRepos` row. Overrides the group's membership when both are given.
+   */
+  linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
+  /** Saved codebase group whose members prefilled the selection. */
+  repoGroupId: v.optional(v.id("repoGroups")),
+  /** Whether linked repos install dependencies on clone. Defaults to true. */
+  installDependencies: v.optional(v.boolean()),
 });
 
 type CreateSessionArgs = Infer<typeof createSessionArgs>;
@@ -88,6 +102,33 @@ export async function createSession(
     { baseBranch: args.baseBranch },
     repo,
   );
+  // Linked repos are resolved and validated before anything is inserted, so a
+  // rejected selection never leaves a half-built session behind.
+  const group =
+    args.repoGroupId === undefined
+      ? null
+      : await getRepoGroupForSession(
+          ctx.db,
+          args.repoGroupId,
+          args.repoId,
+          ctx.userId,
+        );
+  const linkedRepoIds = args.linkedRepoIds ?? group?.linkedRepoIds ?? [];
+  const linkedRepos: Array<Doc<"githubRepos">> = [];
+  for (const linkedRepoId of linkedRepoIds) {
+    if (!(await hasRepoAccess(ctx.db, linkedRepoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    const linkedRepo = await ctx.db.get(linkedRepoId);
+    if (!linkedRepo) throw new Error("Repository not found");
+    linkedRepos.push(linkedRepo);
+  }
+  if (linkedRepos.length > 0) {
+    assertValidRepoGroupMembers(repo, linkedRepos);
+  }
+  const installDependencies =
+    args.installDependencies ?? group?.installDependencies ?? true;
+
   const numId = await allocateNumId(ctx.db, args.repoId, "sessions");
   const model = args.model ?? repo.defaultModel;
   const reasoningLevel = args.reasoningLevel ?? repo.defaultReasoningLevel;
@@ -130,6 +171,41 @@ export async function createSession(
   });
   const branchName = `eva/session-${sessionId}`;
   await ctx.db.patch(sessionId, { branchName });
+
+  // Every linked repo is checked out on the SAME branch name as the primary,
+  // off its own default base. The rows are the sandbox's clone list, so they
+  // must exist before the startup workflow runs.
+  for (const linkedRepo of linkedRepos) {
+    await ctx.db.insert("sessionRepos", {
+      sessionId,
+      repoId: linkedRepo._id,
+      owner: linkedRepo.owner,
+      name: linkedRepo.name,
+      installationId: linkedRepo.installationId,
+      path: linkedRepoDir(linkedRepo.name),
+      branchName,
+      baseBranch: resolveSessionBaseBranch(
+        { baseBranch: undefined },
+        linkedRepo,
+      ),
+      installDependencies,
+      ...(linkedRepo.devPort !== undefined
+        ? { devPort: linkedRepo.devPort }
+        : {}),
+      ...(linkedRepo.devCommand !== undefined
+        ? { devCommand: linkedRepo.devCommand }
+        : {}),
+    });
+  }
+  if (linkedRepos.length > 0) {
+    await ctx.db.patch(sessionId, {
+      linkedRepoCount: linkedRepos.length,
+      ...(args.repoGroupId !== undefined
+        ? { repoGroupId: args.repoGroupId }
+        : {}),
+    });
+  }
+
   await workflow.start(
     ctx,
     internal.sessionWorkflow.sessionSandboxStartupWorkflow,
@@ -141,6 +217,7 @@ export async function createSession(
       branchName,
       baseBranch,
       repoId: args.repoId,
+      hasLinkedRepos: linkedRepos.length > 0,
     },
   );
 

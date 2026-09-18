@@ -29,6 +29,38 @@ export function shouldPreviewChangedFiles(
   );
 }
 
+export interface ChangedFileGroup {
+  /** `null` is the primary repo — rendered without a heading. */
+  repoName: string | null;
+  files: ChangedFile[];
+}
+
+/**
+ * Groups an already-selected file list by linked repo (multi-repo sessions),
+ * preserving each file's relative order within its group and ordering groups
+ * by first appearance. The primary repo (`repoName: null`) renders with
+ * today's flat presentation — no heading — so a single-repo session's card is
+ * unchanged.
+ */
+export function groupChangedFilesByRepo(
+  files: ReadonlyArray<ChangedFile>,
+): ChangedFileGroup[] {
+  const groups: ChangedFileGroup[] = [];
+  const byRepoName = new Map<string | null, ChangedFileGroup>();
+
+  for (const file of files) {
+    let group = byRepoName.get(file.repoName);
+    if (!group) {
+      group = { repoName: file.repoName, files: [] };
+      byRepoName.set(file.repoName, group);
+      groups.push(group);
+    }
+    group.files.push(file);
+  }
+
+  return groups;
+}
+
 export function selectChangedFilePreview(
   files: ReadonlyArray<ChangedFile>,
   limit = CHANGED_FILES_PREVIEW_LIMIT,

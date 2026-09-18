@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useMutation } from "convex/react";
+import { useQueryState } from "nuqs";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
   api,
@@ -7,7 +8,11 @@ import {
   type Id,
   type SandboxOwner,
 } from "@eva/backend";
-import { isSessionSandboxTab, sandboxTabIdFromParam } from "@/lib/search-params";
+import {
+  filesRootParser,
+  isSessionSandboxTab,
+  sandboxTabIdFromParam,
+} from "@/lib/search-params";
 import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
 import { IconClipboardList } from "@tabler/icons-react";
 import { SandboxTabBar } from "./_components/SandboxTabBar";
@@ -29,7 +34,10 @@ import { FilesPanel } from "./FilesPanel";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
+import {
+  DEFAULT_PREVIEW_PORT,
+  useSandboxPreview,
+} from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import {
@@ -46,7 +54,9 @@ import {
   type SessionDesignMessage,
 } from "./_utils/designVariations";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import { previewPortOptions } from "./_utils";
 import { designVariationPrompt } from "./_utils/composerPrompts";
+
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
   sandboxId: string | undefined;
@@ -180,7 +190,16 @@ export function SandboxPanel({
       void setPreviewPort({ owner, port });
     },
   });
-  const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
+  // Multi-repo sessions: which checkout the Files tab browses. "" is the
+  // primary repo; a linked repo's `sessionRepos.path` otherwise.
+  const [filesRoot, setFilesRoot] = useQueryState("filesRoot", filesRootParser);
+  const sessionRepos = useHeldQuery(api.sessions.listRepos, { sessionId });
+  const fileList = useSandboxFileList({
+    sandboxId,
+    repoId,
+    isActive,
+    rootPath: filesRoot || undefined,
+  });
   // User-defined tabs for this app, in display order, enabled only.
   const allCustomTabs = useHeldQuery(
     api.appTabs.list,
@@ -340,6 +359,9 @@ export function SandboxPanel({
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            repos={sessionRepos}
+            activeRoot={filesRoot}
+            onRootChange={setFilesRoot}
           />
         </div>
         <div
@@ -378,6 +400,12 @@ export function SandboxPanel({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           onAnnotationSubmit={submitAnnotation}
+          // Multi-repo sessions run a dev server per repo; the Preview port
+          // control offers each one instead of only the primary's.
+          previewPortOptions={previewPortOptions(
+            sessionRepos,
+            devPort ?? DEFAULT_PREVIEW_PORT,
+          )}
           // Only the session on screen may float; cached siblings and a
           // collapsed rail keep their preview parked.
           miniPlayer={

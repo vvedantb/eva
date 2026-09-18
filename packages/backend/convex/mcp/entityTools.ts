@@ -109,6 +109,10 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           updatedAt: entity.updatedAt,
           repo: `${entity.repoOwner}/${entity.repoName}`,
           path: entityPath(entity),
+          // Only sessions carry this, and only when they have linked repos.
+          ...(entity.linkedRepoCount
+            ? { linkedRepoCount: entity.linkedRepoCount }
+            : {}),
         }));
 
         return textResult({

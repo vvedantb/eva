@@ -172,9 +172,14 @@ export function runTimedBashSync(script: string, label: string): boolean {
   return true;
 }
 
-/** Returns the current git HEAD sha in the workspace, or empty when unavailable. */
-export function readGitHeadSha(): string {
-  const result = spawnSync("git", ["-C", WORK_DIR, "rev-parse", "HEAD"], {
+/**
+ * Returns the current git HEAD sha in `dir` (defaults to the primary
+ * workspace), or empty when unavailable — missing directory, not a git repo,
+ * or no commits yet all fail the same way, so callers skip on empty rather
+ * than distinguishing why.
+ */
+export function readGitHeadSha(dir: string = WORK_DIR): string {
+  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
     encoding: "utf8",
     timeout: CLAUDE_SYNC_TIMEOUT_MS,
   });

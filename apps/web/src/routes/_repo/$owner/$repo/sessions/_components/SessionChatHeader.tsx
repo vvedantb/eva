@@ -25,6 +25,7 @@ import {
   useSessionSandboxError,
 } from "@/lib/components/sandbox/SandboxErrorNotice";
 import { SessionSwitcher } from "./SessionSwitcher";
+import { SessionRepoBadges } from "./SessionRepoBadges";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
@@ -128,7 +129,10 @@ export function useSessionChatHeader({
       </span>
     )
   ) : (
-    <SessionSwitcher sessionId={sessionId} title={title} />
+    <>
+      <SessionSwitcher sessionId={sessionId} title={title} />
+      <SessionRepoBadges sessionId={sessionId} />
+    </>
   );
 
   const headerRight = (

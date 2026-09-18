@@ -19,8 +19,8 @@ import {
   NO_WRITES,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
+  AGENT_CWD,
   SYSTEM_PROMPT,
-  WORK_DIR,
   cursorFastMode,
   cursorReasoningLevel,
   cursorUse1mContext,
@@ -819,13 +819,20 @@ export async function runCursorSdkAttempt(
   // recovery starts a fresh agent once. Deliberately no migration — reading
   // those files is the slow path being removed.
   const store = await sqlite.SqliteLocalAgentStore.open({
-    workspaceRef: WORK_DIR,
+    // Same directory the agent runs in, so stored agents stay keyed to the
+    // workspace they were created against (AGENT_CWD is WORK_DIR unless a
+    // multi-repo session roots the harness at the workspace instead).
+    workspaceRef: AGENT_CWD,
     stateRoot: CURSOR_SDK_STORE_DIR,
   });
   const options: SdkAgentOptions = {
     apiKey: (process.env.CURSOR_API_KEY || "").trim(),
     model: await resolveCursorModelSelection(sdk),
-    local: { cwd: WORK_DIR, store },
+    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
+    // Cursor can edit outside cwd in a multi-repo session; if not, set
+    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
+    // rebuild needed.
+    local: { cwd: AGENT_CWD, store },
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
       : {}),

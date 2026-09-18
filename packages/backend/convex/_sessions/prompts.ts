@@ -1,10 +1,12 @@
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
+  buildLinkedReposSection,
   buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
   RESPONSE_LENGTH_INSTRUCTION,
 } from "../prompts";
+import type { LinkedRepoPromptRow } from "../prompts";
 import { stripMentionTokens } from "../_mentions/resolveDocMentions";
 /**
  * Session chat no longer injects this block: Cursor resumes one agent and the
@@ -215,6 +217,7 @@ export function buildEditPrompt(
   devPort?: number,
   conversationHistory: Array<{ role: string; content: string }> = [],
   readableRepos: ReadonlyArray<{ owner: string; name: string }> = [],
+  linkedRepos: LinkedRepoPromptRow[] = [],
 ): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
   const baseBranch = repo.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
@@ -263,5 +266,5 @@ Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
 - Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh branch: \`git fetch origin && git checkout --no-track -b eva/dup-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/eva/dup-<short-slug>:refs/heads/eva/dup-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Base on "${baseBranch}" unless the user names a different base branch. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
 - Questions only: answer without unnecessary edits. No build/lint/test unless asked.
-- Never commit images/video or \`plan.md\`. Minimal changes.${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
+- Never commit images/video or \`plan.md\`. Minimal changes.${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
 }

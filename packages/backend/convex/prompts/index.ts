@@ -3,8 +3,10 @@ export {
   buildCustomInstructionsBlock,
   buildReadableReposBlock,
   buildSystemPromptBlock,
+  buildLinkedReposSection,
   RESPONSE_LENGTH_INSTRUCTION,
 } from "./shared";
+export type { LinkedRepoPromptRow } from "./shared";
 export { PARSE_PROMPT, INTERVIEW_PROMPT, GENERATE_PROMPT } from "./doc";
 export {
   PROJECT_INTERVIEW_SYSTEM_PROMPT,
