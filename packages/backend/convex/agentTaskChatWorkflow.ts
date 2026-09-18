@@ -622,11 +622,11 @@ export const cancelExecution = authMutation({
     if (!latest) return null;
 
     const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-        latestPendingTurn: latest.pendingTurn,
-        cancelPendingRequestedAt: pendingRequestedAt,
-        latestActiveWorkflowId: latest.activeChatWorkflowId,
-        cancelWorkflowId: workflowIdToCancel,
-      });
+      latestPendingTurn: latest.pendingTurn,
+      cancelPendingRequestedAt: pendingRequestedAt,
+      latestActiveWorkflowId: latest.activeChatWorkflowId,
+      cancelWorkflowId: workflowIdToCancel,
+    });
 
     if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;

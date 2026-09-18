@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { internalMutation, internalQuery, type MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { authAction, authMutation, hasRepoAccess } from "../functions";
 import {
@@ -627,11 +631,11 @@ export const cancelExecution = authMutation({
     if (!latest) return null;
 
     const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-        latestPendingTurn: latest.pendingTurn,
-        cancelPendingRequestedAt: pendingRequestedAt,
-        latestActiveWorkflowId: latest.activeWorkflowId,
-        cancelWorkflowId: workflowIdToCancel,
-      });
+      latestPendingTurn: latest.pendingTurn,
+      cancelPendingRequestedAt: pendingRequestedAt,
+      latestActiveWorkflowId: latest.activeWorkflowId,
+      cancelWorkflowId: workflowIdToCancel,
+    });
 
     if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;

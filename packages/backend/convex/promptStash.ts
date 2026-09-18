@@ -96,18 +96,17 @@ export const listForRepo = authQuery({
 
     return Promise.all(
       rows.map(async (row) => {
-        const attachments = (
-          await resolveStorageEntries(
-            (id) => ctx.storage.getUrl(id),
-            (id) => ctx.storage.getMetadata(id),
-            row.attachmentStorageIds,
-          )
-        )
-          .filter((entry) => entry.url !== null)
-          .map((entry) => ({
-            url: entry.url as string,
-            contentType: entry.contentType,
-          }));
+        const entries = await resolveStorageEntries(
+          (id) => ctx.storage.getUrl(id),
+          (id) => ctx.storage.getMetadata(id),
+          row.attachmentStorageIds,
+        );
+        // Deleted blobs resolve to a null url and are dropped from the list.
+        const attachments = entries.flatMap((entry) =>
+          entry.url === null
+            ? []
+            : [{ url: entry.url, contentType: entry.contentType }],
+        );
         return {
           ...row,
           attachments,
