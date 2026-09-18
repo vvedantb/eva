@@ -407,7 +407,7 @@ function ActivityActionGroup({
   const Icon = firstStep ? iconForStep(firstStep) : IconTerminal2;
 
   return (
-    <Collapsible className="group w-full" defaultOpen={isActive}>
+    <Collapsible className="group py-2 w-full" defaultOpen={isActive}>
       {/* Summary stays muted even when a call inside failed: agents run failing
           commands on purpose, so one non-zero exit should not paint the run red.
           The failed row itself is still red once the fold is open. */}
