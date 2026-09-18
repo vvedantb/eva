@@ -6,9 +6,8 @@ import { describe, expect, test } from "vitest";
 const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const daemon = readSource("callback-src/providers/claudeSdkDaemon.ts");
-const daemonSupervisor = readSource(
-  "callback-src/runtime/daemonSupervisor.ts",
-);
+const daemonProcess = readSource("callback-src/runtime/daemonProcess.ts");
+const daemonSupervisor = readSource("callback-src/runtime/daemonSupervisor.ts");
 const bundledScript = readSource(
   "convex/_sandbox_runtime/callbackScript.generated.ts",
 );
@@ -31,9 +30,9 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
   test("it backs off when nothing is happening", () => {
     expect(dense).toContain("selectClaimPollIntervalMs(");
     expect(
-      timing("idlePollIntervalMs"),
+      timing("idlePollIntervalMs", daemonProcess),
       "an idle poll must be materially cheaper than a mid-turn one",
-    ).toBeGreaterThan(timing("fastPollIntervalMs"));
+    ).toBeGreaterThan(timing("fastPollIntervalMs", daemonProcess));
   });
 
   test("every supervised work state keeps the fast cadence", () => {
@@ -42,11 +41,7 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
     );
 
     const supervisorDense = withoutWhitespace(daemonSupervisor);
-    const hasWork = sliceBetween(
-      supervisorDense,
-      "gethasWork():boolean{",
-      "}",
-    );
+    const hasWork = sliceBetween(supervisorDense, "gethasWork():boolean{", "}");
     expect(hasWork).toContain('this.active.phase!=="idle"');
     expect(hasWork).toContain("this.pendingClaimValue!==null");
   });
@@ -57,14 +52,12 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
    * the next prompt eats the idle interval.
    */
   test("recent activity also keeps the fast cadence", () => {
-    const selector = withoutWhitespace(
-      readSource("callback-src/runtime/daemonProcess.ts"),
-    );
+    const selector = withoutWhitespace(daemonProcess);
     expect(selector).toContain(
       "now-params.lastIdleActivityAtMs<DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs",
     );
     expect(
-      timing("fastPollWindowMs"),
+      timing("fastPollWindowMs", daemonProcess),
       "the window has to outlast a user typing their next message",
     ).toBeGreaterThanOrEqual(10_000);
   });
@@ -73,9 +66,7 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
     expect(dense).toContain(
       "awaitsleep(selectClaimPollIntervalMs({busy:turnInFlight,lastIdleActivityAtMs,}),)",
     );
-    const selector = withoutWhitespace(
-      readSource("callback-src/runtime/daemonProcess.ts"),
-    );
+    const selector = withoutWhitespace(daemonProcess);
     expect(selector).toContain("params.busy||recentlyActive");
     expect(selector).toContain("DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs");
     expect(selector).toContain("DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs");
@@ -87,10 +78,28 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
    */
   test("the deployed callback bundle carries the backoff", () => {
     const flat = withoutWhitespace(bundledScript);
-    expect(flat).toContain("PROMPT_POLL_IDLE_INTERVAL_MS=1e3");
     expect(flat).toContain(
-      "turnInFlight||recentlyActive?PROMPT_POLL_INTERVAL_MS:PROMPT_POLL_IDLE_INTERVAL_MS",
+      "now-params.lastIdleActivityAtMs<DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs",
     );
+    expect(flat).toContain(
+      "params.busy||recentlyActive?DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs:DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs",
+    );
+    expect(
+      withoutWhitespace(
+        functionBody(bundledScript, "function startClaimWatcher("),
+      ),
+      "the shipped watcher no longer picks its sleep through the selector",
+    ).toContain(
+      "awaitsleep(selectClaimPollIntervalMs({busy:turnInFlight,lastIdleActivityAtMs}))",
+    );
+    expect(
+      timing("idlePollIntervalMs", bundledScript),
+      "an idle poll must be materially cheaper than a mid-turn one",
+    ).toBeGreaterThan(timing("fastPollIntervalMs", bundledScript));
+    expect(
+      timing("fastPollWindowMs", bundledScript),
+      "the window has to outlast a user typing their next message",
+    ).toBeGreaterThanOrEqual(10_000);
   });
 });
 
@@ -120,12 +129,16 @@ function sliceBetween(source: string, from: string, to: string): string {
   return source.slice(startAt, endAt);
 }
 
-/** Shared poll knobs from daemonProcess.ts. */
+/**
+ * One DAEMON_CLAIM_POLL_TIMING knob, read from either the source literal
+ * (`1000`, `30_000`) or the bundled one esbuild prints in exponent form
+ * (`1e3`, `3e4`).
+ */
 function timing(
   name: "fastPollIntervalMs" | "idlePollIntervalMs" | "fastPollWindowMs",
+  source: string,
 ): number {
-  const helper = readSource("callback-src/runtime/daemonProcess.ts");
-  const match = helper.match(new RegExp(`${name}:\\s*([\\d_]+)`));
+  const match = source.match(new RegExp(`${name}:\\s*([\\d_]+(?:e\\d+)?)`));
   expect(match, `${name} moved or was renamed`).not.toBeNull();
   return Number((match?.[1] ?? "").replaceAll("_", ""));
 }

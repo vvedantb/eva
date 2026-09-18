@@ -64,7 +64,8 @@ describe("the OOM kill order protects the reporter", () => {
 
   test("the deployed bundle carries both callback-side pieces", () => {
     expect(bundledScript).toContain('"/proc/self/oom_score_adj"');
-    expect(bundledScript).toContain('"/oom_score_adj", "300"');
+    expect(bundledScript).toContain('writeOomScoreAdj("self", "-600")');
+    expect(bundledScript).toContain('writeOomScoreAdj(pid, "300")');
   });
 });
 
