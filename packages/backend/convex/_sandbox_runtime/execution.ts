@@ -61,6 +61,7 @@ import {
   shouldDeferDaemonRespawn,
   type DaemonTurnSnapshot,
 } from "../_chat/daemonClaimPause";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
 /** True if anything is LISTEN on `port` (Vercel images often lack `ss`). */
 function portListenProbeCmd(port: number): string {
@@ -2291,8 +2292,7 @@ export const prewarmSessionDaemon = internalAction({
     const skipPrewarm =
       session === null ||
       session === undefined ||
-      session.status === "closed" ||
-      session.status === "stopping";
+      isSandboxClosingStatus(session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,

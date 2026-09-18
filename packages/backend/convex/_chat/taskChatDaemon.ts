@@ -21,6 +21,8 @@ import { TASK_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
 import { pendingTurnAlreadyClaimed } from "./pendingTurnRestage";
 import { resolveStorageUrls } from "./storageUrls";
+import { assistantReplyContent } from "../_sessions/resultTarget";
+import { isStreamingActivityStale } from "./turnLease";
 
 function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
   return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
@@ -309,9 +311,11 @@ export const completeSyntheticTurn = authMutation({
       pendingQuestion?: string;
       model?: Doc<"messages">["model"];
     } = {
-      content: args.success
-        ? args.result || "I couldn't process your message."
-        : `Error: ${args.error || "Unknown error during execution."}`,
+      content: assistantReplyContent({
+        success: args.success,
+        result: args.result,
+        error: args.error,
+      }),
       finishedAt: Date.now(),
     };
     if (args.activityLog) patch.activityLog = args.activityLog;
@@ -355,9 +359,7 @@ export const handleStaleSyntheticTurn = internalMutation({
       .query("streamingActivity")
       .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
       .first();
-    const streamingStale =
-      streaming === null ||
-      Date.now() - (streaming.lastUpdatedAt ?? 0) > 2 * 60 * 1000;
+    const streamingStale = isStreamingActivityStale(streaming);
     if (!streamingStale) {
       await ctx.scheduler.runAfter(
         10 * 60 * 1000,

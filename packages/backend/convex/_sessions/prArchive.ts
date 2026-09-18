@@ -1,8 +1,8 @@
 import type { Infer } from "convex/values";
-import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { extractPrNumberFromUrl } from "../_projects/prSync";
+import { extractPrNumberFromUrl } from "../_github/prUrl";
+import { schedulePrLifecycleActions } from "../_github/prLifecycleActions";
 import { prStateValidator } from "../validators";
 
 export type PrState = Infer<typeof prStateValidator>;
@@ -53,23 +53,16 @@ export async function scheduleSessionPrSync(
   const repo = await ctx.db.get(session.repoId);
   const prNumber = extractPrNumberFromUrl(session.prUrl);
   if (!repo || prNumber === null) return;
-  const base = {
-    installationId: repo.installationId,
-    repoOwner: repo.owner,
-    repoName: repo.name,
-    prNumber,
-  };
-  if (action.kind === "close") {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.closePullRequest,
-      base,
-    );
-    return;
-  }
-  await ctx.scheduler.runAfter(
-    0,
-    internal.taskWorkflowActions.reopenPullRequest,
-    { ...base, asReady: action.asReady },
+  await schedulePrLifecycleActions(
+    ctx,
+    {
+      installationId: repo.installationId,
+      repoOwner: repo.owner,
+      repoName: repo.name,
+      prNumber,
+    },
+    action.kind === "close"
+      ? { kind: "close" }
+      : { kind: "reopen", asReady: action.asReady },
   );
 }

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-vi.mock("../http/convexClient.js", () => ({
+// Only the network call is faked; the pure envelope reader
+// (`unwrapConvexMutationPayload`) must stay real so the `{ status, value }`
+// shape below is unwrapped exactly as it is in production.
+vi.mock("../http/convexClient.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../http/convexClient.js")>()),
   callConvexWithRetry: vi.fn(async (_type: string, path: string) =>
     path === "pendingQuestions:claimAnswer"
       ? {

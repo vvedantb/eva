@@ -15,3 +15,29 @@ export async function resolveStorageUrls<T>(
   }
   return urls;
 }
+
+export type StorageEntry<T> = {
+  id: T;
+  url: string | null;
+  contentType: string | null;
+};
+
+/**
+ * Resolves URL + content type for each storage id. Callers decide whether
+ * a missing blob is dropped or kept as a null url.
+ */
+export async function resolveStorageEntries<T>(
+  getUrl: (id: T) => Promise<string | null>,
+  getMetadata: (
+    id: T,
+  ) => Promise<{ contentType?: string | null } | null>,
+  storageIds: T[] | undefined,
+): Promise<Array<StorageEntry<T>>> {
+  if (storageIds === undefined || storageIds.length === 0) return [];
+  return Promise.all(
+    storageIds.map(async (id) => {
+      const [url, meta] = await Promise.all([getUrl(id), getMetadata(id)]);
+      return { id, url, contentType: meta?.contentType ?? null };
+    }),
+  );
+}

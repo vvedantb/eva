@@ -6,6 +6,7 @@ import {
   TURN_STARTUP_LEASE_MS,
   canTransitionTurn,
   expiredTurnLeaseDecision,
+  isStreamingActivityStale,
   isTerminalTurnState,
   shouldWriteTurnLeaseRenewal,
   turnExceededAbsoluteLimit,
@@ -45,9 +46,7 @@ describe("durable turn lifecycle", () => {
     expect(turnLeaseDurationMs("staged")).toBe(TURN_STARTUP_LEASE_MS);
     expect(turnLeaseDurationMs("launching")).toBe(TURN_STARTUP_LEASE_MS);
     expect(turnLeaseDurationMs("running")).toBe(TURN_RUNNING_LEASE_MS);
-    expect(turnLeaseDurationMs("finalizing")).toBe(
-      TURN_FINALIZING_LEASE_MS,
-    );
+    expect(turnLeaseDurationMs("finalizing")).toBe(TURN_FINALIZING_LEASE_MS);
     expect(turnLeaseDurationMs("done")).toBe(0);
   });
 
@@ -98,6 +97,27 @@ describe("durable turn lifecycle", () => {
         now,
         durationMs: TURN_RUNNING_LEASE_MS,
       }),
+    ).toBe(true);
+  });
+});
+
+describe("isStreamingActivityStale", () => {
+  test("treats a missing heartbeat row as stale", () => {
+    expect(isStreamingActivityStale(null, STARTED_AT)).toBe(true);
+  });
+
+  test("uses the running-turn lease as the heartbeat window", () => {
+    expect(
+      isStreamingActivityStale(
+        { lastUpdatedAt: STARTED_AT },
+        STARTED_AT + TURN_RUNNING_LEASE_MS,
+      ),
+    ).toBe(false);
+    expect(
+      isStreamingActivityStale(
+        { lastUpdatedAt: STARTED_AT },
+        STARTED_AT + TURN_RUNNING_LEASE_MS + 1,
+      ),
     ).toBe(true);
   });
 });

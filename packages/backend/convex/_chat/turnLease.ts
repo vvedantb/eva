@@ -126,6 +126,17 @@ export function turnExceededAbsoluteLimit(
   return now >= turnStartedAt + RUN_TIMEOUT_MS;
 }
 
+/** Heartbeat row is missing or older than the running-turn lease. */
+export function isStreamingActivityStale(
+  streaming: { lastUpdatedAt?: number } | null,
+  now = Date.now(),
+): boolean {
+  return (
+    streaming === null ||
+    now - (streaming.lastUpdatedAt ?? 0) > TURN_RUNNING_LEASE_MS
+  );
+}
+
 /**
  * Heartbeats used to patch `leaseExpiresAt` on every flush (~150ms while
  * tokens stream). The running lease is two minutes; writing it every flush

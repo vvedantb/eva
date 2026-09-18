@@ -32,6 +32,10 @@ import {
 } from "../sandboxCleanup";
 import { livePrState, scheduleSessionPrSync } from "./prArchive";
 import {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+} from "../_shared/composerTraits";
+import {
   assertValidRepoGroupMembers,
   getRepoGroupForSession,
 } from "../repoGroups";
@@ -157,14 +161,12 @@ export async function createSession(
     // may move the session onto another provider later.
     provider: getAIModelProvider(model),
     lastModel: model,
-    ...(reasoningLevel !== undefined
-      ? { lastReasoningLevel: reasoningLevel }
-      : {}),
-    ...(thinkingEnabled !== undefined
-      ? { lastThinkingEnabled: thinkingEnabled }
-      : {}),
-    ...(use1mContext !== undefined ? { lastUse1mContext: use1mContext } : {}),
-    ...(fastMode !== undefined ? { lastFastMode: fastMode } : {}),
+    ...composerTraitFields({
+      reasoningLevel,
+      thinkingEnabled,
+      use1mContext,
+      fastMode,
+    }),
     ...(args.isOrchestrator !== undefined
       ? { isOrchestrator: args.isOrchestrator }
       : {}),
@@ -409,26 +411,10 @@ export const setTraits = authMutation({
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    if (
-      args.reasoningLevel === undefined &&
-      args.thinkingEnabled === undefined &&
-      args.use1mContext === undefined &&
-      args.fastMode === undefined
-    ) {
+    if (!hasComposerTraitUpdate(args)) {
       return null;
     }
-    await ctx.db.patch(args.id, {
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-    });
+    await ctx.db.patch(args.id, composerTraitFields(args));
     return null;
   },
 });
