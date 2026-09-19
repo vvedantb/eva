@@ -7,37 +7,13 @@ import {
 
 import { Badge } from "../ui/badge";
 import { cn } from "../utils/cn";
+import { freeTextAnswer, selectedLabels } from "./activity-question-utils";
 import type { ActivityQuestion } from "./activity-shared";
 
 const OPTION_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 const CHIP_CLASS =
   "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-bold tracking-wide";
-
-/**
- * The offered labels the user picked. A whole-answer match wins first so a
- * single-select label containing ", " is not mistaken for several picks; only
- * a multi-select answer is split on the ", " the dock joins it with.
- */
-function selectedLabels(
-  answer: string | undefined,
-  question: ActivityQuestion,
-): string[] {
-  if (answer === undefined) return [];
-  const offered = new Set(question.options.map((option) => option.label));
-  if (offered.has(answer)) return [answer];
-  if (!question.multiSelect) return [];
-  return answer.split(", ").filter((label) => offered.has(label));
-}
-
-/** Free text typed into "Other": an answer that matches no offered label. */
-function freeTextAnswer(
-  answer: string | undefined,
-  chosen: string[],
-): string | null {
-  if (answer === undefined || answer.trim().length === 0) return null;
-  return chosen.length > 0 ? null : answer;
-}
 
 function OptionRow({
   chip,
