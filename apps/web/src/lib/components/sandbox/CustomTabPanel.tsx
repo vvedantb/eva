@@ -84,6 +84,9 @@ export function CustomTabPanel({
     pollTimer.current = undefined;
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     The reset also cancels the in-flight poll and bumps a generation counter,
+     so it has to happen as a side effect rather than during render. */
   // Clear cached URL when the sandbox / port identity changes (not on tab hide).
   useEffect(() => {
     generation.current += 1;
@@ -94,6 +97,7 @@ export function CustomTabPanel({
     setState("loading");
     return stopPolling;
   }, [isActive, sandboxId, port, previewPort, retryNonce]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   // Poll only while the sandbox is up and this tab is foreground; keep iframe
   // state when the user switches away.

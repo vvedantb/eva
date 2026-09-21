@@ -60,6 +60,9 @@ export function BackgroundProcessesPanel({
   const hasRows = (rows?.length ?? 0) > 0;
   const live = isRouteActive && hasRows;
 
+  /* eslint-disable no-effect/no-external-store-subscription, no-effect/no-adjust-state-on-prop-change --
+     The "store" is the clock: a ticking timer that only runs while the tab is
+     visible and this route is on screen. There is no snapshot to read. */
   useEffect(() => {
     if (!live) return;
     let intervalId = 0;
@@ -90,6 +93,7 @@ export function BackgroundProcessesPanel({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [live]);
+  /* eslint-enable no-effect/no-external-store-subscription, no-effect/no-adjust-state-on-prop-change */
 
   useEffect(() => {
     if (!live) return;
@@ -137,53 +141,53 @@ export function BackgroundProcessesPanel({
                     return (
                       <QueueItem key={row._id}>
                         <ListEnter index={index} fast>
-                        <div className="flex items-start gap-2">
-                          <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 grow">
-                            <p className="truncate font-mono text-xs text-foreground">
-                              {row.command}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {formatElapsed(row.startedAt, now)}
-                            </p>
-                          </div>
-                          <QueueItemActions>
-                            <QueueItemAction
-                              aria-label="Stop background process"
-                              disabled={isKilling}
-                              className="opacity-100"
-                              onClick={() => {
-                                setKillingIds((prev) =>
-                                  new Set(prev).add(row._id),
-                                );
-                                void kill({ id: row._id })
-                                  .then(() => {
-                                    void reconcile({ sessionId }).catch(
-                                      () => {},
-                                    );
-                                  })
-                                  .catch(() => {
-                                    toast.error(
-                                      "Couldn't stop background process",
-                                    );
-                                  })
-                                  .finally(() => {
-                                    setKillingIds((prev) => {
-                                      const next = new Set(prev);
-                                      next.delete(row._id);
-                                      return next;
+                          <div className="flex items-start gap-2">
+                            <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0 grow">
+                              <p className="truncate font-mono text-xs text-foreground">
+                                {row.command}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {formatElapsed(row.startedAt, now)}
+                              </p>
+                            </div>
+                            <QueueItemActions>
+                              <QueueItemAction
+                                aria-label="Stop background process"
+                                disabled={isKilling}
+                                className="opacity-100"
+                                onClick={() => {
+                                  setKillingIds((prev) =>
+                                    new Set(prev).add(row._id),
+                                  );
+                                  void kill({ id: row._id })
+                                    .then(() => {
+                                      void reconcile({ sessionId }).catch(
+                                        () => {},
+                                      );
+                                    })
+                                    .catch(() => {
+                                      toast.error(
+                                        "Couldn't stop background process",
+                                      );
+                                    })
+                                    .finally(() => {
+                                      setKillingIds((prev) => {
+                                        const next = new Set(prev);
+                                        next.delete(row._id);
+                                        return next;
+                                      });
                                     });
-                                  });
-                              }}
-                            >
-                              {isKilling ? (
-                                <IconLoader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <IconPlayerStop className="size-3.5" />
-                              )}
-                            </QueueItemAction>
-                          </QueueItemActions>
-                        </div>
+                                }}
+                              >
+                                {isKilling ? (
+                                  <IconLoader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                  <IconPlayerStop className="size-3.5" />
+                                )}
+                              </QueueItemAction>
+                            </QueueItemActions>
+                          </div>
                         </ListEnter>
                       </QueueItem>
                     );

@@ -75,6 +75,9 @@ function useSilentStreamNotice(
   startedAt: number | undefined,
 ) {
   const [silent, setSilent] = useState(false);
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     The notice appears on a timer, not on the prop change itself: the stream
+     has to stay empty for N seconds before it flips. */
   useEffect(() => {
     if (!isStreaming || !isEmptyActivityPayload(activity)) {
       setSilent(false);
@@ -93,6 +96,7 @@ function useSilentStreamNotice(
     const timer = window.setTimeout(() => setSilent(true), remaining);
     return () => window.clearTimeout(timer);
   }, [activity, isStreaming, startedAt]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
   return silent;
 }
 
@@ -112,6 +116,9 @@ function useLastVisibleOutputAt(
     visibleKey ? Date.now() : (startedAt ?? Date.now()),
   );
 
+  /* eslint-disable no-effect/no-derived-state, no-effect/no-event-handler --
+     `Date.now()` is not derivable: the value being stored is *when* the stream
+     last changed, which can only be read at the moment the change lands. */
   useEffect(() => {
     if (startedAt !== prevStartedAtRef.current) {
       prevStartedAtRef.current = startedAt;
@@ -125,6 +132,7 @@ function useLastVisibleOutputAt(
       if (visibleKey) setLastOutputAt(Date.now());
     }
   }, [visibleKey, isStreaming, startedAt]);
+  /* eslint-enable no-effect/no-derived-state, no-effect/no-event-handler */
 
   return lastOutputAt;
 }
@@ -148,7 +156,11 @@ export function StreamingActivityDisplay({
 }) {
   const simpleView = useSimpleView();
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
-  const streamIsSilent = useSilentStreamNotice(activity, isStreaming, startedAt);
+  const streamIsSilent = useSilentStreamNotice(
+    activity,
+    isStreaming,
+    startedAt,
+  );
   if (simpleView) {
     if (!isStreaming) return null;
     return (

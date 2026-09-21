@@ -179,6 +179,9 @@ export function DocContentTab({
     }
   }, [editor, effectiveMode]);
 
+  /* eslint-disable no-effect/no-event-handler --
+     Reconfigures the TipTap instance, which lives outside React state and is
+     only available after it mounts. */
   // Toggle suggestion tracking with the mode. Editing/Viewing apply edits
   // directly; Suggesting converts them into tracked-change marks.
   useEffect(() => {
@@ -190,6 +193,7 @@ export function DocContentTab({
     if (effectiveMode === "suggesting") enableSuggesting(editor);
     else disableSuggesting(editor);
   }, [editor, effectiveMode, isPrRecap]);
+  /* eslint-enable no-effect/no-event-handler */
 
   // Surface the pending-suggestion count so the header toggle can show it.
   const suggestionCount =
@@ -198,10 +202,18 @@ export function DocContentTab({
       selector: ({ editor: e }) =>
         e ? collectSuggestions(e.state.doc).length : 0,
     }) ?? 0;
+  /* eslint-disable no-effect/no-pass-data-to-parent --
+     The count is read off the TipTap document, which this component owns; the
+     header that displays it is a sibling, so it has to be pushed up. */
   useEffect(() => {
     onSuggestionCount(suggestionCount);
   }, [suggestionCount, onSuggestionCount]);
+  /* eslint-enable no-effect/no-pass-data-to-parent */
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     TipTap emits "update" on its own bus and has no immutable snapshot to hand
+     useSyncExternalStore; re-serialising markdown per render would be far
+     costlier than mirroring it on change. */
   // Keep the outline in sync with live editor content.
   useEffect(() => {
     if (!editor) return;
@@ -216,6 +228,7 @@ export function DocContentTab({
       editor.off("update", syncTocContent);
     };
   }, [editor]);
+  /* eslint-enable no-effect/no-external-store-subscription */
 
   /**
    * Snapshot the current document as a version. Shared by the idle timer and
@@ -288,6 +301,8 @@ export function DocContentTab({
     setCommentHighlightState(editor, { openAnchorIds, activeAnchorId });
   }, [editor, openAnchorIds, activeAnchorId]);
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     Same TipTap event bus as above: no snapshot function to subscribe with. */
   // Track anchors still present in the doc so deleted ones show as orphaned.
   useEffect(() => {
     if (!editor) return;
@@ -299,7 +314,11 @@ export function DocContentTab({
       editor.off("update", update);
     };
   }, [editor]);
+  /* eslint-enable no-effect/no-external-store-subscription */
 
+  /* eslint-disable no-effect/no-event-handler --
+     Keeps a ref fresh for a callback the TipTap extension calls imperatively
+     from a DOM click, outside React's event system. */
   // Highlight click -> focus its thread in the panel.
   useEffect(() => {
     anchorClickRef.current = (anchorId: string) => {
@@ -307,6 +326,7 @@ export function DocContentTab({
       if (!commentsOpen) onToggleComments();
     };
   }, [commentsOpen, onToggleComments]);
+  /* eslint-enable no-effect/no-event-handler */
 
   // Panel thread click -> scroll the editor to the anchored text.
   const handleAnchorActivate = (anchorId: string) => {
@@ -503,7 +523,10 @@ export function DocContentTab({
             exit={{ opacity: 0 }}
             transition={motionFast}
           >
-            <DocSuggestionsPanel editor={editor} onClose={onToggleSuggestions} />
+            <DocSuggestionsPanel
+              editor={editor}
+              onClose={onToggleSuggestions}
+            />
           </m.div>
         ) : null}
       </AnimatePresence>
