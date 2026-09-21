@@ -5,11 +5,11 @@ import {
 } from "../convex/_validators/aiModels";
 
 describe("SIMPLE_VIEW_MODEL_LADDER", () => {
-  it("is composer → grok 4.5 → grok 4.6 → opus → fable", () => {
+  it("is composer → grok 4.5 → grok 4.7 → opus → fable", () => {
     expect(SIMPLE_VIEW_MODEL_LADDER).toEqual([
       "cursor:composer-2.5",
       "cursor:grok-4.5",
-      "cursor:grok-4.6",
+      "cursor:grok-4.7",
       "claude:opus",
       "claude:claude-fable-5-1",
     ]);
@@ -18,7 +18,7 @@ describe("SIMPLE_VIEW_MODEL_LADDER", () => {
 
 describe("snapToSimpleViewLadder", () => {
   it("keeps an exact ladder model", () => {
-    expect(snapToSimpleViewLadder("cursor:grok-4.6")).toBe("cursor:grok-4.6");
+    expect(snapToSimpleViewLadder("cursor:grok-4.7")).toBe("cursor:grok-4.7");
     expect(snapToSimpleViewLadder("claude:opus")).toBe("claude:opus");
   });
 
@@ -42,7 +42,8 @@ describe("snapToSimpleViewLadder", () => {
       "cursor:grok-4.5",
     );
     expect(snapToSimpleViewLadder("cursor:gpt-6-astra")).toBe(
-      "cursor:grok-4.6",
+      "cursor:grok-4.7",
     );
+    expect(snapToSimpleViewLadder("cursor:grok-4.6")).toBe("cursor:grok-4.7");
   });
 });

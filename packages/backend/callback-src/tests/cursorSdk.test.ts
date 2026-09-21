@@ -265,6 +265,9 @@ test("splitCursorModel separates base id and reasoning level", () => {
 });
 
 test("cursorModeParams explicitly keeps first-party models on Standard", () => {
+  expect(cursorModeParams("grok-4.7", false, false)).toEqual([
+    { id: "fast", value: "false" },
+  ]);
   expect(cursorModeParams("grok-4.6", false, false)).toEqual([
     { id: "fast", value: "false" },
   ]);

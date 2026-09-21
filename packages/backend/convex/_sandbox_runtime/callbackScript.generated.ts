@@ -7569,7 +7569,7 @@ function cursorEventWaitTimeoutMs(args) {
 }
 function cursorModeParams(model, fastMode, use1mContext) {
   const params = [];
-  if (model === "grok-4.6" || model === "grok-4.5" || model === "composer-2.5") {
+  if (model === "grok-4.7" || model === "grok-4.6" || model === "grok-4.5" || model === "composer-2.5") {
     params.push({ id: "fast", value: fastMode ? "true" : "false" });
   }
   if (use1mContext) {
