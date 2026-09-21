@@ -42,7 +42,7 @@ export function SandboxBranchChip({
             });
           }}
           className={cn(
-            "motion-press flex h-7 min-w-0 max-w-full items-center gap-1 rounded-md px-2 text-xs font-normal hover:bg-muted hover:text-foreground active:scale-[0.97]",
+            "motion-press flex h-7 min-w-0 max-w-[min(220px,40vw)] items-center gap-1 rounded-md px-2 text-xs font-normal hover:bg-muted hover:text-foreground active:scale-[0.97]",
             isMismatched ? "text-warning" : "text-muted-foreground",
           )}
         >
