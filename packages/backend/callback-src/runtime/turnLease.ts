@@ -65,6 +65,18 @@ export function endTurnOwnership(): void {
   terminalReason = null;
 }
 
+/**
+ * The completion mutation is the last fenced write of a turn, and the server
+ * closes the turn as part of handling it. Call this once the completion payload
+ * carries the lease and before the request is sent: from that point every
+ * heartbeat this process could still emit would be answered `terminal: closed`
+ * for a turn it has already finished, and `noteHeartbeatResponse` must be able
+ * to tell that apart from a rival taking the turn over.
+ */
+export function releaseTurnLeaseForCompletion(): void {
+  endTurnOwnership();
+}
+
 export function getCurrentTurnLease(): TurnLeaseIdentity | null {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
@@ -89,6 +101,15 @@ export function appendCurrentTurnLease(args: JsonObject): void {
 
 export function getLeaseTerminalReason(): LeaseTerminalReason | null {
   return terminalReason;
+}
+
+/** Two legacy (lease-less) owners compare equal; otherwise id and generation must match. */
+export function isSameTurnLease(
+  a: TurnLeaseIdentity | null,
+  b: TurnLeaseIdentity | null,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
 }
 
 export type TurnLeaseExitDecision =
@@ -123,7 +144,21 @@ function parseTerminalReason(value: JsonValue): LeaseTerminalReason | null {
   return null;
 }
 
-export function noteHeartbeatResponse(response: string | JsonValue): boolean {
+/**
+ * Records a terminal lease verdict, but only for the lease this process still
+ * owns. `sentUnder` is the identity the heartbeat carried when it left: a
+ * heartbeat can be answered after this daemon has itself completed that turn
+ * (the server closes a synthetic turn inside `completeSyntheticTurn`, and the
+ * workflow closes a real one moments after `handleCompletion`), and the reply
+ * is then `terminal: closed` for a lease nobody here holds any more. Treating
+ * that as "a rival owns this turn" exited the daemon 400ms after it had minted
+ * the next synthetic turn, which stalled with no heartbeater (session 225,
+ * 21 Sep 2026).
+ */
+export function noteHeartbeatResponse(
+  response: string | JsonValue,
+  sentUnder: TurnLeaseIdentity | null,
+): boolean {
   if (terminalReason !== null) return true;
   let parsed: JsonValue;
   if (typeof response === "string") {
@@ -150,12 +185,20 @@ export function noteHeartbeatResponse(response: string | JsonValue): boolean {
     return false;
   }
   if (lease.status !== "terminal") return false;
-  terminalReason = parseTerminalReason(lease.reason) ?? "closed";
-  log(
-    "turn lease terminal (" +
-      terminalReason +
-      ") turnId=" +
-      String(getCurrentTurnLease()?.turnId),
-  );
+  const reason = parseTerminalReason(lease.reason) ?? "closed";
+  const current = getCurrentTurnLease();
+  if (!isSameTurnLease(sentUnder, current)) {
+    log(
+      "stale turn lease verdict ignored (" +
+        reason +
+        ") sentUnder=" +
+        String(sentUnder?.turnId) +
+        " current=" +
+        String(current?.turnId),
+    );
+    return false;
+  }
+  terminalReason = reason;
+  log("turn lease terminal (" + reason + ") turnId=" + String(current?.turnId));
   return true;
 }

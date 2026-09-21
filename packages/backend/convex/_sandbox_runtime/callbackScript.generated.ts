@@ -869,6 +869,9 @@ function endTurnOwnership() {
   turnOwnership = { status: "idle" };
   terminalReason = null;
 }
+function releaseTurnLeaseForCompletion() {
+  endTurnOwnership();
+}
 function getCurrentTurnLease() {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
@@ -884,6 +887,10 @@ function appendCurrentTurnLease(args) {
 function getLeaseTerminalReason() {
   return terminalReason;
 }
+function isSameTurnLease(a, b) {
+  if (a === null || b === null) return a === b;
+  return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
+}
 function decideTurnLeaseExit(input) {
   if (input.terminalReason === null) return { action: "continue" };
   if (input.exitScheduled) return { action: "wait" };
@@ -895,7 +902,7 @@ function parseTerminalReason(value) {
   }
   return null;
 }
-function noteHeartbeatResponse(response) {
+function noteHeartbeatResponse(response, sentUnder) {
   if (terminalReason !== null) return true;
   let parsed;
   if (typeof response === "string") {
@@ -917,16 +924,21 @@ function noteHeartbeatResponse(response) {
     return false;
   }
   if (lease.status !== "terminal") return false;
-  terminalReason = parseTerminalReason(lease.reason) ?? "closed";
-  log(
-    "turn lease terminal (" + terminalReason + ") turnId=" + String(getCurrentTurnLease()?.turnId)
-  );
+  const reason = parseTerminalReason(lease.reason) ?? "closed";
+  const current = getCurrentTurnLease();
+  if (!isSameTurnLease(sentUnder, current)) {
+    log(
+      "stale turn lease verdict ignored (" + reason + ") sentUnder=" + String(sentUnder?.turnId) + " current=" + String(current?.turnId)
+    );
+    return false;
+  }
+  terminalReason = reason;
+  log("turn lease terminal (" + reason + ") turnId=" + String(current?.turnId));
   return true;
 }
 
 // callback-src/http/convexClient.ts
-function appendTurnLease(body) {
-  const identity = getCurrentTurnLease();
+function appendTurnLease(body, identity) {
   if (identity === null) return;
   body.set("turnId", identity.turnId);
   body.set("leaseGeneration", String(identity.leaseGeneration));
@@ -1031,21 +1043,21 @@ async function callHarnessSkillCatalogReport(provider, cliVersion, skills) {
   );
 }
 async function callStreamingHeartbeatTouchOnce(entityId) {
+  const identity = getCurrentTurnLease();
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
     body.set("hmac", STREAMING_HMAC);
     body.set("touchOnly", "1");
-    appendTurnLease(body);
+    appendTurnLease(body, identity);
     const response2 = await postSignedForm(
       CONVEX_SITE_URL + "/api/streaming/heartbeat",
       body,
       "Streaming heartbeat touch"
     );
-    noteHeartbeatResponse(response2);
+    noteHeartbeatResponse(response2, identity);
     return response2;
   }
-  const identity = getCurrentTurnLease();
   const response = identity === null ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
     entityId,
     touchOnly: true
@@ -1055,17 +1067,18 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
     turnId: identity.turnId,
     leaseGeneration: identity.leaseGeneration
   });
-  noteHeartbeatResponse(response);
+  noteHeartbeatResponse(response, identity);
   return response;
 }
 async function callStreamingHeartbeatOnce(entityId, currentActivity, currentContent, pendingQuestion) {
+  const identity = getCurrentTurnLease();
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
     body.set("hmac", STREAMING_HMAC);
     body.set("currentActivity", currentActivity);
     body.set("currentContent", currentContent || "");
-    appendTurnLease(body);
+    appendTurnLease(body, identity);
     if (pendingQuestion) {
       body.set("pendingQuestion", pendingQuestion);
     }
@@ -1074,7 +1087,7 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
       body,
       "Streaming heartbeat"
     );
-    noteHeartbeatResponse(response2);
+    noteHeartbeatResponse(response2, identity);
     return response2;
   }
   const args = {
@@ -1086,14 +1099,13 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const identity = getCurrentTurnLease();
   const path3 = identity === null ? "turns:legacyHeartbeatFromCallback" : "turns:heartbeatFromCallback";
   if (identity !== null) {
     args.turnId = identity.turnId;
     args.leaseGeneration = identity.leaseGeneration;
   }
   const response = await callConvex("mutation", path3, args);
-  noteHeartbeatResponse(response);
+  noteHeartbeatResponse(response, identity);
   return response;
 }
 async function callStreamingHeartbeat(entityId, currentActivity, currentContent, pendingQuestion) {
@@ -5122,6 +5134,7 @@ async function postClaimedTurnFailureCompletion(params) {
   );
   appendClaimedTurnCompletion(completionArgs);
   appendTurnCheckpoint(completionArgs);
+  releaseTurnLeaseForCompletion();
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",
@@ -5180,6 +5193,7 @@ async function attachChatMediaIfAny(uploaded, target2) {
 }
 async function deliverCompletionWithMedia(completionArgs) {
   appendTurnCheckpoint(completionArgs);
+  releaseTurnLeaseForCompletion();
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",
@@ -6495,6 +6509,7 @@ async function failSyntheticTurn(error) {
       ...turnLease
     });
     appendTurnCheckpoint(completionArgs);
+    releaseTurnLeaseForCompletion();
     await callConvexWithRetry(
       "mutation",
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
@@ -6570,6 +6585,7 @@ async function finalizeSyntheticTurn(output) {
   }
   persistTurnWork();
   appendTurnCheckpoint(completionArgs);
+  releaseTurnLeaseForCompletion();
   await callConvexWithRetry(
     "mutation",
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
@@ -6987,6 +7003,7 @@ async function runSdkDaemon() {
         ...getCurrentTurnLease()
       };
       appendTurnCheckpoint(completionArgs);
+      releaseTurnLeaseForCompletion();
       await callConvexWithRetry(
         "mutation",
         COMPLETION_MUTATION ?? "",
