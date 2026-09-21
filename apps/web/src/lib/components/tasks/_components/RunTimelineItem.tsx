@@ -82,6 +82,7 @@ function getRunStatusLabel(run: Run, hasRunComment: boolean): string {
 export function RunTimelineItem({
   run,
   isActiveRun,
+  activityInChat = false,
   streaming,
   activeRunElapsed,
   isStopping,
@@ -92,6 +93,11 @@ export function RunTimelineItem({
 }: {
   run: Run;
   isActiveRun: boolean;
+  /**
+   * This run's activity streams into the sandbox chat as a normal turn, so the
+   * steps and the log are left out here rather than shown twice.
+   */
+  activityInChat?: boolean;
   streaming: Streaming | undefined;
   activeRunElapsed: number;
   isStopping: boolean;
@@ -257,32 +263,41 @@ export function RunTimelineItem({
                 ))}
               </div>
             ) : null}
-            {run.status === "running" &&
-              streaming?.currentActivity &&
-              (() => {
-                const steps = parseActivitySteps(streaming.currentActivity);
-                return steps ? (
-                  <ActivityTasks steps={steps} isStreaming />
-                ) : (
-                  <Reasoning isStreaming defaultOpen>
-                    <ReasoningTrigger
-                      getThinkingMessage={(s) =>
-                        s ? "Working..." : "Processing complete"
-                      }
-                    />
-                    <ReasoningContent>
-                      {streaming.currentActivity}
-                    </ReasoningContent>
-                  </Reasoning>
-                );
-              })()}
-            <RunActivityLog
-              runId={run._id}
-              isActive={isActiveRun}
-              finalText={run.resultSummary}
-              startedAt={run.startedAt}
-              finishedAt={run.finishedAt}
-            />
+            {activityInChat ? (
+              <p className="text-xs text-muted-foreground">
+                Eva is working in the sandbox chat — open the Sandbox tab to
+                follow along.
+              </p>
+            ) : (
+              <>
+                {run.status === "running" &&
+                  streaming?.currentActivity &&
+                  (() => {
+                    const steps = parseActivitySteps(streaming.currentActivity);
+                    return steps ? (
+                      <ActivityTasks steps={steps} isStreaming />
+                    ) : (
+                      <Reasoning isStreaming defaultOpen>
+                        <ReasoningTrigger
+                          getThinkingMessage={(s) =>
+                            s ? "Working..." : "Processing complete"
+                          }
+                        />
+                        <ReasoningContent>
+                          {streaming.currentActivity}
+                        </ReasoningContent>
+                      </Reasoning>
+                    );
+                  })()}
+                <RunActivityLog
+                  runId={run._id}
+                  isActive={isActiveRun}
+                  finalText={run.resultSummary}
+                  startedAt={run.startedAt}
+                  finishedAt={run.finishedAt}
+                />
+              </>
+            )}
             {run.resultSummary && (
               <Streamdown
                 className="text-sm text-muted-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"

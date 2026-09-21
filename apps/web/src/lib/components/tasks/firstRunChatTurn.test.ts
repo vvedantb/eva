@@ -74,9 +74,37 @@ describe("findFirstRunChatTurnRun", () => {
     expect(findFirstRunChatTurnRun(runs)?.label).toBe("succeeded");
   });
 
-  test("a run still in flight is not the chat turn", () => {
+  test("a run still in flight owns the chat turn", () => {
+    // Its steps stream into the chat bubble instead of a timeline accordion.
     const runs = [
       run("running", { status: "running", resultSummary: undefined }),
+    ];
+    expect(findFirstRunChatTurnRun(runs)?.label).toBe("running");
+  });
+
+  test("a queued run owns the chat turn too", () => {
+    const runs = [run("queued", { status: "queued", resultSummary: undefined })];
+    expect(findFirstRunChatTurnRun(runs)?.label).toBe("queued");
+  });
+
+  test("an in-flight Resolve Conflicts run stays in the timeline", () => {
+    const runs = [
+      run("conflicts", {
+        status: "running",
+        mode: "resolve_conflicts",
+        resultSummary: undefined,
+      }),
+    ];
+    expect(findFirstRunChatTurnRun(runs)).toBeUndefined();
+  });
+
+  test('an in-flight "Make changes" run stays with its comment', () => {
+    const runs = [
+      run("make-changes", {
+        status: "running",
+        triggeringCommentId: "comment-1",
+        resultSummary: undefined,
+      }),
     ];
     expect(findFirstRunChatTurnRun(runs)).toBeUndefined();
   });
