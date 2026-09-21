@@ -18,6 +18,8 @@ import { ChatTypeToFocus } from "@/lib/components/chat/ChatTypeToFocus";
 import { ChatTypingLayer } from "@/lib/components/chat/ChatTypingLayer";
 import { ComposerInputChrome } from "@/lib/components/chat/_components/ComposerInputChrome";
 import { ComposerStash } from "@/lib/components/chat/_components/ComposerStash";
+import { SkillSuggestionChips } from "@/lib/components/chat/_components/SkillSuggestionChips";
+import { useSkillSuggestions } from "@/lib/components/chat/_components/useSkillSuggestions";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
@@ -140,6 +142,7 @@ export function ChatComposer({
   allowEmptySubmit = false,
 }: ChatComposerProps) {
   const skillItems = useSkillSlashItems(repoId, getAIModelProvider(model));
+  const suggestions = useSkillSuggestions(skillItems);
   const dataMentions = useDataMentionItems(repoId);
   const peopleMentions = usePeopleMentionItems(repoId);
   const { items: plusDataItems } = mergeMentionItems(
@@ -287,6 +290,13 @@ export function ChatComposer({
               onSave={localDraft.onSave}
             />
           )}
+          <SkillSuggestionChips
+            chips={suggestions.chips}
+            onPick={(item) => {
+              mentionRef.current?.insertSkill(item);
+              suggestions.dismiss(item.id);
+            }}
+          />
           <ComposerStash
             repoId={repoId}
             mentionRef={mentionRef}
@@ -352,6 +362,7 @@ export function ChatComposer({
               seedSkillMap={seed?.skillMap}
               messageHistory={messageHistory}
               allowEmptySubmit={allowEmptySubmit}
+              onDraftChange={suggestions.noteDraft}
             />
           </ComposerStash>
         </PromptInputProvider>

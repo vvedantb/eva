@@ -110,6 +110,20 @@ export const conversationMessageValidator = v.object({
   finishedAt: v.optional(v.number()),
 });
 
+/**
+ * Jev's verdict on one automation finding: the severity it judged (which may
+ * disagree with the agent's own `severity`) and the open task it looks like a
+ * duplicate of, if any. `duplicateProbability` is 0 when Jev picked "none", so
+ * the UI thresholds one number instead of branching on absence.
+ */
+export const findingTriageValidator = v.object({
+  severity: findingSeverityValidator,
+  duplicateOfTaskId: v.optional(v.id("agentTasks")),
+  duplicateOfNumId: v.optional(v.number()),
+  duplicateProbability: v.number(),
+  evaluatedAt: v.number(),
+});
+
 export const automationFindingValidator = v.object({
   id: v.string(),
   title: v.string(),
@@ -118,6 +132,7 @@ export const automationFindingValidator = v.object({
   filePaths: v.optional(v.array(v.string())),
   suggestedFix: v.optional(v.string()),
   taskId: v.optional(v.id("agentTasks")),
+  triage: v.optional(findingTriageValidator),
 });
 
 // Task-count breakdown for a project, used by both the single-project

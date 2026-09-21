@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import {
   activityLogTypeValidator,
   notificationTypeValidator,
+  notificationUrgencyValidator,
   snapshotScheduleValidator,
   teamMemberRoleValidator,
   webhookEventStatusValidator,
@@ -316,9 +317,11 @@ const schema = defineSchema({
     // field so the anchor survives independently of the href string. Absent on
     // non-comment notifications and on every notification created before this
     // field existed — those keep landing at the top of the target page.
-    commentId: v.optional(
-      v.union(v.id("taskComments"), v.id("docComments")),
-    ),
+    commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
+    // How loudly to deliver this one: high = instant email, normal = daily
+    // digest only, low = inbox only. Undefined means not yet routed (a mention
+    // whose routing action has not landed) or legacy; treated as normal.
+    urgency: v.optional(notificationUrgencyValidator),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])

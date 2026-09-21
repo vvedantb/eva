@@ -1,5 +1,12 @@
-import { expect, test } from "vitest";
-import { MAX_GENERATED_TAGS, parseGeneratedTags } from "@eva/shared";
+import { describe, expect, test } from "vitest";
+import {
+  MAX_GENERATED_TAGS,
+  parseGeneratedTags,
+  selectTagsByProbability,
+  TAG_PROBABILITY_THRESHOLD,
+  TASK_TAGS,
+  TASK_TAG_DESCRIPTIONS,
+} from "@eva/shared";
 
 test("rejects off-vocabulary tags", () => {
   expect(parseGeneratedTags("bug, foobar, feature", [])).toEqual([
@@ -51,4 +58,56 @@ test("splits on newlines as well as commas", () => {
     "frontend",
     "security",
   ]);
+});
+
+/**
+ * The tag generator asks Jev one boolean per tag, so the cut-off, the cap and
+ * the ordering are decided here rather than by the model. A drifting
+ * threshold would quietly re-tag every new task, so pin the boundary.
+ */
+describe("selectTagsByProbability", () => {
+  test("keeps tags at the threshold and drops anything under it", () => {
+    expect(
+      selectTagsByProbability(
+        { bug: TAG_PROBABILITY_THRESHOLD, docs: 0.59 },
+        [],
+      ),
+    ).toEqual(["bug"]);
+  });
+
+  test("caps at MAX_GENERATED_TAGS, keeping the most likely", () => {
+    const tags = selectTagsByProbability(
+      { bug: 0.7, feature: 0.95, refactor: 0.8, frontend: 0.99 },
+      [],
+    );
+    expect(tags).toHaveLength(MAX_GENERATED_TAGS);
+    expect(tags).toEqual(["frontend", "feature", "refactor"]);
+  });
+
+  test("excludes already applied tags case-insensitively", () => {
+    expect(
+      selectTagsByProbability({ bug: 0.9, ux: 0.9, design: 0.8 }, [
+        "Bug",
+        "UX",
+      ]),
+    ).toEqual(["design"]);
+  });
+
+  test("breaks ties in vocabulary order", () => {
+    expect(
+      selectTagsByProbability({ ux: 0.8, bug: 0.8, backend: 0.8 }, []),
+    ).toEqual(["bug", "ux", "backend"]);
+  });
+
+  test("returns nothing when no tag clears the bar", () => {
+    expect(selectTagsByProbability({ bug: 0.2, docs: 0.5 }, [])).toEqual([]);
+    expect(selectTagsByProbability({}, [])).toEqual([]);
+  });
+
+  test("every vocabulary tag has a rubric line for the model", () => {
+    for (const tag of TASK_TAGS) {
+      expect(TASK_TAG_DESCRIPTIONS[tag]?.trim().length ?? 0).toBeGreaterThan(0);
+    }
+    expect(Object.keys(TASK_TAG_DESCRIPTIONS)).toHaveLength(TASK_TAGS.length);
+  });
 });

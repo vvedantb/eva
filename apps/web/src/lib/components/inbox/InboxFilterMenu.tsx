@@ -32,6 +32,7 @@ const GROUP_LABELS: Record<InboxGroup, string> = {
   day: "Day",
   repo: "Repo",
   type: "Type",
+  urgency: "Urgency",
 };
 
 function UnreadCountBadge({

@@ -362,13 +362,21 @@ describe("evaluate wiring contract", () => {
 
     const action = convexSource("mcp/evaluate.ts");
     expect(action.startsWith('"use node";')).toBe(true);
-    expect(action).toContain("experimental_evaluate");
-    expect(action).toContain("zeroDataRetention: true");
-    expect(action).toContain("AI_GATEWAY_API_KEY");
-    expect(action).not.toContain("TYPESAFE_API_KEY");
+    expect(action).toContain("evaluateDecision(");
+    expect(action).toContain('"eva-mcp-evaluate"');
 
-    const shared = convexSource("_mcp/evaluateTool.ts");
-    expect(shared).toContain("mutating: false");
-    expect(shared).toContain(`EVALUATE_MODEL = "typesafe-ai/jev"`);
+    // The one place the gateway is called, for every Jev caller.
+    const client = convexSource("_jev/client.ts");
+    expect(client.startsWith('"use node";')).toBe(true);
+    expect(client).toContain("experimental_evaluate");
+    expect(client).toContain("zeroDataRetention: true");
+    expect(client).toContain("AI_GATEWAY_API_KEY");
+    expect(client).toContain("tags: [options.tag]");
+    expect(client).not.toContain("TYPESAFE_API_KEY");
+
+    expect(convexSource("_jev/schema.ts")).toContain(
+      `EVALUATE_MODEL = "typesafe-ai/jev"`,
+    );
+    expect(convexSource("_mcp/evaluateTool.ts")).toContain("mutating: false");
   });
 });

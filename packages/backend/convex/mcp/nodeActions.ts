@@ -12,7 +12,7 @@ import { buildTools } from "./tools";
 import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
-import { jsonValue, type JsonValue } from "../_mcp/jsonValue";
+import { jsonValue, type JsonValue } from "../_jev/jsonValue";
 import {
   buildChatMessageCalls,
   decideSandboxStartPlan,

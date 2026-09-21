@@ -5,6 +5,7 @@ import { internal } from "../_generated/api";
 import {
   automationRunFields,
   automationFindingValidator,
+  findingTriageValidator,
   runStatusValidator,
   turnCheckpointArgs,
 } from "../validators";
@@ -210,6 +211,16 @@ export const updateRunStatus = internalMutation({
     }
     await ctx.db.patch(args.runId, patch);
 
+    // Findings land unranked and possibly duplicating open work. Triage runs
+    // out of band so the run finishes at the same speed either way.
+    if (args.findings !== undefined && args.findings.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.automationTriage.triageFindings,
+        { runId: args.runId },
+      );
+    }
+
     // When a run succeeds and the automation opts into email, broadcast its
     // result summary to all users with email notifications enabled.
     if (args.status === "success") {
@@ -223,6 +234,53 @@ export const updateRunStatus = internalMutation({
         );
       }
     }
+    return null;
+  },
+});
+
+/**
+ * A run's repo and findings for the triage action. Null when the run is gone
+ * or produced nothing to triage.
+ */
+export const getRunForTriage = internalQuery({
+  args: { runId: v.id("automationRuns") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      repoId: v.id("githubRepos"),
+      findings: v.array(automationFindingValidator),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || !run.findings || run.findings.length === 0) return null;
+    return { repoId: run.repoId, findings: run.findings };
+  },
+});
+
+/**
+ * Stamps triage verdicts onto a run's findings. Re-reads the run rather than
+ * taking the array the action saw, so a `taskId` linked while Jev was thinking
+ * survives the write.
+ */
+export const setFindingsTriage = internalMutation({
+  args: {
+    runId: v.id("automationRuns"),
+    triage: v.array(
+      v.object({ id: v.string(), triage: findingTriageValidator }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || !run.findings) return null;
+    const byId = new Map(args.triage.map((entry) => [entry.id, entry.triage]));
+    await ctx.db.patch(args.runId, {
+      findings: run.findings.map((finding) => {
+        const triage = byId.get(finding.id);
+        return triage ? { ...finding, triage } : finding;
+      }),
+    });
     return null;
   },
 });
