@@ -290,7 +290,6 @@ export function ChatComposer({
           <ComposerStash
             repoId={repoId}
             mentionRef={mentionRef}
-            disabled={isInputDisabled}
             panels={
               <>
                 <ComposerTasksPanel

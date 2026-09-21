@@ -30,24 +30,28 @@ import { ListEnter } from "@/lib/components/ui/ListEnter";
  * the card by anchoring a popover to the input chrome this component wraps.
  *
  * The hotkey registration stays enabled whenever a composer is mounted and the
- * focus/disabled gate lives inside the callback: `enabled: false` makes the
- * hotkey manager skip preventDefault entirely, so gating via `enabled` let
- * ⌘S fall through to the browser's save-file dialog. Browser save is never
- * useful inside the app; acting on the stash still requires this composer to
- * own focus (or its drawer to be open), so multiple mounted composers don't
- * all stash at once.
+ * focus gate lives inside the callback: `enabled: false` makes the hotkey
+ * manager skip preventDefault entirely, so gating via `enabled` let ⌘S fall
+ * through to the browser's save-file dialog. Browser save is never useful
+ * inside the app; acting on the stash still requires this composer to own
+ * focus (or its drawer to be open), so multiple mounted composers don't all
+ * stash at once.
+ *
+ * The composer's send-disabled state deliberately does NOT gate it. A draft
+ * written while Eva sleeps is exactly the one worth stashing, the stash is
+ * repo-scoped Convex state with no sandbox involvement, and the trigger and
+ * drawer stay clickable then — so gating the hotkey only made ⌘S a dead key
+ * on the surface that needs it most.
  */
 export function ComposerStash({
   repoId,
   mentionRef,
-  disabled,
   panels,
   bar,
   children,
 }: {
   repoId: Id<"githubRepos">;
   mentionRef: RefObject<MentionTextareaHandle | null>;
-  disabled: boolean;
   /** Panels stacked flush above the input (tasks, queued messages). */
   panels: ReactNode;
   /**
@@ -75,7 +79,6 @@ export function ComposerStash({
     "stashDraft",
     (event) => {
       event.preventDefault();
-      if (disabled) return;
       // The drawer is portaled, so while open the active element sits outside
       // `rootRef` — hence the `open` short-circuit.
       if (!open && !rootRef.current?.contains(document.activeElement)) return;
