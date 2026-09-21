@@ -336,6 +336,7 @@ export function TaskSandboxChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={taskId}
+        chatParentId={taskId}
         messages={[...firstRunTurn, ...(messages ?? [])]}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}

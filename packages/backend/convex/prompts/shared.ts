@@ -53,6 +53,15 @@ export function buildRootDirectoryInstruction(rootDirectory: string): string {
 export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
 
+/**
+ * Nudge towards `render_ui`. Appended to the shared chat-turn prompt, so
+ * sessions, quick tasks and project chat all get it — the tool is available on
+ * every sandbox token, and without a prompt line agents never reach for it.
+ */
+export const CHAT_UI_INSTRUCTION = `
+
+Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.`;
+
 /** One linked repo, as the prompt needs to describe it to the agent. */
 export type LinkedRepoPromptRow = {
   owner: string;

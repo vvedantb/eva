@@ -19,6 +19,8 @@ import type { TurnCheckpointContext } from "@/lib/components/chat/_components/us
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
+import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -57,6 +59,11 @@ interface ChatBodyProps {
   repoBasePath: string;
   /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
+  /**
+   * The same chat, typed as the id its messages hang off. Used to load the
+   * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   */
+  chatParentId: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -181,6 +188,7 @@ export function ChatBody({
   repoId,
   repoBasePath,
   conversationId,
+  chatParentId,
   messages,
   isLoadingMessages = false,
   queuedMessages,
@@ -318,6 +326,16 @@ export function ChatBody({
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
 
+  // Agent-composed UI panels (`render_ui`). One query per chat covers all three
+  // surfaces, since every one of them renders through this component.
+  const chatUiPanels = useQuery(api.chatUi.listByParent, {
+    parentId: chatParentId,
+  });
+  const panelPlacement = placeChatUiPanels(
+    chatUiPanels ?? [],
+    new Set(displayMessages.map((message) => message._id)),
+  );
+
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
   const users = useQuery(
     api.users.getMany,
@@ -341,6 +359,26 @@ export function ChatBody({
       : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
           void onSend(content, attachmentStorageIds);
         };
+
+  // A panel button sends its text through the normal send path, so it queues
+  // behind a running turn exactly as a typed message would. Withheld on a
+  // read-only chat and on one whose sandbox is asleep, which is what renders
+  // the panel's buttons disabled instead of inert.
+  const handlePanelReply =
+    isArchived || isInputDisabled
+      ? undefined
+      : (message: string) => {
+          void onSend(message);
+        };
+
+  const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
+    panels.map((panel) => (
+      <ChatUiPanel
+        key={panel._id}
+        spec={panel.spec}
+        onReply={handlePanelReply}
+      />
+    ));
 
   const renderMessage = (message: ChatBodyMessage) => {
     const isStreamingTarget = message._id === streamingTargetId;
@@ -383,6 +421,7 @@ export function ChatBody({
           precedingUser={precedingUser}
         />
         {afterMessage?.(message._id)}
+        {renderChatUiPanels(panelPlacement.byMessageId.get(message._id) ?? [])}
       </div>
     );
   };
@@ -425,6 +464,7 @@ export function ChatBody({
               </ChatLastTurn>
             </>
           )}
+          {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
         <ChatJumpRail messages={jumpRailMessages} />

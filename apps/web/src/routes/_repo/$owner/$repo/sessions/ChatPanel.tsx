@@ -436,6 +436,7 @@ export function ChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={sessionId}
+        chatParentId={sessionId}
         messages={messages}
         queuedMessages={queuedMessages}
         streamingActivity={streamingActivity}

@@ -53,6 +53,7 @@ import {
   snapshotBuildFields,
   sessionDaemonStateFields,
   turnFields,
+  chatUiPanelFields,
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
@@ -189,6 +190,9 @@ const schema = defineSchema({
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
+  // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
+  // sessions, quick tasks and projects — the chat surface is one surface.
+  chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
   proposedPlans: defineTable(proposedPlanFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_capture_key", ["sessionId", "captureKey"])

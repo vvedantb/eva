@@ -1347,6 +1347,24 @@ export const agentUsageLimitFields = {
   completeness: v.optional(usageLimitCompletenessValidator),
 };
 
+/**
+ * One agent-generated UI panel rendered inline in a chat. `spec` is a
+ * json-render Spec serialised as JSON — kept as a string because its shape is
+ * the catalog's business, not the database's, and it is re-parsed at the
+ * client boundary (`@eva/shared/generativeUi`).
+ */
+export const chatUiPanelFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the panel appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  title: v.optional(v.string()),
+  /** The layout request the agent made, kept for debugging and provenance. */
+  prompt: v.string(),
+  spec: v.string(),
+  elementCount: v.number(),
+  createdAt: v.number(),
+};
+
 /** A captured ExitPlanMode plan, linked to the turn that proposed it. */
 export const proposedPlanFields = {
   sessionId: v.id("sessions"),
