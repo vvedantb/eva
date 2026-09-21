@@ -154,8 +154,8 @@ export function SandboxPanel({
   const planImplemented = capturedPlan?.implementedAt !== undefined;
   const hasDesignsContent = latestVariations.length > 0;
   const artifactSource = { kind: "session" as const, sessionId };
-  const { hasArtifacts } = useSourceArtifacts(artifactSource);
-  const { hasDocuments } = useSourceDocuments(artifactSource);
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
   const isDesignExecuting = isAssistantTurnInProgress(messages);
   // Streaming payloads can outlive their turn; only fold them in while one runs.
   const agents = deriveSubagents({
@@ -242,8 +242,8 @@ export function SandboxPanel({
           hasPrdContent={hasPlanContent}
           showDesignsTab={hasDesignsContent}
           hasDesignsContent={hasDesignsContent}
-          hasArtifactsContent={hasArtifacts}
-          hasDocumentsContent={hasDocuments}
+          artifactCount={artifactCount}
+          documentCount={documentCount}
           showFilesTab
           showAgentsTab={hasAgents}
           hasRunningAgents={hasRunningAgents}

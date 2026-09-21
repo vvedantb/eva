@@ -19,10 +19,7 @@ export type ArtifactSourceArg =
 /** Artifacts created from this session / task / project chat. */
 export function useSourceArtifacts(source: ArtifactSourceArg) {
   const artifacts = useQuery(api.artifacts.listForSource, { source });
-  return {
-    artifacts,
-    hasArtifacts: artifacts !== undefined && artifacts.length > 0,
-  };
+  return { artifacts, artifactCount: artifacts?.length };
 }
 
 /**
@@ -34,13 +31,12 @@ export function SessionArtifactsPanel({
 }: {
   source: ArtifactSourceArg;
 }) {
-  const { artifacts } = useSourceArtifacts(source);
-  const count = artifacts?.length;
+  const { artifacts, artifactCount } = useSourceArtifacts(source);
 
   return (
     <SessionSourcePane
       title="Artifacts"
-      count={count}
+      count={artifactCount}
       viewAll={
         <Link to="/artifacts" className={sessionSourceViewAllClass}>
           View all

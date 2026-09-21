@@ -89,8 +89,8 @@ export function TaskSandboxPanel({
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
   // panel already subscribes to (same entity ids).
   const artifactSource = { kind: "task" as const, taskId };
-  const { hasArtifacts } = useSourceArtifacts(artifactSource);
-  const { hasDocuments } = useSourceDocuments(artifactSource);
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: taskId,
     streamingEntityId: `task-chat-${taskIdStr}`,
@@ -151,8 +151,8 @@ export function TaskSandboxPanel({
         showFilesTab
         showAgentsTab={hasAgents}
         hasRunningAgents={hasRunningAgents}
-        hasArtifactsContent={hasArtifacts}
-        hasDocumentsContent={hasDocuments}
+        artifactCount={artifactCount}
+        documentCount={documentCount}
         agentBrowsingAt={viewState?.agentBrowsingAt}
         fileList={fileList}
         consoleDock={panes.consoleDock}

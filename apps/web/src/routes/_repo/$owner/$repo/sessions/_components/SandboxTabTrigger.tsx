@@ -34,6 +34,11 @@ export interface SandboxTabDescriptor {
   indicator?: SandboxTabIndicator;
   /** Accessible name for the indicator dot. */
   indicatorLabel?: string;
+  /**
+   * How many items this tab holds. A count says more than the plain `content`
+   * dot, so when it is present (and non-zero) the badge replaces the dot.
+   */
+  count?: number;
 }
 
 /**
@@ -66,6 +71,12 @@ const TAB_LAYOUT_CLASS: Record<SandboxTabLayout, string> = {
 
 const ICON_CLASS = "size-4 shrink-0";
 
+/* Two-digit counts still fit: the pill grows from a 14px circle via `px-1`
+   rather than being fixed-width, and `tabular-nums` keeps it from twitching as
+   the number changes. */
+const COUNT_BADGE_CLASS =
+  "inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center rounded-full bg-primary px-1 font-medium text-[9px] text-primary-foreground leading-none tabular-nums";
+
 function TabIcon({ icon }: { icon: SandboxTabIcon }) {
   if (icon.kind === "name") {
     return <TablerIconByName name={icon.name} className={ICON_CLASS} />;
@@ -92,6 +103,7 @@ export function SandboxTabTrigger({
   onReselect,
 }: SandboxTabTriggerProps) {
   const labelHidden = layout === "icon";
+  const count = tab.count !== undefined && tab.count > 0 ? tab.count : undefined;
   const trigger = (
     <TabsTrigger
       value={tab.value}
@@ -108,7 +120,17 @@ export function SandboxTabTrigger({
           {tab.label}
         </span>
       ) : null}
-      {tab.indicator ? (
+      {count !== undefined ? (
+        <span
+          aria-label={tab.indicatorLabel}
+          className={cn(
+            COUNT_BADGE_CLASS,
+            layout !== "row" && "absolute right-0 top-0",
+          )}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : tab.indicator ? (
         <span
           aria-label={tab.indicatorLabel}
           className={cn(

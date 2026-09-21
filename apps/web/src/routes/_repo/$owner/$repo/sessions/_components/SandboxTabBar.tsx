@@ -81,12 +81,12 @@ interface SandboxTabBarProps {
   hasDesignsContent?: boolean;
   /** Shows the Artifacts tab (session / task / project sandbox chats). */
   showArtifactsTab?: boolean;
-  /** When true, shows a content indicator on the Artifacts tab. */
-  hasArtifactsContent?: boolean;
+  /** Artifacts in this chat — badged on the tab. Undefined while loading. */
+  artifactCount?: number;
   /** Shows the Documents tab (session / task / project sandbox chats). */
   showDocumentsTab?: boolean;
-  /** When true, shows a content indicator on the Documents tab. */
-  hasDocumentsContent?: boolean;
+  /** Documents in this chat — badged on the tab. Undefined while loading. */
+  documentCount?: number;
   /** Shows the File Viewer tab (sessions only). */
   showFilesTab?: boolean;
   /** Shows the Agents tab (content-keyed: the entity has spawned sub-agents). */
@@ -131,9 +131,9 @@ export function SandboxTabBar({
   showDesignsTab = false,
   hasDesignsContent = false,
   showArtifactsTab = true,
-  hasArtifactsContent = false,
+  artifactCount,
   showDocumentsTab = true,
-  hasDocumentsContent = false,
+  documentCount,
   showFilesTab = false,
   showAgentsTab = false,
   hasRunningAgents = false,
@@ -183,9 +183,9 @@ export function SandboxTabBar({
     showDesignsTab,
     hasDesignsContent,
     showArtifactsTab,
-    hasArtifactsContent,
+    artifactCount,
     showDocumentsTab,
-    hasDocumentsContent,
+    documentCount,
     customTabs: visibleCustomTabs,
   });
   // Desktop is icon-only unless the reader has asked for the labelled rail.
