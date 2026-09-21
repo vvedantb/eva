@@ -7,10 +7,7 @@ export {
   remove,
 } from "./_automations/crud";
 
-export {
-  triggerAutomation,
-  runNow,
-} from "./_automations/triggers";
+export { triggerAutomation, runNow } from "./_automations/triggers";
 
 export {
   listSystemAutomations,
@@ -24,6 +21,8 @@ export {
   countUnreadAll,
   getAutomationData,
   getRunForEmail,
+  getRunForTriage,
+  setFindingsTriage,
   updateRunStatus,
   clearRunWorkflow,
   cancelRun,

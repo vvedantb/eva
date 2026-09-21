@@ -6,8 +6,11 @@ export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
   TASK_TAGS,
+  TASK_TAG_DESCRIPTIONS,
+  TAG_PROBABILITY_THRESHOLD,
   MAX_GENERATED_TAGS,
   parseGeneratedTags,
+  selectTagsByProbability,
   type TaskTag,
 } from "./taskTags";
 export { isUiImplementationTask } from "./uiTaskPrompt";

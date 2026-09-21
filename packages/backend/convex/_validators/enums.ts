@@ -342,3 +342,20 @@ export const usageLimitCompletenessValidator = v.union(
   v.literal("partial"),
   v.literal("refused"),
 );
+
+/**
+ * How loudly a notification should be delivered. Set by mention routing today
+ * (reply → high, fyi → normal, incidental → low):
+ *
+ * - `high`: instant email shortly after the notification lands.
+ * - `normal`: daily digest only.
+ * - `low`: inbox only — no email, no digest, no toast or chime.
+ *
+ * Absent means "not routed yet" (a mention whose routing action has not landed)
+ * or a row created before urgency existed; both are treated as normal.
+ */
+export const notificationUrgencyValidator = v.union(
+  v.literal("low"),
+  v.literal("normal"),
+  v.literal("high"),
+);

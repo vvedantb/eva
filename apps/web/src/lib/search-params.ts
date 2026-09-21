@@ -399,7 +399,7 @@ export function isInboxFilter(s: string): s is InboxFilter {
 
 // How the inbox list is sectioned. Presentation, but shareable: "group by repo"
 // is part of what you are looking at, so it rides the URL with the filter.
-export const inboxGroups = ["day", "repo", "type"] as const;
+export const inboxGroups = ["day", "repo", "type", "urgency"] as const;
 export type InboxGroup = (typeof inboxGroups)[number];
 export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
   .withDefault("day")

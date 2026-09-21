@@ -2,174 +2,42 @@
  * The `evaluate` MCP tool: typed questions about one piece of state, answered
  * by TypeSafe's Jev decision model with probabilities instead of prose.
  *
- * Everything an agent sees — the input schema, its caps, the description and
- * the result shape — lives here, runtime-free, so it can be unit-tested and so
- * the V8 tool layer (`mcp/tools.ts`) and the `"use node"` action
- * (`mcp/evaluate.ts`) share one contract. The provider call itself is injected
- * as `run`, which keeps the SDK types confined to the node module.
+ * The request contract itself — the input schema, its caps and the result
+ * shape — lives in `_jev/schema.ts`, shared with every non-MCP caller. What
+ * stays here is the agent-facing surface: the description, the error copy and
+ * the tool factory. The provider call is injected as `run`, which keeps the
+ * SDK types confined to the node module.
  */
 
-import { z } from "zod";
+import type { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";
 import { errorResult, textResult } from "../mcp/toolShared";
-import { jsonValue, type JsonValue } from "./jsonValue";
+import {
+  MAX_OPTIONS,
+  MAX_QUESTIONS,
+  MAX_STATE_CHARS,
+  evaluateInput,
+  evaluateInputShape,
+  type EvaluateInput,
+  type EvaluateOutcome,
+} from "../_jev/schema";
 
-/** Gateway id; the gateway typings also accept `typesafe-ai/jev-latest`. */
-export const EVALUATE_MODEL = "typesafe-ai/jev";
-/** Serialised `state` cap — Jev is a per-item judge, not a document reader. */
-export const MAX_STATE_CHARS = 200_000;
-export const MAX_QUESTIONS = 32;
-/** Jev's own limit on choice options and score levels. */
-export const MAX_OPTIONS = 255;
-export const MAX_INSTRUCTION_CHARS = 20_000;
-
-/** What Jev accepts for state, instructions and criteria: text or JSON. */
-const evalInput = z.union([
-  z.string().min(1),
-  z.record(z.string(), jsonValue),
-  z.array(jsonValue),
-]);
-
-const criterion = evalInput.nullable();
-
-const booleanQuestion = z.object({
-  type: z.literal("boolean"),
-  instructions: evalInput.describe(
-    "The yes/no question to answer about the state.",
-  ),
-  criteria: z
-    .object({
-      true: criterion.optional().describe("What makes the answer true."),
-      false: criterion.optional().describe("What makes the answer false."),
-    })
-    .strict()
-    .optional()
-    .describe("Optional descriptions of the true and false cases."),
-});
-
-const choiceQuestion = z.object({
-  type: z.literal("choice"),
-  instructions: evalInput.describe("What to decide about the state."),
-  criteria: z
-    .record(z.string().min(1).max(128), criterion)
-    .refine(
-      (options) => {
-        const count = Object.keys(options).length;
-        return count >= 1 && count <= MAX_OPTIONS;
-      },
-      { message: `choice criteria need 1 to ${MAX_OPTIONS} options` },
-    )
-    .describe(
-      `Option name -> description (or null). 1 to ${MAX_OPTIONS} options; the answer is one of these names.`,
-    ),
-});
-
-const scoreQuestion = z.object({
-  type: z.literal("score"),
-  instructions: evalInput.describe("What to rate about the state."),
-  criteria: z
-    .array(criterion)
-    .min(2)
-    .max(MAX_OPTIONS)
-    .describe(
-      `Ordered level descriptions, lowest first. 2 to ${MAX_OPTIONS} levels; the answer is a position on this scale.`,
-    ),
-});
-
-const question = z.discriminatedUnion("type", [
-  booleanQuestion,
-  choiceQuestion,
-  scoreQuestion,
-]);
-
-const QUESTION_ID = /^[A-Za-z0-9_-]+$/;
-
-/** Raw shape for `defineTool`; `search_tools` turns it into JSON schema for agents. */
-export const evaluateInputShape = {
-  state: evalInput.describe(
-    `The thing to judge: a string, or a JSON object or array. Text only; up to ${MAX_STATE_CHARS.toLocaleString("en-GB")} characters serialised.`,
-  ),
-  questions: z
-    .record(z.string().min(1).max(64).regex(QUESTION_ID), question)
-    .refine(
-      (questions) => {
-        const count = Object.keys(questions).length;
-        return count >= 1 && count <= MAX_QUESTIONS;
-      },
-      { message: `questions need 1 to ${MAX_QUESTIONS} entries` },
-    )
-    .describe(
-      `Question id -> question. Ids are [A-Za-z0-9_-]. Each question is { type: "boolean" | "choice" | "score", instructions, criteria } — see the tool description. 1 to ${MAX_QUESTIONS} questions, all answered in one call.`,
-    ),
-} satisfies z.ZodRawShape;
-
-/**
- * Full input schema. The size caps sit here rather than on the raw shape
- * because they span fields; the tool handler and the node action both parse
- * with this so a direct action call is held to the same limits.
- */
-export const evaluateInput = z
-  .object(evaluateInputShape)
-  .superRefine((value, ctx) => {
-    const stateChars =
-      typeof value.state === "string"
-        ? value.state.length
-        : JSON.stringify(value.state).length;
-    if (stateChars > MAX_STATE_CHARS) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["state"],
-        message: `state is ${stateChars.toLocaleString("en-GB")} characters serialised; the cap is ${MAX_STATE_CHARS.toLocaleString("en-GB")}`,
-      });
-    }
-    for (const [id, entry] of Object.entries(value.questions)) {
-      const chars =
-        typeof entry.instructions === "string"
-          ? entry.instructions.length
-          : JSON.stringify(entry.instructions).length;
-      if (chars > MAX_INSTRUCTION_CHARS) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["questions", id, "instructions"],
-          message: `instructions exceed ${MAX_INSTRUCTION_CHARS.toLocaleString("en-GB")} characters`,
-        });
-      }
-    }
-  });
-
-export type EvaluateInput = z.output<typeof evaluateInput>;
-
-/** One answer, normalised from the SDK result to exactly what agents are promised. */
-export type EvaluateAnswer =
-  | { type: "boolean"; probability: number }
-  | { type: "choice"; choice: string; probabilities?: Record<string, number> }
-  | { type: "score"; score: number; probabilities?: Record<string, number> };
-
-export type EvaluateErrorCode =
-  | "missing_config"
-  | "invalid_request"
-  | "provider_error";
-
-/** The node action's return, mirrored by its Convex `returns` validator. */
-export type EvaluateOutcome =
-  | {
-      ok: true;
-      model: string;
-      answers: Record<string, EvaluateAnswer>;
-      usage: {
-        inputTokens: number | null;
-        outputTokens: number | null;
-        totalTokens: number | null;
-      };
-      warnings: string[];
-      metadata: JsonValue | null;
-    }
-  | {
-      ok: false;
-      errorCode: EvaluateErrorCode;
-      error: string;
-      retryable: boolean;
-    };
+// Re-exported so the tool layer and its tests have one import for the whole
+// `evaluate` contract; the definitions live in `_jev/schema.ts`.
+export {
+  EVALUATE_MODEL,
+  MAX_STATE_CHARS,
+  MAX_QUESTIONS,
+  MAX_OPTIONS,
+  MAX_INSTRUCTION_CHARS,
+  evaluateInput,
+  evaluateInputShape,
+} from "../_jev/schema";
+export type {
+  EvaluateInput,
+  EvaluateAnswer,
+  EvaluateOutcome,
+} from "../_jev/schema";
 
 /** Agent-facing message for a failed outcome; never echoes the request. */
 export function evaluateErrorMessage(
