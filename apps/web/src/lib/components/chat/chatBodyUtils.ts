@@ -234,6 +234,12 @@ export const SANDBOX_CHAT_COPY = {
   asleepPlaceholder: "Wake Eva up to send a message…",
   /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
+  /**
+   * A quick task's first run owns the sandbox until it finishes, so the chat
+   * shows that turn live but cannot take a follow-up yet.
+   */
+  firstRunDisabledReason:
+    "Eva is running this task — you can reply when it finishes",
   wakeAction: "Wake up Eva",
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",

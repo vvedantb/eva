@@ -27,7 +27,7 @@ import { RunDevServerConfirmDialog } from "./_components/RunDevServerConfirmDial
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
-import { findFirstRunChatTurnRun } from "./firstRunChatTurn";
+import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
   SandboxWorkspace,
@@ -215,14 +215,20 @@ export function TaskDetailInline({
   const isQuickTask = task.projectId === undefined;
   const isSandboxViewActive = showSandbox;
 
-  // A quick task's settled first run renders as the opening chat turn in the
-  // sandbox view instead of a timeline accordion (see firstRunChatTurn.ts).
+  // A quick task's first run renders as the opening chat turn in the sandbox
+  // view (see firstRunChatTurn.ts). Once it settles there its timeline
+  // accordion goes away entirely; while it is still running the row stays —
+  // it is the only place with a Stop button and it may yet fail back into the
+  // timeline — but its activity steps and log render in the chat, not here.
   const firstRunInChat = isQuickTask
     ? findFirstRunChatTurnRun(runs)
     : undefined;
-  const timelineRuns = firstRunInChat
-    ? runs?.filter((run) => run._id !== firstRunInChat._id)
-    : runs;
+  const firstRunStreamingToChat =
+    firstRunInChat !== undefined && isRunInProgress(firstRunInChat.status);
+  const timelineRuns =
+    firstRunInChat && !firstRunStreamingToChat
+      ? runs?.filter((run) => run._id !== firstRunInChat._id)
+      : runs;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
@@ -407,6 +413,9 @@ export function TaskDetailInline({
                       createdAt={task.createdAt}
                       creatorUser={creatorUser}
                       runs={timelineRuns}
+                      {...(firstRunStreamingToChat && firstRunInChat
+                        ? { activityInChatRunId: firstRunInChat._id }
+                        : {})}
                       comments={comments}
                       taskActivity={taskActivity}
                       users={users}

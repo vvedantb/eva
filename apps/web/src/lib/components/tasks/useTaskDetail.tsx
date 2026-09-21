@@ -14,6 +14,7 @@ import {
   canEditTaskText,
   type TaskDetailTab,
 } from "./_components/task-detail-constants";
+import { taskRunStreamingEntityId } from "./firstRunChatTurn";
 
 const PREVIEW_SANDBOX_ALLOWED_STATUSES = [
   "code_review",
@@ -69,7 +70,7 @@ export function useTaskDetail(
   );
   const streaming = useQuery(
     api.streaming.get,
-    activeRun ? { entityId: `task-run-${activeRun._id}` } : "skip",
+    activeRun ? { entityId: taskRunStreamingEntityId(activeRun._id) } : "skip",
   );
   const users = useQuery(api.users.listAll);
   const projects = useQuery(

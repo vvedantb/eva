@@ -68,6 +68,7 @@ export function ActivityTimeline({
   createdAt,
   creatorUser,
   runs,
+  activityInChatRunId,
   comments,
   taskActivity,
   users,
@@ -82,6 +83,12 @@ export function ActivityTimeline({
   creatorUser: User | undefined;
   isProjectTask: boolean;
   runs: Runs | undefined;
+  /**
+   * The run whose live activity belongs to the sandbox chat instead of this
+   * timeline. Its row still renders (status, timing, Stop) with the activity
+   * steps and log left out.
+   */
+  activityInChatRunId?: Id<"agentRuns">;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
@@ -235,6 +242,7 @@ export function ActivityTimeline({
         <RunTimelineItem
           run={run}
           isActiveRun={isActiveRun}
+          activityInChat={run._id === activityInChatRunId}
           streaming={streaming}
           activeRunElapsed={activeRunElapsed}
           isStopping={isStopping}
