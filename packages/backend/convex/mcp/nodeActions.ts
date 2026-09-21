@@ -12,6 +12,7 @@ import { buildTools } from "./tools";
 import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
+import { jsonValue, type JsonValue } from "../_mcp/jsonValue";
 import {
   buildChatMessageCalls,
   decideSandboxStartPlan,
@@ -289,25 +290,6 @@ export const verifyAccessToken = internalAction({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-const jsonValue: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValue),
-    z.record(z.string(), jsonValue),
-  ]),
-);
 
 const convexSuccessResponse = z.object({
   status: z.literal("success"),

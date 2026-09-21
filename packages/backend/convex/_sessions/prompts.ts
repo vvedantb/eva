@@ -194,6 +194,7 @@ Use the eva MCP tools. That is how the work gets done:
 - \`send_agent_message\` — give an existing agent more context, an answer, or a correction.
 - \`list_agents\` / \`get_agent_state\` — see what the fleet is doing before you speak for it.
 - \`stop_agent\` — cancel a runaway.
+- \`evaluate\` — score, classify or filter many similar items (agent reports, PR titles, log lines) with a calibrated probability instead of eyeballing them; loop it inside \`execute\`.
 Read \`eva-orchestrator\` (via \`get_skill\`) for the full supervision loop and the round report format.
 
 If the user asks for work and you are unsure which repo or how to split it, ask them — one short question — then delegate. Do not start it yourself while you wait.
@@ -223,9 +224,7 @@ export function buildEditPrompt(
   const baseBranch = repo.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   // Task/project chat reuse this helper and pass spec/description as planContent.
   // Sessions pass "" — leftover plan.md must not become an "Approved plan" block.
-  const planContext = planContent
-    ? `\n\nContext:\n${planContent}`
-    : "";
+  const planContext = planContent ? `\n\nContext:\n${planContent}` : "";
   const handoff = buildSessionHandoff(conversationHistory);
   const conversationContext = handoff
     ? `\n\nPrior instructions from this session (handoff; may overlap provider memory). Earlier instructions still apply unless the user has since changed them — do not undo agreed work:\n${handoff}`
