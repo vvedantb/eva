@@ -28,6 +28,7 @@ import { buildEntityMutationArgs } from "./daemonProcess.js";
 import { persistTurnWork } from "./turnPersist.js";
 import { flushStreaming, setFinalizingState } from "./heartbeats.js";
 import { appendTurnCheckpoint } from "../runtime/turnCheckpoint.js";
+import { releaseTurnLeaseForCompletion } from "./turnLease.js";
 import type {
   JsonObject,
   JsonValue,
@@ -570,6 +571,7 @@ export async function postClaimedTurnFailureCompletion(params: {
   );
   appendClaimedTurnCompletion(completionArgs);
   appendTurnCheckpoint(completionArgs);
+  releaseTurnLeaseForCompletion();
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",
@@ -661,6 +663,10 @@ export async function deliverCompletionWithMedia(
   // Every success path runs persistTurnWork() before this, so the checkpoint's
   // afterSha is the pushed turn-end tip.
   appendTurnCheckpoint(completionArgs);
+  // The payload already carries the lease; stop heartbeating under it before
+  // the server closes the turn, or the media upload window below emits
+  // heartbeats that come back `closed` and read as a takeover (session 225).
+  releaseTurnLeaseForCompletion();
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",

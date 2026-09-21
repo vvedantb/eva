@@ -65,6 +65,18 @@ export function endTurnOwnership(): void {
   terminalReason = null;
 }
 
+/**
+ * The completion mutation is the last fenced write of a turn, and the server
+ * closes the turn as part of handling it. Call this once the completion payload
+ * carries the lease and before the request is sent: from that point every
+ * heartbeat this process could still emit would be answered `terminal: closed`
+ * for a turn it has already finished, and `noteHeartbeatResponse` must be able
+ * to tell that apart from a rival taking the turn over.
+ */
+export function releaseTurnLeaseForCompletion(): void {
+  endTurnOwnership();
+}
+
 export function getCurrentTurnLease(): TurnLeaseIdentity | null {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }

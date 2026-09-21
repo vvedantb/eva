@@ -71,6 +71,7 @@ import {
   beginTurnOwnership,
   endTurnOwnership,
   getCurrentTurnLease,
+  releaseTurnLeaseForCompletion,
 } from "../runtime/turnLease.js";
 import { log } from "../utils.js";
 import {
@@ -908,6 +909,7 @@ async function failSyntheticTurn(error: string): Promise<void> {
       ...turnLease,
     });
     appendTurnCheckpoint(completionArgs);
+    releaseTurnLeaseForCompletion();
     await callConvexWithRetry(
       "mutation",
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
@@ -994,6 +996,12 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   // that point erases anything not on origin (see turnPersist.ts).
   persistTurnWork();
   appendTurnCheckpoint(completionArgs);
+  // completeSyntheticTurn closes this turn server-side. Any heartbeat still
+  // emitted under its lease after this point is answered `closed`; the daemon
+  // used to read that as a takeover and exit 400ms after minting the next
+  // synthetic turn, which then stalled with nobody heartbeating it (session
+  // 225, 21 Sep 2026). Release first so the reply is judged stale instead.
+  releaseTurnLeaseForCompletion();
   await callConvexWithRetry(
     "mutation",
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
@@ -1572,6 +1580,7 @@ export async function runSdkDaemon(): Promise<void> {
         ...getCurrentTurnLease(),
       };
       appendTurnCheckpoint(completionArgs);
+      releaseTurnLeaseForCompletion();
       await callConvexWithRetry(
         "mutation",
         COMPLETION_MUTATION ?? "",

@@ -512,15 +512,19 @@ describe("turn lifecycle rollout", () => {
   });
 
   test("an authenticated fallback heartbeat propagates a terminal fence", () => {
-    beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 7 });
+    const lease = { turnId: "turn-1", leaseGeneration: 7 };
+    beginTurnOwnership("claim", lease);
     expect(
-      noteHeartbeatResponse({
-        status: "success",
-        value: {
-          accepted: false,
-          lease: { status: "terminal", reason: "superseded" },
+      noteHeartbeatResponse(
+        {
+          status: "success",
+          value: {
+            accepted: false,
+            lease: { status: "terminal", reason: "superseded" },
+          },
         },
-      }),
+        lease,
+      ),
     ).toBe(true);
     expect(getLeaseTerminalReason()).toBe("superseded");
     endTurnOwnership();
