@@ -6,6 +6,7 @@ import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
 import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
+import { sendEmailTool } from "../_mcp/sendEmailTool";
 import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
 import {
   entityAccess,
@@ -1305,6 +1306,22 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         }
         return textResult(result);
       },
+    }),
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // send_email — mails the calling user only (every MCP caller)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // No recipient argument: the address is looked up from the token owner, so an
+  // agent can only ever mail the user it is running for.
+  tools.push(
+    sendEmailTool(async (input) => {
+      const { userId } = await getContext();
+      return ctx.runAction(internal.mcp.sendEmail.runSendEmail, {
+        userId,
+        ...input,
+      });
     }),
   );
 
