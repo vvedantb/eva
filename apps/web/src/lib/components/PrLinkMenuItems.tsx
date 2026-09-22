@@ -13,6 +13,7 @@ import {
   IconLoader2,
 } from "@tabler/icons-react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 import { prStateIconClass } from "./prStateIconClass";
 
 interface PrLinkMenuItemsArgs {
@@ -21,7 +22,10 @@ interface PrLinkMenuItemsArgs {
   prUrl: string | undefined;
   /** Colours the View PR icon (sessions only); others leave it default. */
   prState?: "draft" | "open" | "merged" | "closed";
-  /** True when a deployment exists — renders the disabled View Preview hint. */
+  /**
+   * True when a deployment exists — renders the disabled View Preview hint,
+   * behind the `viewVercelDeployment` experimental flag.
+   */
   hasDeployment: boolean;
 }
 
@@ -37,9 +41,11 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
   items: ReactNode;
 } {
   const simpleView = useSimpleView();
+  const viewVercelDeployment = useViewVercelDeployment();
   const showCreatePr = !simpleView && Boolean(args.createPr?.enabled);
   const showViewPr = !simpleView && args.prUrl !== undefined;
-  const showViewPreview = !simpleView && args.hasDeployment;
+  const showViewPreview =
+    !simpleView && viewVercelDeployment && args.hasDeployment;
   const hasItems = showCreatePr || showViewPr || showViewPreview;
   const createPr = args.createPr;
 

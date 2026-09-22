@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, motionFast } from "@eva/ui";
+import { Button, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconInfoCircle } from "@tabler/icons-react";
 import {
@@ -12,16 +12,20 @@ import {
 interface DraftReadinessBannerProps {
   result: DraftReadiness | null;
   onDismiss: () => void;
+  /** Spacing for the surface it sits on; the modal and composer differ. */
+  className?: string;
 }
 
 /**
- * Slim strip under the quick-task description when the draft looks too vague
- * for an agent to start on. Advisory only — nothing blocks Create Task, and
- * dismissing hides it for the text it was judged against.
+ * Slim strip beside the draft — the quick-task description or the chat
+ * composer — when it looks too vague for an agent to start on. Advisory only:
+ * nothing blocks sending, and dismissing hides it for the text it was judged
+ * against.
  */
 export function DraftReadinessBanner({
   result,
   onDismiss,
+  className,
 }: DraftReadinessBannerProps) {
   const hints = result === null ? [] : readinessHints(result.missing);
   const lead = "This may be too vague to run well.";
@@ -33,7 +37,10 @@ export function DraftReadinessBanner({
     <AnimatePresence>
       {shouldNudge(result) ? (
         <m.div
-          className="mx-5 mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5"
+          className={cn(
+            "mx-5 mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5",
+            className,
+          )}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}

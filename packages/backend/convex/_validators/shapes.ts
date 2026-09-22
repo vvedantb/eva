@@ -192,6 +192,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("simpleView"),
   v.literal("replyChime"),
   v.literal("disablePageMotion"),
+  v.literal("viewVercelDeployment"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -203,6 +204,7 @@ export const experimentalFlagsFields = {
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
   disablePageMotion: v.optional(v.boolean()),
+  viewVercelDeployment: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -216,6 +218,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   simpleView: v.boolean(),
   replyChime: v.boolean(),
   disablePageMotion: v.boolean(),
+  viewVercelDeployment: v.boolean(),
 });
 
 /**

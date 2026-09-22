@@ -371,14 +371,18 @@ export function ChatBody({
           void onSend(message);
         };
 
+  // Undefined rather than an empty array: the caller slots this into a wrapper
+  // that must not render (and take margin) when the turn has no panels.
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
-    panels.map((panel) => (
-      <ChatUiPanel
-        key={panel._id}
-        spec={panel.spec}
-        onReply={handlePanelReply}
-      />
-    ));
+    panels.length === 0
+      ? undefined
+      : panels.map((panel) => (
+          <ChatUiPanel
+            key={panel._id}
+            spec={panel.spec}
+            onReply={handlePanelReply}
+          />
+        ));
 
   const renderMessage = (message: ChatBodyMessage) => {
     const isStreamingTarget = message._id === streamingTargetId;
@@ -419,9 +423,11 @@ export function ChatBody({
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
           onRetryTurn={handleRetryTurn}
           precedingUser={precedingUser}
+          belowContent={renderChatUiPanels(
+            panelPlacement.byMessageId.get(message._id) ?? [],
+          )}
         />
         {afterMessage?.(message._id)}
-        {renderChatUiPanels(panelPlacement.byMessageId.get(message._id) ?? [])}
       </div>
     );
   };

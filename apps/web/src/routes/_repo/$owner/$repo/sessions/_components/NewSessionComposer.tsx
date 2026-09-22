@@ -25,6 +25,7 @@ import {
   defaultProviderAccountId,
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 
 /**
@@ -137,7 +138,9 @@ export function NewSessionComposer() {
       });
       clearDraft();
       codebases.clear();
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Couldn't create session";
