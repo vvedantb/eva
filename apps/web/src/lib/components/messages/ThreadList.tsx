@@ -12,6 +12,7 @@ import {
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import {
   LIST_STATUS_ORDER,
+  participantNames,
   statusClass,
   statusLabel,
 } from "@/lib/components/messages/status";
@@ -107,8 +108,12 @@ function ThreadRow({
         >
           {thread.title}
         </span>
+        {/* On a fresh thread the preview is the question, which the title above
+            already says. Show who was asked instead of saying it twice. */}
         <span className="truncate text-xs leading-relaxed text-muted-foreground">
-          {thread.lastPreview}
+          {thread.lastPreview === thread.title
+            ? participantNames(thread.participants)
+            : thread.lastPreview}
         </span>
       </div>
       <RelativeDateTime

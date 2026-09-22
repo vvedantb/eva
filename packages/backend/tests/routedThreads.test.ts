@@ -12,7 +12,12 @@ const DESIGNER_CLERK = "clerk|routed-designer";
 const DESIGNER_2_CLERK = "clerk|routed-designer-2";
 const STRANGER_CLERK = "clerk|routed-stranger";
 
-async function fixture(opts?: { personalTeam?: boolean }) {
+/**
+ * `personalTeam` only flips the `isPersonal` flag; `soloTeam` is what decides
+ * whether anyone else is on the team. They are separate because production has
+ * personal-flagged teams with several members.
+ */
+async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
     const now = Date.now();
@@ -42,7 +47,7 @@ async function fixture(opts?: { personalTeam?: boolean }) {
       role: "owner",
       joinedAt: now,
     });
-    if (!opts?.personalTeam) {
+    if (!opts?.soloTeam) {
       await ctx.db.insert("teamMembers", {
         teamId,
         userId: designerUserId,
@@ -252,9 +257,9 @@ describe("ask_teammate", () => {
   );
 
   test(
-    "skips personal teams",
+    "refuses when the actor is the only person on the team",
     async () => {
-      const f = await fixture({ personalTeam: true });
+      const f = await fixture({ personalTeam: true, soloTeam: true });
       const result = await f.asOwner.mutation(api.routedThreads.ask, {
         sourceKind: "session",
         sourceId: f.sessionId,
@@ -265,7 +270,35 @@ describe("ask_teammate", () => {
       });
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error).toMatch(/Personal teams/i);
+      expect(result.error).toMatch(/Nobody else is on this team/i);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "routes on a personal-flagged team that has other members",
+    async () => {
+      // Production shape: the team people actually work in is `isPersonal` and
+      // has five members, so the flag must not block routing.
+      const f = await fixture({ personalTeam: true });
+      const result = await f.asOwner.mutation(api.routedThreads.ask, {
+        sourceKind: "session",
+        sourceId: f.sessionId,
+        question: "Which empty-state illustration should we ship?",
+        context: ASK_CONTEXT,
+        topicKey: "personal-team-routing",
+        role: "designer",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.participants.map((row) => row.userId)).toEqual([
+        f.designerUserId,
+      ]);
+
+      const teams = await f.t.query(internal.workProfiles.listForAgent, {
+        userId: f.ownerUserId,
+      });
+      expect(teams).toHaveLength(1);
     },
     TIMEOUT_MS,
   );

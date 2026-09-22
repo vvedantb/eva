@@ -81,9 +81,13 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
   const sourceLabel = thread.sourceNumId
     ? `${sourceKindLabel(thread.sourceKind)} ${thread.sourceNumId}`
     : sourceKindLabel(thread.sourceKind);
+  // Only worth saying once someone has actually answered. Before that it just
+  // repeats the "To …" list verbatim.
   const outstanding = thread.participants.filter(
     (participant) => participant.needsReply,
   );
+  const showOutstanding =
+    outstanding.length > 0 && outstanding.length < thread.participants.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -117,8 +121,8 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
                 {thread.sourceTitle ? ` · ${thread.sourceTitle}` : ""}
               </>
             )}
-            {outstanding.length > 0
-              ? ` · Waiting on ${participantNames(outstanding)}`
+            {showOutstanding
+              ? ` · Still waiting on ${participantNames(outstanding)}`
               : ""}
           </p>
         </div>

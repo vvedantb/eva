@@ -14,7 +14,7 @@ import {
   startNextQueuedSessionMessage,
   startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
-import { listDirectoryForTeam } from "./workProfiles";
+import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
   DEFAULT_AI_MODEL,
   roleUserValidator,
@@ -89,6 +89,11 @@ function previewOf(body: string): string {
 function titleOf(question: string): string {
   const trimmed = question.trim().replace(/\s+/g, " ");
   return trimmed.length > 120 ? `${trimmed.slice(0, 117)}…` : trimmed;
+}
+
+/** A title quoted mid-sentence keeps its own punctuation out of ours. */
+function quotedTitle(question: string): string {
+  return `"${titleOf(question).replace(/[.?!]+$/, "")}"`;
 }
 
 function sourceKindLabel(kind: SourceKind): string {
@@ -500,10 +505,19 @@ async function gateAsk(
     };
   }
   const team = await ctx.db.get(repo.teamId);
-  if (!team || team.isPersonal === true) {
+  if (!team) {
     return {
       ok: false,
-      error: "Personal teams skip routing. Ask in the session chat.",
+      error: "This repo is not on a team. Ask in the session chat.",
+    };
+  }
+  // Count members rather than reading `team.isPersonal`: a team can be flagged
+  // personal and still have several people on it (that is the main working team
+  // in production), so the flag does not answer "is there anyone to ask".
+  if (!(await teamHasOtherMembers(ctx, team._id, actorUserId))) {
+    return {
+      ok: false,
+      error: "Nobody else is on this team to ask. Ask in the session chat instead.",
     };
   }
   if (!(await hasTeamAccess(ctx.db, repo.teamId, actorUserId))) {
@@ -548,9 +562,9 @@ export const listTeam = authQuery({
         .query("teamMembers")
         .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
         .collect();
+      // Same rule as routing itself: default to a team with someone else on it.
       for (const membership of memberships) {
-        const team = await ctx.db.get(membership.teamId);
-        if (team && team.isPersonal !== true) {
+        if (await teamHasOtherMembers(ctx, membership.teamId, ctx.userId)) {
           teamId = membership.teamId;
           break;
         }
@@ -916,8 +930,8 @@ async function askCore(
     ctx,
     source,
     solo
-      ? `Asked ${solo.name}${roleLabel} about ${titleOf(question)}. Their reply will land in Messages and continue this chat.`
-      : `Asked ${participants.map((row) => row.name).join(", ")} about ${titleOf(question)}. Replies land in Messages and continue this chat.`,
+      ? `Asked ${solo.name}${roleLabel} about ${quotedTitle(question)}. Their reply will land in Messages and continue this chat.`
+      : `Asked ${participants.map((row) => row.name).join(", ")} about ${quotedTitle(question)}. Replies land in Messages and continue this chat.`,
   );
   for (const person of participants) {
     await createNotification(ctx, {

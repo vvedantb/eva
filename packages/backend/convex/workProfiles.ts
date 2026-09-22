@@ -29,6 +29,27 @@ function displayName(user: {
   return user.fullName || user.firstName || user.email || "Teammate";
 }
 
+/**
+ * Is there anyone on this team other than `exceptUserId`?
+ *
+ * Routing asks this instead of reading `team.isPersonal`, because a team can be
+ * flagged personal and still have several members — that is the shape of the
+ * main working team in production — so the flag does not answer "is there
+ * anyone to ask". Two rows are enough: if either is not the excluded user,
+ * somebody else is on the team.
+ */
+export async function teamHasOtherMembers(
+  ctx: QueryCtx,
+  teamId: Id<"teams">,
+  exceptUserId: Id<"users">,
+): Promise<boolean> {
+  const members = await ctx.db
+    .query("teamMembers")
+    .withIndex("by_team", (q) => q.eq("teamId", teamId))
+    .take(2);
+  return members.some((member) => member.userId !== exceptUserId);
+}
+
 async function firstMembershipTeamId(
   ctx: QueryCtx,
   userId: Id<"users">,
@@ -39,8 +60,7 @@ async function firstMembershipTeamId(
     .collect();
   if (memberships.length === 0) return null;
   for (const row of memberships) {
-    const team = await ctx.db.get(row.teamId);
-    if (team && team.isPersonal !== true) return row.teamId;
+    if (await teamHasOtherMembers(ctx, row.teamId, userId)) return row.teamId;
   }
   return memberships[0].teamId;
 }
@@ -180,7 +200,7 @@ export async function listDirectoryForTeam(
   return out;
 }
 
-/** MCP roster: every non-personal team the agent user belongs to. */
+/** MCP roster: every team the agent user shares with at least one other person. */
 export const listForAgent = internalQuery({
   args: { userId: v.string() },
   returns: v.array(
@@ -200,7 +220,8 @@ export const listForAgent = internalQuery({
     const teams = [];
     for (const membership of memberships) {
       const team = await ctx.db.get(membership.teamId);
-      if (!team || team.isPersonal === true) continue;
+      if (!team) continue;
+      if (!(await teamHasOtherMembers(ctx, team._id, userId))) continue;
       teams.push({
         teamId: team._id,
         teamName: team.name,
