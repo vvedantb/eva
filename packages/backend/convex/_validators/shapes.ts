@@ -21,8 +21,9 @@ export const repoShaValidator = v.object({
  * (`callback-src/runtime/turnCheckpoint.ts`), whatever the surface. Every
  * completion receiver must spread these into its args: a closed validator
  * rejects the whole call with ArgumentValidationError, the reply is lost and
- * the turn hangs on "Working…". Only sessions persist them
- * (`messageFields.beforeSha`); other surfaces accept and ignore them.
+ * the turn hangs on "Working…". Session, quick-task and project chat persist
+ * them (`messageFields.beforeSha`); other surfaces accept and ignore them, and
+ * the callback's own allow-list stops it stamping those in the first place.
  */
 export const turnCheckpointArgs = {
   beforeSha: v.optional(v.string()),
@@ -30,8 +31,8 @@ export const turnCheckpointArgs = {
   /**
    * Multi-repo turn checkpoints (see `messageFields.beforeShas`): one entry
    * per checked-out repo. Every completion receiver accepts these so the
-   * sandbox callback's argument shape stays uniform across surfaces; only
-   * sessions persist them.
+   * sandbox callback's argument shape stays uniform across surfaces; the three
+   * chat surfaces persist them.
    */
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),

@@ -950,10 +950,10 @@ export const messageFields = {
   // User-role wake-up row inserted into the master session when a watched
   // child agent finishes. Drives distinct UI styling.
   orchestratorNotification: v.optional(v.boolean()),
-  // Turn checkpoint (assistant rows, sessions only): sandbox git HEAD when the
-  // turn started and after persistTurnWork committed/pushed at turn end. Equal
-  // shas mean the turn changed no code. Absent on turns from pre-checkpoint
-  // callback bundles and on task runs.
+  // Turn checkpoint (assistant rows on session, quick-task and project chat):
+  // sandbox git HEAD when the turn started and after persistTurnWork
+  // committed/pushed at turn end. Equal shas mean the turn changed no code.
+  // Absent on turns from pre-checkpoint callback bundles and on task runs.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
   // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
@@ -963,7 +963,8 @@ export const messageFields = {
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
   // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
-  // what the prompt asked for. Needs beforeSha/afterSha, so sessions only today.
+  // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
+  // three chat surfaces; task runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
 };
 

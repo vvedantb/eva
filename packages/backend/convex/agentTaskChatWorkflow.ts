@@ -919,6 +919,10 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       activityLog: result.activityLog,
       model: args.model,
       pendingQuestion: result.pendingQuestion,
+      beforeSha: result.beforeSha,
+      afterSha: result.afterSha,
+      beforeShas: result.beforeShas,
+      afterShas: result.afterShas,
     });
 
     if (result.success && activeSandboxId && data.branchName) {
@@ -1066,11 +1070,33 @@ export const saveResult = internalMutation({
     /** Stamped onto the reply on success, making it this provider's checkpoint. */
     model: v.optional(aiModelValidator),
     pendingQuestion: v.optional(v.string()),
+    /** Turn checkpoint from the callback (see messageFields.beforeSha). */
+    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
+
+    // A typed local, not an inline literal: `AssistantTurnResultPatch` declares
+    // only the scalar shas, so excess-property checking would reject the
+    // per-repo arrays at the call site. Each pair is copied only when both
+    // halves are present — a lone `afterSha` would make the turn look like it
+    // changed code from nothing.
+    const extraPatch: {
+      beforeSha?: string;
+      afterSha?: string;
+      beforeShas?: Array<{ path: string; sha: string }>;
+      afterShas?: Array<{ path: string; sha: string }>;
+    } = {};
+    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
+      extraPatch.beforeSha = args.beforeSha;
+      extraPatch.afterSha = args.afterSha;
+    }
+    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
+      extraPatch.beforeShas = args.beforeShas;
+      extraPatch.afterShas = args.afterShas;
+    }
 
     const outcome = await applyChatTurnResult(ctx, {
       parentId: args.taskId,
@@ -1082,6 +1108,7 @@ export const saveResult = internalMutation({
       alertTitle: "Failed to publish task branch",
       pendingQuestion: args.pendingQuestion,
       model: args.model,
+      extraPatch,
     });
     if (outcome === "publish-failure") return null;
 
@@ -1139,6 +1166,10 @@ export const handleCompletion = authMutation({
         error: args.error,
         activityLog: args.activityLog,
         pendingQuestion: args.pendingQuestion,
+        beforeSha: args.beforeSha,
+        afterSha: args.afterSha,
+        beforeShas: args.beforeShas,
+        afterShas: args.afterShas,
       },
     );
 

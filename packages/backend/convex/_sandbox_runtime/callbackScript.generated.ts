@@ -2114,8 +2114,15 @@ function currentBranch() {
   );
   return result.status === 0 ? (result.stdout || "").trim() : "";
 }
+var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
+  "sessionId",
+  "taskId",
+  "projectId"
+]);
 function appendTurnCheckpoint(args) {
-  if (ENTITY_ID_FIELD !== "sessionId") return;
+  if (ENTITY_ID_FIELD === void 0 || !CHECKPOINTED_ENTITY_ID_FIELDS.has(ENTITY_ID_FIELD)) {
+    return;
+  }
   if (RUN_ID || turnStartSha === "") return;
   if (!currentBranch().startsWith("eva/")) return;
   const afterSha = readGitHeadSha();
