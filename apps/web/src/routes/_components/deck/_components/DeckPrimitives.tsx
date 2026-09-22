@@ -14,6 +14,20 @@ export function useDeckStep(): number {
   return use(DeckStepContext);
 }
 
+/** Light or dark slides sit in the same deck. */
+export type DeckTheme = "dark" | "light";
+
+/**
+ * The surface the active slide is painted on. `Deck`, `PresenterView` and the
+ * index page's preview boxes all provide it, so a slide picks its own text
+ * colours from here rather than assuming the deck is dark.
+ */
+export const DeckThemeContext = createContext<DeckTheme>("dark");
+
+export function useDeckTheme(): DeckTheme {
+  return use(DeckThemeContext);
+}
+
 /** Decelerating curve, no overshoot — the deck uses this everywhere. */
 export const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
 

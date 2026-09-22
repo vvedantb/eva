@@ -1,9 +1,10 @@
 import type { KeyboardEvent } from "react";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button, cn } from "@eva/ui";
 import type { DeckSlide } from "../slides/types";
 import { getSpeakerNotes } from "../speakerNotes";
-import { DeckStepContext } from "./DeckPrimitives";
+import { DeckStepContext, DeckThemeContext } from "./DeckPrimitives";
+import { DECK_TONES } from "./deckTone";
 import { DeckAmbient } from "./DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./DeckCamera";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./deckStage";
@@ -44,6 +45,8 @@ export function PresenterView({
 
   const { entry, step, total } = nav;
   const upcoming = slide < total ? slides[slide] : undefined;
+  // The preview has to match the stage, including a light slide's surface.
+  const theme = entry.theme ?? "dark";
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (isTypingTarget(event.target)) return;
@@ -83,13 +86,18 @@ export function PresenterView({
             }}
             // The frame sits on the canvas itself, so the border hugs the slide
             // rather than the letterboxed pane around it.
-            className="relative shrink-0 overflow-hidden rounded-[20px] bg-zinc-950 ring-2 ring-white/10"
+            className={cn(
+              "relative shrink-0 overflow-hidden rounded-[20px] ring-2 ring-white/10",
+              DECK_TONES[theme].stage,
+            )}
           >
-            <DeckAmbient />
+            <DeckAmbient theme={theme} />
             {/* Keyed on the slide id so a slide change remounts the build. */}
-            <DeckStepContext key={entry.id} value={step}>
-              <entry.Component />
-            </DeckStepContext>
+            <DeckThemeContext value={theme}>
+              <DeckStepContext key={entry.id} value={step}>
+                <entry.Component />
+              </DeckStepContext>
+            </DeckThemeContext>
           </div>
         </div>
 

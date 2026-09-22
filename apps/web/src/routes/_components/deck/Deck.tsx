@@ -1,28 +1,42 @@
 import { useState } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
+import { cn } from "@eva/ui";
 import type { DeckSlide } from "./slides/types";
-import { DeckStepContext, EASE_OUT } from "./_components/DeckPrimitives";
+import {
+  DeckStepContext,
+  DeckThemeContext,
+  EASE_OUT,
+} from "./_components/DeckPrimitives";
 import { DeckAmbient } from "./_components/DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./_components/DeckCamera";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
+import { DECK_TONES } from "./_components/deckTone";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./_components/deckStage";
 import {
   handleStepKey,
   isTypingTarget,
   useDeckNavigation,
 } from "./_components/deckNavigation";
+import type { DeckNavigation } from "./_components/deckNavigation";
 import { deckSyncRef } from "./_components/deckSyncRef";
 import {
   openPresenterWindow,
   postDeckMessage,
 } from "./_components/presenterSync";
+import { useLiveShare } from "./_components/useLiveShare";
 
 interface DeckProps {
   slides: readonly DeckSlide[];
   slide: number;
-  onNavigate: (slide: number) => void;
+  /** Present when this window is hosting or following a live session. */
+  sessionCode: string | undefined;
+  /** Writes `slide` and `session` back into the route's search params. */
+  updateSearch: (next: {
+    slide?: number;
+    session?: string | undefined;
+  }) => void;
   /** The deck's own route path, e.g. "/slides/annual-cdm". Also the sync channel key. */
   basePath: string;
 }
@@ -52,23 +66,43 @@ const slideVariants = {
   }),
 };
 
-export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
-  const nav = useDeckNavigation(slides, slide, onNavigate, (next, step) =>
-    postDeckMessage({ deck: basePath, slide: next, step }),
+export function Deck({
+  slides,
+  slide,
+  sessionCode,
+  updateSearch,
+  basePath,
+}: DeckProps) {
+  const share = useLiveShare({ slide, sessionCode, updateSearch });
+  // The stage renders the host's slide when following, its own otherwise, so
+  // everything below — build steps, direction, the outline — follows from it.
+  const nav = useDeckNavigation(
+    slides,
+    share.effectiveSlide,
+    share.onNavigate,
+    (next, step) => postDeckMessage({ deck: basePath, slide: next, step }),
   );
   const stage = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
   const [outlineOpen, setOutlineOpen] = useState(false);
 
   const { entry, step, direction, total } = nav;
+  const theme = entry.theme ?? "dark";
+
+  // A follower is a passenger: every way of moving the deck by hand is taken
+  // away in one place, rather than guarded at each call site. `applyRemote` is
+  // untouched, so a host's own presenter window still drives this stage.
+  const driven: DeckNavigation = share.isFollower
+    ? { ...nav, next: noop, prev: noop, goTo: noop }
+    : nav;
 
   function openPresenter() {
-    openPresenterWindow(basePath, slide);
+    openPresenterWindow(basePath, share.effectiveSlide);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (isTypingTarget(event.target)) return;
-    if (handleStepKey(event, nav)) return;
+    if (handleStepKey(event, driven)) return;
     const root = event.currentTarget;
 
     switch (event.key) {
@@ -106,8 +140,8 @@ export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
       return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    if (event.clientX - rect.left < rect.width * 0.25) nav.prev();
-    else nav.next();
+    if (event.clientX - rect.left < rect.width * 0.25) driven.prev();
+    else driven.next();
   }
 
   return (
@@ -118,22 +152,27 @@ export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
       autoFocus
       // The deck owns the keys, so it has to hold focus from the first paint —
       // `autoFocus` alone does not land on a non-form host element. The same
-      // callback attaches the presenter-window sync.
+      // callback attaches the presenter-window sync and restores the host role
+      // after a reload, keeping `localStorage` out of render.
       ref={(el) => {
         if (!el) return;
         el.focus();
+        share.restoreHost();
         return syncRef(el);
       }}
       onKeyDown={handleKeyDown}
-      className="fixed inset-0 flex overflow-hidden bg-zinc-950 font-sans text-white outline-none select-none"
+      className={cn(
+        "fixed inset-0 flex overflow-hidden font-sans outline-none transition-colors duration-500 select-none",
+        DECK_TONES[theme].stage,
+      )}
     >
-      <DeckAmbient />
+      <DeckAmbient theme={theme} />
 
       <DeckOutline
         slides={slides}
         open={outlineOpen}
-        slide={slide}
-        onNavigate={nav.goTo}
+        slide={share.effectiveSlide}
+        onNavigate={driven.goTo}
         onClose={() => setOutlineOpen(false)}
       />
 
@@ -162,7 +201,7 @@ export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
               freeze mount-time animations on a direct `?slide=n` load. */}
           <AnimatePresence mode="popLayout" custom={direction}>
             <m.div
-              key={slide}
+              key={share.effectiveSlide}
               custom={direction}
               variants={slideVariants}
               initial="enter"
@@ -170,20 +209,29 @@ export function Deck({ slides, slide, onNavigate, basePath }: DeckProps) {
               exit="exit"
               className="absolute inset-0"
             >
-              <DeckStepContext value={step}>
-                <entry.Component />
-              </DeckStepContext>
+              <DeckThemeContext value={theme}>
+                <DeckStepContext value={step}>
+                  <entry.Component />
+                </DeckStepContext>
+              </DeckThemeContext>
             </m.div>
           </AnimatePresence>
         </div>
 
         <DeckChrome
-          slide={slide}
+          slide={share.effectiveSlide}
           total={total}
+          theme={theme}
+          share={share}
+          basePath={basePath}
           onToggleOutline={() => setOutlineOpen((open) => !open)}
           onOpenPresenter={openPresenter}
         />
       </div>
     </div>
   );
+}
+
+function noop() {
+  return undefined;
 }

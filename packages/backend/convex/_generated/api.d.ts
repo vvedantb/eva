@@ -377,6 +377,7 @@ import type * as pendingQuestions from "../pendingQuestions.js";
 import type * as prBody from "../prBody.js";
 import type * as prRecapWorkflow from "../prRecapWorkflow.js";
 import type * as presence from "../presence.js";
+import type * as presentations from "../presentations.js";
 import type * as previewGrant from "../previewGrant.js";
 import type * as previewGrantConfig from "../previewGrantConfig.js";
 import type * as projectChatWorkflow from "../projectChatWorkflow.js";
@@ -827,6 +828,7 @@ declare const fullApi: ApiFromModules<{
   prBody: typeof prBody;
   prRecapWorkflow: typeof prRecapWorkflow;
   presence: typeof presence;
+  presentations: typeof presentations;
   previewGrant: typeof previewGrant;
   previewGrantConfig: typeof previewGrantConfig;
   projectChatWorkflow: typeof projectChatWorkflow;
