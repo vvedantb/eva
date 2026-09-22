@@ -1,4 +1,3 @@
-import type { Id } from "../_generated/dataModel";
 import {
   buildImplementationSteps,
   buildSummarySection,
@@ -10,31 +9,6 @@ import {
   buildSystemPromptBlock,
 } from "../prompts";
 import { buildTypecheckCommand } from "../_sandbox_runtime/typecheckCommand";
-
-/** Builds a user-facing notification message for a workflow run completion. */
-export function buildWorkflowRunNotificationMessage(params: {
-  success: boolean;
-  projectId: Id<"projects"> | undefined;
-  error: string | null;
-  prUrl: string | null;
-}): string {
-  const scopeLabel = params.projectId ? "project task" : "quick task";
-  if (params.success) {
-    if (params.prUrl) {
-      return `Run succeeded for this ${scopeLabel}. Pull request: ${params.prUrl}`;
-    }
-    return `Run succeeded for this ${scopeLabel}.`;
-  }
-  if (params.error) {
-    const trimmedError = params.error.trim();
-    const clippedError =
-      trimmedError.length > 200
-        ? `${trimmedError.slice(0, 197)}...`
-        : trimmedError;
-    return `Run failed for this ${scopeLabel}. ${clippedError}`;
-  }
-  return `Run failed for this ${scopeLabel}.`;
-}
 
 /**
  * A reviewer change request prepared for a re-run prompt.
