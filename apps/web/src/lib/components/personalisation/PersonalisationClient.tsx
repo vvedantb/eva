@@ -6,7 +6,6 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import {
   Textarea,
-  Input,
   Button,
   Spinner,
   Collapsible,
@@ -16,6 +15,7 @@ import {
 import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { RolePresetPicker } from "./RolePresetPicker";
+import { WorkProfileSection } from "./WorkProfileSection";
 import {
   catchMutationError,
   withMutationToast,
@@ -23,11 +23,6 @@ import {
 
 export function PersonalisationClient() {
   const personalisation = useQuery(api.auth.getPersonalisation);
-  const workProfile = useQuery(api.workProfiles.getMine);
-  const upsertWorkProfile = useMutation(api.workProfiles.upsertMine);
-  const headlineRef = useRef<HTMLInputElement>(null);
-  const ownsRef = useRef<HTMLTextAreaElement>(null);
-  const askRef = useRef<HTMLTextAreaElement>(null);
   const setCustomInstructions = useMutation(
     api.auth.setCustomInstructions,
   ).withOptimisticUpdate((localStore, args) => {
@@ -93,39 +88,6 @@ export function PersonalisationClient() {
     setIsSaving(false);
   };
 
-<<<<<<< HEAD
-  useEffect(() => {
-    if (textareaRef.current && personalisation) {
-      textareaRef.current.value = personalisation.customInstructions ?? "";
-    }
-  }, [personalisation]);
-
-  useEffect(() => {
-    if (!workProfile) return;
-    if (headlineRef.current) headlineRef.current.value = workProfile.headline;
-    if (ownsRef.current) ownsRef.current.value = workProfile.owns;
-    if (askRef.current) askRef.current.value = workProfile.askMeAbout;
-  }, [workProfile]);
-
-  const handleSaveProfile = async () => {
-    try {
-      await withMutationToast(
-        upsertWorkProfile({
-          headline: headlineRef.current?.value ?? "",
-          owns: ownsRef.current?.value ?? "",
-          askMeAbout: askRef.current?.value ?? "",
-        }),
-        "Work profile saved",
-        "Couldn't save work profile",
-        "work-profile",
-      );
-    } catch {
-      // Toast already shown.
-    }
-  };
-
-=======
->>>>>>> origin/main
   if (!personalisation) {
     return (
       <SettingsPage title="Personalisation">
@@ -174,53 +136,7 @@ export function PersonalisationClient() {
         </div>
       </SettingsSection>
 
-      <SettingsSection
-        title="Work profile"
-        description="Eva uses this to route design and product questions to you."
-        footer={
-          <Button size="sm" onClick={() => void handleSaveProfile()}>
-            Save profile
-          </Button>
-        }
-      >
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium" htmlFor="work-headline">
-              Headline
-            </label>
-            <Input
-              id="work-headline"
-              ref={headlineRef}
-              placeholder="Product designer — CarePulse web"
-              defaultValue={workProfile?.headline ?? ""}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium" htmlFor="work-owns">
-              What you own
-            </label>
-            <Textarea
-              id="work-owns"
-              ref={ownsRef}
-              className="min-h-[72px] text-sm"
-              placeholder="Empty states, IA, visual polish on web"
-              defaultValue={workProfile?.owns ?? ""}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium" htmlFor="work-ask">
-              Ask me about
-            </label>
-            <Textarea
-              id="work-ask"
-              ref={askRef}
-              className="min-h-[72px] text-sm"
-              placeholder="Spacing, copy, which variation to ship"
-              defaultValue={workProfile?.askMeAbout ?? ""}
-            />
-          </div>
-        </div>
-      </SettingsSection>
+      <WorkProfileSection />
 
       <SettingsSection
         title="Custom instructions"

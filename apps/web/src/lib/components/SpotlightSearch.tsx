@@ -31,109 +31,12 @@ import {
 } from "@/lib/components/_components/spotlightGroups";
 import { SpotlightItem } from "@/lib/components/_components/SpotlightItem";
 
-<<<<<<< HEAD
-type SpotlightHit = FunctionReturnType<typeof api.spotlight.search>[number];
-
-type HitType = SpotlightHit["type"];
-
-const GROUP_ORDER: HitType[] = [
-  "page",
-  "repo",
-  "team",
-  "project",
-  "task",
-  "session",
-  "doc",
-  "automation",
-  "artifact",
-];
-
-const GROUP_LABEL: Record<HitType, string> = {
-  page: "Pages",
-  repo: "Repos",
-  team: "Teams",
-  project: "Projects",
-  task: "Tasks",
-  session: "Sessions",
-  doc: "Documents",
-  automation: "Automations",
-  artifact: "Artifacts",
-};
-
-const TYPE_ICON: Record<
-  HitType,
-  ComponentType<{ size?: number; className?: string }>
-> = {
-  page: IconFolder,
-  repo: IconBox,
-  team: IconUsers,
-  project: IconLayoutKanban,
-  task: IconChecklist,
-  session: IconTerminal2,
-  doc: IconFileText,
-  automation: IconRobot,
-  artifact: IconFileCode,
-};
-
-function iconForPageTitle(title: string) {
-  switch (title) {
-    case "Home":
-      return IconHome;
-    case "Inbox":
-      return IconInbox;
-    case "Messages":
-      return IconInbox;
-    case "Sessions":
-      return IconTerminal2;
-    case "Projects":
-      return IconLayoutKanban;
-    case "Quick Tasks":
-      return IconChecklist;
-    case "Documents":
-      return IconFileText;
-    case "Testing Arena":
-      return IconFlask;
-    case "Stats":
-      return IconChartBar;
-    case "Settings":
-      return IconSettings;
-    case "Teams":
-      return IconUsers;
-    case "Artifacts":
-      return IconFileCode;
-    case "Automations":
-      return IconRobot;
-    default:
-      return IconSearch;
-  }
-}
-
-function groupHits(hits: SpotlightHit[]): Array<{
-  type: HitType;
-  items: SpotlightHit[];
-}> {
-  const buckets = new Map<HitType, SpotlightHit[]>();
-  for (const hit of hits) {
-    const existing = buckets.get(hit.type);
-    if (existing) {
-      existing.push(hit);
-    } else {
-      buckets.set(hit.type, [hit]);
-    }
-  }
-  return GROUP_ORDER.flatMap((type) => {
-    const items = buckets.get(type);
-    if (!items || items.length === 0) return [];
-    return [{ type, items }];
-  });
-=======
 /** What a selected row records in Recents — the shape both hits and recents share. */
 interface SelectableHit {
   type: string;
   title: string;
   subtitle: string;
   href: string;
->>>>>>> origin/main
 }
 
 export function SpotlightSearch() {
