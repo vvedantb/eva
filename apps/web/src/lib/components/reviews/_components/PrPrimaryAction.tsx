@@ -28,6 +28,7 @@ import {
   IconGitPullRequest,
 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
 import type { PrOverview } from "./prOverviewMeta";
 import {
@@ -282,7 +283,9 @@ function RevertAction({ overview }: { overview: PrOverview }) {
         message,
         baseBranch: overview.baseRef,
       });
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Couldn't start a session",
