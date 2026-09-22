@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
-import type { DraftReadiness } from "../_components/readinessHints";
+import type { DraftReadiness } from "./readinessHints";
 
 /** Long enough that the judgement lands in a pause, not between two words. */
 export const READINESS_IDLE_MS = 800;
@@ -16,14 +16,17 @@ interface DraftReadinessState {
 }
 
 /**
- * Judges the open quick-task draft once typing goes idle, and remembers which
- * exact text the verdict belongs to. Editing past a judged draft hides the
- * banner until the next verdict arrives, so the nudge never describes text
- * that is no longer on screen.
+ * Judges a draft prompt once typing goes idle, and remembers which exact text
+ * the verdict belongs to. Editing past a judged draft hides the banner until
+ * the next verdict arrives, so the nudge never describes text that is no
+ * longer on screen.
+ *
+ * Shared by the quick-task modal (title plus description) and the chat
+ * composer (the message on its own, hence the optional title).
  */
 export function useDraftReadiness(): {
   resultFor: (description: string) => DraftReadiness | null;
-  noteChange: (title: string, description: string) => void;
+  noteChange: (description: string, title?: string) => void;
   dismiss: () => void;
   reset: () => void;
 } {
@@ -48,7 +51,7 @@ export function useDraftReadiness(): {
       if (dismissedFor === description) return null;
       return state.result;
     },
-    noteChange: (title, description) => {
+    noteChange: (description, title = "") => {
       const trimmed = description.trim();
       if (trimmed.length < READINESS_MIN_CHARS) return;
       // Mid-mention or mid-skill: the editor is about to rewrite the text.

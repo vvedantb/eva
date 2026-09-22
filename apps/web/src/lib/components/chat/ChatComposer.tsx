@@ -20,6 +20,8 @@ import { ComposerInputChrome } from "@/lib/components/chat/_components/ComposerI
 import { ComposerStash } from "@/lib/components/chat/_components/ComposerStash";
 import { SkillSuggestionChips } from "@/lib/components/chat/_components/SkillSuggestionChips";
 import { useSkillSuggestions } from "@/lib/components/chat/_components/useSkillSuggestions";
+import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
+import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
@@ -153,6 +155,10 @@ export function ChatComposer({
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
   const [isUploading, setIsUploading] = useState(false);
+  const readiness = useDraftReadiness();
+  // The composer's text lives inside PromptInput; the readiness verdict is
+  // keyed by the exact text it judged, so the last draft is mirrored here.
+  const [draftText, setDraftText] = useState("");
   const { updateQueuedMessage, deleteQueuedMessage, reorderQueuedMessages } =
     useQueuedMessageMutations(queuedMessages);
   // Convex draft wins when both are passed (existing sessions).
@@ -200,6 +206,9 @@ export function ChatComposer({
       return;
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
+    // The judged draft is gone once it is sent; a nudge about it is not.
+    setDraftText("");
+    readiness.reset();
     await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
 
@@ -290,6 +299,11 @@ export function ChatComposer({
               onSave={localDraft.onSave}
             />
           )}
+          <DraftReadinessBanner
+            result={readiness.resultFor(draftText)}
+            onDismiss={readiness.dismiss}
+            className="mx-0 mb-2"
+          />
           <SkillSuggestionChips
             chips={suggestions.chips}
             onPick={(item) => {
@@ -362,7 +376,11 @@ export function ChatComposer({
               seedSkillMap={seed?.skillMap}
               messageHistory={messageHistory}
               allowEmptySubmit={allowEmptySubmit}
-              onDraftChange={suggestions.noteDraft}
+              onDraftChange={(text) => {
+                suggestions.noteDraft(text);
+                setDraftText(text);
+                readiness.noteChange(text);
+              }}
             />
           </ComposerStash>
         </PromptInputProvider>

@@ -72,11 +72,11 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
 import type { Priority } from "@/lib/components/priority/priorityMeta";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
+import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
+import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
 import { AssigneeSelector } from "./_components/AssigneeSelector";
-import { DraftReadinessBanner } from "./_components/DraftReadinessBanner";
 import { ProjectPicker } from "./_components/ProjectPicker";
 import { TaskFilesSection } from "./_components/TaskFilesSection";
-import { useDraftReadiness } from "./_hooks/useDraftReadiness";
 import { useTaskAttachments } from "./useTaskAttachments";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
 import {
@@ -475,7 +475,7 @@ export function QuickTaskModal({
                 value={description}
                 onValueChange={(next) => {
                   setDescription(next);
-                  readiness.noteChange(title, next);
+                  readiness.noteChange(next, title);
                 }}
                 placeholder="Add description... @ for data, / for skills."
                 minHeight="min-h-[160px]"

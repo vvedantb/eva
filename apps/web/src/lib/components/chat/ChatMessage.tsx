@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import {
   AgentSpawnCtaRow,
@@ -155,6 +155,12 @@ interface ChatMessageProps {
     content: string;
     attachmentStorageIds?: Id<"_storage">[];
   };
+  /**
+   * Rendered inside the turn, directly above the meta row (provider mark, copy,
+   * time) so agent-composed panels read as part of the reply rather than as a
+   * detached card below its footer.
+   */
+  belowContent?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -182,6 +188,7 @@ export const ChatMessage = memo(function ChatMessage({
   onFork,
   onRetryTurn,
   precedingUser,
+  belowContent,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -374,6 +381,11 @@ export const ChatMessage = memo(function ChatMessage({
                     className={isOtherUser ? "ml-6" : undefined}
                   />
                 ) : null}
+                {belowContent ? (
+                  <div className="mt-1 flex w-full flex-col gap-2">
+                    {belowContent}
+                  </div>
+                ) : null}
                 <UserMessageMeta
                   align={isOtherUser ? "start" : "end"}
                   copyPlain={copyPlain}
@@ -481,6 +493,9 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {belowContent ? (
+                  <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+                ) : null}
                 {turnModel || copyPlain || rowActions.length > 0 ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
@@ -500,7 +515,10 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                         {message.finishedAt && message.timestamp ? (
                           <span className="text-[11px] tabular-nums text-muted-foreground/60">
-                            {dayjs(message.timestamp).format("h:mm A")} ·{" "}
+                            {/* The turn's clock time is when Eva finished, not
+                                when it started — the duration next to it already
+                                says how long the reply took. */}
+                            {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
                             {formatDuration(
                               message.timestamp,
                               message.finishedAt,

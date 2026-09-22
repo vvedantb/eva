@@ -28,6 +28,7 @@ import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
+import { isTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
   SandboxWorkspace,
@@ -492,13 +493,14 @@ export function TaskDetailInline({
         isStarting={isStarting}
         canStartSandbox={canStartSandbox}
         isSandboxActive={isSandboxActive}
+        isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
         isRetryingStartupCommands={isRetryingStartupCommands}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
+        onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        isSandboxViewActive={isSandboxViewActive}
         onRunStartupCommands={() =>
           requestConfirm(
             altHeld,
@@ -537,6 +539,7 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
+        isAgentActive={isTaskAgentActive(task)}
         onSurfaceChange={handleSelectSurface}
       />
     ) : null;
