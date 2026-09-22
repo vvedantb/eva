@@ -1,10 +1,11 @@
 "use client";
 
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { IconChevronDown, IconChevronUp, IconSearch, IconX } from "@tabler/icons-react";
 import {
   FIND_QUERY_MAX_LENGTH,
   findThreadMatches,
+  isWithinChatFindScope,
   normalizeFindQuery,
   resolveThreadFindJump,
   shouldCaptureChatFindShortcutFromTarget,
@@ -12,13 +13,25 @@ import {
   threadFindCountLabel,
   type ThreadFindDocument,
 } from "@/lib/components/chat/threadFind";
-import { applyThreadFindMarks, clearThreadFindMarks } from "@/lib/components/chat/threadFindDom";
+import {
+  clearThreadFindHighlights,
+  findThreadFindMatchElement,
+  paintThreadFindHighlights,
+  THREAD_FIND_HIGHLIGHT_CSS,
+} from "@/lib/components/chat/threadFindDom";
 
-function findScope(host: HTMLElement | null): ParentNode | null {
+function findScope(node: Element | null): ParentNode | null {
   return (
-    host?.closest("[data-thread-find-scope], [data-chat-pane]") ??
+    node?.closest("[data-thread-find-scope], [data-chat-pane]") ??
     document.querySelector("[data-thread-find-scope], [data-chat-pane]")
   );
+}
+
+/** Opening the bar mounts the input, so mounting is when it takes focus. */
+function focusFindInput(node: HTMLInputElement | null): void {
+  if (!node) return;
+  node.focus();
+  node.select();
 }
 
 export function ThreadFindBar({
@@ -30,95 +43,128 @@ export function ThreadFindBar({
   defaultOpen?: boolean;
   defaultQuery?: string;
 }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState(defaultQuery);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [focusNonce, setFocusNonce] = useState(0);
   const deferredQuery = useDeferredValue(query);
-  const matches = useMemo(
-    () => findThreadMatches(documents, deferredQuery),
-    [deferredQuery, documents],
-  );
+  // Plain render-time work: the React Compiler memoises it, which is what the
+  // removed useMemo was doing by hand.
+  const matches = findThreadMatches(documents, deferredQuery);
   const matchCount = matches.length;
   const safeIndex =
     matchCount === 0 ? -1 : Math.min(Math.max(activeIndex, 0), matchCount - 1);
   const countLabel = threadFindCountLabel(deferredQuery, matchCount, safeIndex);
 
-  useEffect(() => {
+  /**
+   * Cmd/Ctrl+F has to beat the browser's native find and Escape has to work
+   * wherever the reader's focus is, so this one listener is genuinely global.
+   * A ref callback on the always-mounted host registers it and returns the
+   * cleanup — the effect-free equivalent of the mount/unmount effect, since
+   * useEffect is banned here.
+   */
+  const registerShortcuts = (node: HTMLDivElement | null) => {
+    if (!node) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        if (event.shiftKey || event.altKey) return;
-        if (!shouldCaptureChatFindShortcutFromTarget(event.target)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (!open) {
-          const selected = window.getSelection()?.toString().trim() ?? "";
-          if (selected.length > 0) {
-            setQuery(selected.slice(0, FIND_QUERY_MAX_LENGTH));
-            setActiveIndex(0);
-          }
-          setOpen(true);
+      if (event.key === "Escape") {
+        if (!open) return;
+        if (!isWithinChatFindScope(event.target)) return;
+        setOpen(false);
+        // Swallowed only for the bar's own input. Elsewhere in the pane Escape
+        // still belongs to the composer, dialogs and menus.
+        if (
+          event.target instanceof Element &&
+          event.target.closest("[data-thread-find-bar]")
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
         }
-        setFocusNonce((value) => value + 1);
+        return;
       }
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== "f") return;
+      if (event.shiftKey || event.altKey) return;
+      if (!shouldCaptureChatFindShortcutFromTarget(event.target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      // Toggles, like every other find bar — pressing it again used to only
+      // re-focus the input.
+      if (open) {
+        setOpen(false);
+        return;
+      }
+      const selected = window.getSelection()?.toString().trim() ?? "";
+      if (selected.length > 0) {
+        setQuery(selected.slice(0, FIND_QUERY_MAX_LENGTH));
+        setActiveIndex(0);
+      }
+      setOpen(true);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const input = inputRef.current;
-    if (!input) return;
-    input.focus();
-    input.select();
-  }, [focusNonce, open]);
-
-  useLayoutEffect(() => {
-    const scope = findScope(hostRef.current);
-    if (!scope) return;
-    if (!open || normalizeFindQuery(deferredQuery).length === 0) {
-      clearThreadFindMarks(scope);
-      return;
-    }
-    const active = applyThreadFindMarks(scope, deferredQuery, safeIndex);
-    if (active) {
-      active.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
-    return () => {
-      clearThreadFindMarks(scope);
-    };
-  }, [deferredQuery, open, safeIndex]);
+  };
 
   function handleStep(direction: "next" | "previous") {
     if (matchCount === 0) return;
     setActiveIndex(stepThreadFindIndex(matchCount, safeIndex, direction));
   }
 
-  if (!open) return <div ref={hostRef} className="contents" />;
+  if (!open) return <div ref={registerShortcuts} className="contents" />;
 
   const match = resolveThreadFindJump(matches, safeIndex);
 
   return (
     <div
-      ref={hostRef}
+      ref={registerShortcuts}
       className="pointer-events-none absolute right-3 top-3 z-40"
     >
+      {/* ::highlight() rules cannot be a utility class, and globals.css is not
+          ours to edit — React 19 hoists and de-dupes this by href. */}
+      <style href="eva-thread-find" precedence="default">
+        {THREAD_FIND_HIGHLIGHT_CSS}
+      </style>
       <div
         role="search"
         data-testid="thread-find-bar"
         data-thread-find-bar=""
         className="pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border bg-card shadow-lg"
       >
+        {/* Painting is a DOM side effect, so it hangs off a remount rather than
+            an effect: changing the key re-runs the ref callback, and its
+            cleanup unregisters the highlights when the bar closes. The match
+            count is part of the key because the old effect's deps left out
+            `documents` — a match that streamed in was counted but not painted. */}
+        <span
+          hidden
+          key={`paint:${matchCount}:${safeIndex}:${deferredQuery}`}
+          ref={(node) => {
+            const scope = findScope(node);
+            if (!scope) return;
+            paintThreadFindHighlights(scope, deferredQuery, safeIndex);
+            return clearThreadFindHighlights;
+          }}
+        />
+        {/* Jumping is keyed only on the query and the active match, so a
+            repaint mid-stream cannot yank the reader's scroll position. */}
+        <span
+          hidden
+          key={`jump:${safeIndex}:${deferredQuery}`}
+          ref={(node) => {
+            const scope = findScope(node);
+            if (!scope) return;
+            findThreadFindMatchElement(
+              scope,
+              deferredQuery,
+              safeIndex,
+            )?.scrollIntoView({ block: "center", behavior: "smooth" });
+          }}
+        />
         <div className="flex items-center gap-2 px-3">
           <IconSearch
             className="size-4 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
           <input
-            ref={inputRef}
+            ref={focusFindInput}
             type="text"
             value={query}
             onChange={(event) => {
@@ -126,12 +172,8 @@ export function ThreadFindBar({
               setActiveIndex(0);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                setOpen(false);
-                return;
-              }
+              // Escape is handled by the window listener above so that it also
+              // closes the bar from anywhere else in the pane.
               if (event.key === "Enter") {
                 event.preventDefault();
                 event.stopPropagation();

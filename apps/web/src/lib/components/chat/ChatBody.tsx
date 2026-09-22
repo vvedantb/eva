@@ -277,22 +277,27 @@ function ChatBodyInner({
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
   ) => {
-    const withCitations = appendCitationsToPrompt(
-      content,
-      citations?.items ?? [],
-    );
+    const sentCitations = citations?.items ?? [];
+    const sentSnapshots = snapshots?.items ?? [];
+    const sentWebMcp = webmcp?.items ?? [];
+    const withCitations = appendCitationsToPrompt(content, sentCitations);
     const withSnapshots = appendSnapshotsToPrompt(
       withCitations,
-      (snapshots?.items ?? []).map((item) => item.snapshot),
+      sentSnapshots.map((item) => item.snapshot),
     );
     const withWebMcp = appendWebMcpToPrompt(
       withSnapshots,
-      (webmcp?.items ?? []).map((item) => item.discovery),
+      sentWebMcp.map((item) => item.discovery),
     );
+    // Same contract as useSessionSend's `review?.clear()`: the pending context
+    // is consumed only once the send has settled, so a rejected send (the
+    // enqueue path) leaves the chips attached for the retry. And only the exact
+    // items that went into this prompt are dropped — `clear()` also threw away
+    // anything cited while the send was in flight, which was never sent.
     await onSend(withWebMcp, attachmentStorageIds);
-    citations?.clear();
-    snapshots?.clear();
-    webmcp?.clear();
+    for (const citation of sentCitations) citations?.remove(citation.id);
+    for (const item of sentSnapshots) snapshots?.remove(item.id);
+    for (const item of sentWebMcp) webmcp?.remove(item.id);
   };
   const hasComposerContext =
     (hasPendingContext ?? false) ||

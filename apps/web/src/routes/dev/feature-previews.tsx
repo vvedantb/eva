@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { z } from "zod";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@eva/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
@@ -40,16 +41,14 @@ const FEATURES = [
   "message-fork",
 ] as const;
 
-type FeaturePreview = (typeof FEATURES)[number];
-
-const validateSearch = (search: Record<string, unknown>) => ({
-  feature: FEATURES.includes(search.feature as FeaturePreview)
-    ? (search.feature as FeaturePreview)
-    : "cite",
+// `.catch` keeps an unknown ?feature= on the default preview instead of
+// throwing, which is what the two type assertions used to buy.
+const searchSchema = z.object({
+  feature: z.enum(FEATURES).catch("cite"),
 });
 
 export const Route = createFileRoute("/dev/feature-previews")({
-  validateSearch,
+  validateSearch: searchSchema,
   beforeLoad: () => {
     if (!import.meta.env.DEV) {
       throw redirect({ to: "/" });

@@ -128,7 +128,7 @@ describe("hostile input schemas stay serialisable", () => {
   test("BigInt, functions, Date, Map and Set are dropped", () => {
     const discovery = parseDiscoveryOrThrow({
       type: "object",
-      big: BigInt(9_007_199_254_740_993n),
+      big: BigInt("9007199254740993"),
       fn: () => "nope",
       when: new Date(0),
       map: new Map([["a", 1]]),
@@ -136,7 +136,7 @@ describe("hostile input schemas stay serialisable", () => {
       sym: Symbol("s"),
       nan: Number.NaN,
       keep: "yes",
-      list: [1, BigInt(2n), "three"],
+      list: [1, BigInt(2), "three"],
     });
     const schema = discovery.tools[0]?.inputSchema;
 

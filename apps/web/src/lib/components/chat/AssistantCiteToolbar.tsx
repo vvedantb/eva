@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, toast } from "@eva/ui";
 import { IconQuote } from "@tabler/icons-react";
 import {
@@ -29,8 +29,15 @@ export function AssistantCiteToolbar({
   const citations = usePendingCitations();
   const [target, setTarget] = useState<CiteTarget | null>(forcedTarget ?? null);
 
-  useEffect(() => {
-    if (forcedTarget || !citations) return;
+  if (!citations) return null;
+
+  /**
+   * `selectionchange` only fires on the document, so the listener stays global.
+   * It is registered from a ref callback on a mounted node (cleanup returned)
+   * instead of an effect — useEffect is banned in this repo.
+   */
+  const watchSelection = (node: HTMLSpanElement | null) => {
+    if (!node) return;
     const onSelectionChange = () => {
       const selection = window.getSelection();
       const captured = captureAssistantCitationSelection(selection);
@@ -50,11 +57,10 @@ export function AssistantCiteToolbar({
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
     };
-  }, [citations, forcedTarget]);
-
-  if (!citations || !target) return null;
+  };
 
   const cite = () => {
+    if (!target) return;
     const citation = createCitation({
       messageId: target.messageId,
       text: target.text,
@@ -73,27 +79,34 @@ export function AssistantCiteToolbar({
   };
 
   return (
-    <div
-      className="pointer-events-none fixed z-50"
-      style={{
-        left: Math.max(8, Math.min(target.x, window.innerWidth - 88)),
-        top: Math.max(8, target.y - 40),
-      }}
-    >
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        className="pointer-events-auto h-7 gap-1 px-2 text-xs shadow-sm"
-        data-testid="cite-selection-toolbar"
-        onMouseDown={(event) => {
-          event.preventDefault();
-        }}
-        onClick={cite}
-      >
-        <IconQuote className="size-3.5" />
-        Cite
-      </Button>
-    </div>
+    <>
+      {/* Anchor for the document listener: the toolbar itself only renders
+          once there is a selection, so it cannot own the subscription. */}
+      {forcedTarget ? null : <span hidden ref={watchSelection} />}
+      {target ? (
+        <div
+          className="pointer-events-none fixed z-50"
+          style={{
+            left: Math.max(8, Math.min(target.x, window.innerWidth - 88)),
+            top: Math.max(8, target.y - 40),
+          }}
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="pointer-events-auto h-7 gap-1 px-2 text-xs shadow-sm"
+            data-testid="cite-selection-toolbar"
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+            onClick={cite}
+          >
+            <IconQuote className="size-3.5" />
+            Cite
+          </Button>
+        </div>
+      ) : null}
+    </>
   );
 }

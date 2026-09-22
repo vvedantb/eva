@@ -75,49 +75,52 @@ function collectThreadFindRanges(root: ParentNode, needle: string): Range[] {
 }
 
 /**
- * Paints the matches inside `root` and returns the element holding the active
- * one so the caller can scroll to it.
+ * Paints the matches inside `root`.
  *
  * Ranges are handed to the Custom Highlight API rather than wrapped in `<mark>`
  * elements: the transcript is React-rendered markdown, and splitting its text
  * nodes leaves React's fiber `stateNode` pointers aimed at nodes that are now
  * empty, wrapped or (after `normalize()`) detached — which duplicated text on
  * streaming messages and threw NotFoundError on unmount. A highlight paints
- * over the same DOM without changing it.
+ * over the same DOM without changing it, and the Ranges are live, so they track
+ * the edits React makes while a message streams.
  */
 export function paintThreadFindHighlights(
   root: ParentNode,
   query: string,
   activeIndex: number,
-): Element | null {
+): void {
   clearThreadFindHighlights();
+  const registry = highlightRegistry();
+  if (!registry) return;
   const needle = normalizeFindQuery(query);
-  if (needle.length === 0) return null;
+  if (needle.length === 0) return;
 
   const ranges = collectThreadFindRanges(root, needle);
-  if (ranges.length === 0) return null;
+  if (ranges.length === 0) return;
   const safe = Math.min(Math.max(activeIndex, 0), ranges.length - 1);
+  // Two registrations, not one: the active match needs its own rule, and a
+  // range in both highlights would paint with the later registration's colour.
+  const rest = ranges.filter((_, index) => index !== safe);
   const active = ranges[safe];
-  if (!active) return null;
-
-  const registry = highlightRegistry();
-  if (registry) {
-    // Two registrations, not one: the active match needs its own rule, and a
-    // range that is in both highlights would paint with the later one's colour.
-    const rest = ranges.filter((_, index) => index !== safe);
-    if (rest.length > 0) registry.set(HIGHLIGHT_NAME, new Highlight(...rest));
-    registry.set(ACTIVE_HIGHLIGHT_NAME, new Highlight(active));
-  }
-  return active.startContainer.parentElement;
+  if (rest.length > 0) registry.set(HIGHLIGHT_NAME, new Highlight(...rest));
+  if (active) registry.set(ACTIVE_HIGHLIGHT_NAME, new Highlight(active));
 }
 
 /**
- * Scrolls only when the match is off screen. The painter re-runs whenever the
- * transcript grows, and an unconditional scroll would yank the view on every
- * streamed token.
+ * The element holding the active match, for scroll-to. Kept separate from
+ * painting so that jumping to a match and repainting a growing transcript can
+ * be triggered independently — repainting must not yank the scroll position.
  */
-export function revealThreadFindMatch(element: Element): void {
-  const rect = element.getBoundingClientRect();
-  if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
-  element.scrollIntoView({ block: "center", behavior: "smooth" });
+export function findThreadFindMatchElement(
+  root: ParentNode,
+  query: string,
+  activeIndex: number,
+): Element | null {
+  const needle = normalizeFindQuery(query);
+  if (needle.length === 0) return null;
+  const ranges = collectThreadFindRanges(root, needle);
+  if (ranges.length === 0) return null;
+  const safe = Math.min(Math.max(activeIndex, 0), ranges.length - 1);
+  return ranges[safe]?.startContainer.parentElement ?? null;
 }

@@ -86,5 +86,24 @@ describe("in-thread find", () => {
         isDocumentRoot: true,
       }),
     ).toBe(true);
+    // The composer lives inside the chat pane: typing a prompt keeps the
+    // browser's own find.
+    expect(
+      shouldCaptureChatFindShortcut({
+        inChatPane: true,
+        inFindBar: false,
+        inEditable: true,
+        isDocumentRoot: false,
+      }),
+    ).toBe(false);
+    // The find bar's input is editable too, and it must still capture.
+    expect(
+      shouldCaptureChatFindShortcut({
+        inChatPane: true,
+        inFindBar: true,
+        inEditable: true,
+        isDocumentRoot: false,
+      }),
+    ).toBe(true);
   });
 });

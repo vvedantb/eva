@@ -10,7 +10,7 @@ export interface ForkTranscriptPrefix {
 }
 
 const TURN_CHAR_LIMIT = 4_000;
-const PROMPT_CHAR_LIMIT = 16_000;
+export const FORK_PROMPT_CHAR_LIMIT = 16_000;
 
 function forkRole(role: string): ForkTranscriptTurn["role"] | null {
   if (role === "user") return "user";
@@ -66,22 +66,35 @@ function clipTurn(text: string): string {
 
 export function formatForkPrompt(prefix: ForkTranscriptPrefix): string {
   const last = prefix.turns[prefix.turns.length - 1];
-  const lines = prefix.turns.map((turn) => {
-    const speaker = turn.role === "user" ? "You" : "Eva";
-    return `${speaker}:\n${escapeForkText(clipTurn(turn.text))}`;
-  });
-  const body = [
+  const header = [
     "<forked_thread>",
     `through: ${last?.role ?? "assistant"}`,
     `turns: ${prefix.turns.length}`,
     "",
-    ...lines,
+  ].join("\n");
+  const footer = [
     "</forked_thread>",
     "",
     "Continue this conversation from the last message above. Do not redo earlier work unless asked.",
   ].join("\n");
-  if (body.length <= PROMPT_CHAR_LIMIT) return body;
-  return `${body.slice(0, PROMPT_CHAR_LIMIT)}\n…`;
+  const turns = prefix.turns
+    .map((turn) => {
+      const speaker = turn.role === "user" ? "You" : "Eva";
+      return `${speaker}:\n${escapeForkText(clipTurn(turn.text))}`;
+    })
+    .join("\n");
+  // The turns are what gets budgeted, not the whole prompt: slicing the
+  // assembled string dropped the closing tag and the instruction, which left
+  // the forked session with an unterminated block and no task.
+  const turnsBudget = Math.max(
+    0,
+    FORK_PROMPT_CHAR_LIMIT - header.length - footer.length - 2,
+  );
+  const clippedTurns =
+    turns.length <= turnsBudget
+      ? turns
+      : `${turns.slice(0, Math.max(0, turnsBudget - 2))}\n…`;
+  return `${header}\n${clippedTurns}\n${footer}`;
 }
 
 export function forkThreadTitle(prefix: ForkTranscriptPrefix): string {
