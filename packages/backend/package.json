@@ -38,6 +38,8 @@
     "@cursor/sdk": "1.0.28",
     "@eva/shared": "workspace:*",
     "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
+    "@json-render/core": "0.21.0",
+    "@json-render/react": "0.21.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@octokit/auth-app": "^8.1.2",
     "@openai/codex-sdk": "^0.146.0",

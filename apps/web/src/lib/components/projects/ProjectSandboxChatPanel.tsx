@@ -295,6 +295,7 @@ export function ProjectSandboxChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={projectId}
+        chatParentId={projectId}
         messages={messages ?? []}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}

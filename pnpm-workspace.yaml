@@ -25,3 +25,8 @@ minimumReleaseAgeExclude:
   - "@ai-sdk/gateway"
   - "@ai-sdk/provider"
   - "@ai-sdk/provider-utils"
+  # json-render 0.21.0 (2026-09-18) is the first release to export
+  # experimental_composeSpec / experimental_createEvaluator, which is what the
+  # chat's generative UI panels are built on. Drop once it is past the soak.
+  - "@json-render/core"
+  - "@json-render/react"
