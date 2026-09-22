@@ -1,9 +1,5 @@
 import { api } from "@eva/backend";
-import type {
-  AIModel,
-  Id,
-  ModelTraitsExecutionArgs,
-} from "@eva/backend";
+import type { AIModel, Id, ModelTraitsExecutionArgs } from "@eva/backend";
 import type { ModelAccount } from "@eva/ui";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -17,6 +13,7 @@ import {
   isAssistantTurnInProgress,
   readableSendError,
 } from "@/lib/components/chat/chatBodyUtils";
+import type { ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { toast } from "@eva/ui";
 export type SessionMessage = NonNullable<
@@ -74,7 +71,7 @@ function applyAddMessageOptimistically(
   ]);
 }
 
-export interface SessionSendOptions {
+export interface SessionSendOptions extends ChatSendOptions {
   /**
    * Skip appending the pending review comments to the prompt (and leave them
    * pending). For harness built-ins like `/compact`, which must reach the
@@ -135,6 +132,27 @@ export function useSessionSend({
       ? isAssistantTurnInProgress(messages)
       : turnStatus !== null;
 
+  // The composer clears optimistically, so a failed send's prompt only exists
+  // in this closure. Writing the failure as an assistant turn used to read like
+  // Eva replying "Error: …" while the user's own message was gone — the toast
+  // says whose failure it is and hands the typed prompt back through the same
+  // `drafts` row the composer reads (ChatDraftSync pulls it live).
+  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
+    toast.error("Couldn't send your message", {
+      id: "session-send",
+      description: readableSendError(errorMessage),
+      action: {
+        label: "Restore draft",
+        onClick: () => {
+          void setDraft({
+            target: { kind: "sessionChat", sessionId },
+            content: draftContent,
+          });
+        },
+      },
+    });
+  };
+
   const handleSend = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
@@ -146,21 +164,43 @@ export function useSessionSend({
     const finalContent = consumesReviewComments
       ? appendReviewCommentsToPrompt(content, review?.comments ?? [])
       : content;
+    // What the user typed. A ChatBody send has already appended its citation /
+    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
+    // re-edit, so the restore has to use the pre-append text.
+    const draftContent = options?.draftContent ?? content;
+    // Hoisted out of the `try`: React Compiler bails on the whole file when it
+    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    const enqueueReasoningLevel =
+      reasoningLevel ?? executionTraits.reasoningLevel;
     if (isExecuting) {
-      await enqueueMessage({
-        sessionId,
-        message: finalContent,
-        model,
-        ...executionTraits,
-        reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: resolveAccountId(providerAccountId),
-        attachmentStorageIds,
-      });
+      try {
+        await enqueueMessage({
+          sessionId,
+          message: finalContent,
+          model,
+          ...executionTraits,
+          reasoningLevel: enqueueReasoningLevel,
+          providerAccountId: resolveAccountId(providerAccountId),
+          attachmentStorageIds,
+        });
+      } catch (error) {
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
+      }
       if (consumesReviewComments) review?.clear();
       return;
     }
     const accountId = resolveAccountId(providerAccountId);
-    void Promise.all([
+    // Awaited rather than fired and forgotten: the caller cannot tell a
+    // delivered send from a failed one unless this settles with it. The
+    // composer still empties instantly — ChatBody observes this promise instead
+    // of blocking its submit on it.
+    await Promise.all([
       addMessage({
         id: sessionId,
         role: "user",
@@ -184,29 +224,15 @@ export function useSessionSend({
       }),
     ])
       .catch((error) => {
-        // The composer has already cleared and the optimistic user bubble has
-        // rolled back, so the prompt only exists here. Writing the failure as an
-        // assistant turn used to read like Eva replying "Error: …" while the
-        // user's own message was gone — the toast says whose failure it is and
-        // hands the typed prompt back through the same `drafts` row the composer
-        // reads (ChatDraftSync pulls it live).
-        toast.error("Couldn't send your message", {
-          id: "session-send",
-          description: readableSendError(
-            error instanceof Error ? error.message : "",
-          ),
-          action: {
-            label: "Restore draft",
-            onClick: () => {
-              void setDraft({
-                target: { kind: "sessionChat", sessionId },
-                // The tokenized content the user typed, not `finalContent` —
-                // the appended review comments are not theirs to re-edit.
-                content,
-              });
-            },
-          },
-        });
+        // The optimistic user bubble has rolled back too, so the toast is the
+        // only thing left standing for this turn.
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
       })
       .finally(() => {
         if (consumesReviewComments) review?.clear();

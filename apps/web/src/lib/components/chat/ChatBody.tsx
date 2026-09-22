@@ -76,6 +76,17 @@ import {
 
 export type { ChatBodyMessage };
 
+/**
+ * Extra context ChatBody hands its surface's send handler. The prompt the
+ * handler receives has the pending citation / preview-snapshot / WebMCP blocks
+ * appended to it, so a failure cannot offer it back to the user to re-edit —
+ * `draftContent` is the text they actually typed, and is what the failure toast
+ * restores.
+ */
+export interface ChatSendOptions {
+  draftContent?: string;
+}
+
 interface ChatBodyProps {
   repoId: Id<"githubRepos">;
   /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
@@ -154,6 +165,7 @@ interface ChatBodyProps {
   onSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => Promise<void>;
   onCancel: () => Promise<void>;
   /** Optional slot inserted above the conversation (session summary accordion). */
@@ -289,15 +301,28 @@ function ChatBodyInner({
       withSnapshots,
       sentWebMcp.map((item) => item.discovery),
     );
+    // Settlement is observed, not awaited: the composer only empties once this
+    // resolves, and holding the user's text on screen until the mutation
+    // round-trips would undo the optimistic clear every surface relies on.
     // Same contract as useSessionSend's `review?.clear()`: the pending context
-    // is consumed only once the send has settled, so a rejected send (the
-    // enqueue path) leaves the chips attached for the retry. And only the exact
-    // items that went into this prompt are dropped — `clear()` also threw away
-    // anything cited while the send was in flight, which was never sent.
-    await onSend(withWebMcp, attachmentStorageIds);
-    for (const citation of sentCitations) citations?.remove(citation.id);
-    for (const item of sentSnapshots) snapshots?.remove(item.id);
-    for (const item of sentWebMcp) webmcp?.remove(item.id);
+    // is consumed only once the send has actually succeeded, so a rejected send
+    // leaves the chips attached for the retry. And only the exact items that
+    // went into this prompt are dropped — `clear()` also threw away anything
+    // cited while the send was in flight, which was never sent.
+    void onSend(withWebMcp, attachmentStorageIds, {
+      draftContent: content,
+    }).then(
+      () => {
+        for (const citation of sentCitations) citations?.remove(citation.id);
+        for (const item of sentSnapshots) snapshots?.remove(item.id);
+        for (const item of sentWebMcp) webmcp?.remove(item.id);
+      },
+      () => {
+        // The send handler already raised the failure toast (with the typed
+        // text behind "Restore draft"); the chips are all we own here, and they
+        // stay so the retry carries the same context.
+      },
+    );
   };
   const hasComposerContext =
     (hasPendingContext ?? false) ||
@@ -443,7 +468,10 @@ function ChatBodyInner({
     isArchived || isExecuting
       ? undefined
       : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
-          void onSend(content, attachmentStorageIds);
+          // `onSend` rejects on a failed send so the composer can keep the
+          // pending chips. The surface has already toasted by then, so swallow
+          // it here rather than leaving an unhandled rejection.
+          void onSend(content, attachmentStorageIds).catch(() => {});
         };
 
   // A panel button sends its text through the normal send path, so it queues
@@ -454,7 +482,8 @@ function ChatBodyInner({
     isArchived || isInputDisabled
       ? undefined
       : (message: string) => {
-          void onSend(message);
+          // See `handleRetryTurn`: the rejection is already surfaced as a toast.
+          void onSend(message).catch(() => {});
         };
 
   // Undefined rather than an empty array: the caller slots this into a wrapper
@@ -525,10 +554,7 @@ function ChatBodyInner({
   };
 
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col"
-      data-chat-pane=""
-    >
+    <div className="relative flex min-h-0 flex-1 flex-col" data-chat-pane="">
       {preConversationContent}
       <ThreadFindBar documents={findDocuments} />
       <Conversation className="flex-1 min-h-0">

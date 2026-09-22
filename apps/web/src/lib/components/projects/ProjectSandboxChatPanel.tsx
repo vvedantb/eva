@@ -13,7 +13,7 @@ import {
   type Id,
 } from "@eva/backend";
 import { toast } from "@eva/ui";
-import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
@@ -187,21 +187,59 @@ export function ProjectSandboxChatPanel({
     Boolean(project?.activeChatWorkflowId) ||
     isAssistantTurnInProgress(messages ?? []);
 
+  // A thrown send rolls the whole turn back (no placeholder, no workflow) and
+  // the composer has already cleared, so the prompt only exists here. The toast
+  // owns the failure and hands the text back through the same `drafts` row the
+  // composer reads (same contract as useSessionSend).
+  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
+    toast.error("Couldn't send your message", {
+      id: "project-chat-send",
+      description: readableSendError(errorMessage),
+      action: {
+        label: "Restore draft",
+        onClick: () => {
+          void setDraft({
+            target: { kind: "projectChat", projectId },
+            content: draftContent,
+          });
+        },
+      },
+    });
+  };
+
   const handleSend = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => {
+    // What the user typed. A ChatBody send has already appended its citation /
+    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
+    // re-edit, so the restore has to use the pre-append text.
+    const draftContent = options?.draftContent ?? content;
+    // Hoisted out of the `try`: React Compiler bails on the whole file when it
+    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    const enqueueReasoningLevel =
+      displayTraits.effortLevel ?? executionTraits.reasoningLevel;
     if (isExecuting) {
-      await enqueueMessage({
-        projectId,
-        message: content,
-        model,
-        ...executionTraits,
-        reasoningLevel:
-          displayTraits.effortLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: resolveAccountId(providerAccountId),
-        attachmentStorageIds,
-      });
+      try {
+        await enqueueMessage({
+          projectId,
+          message: content,
+          model,
+          ...executionTraits,
+          reasoningLevel: enqueueReasoningLevel,
+          providerAccountId: resolveAccountId(providerAccountId),
+          attachmentStorageIds,
+        });
+      } catch (error) {
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
+      }
       return;
     }
     const accountId = resolveAccountId(providerAccountId);
@@ -222,26 +260,13 @@ export function ProjectSandboxChatPanel({
         providerAccountId: accountId,
       });
     } catch (error) {
-      // A thrown startExecute rolls the whole turn back (no placeholder, no
-      // workflow) and the composer has already cleared, so the prompt only
-      // exists here. The toast owns the failure and hands the text back through
-      // the same `drafts` row the composer reads (same contract as
-      // useSessionSend).
-      toast.error("Couldn't send your message", {
-        id: "project-chat-send",
-        description: readableSendError(
-          error instanceof Error ? error.message : "",
-        ),
-        action: {
-          label: "Restore draft",
-          onClick: () => {
-            void setDraft({
-              target: { kind: "projectChat", projectId },
-              content,
-            });
-          },
-        },
-      });
+      raiseSendFailure(
+        error instanceof Error ? error.message : "",
+        draftContent,
+      );
+      // Rethrow: the caller tells a delivered send from a failed one by whether
+      // this settles, and keeps its pending chips on a failure.
+      throw error;
     }
   };
 
@@ -275,7 +300,8 @@ export function ProjectSandboxChatPanel({
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
     onSendCommand: (command) => {
-      void handleSend(command);
+      // Rejects on a failed send; the failure is already toasted.
+      void handleSend(command).catch(() => {});
     },
   };
 

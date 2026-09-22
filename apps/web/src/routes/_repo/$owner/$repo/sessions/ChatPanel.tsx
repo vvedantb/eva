@@ -279,7 +279,10 @@ export function ChatPanel({
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
     onSendCommand: (command) => {
-      void handleSend(command, undefined, { skipReviewComments: true });
+      // Rejects on a failed send; the failure is already toasted.
+      void handleSend(command, undefined, { skipReviewComments: true }).catch(
+        () => {},
+      );
     },
   };
 
