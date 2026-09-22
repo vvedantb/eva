@@ -160,7 +160,8 @@ function evaPreviewAnnotationScript(): void {
     annotations?: { readOnlyHint?: boolean };
   };
   const compatibilityTools = new Map<string, RegisteredWebMcpTool>();
-  let installedCompatibility = false;
+  /** Our own shim, once installed — never mistaken for the page's own. */
+  let compatibilityContext: object | null = null;
 
   function normalizeToolName(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -168,10 +169,31 @@ function evaPreviewAnnotationScript(): void {
     return /^[A-Za-z0-9_.-]{1,128}$/.test(name) ? name : null;
   }
 
+  /**
+   * Reads a `modelContext` implementation off a host object. `Reflect.get`
+   * rather than a cast: `modelContext` is not in lib.dom yet and the repo bans
+   * type assertions.
+   */
+  function modelContextOn(host: object): object | null {
+    const value = Reflect.get(host, "modelContext");
+    return value !== null && typeof value === "object" ? value : null;
+  }
+
+  /**
+   * The implementation the previewed page itself provides, if any. Our shim is
+   * installed at `</head>` before app code runs, so it would otherwise always
+   * win and a page registering tools the spec way would list none.
+   */
+  function pageModelContext(): object | null {
+    for (const host of [navigator, document, window]) {
+      const ctx = modelContextOn(host);
+      if (ctx && ctx !== compatibilityContext) return ctx;
+    }
+    return null;
+  }
+
   function ensureModelContext(): void {
-    const doc = document as Document & { modelContext?: unknown };
-    const nav = navigator as Navigator & { modelContext?: unknown };
-    if (doc.modelContext || nav.modelContext) return;
+    if (pageModelContext()) return;
     const ctx = {
       registerTool(tool: RegisteredWebMcpTool) {
         const name = normalizeToolName(tool?.name);
@@ -211,11 +233,21 @@ function evaPreviewAnnotationScript(): void {
         );
       },
     };
-    Object.defineProperty(document, "modelContext", {
-      value: ctx,
-      configurable: true,
-    });
-    installedCompatibility = true;
+    try {
+      // `navigator` is the surface the spec (and the official polyfill) uses.
+      // `writable` matters: a module doing `navigator.modelContext = impl` runs
+      // in strict mode, so a non-writable property would throw a TypeError and
+      // take the previewed app down with it.
+      Object.defineProperty(navigator, "modelContext", {
+        value: ctx,
+        configurable: true,
+        writable: true,
+      });
+      compatibilityContext = ctx;
+    } catch {
+      // A locked-down navigator is not worth breaking annotation over; form
+      // tools still work and `implementation` reports "none".
+    }
   }
   ensureModelContext();
 
@@ -276,14 +308,32 @@ function evaPreviewAnnotationScript(): void {
     });
   };
 
-  let parentOrigin = "*";
-  try {
-    if (document.referrer) {
-      parentOrigin = new URL(document.referrer).origin;
+  function originOf(url: string): string {
+    try {
+      return new URL(url).origin;
+    } catch {
+      return "";
     }
-  } catch {
-    /* keep "*" */
   }
+
+  /**
+   * Eva's origin, handed over by the proxy at injection time. `document.referrer`
+   * alone is not usable: the proxy sends `referrer-policy: no-referrer`, so on an
+   * authenticated load the referrer is empty (guard disabled, replies broadcast
+   * to "*"), and after an in-app navigation it becomes the preview's own origin
+   * (Eva's messages silently dropped). Read once, then removed so the previewed
+   * page keeps its own global scope.
+   */
+  function injectedParentOrigin(): string {
+    const raw = Reflect.get(window, "__evaPreviewParentOrigin");
+    Reflect.deleteProperty(window, "__evaPreviewParentOrigin");
+    return typeof raw === "string" && raw ? originOf(raw) : "";
+  }
+
+  /** Eva's origin, or "" when unknown (ungated proxy with no Eva URL). */
+  const parentOrigin =
+    injectedParentOrigin() ||
+    (document.referrer ? originOf(document.referrer) : "");
 
   let modeActive = false;
   let selectedEl: Element | null = null;
@@ -353,7 +403,10 @@ function evaPreviewAnnotationScript(): void {
           message: string;
         },
   ): void {
-    window.parent.postMessage(payload, parentOrigin);
+    // Payloads carry page text, console output and failing request URLs, so
+    // they go to Eva's exact origin. "*" only survives where no origin is known
+    // at all, which is the ungated legacy proxy.
+    window.parent.postMessage(payload, parentOrigin || "*");
   }
 
   function ensureOverlay(): void {
@@ -847,6 +900,12 @@ function evaPreviewAnnotationScript(): void {
     return tag;
   }
 
+  /**
+   * Never reads `element.value`. The snapshot is shown in Eva and sent to the
+   * model, and unlabelled fields are common in small dev apps, so falling back
+   * to the live value would ship whatever the user had typed — a password, an
+   * API key, an email address — straight into the conversation.
+   */
   function accessibleName(element: HTMLElement): string {
     const labelled = element.getAttribute("aria-label");
     if (labelled) return labelled.replace(/\s+/g, " ").trim().slice(0, 80);
@@ -855,7 +914,13 @@ function evaPreviewAnnotationScript(): void {
       if (fromLabel) return fromLabel.replace(/\s+/g, " ").trim().slice(0, 80);
       const placeholder = element.getAttribute("placeholder");
       if (placeholder) return placeholder.slice(0, 80);
-      return (element.value || "").slice(0, 80);
+      const named = element.getAttribute("name") || element.getAttribute("id");
+      if (named) return named.slice(0, 80);
+      if (element instanceof HTMLTextAreaElement) return "(textarea)";
+      const type = (element.getAttribute("type") || "text")
+        .toLowerCase()
+        .slice(0, 32);
+      return "(" + type + " input)";
     }
     if (element instanceof HTMLImageElement) {
       return (element.alt || "").slice(0, 80);
@@ -932,13 +997,9 @@ function evaPreviewAnnotationScript(): void {
     };
   }
 
+  /** Page implementation first, our compatibility shim only as a fallback. */
   function modelContextRoot(): object | null {
-    const doc = document as Document & { modelContext?: unknown };
-    const nav = navigator as Navigator & { modelContext?: unknown };
-    const win = window as Window & { modelContext?: unknown };
-    const raw = doc.modelContext ?? nav.modelContext ?? win.modelContext;
-    if (raw !== null && typeof raw === "object") return raw;
-    return null;
+    return pageModelContext() ?? compatibilityContext;
   }
 
   function recordFromObject(value: object): Record<string, unknown> {
@@ -1091,16 +1152,18 @@ function evaPreviewAnnotationScript(): void {
     for (const tool of [...fromApi, ...fromForms]) {
       if (!byName.has(tool.name)) byName.set(tool.name, tool);
     }
-    const ctx = modelContextRoot();
+    // Reported verbatim in the prompt sent to the agent, so it has to be
+    // honest about where the tools actually came from.
+    const implementation = pageModelContext()
+      ? "native"
+      : fromApi.length > 0
+        ? "compatibility"
+        : fromForms.length > 0
+          ? "form"
+          : "none";
     return {
       origin: window.location.origin,
-      implementation: installedCompatibility
-        ? "compatibility"
-        : ctx
-          ? "native"
-          : fromForms.length > 0
-            ? "form"
-            : "none",
+      implementation,
       tools: [...byName.values()].slice(0, 64),
     };
   }
@@ -1303,7 +1366,7 @@ function evaPreviewAnnotationScript(): void {
   }
 
   window.addEventListener("message", (event) => {
-    if (parentOrigin !== "*" && event.origin !== parentOrigin) return;
+    if (parentOrigin && event.origin !== parentOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const type = Reflect.get(data, "type");

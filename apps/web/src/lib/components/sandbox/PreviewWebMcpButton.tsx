@@ -56,12 +56,14 @@ export function PreviewWebMcpButton({
       if (typeof event.data !== "object" || event.data === null) return;
       const inbound = parseWebMcpInbound(event.data);
       if (!inbound || inbound.requestId !== requestId) return;
+      // A "result" carrying this requestId is not an answer to discovery: keep
+      // listening rather than silently ending it with no dialog and no error.
+      if (inbound.type === "result") return;
       finish();
       if (inbound.type === "error") {
         toast.error(inbound.message);
         return;
       }
-      if (inbound.type !== "tools") return;
       setDiscovery(inbound.discovery);
       setOpen(true);
     }

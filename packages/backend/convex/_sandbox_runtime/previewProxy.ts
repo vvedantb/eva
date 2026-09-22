@@ -35,7 +35,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v22";
+const SCRIPT_VERSION = "stream-v23";
 
 /** Values injected into the generated proxy script to drive the auth gate. */
 interface PreviewProxyAuthParams {
@@ -787,6 +787,26 @@ const cookiePatchScript =
 
 const ANNOTATION_SCRIPT = ${JSON.stringify(PREVIEW_ANNOTATION_SCRIPT)};
 
+// The annotation script answers Eva over postMessage with page text, console
+// output and failing request URLs, so it must know Eva's exact origin. It cannot
+// derive it: we send "referrer-policy: no-referrer", leaving document.referrer
+// empty on authenticated loads and set to the preview's own origin after any
+// in-app navigation. Hand the origin over explicitly instead; empty string when
+// no Eva URL is configured (ungated legacy proxy), which keeps the old
+// referrer-only behaviour.
+function annotationParentOrigin() {
+  try {
+    return WEB_APP_URL ? new URL(WEB_APP_URL).origin : "";
+  } catch {
+    return "";
+  }
+}
+
+const PARENT_ORIGIN_SCRIPT =
+  "window.__evaPreviewParentOrigin=" +
+  JSON.stringify(annotationParentOrigin()) +
+  ";";
+
 function buildInjectionTag() {
   const combined =
     cookiePatchScript +
@@ -794,6 +814,8 @@ function buildInjectionTag() {
     convexRewriteScript +
     "\n" +
     injectedScript +
+    "\n" +
+    PARENT_ORIGIN_SCRIPT +
     "\n" +
     ANNOTATION_SCRIPT;
   const safeScript = combined.replace(/<\/script/gi, "<\\/script");

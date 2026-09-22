@@ -19,6 +19,7 @@ import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
 import { applyIgnoreWhitespace } from "./diffFiles";
+import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
@@ -55,6 +56,11 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
     "eva:pr-diff-ignore-ws",
     false,
   );
+  const review = usePendingReviewComments();
+  const [pinnedIgnoreWhitespace, setPinnedIgnoreWhitespace] = useState<
+    boolean | null
+  >(null);
+
   const [fileFilter, setFileFilter] = useState("");
   // Controlled accordion open set — independent of Viewed so a viewed file can
   // still be expanded to re-read without clearing the checkbox (GitHub UX).
@@ -81,7 +87,25 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
   // One entry per changed file: patch, path, status, and change counts. Parsed
   // once when the diff is fetched, not on every render.
   const rawEntries = state.status === "ready" ? state.entries : [];
-  const fileEntries = ignoreWhitespace
+
+  // A drafted review comment is anchored by its position in a walk of the patch
+  // it was drawn on (see `reviewComments.ts`), and ignore-whitespace rewrites
+  // that patch. Flipping the toggle underneath one would silently move it to
+  // another line or drop it, so the setting is pinned to whatever was on screen
+  // when the first comment was drafted, and released once the review is empty
+  // again. Pending comments start empty on mount, so a toggle left on in
+  // localStorage still takes effect on the next PR.
+  const hasPendingComments = (review?.comments.length ?? 0) > 0;
+  if (hasPendingComments && pinnedIgnoreWhitespace === null) {
+    setPinnedIgnoreWhitespace(ignoreWhitespace);
+  }
+  if (!hasPendingComments && pinnedIgnoreWhitespace !== null) {
+    setPinnedIgnoreWhitespace(null);
+  }
+  const effectiveIgnoreWhitespace = pinnedIgnoreWhitespace ?? ignoreWhitespace;
+  const ignoreWhitespacePinned = effectiveIgnoreWhitespace !== ignoreWhitespace;
+
+  const fileEntries = effectiveIgnoreWhitespace
     ? applyIgnoreWhitespace(rawEntries)
     : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
@@ -213,6 +237,16 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
               Diff is large and has been truncated.
             </p>
           ) : null}
+          {/* The press was recorded for next time, but the diff on screen has
+              to stay put — say so rather than looking broken. */}
+          {ignoreWhitespacePinned ? (
+            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Whitespace changes stay{" "}
+              {effectiveIgnoreWhitespace ? "hidden" : "shown"} while you have
+              pending review comments, so they keep pointing at the right lines.
+              Submit or delete them to change it.
+            </p>
+          ) : null}
           <Accordion
             type="multiple"
             value={openPaths}
@@ -265,7 +299,7 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
         onDiffViewChange={setDiffView}
         wrapLines={wrapLines}
         onWrapLinesChange={setWrapLines}
-        ignoreWhitespace={ignoreWhitespace}
+        ignoreWhitespace={effectiveIgnoreWhitespace}
         onIgnoreWhitespaceChange={setIgnoreWhitespace}
         allExpanded={
           visiblePaths.length > 0 &&

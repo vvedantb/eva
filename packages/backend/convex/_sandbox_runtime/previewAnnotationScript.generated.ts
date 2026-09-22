@@ -59,16 +59,25 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
     }
     root.setAttribute(ATTR, "1");
     const compatibilityTools = /* @__PURE__ */ new Map();
-    let installedCompatibility = false;
+    let compatibilityContext = null;
     function normalizeToolName(value) {
       if (typeof value !== "string") return null;
       const name = value.trim();
       return /^[A-Za-z0-9_.-]{1,128}\$/.test(name) ? name : null;
     }
+    function modelContextOn(host) {
+      const value = Reflect.get(host, "modelContext");
+      return value !== null && typeof value === "object" ? value : null;
+    }
+    function pageModelContext() {
+      for (const host of [navigator, document, window]) {
+        const ctx = modelContextOn(host);
+        if (ctx && ctx !== compatibilityContext) return ctx;
+      }
+      return null;
+    }
     function ensureModelContext() {
-      const doc = document;
-      const nav = navigator;
-      if (doc.modelContext || nav.modelContext) return;
+      if (pageModelContext()) return;
       const ctx = {
         registerTool(tool) {
           const name = normalizeToolName(tool?.name);
@@ -107,11 +116,15 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
           );
         }
       };
-      Object.defineProperty(document, "modelContext", {
-        value: ctx,
-        configurable: true
-      });
-      installedCompatibility = true;
+      try {
+        Object.defineProperty(navigator, "modelContext", {
+          value: ctx,
+          configurable: true,
+          writable: true
+        });
+        compatibilityContext = ctx;
+      } catch {
+      }
     }
     ensureModelContext();
     const RING_MAX = 40;
@@ -161,20 +174,26 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         return response;
       });
     };
-    let parentOrigin = "*";
-    try {
-      if (document.referrer) {
-        parentOrigin = new URL(document.referrer).origin;
+    function originOf(url) {
+      try {
+        return new URL(url).origin;
+      } catch {
+        return "";
       }
-    } catch {
     }
+    function injectedParentOrigin() {
+      const raw = Reflect.get(window, "__evaPreviewParentOrigin");
+      Reflect.deleteProperty(window, "__evaPreviewParentOrigin");
+      return typeof raw === "string" && raw ? originOf(raw) : "";
+    }
+    const parentOrigin = injectedParentOrigin() || (document.referrer ? originOf(document.referrer) : "");
     let modeActive = false;
     let selectedEl = null;
     let overlay = null;
     let labelEl = null;
     let rectRaf = 0;
     function post(payload) {
-      window.parent.postMessage(payload, parentOrigin);
+      window.parent.postMessage(payload, parentOrigin || "*");
     }
     function ensureOverlay() {
       if (overlay) return;
@@ -603,7 +622,11 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         if (fromLabel) return fromLabel.replace(/\\s+/g, " ").trim().slice(0, 80);
         const placeholder = element.getAttribute("placeholder");
         if (placeholder) return placeholder.slice(0, 80);
-        return (element.value || "").slice(0, 80);
+        const named = element.getAttribute("name") || element.getAttribute("id");
+        if (named) return named.slice(0, 80);
+        if (element instanceof HTMLTextAreaElement) return "(textarea)";
+        const type = (element.getAttribute("type") || "text").toLowerCase().slice(0, 32);
+        return "(" + type + " input)";
       }
       if (element instanceof HTMLImageElement) {
         return (element.alt || "").slice(0, 80);
@@ -672,12 +695,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       };
     }
     function modelContextRoot() {
-      const doc = document;
-      const nav = navigator;
-      const win = window;
-      const raw = doc.modelContext ?? nav.modelContext ?? win.modelContext;
-      if (raw !== null && typeof raw === "object") return raw;
-      return null;
+      return pageModelContext() ?? compatibilityContext;
     }
     function recordFromObject(value) {
       const record = {};
@@ -791,10 +809,10 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       for (const tool of [...fromApi, ...fromForms]) {
         if (!byName.has(tool.name)) byName.set(tool.name, tool);
       }
-      const ctx = modelContextRoot();
+      const implementation = pageModelContext() ? "native" : fromApi.length > 0 ? "compatibility" : fromForms.length > 0 ? "form" : "none";
       return {
         origin: window.location.origin,
-        implementation: installedCompatibility ? "compatibility" : ctx ? "native" : fromForms.length > 0 ? "form" : "none",
+        implementation,
         tools: [...byName.values()].slice(0, 64)
       };
     }
@@ -957,7 +975,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
     }
     window.addEventListener("message", (event) => {
-      if (parentOrigin !== "*" && event.origin !== parentOrigin) return;
+      if (parentOrigin && event.origin !== parentOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       const type = Reflect.get(data, "type");

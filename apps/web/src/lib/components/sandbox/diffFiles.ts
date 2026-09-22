@@ -36,9 +36,13 @@ function renamedFromPatch(patch: string): string | null {
 
 /**
  * Counts changed lines the way GitHub's file header does: `+`/`-` content
- * lines only, excluding the `+++`/`---` file markers of the patch header.
- * Context lines and hunk count come from the same pass — they are only used to
- * estimate a file's rendered height before it is mounted.
+ * lines only. Context lines and hunk count come from the same pass — they are
+ * only used to estimate a file's rendered height before it is mounted.
+ *
+ * Only lines inside a hunk are counted. The `---`/`+++` file markers live in
+ * the patch header, before the first `@@`, so skipping everything up to it is
+ * what excludes them — testing for a `---`/`+++` prefix instead would miss a
+ * deleted `---` (YAML front matter), `--brand: red;` (CSS), or an added `++i`.
  */
 function diffFileStats(patch: string): {
   additions: number;
@@ -51,12 +55,14 @@ function diffFileStats(patch: string): {
   let contextLines = 0;
   let hunkCount = 0;
   for (const line of patch.split("\n")) {
-    if (line.startsWith("@@ ")) hunkCount += 1;
-    else if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
-    else if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
-    // Context lines only exist inside hunks, so the leading-space test is only
-    // meaningful once a hunk header has been seen.
-    else if (hunkCount > 0 && line.startsWith(" ")) contextLines += 1;
+    if (line.startsWith("@@ ")) {
+      hunkCount += 1;
+      continue;
+    }
+    if (hunkCount === 0) continue;
+    if (line.startsWith("+")) additions += 1;
+    else if (line.startsWith("-")) deletions += 1;
+    else if (line.startsWith(" ")) contextLines += 1;
   }
   return { additions, deletions, contextLines, hunkCount };
 }
@@ -127,12 +133,19 @@ function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, "");
 }
 
+/*
+ * Hunk-body classification: a leading `-`/`+` is always a real change. The
+ * `---`/`+++` file markers only occur in the patch header, which
+ * `ignoreWhitespaceInPatch` copies straight through before it ever reaches a
+ * hunk, so excluding them here would silently swallow genuine edits to lines
+ * whose own content starts with `-`/`+` (`---`, `--brand: red;`, `++i`).
+ */
 function isMinusLine(line: string): boolean {
-  return line.startsWith("-") && !line.startsWith("---");
+  return line.startsWith("-");
 }
 
 function isPlusLine(line: string): boolean {
-  return line.startsWith("+") && !line.startsWith("+++");
+  return line.startsWith("+");
 }
 
 /**
@@ -244,7 +257,11 @@ export function applyIgnoreWhitespace(
 ): DiffFileEntry[] {
   return entries.flatMap((entry) => {
     if (entry.binary || !entry.hasHunks) return [entry];
-    const next = buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch));
-    return next.length > 0 ? next : [entry];
+    // A file whose every hunk was whitespace-only filters down to a header-only
+    // patch. GitHub drops such files from the list entirely; keeping them would
+    // render a "nothing to diff" body and inflate the toolbar's file count.
+    return buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch)).filter(
+      (filtered) => filtered.hasHunks,
+    );
   });
 }
