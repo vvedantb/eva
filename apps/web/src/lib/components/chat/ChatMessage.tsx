@@ -51,6 +51,7 @@ import {
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
 import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
@@ -454,6 +455,14 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {showChangedFiles && message.scopeCheck ? (
+                  <div className="mt-1">
+                    <ScopeCheckChip
+                      check={message.scopeCheck}
+                      onViewDiff={onViewDiff}
+                    />
+                  </div>
+                ) : null}
                 {turnModel || copyPlain || checkpoint.items.length > 0 ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (

@@ -124,6 +124,38 @@ export const findingTriageValidator = v.object({
   evaluatedAt: v.number(),
 });
 
+/** One diff hunk Jev judged the prompt did not ask for. */
+export const scopeCheckHunkValidator = v.object({
+  /** Repo-relative path of the file the hunk touches. */
+  file: v.string(),
+  /** The hunk's `@@ -a,b +c,d @@ context` line, for locating it in a diff. */
+  header: v.string(),
+  /** P(the prompt asked for this change), 0..1. */
+  requested: v.number(),
+  /** P(the change is required to make a requested change work), 0..1. */
+  necessary: v.number(),
+});
+
+/**
+ * Jev's scope verdict on one assistant turn: did the diff between the turn's
+ * `beforeSha` and `afterSha` contain changes the user's prompt did not ask for?
+ * Written out of band after the turn completes (`scopeCheck.ts`); absent when
+ * the turn changed no code, the diff never became fetchable, or Jev failed.
+ */
+export const scopeCheckValidator = v.object({
+  /** P(this turn contains changes the prompt did not ask for), whole-diff question. */
+  unrequestedProbability: v.number(),
+  /** Hunks in the turn diff after dropping lockfiles and binaries. */
+  totalHunks: v.number(),
+  /** Hunks actually judged — capped, so may be below `totalHunks`. */
+  judgedHunks: v.number(),
+  /** Judged hunks under the requested/necessary threshold, worst first, capped. */
+  flagged: v.array(scopeCheckHunkValidator),
+  /** True when the diff was clipped or hunks past the cap were skipped. */
+  partial: v.boolean(),
+  evaluatedAt: v.number(),
+});
+
 export const automationFindingValidator = v.object({
   id: v.string(),
   title: v.string(),

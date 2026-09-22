@@ -45,6 +45,7 @@ import {
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
+  scopeCheckValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
   userFlowValidator,
@@ -961,6 +962,9 @@ export const messageFields = {
   // writing only the scalars.
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
+  // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
+  // what the prompt asked for. Needs beforeSha/afterSha, so sessions only today.
+  scopeCheck: v.optional(scopeCheckValidator),
 };
 
 export const queuedMessageFields = {
