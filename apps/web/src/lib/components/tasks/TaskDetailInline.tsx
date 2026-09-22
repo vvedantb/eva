@@ -489,7 +489,6 @@ export function TaskDetailInline({
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
         onStopSandbox={handleStopSandbox}
-        isSandboxViewActive={isSandboxViewActive}
         onRunStartupCommands={() =>
           requestConfirm(
             altHeld,

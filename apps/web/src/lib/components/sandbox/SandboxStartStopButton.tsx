@@ -77,32 +77,22 @@ export function SandboxStartStopButton({
 }
 
 /**
- * Plan usage and start/stop for project and task sandbox chat headers — the
- * sandbox-surface counterpart of the session chat header, which carries the
- * same pair itself (so nothing is duplicated there). Collapse lives on the
- * sandbox rail.
+ * Plan usage for project and task sandbox chat headers. Start/stop lives in the
+ * task and project page headers only — one control per action, so the chat
+ * header carries usage alone. Sessions keep their own start/stop in the session
+ * chat header. Collapse lives on the sandbox rail.
  */
 export function SandboxChatHeaderActions({
   repoId,
-  isSandboxActive,
-  isSandboxToggling,
-  onSandboxToggle,
-  isAssistantResponding = false,
   model,
   providerAccountId,
   usageAccountLabel,
 }: {
   repoId: Id<"githubRepos">;
-  isSandboxActive: boolean;
-  isSandboxToggling: boolean;
-  onSandboxToggle?: (action: "start" | "stop") => void;
-  isAssistantResponding?: boolean;
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
   usageAccountLabel: string;
 }) {
-  if (!onSandboxToggle) return null;
-
   return (
     <div className="flex shrink-0 items-center justify-end gap-1 px-2 py-1">
       <UsageLimitsIndicator
@@ -110,12 +100,6 @@ export function SandboxChatHeaderActions({
         model={model}
         providerAccountId={providerAccountId}
         accountLabel={usageAccountLabel}
-      />
-      <SandboxStartStopButton
-        isActive={isSandboxActive}
-        isToggling={isSandboxToggling}
-        onToggle={onSandboxToggle}
-        isAssistantResponding={isAssistantResponding}
       />
     </div>
   );
