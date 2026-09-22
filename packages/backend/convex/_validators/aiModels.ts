@@ -52,6 +52,7 @@ export const aiModelValidator = v.union(
   v.literal("opencode:openai/gpt-5.3-codex"),
   v.literal("opencode:openai/gpt-5.4"),
   v.literal("opencode:openai/gpt-5.4-mini"),
+  v.literal("cursor:grok-4.7"),
   v.literal("cursor:grok-4.6"),
   v.literal("cursor:grok-4.5"),
   v.literal("cursor:gpt-6-astra"),
@@ -175,8 +176,8 @@ const CURSOR_REASONING: ModelReasoningTraits = {
   default: "medium",
 };
 
-/** Grok 4.6: low, medium, high (default), xhigh. Fast is a separate trait. */
-const CURSOR_REASONING_GROK46: ModelReasoningTraits = {
+/** Grok 4.6/4.7: low, medium, high (default), xhigh. Fast is a separate trait. */
+const CURSOR_REASONING_GROK_XHIGH: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh"],
   default: "high",
 };
@@ -204,6 +205,7 @@ export type AIModel =
   | "opencode:openai/gpt-5.6-sol"
   | "opencode:openai/gpt-5.6-terra"
   | "opencode:openai/gpt-5.6-luna"
+  | "cursor:grok-4.7"
   | "cursor:grok-4.6"
   | "cursor:grok-4.5"
   | "cursor:gpt-6-astra"
@@ -382,11 +384,21 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
   },
   {
+    id: "cursor:grok-4.7",
+    provider: "cursor",
+    label: "Grok 4.7",
+    requiresAuth: true,
+    reasoning: CURSOR_REASONING_GROK_XHIGH,
+    fastMode: true,
+    // xAI documents 500K for 4.7 (docs.x.ai/developers/grok-4-7, 21 Sep 2026).
+    contextWindow: 500000,
+  },
+  {
     id: "cursor:grok-4.6",
     provider: "cursor",
     label: "Grok 4.6",
     requiresAuth: true,
-    reasoning: CURSOR_REASONING_GROK46,
+    reasoning: CURSOR_REASONING_GROK_XHIGH,
     fastMode: true,
   },
   {
@@ -546,6 +558,8 @@ export function normalizeAIModel(model: string | null | undefined): AIModel {
     case "cursor:grok-4.5-medium":
     case "cursor:grok-4.5-high":
       return "cursor:grok-4.5";
+    case "cursor:grok-4.7":
+      return "cursor:grok-4.7";
     case "cursor:grok-4.6":
     case "cursor:grok-4.6-low":
     case "cursor:grok-4.6-medium":
@@ -843,6 +857,7 @@ const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
   "codex:gpt-5.6-sol",
   "codex:gpt-5.6-terra",
   "codex:gpt-5.6-luna",
+  "cursor:grok-4.7",
   "cursor:grok-4.6",
   "cursor:grok-4.5",
   "cursor:composer-2.5",
@@ -856,7 +871,7 @@ const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
 export const SIMPLE_VIEW_MODEL_LADDER: ReadonlyArray<AIModel> = [
   "cursor:composer-2.5",
   "cursor:grok-4.5",
-  "cursor:grok-4.6",
+  "cursor:grok-4.7",
   "claude:opus",
   "claude:claude-fable-5-1",
 ];
@@ -874,7 +889,8 @@ export function snapToSimpleViewLadder(model: string): AIModel {
   if (getAIModelProvider(normalized) === "claude") return "claude:opus";
   if (normalized.includes("composer")) return "cursor:composer-2.5";
   if (normalized.includes("grok-4.5")) return "cursor:grok-4.5";
-  return "cursor:grok-4.6";
+  // Grok 4.6 has no tick of its own: 4.7 is the Cursor top step now.
+  return "cursor:grok-4.7";
 }
 
 /**

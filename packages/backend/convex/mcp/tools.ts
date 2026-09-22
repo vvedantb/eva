@@ -6,6 +6,7 @@ import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
 import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
+import { renderUiTool } from "../_mcp/renderUiTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
 import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
 import {
@@ -502,6 +503,53 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       ctx.runAction(internal.mcp.evaluate.runEvaluate, input),
     ),
   );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // render_ui — an agent-composed panel rendered inline in the chat
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped to a sandbox token: the panel has to land in *this* chat, so a
+  // caller without an entity (the user's own OAuth connector) has no target.
+  if (entityKind !== undefined && entityId !== undefined) {
+    tools.push(
+      renderUiTool(async (input) => {
+        const outcome = await ctx.runAction(
+          internal.mcp.renderUi.composePanel,
+          {
+            prompt: input.prompt,
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            blocks: input.blocks,
+          },
+        );
+        if (!outcome.ok) return { ok: false, outcome };
+
+        const panelId = await ctx.runMutation(internal.chatUi.create, {
+          entityKind,
+          entityId,
+          prompt: input.prompt,
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          spec: outcome.spec,
+          elementCount: outcome.elementCount,
+        });
+        if (panelId === null) {
+          return {
+            ok: false,
+            outcome: {
+              ok: false,
+              errorCode: "invalid_request",
+              error: "This sandbox is not attached to a chat any more.",
+            },
+          };
+        }
+        return {
+          ok: true,
+          panelId,
+          elementCount: outcome.elementCount,
+          elapsedMs: outcome.elapsedMs,
+        };
+      }),
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Task creation tools

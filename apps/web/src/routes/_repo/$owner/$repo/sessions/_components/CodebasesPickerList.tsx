@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Button,
+  Checkbox,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -178,61 +179,81 @@ export function ForeignGroupRow({ group }: { group: CodebaseGroup }) {
   );
 }
 
-/** One selectable "other repo" row, disabled when its name collides. */
-export function RepoRow({
+/**
+ * One repo row in the single composer dropdown. The row body switches the
+ * session's primary app (a plain link, same destination as the rail tile); the
+ * trailing checkbox links the repo as an extra codebase without leaving the
+ * current app. Repos that cannot be linked (the primary itself, monorepo
+ * siblings) render the row without a checkbox.
+ */
+export function AppRow({
   repo,
   primary,
   selected,
+  active,
+  linkable,
   isSelected,
   onToggle,
+  onSwitch,
 }: {
   repo: CodebaseRepoRow;
   primary: { name: string };
   selected: readonly { name: string }[];
+  active: boolean;
+  linkable: boolean;
   isSelected: boolean;
   onToggle: () => void;
+  onSwitch: () => void;
 }) {
   const label = repoDisplayLabel(repo);
   const collides =
-    !isSelected && codebaseNameCollides(repo, primary, selected);
+    linkable && !isSelected && codebaseNameCollides(repo, primary, selected);
 
-  const row = (
-    <button
-      type="button"
+  const checkbox = linkable ? (
+    <Checkbox
+      checked={isSelected}
       disabled={collides}
-      onClick={onToggle}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
-        collides
-          ? "cursor-not-allowed opacity-45"
-          : isSelected
-            ? "bg-muted"
-            : "hover:bg-muted/60",
-      )}
-    >
-      <RowIdentity
-        logoUrl={repo.logoUrl}
-        seed={`${repo.owner}/${repo.name}/${label}`}
-        label={label}
-      />
-      {isSelected ? (
-        <IconCheck size={14} className="shrink-0 text-primary" />
-      ) : null}
-    </button>
-  );
-
-  if (!collides) return row;
+      onCheckedChange={onToggle}
+      aria-label={`Also clone ${label} in this session`}
+      className={collides ? "cursor-not-allowed opacity-45" : undefined}
+    />
+  ) : null;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div>{row}</div>
-      </TooltipTrigger>
-      <TooltipContent>
-        Repository name "{repo.name}" collides with an already-selected
-        codebase
-      </TooltipContent>
-    </Tooltip>
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-md pr-2 text-sm",
+        active || isSelected ? "bg-muted" : "hover:bg-muted/60",
+      )}
+    >
+      <Link
+        to={repoHref(repo.owner, repo.name, repo.rootDirectory)}
+        onClick={onSwitch}
+        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 no-underline"
+      >
+        <RowIdentity
+          logoUrl={repo.logoUrl}
+          seed={`${repo.owner}/${repo.name}/${label}`}
+          label={label}
+        />
+        {active ? (
+          <IconCheck size={14} className="shrink-0 text-primary" />
+        ) : null}
+      </Link>
+      {collides ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>{checkbox}</div>
+          </TooltipTrigger>
+          <TooltipContent>
+            Repository name "{repo.name}" collides with an already-selected
+            codebase
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        checkbox
+      )}
+    </div>
   );
 }
 

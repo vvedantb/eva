@@ -4,6 +4,7 @@ export {
   buildReadableReposBlock,
   buildSystemPromptBlock,
   buildLinkedReposSection,
+  CHAT_UI_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
 } from "./shared";
 export type { LinkedRepoPromptRow } from "./shared";

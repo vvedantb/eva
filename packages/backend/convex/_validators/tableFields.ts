@@ -45,6 +45,7 @@ import {
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
+  scopeCheckValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
   userFlowValidator,
@@ -949,10 +950,10 @@ export const messageFields = {
   // User-role wake-up row inserted into the master session when a watched
   // child agent finishes. Drives distinct UI styling.
   orchestratorNotification: v.optional(v.boolean()),
-  // Turn checkpoint (assistant rows, sessions only): sandbox git HEAD when the
-  // turn started and after persistTurnWork committed/pushed at turn end. Equal
-  // shas mean the turn changed no code. Absent on turns from pre-checkpoint
-  // callback bundles and on task runs.
+  // Turn checkpoint (assistant rows on session, quick-task and project chat):
+  // sandbox git HEAD when the turn started and after persistTurnWork
+  // committed/pushed at turn end. Equal shas mean the turn changed no code.
+  // Absent on turns from pre-checkpoint callback bundles and on task runs.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
   // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
@@ -961,6 +962,10 @@ export const messageFields = {
   // writing only the scalars.
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
+  // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
+  // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
+  // three chat surfaces; task runs never checkpoint and so never carry one.
+  scopeCheck: v.optional(scopeCheckValidator),
 };
 
 export const queuedMessageFields = {
@@ -1345,6 +1350,24 @@ export const agentUsageLimitFields = {
    * treat that as "unknown", not as any of the three states.
    */
   completeness: v.optional(usageLimitCompletenessValidator),
+};
+
+/**
+ * One agent-generated UI panel rendered inline in a chat. `spec` is a
+ * json-render Spec serialised as JSON — kept as a string because its shape is
+ * the catalog's business, not the database's, and it is re-parsed at the
+ * client boundary (`@eva/shared/generativeUi`).
+ */
+export const chatUiPanelFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the panel appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  title: v.optional(v.string()),
+  /** The layout request the agent made, kept for debugging and provenance. */
+  prompt: v.string(),
+  spec: v.string(),
+  elementCount: v.number(),
+  createdAt: v.number(),
 };
 
 /** A captured ExitPlanMode plan, linked to the turn that proposed it. */

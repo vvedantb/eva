@@ -28,9 +28,11 @@ interface BuildSandboxTabDescriptorsArgs {
   showDesignsTab: boolean;
   hasDesignsContent: boolean;
   showArtifactsTab: boolean;
-  hasArtifactsContent: boolean;
+  /** Artifacts in this chat; `undefined` while the query is still loading. */
+  artifactCount: number | undefined;
   showDocumentsTab: boolean;
-  hasDocumentsContent: boolean;
+  /** Documents in this chat; `undefined` while the query is still loading. */
+  documentCount: number | undefined;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
 }
 
@@ -54,9 +56,9 @@ export function buildSandboxTabDescriptors({
   showDesignsTab,
   hasDesignsContent,
   showArtifactsTab,
-  hasArtifactsContent,
+  artifactCount,
   showDocumentsTab,
-  hasDocumentsContent,
+  documentCount,
   customTabs,
 }: BuildSandboxTabDescriptorsArgs): SandboxTabDescriptor[] {
   const descriptors: SandboxTabDescriptor[] = baseTabs.map((tab) => {
@@ -131,9 +133,9 @@ export function buildSandboxTabDescriptors({
       value: "artifacts",
       label: "Artifacts",
       icon: { kind: "component", Icon: IconLayoutDashboard },
-      indicator: hasArtifactsContent ? "content" : undefined,
-      indicatorLabel: hasArtifactsContent
-        ? "Artifacts generated in this chat"
+      count: artifactCount,
+      indicatorLabel: artifactCount
+        ? `${artifactCount} artifacts in this chat`
         : undefined,
     });
   }
@@ -143,9 +145,9 @@ export function buildSandboxTabDescriptors({
       value: "documents",
       label: "Documents",
       icon: { kind: "component", Icon: IconFile },
-      indicator: hasDocumentsContent ? "content" : undefined,
-      indicatorLabel: hasDocumentsContent
-        ? "Documents generated in this chat"
+      count: documentCount,
+      indicatorLabel: documentCount
+        ? `${documentCount} documents in this chat`
         : undefined,
     });
   }

@@ -232,6 +232,12 @@ importers:
       '@handlewithcare/prosemirror-suggest-changes':
         specifier: ^0.1.8
         version: 0.1.8(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-transform@1.12.0)(prosemirror-view@1.41.8)
+      '@json-render/core':
+        specifier: 0.21.0
+        version: 0.21.0(zod@3.25.76)
+      '@json-render/react':
+        specifier: 0.21.0
+        version: 0.21.0(react@19.2.1)(zod@3.25.76)
       '@pierre/diffs':
         specifier: ^1.4.0
         version: 1.4.0(@shikijs/themes@3.23.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -536,6 +542,12 @@ importers:
       '@jitl/quickjs-singlefile-cjs-release-sync':
         specifier: ^0.32.0
         version: 0.32.0
+      '@json-render/core':
+        specifier: 0.21.0
+        version: 0.21.0(zod@3.25.76)
+      '@json-render/react':
+        specifier: 0.21.0
+        version: 0.21.0(react@19.2.5)(zod@3.25.76)
       '@modelcontextprotocol/sdk':
         specifier: ^1.26.0
         version: 1.29.0(zod@3.25.76)
@@ -650,14 +662,20 @@ importers:
         version: 0.0.7(@types/react@19.0.10)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react:
         specifier: '>=19.0.0'
-        version: 19.2.1
-      zod:
-        specifier: '>=3.24.0'
-        version: 3.25.76
+        version: 19.2.5
     devDependencies:
+      '@json-render/core':
+        specifier: 0.21.0
+        version: 0.21.0(zod@3.25.76)
+      '@json-render/react':
+        specifier: 0.21.0
+        version: 0.21.0(react@19.2.5)(zod@3.25.76)
       '@types/react':
         specifier: 19.0.10
         version: 19.0.10
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
 
   packages/ui:
     dependencies:
@@ -2442,6 +2460,16 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@json-render/core@0.21.0':
+    resolution: {integrity: sha512-vysEbTjO1y8mEgAsp0tztRyaWCkNsBrG8MhAqbndGK3qmMXjMRdCNtk21+AQRNKdRelFGVAwBgtUNW8tfjQlsw==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@json-render/react@0.21.0':
+    resolution: {integrity: sha512-z/fZg0L8fJe2dnnQjWkmMw409iBclSWcOqdjoBy8eLHeBr/7F7VipzkY1CfgA2Fa5uW+zxZ54OvWMtdDcsp/yg==}
+    peerDependencies:
+      react: ^19.2.3
 
   '@kurkle/color@0.3.4':
     resolution: {integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==}
@@ -9524,9 +9552,6 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
-
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -11290,6 +11315,24 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@json-render/core@0.21.0(zod@3.25.76)':
+    dependencies:
+      zod: 3.25.76
+
+  '@json-render/react@0.21.0(react@19.2.1)(zod@3.25.76)':
+    dependencies:
+      '@json-render/core': 0.21.0(zod@3.25.76)
+      react: 19.2.1
+    transitivePeerDependencies:
+      - zod
+
+  '@json-render/react@0.21.0(react@19.2.5)(zod@3.25.76)':
+    dependencies:
+      '@json-render/core': 0.21.0(zod@3.25.76)
+      react: 19.2.5
+    transitivePeerDependencies:
+      - zod
 
   '@kurkle/color@0.3.4': {}
 
@@ -16010,7 +16053,7 @@ snapshots:
       tinyglobby: 0.2.17
       unbash: 4.0.3
       yaml: 2.9.0
-      zod: 4.3.6
+      zod: 4.4.3
 
   langium@4.2.2:
     dependencies:
@@ -18889,8 +18932,6 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
-
-  zod@4.3.6: {}
 
   zod@4.4.3: {}
 

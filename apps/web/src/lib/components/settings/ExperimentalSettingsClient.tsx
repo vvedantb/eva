@@ -16,7 +16,8 @@ type ExperimentalFlagKey =
   | "composerAutocomplete"
   | "simpleView"
   | "replyChime"
-  | "disablePageMotion";
+  | "disablePageMotion"
+  | "viewVercelDeployment";
 
 export function ExperimentalSettingsClient() {
   const flags = useQuery(api.auth.getExperimentalFlags);
@@ -62,7 +63,7 @@ export function ExperimentalSettingsClient() {
         description="Optional features. Off by default until you turn them on."
         bodyVariant="list"
       >
-        <ListEnter index={0} fast staggerMax={6}>
+        <ListEnter index={0} fast staggerMax={7}>
           <SettingsToggleRow
             title="Disable page animations"
             description="Skip page and list enters, chart draws, and panel motion. Hover marquees, loading UI, the composer beam, and the sessions sidebar working indicator stay on."
@@ -77,7 +78,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={1} fast staggerMax={6}>
+        <ListEnter index={1} fast staggerMax={7}>
           <SettingsToggleRow
             title="Chrome-style session tabs"
             description="Use horizontal tabs grouped by app. Archived and merged PRs move into an Archived menu."
@@ -90,7 +91,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={2} fast staggerMax={6}>
+        <ListEnter index={2} fast staggerMax={7}>
           <SettingsToggleRow
             title="Blur personal info"
             description="Blur names and emails when screen recording. Avatars stay visible."
@@ -103,7 +104,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={3} fast staggerMax={6}>
+        <ListEnter index={3} fast staggerMax={7}>
           <SettingsToggleRow
             title="Voice dictation"
             description="Use speech-to-text in chat and quick tasks. Requires microphone permission."
@@ -116,7 +117,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={4} fast staggerMax={6}>
+        <ListEnter index={4} fast staggerMax={7}>
           <SettingsToggleRow
             title="Composer autocomplete"
             description="Suggest inline completions while typing in chat and task composers. Press Tab to accept."
@@ -131,7 +132,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={5} fast staggerMax={6}>
+        <ListEnter index={5} fast staggerMax={7}>
           <SettingsToggleRow
             title="Reply chime"
             description="Play the notification sound when the agent finishes replying to you. Only your turns chime, and only on this machine."
@@ -144,7 +145,22 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={6} fast staggerMax={6}>
+        <ListEnter index={6} fast staggerMax={7}>
+          <SettingsToggleRow
+            title="View Vercel Deployment"
+            description="Show the Vercel deployment status in quick task properties, and the View Preview item in the More menu."
+            action={
+              <Switch
+                checked={flags.viewVercelDeployment === true}
+                onCheckedChange={(checked) =>
+                  toggle("viewVercelDeployment", checked)
+                }
+                aria-label="View Vercel Deployment"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={7} fast staggerMax={7}>
           <SettingsToggleRow
             title="Simple view"
             description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."

@@ -14,7 +14,11 @@ import {
   Switch,
   cn,
 } from "@eva/ui";
-import { IconPlus, IconX } from "@tabler/icons-react";
+import {
+  IconBrandGithub,
+  IconChevronDown,
+  IconX,
+} from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -25,19 +29,21 @@ import {
   repoGroupIdParser,
   installDependenciesParser,
 } from "@/lib/search-params";
-import { ComposerAppSwitcher } from "./ComposerAppSwitcher";
 import {
+  AppRow,
   ForeignGroupRow,
   OwnGroupRow,
   PickerSectionLabel,
   PickerSeparator,
-  RepoRow,
 } from "./CodebasesPickerList";
 import {
+  isCodebaseLinked,
   pickableCodebaseRepos,
   resolveRepoGroupId,
   resolveRepoIds,
+  toggleLinkedCodebase,
   type CodebaseGroup,
+  type CodebaseRepoRow,
 } from "../_utils";
 
 /**
@@ -132,16 +138,17 @@ function LinkedRepoChip({
 }
 
 /**
- * The landing composer's app switcher, extended with linked-repo chips and an
- * "Add codebase" popover (multi-repo sessions). The primary repo itself is
- * still switched via {@link ComposerAppSwitcher}; this only adds/removes the
- * repos cloned alongside it.
+ * The landing composer's single dropdown: it both switches the primary app and
+ * checks the extra codebases cloned alongside it (multi-repo sessions). One
+ * repo list serves both — the row body links to the app, the trailing checkbox
+ * links the repo into this session.
  */
 export function CodebasesPicker() {
   const { repo: primary } = useRepo();
   const [open, setOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const codebases = useCodebasesSelection();
+  const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId: primary._id });
   const createGroup = useMutation(api.repoGroups.create);
   const updateGroup = useMutation(api.repoGroups.update);
   const removeGroup = useMutation(api.repoGroups.remove);
@@ -152,14 +159,18 @@ export function CodebasesPicker() {
   const foreignGroups = codebases.groups.filter(
     (group) => group.primaryRepoId !== primary._id,
   );
-  const pickable = pickableCodebaseRepos(codebases.repos, primary);
+  // Only one row per `owner/name` can be linked (a linked repo is the whole
+  // checkout), so the checkbox shows on that representative row alone.
+  const linkableIds = new Set(
+    pickableCodebaseRepos(codebases.repos, primary).map((repo) => repo._id),
+  );
 
-  const toggleRepo = (repoId: Id<"githubRepos">) => {
-    const isSelected = codebases.linkedRepoIds.includes(repoId);
+  const isLinked = (repo: CodebaseRepoRow) =>
+    isCodebaseLinked(repo, codebases.linkedRepos);
+
+  const toggleRepo = (repo: CodebaseRepoRow) => {
     codebases.setLinkedRepoIds(
-      isSelected
-        ? codebases.linkedRepoIds.filter((id) => id !== repoId)
-        : [...codebases.linkedRepoIds, repoId],
+      toggleLinkedCodebase(repo, codebases.linkedRepos),
     );
   };
 
@@ -189,25 +200,27 @@ export function CodebasesPicker() {
 
   return (
     <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
-      <ComposerAppSwitcher />
-      {codebases.linkedRepos.map((repo) => (
-        <LinkedRepoChip
-          key={repo._id}
-          repo={repo}
-          onRemove={() => toggleRepo(repo._id)}
-        />
-      ))}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-sm text-muted-foreground no-underline hover:bg-muted hover:text-foreground"
+            className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm text-primary underline decoration-primary/30 decoration-1 underline-offset-4 transition-colors hover:text-primary/60 hover:decoration-primary/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40"
           >
-            <IconPlus size={13} />
-            Add codebase
+            <RepoLogo
+              logoUrl={logoUrl}
+              size={28}
+              fallback={
+                <IconBrandGithub
+                  size={28}
+                  className="shrink-0 text-muted-foreground"
+                />
+              }
+            />
+            <span className="truncate">{repoDisplayLabel(primary)}</span>
+            <IconChevronDown size={16} className="shrink-0 no-underline" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 p-2">
+        <PopoverContent align="center" className="w-80 p-2">
           <div className="max-h-80 overflow-y-auto">
             {ownGroups.length > 0 || foreignGroups.length > 0 ? (
               <>
@@ -247,20 +260,25 @@ export function CodebasesPicker() {
               </>
             ) : null}
 
-            <PickerSectionLabel>Repositories</PickerSectionLabel>
-            {pickable.length === 0 ? (
+            <PickerSectionLabel>
+              Apps · tick to add a codebase
+            </PickerSectionLabel>
+            {codebases.repos.length === 0 ? (
               <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                No other repositories available
+                No repositories available
               </p>
             ) : (
-              pickable.map((candidate) => (
-                <RepoRow
+              codebases.repos.map((candidate) => (
+                <AppRow
                   key={candidate._id}
                   repo={candidate}
                   primary={primary}
                   selected={codebases.linkedRepos}
-                  isSelected={codebases.linkedRepoIds.includes(candidate._id)}
-                  onToggle={() => toggleRepo(candidate._id)}
+                  active={candidate._id === primary._id}
+                  linkable={linkableIds.has(candidate._id)}
+                  isSelected={isLinked(candidate)}
+                  onToggle={() => toggleRepo(candidate)}
+                  onSwitch={() => setOpen(false)}
                 />
               ))
             )}
@@ -306,6 +324,13 @@ export function CodebasesPicker() {
           ) : null}
         </PopoverContent>
       </Popover>
+      {codebases.linkedRepos.map((repo) => (
+        <LinkedRepoChip
+          key={repo._id}
+          repo={repo}
+          onRemove={() => toggleRepo(repo)}
+        />
+      ))}
     </span>
   );
 }

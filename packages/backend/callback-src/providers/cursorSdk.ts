@@ -206,6 +206,7 @@ export function cursorModeParams(
 ): SdkModelParameterValue[] {
   const params: SdkModelParameterValue[] = [];
   if (
+    model === "grok-4.7" ||
     model === "grok-4.6" ||
     model === "grok-4.5" ||
     model === "composer-2.5"

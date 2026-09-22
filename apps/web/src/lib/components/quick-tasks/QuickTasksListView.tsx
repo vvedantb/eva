@@ -37,7 +37,8 @@ import {
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
-import { isTaskAgentActive, QuickTaskCard } from "./QuickTaskCard";
+import { QuickTaskCard } from "./QuickTaskCard";
+import { isTaskAgentActive } from "@/lib/components/tasks/taskAgentActivity";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";

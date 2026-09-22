@@ -283,10 +283,6 @@ export function ProjectSandboxChatPanel({
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
         repoId={repo._id}
-        isSandboxActive={isSandboxActive}
-        isSandboxToggling={isSandboxToggling}
-        onSandboxToggle={onSandboxToggle}
-        isAssistantResponding={isExecuting}
         model={model}
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
@@ -295,6 +291,7 @@ export function ProjectSandboxChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={projectId}
+        chatParentId={projectId}
         messages={messages ?? []}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}

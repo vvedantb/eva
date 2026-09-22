@@ -71,6 +71,7 @@ import {
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
+import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -85,6 +86,7 @@ interface StatusFieldsSectionProps {
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
   baseBranch: string;
   setBaseBranch: (v: string) => void;
+  /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
   hasActiveRun: boolean;
   /** Locks the model picker — the model that ran must stay on the record. */
@@ -109,6 +111,7 @@ export function StatusFieldsSection({
   isOwner,
   allTags,
 }: StatusFieldsSectionProps) {
+  const viewVercelDeployment = useViewVercelDeployment();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       if (!task?.repoId) return;
@@ -515,7 +518,7 @@ export function StatusFieldsSection({
         </AnimatePresence>
 
         <AnimatePresence initial={false}>
-          {latestDeployment?.deploymentStatus ? (
+          {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
             <m.div
               key="vercel-deployment"
               className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}
