@@ -42,14 +42,10 @@ import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandbo
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
-<<<<<<< HEAD
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
 import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
-=======
-import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
->>>>>>> origin/main
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
