@@ -34,8 +34,27 @@ export const IGNORED_FILE_NAMES: ReadonlySet<string> = new Set([
   "composer.lock",
 ]);
 
-/** One hunk's share of Jev's state budget; a longer hunk is judged on its head. */
-export const MAX_HUNK_CHARS = 6_000;
+/**
+ * Generated output no prompt asks for by name: build artefacts checked in for
+ * the runtime (the sandbox callback bundle, Convex codegen). Their hunks are
+ * minified walls of text that time Jev out, and judging them would flag every
+ * turn that rebuilt them.
+ */
+export const IGNORED_PATH_PATTERNS: ReadonlyArray<RegExp> = [
+  /\.generated\.[cm]?[jt]sx?$/, // foo.generated.ts / .js / .mjs / .tsx …
+  /(^|\/)_generated\//, // Convex codegen directory
+  /\.min\.[cm]?js$/, // pre-minified vendored scripts
+  /(^|\/)dist\//, // built output that some repos commit
+];
+
+/**
+ * One hunk's share of Jev's state budget; a longer hunk is judged on its head.
+ *
+ * 3k rather than 6k because Jev answers a 3k hunk in well under a second but
+ * stalled past its 30 s timeout on 6k minified hunks, leaving them unjudged. A
+ * hunk's head is enough to judge intent.
+ */
+export const MAX_HUNK_CHARS = 3_000;
 
 const TRUNCATION_MARKER = "\n… (hunk truncated)";
 
@@ -66,6 +85,15 @@ function basename(path: string): string {
 }
 
 /**
+ * Whether a repo-relative path is judge-exempt: a known generated basename, or
+ * a path shaped like build output.
+ */
+export function isIgnoredFile(path: string): boolean {
+  if (IGNORED_FILE_NAMES.has(basename(path))) return true;
+  return IGNORED_PATH_PATTERNS.some((pattern) => pattern.test(path));
+}
+
+/**
  * The path a block's hunks belong to. Deletions write `+++ /dev/null`, so the
  * old-side path is the only name the file has.
  */
@@ -93,7 +121,7 @@ function isBinaryBlock(lines: readonly string[]): boolean {
 function blockHunks(lines: readonly string[]): DiffHunk[] {
   if (isBinaryBlock(lines)) return [];
   const file = blockFilePath(lines);
-  if (file === null || IGNORED_FILE_NAMES.has(basename(file))) return [];
+  if (file === null || isIgnoredFile(file)) return [];
 
   const hunks: DiffHunk[] = [];
   let header: string | null = null;

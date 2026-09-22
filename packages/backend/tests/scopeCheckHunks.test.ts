@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
   IGNORED_FILE_NAMES,
+  isIgnoredFile,
   MAX_HUNK_CHARS,
   splitDiffIntoHunks,
 } from "../convex/_scopeCheck/hunks";
+
+/** A one-hunk diff touching `path`, enough to see whether it is judged. */
+function oneHunkDiff(path: string): string {
+  return `diff --git a/${path} b/${path}
+index 1111111..2222222 100644
+--- a/${path}
++++ b/${path}
+@@ -1 +1 @@
+-const a = 1;
++const a = 2;
+`;
+}
 
 /**
  * The motivating case: a file the prompt did ask about, plus a hunk in it that
@@ -138,6 +151,39 @@ zcmZ?wbhEHb
     expect(splitDiffIntoHunks(diff)).toEqual([]);
   });
 
+  it("skips the regenerated sandbox callback bundle", () => {
+    expect(
+      splitDiffIntoHunks(
+        oneHunkDiff(
+          "packages/backend/convex/_sandbox_runtime/callbackScript.generated.ts",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("skips the Convex codegen directory", () => {
+    expect(
+      splitDiffIntoHunks(
+        oneHunkDiff("packages/backend/convex/_generated/api.d.ts"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("skips pre-minified vendored scripts", () => {
+    expect(splitDiffIntoHunks(oneHunkDiff("vendor/lib.min.js"))).toEqual([]);
+  });
+
+  it("skips committed build output", () => {
+    expect(splitDiffIntoHunks(oneHunkDiff("dist/index.js"))).toEqual([]);
+  });
+
+  it("judges a source file whose directory merely reads as generated", () => {
+    const path = "src/generatedReports/Report.tsx";
+    expect(
+      splitDiffIntoHunks(oneHunkDiff(path)).map((hunk) => hunk.file),
+    ).toEqual([path]);
+  });
+
   it("yields nothing for a rename with no hunks", () => {
     const diff = `diff --git a/src/old.ts b/src/new.ts
 similarity index 100%
@@ -175,5 +221,13 @@ ${long}
     expect(splitDiffIntoHunks("")).toEqual([]);
     expect(splitDiffIntoHunks("not a diff at all\njust prose\n")).toEqual([]);
     expect(splitDiffIntoHunks("@@ -1 +1 @@\n-a\n+b\n")).toEqual([]);
+  });
+});
+
+describe("isIgnoredFile", () => {
+  it("matches a lockfile basename however deep it sits", () => {
+    expect(isIgnoredFile("apps/web/nested/pnpm-lock.yaml")).toBe(true);
+    expect(isIgnoredFile("pnpm-lock.yaml")).toBe(true);
+    expect(isIgnoredFile("apps/web/src/lockfileNotes.ts")).toBe(false);
   });
 });
