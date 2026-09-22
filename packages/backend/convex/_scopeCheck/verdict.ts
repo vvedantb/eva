@@ -11,7 +11,7 @@ import type { z } from "zod";
 import type { booleanQuestion } from "../_jev/schema";
 import type { scopeCheckValidator } from "../_validators/shapes";
 import type { Infer } from "convex/values";
-import { clipToLineBoundary } from "./hunks";
+import { clipToLineBoundary, type DiffHunk } from "./hunks";
 
 /** One Jev call per hunk, so a 400-hunk turn does not bill like one. */
 export const MAX_JUDGED_HUNKS = 60;
@@ -21,8 +21,13 @@ export const SCOPE_BATCH_SIZE = 6;
 export const MAX_FLAGGED_HUNKS = 20;
 /** Flagged when Jev leans "not asked for" on both questions. */
 export const FLAG_THRESHOLD = 0.5;
-/** Whole-diff state budget: prompt + diff must stay under Jev's 200k cap. */
-export const MAX_OVERALL_DIFF_CHARS = 150_000;
+/**
+ * Whole-diff state budget. Well under Jev's 200k-character schema cap: the
+ * gateway answered a 41k-character state (16.7k input tokens) but returned 503
+ * on a 77k one, repeatably, so the schema limit is not the real ceiling. A
+ * headline question that 503s costs the chip its own number.
+ */
+export const MAX_OVERALL_DIFF_CHARS = 30_000;
 /** Jev needs the ask, not the essay; long prompts are asks plus context. */
 export const MAX_PROMPT_CHARS = 8_000;
 
@@ -90,11 +95,28 @@ export function clipPrompt(prompt: string): string {
   return prompt.slice(0, MAX_PROMPT_CHARS);
 }
 
-export function clipDiffForOverall(diff: string): {
+/**
+ * Renders the judgeable hunks back into a diff for the headline question, so it
+ * reads exactly what the per-hunk questions read: ignored files (lockfiles,
+ * generated bundles) are already gone, and cannot inflate the chip's number.
+ *
+ * Consecutive hunks of one file share a single `--- <file>` line, which spends
+ * the budget on code rather than on repeated paths.
+ */
+export function buildOverallDiff(hunks: readonly DiffHunk[]): {
   text: string;
   clipped: boolean;
 } {
-  return clipToLineBoundary(diff, MAX_OVERALL_DIFF_CHARS);
+  const lines: string[] = [];
+  let currentFile: string | null = null;
+  for (const hunk of hunks) {
+    if (hunk.file !== currentFile) {
+      lines.push(`--- ${hunk.file}`);
+      currentFile = hunk.file;
+    }
+    lines.push(hunk.header, hunk.body);
+  }
+  return clipToLineBoundary(lines.join("\n"), MAX_OVERALL_DIFF_CHARS);
 }
 
 /**

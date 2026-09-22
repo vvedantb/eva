@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  clipDiffForOverall,
+  buildOverallDiff,
   clipPrompt,
   FLAG_THRESHOLD,
   HUNK_QUESTIONS,
@@ -12,6 +12,7 @@ import {
   summariseScopeCheck,
   type JudgedHunk,
 } from "../convex/_scopeCheck/verdict";
+import type { DiffHunk } from "../convex/_scopeCheck/hunks";
 
 function hunk(
   requested: number,
@@ -19,6 +20,10 @@ function hunk(
   file = "src/a.ts",
 ): JudgedHunk {
   return { file, header: `@@ ${requested} @@`, requested, necessary };
+}
+
+function diffHunk(file: string, header: string, body: string): DiffHunk {
+  return { file, header, body };
 }
 
 describe("questions", () => {
@@ -145,22 +150,78 @@ describe("clipping", () => {
     );
     expect(clipPrompt("short ask")).toBe("short ask");
   });
+});
 
-  it("leaves a diff under the cap alone", () => {
-    expect(clipDiffForOverall("+a\n+b\n")).toEqual({
-      text: "+a\n+b\n",
-      clipped: false,
-    });
+describe("buildOverallDiff", () => {
+  it("writes one path line per run of hunks in the same file", () => {
+    const result = buildOverallDiff([
+      diffHunk("src/a.ts", "@@ -1 +1 @@", "+one"),
+      diffHunk("src/a.ts", "@@ -9 +9 @@", "+two\n+three"),
+      diffHunk("src/b.ts", "@@ -4 +4 @@", "+four"),
+    ]);
+    expect(result.clipped).toBe(false);
+    expect(result.text.split("\n")).toEqual([
+      "--- src/a.ts",
+      "@@ -1 +1 @@",
+      "+one",
+      "@@ -9 +9 @@",
+      "+two",
+      "+three",
+      "--- src/b.ts",
+      "@@ -4 +4 @@",
+      "+four",
+    ]);
   });
 
-  it("clips a long diff on a line boundary", () => {
-    const line = "+".padEnd(100, "y");
-    const diff = Array.from({ length: 3000 }, () => line).join("\n");
-    const result = clipDiffForOverall(diff);
+  it("repeats a path line when the file comes back later", () => {
+    const result = buildOverallDiff([
+      diffHunk("src/a.ts", "@@ -1 +1 @@", "+one"),
+      diffHunk("src/b.ts", "@@ -2 +2 @@", "+two"),
+      diffHunk("src/a.ts", "@@ -3 +3 @@", "+three"),
+    ]);
+    expect(
+      result.text.split("\n").filter((line) => line.startsWith("--- ")),
+    ).toEqual(["--- src/a.ts", "--- src/b.ts", "--- src/a.ts"]);
+  });
+
+  it("includes every hunk's header and body", () => {
+    const result = buildOverallDiff([
+      diffHunk("src/a.ts", "@@ -1,2 +1,3 @@ fn a", "+alpha"),
+      diffHunk("src/b.ts", "@@ -7,1 +7,2 @@ fn b", "-beta\n+gamma"),
+    ]);
+    for (const fragment of [
+      "@@ -1,2 +1,3 @@ fn a",
+      "+alpha",
+      "@@ -7,1 +7,2 @@ fn b",
+      "-beta",
+      "+gamma",
+    ]) {
+      expect(result.text).toContain(fragment);
+    }
+  });
+
+  it("returns nothing for an empty hunk list", () => {
+    expect(buildOverallDiff([])).toEqual({ text: "", clipped: false });
+  });
+
+  it("clips on a line boundary at the cap", () => {
+    const body = "+".padEnd(100, "y");
+    const header = "@@ -1,4 +1,4 @@";
+    const hunks = Array.from({ length: 400 }, () =>
+      diffHunk("src/a.ts", header, body),
+    );
+    const result = buildOverallDiff(hunks);
     expect(result.clipped).toBe(true);
     expect(result.text.length).toBeLessThanOrEqual(MAX_OVERALL_DIFF_CHARS);
-    for (const clippedLine of result.text.split("\n")) {
-      expect(clippedLine).toBe(line);
+    // Every surviving line is whole: no line was cut through the middle.
+    for (const line of result.text.split("\n")) {
+      expect([body, header, "--- src/a.ts"]).toContain(line);
     }
+  });
+
+  it("keeps the whole-diff budget inside what the gateway actually serves", () => {
+    // 41k answered, 77k returned 503 repeatably. Leave headroom for the prompt
+    // and JSON escaping on top of the diff text.
+    expect(MAX_OVERALL_DIFF_CHARS).toBeLessThanOrEqual(50_000);
   });
 });

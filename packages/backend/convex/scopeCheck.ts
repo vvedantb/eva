@@ -22,7 +22,7 @@ import { evaluateDecision } from "./_jev/client";
 import type { EvaluateInputRaw } from "./_jev/schema";
 import { splitDiffIntoHunks } from "./_scopeCheck/hunks";
 import {
-  clipDiffForOverall,
+  buildOverallDiff,
   clipPrompt,
   HUNK_QUESTIONS,
   MAX_JUDGED_HUNKS,
@@ -121,7 +121,10 @@ export const evaluateTurn = internalAction({
         }
       }
 
-      const overallDiff = clipDiffForOverall(diff.diff);
+      // The headline question reads the same filtered hunks the per-hunk
+      // questions do — every judgeable hunk, not just the judged slice — so
+      // lockfile and generated-bundle churn cannot drive the chip's number.
+      const overallDiff = buildOverallDiff(hunks);
       const overall = await evaluateDecision(
         {
           state: { prompt, diff: overallDiff.text },
