@@ -100,6 +100,12 @@ function MessageModelIcon({
 
 interface ChatMessageProps {
   message: ChatBodyMessage;
+  /**
+   * False for rows the user has already scrolled past — the transcript backlog
+   * mounts a whole chat at once, and 80 simultaneous enter animations is both
+   * wrong (nothing arrived) and the most expensive part of that commit.
+   */
+  animateIn?: boolean;
   repoBasePath: string;
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
@@ -160,6 +166,7 @@ interface ChatMessageProps {
 
 export const ChatMessage = memo(function ChatMessage({
   message,
+  animateIn = true,
   repoBasePath,
   isLatestAssistantTurn,
   showChangedFiles = true,
@@ -282,7 +289,7 @@ export const ChatMessage = memo(function ChatMessage({
       >
         <m.div
           data-message-id={message._id}
-          initial={{ opacity: 0, y: 10 }}
+          initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={motionFast}
         >

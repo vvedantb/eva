@@ -21,7 +21,7 @@ import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesE
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
-import { useState, type ReactNode } from "react";
+import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -239,6 +239,17 @@ export function ChatBody({
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
 
+  // Opening a long chat used to commit every settled turn in one blocking
+  // render — ~1s of locked main thread on a heavy transcript. Only the last
+  // turn is ever in the viewport (ChatLastTurn pads it to `100cqh`), so the
+  // backlog above it renders one pass later, at transition priority.
+  //
+  // Deferring "the transcript has rows" rather than mount — a chat whose
+  // messages arrive after mount would otherwise have spent its deferred pass
+  // on the loading skeleton and then commit the whole backlog in the render
+  // that first has data.
+  const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+
   const lastMessage = displayMessages[displayMessages.length - 1];
   // The oldest unfinished Working bubble owns the session-scoped streaming
   // row — turns run FIFO, so a newer queued placeholder must not steal a
@@ -384,7 +395,16 @@ export function ChatBody({
           />
         ));
 
-  const renderMessage = (message: ChatBodyMessage) => {
+  /**
+   * `isBacklog` marks a row the chat opened already scrolled past, which skips
+   * its enter animation: nothing arrived, and 80 simultaneous enter animations
+   * is the most expensive part of committing a long transcript.
+   *
+   * (`content-visibility: auto` on these rows was tried and reverted — no
+   * intrinsic-size estimate fits a chat turn, so the scroll height grew from
+   * 19k to 36k px as the user scrolled up through them.)
+   */
+  const renderMessage = (message: ChatBodyMessage, isBacklog = false) => {
     const isStreamingTarget = message._id === streamingTargetId;
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const senderFirstName =
@@ -400,6 +420,7 @@ export function ChatBody({
       <div key={message._id} className="flex flex-col gap-3">
         <ChatMessage
           message={message}
+          animateIn={!isBacklog}
           repoBasePath={repoBasePath}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
@@ -459,21 +480,29 @@ export function ChatBody({
               />
             )))
           ) : lastUserMessageIndex < 0 ? (
-            displayMessages.map(renderMessage)
+            displayMessages.map((message) => renderMessage(message))
           ) : (
             <>
-              {displayMessages
-                .slice(0, lastUserMessageIndex)
-                .map(renderMessage)}
+              {backlogReady
+                ? displayMessages
+                    .slice(0, lastUserMessageIndex)
+                    .map((message) => renderMessage(message, true))
+                : null}
               <ChatLastTurn>
-                {displayMessages.slice(lastUserMessageIndex).map(renderMessage)}
+                {displayMessages
+                  .slice(lastUserMessageIndex)
+                  .map((message) => renderMessage(message))}
               </ChatLastTurn>
             </>
           )}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
-        <ChatJumpRail messages={jumpRailMessages} />
+        {/* Mounted with the backlog: the rail resolves its ticks by querying
+            `[data-message-id]` from an effect keyed on the (memoised) tick
+            array, so binding it before those rows exist would observe nothing
+            and never retry. */}
+        {backlogReady ? <ChatJumpRail messages={jumpRailMessages} /> : null}
       </Conversation>
       {isArchived ? null : (
         <AnimatePresence mode="wait" initial={false}>
