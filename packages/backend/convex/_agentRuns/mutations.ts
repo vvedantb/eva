@@ -7,7 +7,6 @@ import {
   logLevelValidator,
   deploymentStatusValidator,
 } from "../validators";
-import { createNotification } from "../notifications";
 import {
   authMutation,
   hasTaskAccess,
@@ -26,35 +25,6 @@ async function loadAccessibleRun(
   if (!task || !(await hasTaskAccess(db, task, userId)))
     throw new Error("Run not found");
   return { run, task };
-}
-
-/** Builds a human-readable notification message for a completed or failed run. */
-function buildRunNotificationMessage(params: {
-  success: boolean;
-  projectId: Id<"projects"> | undefined;
-  resultSummary: string | undefined;
-  error: string | undefined;
-  prUrl: string | undefined;
-}): string {
-  const scopeLabel = params.projectId ? "project task" : "quick task";
-  if (params.success) {
-    if (params.prUrl) {
-      return `Run succeeded for this ${scopeLabel}. Pull request: ${params.prUrl}`;
-    }
-    if (params.resultSummary) {
-      return `Run succeeded for this ${scopeLabel}. ${params.resultSummary}`;
-    }
-    return `Run succeeded for this ${scopeLabel}.`;
-  }
-  if (params.error) {
-    const trimmedError = params.error.trim();
-    const clippedError =
-      trimmedError.length > 200
-        ? `${trimmedError.slice(0, 197)}...`
-        : trimmedError;
-    return `Run failed for this ${scopeLabel}. ${clippedError}`;
-  }
-  return `Run failed for this ${scopeLabel}.`;
 }
 
 /** Updates the status of an in-progress agent run and recomputes project phase if needed. */
@@ -160,30 +130,8 @@ export const complete = authMutation({
     if (task.projectId) {
       await recomputeProjectPhase(ctx, task.projectId);
     }
-    const scopeLabel = task.projectId ? "Task" : "Quick task";
-    const statusText = args.success ? "completed" : "failed";
-    const notifyUsers = new Set(
-      [task.createdBy, task.assignedTo].filter(
-        (id): id is Id<"users"> => id !== undefined,
-      ),
-    );
-    for (const userId of notifyUsers) {
-      await createNotification(ctx, {
-        userId,
-        type: args.success ? "run_completed" : "run_failed",
-        title: `${scopeLabel} ${statusText}: ${task.title}`,
-        repoId: task.repoId,
-        projectId: task.projectId,
-        taskId: task._id,
-        message: buildRunNotificationMessage({
-          success: args.success,
-          projectId: task.projectId,
-          resultSummary: args.resultSummary,
-          error: args.error,
-          prUrl: args.prUrl,
-        }),
-      });
-    }
+    // Run success/failure deliberately sends no notification: the task card and
+    // chat already show the outcome, so an inbox row per run is pure noise.
     return null;
   },
 });

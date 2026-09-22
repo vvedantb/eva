@@ -1,6 +1,7 @@
 "use client";
 
-import { Badge } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { Badge, motionFast } from "@eva/ui";
 import type { Doc } from "@eva/backend";
 import {
   IconNotes,
@@ -120,9 +121,20 @@ export function ProjectPhaseBadge({ phase }: ProjectPhaseBadgeProps) {
   const Icon = config.icon;
 
   return (
-    <Badge className={`${config.text} ${config.bg} border-transparent`}>
-      <Icon size={14} className={`mr-1 ${config.text}`} />
-      {config.label}
-    </Badge>
+    <AnimatePresence mode="wait" initial={false}>
+      <m.span
+        key={phase}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={motionFast}
+        className="inline-flex"
+      >
+        <Badge className={`${config.text} ${config.bg} border-transparent`}>
+          <Icon size={14} className={`mr-1 ${config.text}`} />
+          {config.label}
+        </Badge>
+      </m.span>
+    </AnimatePresence>
   );
 }

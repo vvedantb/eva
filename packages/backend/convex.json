@@ -7,7 +7,9 @@
       "@modelcontextprotocol/sdk",
       "jose",
       "pg",
-      "shell-quote"
+      "shell-quote",
+      "quickjs-emscripten-core",
+      "@jitl/quickjs-singlefile-cjs-release-sync"
     ]
   }
 }

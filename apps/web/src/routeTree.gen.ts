@@ -14,6 +14,7 @@ import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
 import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
+import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -25,9 +26,11 @@ import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
+import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
 import { Route as GlobalSettingsAccountsRouteImport } from './routes/_global/settings/accounts'
 import { Route as GlobalSettingsConnectionsRouteImport } from './routes/_global/settings/connections'
 import { Route as GlobalSettingsExperimentalRouteImport } from './routes/_global/settings/experimental'
+import { Route as GlobalSettingsGrokBotRouteImport } from './routes/_global/settings/grok-bot'
 import { Route as GlobalSettingsNotificationsRouteImport } from './routes/_global/settings/notifications'
 import { Route as GlobalSettingsPersonalisationRouteImport } from './routes/_global/settings/personalisation'
 import { Route as GlobalSettingsSandboxesRouteImport } from './routes/_global/settings/sandboxes'
@@ -157,6 +160,11 @@ const PreviewAuthRoute = PreviewAuthRouteImport.update({
   path: '/preview-auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SlidesRoute = SlidesRouteImport.update({
+  id: '/slides',
+  path: '/slides',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
   id: '/automations',
   path: '/automations',
@@ -213,6 +221,11 @@ const GlobalArtifactsArtifactIdRoute =
     path: '/artifacts/$artifactId',
     getParentRoute: () => GlobalRoute,
   } as any)
+const GlobalSettingsIndexRoute = GlobalSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GlobalSettingsRouteRoute,
+} as any)
 const GlobalSettingsAccountsRoute = GlobalSettingsAccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
@@ -230,6 +243,11 @@ const GlobalSettingsExperimentalRoute =
     path: '/experimental',
     getParentRoute: () => GlobalSettingsRouteRoute,
   } as any)
+const GlobalSettingsGrokBotRoute = GlobalSettingsGrokBotRouteImport.update({
+  id: '/grok-bot',
+  path: '/grok-bot',
+  getParentRoute: () => GlobalSettingsRouteRoute,
+} as any)
 const GlobalSettingsNotificationsRoute =
   GlobalSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -854,6 +872,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -868,6 +887,7 @@ export interface FileRoutesByFullPath {
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/connections': typeof GlobalSettingsConnectionsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
+  '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
@@ -878,6 +898,7 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
+  '/settings/': typeof GlobalSettingsIndexRoute
   '/teams/': typeof GlobalTeamsIndexRoute
   '/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsRouteRouteWithChildren
   '/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksRouteRouteWithChildren
@@ -978,7 +999,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/settings': typeof GlobalSettingsRouteRouteWithChildren
+  '/slides': typeof SlidesRoute
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
@@ -991,6 +1012,7 @@ export interface FileRoutesByTo {
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/connections': typeof GlobalSettingsConnectionsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
+  '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
@@ -1000,6 +1022,7 @@ export interface FileRoutesByTo {
   '/setup/$id': typeof GlobalSetupIdRoute
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
+  '/settings': typeof GlobalSettingsIndexRoute
   '/teams': typeof GlobalTeamsIndexRoute
   '/teams/$teamId/$teamTab': typeof GlobalTeamsTeamIdTeamTabRoute
   '/$owner/$repo/inbox': typeof RepoOwnerRepoInboxRoute
@@ -1081,6 +1104,7 @@ export interface FileRoutesById {
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1095,6 +1119,7 @@ export interface FileRoutesById {
   '/_global/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/_global/settings/connections': typeof GlobalSettingsConnectionsRoute
   '/_global/settings/experimental': typeof GlobalSettingsExperimentalRoute
+  '/_global/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/_global/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/_global/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
   '/_global/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
@@ -1105,6 +1130,7 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
+  '/_global/settings/': typeof GlobalSettingsIndexRoute
   '/_global/teams/': typeof GlobalTeamsIndexRoute
   '/_repo/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsRouteRouteWithChildren
   '/_repo/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksRouteRouteWithChildren
@@ -1207,6 +1233,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
+    | '/slides'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1221,6 +1248,7 @@ export interface FileRouteTypes {
     | '/settings/accounts'
     | '/settings/connections'
     | '/settings/experimental'
+    | '/settings/grok-bot'
     | '/settings/notifications'
     | '/settings/personalisation'
     | '/settings/sandboxes'
@@ -1231,6 +1259,7 @@ export interface FileRouteTypes {
     | '/$owner/$repo'
     | '/mcp/oauth/authorize'
     | '/artifacts/'
+    | '/settings/'
     | '/teams/'
     | '/$owner/$repo/automations'
     | '/$owner/$repo/quick-tasks'
@@ -1331,7 +1360,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
-    | '/settings'
+    | '/slides'
     | '/automations'
     | '/ave'
     | '/changelog'
@@ -1344,6 +1373,7 @@ export interface FileRouteTypes {
     | '/settings/accounts'
     | '/settings/connections'
     | '/settings/experimental'
+    | '/settings/grok-bot'
     | '/settings/notifications'
     | '/settings/personalisation'
     | '/settings/sandboxes'
@@ -1353,6 +1383,7 @@ export interface FileRouteTypes {
     | '/setup/$id'
     | '/mcp/oauth/authorize'
     | '/artifacts'
+    | '/settings'
     | '/teams'
     | '/teams/$teamId/$teamTab'
     | '/$owner/$repo/inbox'
@@ -1433,6 +1464,7 @@ export interface FileRouteTypes {
     | '/_repo'
     | '/agent-callback'
     | '/preview-auth'
+    | '/slides'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1447,6 +1479,7 @@ export interface FileRouteTypes {
     | '/_global/settings/accounts'
     | '/_global/settings/connections'
     | '/_global/settings/experimental'
+    | '/_global/settings/grok-bot'
     | '/_global/settings/notifications'
     | '/_global/settings/personalisation'
     | '/_global/settings/sandboxes'
@@ -1457,6 +1490,7 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo'
     | '/mcp/oauth/authorize'
     | '/_global/artifacts/'
+    | '/_global/settings/'
     | '/_global/teams/'
     | '/_repo/$owner/$repo/automations'
     | '/_repo/$owner/$repo/quick-tasks'
@@ -1560,6 +1594,7 @@ export interface RootRouteChildren {
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
+  SlidesRoute: typeof SlidesRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1598,6 +1633,13 @@ declare module '@tanstack/react-router' {
       path: '/preview-auth'
       fullPath: '/preview-auth'
       preLoaderRoute: typeof PreviewAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides': {
+      id: '/slides'
+      path: '/slides'
+      fullPath: '/slides'
+      preLoaderRoute: typeof SlidesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -1677,6 +1719,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GlobalArtifactsArtifactIdRouteImport
       parentRoute: typeof GlobalRoute
     }
+    '/_global/settings/': {
+      id: '/_global/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof GlobalSettingsIndexRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
+    }
     '/_global/settings/accounts': {
       id: '/_global/settings/accounts'
       path: '/accounts'
@@ -1696,6 +1745,13 @@ declare module '@tanstack/react-router' {
       path: '/experimental'
       fullPath: '/settings/experimental'
       preLoaderRoute: typeof GlobalSettingsExperimentalRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
+    }
+    '/_global/settings/grok-bot': {
+      id: '/_global/settings/grok-bot'
+      path: '/grok-bot'
+      fullPath: '/settings/grok-bot'
+      preLoaderRoute: typeof GlobalSettingsGrokBotRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/notifications': {
@@ -2440,24 +2496,28 @@ interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsAccountsRoute: typeof GlobalSettingsAccountsRoute
   GlobalSettingsConnectionsRoute: typeof GlobalSettingsConnectionsRoute
   GlobalSettingsExperimentalRoute: typeof GlobalSettingsExperimentalRoute
+  GlobalSettingsGrokBotRoute: typeof GlobalSettingsGrokBotRoute
   GlobalSettingsNotificationsRoute: typeof GlobalSettingsNotificationsRoute
   GlobalSettingsPersonalisationRoute: typeof GlobalSettingsPersonalisationRoute
   GlobalSettingsSandboxesRoute: typeof GlobalSettingsSandboxesRoute
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
   GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
   GlobalSettingsThemeRoute: typeof GlobalSettingsThemeRoute
+  GlobalSettingsIndexRoute: typeof GlobalSettingsIndexRoute
 }
 
 const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsAccountsRoute: GlobalSettingsAccountsRoute,
   GlobalSettingsConnectionsRoute: GlobalSettingsConnectionsRoute,
   GlobalSettingsExperimentalRoute: GlobalSettingsExperimentalRoute,
+  GlobalSettingsGrokBotRoute: GlobalSettingsGrokBotRoute,
   GlobalSettingsNotificationsRoute: GlobalSettingsNotificationsRoute,
   GlobalSettingsPersonalisationRoute: GlobalSettingsPersonalisationRoute,
   GlobalSettingsSandboxesRoute: GlobalSettingsSandboxesRoute,
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
   GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,
   GlobalSettingsThemeRoute: GlobalSettingsThemeRoute,
+  GlobalSettingsIndexRoute: GlobalSettingsIndexRoute,
 }
 
 const GlobalSettingsRouteRouteWithChildren =
@@ -3066,6 +3126,7 @@ const rootRouteChildren: RootRouteChildren = {
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
   PreviewAuthRoute: PreviewAuthRoute,
+  SlidesRoute: SlidesRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport

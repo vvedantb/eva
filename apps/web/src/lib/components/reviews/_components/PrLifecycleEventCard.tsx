@@ -1,4 +1,7 @@
-import { Button, Surface } from "@eva/ui";
+"use client";
+
+import { m } from "motion/react";
+import { Button, Surface, motionBase } from "@eva/ui";
 import {
   IconGitMerge,
   IconGitPullRequestClosed,
@@ -43,30 +46,36 @@ export function PrLifecycleEventCard({
     sha === null ? null : `${overview.htmlUrl}/commits/${sha}`;
 
   return (
-    <Surface density="tight" className="flex min-w-0 items-center gap-3">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        {merged ? (
-          <IconGitMerge size={15} aria-hidden />
-        ) : (
-          <IconGitPullRequestClosed size={15} aria-hidden />
+    <m.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionBase}
+    >
+      <Surface density="tight" className="flex min-w-0 items-center gap-3">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          {merged ? (
+            <IconGitMerge size={15} aria-hidden />
+          ) : (
+            <IconGitPullRequestClosed size={15} aria-hidden />
+          )}
+        </span>
+
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="text-sm font-medium">{merged ? "Merged" : "Closed"}</p>
+          <p className="min-w-0 truncate text-xs text-muted-foreground">
+            <Detail status={status} overview={overview} />
+          </p>
+        </div>
+
+        {commitUrl === null ? null : (
+          <Button size="sm" variant="outline" asChild className="shrink-0">
+            <a href={commitUrl} target="_blank" rel="noopener noreferrer">
+              View commit
+            </a>
+          </Button>
         )}
-      </span>
-
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-sm font-medium">{merged ? "Merged" : "Closed"}</p>
-        <p className="min-w-0 truncate text-xs text-muted-foreground">
-          <Detail status={status} overview={overview} />
-        </p>
-      </div>
-
-      {commitUrl === null ? null : (
-        <Button size="sm" variant="outline" asChild className="shrink-0">
-          <a href={commitUrl} target="_blank" rel="noopener noreferrer">
-            View commit
-          </a>
-        </Button>
-      )}
-    </Surface>
+      </Surface>
+    </m.div>
   );
 }
 

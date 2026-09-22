@@ -8,6 +8,14 @@ export {
 } from "./_sessions/queries";
 
 export {
+  listRepos,
+  listLinkedReposInternal,
+  getSessionRepoInternal,
+  patchSessionRepo,
+  findSessionRepoByPrUrl,
+} from "./_sessions/repos";
+
+export {
   create,
   addMessage,
   updateStatus,

@@ -1,6 +1,7 @@
 "use node";
 
 import { v, type Infer } from "convex/values";
+import { quote } from "shell-quote";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
@@ -60,6 +61,7 @@ import {
   shouldDeferDaemonRespawn,
   type DaemonTurnSnapshot,
 } from "../_chat/daemonClaimPause";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
 /** True if anything is LISTEN on `port` (Vercel images often lack `ss`). */
 function portListenProbeCmd(port: number): string {
@@ -1595,6 +1597,123 @@ export const pushSandboxBranch = internalAction({
   },
 });
 
+const pushLinkedRepoBranchResultValidator = v.object({
+  sessionRepoId: v.id("sessionRepos"),
+  pushed: v.boolean(),
+  published: v.boolean(),
+});
+
+/**
+ * Publishes every linked repo's branch that has commits origin lacks — the
+ * multi-repo counterpart of `pushSandboxBranch`, one push per `sessionRepos`
+ * row cloned into the same sandbox. Each row is independent: a missing clone
+ * directory or a network failure on one repo is logged and reported as
+ * `{ pushed: false, published: false }` rather than aborting the loop, so one
+ * bad linked repo never strands a good push on its siblings.
+ */
+export const pushLinkedRepoBranches = internalAction({
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+  },
+  returns: v.array(pushLinkedRepoBranchResultValidator),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    Array<{
+      sessionRepoId: Id<"sessionRepos">;
+      pushed: boolean;
+      published: boolean;
+    }>
+  > => {
+    const linkedRepos = await ctx.runQuery(
+      internal.sessions.listLinkedReposInternal,
+      { sessionId: args.sessionId },
+    );
+    if (linkedRepos.length === 0) return [];
+
+    const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    const results: Array<{
+      sessionRepoId: Id<"sessionRepos">;
+      pushed: boolean;
+      published: boolean;
+    }> = [];
+
+    for (const row of linkedRepos) {
+      try {
+        const quotedPath = quote([row.path]);
+        const dirExists = (
+          await execHandle(
+            sandbox,
+            `test -d ${quotedPath} && echo yes || echo no`,
+            10,
+          )
+        ).trim();
+        if (dirExists !== "yes") {
+          console.warn(
+            `[sandbox][execution] pushLinkedRepoBranches: ${row.path} is missing on sandbox=${args.sandboxId}, skipping (sessionRepoId=${row._id})`,
+          );
+          results.push({
+            sessionRepoId: row._id,
+            pushed: false,
+            published: false,
+          });
+          continue;
+        }
+
+        await execHandle(
+          sandbox,
+          `cd ${quotedPath} && git config --unset-all http.https://github.com/.extraheader 2>/dev/null; git remote set-url origin ${quote([`https://github.com/${row.owner}/${row.name}.git`])} && GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin ${quote([row.baseBranch])}`,
+          120,
+        );
+        const rangeSpec = `origin/${row.baseBranch}..${row.branchName}`;
+        const unpublishedCount = (
+          await execHandle(
+            sandbox,
+            `cd ${quotedPath} && git rev-list --count ${quote([rangeSpec])}`,
+            15,
+          )
+        ).trim();
+
+        if (unpublishedCount === "0") {
+          results.push({
+            sessionRepoId: row._id,
+            pushed: false,
+            published: false,
+          });
+          continue;
+        }
+
+        const pushResult = await pushBranchToOrigin(
+          sandbox,
+          row.owner,
+          row.name,
+          row.branchName,
+          { timeoutSeconds: 90, retryAttempts: 3, workspaceDir: row.path },
+        );
+        results.push({
+          sessionRepoId: row._id,
+          pushed: pushResult.pushed,
+          published: pushResult.published,
+        });
+      } catch (error) {
+        console.error(
+          `[sandbox][execution] pushLinkedRepoBranches failed for sessionRepoId=${row._id} (${row.owner}/${row.name}): ${errorMessage(error, "push failed")}`,
+        );
+        results.push({
+          sessionRepoId: row._id,
+          pushed: false,
+          published: false,
+        });
+      }
+    }
+
+    return results;
+  },
+});
+
 type TraitEnvInput = {
   reasoningLevel?: string;
   thinkingEnabled?: boolean;
@@ -2173,8 +2292,7 @@ export const prewarmSessionDaemon = internalAction({
     const skipPrewarm =
       session === null ||
       session === undefined ||
-      session.status === "closed" ||
-      session.status === "stopping";
+      isSandboxClosingStatus(session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,

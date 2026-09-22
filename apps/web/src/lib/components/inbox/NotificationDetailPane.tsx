@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconArrowUpRight, IconInbox } from "@tabler/icons-react";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
@@ -105,26 +106,39 @@ export function NotificationDetailPane({
 
   const { subject, event } = splitNotificationTitle(notification);
 
-  return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-      {notification.href ? (
-        <>
-          {/* The one action the header used to hold, floated over the frame's
+  // The embed iframe must stay mounted across href switches — a keyed fade
+  // remounts it and drops the `eva:embed-ready` handshake / in-place navigate.
+  if (notification.href) {
+    return (
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+        {/* The one action the header used to hold, floated over the frame's
           corner. `bg-background` keeps it legible over whatever the embedded
           page renders underneath. */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onOpen(notification)}
-            title="Open as full page"
-            className="absolute right-3 top-3 z-10 h-7 gap-1 bg-background text-xs"
-          >
-            Open
-            <IconArrowUpRight size={14} />
-          </Button>
-          <NotificationPagePreview href={notification.href} />
-        </>
-      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onOpen(notification)}
+          title="Open as full page"
+          className="absolute right-3 top-3 z-10 h-7 gap-1 bg-background text-xs"
+        >
+          Open
+          <IconArrowUpRight size={14} />
+        </Button>
+        <NotificationPagePreview href={notification.href} />
+      </div>
+    );
+  }
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <m.div
+        key={notification._id}
+        className="relative flex h-full min-h-0 flex-col overflow-hidden"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={motionFast}
+      >
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar">
           <div className="mx-auto w-full max-w-2xl space-y-4 px-6 py-6">
             <div className="space-y-1">
@@ -157,7 +171,7 @@ export function NotificationDetailPane({
             ) : null}
           </div>
         </div>
-      )}
-    </div>
+      </m.div>
+    </AnimatePresence>
   );
 }

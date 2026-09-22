@@ -17,6 +17,7 @@ function sourceOf(relativePath: string): string {
 const composer = sourceOf("ChatComposer.tsx");
 const stash = sourceOf("_components/ComposerStash.tsx");
 const inputChrome = sourceOf("_components/ComposerInputChrome.tsx");
+const branchChip = sourceOf("SandboxBranchChip.tsx");
 
 /**
  * The muted under-card bar is the only home the model picker has (fix
@@ -60,5 +61,14 @@ describe("the composer's under-card bar", () => {
     // passes null when there is nothing stashed rather than dropping the bar.
     expect(stash).toContain("{bar(stashButton)}");
     expect(stash).toMatch(/const stashButton =\s*\n?\s*entries\.length > 0 \?/);
+  });
+});
+
+describe("the sandbox branch chip", () => {
+  test("caps its width and truncates", () => {
+    // A long branch name must not push the model picker and stash trigger off
+    // the bar; the tooltip carries the full name.
+    expect(branchChip).toContain("max-w-[min(220px,40vw)]");
+    expect(branchChip).toContain("truncate");
   });
 });

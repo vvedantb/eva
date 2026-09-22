@@ -134,6 +134,7 @@ export default defineConfig({
       "@tiptap/react",
       "@tiptap/core",
       "@convex-dev/prosemirror-sync",
+      "@json-render/react",
       "@pierre/diffs",
       "@pierre/trees",
       "shiki",

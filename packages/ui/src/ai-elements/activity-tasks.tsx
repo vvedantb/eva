@@ -20,6 +20,9 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "../utils/cn";
 import { Spinner } from "../ui/spinner";
+import { CrossfadeIconSlot } from "../ui/crossfade-icon";
+import { motionFast, motionStagger } from "../utils/motion";
+import { m } from "motion/react";
 import { Shimmer } from "./shimmer";
 import {
   type ActivityStep,
@@ -48,6 +51,31 @@ import { ActivityStepDetail } from "./activity-step-detail";
 import { MessageResponse } from "./message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
 import { Task, TaskContent, TaskItem, TaskItemFile, TaskTrigger } from "./task";
+
+const ActivityStreamingHeader = memo(function ActivityStreamingHeader({
+  steps,
+  name,
+  startedAt,
+}: {
+  steps: ActivityStep[];
+  name?: string;
+  startedAt?: number;
+}) {
+  const verb = useSpinnerVerb(true);
+  const elapsed = useElapsedSeconds(startedAt, true);
+  const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
+  const headerText = `${
+    activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
+  }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <Spinner size="sm" />
+      <Shimmer as="span" duration={2.5} spread={1.5}>
+        {headerText}
+      </Shimmer>
+    </div>
+  );
+});
 
 /** Max timeline blocks shown before the overflow toggle appears. */
 const MAX_VISIBLE_ROWS = 8;
@@ -114,18 +142,20 @@ export interface ActivityTasksProps extends ComponentProps<"div"> {
 
 /** Status glyph for one todo row. */
 function TodoStatusIcon({ status }: { status: TodoItem["status"] }) {
-  if (status === "completed") {
-    return (
-      <IconCircleCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <IconLoader className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
-    );
-  }
   return (
-    <IconCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+    <CrossfadeIconSlot
+      iconKey={status}
+      variant="soft"
+      className="relative mt-0.5 flex size-3.5 shrink-0 items-center justify-center"
+    >
+      {status === "completed" ? (
+        <IconCircleCheck className="size-3.5 text-primary" />
+      ) : status === "in_progress" ? (
+        <IconLoader className="size-3.5 animate-spin text-primary" />
+      ) : (
+        <IconCircle className="size-3.5 text-muted-foreground" />
+      )}
+    </CrossfadeIconSlot>
   );
 }
 
@@ -292,7 +322,13 @@ function ActivityStepRow({
         step.isError ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      <Icon className="size-4 shrink-0" />
+      <CrossfadeIconSlot
+        iconKey={`${step.type}-${step.status}`}
+        variant="soft"
+        className="relative flex size-4 shrink-0 items-center justify-center"
+      >
+        <Icon className="size-4" />
+      </CrossfadeIconSlot>
       {label}
       {fileChip}
     </div>
@@ -371,12 +407,18 @@ function ActivityActionGroup({
   const Icon = firstStep ? iconForStep(firstStep) : IconTerminal2;
 
   return (
-    <Collapsible className="group w-full" defaultOpen={isActive}>
+    <Collapsible className="group py-2 w-full" defaultOpen={isActive}>
       {/* Summary stays muted even when a call inside failed: agents run failing
           commands on purpose, so one non-zero exit should not paint the run red.
           The failed row itself is still red once the fold is open. */}
       <CollapsibleTrigger className="flex w-full items-center gap-2 text-left text-muted-foreground text-sm transition-colors hover:text-foreground">
-        <Icon className="size-4 shrink-0" />
+        <CrossfadeIconSlot
+          iconKey={isActive ? "group-active" : "group-idle"}
+          variant="soft"
+          className="relative flex size-4 shrink-0 items-center justify-center"
+        >
+          <Icon className="size-4" />
+        </CrossfadeIconSlot>
         <span className="min-w-0 truncate" title={summary}>
           {isActive ? (
             <Shimmer as="span" duration={2.5} spread={1.5}>
@@ -469,12 +511,18 @@ function ActivityRowList({
   return (
     <>
       {isStreaming && toggle}
-      {visible.map(({ segment, key }) => (
-        <ActivitySegmentBlock
+      {visible.map(({ segment, key }, index) => (
+        <m.div
           key={key}
-          segment={segment}
-          onOpenFile={onOpenFile}
-        />
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            ...motionFast,
+            delay: motionStagger(index, 0.02, 0.08),
+          }}
+        >
+          <ActivitySegmentBlock segment={segment} onOpenFile={onOpenFile} />
+        </m.div>
       ))}
       {!isStreaming && toggle}
     </>
@@ -517,8 +565,6 @@ export const ActivityTasks = memo(
     onOpenFile,
     ...props
   }: ActivityTasksProps) => {
-    const verb = useSpinnerVerb(Boolean(isStreaming));
-    const elapsed = useElapsedSeconds(startedAt, Boolean(isStreaming));
     const rows = buildActivityRows(steps).filter(
       (row) => !HIDDEN_TYPES.has(row.step.type),
     );
@@ -526,16 +572,6 @@ export const ActivityTasks = memo(
     if (rows.length === 0 && !isStreaming) return null;
 
     void finalText;
-
-    // When real tool/file rows exist, they already shimmer their own titles —
-    // don't also show the random "Eva is inferring…" header above them.
-    const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
-    const headerText =
-      rows.length > 0
-        ? null
-        : `${
-            activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
-          }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
 
     if (!isStreaming && duration) {
       return (
@@ -561,13 +597,12 @@ export const ActivityTasks = memo(
 
     return (
       <div className={cn("space-y-1.5 text-sm", className)} {...props}>
-        {isStreaming && headerText ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Spinner size="sm" />
-            <Shimmer as="span" duration={2.5} spread={1.5}>
-              {headerText}
-            </Shimmer>
-          </div>
+        {isStreaming && rows.length === 0 ? (
+          <ActivityStreamingHeader
+            steps={steps}
+            name={name}
+            startedAt={startedAt}
+          />
         ) : null}
         <ActivityRowList
           rows={rows}

@@ -68,6 +68,12 @@ export const createTasksFromFindings = authMutation({
       });
       await createTaskRunSummary(ctx, taskId, automation.repoId);
       await ensureSubscribed(ctx, taskId, ctx.userId);
+      await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
+        taskId,
+        title: finding.title,
+        description: descriptionParts.join(""),
+        existingTags: [],
+      });
 
       updatedFindings[i] = { ...finding, taskId };
       taskIds.push(taskId);

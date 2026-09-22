@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CrossfadeIcon } from "@eva/ui";
 import {
   IconCheck,
   IconChevronRight,
@@ -51,11 +52,14 @@ function CopyButton({ content }: { content: string }) {
         setTimeout(() => setCopied(false), 2000);
       }}
     >
-      {copied ? (
-        <IconCheck className="size-3.5" />
-      ) : (
-        <IconCopy className="size-3.5" />
-      )}
+      <CrossfadeIcon
+        show={copied}
+        trueKey="copied"
+        falseKey="copy"
+        className="relative flex size-3.5 items-center justify-center"
+        whenTrue={<IconCheck className="size-3.5" />}
+        whenFalse={<IconCopy className="size-3.5" />}
+      />
     </FileViewerToolbarButton>
   );
 }
@@ -131,11 +135,15 @@ export function FileViewerHeader({
           }
           onClick={markdown.onToggle}
         >
-          {markdown.view === "rendered" ? (
-            <IconCode className="size-3.5" />
-          ) : (
-            <IconMarkdown className="size-3.5" />
-          )}
+          <CrossfadeIcon
+            show={markdown.view === "rendered"}
+            trueKey="source"
+            falseKey="rendered"
+            variant="soft"
+            className="relative flex size-3.5 items-center justify-center"
+            whenTrue={<IconCode className="size-3.5" />}
+            whenFalse={<IconMarkdown className="size-3.5" />}
+          />
         </FileViewerToolbarButton>
       ) : null}
 

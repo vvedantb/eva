@@ -1,4 +1,5 @@
 import { getAIModelProvider, type Doc } from "@eva/backend";
+import type { ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
@@ -170,22 +171,42 @@ export function otherUserIdsInChat<TUserId extends string>(
   return [...ids].sort();
 }
 
-/** Streaming / changed-files flags for an assistant row. */
+/**
+ * Answered AskUserQuestion prompts, as a read-only record for the transcript.
+ * A still-active question is excluded: the composer dock is showing it live,
+ * so a card for it would be the same prompt twice.
+ */
+export function collectQuestionSteps(steps: ActivityStep[]): ActivityStep[] {
+  return steps.filter(
+    (step) =>
+      step.type === "question" &&
+      step.status === "complete" &&
+      step.questions !== undefined &&
+      step.questions.length > 0,
+  );
+}
+
+/** Streaming / changed-files / question-record flags for an assistant row. */
 export function getAssistantTurnState(message: ChatBodyMessage): {
   isStreamingPlaceholder: boolean;
   changedFiles: ChangedFile[];
+  questionSteps: ActivityStep[];
 } {
   const isStreamingPlaceholder =
     message.role === "assistant" &&
     !message.content &&
     message.finishedAt === undefined;
-  const changedFiles =
+  const steps =
     !isStreamingPlaceholder &&
     message.role === "assistant" &&
     message.activityLog
-      ? collectChangedFiles(parseActivitySteps(message.activityLog) ?? [])
+      ? (parseActivitySteps(message.activityLog) ?? [])
       : [];
-  return { isStreamingPlaceholder, changedFiles };
+  return {
+    isStreamingPlaceholder,
+    changedFiles: collectChangedFiles(steps),
+    questionSteps: collectQuestionSteps(steps),
+  };
 }
 
 /**
@@ -197,6 +218,52 @@ export function stripErrorPrefix(content: string): string {
   const trimmed = content.trim();
   const prefix = /^error:\s*/i.exec(trimmed);
   return prefix === null ? trimmed : trimmed.slice(prefix[0].length);
+}
+
+/**
+ * One wording for the sandbox across every chat panel (session, quick task,
+ * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
+ * so the transcript and the composer speak about Eva too rather than about a
+ * "sandbox" the user never named.
+ */
+export const SANDBOX_CHAT_COPY = {
+  startingTitle: "Waking Eva up…",
+  stoppingTitle: "Putting Eva to sleep…",
+  asleepTitle: "Eva is asleep",
+  asleepDescription: "Eva's sandbox is asleep.",
+  asleepPlaceholder: "Wake Eva up to send a message…",
+  /** Why the composer will not send while Eva sleeps. */
+  asleepDisabledReason: "Wake Eva up to send",
+  /**
+   * A quick task's first run owns the sandbox until it finishes, so the chat
+   * shows that turn live but cannot take a follow-up yet.
+   */
+  firstRunDisabledReason:
+    "Eva is running this task — you can reply when it finishes",
+  wakeAction: "Wake up Eva",
+  switchingAccountPlaceholder: "Switching Claude account…",
+  activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
+  /** Teaches the three composer affordances on an empty, awake chat. */
+  activeDescription:
+    "Type / for skills, @ to mention, or drop files to attach.",
+} as const;
+
+/**
+ * The failure a send threw, as the user should read it. Convex wraps a server
+ * error in `[CONVEX …] [Request ID: …] Server Error` plus an `Uncaught Error:`
+ * line and a stack, none of which means anything outside the dashboard.
+ */
+export function readableSendError(message: string): string {
+  const cleaned = message
+    .replace(/\s+/g, " ")
+    .replace(/\[CONVEX[^\]]*\]/g, "")
+    .replace(/\[Request ID:[^\]]*\]/g, "")
+    .replace(/\bServer Error\b/g, "")
+    .replace(/\bUncaught [A-Za-z]*Error:?/g, "")
+    // Everything from the first stack frame on is for the logs, not the user.
+    .split(" at ")[0];
+  const trimmed = (cleaned ?? "").trim();
+  return trimmed.length > 0 ? trimmed : "Something went wrong";
 }
 
 /**

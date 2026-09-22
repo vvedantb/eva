@@ -6,7 +6,8 @@ import { useNavigate, useLocation } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import { decodeRepoParam, toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { FunctionReturnType } from "convex/server";
-import { Spinner } from "@eva/ui";
+import { Skeleton } from "@eva/ui";
+import { RepoNotFound } from "@/lib/components/RepoNotFound";
 
 type Repo = NonNullable<
   FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>
@@ -24,22 +25,57 @@ interface RepoContextType {
 
 const RepoContext = createContext<RepoContextType | undefined>(undefined);
 
-// Internal load-state context: "pending" while the repo query hasn't resolved
-// yet, otherwise the resolved (possibly undefined-repo) context value. This
-// lets RepoProvider always render its children (so sidebar/chrome mounted
-// above it never unmounts on navigation) while RepoGate scopes the loading
-// spinner to just the routed content that actually needs `repo`.
-const RepoLoadStateContext = createContext<
-  RepoContextType | undefined | "pending"
->("pending");
+/**
+ * Internal load state for the repo query, as an explicit union: "not found" and
+ * "still loading" used to both arrive as `undefined`, which is what made the
+ * gate unable to tell them apart (and why a missing repo silently redirected
+ * instead of saying so). Letting RepoProvider always render its children keeps
+ * the sidebar/chrome above it mounted across navigation, while RepoGate scopes
+ * the placeholder to the routed content that actually needs `repo`.
+ */
+type RepoLoadState =
+  | { status: "pending" }
+  | { status: "not-found"; owner: string; name: string }
+  | { status: "ready"; value: RepoContextType };
+
+const PENDING: RepoLoadState = { status: "pending" };
+
+const RepoLoadStateContext = createContext<RepoLoadState>(PENDING);
+
+function resolveLoadState(
+  repo: Repo | null | undefined,
+  context: Pick<RepoContextType, "basePath" | "owner" | "name">,
+  passive: boolean,
+): RepoLoadState {
+  if (repo === undefined) return PENDING;
+  // Passive trees are cached and hidden: they must render nothing the user
+  // could act on, so a background repo can never explain itself over the top of
+  // the session they are actually looking at.
+  if (repo === null) {
+    return passive
+      ? PENDING
+      : { status: "not-found", owner: context.owner, name: context.name };
+  }
+  return {
+    status: "ready",
+    value: {
+      ...context,
+      repo,
+      repoId: repo._id,
+      installationId: repo.installationId,
+      rootDirectory: repo.rootDirectory,
+    },
+  };
+}
 
 interface RepoProviderProps {
   children: React.ReactNode;
   owner: string;
   repoParam: string;
   /**
-   * Cached/hidden trees (session shell cache): skips the not-found redirect
-   * and URL canonicalization so a background repo can never hijack navigation.
+   * Cached/hidden trees (session shell cache): skips URL canonicalization and
+   * the not-found screen so a background repo can never hijack navigation or
+   * speak over the visible one.
    */
   passive?: boolean;
 }
@@ -60,13 +96,6 @@ export function RepoProvider({
     name,
     appName,
   });
-
-  useEffect(() => {
-    if (passive) return;
-    if (repo === null) {
-      navigate({ to: "/home", replace: true });
-    }
-  }, [repo, navigate, passive]);
 
   // Bare /owner/repo URLs for monorepos without a visible root row resolve to an
   // app repo — canonicalize to the public slash form (router rewrite maps it
@@ -102,20 +131,11 @@ export function RepoProvider({
     ? `/${owner}/${name}/${resolvedAppName}`
     : `/${owner}/${name}`;
 
-  const value =
-    repo === undefined || repo === null
-      ? undefined
-      : {
-          repo,
-          repoId: repo._id,
-          basePath,
-          owner,
-          name,
-          installationId: repo.installationId,
-          rootDirectory: repo.rootDirectory,
-        };
-
-  const loadState = repo === undefined ? "pending" : value;
+  const loadState = resolveLoadState(
+    repo,
+    { basePath, owner, name },
+    passive,
+  );
 
   return (
     <RepoLoadStateContext.Provider value={loadState}>
@@ -125,25 +145,35 @@ export function RepoProvider({
 }
 
 /**
- * Scopes the repo-loading spinner to routed content. Renders a content-area
- * spinner until the repo query resolves, then provides RepoContext to
- * `children`. Chrome mounted above RepoProvider (sidebar, etc.) is unaffected.
+ * Scopes the repo-loading placeholder to routed content, then provides
+ * RepoContext to `children`. Chrome mounted above RepoProvider (sidebar, etc.)
+ * is unaffected.
  */
 export function RepoGate({ children }: { children: React.ReactNode }) {
   const loadState = useContext(RepoLoadStateContext);
 
-  // Treat both "query still loading" and "repo not found" (redirect in
-  // flight) as pending — children rely on useRepo's non-nullable contract.
-  if (loadState === "pending" || loadState === undefined) {
+  if (loadState.status === "not-found") {
+    return <RepoNotFound owner={loadState.owner} name={loadState.name} />;
+  }
+
+  // A centred spinner said "something is happening" and nothing else; the
+  // page's own shape is a better answer to "what am I waiting for", and it
+  // does not re-centre as the real content lands.
+  if (loadState.status === "pending") {
     return (
-      <div className="flex h-full flex-1 items-center justify-center">
-        <Spinner size="lg" />
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-3 p-3"
+        aria-busy="true"
+        aria-label="Loading codebase"
+      >
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="min-h-0 flex-1" />
       </div>
     );
   }
 
   return (
-    <RepoContext.Provider value={loadState}>
+    <RepoContext.Provider value={loadState.value}>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {children}
       </div>

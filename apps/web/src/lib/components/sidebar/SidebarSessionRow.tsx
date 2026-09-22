@@ -10,8 +10,12 @@ import {
   toast,
 } from "@eva/ui";
 import { useState } from "react";
-import { entityPathSegment } from "@/lib/numId";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
+import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
+import {
+  sessionHrefForRow,
+  type RepoPathParts,
+} from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import {
   SessionMenuItems,
   useIsRegeneratingTitle,
@@ -24,8 +28,6 @@ import {
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
-type SessionStatus = "active" | "starting" | "stopping" | "closed";
-
 interface SessionItem {
   _id: Id<"sessions">;
   numId?: number;
@@ -33,7 +35,9 @@ interface SessionItem {
   userId: Id<"users">;
   title: string;
   titleRegeneration?: { startedAt: number };
-  status: SessionStatus;
+  status: SandboxStatus;
+  /** Set when the last wake attempt failed; the row's dot reads as an error. */
+  sandboxError?: string;
   isExecuting?: boolean;
   isOrchestrator?: boolean;
   updatedAt?: number;
@@ -42,12 +46,20 @@ interface SessionItem {
   baseBranch?: string;
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
+  /**
+   * Set only on rows this app sees through a linked checkout: the session's
+   * primary repo, which owns its URL (see `sessionHrefForRow`).
+   */
+  linkedFrom?: RepoPathParts;
+  /** Linked repos cloned beside the primary; drives the `+N` badge. */
+  linkedRepoCount?: number;
 }
 
 interface SidebarSessionRowProps<T extends SessionItem> {
   session: T;
   isSelected: boolean;
-  baseUrl: string;
+  /** The app whose sidebar this row sits in; the row's own repo unless linked in. */
+  repo: RepoPathParts;
   onNavigate?: () => void;
   onRename?: (session: T, newTitle: string) => Promise<void>;
   onDuplicate?: (session: T) => Promise<string>;
@@ -66,7 +78,7 @@ interface SidebarSessionRowProps<T extends SessionItem> {
 export function SidebarSessionRow<T extends SessionItem>({
   session,
   isSelected,
-  baseUrl,
+  repo,
   onNavigate,
   onRename,
   onDuplicate,
@@ -75,8 +87,7 @@ export function SidebarSessionRow<T extends SessionItem>({
   onDuplicateNavigate,
   onRenameRequest,
 }: SidebarSessionRowProps<T>) {
-  const pathSegment = entityPathSegment(session);
-  const href = pathSegment ? `${baseUrl}/${pathSegment}` : baseUrl;
+  const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
   const isRegeneratingTitle = useIsRegeneratingTitle(session);
   // Same gate the chat header uses, minus archived rows — an archived session
@@ -112,6 +123,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 createdAt={session._creationTime}
                 updatedAt={session.updatedAt}
                 status={session.status}
+                sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
                 isOrchestrator={session.isOrchestrator === true}
                 isSelected={isSelected}
@@ -119,6 +131,8 @@ export function SidebarSessionRow<T extends SessionItem>({
                 prUrl={session.prUrl}
                 prState={session.prState}
                 baseBranch={session.baseBranch}
+                linkedFrom={session.linkedFrom}
+                linkedRepoCount={session.linkedRepoCount}
               />
             </SharedLayoutNavSurface>
           </m.div>

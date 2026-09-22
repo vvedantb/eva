@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { promptStashFields } from "./validators";
+import { resolveStorageEntries } from "./_chat/storageUrls";
 
 /** Max stashed prompts per user per repo; oldest (`_creationTime`) is evicted. */
 const MAX_STASHES_PER_REPO = 20;
@@ -95,21 +96,17 @@ export const listForRepo = authQuery({
 
     return Promise.all(
       rows.map(async (row) => {
-        const attachments: Array<{
-          url: string;
-          contentType: string | null;
-        }> = [];
-        for (const storageId of row.attachmentStorageIds ?? []) {
-          const [url, meta] = await Promise.all([
-            ctx.storage.getUrl(storageId),
-            ctx.storage.getMetadata(storageId),
-          ]);
-          if (url === null) continue;
-          attachments.push({
-            url,
-            contentType: meta?.contentType ?? null,
-          });
-        }
+        const entries = await resolveStorageEntries(
+          (id) => ctx.storage.getUrl(id),
+          (id) => ctx.storage.getMetadata(id),
+          row.attachmentStorageIds,
+        );
+        // Deleted blobs resolve to a null url and are dropped from the list.
+        const attachments = entries.flatMap((entry) =>
+          entry.url === null
+            ? []
+            : [{ url: entry.url, contentType: entry.contentType }],
+        );
         return {
           ...row,
           attachments,

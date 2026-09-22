@@ -11,6 +11,13 @@ const source = stripComments(
 );
 const derive = functionBody(source, "function deriveSessionPrState(");
 const handler = definitionBody(source, "handleSessionPrEvent");
+// The archive/unarchive side effects moved into a helper so the linked-repo PR
+// path (multi-repo sessions open one PR per `sessionRepos` row) archives
+// through the same code; the lifecycle contract lives there now.
+const reconcile = functionBody(
+  source,
+  "async function reconcileSessionArchiveState(",
+);
 
 describe("session pull-request lifecycle", () => {
   test("distinguishes merged closes from unmerged closes", () => {
@@ -23,34 +30,40 @@ describe("session pull-request lifecycle", () => {
     expect(derive).toContain('action === "opened" || action === "reopened"');
   });
 
+  test("both PR paths reconcile the archive state through one helper", () => {
+    // Primary-PR path and linked-repo path, so a multi-repo session archives
+    // exactly once — when every PR it opened is terminal.
+    expect(handler.match(/reconcileSessionArchiveState\(/g)).toHaveLength(2);
+  });
+
   test("archives both terminal states and unarchives every live state", () => {
-    expect(handler).toContain(
-      'const isTerminal = nextState === "merged" || nextState === "closed"',
-    );
-    expect(handler).toContain("archived: true");
-    expect(handler).toContain("archived: false");
-    expect(handler).toContain("prStateOnArchive: undefined");
+    // Which PR states count as terminal — and how a session's linked PRs
+    // combine with its primary — is `shouldArchiveSession` (see
+    // prArchiveRule.test.ts), not a condition inlined here.
+    expect(reconcile).toContain("shouldArchiveSession(");
+    expect(reconcile).toContain("archived: needsArchive");
+    expect(reconcile).toContain("prStateOnArchive: undefined");
   });
 
   test("stops a terminal session before scheduling its grace deletion", () => {
-    const stopAt = handler.indexOf("requestSessionSandboxStop(");
-    const deleteAt = handler.indexOf("scheduleSessionSandboxGraceDelete(");
+    const stopAt = reconcile.indexOf("requestSessionSandboxStop(");
+    const deleteAt = reconcile.indexOf("scheduleSessionSandboxGraceDelete(");
     expect(stopAt).toBeGreaterThan(-1);
     expect(deleteAt).toBeGreaterThan(stopAt);
   });
 
   test("only schedules deletion for a newly archived session", () => {
-    expect(handler).toContain(
-      "const needsArchive = isTerminal && session.archived !== true",
+    expect(reconcile).toContain(
+      "const needsArchive = archive && session.archived !== true",
     );
-    expect(handler).toContain("if (needsArchive) {");
+    expect(reconcile).toContain("if (needsArchive) {");
   });
 
   test("reopen cancels an already scheduled deletion", () => {
-    expect(handler).toContain(
-      "const needsUnarchive = !isTerminal && session.archived === true",
+    expect(reconcile).toContain(
+      "const needsUnarchive = !archive && session.archived === true",
     );
-    expect(handler).toContain("cancelSessionSandboxGraceDelete(");
+    expect(reconcile).toContain("cancelSessionSandboxGraceDelete(");
   });
 
   test("merged verification is fenced by PR number and merge SHA", () => {
@@ -63,11 +76,13 @@ describe("session pull-request lifecycle", () => {
   });
 
   test("a newly archived session notifies the owner in-app", () => {
-    const archiveAt = handler.indexOf("if (needsArchive) {");
-    const notifyAt = handler.indexOf("notifySessionOwnerOfPrArchive(");
+    const archiveAt = reconcile.indexOf("if (needsArchive) {");
+    const notifyAt = reconcile.indexOf("notifySessionOwnerOfPrArchive(");
     expect(archiveAt).toBeGreaterThan(-1);
     expect(notifyAt).toBeGreaterThan(archiveAt);
-    expect(handler.slice(archiveAt, notifyAt)).not.toContain("needsUnarchive");
+    expect(reconcile.slice(archiveAt, notifyAt)).not.toContain(
+      "needsUnarchive",
+    );
   });
 });
 

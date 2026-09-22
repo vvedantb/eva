@@ -17,6 +17,7 @@ import {
 import { buildPrBody } from "./prBody";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { buildRootDirectoryInstruction } from "./prompts";
 
 const evalCompleteEvent = defineEvent({
   name: "evalComplete",
@@ -281,10 +282,9 @@ export const getDocData = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const rootDirectory = repo.rootDirectory ?? "";
-    const rootDirInstruction = rootDirectory
-      ? `\nIMPORTANT: Unless the user mentions otherwise, focus your evaluation on the app at "${rootDirectory}".`
-      : "";
+    const rootDirInstruction = buildRootDirectoryInstruction(
+      repo.rootDirectory ?? "",
+    );
 
     // The document itself is the specification. The agent explores the codebase
     // and reports whatever issues it finds, ranked by severity — no fixed
@@ -496,10 +496,9 @@ export const getFixData = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const rootDirectory = repo.rootDirectory ?? "";
-    const rootDirInstruction = rootDirectory
-      ? `\nIMPORTANT: Unless the user mentions otherwise, focus your changes on the app at "${rootDirectory}".`
-      : "";
+    const rootDirInstruction = buildRootDirectoryInstruction(
+      repo.rootDirectory ?? "",
+    );
 
     const issues = report.issues ?? [];
 

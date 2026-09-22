@@ -52,6 +52,7 @@ export const aiModelValidator = v.union(
   v.literal("opencode:openai/gpt-5.3-codex"),
   v.literal("opencode:openai/gpt-5.4"),
   v.literal("opencode:openai/gpt-5.4-mini"),
+  v.literal("cursor:grok-4.7"),
   v.literal("cursor:grok-4.6"),
   v.literal("cursor:grok-4.5"),
   v.literal("cursor:gpt-6-astra"),
@@ -175,8 +176,8 @@ const CURSOR_REASONING: ModelReasoningTraits = {
   default: "medium",
 };
 
-/** Grok 4.6: low, medium, high (default), xhigh. Fast is a separate trait. */
-const CURSOR_REASONING_GROK46: ModelReasoningTraits = {
+/** Grok 4.6/4.7: low, medium, high (default), xhigh. Fast is a separate trait. */
+const CURSOR_REASONING_GROK_XHIGH: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh"],
   default: "high",
 };
@@ -204,6 +205,7 @@ export type AIModel =
   | "opencode:openai/gpt-5.6-sol"
   | "opencode:openai/gpt-5.6-terra"
   | "opencode:openai/gpt-5.6-luna"
+  | "cursor:grok-4.7"
   | "cursor:grok-4.6"
   | "cursor:grok-4.5"
   | "cursor:gpt-6-astra"
@@ -247,6 +249,13 @@ export interface AIModelOption {
   contextWindow1m?: boolean;
   contextWindowDefaultLabel?: string;
   fastMode?: boolean;
+  /**
+   * Default context window in tokens, for the usage meter. Only set where the
+   * number is known here — left undefined rather than guessed, so the meter can
+   * say "unknown" instead of inventing a denominator. A run that reports its own
+   * `contextWindow` (e.g. Claude's 1M mode) always wins over this.
+   */
+  contextWindow?: number;
 }
 
 export interface AIProviderAvailability {
@@ -266,6 +275,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
+    contextWindow: 200000,
   },
   {
     id: "claude:opus",
@@ -273,6 +283,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Opus",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
+    contextWindow: 200000,
   },
   {
     id: "claude:sonnet",
@@ -281,6 +292,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
+    contextWindow: 200000,
   },
   {
     id: "claude:haiku",
@@ -288,6 +300,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Haiku",
     requiresAuth: true,
     thinkingToggle: true,
+    contextWindow: 200000,
   },
   {
     id: "claude:opusplan",
@@ -295,6 +308,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Opus Plan",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
+    contextWindow: 200000,
   },
   {
     id: "claude:claude-opus-4-5-20251101",
@@ -302,6 +316,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     label: "Opus 4.5",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_NO_XHIGH,
+    contextWindow: 200000,
   },
   {
     id: "claude:claude-opus-4-6",
@@ -310,6 +325,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_OPUS_46,
     contextWindow1m: true,
+    contextWindow: 200000,
   },
   {
     id: "codex:gpt-6-astra",
@@ -368,11 +384,21 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     requiresAuth: true,
   },
   {
+    id: "cursor:grok-4.7",
+    provider: "cursor",
+    label: "Grok 4.7",
+    requiresAuth: true,
+    reasoning: CURSOR_REASONING_GROK_XHIGH,
+    fastMode: true,
+    // xAI documents 500K for 4.7 (docs.x.ai/developers/grok-4-7, 21 Sep 2026).
+    contextWindow: 500000,
+  },
+  {
     id: "cursor:grok-4.6",
     provider: "cursor",
     label: "Grok 4.6",
     requiresAuth: true,
-    reasoning: CURSOR_REASONING_GROK46,
+    reasoning: CURSOR_REASONING_GROK_XHIGH,
     fastMode: true,
   },
   {
@@ -391,6 +417,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     reasoning: CURSOR_REASONING_ASTRA,
     contextWindow1m: true,
     contextWindowDefaultLabel: "272K",
+    contextWindow: 272000,
   },
   {
     id: "cursor:gemini-3.1-pro",
@@ -531,6 +558,8 @@ export function normalizeAIModel(model: string | null | undefined): AIModel {
     case "cursor:grok-4.5-medium":
     case "cursor:grok-4.5-high":
       return "cursor:grok-4.5";
+    case "cursor:grok-4.7":
+      return "cursor:grok-4.7";
     case "cursor:grok-4.6":
     case "cursor:grok-4.6-low":
     case "cursor:grok-4.6-medium":
@@ -745,6 +774,36 @@ export function findAIModelOption(
   };
 }
 
+/**
+ * The ways a result event can spell an option's id: the `AIModel` key minus its
+ * provider prefix, plus (for opencode's `openai/gpt-6-astra` style ids) the part
+ * after the slash.
+ */
+function rawIdsForOption(option: AIModelOption): ReadonlyArray<string> {
+  const withoutProvider = option.id.slice(option.id.indexOf(":") + 1);
+  const slash = withoutProvider.lastIndexOf("/");
+  if (slash === -1) return [withoutProvider];
+  return [withoutProvider, withoutProvider.slice(slash + 1)];
+}
+
+/**
+ * Context window for a raw provider model id as it appears in a result event
+ * (`claude-opus-4-6`, `gpt-6-astra`) — not the `provider:id` AIModel key.
+ *
+ * Returns null when nothing here knows the window, so the usage meter can say
+ * "unknown" rather than divide by an invented default. Where the same raw id is
+ * offered by several providers (`gpt-6-astra` on codex, opencode and cursor),
+ * the first option that declares a window wins: it is the same underlying model,
+ * so its window is the same regardless of which provider ran it.
+ */
+export function contextWindowForRawModel(rawModel: string): number | null {
+  for (const option of AI_MODEL_OPTIONS) {
+    if (option.contextWindow === undefined) continue;
+    if (rawIdsForOption(option).includes(rawModel)) return option.contextWindow;
+  }
+  return null;
+}
+
 /** Checks whether any Codex authentication environment variable is present and non-empty. */
 export function hasCodexAuthEnvVar(envVars: Record<string, string>): boolean {
   return CODEX_AUTH_ENV_KEYS.some((key) => {
@@ -798,6 +857,7 @@ const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
   "codex:gpt-5.6-sol",
   "codex:gpt-5.6-terra",
   "codex:gpt-5.6-luna",
+  "cursor:grok-4.7",
   "cursor:grok-4.6",
   "cursor:grok-4.5",
   "cursor:composer-2.5",
@@ -811,7 +871,7 @@ const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
 export const SIMPLE_VIEW_MODEL_LADDER: ReadonlyArray<AIModel> = [
   "cursor:composer-2.5",
   "cursor:grok-4.5",
-  "cursor:grok-4.6",
+  "cursor:grok-4.7",
   "claude:opus",
   "claude:claude-fable-5-1",
 ];
@@ -829,7 +889,8 @@ export function snapToSimpleViewLadder(model: string): AIModel {
   if (getAIModelProvider(normalized) === "claude") return "claude:opus";
   if (normalized.includes("composer")) return "cursor:composer-2.5";
   if (normalized.includes("grok-4.5")) return "cursor:grok-4.5";
-  return "cursor:grok-4.6";
+  // Grok 4.6 has no tick of its own: 4.7 is the Cursor top step now.
+  return "cursor:grok-4.7";
 }
 
 /**

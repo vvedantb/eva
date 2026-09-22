@@ -35,6 +35,7 @@ import {
 } from "@tabler/icons-react";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { EnvVarProviderSlots } from "@/lib/components/EnvVarProviderSlots";
 import { parseEnvVars } from "./_utils/parseEnvVars";
 import {
@@ -50,11 +51,7 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 export interface EnvVar {
   key: string;
@@ -281,152 +278,158 @@ export function EnvVarsTable({
   ).sort((a, b) => a.key.localeCompare(b.key));
   const showTable = (freeformVars && freeformVars.length > 0) || adding;
 
-  const renderRow = (v: EnvVar) => (
-    <TableRow key={v.key}>
+  const renderRow = (v: EnvVar, index: number) => (
+    <ListEnter
+      key={v.key}
+      as="tr"
+      index={index}
+      fast
+      className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+    >
       <TableCell className="px-2.5 py-2.5 font-mono text-xs sm:px-4">
-        {v.key}
-      </TableCell>
-      <TableCell className="px-2.5 py-2.5 sm:px-4">
-        {editingKey === v.key ? (
-          <Input
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            placeholder="Enter new value"
-            className="h-7 font-mono text-xs"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") saveEdit();
-              if (e.key === "Escape") cancelEdit();
-            }}
-          />
-        ) : (
-          <span className="font-mono text-xs text-muted-foreground">
-            {revealedValues[v.key] ?? v.value}
-          </span>
-        )}
-      </TableCell>
-      <TableCell className="px-2.5 py-2.5 text-right sm:px-4">
-        {editingKey === v.key ? (
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              onClick={saveEdit}
-              disabled={!editValue.trim() || saving}
-              title="Save"
-              className="max-sm:hit-target text-primary hover:text-primary"
-            >
-              <IconCheck size={14} />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              onClick={cancelEdit}
-              title="Cancel"
-              className="max-sm:hit-target"
-            >
-              <IconX size={14} />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              className="hit-target"
-              onClick={() => toggleReveal(v.key)}
-              disabled={revealingKey === v.key}
-              title={
-                revealedValues[v.key] !== undefined
-                  ? "Hide value"
-                  : "Reveal value"
-              }
-            >
-              <CrossfadeIcon
-                show={revealedValues[v.key] !== undefined}
-                trueKey="hide"
-                falseKey="reveal"
-                className="relative flex size-3.5 items-center justify-center"
-                whenTrue={<IconEyeOff size={14} />}
-                whenFalse={<IconEye size={14} />}
-              />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              className="hit-target"
-              onClick={() => copyValue(v.key)}
-              title={copiedKey === v.key ? "Copied!" : "Copy value"}
-            >
-              <CrossfadeIcon
-                show={copiedKey === v.key}
-                trueKey="copied"
-                falseKey="copy"
-                className="relative flex size-3.5 items-center justify-center"
-                whenTrue={<IconCheck size={14} className="text-primary" />}
-                whenFalse={<IconCopy size={14} />}
-              />
-            </Button>
-            {!readOnly && (
-              <>
-                {onToggleSandboxExclude && (
+          {v.key}
+        </TableCell>
+        <TableCell className="px-2.5 py-2.5 sm:px-4">
+          {editingKey === v.key ? (
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              placeholder="Enter new value"
+              className="h-7 font-mono text-xs"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveEdit();
+                if (e.key === "Escape") cancelEdit();
+              }}
+            />
+          ) : (
+            <span className="font-mono text-xs text-muted-foreground">
+              {revealedValues[v.key] ?? v.value}
+            </span>
+          )}
+        </TableCell>
+        <TableCell className="px-2.5 py-2.5 text-right sm:px-4">
+          {editingKey === v.key ? (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                onClick={saveEdit}
+                disabled={!editValue.trim() || saving}
+                title="Save"
+                className="max-sm:hit-target text-primary hover:text-primary"
+              >
+                <IconCheck size={14} />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                onClick={cancelEdit}
+                title="Cancel"
+                className="max-sm:hit-target"
+              >
+                <IconX size={14} />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="hit-target"
+                onClick={() => toggleReveal(v.key)}
+                disabled={revealingKey === v.key}
+                title={
+                  revealedValues[v.key] !== undefined
+                    ? "Hide value"
+                    : "Reveal value"
+                }
+              >
+                <CrossfadeIcon
+                  show={revealedValues[v.key] !== undefined}
+                  trueKey="hide"
+                  falseKey="reveal"
+                  className="relative flex size-3.5 items-center justify-center"
+                  whenTrue={<IconEyeOff size={14} />}
+                  whenFalse={<IconEye size={14} />}
+                />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="hit-target"
+                onClick={() => copyValue(v.key)}
+                title={copiedKey === v.key ? "Copied!" : "Copy value"}
+              >
+                <CrossfadeIcon
+                  show={copiedKey === v.key}
+                  trueKey="copied"
+                  falseKey="copy"
+                  className="relative flex size-3.5 items-center justify-center"
+                  whenTrue={<IconCheck size={14} className="text-primary" />}
+                  whenFalse={<IconCopy size={14} />}
+                />
+              </Button>
+              {!readOnly && (
+                <>
+                  {onToggleSandboxExclude && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      className="max-sm:hit-target"
+                      onClick={() =>
+                        void catchMutationError(
+                          onToggleSandboxExclude(v.key, !v.sandboxExclude),
+                          "Couldn't update sandbox setting",
+                          "env-var-sandbox-exclude",
+                        )
+                      }
+                      title={
+                        v.sandboxExclude
+                          ? "Excluded from sandbox (click to include)"
+                          : "Included in sandbox (click to exclude)"
+                      }
+                    >
+                      {v.sandboxExclude ? (
+                        <IconLock size={14} className="text-warning" />
+                      ) : (
+                        <IconLockOpen size={14} />
+                      )}
+                    </Button>
+                  )}
                   <Button
                     size="icon-sm"
                     variant="ghost"
+                    onClick={() => startEdit(v.key)}
+                    title="Edit"
                     className="max-sm:hit-target"
-                    onClick={() =>
-                      void catchMutationError(
-                        onToggleSandboxExclude(v.key, !v.sandboxExclude),
-                        "Couldn't update sandbox setting",
-                        "env-var-sandbox-exclude",
+                  >
+                    <IconPencil size={14} />
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={(event) =>
+                      requestConfirm(
+                        altHeld,
+                        () => setDeleteKey(v.key),
+                        () => {
+                          void confirmDelete(v.key);
+                        },
+                        event,
                       )
                     }
-                    title={
-                      v.sandboxExclude
-                        ? "Excluded from sandbox (click to include)"
-                        : "Included in sandbox (click to exclude)"
-                    }
+                    title={skipConfirmTitle("Delete")}
+                    className="max-sm:hit-target text-destructive hover:text-destructive"
                   >
-                    {v.sandboxExclude ? (
-                      <IconLock size={14} className="text-warning" />
-                    ) : (
-                      <IconLockOpen size={14} />
-                    )}
+                    <IconTrash size={14} />
                   </Button>
-                )}
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => startEdit(v.key)}
-                  title="Edit"
-                  className="max-sm:hit-target"
-                >
-                  <IconPencil size={14} />
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={(event) =>
-                    requestConfirm(
-                      altHeld,
-                      () => setDeleteKey(v.key),
-                      () => {
-                        void confirmDelete(v.key);
-                      },
-                      event,
-                    )
-                  }
-                  title={skipConfirmTitle("Delete")}
-                  className="max-sm:hit-target text-destructive hover:text-destructive"
-                >
-                  <IconTrash size={14} />
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </TableCell>
-    </TableRow>
+                </>
+              )}
+            </div>
+          )}
+        </TableCell>
+    </ListEnter>
   );
 
   const tableHeader = (

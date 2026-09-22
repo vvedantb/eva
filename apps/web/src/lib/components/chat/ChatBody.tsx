@@ -1,11 +1,16 @@
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
+  motionBase,
   type ModelOption,
   type ModelAccount,
 } from "@eva/ui";
+import {
+  ChatEmptyState,
+  ChatTranscriptSkeleton,
+} from "@/lib/components/chat/_components/ChatTranscriptStates";
+import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
@@ -14,6 +19,8 @@ import type { TurnCheckpointContext } from "@/lib/components/chat/_components/us
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
+import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -38,6 +45,7 @@ import {
   isOtherUserChatMessage,
   otherUserIdsInChat,
   parsePendingQuestion,
+  SANDBOX_CHAT_COPY,
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
@@ -51,7 +59,18 @@ interface ChatBodyProps {
   repoBasePath: string;
   /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
+  /**
+   * The same chat, typed as the id its messages hang off. Used to load the
+   * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   */
+  chatParentId: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
   messages: ChatBodyMessage[];
+  /**
+   * True while the transcript query is still in flight. Panels collapse Convex's
+   * `undefined` into `[]`, so without this the empty state flashes before the
+   * turns arrive.
+   */
+  isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
   streamingActivity?: string;
   streamingContent?: string;
@@ -72,6 +91,22 @@ interface ChatBodyProps {
   isArchived?: boolean;
   placeholder: string;
   emptyStateTitle: string;
+  /**
+   * Second line of the empty state. Always passed explicitly by the panels —
+   * the library's default ("Start a conversation to see messages here")
+   * contradicts a chat whose sandbox is asleep.
+   */
+  emptyStateDescription?: string;
+  /**
+   * Why the composer will not send, shown when the user presses Enter on a
+   * disabled composer instead of swallowing the keystroke.
+   */
+  disabledReason?: string;
+  /**
+   * Wakes the sandbox. Set only when it is stopped and not already toggling;
+   * gives the empty state its button and the blocked-send toast its action.
+   */
+  onStartSandbox?: () => void;
   model: AIModel;
   setModel: (model: AIModel) => void;
   modelOptions: ReadonlyArray<ModelOption<AIModel>>;
@@ -106,6 +141,8 @@ interface ChatBodyProps {
   preInputContent?: React.ReactNode;
   /** Replaces the default empty-state component when there are zero messages. */
   emptyStateOverride?: React.ReactNode;
+  /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
+  underCardLeading?: React.ReactNode;
   /**
    * Draft seed to restore. When provided, the PromptInputProvider is seeded
    * with the stored draft text and mention maps, and a ChatDraftSync child
@@ -151,7 +188,9 @@ export function ChatBody({
   repoId,
   repoBasePath,
   conversationId,
+  chatParentId,
   messages,
+  isLoadingMessages = false,
   queuedMessages,
   streamingActivity,
   streamingContent,
@@ -163,6 +202,9 @@ export function ChatBody({
   isArchived,
   placeholder,
   emptyStateTitle,
+  emptyStateDescription = "",
+  disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
+  onStartSandbox,
   model,
   setModel,
   modelOptions,
@@ -177,6 +219,7 @@ export function ChatBody({
   beforeQueuedContent,
   preInputContent,
   emptyStateOverride,
+  underCardLeading,
   draft,
   isDraftLoading,
   onOpenFile,
@@ -283,6 +326,16 @@ export function ChatBody({
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
 
+  // Agent-composed UI panels (`render_ui`). One query per chat covers all three
+  // surfaces, since every one of them renders through this component.
+  const chatUiPanels = useQuery(api.chatUi.listByParent, {
+    parentId: chatParentId,
+  });
+  const panelPlacement = placeChatUiPanels(
+    chatUiPanels ?? [],
+    new Set(displayMessages.map((message) => message._id)),
+  );
+
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
   const users = useQuery(
     api.users.getMany,
@@ -296,6 +349,40 @@ export function ChatBody({
     }
     return map;
   })();
+
+  // Retry re-sends the failed turn's prompt through the normal send path. It is
+  // withheld while a turn is running (the send would only queue behind it) and
+  // on a read-only chat, which has no composer at all.
+  const handleRetryTurn =
+    isArchived || isExecuting
+      ? undefined
+      : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
+          void onSend(content, attachmentStorageIds);
+        };
+
+  // A panel button sends its text through the normal send path, so it queues
+  // behind a running turn exactly as a typed message would. Withheld on a
+  // read-only chat and on one whose sandbox is asleep, which is what renders
+  // the panel's buttons disabled instead of inert.
+  const handlePanelReply =
+    isArchived || isInputDisabled
+      ? undefined
+      : (message: string) => {
+          void onSend(message);
+        };
+
+  // Undefined rather than an empty array: the caller slots this into a wrapper
+  // that must not render (and take margin) when the turn has no panels.
+  const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
+    panels.length === 0
+      ? undefined
+      : panels.map((panel) => (
+          <ChatUiPanel
+            key={panel._id}
+            spec={panel.spec}
+            onReply={handlePanelReply}
+          />
+        ));
 
   const renderMessage = (message: ChatBodyMessage) => {
     const isStreamingTarget = message._id === streamingTargetId;
@@ -311,31 +398,36 @@ export function ChatBody({
 
     return (
       <div key={message._id} className="flex flex-col gap-3">
-      <ChatMessage
-        message={message}
-        repoBasePath={repoBasePath}
-        isLatestAssistantTurn={message._id === latestAssistantMessageId}
-        showChangedFiles={!simpleView}
-        {...(expandedByMessageId[message._id] !== undefined
-          ? { changedFilesExpanded: expandedByMessageId[message._id] }
-          : {})}
-        onChangedFilesExpandedChange={setMessageExpanded}
-        isOtherUser={isOtherUser}
-        senderFirstName={senderFirstName}
-        isHandoffBoundary={handoffBoundaryIds.has(message._id)}
-        turnModel={precedingUser?.model}
-        turnReasoningLevel={precedingUser?.reasoningLevel}
-        turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
-        streamingActivity={isStreamingTarget ? streamingActivity : undefined}
-        streamingContent={isStreamingTarget ? streamingContent : undefined}
-        onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
-        onOpenAgentsTab={simpleView ? undefined : onOpenAgentsTab}
-        backgroundAgents={backgroundAgents}
-        sandboxRunning={sandboxRunning}
-        turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-      />
-      {afterMessage?.(message._id)}
+        <ChatMessage
+          message={message}
+          repoBasePath={repoBasePath}
+          isLatestAssistantTurn={message._id === latestAssistantMessageId}
+          showChangedFiles={!simpleView}
+          {...(expandedByMessageId[message._id] !== undefined
+            ? { changedFilesExpanded: expandedByMessageId[message._id] }
+            : {})}
+          onChangedFilesExpandedChange={setMessageExpanded}
+          isOtherUser={isOtherUser}
+          senderFirstName={senderFirstName}
+          isHandoffBoundary={handoffBoundaryIds.has(message._id)}
+          turnModel={precedingUser?.model}
+          turnReasoningLevel={precedingUser?.reasoningLevel}
+          turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
+          streamingActivity={isStreamingTarget ? streamingActivity : undefined}
+          streamingContent={isStreamingTarget ? streamingContent : undefined}
+          onOpenFile={onOpenFile}
+          onViewDiff={onViewDiff}
+          onOpenAgentsTab={simpleView ? undefined : onOpenAgentsTab}
+          backgroundAgents={backgroundAgents}
+          sandboxRunning={sandboxRunning}
+          turnCheckpoint={simpleView ? undefined : turnCheckpoint}
+          onRetryTurn={handleRetryTurn}
+          precedingUser={precedingUser}
+          belowContent={renderChatUiPanels(
+            panelPlacement.byMessageId.get(message._id) ?? [],
+          )}
+        />
+        {afterMessage?.(message._id)}
       </div>
     );
   };
@@ -349,9 +441,23 @@ export function ChatBody({
           scrollClassName="[container-type:size]"
         >
           {displayMessages.length === 0 ? (
-            (emptyStateOverride ?? (
-              <ConversationEmptyState title={emptyStateTitle} />
-            ))
+            (emptyStateOverride ??
+            (isLoadingMessages ? (
+              <ChatTranscriptSkeleton />
+            ) : (
+              <ChatEmptyState
+                title={emptyStateTitle}
+                description={emptyStateDescription}
+                {...(isInputDisabled && onStartSandbox
+                  ? {
+                      action: {
+                        label: SANDBOX_CHAT_COPY.wakeAction,
+                        onClick: onStartSandbox,
+                      },
+                    }
+                  : {})}
+              />
+            )))
           ) : lastUserMessageIndex < 0 ? (
             displayMessages.map(renderMessage)
           ) : (
@@ -364,48 +470,72 @@ export function ChatBody({
               </ChatLastTurn>
             </>
           )}
+          {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
         <ChatJumpRail messages={jumpRailMessages} />
       </Conversation>
-      {isArchived ? null : dockedQuestions ? (
-        <ChatQuestionDock
-          questions={dockedQuestions}
-          onAnswer={handleQuestionAnswer}
-          {...(blockingQuestions
-            ? { onAnswerStructured: handleBlockingAnswer }
-            : {})}
-          isLoading={isAnsweringQuestion}
-        />
-      ) : (
-        <ChatComposer
-          repoId={repoId}
-          repoBasePath={repoBasePath}
-          conversationId={conversationId}
-          queuedMessages={queuedMessages}
-          messageHistory={messageHistory}
-          isExecuting={isExecuting}
-          isInputDisabled={isInputDisabled}
-          placeholder={placeholder}
-          model={model}
-          setModel={setModel}
-          modelOptions={modelOptions}
-          accounts={accounts}
-          accountId={accountId}
-          onAccountChange={onAccountChange}
-          displayTraits={displayTraits}
-          onTraitsChange={onTraitsChange}
-          onSend={onSend}
-          onCancel={onCancel}
-          beforeQueuedContent={beforeQueuedContent}
-          preInputContent={preInputContent}
-          streamingActivity={streamingActivity}
-          streamingTurnId={streamingTargetId}
-          draft={draft}
-          isDraftLoading={isDraftLoading}
-          hasPendingContext={hasPendingContext}
-          allowEmptySubmit={allowEmptySubmit}
-        />
+      {isArchived ? null : (
+        <AnimatePresence mode="wait" initial={false}>
+          {dockedQuestions ? (
+            <m.div
+              key="question-dock"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionBase}
+            >
+              <ChatQuestionDock
+                questions={dockedQuestions}
+                onAnswer={handleQuestionAnswer}
+                {...(blockingQuestions
+                  ? { onAnswerStructured: handleBlockingAnswer }
+                  : {})}
+                isLoading={isAnsweringQuestion}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="composer"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={motionBase}
+            >
+              <ChatComposer
+                repoId={repoId}
+                repoBasePath={repoBasePath}
+                conversationId={conversationId}
+                queuedMessages={queuedMessages}
+                messageHistory={messageHistory}
+                isExecuting={isExecuting}
+                isInputDisabled={isInputDisabled}
+                disabledReason={disabledReason}
+                onStartSandbox={onStartSandbox}
+                placeholder={placeholder}
+                model={model}
+                setModel={setModel}
+                modelOptions={modelOptions}
+                accounts={accounts}
+                accountId={accountId}
+                onAccountChange={onAccountChange}
+                displayTraits={displayTraits}
+                onTraitsChange={onTraitsChange}
+                onSend={onSend}
+                onCancel={onCancel}
+                beforeQueuedContent={beforeQueuedContent}
+                preInputContent={preInputContent}
+                streamingActivity={streamingActivity}
+                streamingTurnId={streamingTargetId}
+                underCardLeading={underCardLeading}
+                draft={draft}
+                isDraftLoading={isDraftLoading}
+                hasPendingContext={hasPendingContext}
+                allowEmptySubmit={allowEmptySubmit}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       )}
     </>
   );

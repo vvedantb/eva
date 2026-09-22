@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Spinner, toast, WebPreviewNavigationButton } from "@eva/ui";
+import {
+  CrossfadeIcon,
+  Spinner,
+  toast,
+  WebPreviewNavigationButton,
+} from "@eva/ui";
 import { IconCamera } from "@tabler/icons-react";
 import {
   downloadPreviewScreenshot,
@@ -86,7 +91,15 @@ export function PreviewScreenshotButton({
       disabled={capturing || iframeElement === null}
       onClick={capture}
     >
-      {capturing ? <Spinner size="sm" /> : <IconCamera className="h-3.5 w-3.5" />}
+      <CrossfadeIcon
+        show={capturing}
+        trueKey="loading"
+        falseKey="idle"
+        variant="soft"
+        className="relative flex size-3.5 items-center justify-center"
+        whenTrue={<Spinner size="sm" />}
+        whenFalse={<IconCamera className="h-3.5 w-3.5" />}
+      />
     </WebPreviewNavigationButton>
   );
 }

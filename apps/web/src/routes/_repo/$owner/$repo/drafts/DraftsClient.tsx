@@ -2,7 +2,8 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Skeleton } from "@eva/ui";
+import { Skeleton, motionBase, motionStagger } from "@eva/ui";
+import { m } from "motion/react";
 import { IconFileText } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -46,16 +47,19 @@ export function DraftsClient() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {drafts.map((model) => (
-            <DraftCard
+          {drafts.map((model, index) => (
+            <m.div
               key={
                 model.source === "comment"
                   ? `comment-${model.row._id}`
                   : `task-${model.row._id}`
               }
-              model={model}
-              basePath={basePath}
-            />
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...motionBase, delay: motionStagger(index) }}
+            >
+              <DraftCard model={model} basePath={basePath} />
+            </m.div>
           ))}
         </div>
       )}

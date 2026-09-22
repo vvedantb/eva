@@ -10,8 +10,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
-import { memo } from "react";
-import { m } from "motion/react";
+import { memo, type ReactNode } from "react";
+import { AnimatePresence, m } from "motion/react";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -22,6 +22,7 @@ import {
   findAIModelOption,
   getReasoningLevelLabel,
   type BackgroundAgentEntry,
+  type Id,
 } from "@eva/backend";
 import { VideoPreview } from "@/lib/components/MediaPreview";
 import { ImageGalleryPreview } from "@/lib/components/MediaGallery";
@@ -45,9 +46,13 @@ import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
 import {
+  collectQuestionSteps,
   getAssistantTurnState,
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
+import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
+import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
@@ -132,6 +137,25 @@ interface ChatMessageProps {
    * on assistant turns that carry checkpoint shas.
    */
   turnCheckpoint?: TurnCheckpointContext;
+  /**
+   * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
+   * is read-only, which is what hides the Retry action on a failed turn.
+   */
+  onRetryTurn?: (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => void;
+  /** The preceding user turn, i.e. what Retry re-sends. */
+  precedingUser?: {
+    content: string;
+    attachmentStorageIds?: Id<"_storage">[];
+  };
+  /**
+   * Rendered inside the turn, directly above the meta row (provider mark, copy,
+   * time) so agent-composed panels read as part of the reply rather than as a
+   * detached card below its footer.
+   */
+  belowContent?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -155,6 +179,9 @@ export const ChatMessage = memo(function ChatMessage({
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
+  onRetryTurn,
+  precedingUser,
+  belowContent,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -171,8 +198,14 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const { isStreamingPlaceholder, changedFiles } =
+  const { isStreamingPlaceholder, changedFiles, questionSteps } =
     getAssistantTurnState(message);
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
+  const streamingQuestionSteps = isStreamingPlaceholder
+    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+    : [];
 
   const copySource =
     message.content.trim().length > 0
@@ -217,6 +250,29 @@ export const ChatMessage = memo(function ChatMessage({
     agentSpawn && onOpenAgentsTab ? (
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
+
+  // Both failure classes are failures, not replies: as markdown they read as
+  // Eva answering "Error: …" in body copy. Only "rate_limit" used to get the
+  // notice, so every other failed turn looked like an answer.
+  const turnErrorTitle =
+    message.errorType === "rate_limit"
+      ? "Claude usage limit reached"
+      : message.errorType === "generic"
+        ? "This turn failed"
+        : null;
+  // Retrying means re-sending the prompt this turn answered, so it needs the
+  // turn before it; a failure with nothing above it has nothing to repeat.
+  const retryAction =
+    onRetryTurn && precedingUser
+      ? {
+          label: "Retry",
+          onClick: () =>
+            onRetryTurn(
+              precedingUser.content,
+              precedingUser.attachmentStorageIds,
+            ),
+        }
+      : null;
 
   return (
     <>
@@ -303,6 +359,11 @@ export const ChatMessage = memo(function ChatMessage({
                     className={isOtherUser ? "ml-6" : undefined}
                   />
                 ) : null}
+                {belowContent ? (
+                  <div className="mt-1 flex w-full flex-col gap-2">
+                    {belowContent}
+                  </div>
+                ) : null}
                 <UserMessageMeta
                   align={isOtherUser ? "start" : "end"}
                   copyPlain={copyPlain}
@@ -322,6 +383,7 @@ export const ChatMessage = memo(function ChatMessage({
                         onOpenFile={onOpenFile}
                       />
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
                         <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
                           {streamingContent}
@@ -342,20 +404,38 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                       )}
                       {agentSpawnRow}
-                      {message.errorType === "rate_limit" ? (
-                        // A limit failure is not a reply: as markdown it read
-                        // as Eva answering "Error: …" in body copy.
-                        <TurnErrorNotice
-                          title="Claude usage limit reached"
-                          detail={stripErrorPrefix(message.content)}
-                        />
-                      ) : (
-                        /* wrap-anywhere: without it a long unbreakable token is
+                      <AssistantQuestionCards steps={questionSteps} />
+                      <AnimatePresence mode="wait" initial={false}>
+                        {turnErrorTitle !== null ? (
+                          <m.div
+                            key="turn-error"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                          >
+                            <TurnErrorNotice
+                              title={turnErrorTitle}
+                              detail={stripErrorPrefix(message.content)}
+                              {...(retryAction ? { action: retryAction } : {})}
+                            />
+                          </m.div>
+                        ) : (
+                          /* wrap-anywhere: without it a long unbreakable token is
                           silently clipped by MessageContent's overflow-hidden. */
-                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                          {message.content}
-                        </MessageResponse>
-                      )}
+                          <m.div
+                            key="turn-content"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                          >
+                            <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+                              {message.content}
+                            </MessageResponse>
+                          </m.div>
+                        )}
+                      </AnimatePresence>
                       {showChangedFiles && changedFiles.length > 0 ? (
                         <ChangedFilesCard
                           files={changedFiles}
@@ -387,6 +467,20 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {/* Sits above `belowContent` so agent-composed panels keep
+                    their promised slot directly over the meta row, and so the
+                    chip stays next to the changed-files card it judges. */}
+                {showChangedFiles && message.scopeCheck ? (
+                  <div className="mt-1">
+                    <ScopeCheckChip
+                      check={message.scopeCheck}
+                      onViewDiff={onViewDiff}
+                    />
+                  </div>
+                ) : null}
+                {belowContent ? (
+                  <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+                ) : null}
                 {turnModel || copyPlain || checkpoint.items.length > 0 ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
@@ -406,7 +500,10 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                         {message.finishedAt && message.timestamp ? (
                           <span className="text-[11px] tabular-nums text-muted-foreground/60">
-                            {dayjs(message.timestamp).format("h:mm A")} ·{" "}
+                            {/* The turn's clock time is when Eva finished, not
+                                when it started — the duration next to it already
+                                says how long the reply took. */}
+                            {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
                             {formatDuration(
                               message.timestamp,
                               message.finishedAt,
@@ -471,15 +568,18 @@ function HandoffModelChip({
 }) {
   const option = findAIModelOption(model);
   return (
-    <span
+    <m.span
       className={cn(
         "inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground",
         className,
       )}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionFast}
     >
       <ProviderIcon provider={option.provider} size={10} />
       {formatModelDisplayLabel(option.provider, option.label)}
-    </span>
+    </m.span>
   );
 }
 

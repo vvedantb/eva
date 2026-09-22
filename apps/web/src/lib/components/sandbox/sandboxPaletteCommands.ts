@@ -5,7 +5,10 @@ import {
   IconClipboardList,
   IconCode,
   IconDeviceDesktop,
+  IconFile,
   IconFileText,
+  IconLayoutDashboard,
+  IconLetterCase,
   IconPalette,
   IconRobot,
   IconTerminal2,
@@ -30,6 +33,8 @@ interface BuildSandboxPaletteCommandsArgs {
   showAgentsTab: boolean;
   showPrdTab: boolean;
   showDesignsTab: boolean;
+  showArtifactsTab: boolean;
+  showDocumentsTab: boolean;
   showEditorItem: boolean;
   showDesktopItem: boolean;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
@@ -39,6 +44,9 @@ interface BuildSandboxPaletteCommandsArgs {
   onNewPreview: () => void;
   newPreviewDisabled: boolean;
   simpleView?: boolean;
+  /** Desktop rail: tab labels under the icons. */
+  showRailLabels: boolean;
+  onToggleRailLabels: () => void;
 }
 
 /** Builds the shared, context-aware command palette vocabulary. */
@@ -49,6 +57,8 @@ export function buildSandboxPaletteCommands({
   showAgentsTab,
   showPrdTab,
   showDesignsTab,
+  showArtifactsTab,
+  showDocumentsTab,
   showEditorItem,
   showDesktopItem,
   customTabs,
@@ -58,6 +68,8 @@ export function buildSandboxPaletteCommands({
   onNewPreview,
   newPreviewDisabled,
   simpleView = false,
+  showRailLabels,
+  onToggleRailLabels,
 }: BuildSandboxPaletteCommandsArgs): SandboxPaletteCommand[] {
   const commands: SandboxPaletteCommand[] = tabs.map((tab) => ({
     id: `show-${tab.value}`,
@@ -103,6 +115,24 @@ export function buildSandboxPaletteCommands({
       run: () => onTabChange("designs"),
     });
   }
+  if (showArtifactsTab) {
+    commands.push({
+      id: "show-artifacts",
+      label: "Show Artifacts",
+      keywords: "view tab dashboard hosted",
+      icon: IconLayoutDashboard,
+      run: () => onTabChange("artifacts"),
+    });
+  }
+  if (showDocumentsTab) {
+    commands.push({
+      id: "show-documents",
+      label: "Show Documents",
+      keywords: "view tab prd docs design",
+      icon: IconFile,
+      run: () => onTabChange("documents"),
+    });
+  }
   if (showEditorItem) {
     commands.push({
       id: "show-editor",
@@ -130,6 +160,16 @@ export function buildSandboxPaletteCommands({
       run: () => onTabChange(slugifyAppTabName(tab.name)),
     });
   }
+
+  // Outside the `simpleView` gate: the rail is there either way, and this is
+  // how a reader who cannot place the icons finds out the labels exist.
+  commands.push({
+    id: "toggle-rail-labels",
+    label: showRailLabels ? "Hide tab labels" : "Show tab labels",
+    keywords: "sandbox rail sidebar icon text names wide",
+    icon: IconLetterCase,
+    run: onToggleRailLabels,
+  });
 
   if (!simpleView) {
     commands.push({

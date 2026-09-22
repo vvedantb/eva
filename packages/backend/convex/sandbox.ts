@@ -7,6 +7,7 @@ export {
   captureDiagnosticsAndStopSandbox,
   archiveSandbox,
   verifySandboxLiveness,
+  captureStalledTurnDiagnostics,
   getSandboxProviderKind,
   getSnapshotSandboxProviderKind,
 } from "./_sandbox_runtime/lifecycle";
@@ -33,6 +34,7 @@ export {
   checkoutBaseBranch,
   setupSandboxBranch,
   pushSandboxBranch,
+  pushLinkedRepoBranches,
   launchOnExistingSandbox,
   prewarmSessionDaemon,
   prewarmEntityDaemon,
@@ -71,3 +73,5 @@ export {
   startTaskPreviewSandbox,
   startProjectPreviewSandbox,
 } from "./_sandbox_runtime/sessions";
+
+export { prepareLinkedRepo } from "./_sandbox_runtime/linkedRepos";

@@ -7,12 +7,14 @@ import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SkillRow } from "./skills/_components/SkillRow";
 import { SystemSkillRow } from "./skills/_components/SystemSkillRow";
-import { Button } from "@eva/ui";
+import { Button, motionBase, motionFast, motionStagger } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconRefresh, IconSparkles } from "@tabler/icons-react";
 import { useState } from "react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export function SkillsClient() {
@@ -87,30 +89,53 @@ export function SkillsClient() {
         </Button>
       }
     >
-      {error ? (
-        <p className="rounded-control border border-destructive/40 px-3 py-2 text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
-      {syncSummary ? (
-        <p className="rounded-control border border-border px-3 py-2 text-xs text-muted-foreground">
-          {syncSummary}
-        </p>
-      ) : null}
-      {warnings.length > 0 ? (
-        <SettingsSection title="Sync warnings" bodyVariant="compact">
-          <div className="grid gap-1">
-            {warnings.map((warning) => (
-              <p
-                key={warning}
-                className="text-xs leading-relaxed text-muted-foreground"
-              >
-                {warning}
-              </p>
-            ))}
-          </div>
-        </SettingsSection>
-      ) : null}
+      <AnimatePresence>
+        {error ? (
+          <m.p
+            key="skills-sync-error"
+            className="rounded-control border border-destructive/40 px-3 py-2 text-xs text-destructive"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            {error}
+          </m.p>
+        ) : null}
+        {syncSummary ? (
+          <m.p
+            key="skills-sync-summary"
+            className="rounded-control border border-border px-3 py-2 text-xs text-muted-foreground"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            {syncSummary}
+          </m.p>
+        ) : null}
+        {warnings.length > 0 ? (
+          <m.div
+            key="skills-sync-warnings"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <SettingsSection title="Sync warnings" bodyVariant="compact">
+              <div className="grid gap-1">
+                {warnings.map((warning, index) => (
+                  <ListEnter key={warning} index={index} fast>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {warning}
+                    </p>
+                  </ListEnter>
+                ))}
+              </div>
+            </SettingsSection>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <SettingsSection
         title="Eva skills"
@@ -118,9 +143,14 @@ export function SkillsClient() {
         bodyVariant="list"
       >
         <div className="divide-y divide-border/50">
-          {(systemSkills ?? []).map((skill) => (
-            <SystemSkillRow
+          {(systemSkills ?? []).map((skill, index) => (
+            <m.div
               key={skill.name}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...motionBase, delay: motionStagger(index) }}
+            >
+            <SystemSkillRow
               repoId={repoId}
               skill={skill}
               onInstall={(name) =>
@@ -140,6 +170,7 @@ export function SkillsClient() {
                 )
               }
             />
+            </m.div>
           ))}
         </div>
       </SettingsSection>
@@ -157,11 +188,15 @@ export function SkillsClient() {
       >
         {skills.length > 0 ? (
           <div className="divide-y divide-border/50">
-            {availableSkills.map((skill) => (
-              <SkillRow key={skill._id} skill={skill} />
-            ))}
-            {staleSkills.map((skill) => (
-              <SkillRow key={skill._id} skill={skill} />
+            {[...availableSkills, ...staleSkills].map((skill, index) => (
+              <m.div
+                key={skill._id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...motionBase, delay: motionStagger(index) }}
+              >
+                <SkillRow skill={skill} />
+              </m.div>
             ))}
           </div>
         ) : (

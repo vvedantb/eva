@@ -228,6 +228,23 @@ export function ResizablePanelLayout({
     rightPanelRef,
   ]);
 
+  // The rail can change width while it is on screen (the sandbox rail's label
+  // preference). `Panel` re-registers with the new `collapsedSize`, but a panel
+  // already snapped to the old pixel width is left sitting at it, so re-apply
+  // the snap here. Idempotent: resizing to the width it already has is a no-op.
+  useEffect(() => {
+    if (isMobile || rightCollapsedSizePx <= 0) return;
+    const panel = rightPanelRef.current;
+    if (!panel) return;
+    const size = panel.getSize();
+    if (!isMeasuredPanelSize(size)) return;
+    // Only the collapsed snap is ours to move — an expanded pane is the width
+    // the user dragged it to.
+    if (!isCollapsedPanelSize(size, rightCollapsedSizePx, railMinSizePx))
+      return;
+    panel.resize(`${rightCollapsedSizePx}px`);
+  }, [isMobile, railMinSizePx, rightCollapsedSizePx, rightPanelRef]);
+
   const handleResize = (size: PanelSize) => {
     // Hiding the panel (a kept-alive session shell going `display: none`) is not
     // a collapse — see `isMeasuredPanelSize`. Taking that report as "expanded"

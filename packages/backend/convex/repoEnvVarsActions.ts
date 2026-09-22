@@ -3,7 +3,8 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { encryptValue, decryptValue } from "./encryption";
+import { encryptValue } from "./encryption";
+import { decryptStoredEntry } from "./_envVars/encryptedEntries";
 import { getActionRepoWithAccess } from "./functions";
 
 /** Decrypts and reveals the plaintext value of a specific repo env var. */
@@ -23,8 +24,7 @@ export const revealValue = action({
       internal.repoEnvVars.getAllInternal,
       { repoId: args.repoId },
     );
-    const entry = vars.find((entry) => entry.key === args.key);
-    return entry ? decryptValue(entry.value) : null;
+    return decryptStoredEntry(vars, args.key);
   },
 });
 

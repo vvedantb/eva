@@ -514,9 +514,9 @@ describe("which tokens get which tools", () => {
   });
 
   test("fleet tools are registered for every MCP caller", () => {
-    // registerFleetTools is called in tools.ts above the isOrchestrator gate,
+    // fleetTools is spread into the catalog above the isOrchestrator gate,
     // the same ordering that puts send_chat_message on an OAuth connector.
-    const fleet = tools.indexOf("registerFleetTools(server, credentials, ctx)");
+    const fleet = tools.indexOf("tools.push(...fleetTools(credentials, ctx))");
     const gate = tools.indexOf("if (isOrchestrator) {");
     expect(fleet).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(fleet);
@@ -535,13 +535,13 @@ describe("which tokens get which tools", () => {
   test("send_agent_message stays behind the orchestrator gate", () => {
     expect(orchestratorTools).toContain('"send_agent_message"');
     expect(tools).not.toContain('"send_agent_message"');
-    const registerAt = tools.indexOf("registerOrchestratorTools(server");
+    const registerAt = tools.indexOf("tools.push(...orchestratorTools(");
     const guardAt = tools.lastIndexOf("if (isOrchestrator) {", registerAt);
     expect(registerAt).toBeGreaterThan(-1);
     expect(guardAt).toBeGreaterThan(-1);
     expect(tools.slice(guardAt, registerAt)).not.toContain("}");
     expect(tools).toContain(
-      "if (isOrchestrator) {\n    registerOrchestratorTools(server, credentials, ctx);",
+      "if (isOrchestrator) {\n    tools.push(...orchestratorTools(credentials, ctx));",
     );
   });
 
@@ -549,9 +549,7 @@ describe("which tokens get which tools", () => {
     expect(orchestratorTools).not.toContain(
       "Watch tools require the master session's own sandbox token.",
     );
-    expect(orchestratorTools).toContain(
-      "getLiveOrchestratorSessionIdForUser",
-    );
+    expect(orchestratorTools).toContain("getLiveOrchestratorSessionIdForUser");
   });
 
   test("the send checks repo access before it sends", () => {
@@ -583,6 +581,13 @@ describe("which tokens get which tools", () => {
     );
     expect(getState).toContain('"_sessions/queries:get"');
     expect(getState).toContain('"_agentTasks/queries:get"');
+  });
+
+  test("code-mode tools are mounted beside the flat tools, never instead of them", () => {
+    const nodeActions = convexSource("mcp/nodeActions.ts");
+    expect(nodeActions).toContain(
+      "mountFlat(server, [...allTools, ...codeModeTools(allTools)])",
+    );
   });
 });
 
@@ -658,7 +663,7 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
       nodeActions.indexOf("export const orchestratorSendMessage"),
       nodeActions.indexOf("export const orchestratorStopAgent"),
     );
-    expect(send).toContain("kind === \"task\"");
+    expect(send).toContain('kind === "task"');
     expect(send).toContain("ensureEntitySandboxActive");
     expect(send.indexOf("ensureEntitySandboxActive")).toBeLessThan(
       send.indexOf("buildChatMessageCalls"),
@@ -684,12 +689,8 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
       taskChat.indexOf("async function stageAndStartTaskChatTurn"),
       taskChat.indexOf("export const agentTaskChatCompleteEvent"),
     );
-    expect(staging).toContain(
-      'task.reviewTaskSandboxStatus !== "closed"',
-    );
-    expect(staging).toContain(
-      'task.reviewTaskSandboxStatus !== "stopping"',
-    );
+    expect(staging).toContain('task.reviewTaskSandboxStatus !== "closed"');
+    expect(staging).toContain('task.reviewTaskSandboxStatus !== "stopping"');
   });
 
   test("the chat workflow starts a closed sandbox instead of resuming it in place", () => {
@@ -701,45 +702,51 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
     expect(workflow).toContain("markTaskSandboxStartingForChat");
     expect(workflow).toContain("startTaskPreviewSandbox");
     expect(workflow).toContain("waitForTaskPreviewSandboxActive");
-    expect(workflow).toContain("sandboxRunning: data.sandboxStatus === \"active\"");
+    expect(workflow).toContain(
+      'sandboxRunning: data.sandboxStatus === "active"',
+    );
     expect(workflow).not.toContain("sandboxRunning: false");
   });
 
-  test("markTaskSandboxStartingForChat flips closed to starting so ready is accepted", async () => {
-    const f = await fixture();
-    const now = Date.now();
-    const taskId = await f.t.run(async (ctx) => {
-      return await ctx.db.insert("agentTasks", {
-        repoId: f.repoId,
-        title: "Closed sandbox follow-up",
-        status: "business_review",
-        numId: 470,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: f.ownerUserId,
-        sandboxId: "sbx_closed",
-        reviewTaskSandboxStatus: "closed",
+  test(
+    "markTaskSandboxStartingForChat flips closed to starting so ready is accepted",
+    async () => {
+      const f = await fixture();
+      const now = Date.now();
+      const taskId = await f.t.run(async (ctx) => {
+        return await ctx.db.insert("agentTasks", {
+          repoId: f.repoId,
+          title: "Closed sandbox follow-up",
+          status: "business_review",
+          numId: 470,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: f.ownerUserId,
+          sandboxId: "sbx_closed",
+          reviewTaskSandboxStatus: "closed",
+        });
       });
-    });
 
-    await f.t.mutation(
-      internal.agentTaskChatWorkflow.markTaskSandboxStartingForChat,
-      { taskId },
-    );
+      await f.t.mutation(
+        internal.agentTaskChatWorkflow.markTaskSandboxStartingForChat,
+        { taskId },
+      );
 
-    const after = await f.t.run(async (ctx) => ctx.db.get(taskId));
-    expect(after?.reviewTaskSandboxStatus).toBe("starting");
+      const after = await f.t.run(async (ctx) => ctx.db.get(taskId));
+      expect(after?.reviewTaskSandboxStatus).toBe("starting");
 
-    const activity = await f.t.run(async (ctx) =>
-      ctx.db
-        .query("streamingActivity")
-        .withIndex("by_entity", (q) =>
-          q.eq("entityId", `task-sandbox-startup-${taskId}`),
-        )
-        .first(),
-    );
-    expect(activity?.currentActivity).toContain("Starting sandbox...");
-  }, TIMEOUT_MS);
+      const activity = await f.t.run(async (ctx) =>
+        ctx.db
+          .query("streamingActivity")
+          .withIndex("by_entity", (q) =>
+            q.eq("entityId", `task-sandbox-startup-${taskId}`),
+          )
+          .first(),
+      );
+      expect(activity?.currentActivity).toContain("Starting sandbox...");
+    },
+    TIMEOUT_MS,
+  );
 
   test("waitForTaskPreviewSandboxActive is ready only when status is active", async () => {
     const f = await fixture();
@@ -821,7 +828,12 @@ describe("user MCP accepts fable on per-turn sends and runs it as Eva's Fable mo
   const schema = z.enum(MCP_CLAUDE_MODELS);
 
   test("the shared MCP model enum accepts fable and rejects grok", () => {
-    expect([...MCP_CLAUDE_MODELS]).toEqual(["opus", "sonnet", "haiku", "fable"]);
+    expect([...MCP_CLAUDE_MODELS]).toEqual([
+      "opus",
+      "sonnet",
+      "haiku",
+      "fable",
+    ]);
     expect(schema.parse("fable")).toBe("fable");
     expect(schema.safeParse("grok").success).toBe(false);
     expect(schema.safeParse("cursor:grok-4.6").success).toBe(false);
@@ -830,13 +842,15 @@ describe("user MCP accepts fable on per-turn sends and runs it as Eva's Fable mo
 
   test("only the per-turn send tools carry a model picker, and they use that enum", () => {
     expect(tools).not.toContain('.enum(["opus", "sonnet", "haiku"])');
-    expect(orchestratorTools).not.toContain('.enum(["opus", "sonnet", "haiku"])');
+    expect(orchestratorTools).not.toContain(
+      '.enum(["opus", "sonnet", "haiku"])',
+    );
     // send_chat_message
     expect((tools.match(/enum\(MCP_CLAUDE_MODELS\)/g) ?? []).length).toBe(1);
     // modelArg, shared by send_agent_message
-    expect((orchestratorTools.match(/enum\(MCP_CLAUDE_MODELS\)/g) ?? []).length).toBe(
-      1,
-    );
+    expect(
+      (orchestratorTools.match(/enum\(MCP_CLAUDE_MODELS\)/g) ?? []).length,
+    ).toBe(1);
   });
 
   test("send_chat_message canonicalizes fable", () => {
@@ -877,9 +891,9 @@ describe("MCP task and session creation always run on the repo default model", (
     const batch = between(tools, '"create_tasks_batch"', '"send_chat_message"');
     expect(taskArgs).not.toMatch(/\bmodel\b/);
     expect(batch).not.toMatch(/\bmodel\b/);
-    expect(between(tools, "type TaskInput = {", "async function createTaskForRepo")).not.toMatch(
-      /\bmodel\b/,
-    );
+    expect(
+      between(tools, "type TaskInput = {", "async function createTaskForRepo"),
+    ).not.toMatch(/\bmodel\b/);
   });
 
   test("create_session exposes no model argument", () => {
@@ -930,4 +944,3 @@ describe("MCP task and session creation always run on the repo default model", (
     expect(createFn).not.toContain("model: args.model");
   });
 });
-

@@ -278,7 +278,13 @@ function extractBearerSecret(request: Request): string | null {
   return secret.length > 0 ? secret : null;
 }
 
-/** The repository git asked about, sent by the in-sandbox credential helper. */
+/**
+ * Body the in-sandbox credential helper posts. `path` is git's `path=`
+ * component (e.g. `owner/name.git`), present once `credential.useHttpPath` is
+ * on; absent for an old baked helper script, which still gets a primary token.
+ * Any other shape (or unparsable JSON) degrades to `{}` rather than erroring —
+ * a malformed body must not break the credential handshake.
+ */
 const gitCredentialsBodySchema = z.object({ path: z.string().optional() });
 
 /** Reads the requested repository path from the helper's body, if any. */
@@ -295,7 +301,8 @@ http.route({
     if (!secret) {
       return new Response("Unauthorized", { status: 401 });
     }
-    const body: unknown = await request.json().catch(() => null);
+    // Old baked helper scripts send an empty body; treat unparseable as `{}`.
+    const body: unknown = await request.json().catch(() => ({}));
     const resolved = await ctx.runQuery(
       internal.sandboxGitCredentials.resolveCredentialRequest,
       { secret, path: parseGitCredentialsPath(body) },
@@ -321,6 +328,14 @@ http.route({
         token: siblingToken,
       });
     }
+    if (resolved.kind === "linked") {
+      // A multi-repo session's linked repo: a full token, but for that repo's
+      // own installation rather than the primary's.
+      console.log(
+        `[git-credentials][linked-repo] sandbox=${resolved.sandboxId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+      );
+    }
+
     const token: string = await ctx.runAction(
       internal.githubAuth.mintInstallationToken,
       { installationId: resolved.installationId },

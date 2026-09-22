@@ -17,6 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  CrossfadeIcon,
   Spinner,
   toast,
 } from "@eva/ui";
@@ -27,6 +28,7 @@ import {
   IconGitPullRequest,
 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
 import type { PrOverview } from "./prOverviewMeta";
 import {
@@ -191,7 +193,15 @@ function MergeAction({
               Cancel
             </Button>
             <Button onClick={() => void runMerge()} disabled={merging}>
-              {merging ? <Spinner size="sm" /> : <IconGitMerge size={14} />}
+              <CrossfadeIcon
+                show={merging}
+                trueKey="loading"
+                falseKey="idle"
+                variant="soft"
+                className="relative flex size-3.5 items-center justify-center"
+                whenTrue={<Spinner size="sm" />}
+                whenFalse={<IconGitMerge size={14} />}
+              />
               {merging ? "Merging" : methodLabel}
             </Button>
           </DialogFooter>
@@ -229,7 +239,15 @@ function ReopenAction({
 
   return (
     <Button size="sm" disabled={working} onClick={() => void reopen()}>
-      {working ? <Spinner size="sm" /> : <IconGitPullRequest size={14} />}
+      <CrossfadeIcon
+        show={working}
+        trueKey="loading"
+        falseKey="idle"
+        variant="soft"
+        className="relative flex size-3.5 items-center justify-center"
+        whenTrue={<Spinner size="sm" />}
+        whenFalse={<IconGitPullRequest size={14} />}
+      />
       Reopen
     </Button>
   );
@@ -265,7 +283,9 @@ function RevertAction({ overview }: { overview: PrOverview }) {
         message,
         baseBranch: overview.baseRef,
       });
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Couldn't start a session",
@@ -315,7 +335,15 @@ function RevertAction({ overview }: { overview: PrOverview }) {
               Cancel
             </Button>
             <Button onClick={() => void start()} disabled={starting}>
-              {starting ? <Spinner size="sm" /> : <IconArrowBackUp size={14} />}
+              <CrossfadeIcon
+                show={starting}
+                trueKey="loading"
+                falseKey="idle"
+                variant="soft"
+                className="relative flex size-3.5 items-center justify-center"
+                whenTrue={<Spinner size="sm" />}
+                whenFalse={<IconArrowBackUp size={14} />}
+              />
               Start a session
             </Button>
           </DialogFooter>
