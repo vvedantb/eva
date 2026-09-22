@@ -70,6 +70,38 @@ export function findFirstRunChatTurnRun<Run extends ChatTurnRunFields>(
 }
 
 /**
+ * The assistant row's content for a first run, which is the only part of the
+ * turn that differs between an in-flight and a settled run.
+ *
+ * In flight it is the live streaming placeholder: empty content and **no**
+ * `finishedAt`, exactly the shape `findStreamingTargetMessage` looks for, so
+ * the run's steps stream into the bubble like a session turn. Settled, it
+ * carries the reply and always sets `finishedAt` — an assistant row without it
+ * reads as that same placeholder and would swallow the next turn's tokens.
+ */
+export function firstRunAssistantContent({
+  status,
+  resultSummary,
+  finishedAt,
+  activityLog,
+  startedAt,
+}: {
+  status: AgentRun["status"];
+  resultSummary?: string;
+  finishedAt?: number;
+  /** Resolved log for the run — `null` when it has none. */
+  activityLog: string | null;
+  startedAt: number;
+}): { content: string; activityLog?: string; finishedAt?: number } {
+  if (isRunInProgress(status)) return { content: "" };
+  return {
+    content: resultSummary ?? "",
+    ...(activityLog !== null ? { activityLog } : {}),
+    finishedAt: finishedAt ?? startedAt,
+  };
+}
+
+/**
  * The first run as a normal chat turn: the task prompt (title + description)
  * as the user message, the run's activity log + result summary as the
  * assistant reply. While the run is still in flight the assistant row is an
@@ -117,28 +149,21 @@ export function buildFirstRunChatTurn({
         : {}),
       ...(attachments && attachments.length > 0 ? { attachments } : {}),
     },
-    isRunInProgress(run.status)
-      ? {
-          _id: `first-run-${run._id}-assistant`,
-          _creationTime: startedAt,
-          parentId: task._id,
-          role: "assistant",
-          // Empty content and no finishedAt: this is the live streaming
-          // placeholder the run's activity streams into.
-          content: "",
-          timestamp: startedAt,
-        }
-      : {
-          _id: `first-run-${run._id}-assistant`,
-          _creationTime: startedAt,
-          parentId: task._id,
-          role: "assistant",
-          content: run.resultSummary ?? "",
-          ...(activityLog !== null ? { activityLog } : {}),
-          timestamp: startedAt,
-          // Always set: an assistant row without finishedAt reads as the live
-          // streaming placeholder (findStreamingTargetMessage).
-          finishedAt: run.finishedAt ?? startedAt,
-        },
+    {
+      _id: `first-run-${run._id}-assistant`,
+      _creationTime: startedAt,
+      parentId: task._id,
+      role: "assistant",
+      timestamp: startedAt,
+      ...firstRunAssistantContent({
+        status: run.status,
+        ...(run.resultSummary !== undefined
+          ? { resultSummary: run.resultSummary }
+          : {}),
+        ...(run.finishedAt !== undefined ? { finishedAt: run.finishedAt } : {}),
+        activityLog,
+        startedAt,
+      }),
+    },
   ];
 }
