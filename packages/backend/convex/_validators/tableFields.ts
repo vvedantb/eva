@@ -1393,11 +1393,10 @@ export const workProfileFields = {
   updatedAt: v.number(),
 };
 
-/** One routed question thread: one topic, one assignee, one source entity. */
+/** One routed question thread: one topic, one source entity, many teammates. */
 export const routedThreadFields = {
   teamId: v.id("teams"),
   repoId: v.id("githubRepos"),
-  assigneeUserId: v.id("users"),
   sourceKind: routedSourceKindValidator,
   sourceId: v.string(),
   sourceNumId: v.optional(v.number()),
@@ -1409,6 +1408,19 @@ export const routedThreadFields = {
   lastPreview: v.string(),
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
+};
+
+/** One teammate on a routed thread. Denormalises the thread's clock so "my
+ *  threads" is one indexed scan rather than a get per thread. */
+export const routedParticipantFields = {
+  threadId: v.id("routedThreads"),
+  userId: v.id("users"),
+  teamId: v.id("teams"),
+  lastMessageAt: v.number(),
+  /** True while Eva is still waiting on this person specifically. */
+  needsReply: v.boolean(),
+  addedAt: v.number(),
+  repliedAt: v.optional(v.number()),
 };
 
 export const routedMessageFields = {

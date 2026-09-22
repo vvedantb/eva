@@ -30,14 +30,12 @@ export function MessagesClient() {
   const team = useQuery(api.routedThreads.listTeam, { status: "open" });
   const threads = scope === "team" ? team : mine;
   const selected = threads?.find((row) => row._id === selectedId) ?? null;
-  const waitingCount =
-    mine?.filter((row) => row.status === "waiting_human").length ?? 0;
+  const waitingCount = mine?.filter((row) => row.needsMyReply).length ?? 0;
 
   useEffect(() => {
     if (!threads || threads.length === 0) return;
     if (selectedId && threads.some((row) => row._id === selectedId)) return;
-    const first =
-      threads.find((row) => row.status === "waiting_human") ?? threads[0];
+    const first = threads.find((row) => row.needsMyReply) ?? threads[0];
     void setSelectedId(first._id);
   }, [threads, selectedId, setSelectedId]);
 

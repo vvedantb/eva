@@ -21,6 +21,7 @@ import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { catchMutationError, withMutationToast } from "@/lib/utils/mutationToast";
 import {
+  participantNames,
   sourceKindLabel,
   statusBadgeVariant,
   statusLabel,
@@ -43,7 +44,8 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
 
   const canWrite =
     me !== undefined &&
-    (me === thread.assigneeUserId || me === thread.sourceOwnerUserId);
+    (thread.participants.some((participant) => participant.userId === me) ||
+      me === thread.sourceOwnerUserId);
   const closed =
     thread.status === "resolved" || thread.status === "cancelled";
 
@@ -69,15 +71,19 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
       setDraft("");
     } catch {
       // Toast already shown.
-    } finally {
-      setSending(false);
-      textareaRef.current?.focus();
     }
+    // No `finally`: the catch swallows, so this always runs (and `finally`
+    // bails the React Compiler out of the whole file).
+    setSending(false);
+    textareaRef.current?.focus();
   };
 
   const sourceLabel = thread.sourceNumId
     ? `${sourceKindLabel(thread.sourceKind)} ${thread.sourceNumId}`
     : sourceKindLabel(thread.sourceKind);
+  const outstanding = thread.participants.filter(
+    (participant) => participant.needsReply,
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -95,7 +101,7 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
             </Badge>
           </div>
           <p className="truncate text-xs text-muted-foreground">
-            To {thread.assigneeName}
+            To {participantNames(thread.participants)}
             {" · "}
             {thread.sourceHref ? (
               <a
@@ -111,6 +117,9 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
                 {thread.sourceTitle ? ` · ${thread.sourceTitle}` : ""}
               </>
             )}
+            {outstanding.length > 0
+              ? ` · Waiting on ${participantNames(outstanding)}`
+              : ""}
           </p>
         </div>
         {!closed && canWrite ? (

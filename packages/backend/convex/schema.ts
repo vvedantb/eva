@@ -59,6 +59,7 @@ import {
   logFields,
   workProfileFields,
   routedThreadFields,
+  routedParticipantFields,
   routedMessageFields,
 } from "./validators";
 
@@ -410,15 +411,15 @@ const schema = defineSchema({
     .index("by_user", ["userId"]),
 
   routedThreads: defineTable(routedThreadFields)
-    .index("by_assignee_and_status", ["assigneeUserId", "status"])
-    .index("by_assignee_and_lastMessage", ["assigneeUserId", "lastMessageAt"])
     .index("by_team_and_lastMessage", ["teamId", "lastMessageAt"])
     .index("by_source", ["sourceKind", "sourceId"])
-    .index("by_source_assignee_topic", [
-      "sourceId",
-      "assigneeUserId",
-      "topicKey",
-    ]),
+    .index("by_source_and_topic", ["sourceId", "topicKey"]),
+
+  routedParticipants: defineTable(routedParticipantFields)
+    .index("by_thread", ["threadId"])
+    .index("by_thread_and_user", ["threadId", "userId"])
+    .index("by_user_and_lastMessage", ["userId", "lastMessageAt"])
+    .index("by_user_and_needsReply", ["userId", "needsReply"]),
 
   routedMessages: defineTable(routedMessageFields)
     .index("by_thread", ["threadId"])

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -36,8 +36,15 @@ const threadSummary = v.object({
   _id: v.id("routedThreads"),
   teamId: v.id("teams"),
   repoId: v.id("githubRepos"),
-  assigneeUserId: v.id("users"),
-  assigneeName: v.string(),
+  participants: v.array(
+    v.object({
+      userId: v.id("users"),
+      name: v.string(),
+      needsReply: v.boolean(),
+    }),
+  ),
+  /** True when the caller is a participant Eva is still waiting on. */
+  needsMyReply: v.boolean(),
   sourceOwnerUserId: v.optional(v.id("users")),
   sourceKind: routedSourceKindValidator,
   sourceId: v.string(),
@@ -145,26 +152,6 @@ function displayName(user: {
   return user.fullName || user.firstName || user.email || "Teammate";
 }
 
-function scoreOverlap(
-  question: string,
-  profile: { owns: string; askMeAbout: string; headline: string },
-): number {
-  const words = new Set(
-    question
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((word) => word.length > 2),
-  );
-  const hay = `${profile.owns} ${profile.askMeAbout} ${profile.headline}`
-    .toLowerCase()
-    .split(/[^a-z0-9]+/);
-  let score = 0;
-  for (const word of hay) {
-    if (word.length > 2 && words.has(word)) score += 1;
-  }
-  return score;
-}
-
 function repoHref(
   owner: string,
   name: string,
@@ -263,33 +250,32 @@ async function loadSource(
 
 async function enrichThread(
   ctx: QueryCtx,
-  thread: {
-    _id: Id<"routedThreads">;
-    teamId: Id<"teams">;
-    repoId: Id<"githubRepos">;
-    assigneeUserId: Id<"users">;
-    sourceKind: SourceKind;
-    sourceId: string;
-    sourceNumId?: number;
-    sourceTitle: string;
-    topicKey: string;
-    title: string;
-    status: ThreadStatus;
-    lastMessageAt: number;
-    lastPreview: string;
-    createdAt: number;
-    resolvedAt?: number;
-  },
+  thread: Doc<"routedThreads">,
+  viewerUserId: Id<"users">,
 ) {
-  const assignee = await ctx.db.get(thread.assigneeUserId);
+  const rows = await threadParticipants(ctx, thread._id);
+  const participants = [];
+  let needsMyReply = false;
+  for (const row of rows) {
+    const user = await ctx.db.get(row.userId);
+    participants.push({
+      userId: row.userId,
+      name: displayName(user),
+      needsReply: row.needsReply,
+    });
+    if (row.userId === viewerUserId && row.needsReply) needsMyReply = true;
+  }
+  // Stable order for the UI — row order is insertion order, which shuffles as
+  // people are added to an existing thread.
+  participants.sort((a, b) => a.name.localeCompare(b.name));
   const repo = await ctx.db.get(thread.repoId);
   const source = await loadSource(ctx, thread.sourceKind, thread.sourceId);
   return {
     _id: thread._id,
     teamId: thread.teamId,
     repoId: thread.repoId,
-    assigneeUserId: thread.assigneeUserId,
-    assigneeName: displayName(assignee),
+    participants,
+    needsMyReply,
     sourceOwnerUserId: source?.ownerUserId,
     sourceKind: thread.sourceKind,
     sourceId: thread.sourceId,
@@ -321,14 +307,37 @@ async function assertThreadRead(
   return thread;
 }
 
+async function participantRow(
+  ctx: QueryCtx,
+  threadId: Id<"routedThreads">,
+  userId: Id<"users">,
+): Promise<Doc<"routedParticipants"> | null> {
+  return await ctx.db
+    .query("routedParticipants")
+    .withIndex("by_thread_and_user", (q) =>
+      q.eq("threadId", threadId).eq("userId", userId),
+    )
+    .first();
+}
+
 async function canWriteThread(
   ctx: QueryCtx,
-  thread: { assigneeUserId: Id<"users">; sourceKind: SourceKind; sourceId: string },
+  thread: Doc<"routedThreads">,
   userId: Id<"users">,
 ): Promise<boolean> {
-  if (thread.assigneeUserId === userId) return true;
+  if (await participantRow(ctx, thread._id, userId)) return true;
   const source = await loadSource(ctx, thread.sourceKind, thread.sourceId);
   return source?.ownerUserId === userId;
+}
+
+async function threadParticipants(
+  ctx: QueryCtx,
+  threadId: Id<"routedThreads">,
+): Promise<Doc<"routedParticipants">[]> {
+  return await ctx.db
+    .query("routedParticipants")
+    .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+    .collect();
 }
 
 function notifyEntityArgs(
@@ -400,87 +409,107 @@ async function enqueueSourceWake(
   }
 }
 
-async function resolveAssignee(
+type DirectoryMember = {
+  userId: Id<"users">;
+  name: string;
+  role: "business" | "dev" | "designer" | null;
+};
+
+/**
+ * Who Eva is asking. A role with several matches is no longer ambiguous: the
+ * whole role gets the question, which is what a group thread is for.
+ */
+async function resolveParticipants(
   ctx: QueryCtx,
   args: {
     teamId: Id<"teams">;
-    userId?: Id<"users">;
+    actorUserId: Id<"users">;
+    userIds?: Id<"users">[];
     role?: "business" | "dev" | "designer";
-    question: string;
   },
 ): Promise<
-  | { ok: true; userId: Id<"users">; name: string; role: string | null }
-  | {
-      ok: false;
-      error: string;
-      candidates?: Array<{ userId: Id<"users">; name: string; role: string | null }>;
-    }
+  | { ok: true; users: DirectoryMember[] }
+  | { ok: false; error: string; candidates?: DirectoryMember[] }
 > {
   const directory = await listDirectoryForTeam(ctx, args.teamId);
-  if (args.userId) {
-    const match = directory.find((row) => row.userId === args.userId);
-    if (!match) {
-      return { ok: false, error: "That person is not on this team." };
+  let chosen: DirectoryMember[];
+  if (args.userIds && args.userIds.length > 0) {
+    chosen = [];
+    for (const userId of new Set(args.userIds)) {
+      const match = directory.find((row) => row.userId === userId);
+      if (!match) {
+        return { ok: false, error: `That person (${userId}) is not on this team.` };
+      }
+      chosen.push(match);
     }
-    return {
-      ok: true,
-      userId: match.userId,
-      name: match.name,
-      role: match.role,
-    };
-  }
-  if (!args.role) {
+  } else if (args.role) {
+    chosen = directory.filter((row) => row.role === args.role);
+    if (chosen.length === 0) {
+      return {
+        ok: false,
+        error: `No teammate with role "${args.role}" on this team. Ask in the session chat instead.`,
+      };
+    }
+  } else {
     return {
       ok: false,
       error:
-        "Pass userId or role (business, dev, designer). Call list_work_profiles first.",
+        "Pass userIds or role (business, dev, designer). Call list_work_profiles first.",
     };
   }
-  const byRole = directory.filter((row) => row.role === args.role);
-  if (byRole.length === 0) {
+  // The person driving the source chat must never be asked their own question.
+  const others = chosen.filter((row) => row.userId !== args.actorUserId);
+  if (others.length === 0) {
     return {
       ok: false,
-      error: `No teammate with role "${args.role}" on this team. Ask in the session chat instead.`,
+      error: "You are the only match. Name someone else to ask.",
     };
   }
-  if (byRole.length === 1) {
-    return {
-      ok: true,
-      userId: byRole[0].userId,
-      name: byRole[0].name,
-      role: byRole[0].role,
-    };
-  }
-  let best = byRole[0];
-  let bestScore = -1;
-  let ties = 0;
-  for (const row of byRole) {
-    const score = scoreOverlap(args.question, row);
-    if (score > bestScore) {
-      best = row;
-      bestScore = score;
-      ties = 1;
-    } else if (score === bestScore) {
-      ties += 1;
+  return { ok: true, users: others };
+}
+
+type AskGate =
+  | {
+      ok: true;
+      source: SourceRecord;
+      repo: Doc<"githubRepos">;
+      teamId: Id<"teams">;
     }
+  | { ok: false; error: string };
+
+/**
+ * Everything that must hold before anyone is picked. `ask` and `candidatesFor`
+ * share it so the agent sees the same refusal whichever it calls first.
+ */
+async function gateAsk(
+  ctx: QueryCtx,
+  actorUserId: Id<"users">,
+  sourceKind: SourceKind,
+  sourceId: string,
+): Promise<AskGate> {
+  const source = await loadSource(ctx, sourceKind, sourceId);
+  if (!source) return { ok: false, error: "Source chat was not found." };
+  if (source.deleted || source.archived) {
+    return { ok: false, error: "The source chat is archived. Ask in chat." };
   }
-  if (bestScore > 0 && ties === 1) {
+  const repo = await ctx.db.get(source.repoId);
+  if (!repo?.teamId) {
     return {
-      ok: true,
-      userId: best.userId,
-      name: best.name,
-      role: best.role,
+      ok: false,
+      error: "This repo is not on a team. Ask in the session chat.",
     };
   }
-  return {
-    ok: false,
-    error: `Several teammates have role "${args.role}". Pass userId to choose one.`,
-    candidates: byRole.map((row) => ({
-      userId: row.userId,
-      name: row.name,
-      role: row.role,
-    })),
-  };
+  const team = await ctx.db.get(repo.teamId);
+  if (!team || team.isPersonal === true) {
+    return {
+      ok: false,
+      error: "Personal teams skip routing. Ask in the session chat.",
+    };
+  }
+  if (!(await hasTeamAccess(ctx.db, repo.teamId, actorUserId))) {
+    return { ok: false, error: "Not authorized for this team's repo." };
+  }
+  return { ok: true, source, repo, teamId: repo.teamId };
 }
 
 export const listMine = authQuery({
@@ -490,17 +519,17 @@ export const listMine = authQuery({
   returns: v.array(threadSummary),
   handler: async (ctx, args) => {
     const rows = await ctx.db
-      .query("routedThreads")
-      .withIndex("by_assignee_and_lastMessage", (q) =>
-        q.eq("assigneeUserId", ctx.userId),
-      )
+      .query("routedParticipants")
+      .withIndex("by_user_and_lastMessage", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(80);
     const out = [];
     for (const row of rows) {
-      if (!(await hasTeamAccess(ctx.db, row.teamId, ctx.userId))) continue;
-      if (args.status !== "all" && !OPEN_STATUSES.has(row.status)) continue;
-      out.push(await enrichThread(ctx, row));
+      const thread = await ctx.db.get(row.threadId);
+      if (!thread) continue;
+      if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) continue;
+      if (args.status !== "all" && !OPEN_STATUSES.has(thread.status)) continue;
+      out.push(await enrichThread(ctx, thread, ctx.userId));
     }
     return out;
   },
@@ -540,7 +569,7 @@ export const listTeam = authQuery({
     const out = [];
     for (const row of rows) {
       if (args.status !== "all" && !OPEN_STATUSES.has(row.status)) continue;
-      out.push(await enrichThread(ctx, row));
+      out.push(await enrichThread(ctx, row, ctx.userId));
     }
     return out;
   },
@@ -568,7 +597,7 @@ export const listBySource = authQuery({
     const out = [];
     for (const row of rows) {
       if (!OPEN_STATUSES.has(row.status)) continue;
-      out.push(await enrichThread(ctx, row));
+      out.push(await enrichThread(ctx, row, ctx.userId));
     }
     return out;
   },
@@ -583,7 +612,7 @@ export const get = authQuery({
     if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    return enrichThread(ctx, thread);
+    return enrichThread(ctx, thread, ctx.userId);
   },
 });
 
@@ -622,14 +651,16 @@ export const countWaitingForMe = authQuery({
   returns: v.number(),
   handler: async (ctx) => {
     const rows = await ctx.db
-      .query("routedThreads")
-      .withIndex("by_assignee_and_status", (q) =>
-        q.eq("assigneeUserId", ctx.userId).eq("status", "waiting_human"),
+      .query("routedParticipants")
+      .withIndex("by_user_and_needsReply", (q) =>
+        q.eq("userId", ctx.userId).eq("needsReply", true),
       )
       .collect();
     let count = 0;
     for (const row of rows) {
-      if (await hasTeamAccess(ctx.db, row.teamId, ctx.userId)) count += 1;
+      const thread = await ctx.db.get(row.threadId);
+      if (!thread || !OPEN_STATUSES.has(thread.status)) continue;
+      if (await hasTeamAccess(ctx.db, thread.teamId, ctx.userId)) count += 1;
     }
     return count;
   },
@@ -668,15 +699,38 @@ export const reply = authMutation({
       lastMessageAt: now,
       lastPreview: previewOf(body),
     });
+    // Snapshot before patching, so `needsReply` still reads as it did when Eva
+    // asked and the outstanding list is the people who have not answered yet.
+    const rows = await threadParticipants(ctx, thread._id);
+    const outstanding: string[] = [];
+    for (const row of rows) {
+      if (row.userId === ctx.userId) {
+        await ctx.db.patch(row._id, {
+          needsReply: false,
+          repliedAt: now,
+          lastMessageAt: now,
+        });
+        continue;
+      }
+      await ctx.db.patch(row._id, { lastMessageAt: now });
+      if (row.needsReply) {
+        outstanding.push(displayName(await ctx.db.get(row.userId)));
+      }
+    }
+    outstanding.sort((a, b) => a.localeCompare(b));
     const source = await loadSource(ctx, thread.sourceKind, thread.sourceId);
     const author = await ctx.db.get(ctx.userId);
     const name = displayName(author);
     if (source) {
+      const closing =
+        outstanding.length > 0
+          ? `Still waiting on: ${outstanding.join(", ")}. Continue with what you have or wait for the rest; do not re-ask the same question.`
+          : "Everyone asked has now replied. Continue the work using this answer. Do not re-ask the same question.";
       await enqueueSourceWake(
         ctx,
         source,
         ctx.userId,
-        `Routed reply from ${name} on "${thread.title}":\n\n${body}\n\nContinue the work using this answer. Do not re-ask the same question.`,
+        `Routed reply from ${name} on "${thread.title}":\n\n${body}\n\n${closing}`,
         `${name} replied: ${previewOf(body)}`,
       );
       if (source.ownerUserId !== ctx.userId) {
@@ -707,6 +761,9 @@ export const resolve = authMutation({
       status: "resolved",
       resolvedAt: Date.now(),
     });
+    for (const row of await threadParticipants(ctx, thread._id)) {
+      if (row.needsReply) await ctx.db.patch(row._id, { needsReply: false });
+    }
     return null;
   },
 });
@@ -716,8 +773,9 @@ const askResult = v.union(
     ok: v.literal(true),
     threadId: v.id("routedThreads"),
     created: v.boolean(),
-    assigneeUserId: v.id("users"),
-    assigneeName: v.string(),
+    participants: v.array(
+      v.object({ userId: v.id("users"), name: v.string() }),
+    ),
   }),
   v.object({
     ok: v.literal(false),
@@ -744,7 +802,7 @@ async function askCore(
     context: string;
     topicKey: string;
     role?: "business" | "dev" | "designer";
-    assigneeUserId?: Id<"users">;
+    assigneeUserIds?: Id<"users">[];
   },
 ): Promise<Infer<typeof askResult>> {
   const question = args.question.trim();
@@ -757,43 +815,28 @@ async function askCore(
         "Context is too thin. Explain what is being built and why this question matters.",
     };
   }
-  const source = await loadSource(ctx, args.sourceKind, args.sourceId);
-  if (!source) return { ok: false, error: "Source chat was not found." };
-  if (source.deleted || source.archived) {
-    return { ok: false, error: "The source chat is archived. Ask in chat." };
-  }
-  const repo = await ctx.db.get(source.repoId);
-  if (!repo?.teamId) {
-    return {
-      ok: false,
-      error: "This repo is not on a team. Ask in the session chat.",
-    };
-  }
-  const team = await ctx.db.get(repo.teamId);
-  if (!team || team.isPersonal === true) {
-    return {
-      ok: false,
-      error: "Personal teams skip routing. Ask in the session chat.",
-    };
-  }
-  if (!(await hasTeamAccess(ctx.db, repo.teamId, args.actorUserId))) {
-    return { ok: false, error: "Not authorized for this team's repo." };
-  }
-  const assignee = await resolveAssignee(ctx, {
-    teamId: repo.teamId,
-    userId: args.assigneeUserId,
+  const gate = await gateAsk(
+    ctx,
+    args.actorUserId,
+    args.sourceKind,
+    args.sourceId,
+  );
+  if (!gate.ok) return gate;
+  const { source, repo } = gate;
+  const chosen = await resolveParticipants(ctx, {
+    teamId: gate.teamId,
+    actorUserId: args.actorUserId,
+    userIds: args.assigneeUserIds,
     role: args.role,
-    question,
   });
-  if (!assignee.ok) return assignee;
+  if (!chosen.ok) return chosen;
   const topicKey = normalizeTopicKey(args.topicKey);
+  // One open thread per topic per source, whoever is on it — a second ask adds
+  // people rather than forking the conversation.
   const existing = await ctx.db
     .query("routedThreads")
-    .withIndex("by_source_assignee_topic", (q) =>
-      q
-        .eq("sourceId", source.sourceId)
-        .eq("assigneeUserId", assignee.userId)
-        .eq("topicKey", topicKey),
+    .withIndex("by_source_and_topic", (q) =>
+      q.eq("sourceId", source.sourceId).eq("topicKey", topicKey),
     )
     .collect();
   const open = existing.find((row) => OPEN_STATUSES.has(row.status));
@@ -810,9 +853,8 @@ async function askCore(
   } else {
     created = true;
     threadId = await ctx.db.insert("routedThreads", {
-      teamId: repo.teamId,
+      teamId: gate.teamId,
       repoId: repo._id,
-      assigneeUserId: assignee.userId,
       sourceKind: source.sourceKind,
       sourceId: source.sourceId,
       sourceNumId: source.numId,
@@ -825,6 +867,32 @@ async function askCore(
       createdAt: now,
     });
   }
+  // Eva has just asked, so everyone on the thread is on the hook again — the
+  // people already there as well as anyone newly named.
+  const alreadyOn = created ? [] : await threadParticipants(ctx, threadId);
+  const onThread = new Set(alreadyOn.map((row) => row.userId));
+  for (const row of alreadyOn) {
+    await ctx.db.patch(row._id, { needsReply: true, lastMessageAt: now });
+  }
+  for (const person of chosen.users) {
+    if (onThread.has(person.userId)) continue;
+    await ctx.db.insert("routedParticipants", {
+      threadId,
+      userId: person.userId,
+      teamId: gate.teamId,
+      lastMessageAt: now,
+      needsReply: true,
+      addedAt: now,
+    });
+  }
+  const participants: Array<{ userId: Id<"users">; name: string }> = [];
+  for (const row of await threadParticipants(ctx, threadId)) {
+    participants.push({
+      userId: row.userId,
+      name: displayName(await ctx.db.get(row.userId)),
+    });
+  }
+  participants.sort((a, b) => a.name.localeCompare(b.name));
   const owner = await ctx.db.get(source.ownerUserId);
   const context = composeAskContext(
     agentContext,
@@ -839,28 +907,30 @@ async function askCore(
     context,
     createdAt: now,
   });
-  const roleLabel = assignee.role ? ` (${assignee.role})` : "";
+  const solo =
+    participants.length === 1
+      ? chosen.users.find((row) => row.userId === participants[0].userId)
+      : undefined;
+  const roleLabel = solo?.role ? ` (${solo.role})` : "";
   await insertSystemAlert(
     ctx,
     source,
-    `Asked ${assignee.name}${roleLabel} about ${titleOf(question)}. Their reply will land in Messages and continue this chat.`,
+    solo
+      ? `Asked ${solo.name}${roleLabel} about ${titleOf(question)}. Their reply will land in Messages and continue this chat.`
+      : `Asked ${participants.map((row) => row.name).join(", ")} about ${titleOf(question)}. Replies land in Messages and continue this chat.`,
   );
-  await createNotification(ctx, {
-    userId: assignee.userId,
-    type: "routed_question",
-    title: `Eva asked about "${titleOf(question)}"`,
-    message: previewOf(context),
-    href: `/messages?thread=${threadId}`,
-    repoId: repo._id,
-    ...notifyEntityArgs(source),
-  });
-  return {
-    ok: true,
-    threadId,
-    created,
-    assigneeUserId: assignee.userId,
-    assigneeName: assignee.name,
-  };
+  for (const person of participants) {
+    await createNotification(ctx, {
+      userId: person.userId,
+      type: "routed_question",
+      title: `Eva asked about "${titleOf(question)}"`,
+      message: previewOf(context),
+      href: `/messages?thread=${threadId}`,
+      repoId: repo._id,
+      ...notifyEntityArgs(source),
+    });
+  }
+  return { ok: true, threadId, created, participants };
 }
 
 export const ask = authMutation({
@@ -871,7 +941,7 @@ export const ask = authMutation({
     context: v.string(),
     topicKey: v.string(),
     role: v.optional(roleUserValidator),
-    assigneeUserId: v.optional(v.id("users")),
+    assigneeUserIds: v.optional(v.array(v.id("users"))),
   },
   returns: askResult,
   handler: async (ctx, args) => {
@@ -883,7 +953,7 @@ export const ask = authMutation({
       context: args.context,
       topicKey: args.topicKey,
       role: args.role,
-      assigneeUserId: args.assigneeUserId,
+      assigneeUserIds: args.assigneeUserIds,
     });
   },
 });
@@ -897,7 +967,7 @@ export const askFromAgent = internalMutation({
     context: v.string(),
     topicKey: v.string(),
     role: v.optional(roleUserValidator),
-    assigneeUserId: v.optional(v.string()),
+    assigneeUserIds: v.optional(v.array(v.string())),
   },
   returns: askResult,
   handler: async (ctx, args) => {
@@ -905,11 +975,14 @@ export const askFromAgent = internalMutation({
     if (!actorUserId) {
       return { ok: false as const, error: "Unknown user." };
     }
-    const assigneeUserId = args.assigneeUserId
-      ? ctx.db.normalizeId("users", args.assigneeUserId)
-      : undefined;
-    if (args.assigneeUserId && !assigneeUserId) {
-      return { ok: false as const, error: "Invalid userId." };
+    let assigneeUserIds: Id<"users">[] | undefined;
+    if (args.assigneeUserIds) {
+      assigneeUserIds = [];
+      for (const raw of args.assigneeUserIds) {
+        const id = ctx.db.normalizeId("users", raw);
+        if (!id) return { ok: false as const, error: `Invalid userId: ${raw}` };
+        assigneeUserIds.push(id);
+      }
     }
     return await askCore(ctx, {
       actorUserId,
@@ -919,7 +992,59 @@ export const askFromAgent = internalMutation({
       context: args.context,
       topicKey: args.topicKey,
       role: args.role,
-      assigneeUserId: assigneeUserId ?? undefined,
+      assigneeUserIds,
     });
+  },
+});
+
+/**
+ * Who Eva could ask, with their profile text, so a Node action can pick the
+ * group with an LLM. Runs the same gate as `ask` to keep refusals identical.
+ */
+export const candidatesFor = internalQuery({
+  args: {
+    userId: v.string(),
+    sourceKind: routedSourceKindValidator,
+    sourceId: v.string(),
+    role: v.optional(roleUserValidator),
+  },
+  returns: v.union(
+    v.object({
+      ok: v.literal(true),
+      candidates: v.array(
+        v.object({
+          userId: v.id("users"),
+          name: v.string(),
+          role: v.union(roleUserValidator, v.null()),
+          headline: v.string(),
+          owns: v.string(),
+          askMeAbout: v.string(),
+        }),
+      ),
+    }),
+    v.object({ ok: v.literal(false), error: v.string() }),
+  ),
+  handler: async (ctx, args) => {
+    const actorUserId = ctx.db.normalizeId("users", args.userId);
+    if (!actorUserId) {
+      return { ok: false as const, error: "Unknown user." };
+    }
+    const gate = await gateAsk(
+      ctx,
+      actorUserId,
+      args.sourceKind,
+      args.sourceId,
+    );
+    if (!gate.ok) return { ok: false as const, error: gate.error };
+    const directory = await listDirectoryForTeam(ctx, gate.teamId);
+    return {
+      ok: true as const,
+      // The person driving the session must not be offered their own question.
+      candidates: directory.filter(
+        (row) =>
+          row.userId !== actorUserId &&
+          (args.role === undefined || row.role === args.role),
+      ),
+    };
   },
 });

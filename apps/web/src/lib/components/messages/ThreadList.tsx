@@ -20,19 +20,25 @@ import type { api } from "@eva/backend";
 
 type Thread = FunctionReturnType<typeof api.routedThreads.listMine>[number];
 
+/**
+ * Which bucket a thread sits in for *this* reader. A group thread flips to
+ * `waiting_eva` the moment anyone answers, so grouping on the raw status would
+ * file a question you personally still owe under "Waiting on Eva".
+ */
+function listStatus(thread: Thread): string {
+  return thread.needsMyReply ? "waiting_human" : thread.status;
+}
+
 function groupByStatus(threads: Thread[]) {
   const groups: { status: string; label: string; items: Thread[] }[] = [];
+  const bucketed = new Set<string>();
   for (const status of LIST_STATUS_ORDER) {
-    const items = threads.filter((thread) => thread.status === status);
+    const items = threads.filter((thread) => listStatus(thread) === status);
     if (items.length === 0) continue;
+    for (const thread of items) bucketed.add(thread._id);
     groups.push({ status, label: statusLabel(status), items });
   }
-  const leftover = threads.filter(
-    (thread) =>
-      !LIST_STATUS_ORDER.includes(
-        thread.status as (typeof LIST_STATUS_ORDER)[number],
-      ),
-  );
+  const leftover = threads.filter((thread) => !bucketed.has(thread._id));
   if (leftover.length > 0) {
     groups.push({ status: "other", label: "Other", items: leftover });
   }
@@ -58,7 +64,9 @@ function ThreadRow({
   onSelect: () => void;
 }) {
   const rowRef = useRef<HTMLButtonElement>(null);
-  const needsReply = thread.status === "waiting_human";
+  const needsReply = thread.needsMyReply;
+  // Same reading as the group header above the row, not the raw thread status.
+  const rowStatus = listStatus(thread);
 
   useEffect(() => {
     if (selected) rowRef.current?.scrollIntoView({ block: "nearest" });
@@ -109,11 +117,11 @@ function ThreadRow({
       />
       <span
         role="img"
-        aria-label={statusLabel(thread.status)}
-        title={statusLabel(thread.status)}
+        aria-label={statusLabel(rowStatus)}
+        title={statusLabel(rowStatus)}
         className="flex size-4 shrink-0 items-center justify-center"
       >
-        <ThreadStatusIcon status={thread.status} />
+        <ThreadStatusIcon status={rowStatus} />
       </span>
     </button>
   );

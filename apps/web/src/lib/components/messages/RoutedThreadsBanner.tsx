@@ -7,6 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { IconChevronRight } from "@tabler/icons-react";
 import type { ChatEntityRef } from "@/lib/components/chat/sandboxChatSurface";
 import {
+  participantNames,
   statusBadgeVariant,
   statusLabel,
 } from "@/lib/components/messages/status";
@@ -52,7 +53,7 @@ export function RoutedThreadsBanner({ entity }: { entity: ChatEntityRef }) {
                 {thread.title}
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">
-                {thread.assigneeName}
+                {participantNames(thread.participants)}
               </span>
               <IconChevronRight
                 size={14}

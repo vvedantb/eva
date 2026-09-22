@@ -24,6 +24,23 @@ export function statusBadgeVariant(status: string): BadgeProps["variant"] {
   return "secondary";
 }
 
+/**
+ * One-line list of the people on a thread: names joined with commas, or the
+ * first two plus a `+N` tail once there are more than three.
+ */
+export function participantNames(
+  participants: readonly { name: string }[],
+): string {
+  if (participants.length > 3) {
+    const shown = participants
+      .slice(0, 2)
+      .map((participant) => participant.name)
+      .join(", ");
+    return `${shown} +${participants.length - 2}`;
+  }
+  return participants.map((participant) => participant.name).join(", ");
+}
+
 export function sourceKindLabel(kind: string): string {
   if (kind === "session") return "Session";
   if (kind === "task") return "Task";

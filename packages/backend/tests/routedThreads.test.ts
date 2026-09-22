@@ -9,6 +9,7 @@ const ASK_CONTEXT =
   "We are shipping the Messages empty state. Need a call on illustration vs ghost so the list can land.";
 const OWNER_CLERK = "clerk|routed-owner";
 const DESIGNER_CLERK = "clerk|routed-designer";
+const DESIGNER_2_CLERK = "clerk|routed-designer-2";
 const STRANGER_CLERK = "clerk|routed-stranger";
 
 async function fixture(opts?: { personalTeam?: boolean }) {
@@ -82,6 +83,44 @@ async function fixture(opts?: { personalTeam?: boolean }) {
   };
 }
 
+/** A second designer, so `role: "designer"` resolves to a group. */
+async function addSecondDesigner(f: Awaited<ReturnType<typeof fixture>>) {
+  const userId = await f.t.run(async (ctx) => {
+    const id = await ctx.db.insert("users", {
+      clerkId: DESIGNER_2_CLERK,
+      fullName: "Sam Second",
+      role: "designer",
+    });
+    await ctx.db.insert("teamMembers", {
+      teamId: f.teamId,
+      userId: id,
+      role: "member",
+      joinedAt: Date.now(),
+    });
+    return id;
+  });
+  return { userId, as: f.t.withIdentity({ subject: DESIGNER_2_CLERK }) };
+}
+
+/**
+ * Wake payloads queued for the source chat. Only readable while the session is
+ * mid-turn: once the queue drains, the chat keeps `displayContent` instead.
+ */
+async function queuedWakes(f: Awaited<ReturnType<typeof fixture>>) {
+  return await f.t.run(async (ctx) => {
+    const rows = await ctx.db.query("queuedMessages").collect();
+    rows.sort((a, b) => a.createdAt - b.createdAt);
+    return rows.map((row) => row.content);
+  });
+}
+
+/** Pins the session mid-turn so replies stay queued instead of draining. */
+async function markSessionBusy(f: Awaited<ReturnType<typeof fixture>>) {
+  await f.t.run(async (ctx) => {
+    await ctx.db.patch(f.sessionId, { activeWorkflowId: "wf-test" });
+  });
+}
+
 describe("work profiles", () => {
   test(
     "upsert writes a directory row Eva can list",
@@ -112,7 +151,7 @@ describe("work profiles", () => {
 
 describe("ask_teammate", () => {
   test(
-    "creates a thread, notifies the assignee, and stubs the source chat",
+    "creates a thread, notifies the participant, and stubs the source chat",
     async () => {
       const f = await fixture();
       await f.asDesigner.mutation(api.workProfiles.upsertMine, {
@@ -139,12 +178,16 @@ describe("ask_teammate", () => {
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.assigneeUserId).toBe(f.designerUserId);
+      expect(result.participants.map((row) => row.userId)).toEqual([
+        f.designerUserId,
+      ]);
       expect(result.created).toBe(true);
 
       const mine = await f.asDesigner.query(api.routedThreads.listMine, {});
       expect(mine).toHaveLength(1);
       expect(mine[0].title).toContain("empty-state");
+      expect(mine[0].needsMyReply).toBe(true);
+      expect(mine[0].participants).toHaveLength(1);
 
       const messages = await f.asDesigner.query(api.routedThreads.listMessages, {
         threadId: result.threadId,
@@ -247,23 +290,10 @@ describe("ask_teammate", () => {
   );
 
   test(
-    "lists candidates when two designers match",
+    "asks every designer when the role matches two people",
     async () => {
       const f = await fixture();
-      await f.t.run(async (ctx) => {
-        const now = Date.now();
-        const otherId = await ctx.db.insert("users", {
-          clerkId: "clerk|routed-designer-2",
-          fullName: "Other Designer",
-          role: "designer",
-        });
-        await ctx.db.insert("teamMembers", {
-          teamId: f.teamId,
-          userId: otherId,
-          role: "member",
-          joinedAt: now,
-        });
-      });
+      const second = await addSecondDesigner(f);
       const result = await f.asOwner.mutation(api.routedThreads.ask, {
         sourceKind: "session",
         sourceId: f.sessionId,
@@ -272,9 +302,93 @@ describe("ask_teammate", () => {
         topicKey: "xyz",
         role: "designer",
       });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.participants.map((row) => row.userId).sort()).toEqual(
+        [f.designerUserId, second.userId].sort(),
+      );
+
+      const threads = await f.t.run(async (ctx) => {
+        return await ctx.db.query("routedThreads").collect();
+      });
+      expect(threads).toHaveLength(1);
+
+      const alerts = await f.t.run(async (ctx) => {
+        return await ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", f.sessionId))
+          .collect();
+      });
+      expect(
+        alerts.some((row) => row.content.includes("Dana Designer, Sam Second")),
+      ).toBe(true);
+
+      for (const viewer of [f.asDesigner, second.as]) {
+        expect(await viewer.query(api.routedThreads.countWaitingForMe, {})).toBe(
+          1,
+        );
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a second ask on the same topic unions in an extra person",
+    async () => {
+      const f = await fixture();
+      const second = await addSecondDesigner(f);
+      const first = await f.asOwner.mutation(api.routedThreads.ask, {
+        sourceKind: "session",
+        sourceId: f.sessionId,
+        question: "Ghost or outline?",
+        context: ASK_CONTEXT,
+        topicKey: "buttons",
+        assigneeUserIds: [f.designerUserId],
+      });
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      expect(first.participants).toHaveLength(1);
+
+      const again = await f.asOwner.mutation(api.routedThreads.ask, {
+        sourceKind: "session",
+        sourceId: f.sessionId,
+        question: "Sam, same question",
+        context: ASK_CONTEXT,
+        topicKey: "buttons",
+        assigneeUserIds: [second.userId],
+      });
+      expect(again.ok).toBe(true);
+      if (!again.ok) return;
+      expect(again.created).toBe(false);
+      expect(again.threadId).toBe(first.threadId);
+      expect(again.participants.map((row) => row.name)).toEqual([
+        "Dana Designer",
+        "Sam Second",
+      ]);
+
+      const threads = await f.t.run(async (ctx) => {
+        return await ctx.db.query("routedThreads").collect();
+      });
+      expect(threads).toHaveLength(1);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "refuses to route a question back to the person asking it",
+    async () => {
+      const f = await fixture();
+      const result = await f.asDesigner.mutation(api.routedThreads.ask, {
+        sourceKind: "session",
+        sourceId: f.sessionId,
+        question: "Which illustration?",
+        context: ASK_CONTEXT,
+        topicKey: "self-ask",
+        role: "designer",
+      });
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.candidates?.length).toBeGreaterThan(1);
+      expect(result.error).toMatch(/only match/i);
     },
     TIMEOUT_MS,
   );
@@ -322,6 +436,62 @@ describe("reply wakes the source", () => {
           body: "nope",
         }),
       ).rejects.toThrow();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "one reply clears only that participant and names who is outstanding",
+    async () => {
+      const f = await fixture();
+      const second = await addSecondDesigner(f);
+      const asked = await f.asOwner.mutation(api.routedThreads.ask, {
+        sourceKind: "session",
+        sourceId: f.sessionId,
+        question: "Ghost or outline on the empty state?",
+        context: ASK_CONTEXT,
+        topicKey: "ghost-button",
+        role: "designer",
+      });
+      expect(asked.ok).toBe(true);
+      if (!asked.ok) return;
+      expect(await f.asDesigner.query(api.routedThreads.countWaitingForMe, {}))
+        .toBe(1);
+      await markSessionBusy(f);
+
+      await f.asDesigner.mutation(api.routedThreads.reply, {
+        threadId: asked.threadId,
+        body: "Ghost, with the outline reserved for destructive actions.",
+      });
+
+      const thread = await f.asDesigner.query(api.routedThreads.get, {
+        id: asked.threadId,
+      });
+      expect(thread?.status).toBe("waiting_eva");
+      expect(thread?.needsMyReply).toBe(false);
+      expect(thread?.participants).toEqual([
+        { userId: f.designerUserId, name: "Dana Designer", needsReply: false },
+        { userId: second.userId, name: "Sam Second", needsReply: true },
+      ]);
+      expect(await f.asDesigner.query(api.routedThreads.countWaitingForMe, {}))
+        .toBe(0);
+      expect(await second.as.query(api.routedThreads.countWaitingForMe, {}))
+        .toBe(1);
+
+      const firstWake = await queuedWakes(f);
+      expect(firstWake).toHaveLength(1);
+      expect(firstWake[0]).toContain("Routed reply from Dana Designer");
+      expect(firstWake[0]).toContain("Still waiting on: Sam Second.");
+
+      await second.as.mutation(api.routedThreads.reply, {
+        threadId: asked.threadId,
+        body: "Agreed, ghost.",
+      });
+      const wakes = await queuedWakes(f);
+      expect(wakes).toHaveLength(2);
+      expect(wakes[1]).toContain("Everyone asked has now replied.");
+      expect(await second.as.query(api.routedThreads.countWaitingForMe, {}))
+        .toBe(0);
     },
     TIMEOUT_MS,
   );

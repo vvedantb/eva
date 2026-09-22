@@ -1114,7 +1114,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
     defineTool({
       name: "ask_teammate",
       description:
-        "Route a clarification to a teammate (Messages area). Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. Their reply is injected back into this session/task/project and wakes the run. Pass userId from list_work_profiles, or role when exactly one person matches. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
+        "Route a clarification to one or more teammates (Messages area) as a group thread that any of them can answer. Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. The first reply is injected back into this session/task/project and wakes the run. Omit userIds and Eva picks the right people automatically; pass userIds from list_work_profiles when you already know who owns the decision, or role to narrow the pool. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
       mutating: true,
       input: {
         question: z.string().describe("The question for the teammate."),
@@ -1132,10 +1132,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           .enum(["business", "dev", "designer"])
           .optional()
           .describe("Job function to route to when userId is omitted."),
-        userId: z
-          .string()
+        userIds: z
+          .array(z.string())
           .optional()
-          .describe("Teammate user id from list_work_profiles."),
+          .describe(
+            "Teammate user ids from list_work_profiles. Omit to let Eva pick who should answer.",
+          ),
         sourceKind: z
           .enum(["session", "task", "project"])
           .optional()
@@ -1150,7 +1152,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         context,
         topicKey,
         role,
-        userId,
+        userIds,
         sourceKind,
         sourceId,
       }) => {
@@ -1162,8 +1164,8 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             "No source chat. Pass sourceKind and sourceId, or call this from a session, task, or project sandbox.",
           );
         }
-        const result = await ctx.runMutation(
-          internal.routedThreads.askFromAgent,
+        const result = await ctx.runAction(
+          internal.routedThreadRouting.askRouted,
           {
             userId: actorId,
             sourceKind: kind,
@@ -1172,7 +1174,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             context,
             topicKey,
             role,
-            assigneeUserId: userId,
+            assigneeUserIds: userIds,
           },
         );
         if (!result.ok) {
