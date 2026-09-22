@@ -3,11 +3,12 @@
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import { m } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   Command,
   CommandEmpty,
   CommandList,
+  motionFast,
   motionSpring,
   Popover,
   PopoverAnchor,
@@ -19,6 +20,7 @@ import type { Id } from "@eva/backend";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { ComposerStashItem } from "@/lib/components/chat/_components/ComposerStashItem";
 import { useComposerStash } from "@/lib/components/chat/_components/useComposerStash";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 /**
  * Prompt-stash drawer plus the dock the tasks/queued panels sit in. The
@@ -28,24 +30,28 @@ import { useComposerStash } from "@/lib/components/chat/_components/useComposerS
  * the card by anchoring a popover to the input chrome this component wraps.
  *
  * The hotkey registration stays enabled whenever a composer is mounted and the
- * focus/disabled gate lives inside the callback: `enabled: false` makes the
- * hotkey manager skip preventDefault entirely, so gating via `enabled` let
- * ⌘S fall through to the browser's save-file dialog. Browser save is never
- * useful inside the app; acting on the stash still requires this composer to
- * own focus (or its drawer to be open), so multiple mounted composers don't
- * all stash at once.
+ * focus gate lives inside the callback: `enabled: false` makes the hotkey
+ * manager skip preventDefault entirely, so gating via `enabled` let ⌘S fall
+ * through to the browser's save-file dialog. Browser save is never useful
+ * inside the app; acting on the stash still requires this composer to own
+ * focus (or its drawer to be open), so multiple mounted composers don't all
+ * stash at once.
+ *
+ * The composer's send-disabled state deliberately does NOT gate it. A draft
+ * written while Eva sleeps is exactly the one worth stashing, the stash is
+ * repo-scoped Convex state with no sandbox involvement, and the trigger and
+ * drawer stay clickable then — so gating the hotkey only made ⌘S a dead key
+ * on the surface that needs it most.
  */
 export function ComposerStash({
   repoId,
   mentionRef,
-  disabled,
   panels,
   bar,
   children,
 }: {
   repoId: Id<"githubRepos">;
   mentionRef: RefObject<MentionTextareaHandle | null>;
-  disabled: boolean;
   /** Panels stacked flush above the input (tasks, queued messages). */
   panels: ReactNode;
   /**
@@ -73,7 +79,6 @@ export function ComposerStash({
     "stashDraft",
     (event) => {
       event.preventDefault();
-      if (disabled) return;
       // The drawer is portaled, so while open the active element sits outside
       // `rootRef` — hence the `open` short-circuit.
       if (!open && !rootRef.current?.contains(document.activeElement)) return;
@@ -96,29 +101,40 @@ export function ComposerStash({
 
   const stashButton =
     entries.length > 0 ? (
-      <button
-        ref={tabRef}
-        type="button"
-        aria-expanded={open}
-        aria-label={`Prompt stash, ${entries.length} saved`}
-        title="Prompt stash"
-        className="motion-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.98]"
-        // Keep composer focus when toggling from the input.
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <IconBookmark aria-hidden className="size-3.5" />
-        <span>Stash</span>
-        <m.span
-          key={pulseKey}
-          initial={{ opacity: 0, y: 2 }}
+      <AnimatePresence>
+        <m.div
+          key="composer-stash-trigger"
+          className="inline-flex"
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={motionSpring}
-          className="font-medium tabular-nums"
+          exit={{ opacity: 0, y: 8 }}
+          transition={motionFast}
         >
-          {entries.length}
-        </m.span>
-      </button>
+          <button
+            ref={tabRef}
+            type="button"
+            aria-expanded={open}
+            aria-label={`Prompt stash, ${entries.length} saved`}
+            title="Prompt stash"
+            className="motion-press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-transparent px-2 text-xs font-normal text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.98]"
+            // Keep composer focus when toggling from the input.
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            <IconBookmark aria-hidden className="size-3.5" />
+            <span>Stash</span>
+            <m.span
+              key={pulseKey}
+              initial={{ opacity: 0, y: 2 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={motionSpring}
+              className="font-medium tabular-nums"
+            >
+              {entries.length}
+            </m.span>
+          </button>
+        </m.div>
+      </AnimatePresence>
     ) : null;
 
   return (
@@ -185,19 +201,20 @@ export function ComposerStash({
               Nothing stashed. Press <ShortcutKbd id="stashDraft" /> with a
               draft to stash it.
             </CommandEmpty>
-            {entries.map((entry) => (
-              <ComposerStashItem
-                key={entry._id}
-                entry={entry}
-                onSelect={() => {
-                  void restore(entry).then((ok) => {
-                    if (ok) setOpen(false);
-                  });
-                }}
-                onDelete={() => {
-                  void removeEntry(entry._id);
-                }}
-              />
+            {entries.map((entry, index) => (
+              <ListEnter key={entry._id} index={index} fast>
+                <ComposerStashItem
+                  entry={entry}
+                  onSelect={() => {
+                    void restore(entry).then((ok) => {
+                      if (ok) setOpen(false);
+                    });
+                  }}
+                  onDelete={() => {
+                    void removeEntry(entry._id);
+                  }}
+                />
+              </ListEnter>
             ))}
           </CommandList>
         </Command>

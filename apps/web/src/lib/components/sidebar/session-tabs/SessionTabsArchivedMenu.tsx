@@ -16,8 +16,11 @@ import {
 import { IconArchive, IconArchiveOff } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { RepoLogo } from "@/lib/components/RepoLogo";
-import { repoBasePaths } from "@/lib/components/sidebar/_utils/repoSessionPaths";
-import { entityPathSegment } from "@/lib/numId";
+import {
+  sessionHrefForRow,
+  sessionRowMatchesPath,
+  type RepoPathParts,
+} from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
@@ -29,6 +32,8 @@ interface ArchivedMenuSession {
   prState?: "draft" | "open" | "merged" | "closed";
   updatedAt?: number;
   _creationTime: number;
+  /** Linked-in row: the session's primary repo owns its URL. */
+  linkedFrom?: RepoPathParts;
 }
 
 export interface ArchivedMenuGroup {
@@ -77,7 +82,6 @@ export function SessionTabsArchivedMenu({
         ) : (
           nonEmpty.map((group) => {
             const label = repoDisplayLabel(group.repo);
-            const baseUrl = `${repoBasePaths(group.repo)[0]}/sessions`;
             return (
               <DropdownMenuSub key={group.repo._id}>
                 <DropdownMenuSubTrigger>
@@ -97,12 +101,12 @@ export function SessionTabsArchivedMenu({
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-72 w-72 overflow-y-auto">
                   {group.sessions.map((session) => {
-                    const pathSegment = entityPathSegment(session);
-                    const href = pathSegment
-                      ? `${baseUrl}/${pathSegment}`
-                      : baseUrl;
-                    const isSelected =
-                      pathname === href || pathname.startsWith(`${href}/`);
+                    const href = sessionHrefForRow(group.repo, session);
+                    const isSelected = sessionRowMatchesPath(
+                      group.repo,
+                      session,
+                      pathname,
+                    );
                     const canUnarchive = session.archived === true;
                     const subtitle =
                       session.prState === "merged"

@@ -10,6 +10,12 @@ import {
   roleValidator,
 } from "./enums";
 
+/** Git HEAD of one checked-out repo, keyed by its sandbox path. */
+export const repoShaValidator = v.object({
+  path: v.string(),
+  sha: v.string(),
+});
+
 /**
  * Turn checkpoint shas the sandbox callback stamps on every completion it posts
  * (`callback-src/runtime/turnCheckpoint.ts`), whatever the surface. Every
@@ -21,6 +27,14 @@ import {
 export const turnCheckpointArgs = {
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
+  /**
+   * Multi-repo turn checkpoints (see `messageFields.beforeShas`): one entry
+   * per checked-out repo. Every completion receiver accepts these so the
+   * sandbox callback's argument shape stays uniform across surfaces; only
+   * sessions persist them.
+   */
+  beforeShas: v.optional(v.array(repoShaValidator)),
+  afterShas: v.optional(v.array(repoShaValidator)),
 };
 
 export const workflowCompleteValidator = v.object({
@@ -96,6 +110,20 @@ export const conversationMessageValidator = v.object({
   finishedAt: v.optional(v.number()),
 });
 
+/**
+ * Jev's verdict on one automation finding: the severity it judged (which may
+ * disagree with the agent's own `severity`) and the open task it looks like a
+ * duplicate of, if any. `duplicateProbability` is 0 when Jev picked "none", so
+ * the UI thresholds one number instead of branching on absence.
+ */
+export const findingTriageValidator = v.object({
+  severity: findingSeverityValidator,
+  duplicateOfTaskId: v.optional(v.id("agentTasks")),
+  duplicateOfNumId: v.optional(v.number()),
+  duplicateProbability: v.number(),
+  evaluatedAt: v.number(),
+});
+
 export const automationFindingValidator = v.object({
   id: v.string(),
   title: v.string(),
@@ -104,6 +132,7 @@ export const automationFindingValidator = v.object({
   filePaths: v.optional(v.array(v.string())),
   suggestedFix: v.optional(v.string()),
   taskId: v.optional(v.id("agentTasks")),
+  triage: v.optional(findingTriageValidator),
 });
 
 // Task-count breakdown for a project, used by both the single-project
@@ -129,6 +158,8 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("composerAutocomplete"),
   v.literal("simpleView"),
   v.literal("replyChime"),
+  v.literal("disablePageMotion"),
+  v.literal("viewVercelDeployment"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -139,6 +170,8 @@ export const experimentalFlagsFields = {
   composerAutocomplete: v.optional(v.boolean()),
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
+  disablePageMotion: v.optional(v.boolean()),
+  viewVercelDeployment: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -151,6 +184,8 @@ export const resolvedExperimentalFlagsValidator = v.object({
   composerAutocomplete: v.boolean(),
   simpleView: v.boolean(),
   replyChime: v.boolean(),
+  disablePageMotion: v.boolean(),
+  viewVercelDeployment: v.boolean(),
 });
 
 /**

@@ -24,6 +24,7 @@ FOLLOW ALL OF THESE RULES
 - Do not run dev / lint / build unless the user asks.
 - After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (or `internal/changelog.md`).
 - Eliminate duplication, centralise your changes so its easier to update them
+- Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - For debugging, use Eva MCP and Convex CLI for prod logs
 
 

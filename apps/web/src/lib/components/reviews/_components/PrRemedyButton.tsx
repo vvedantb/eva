@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Spinner, cn, toast } from "@eva/ui";
+import { CrossfadeIconSlot, Spinner, cn, toast } from "@eva/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import type { PrRemedy } from "./prMergeState";
@@ -72,9 +72,17 @@ export function PrRemedyButton({
         TONE_CLASS[tone],
       )}
     >
-      {starting ? <Spinner size="sm" /> : null}
       {remedy.action}
-      {starting ? null : <IconArrowUpRight size={13} aria-hidden />}
+      <CrossfadeIconSlot
+        iconKey={starting ? "loading" : "go"}
+        className="relative flex size-3.5 items-center justify-center"
+      >
+        {starting ? (
+          <Spinner size="sm" />
+        ) : (
+          <IconArrowUpRight size={13} aria-hidden />
+        )}
+      </CrossfadeIconSlot>
     </button>
   );
 }

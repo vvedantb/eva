@@ -2,6 +2,7 @@ import { ContextMenuItem, DropdownMenuItem } from "@eva/ui";
 import {
   IconExternalLink,
   IconLayoutDashboard,
+  IconMessage,
   IconTrash,
 } from "@tabler/icons-react";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
@@ -15,6 +16,8 @@ export interface ArtifactCardMenuItemsProps {
   variant: "context" | "dropdown";
   onOpen: () => void;
   onOpenInNewTab: () => void;
+  onOpenSource?: () => void;
+  sourceLabel?: string;
   onDelete: () => void;
 }
 
@@ -22,6 +25,8 @@ export function ArtifactCardMenuItems({
   variant,
   onOpen,
   onOpenInNewTab,
+  onOpenSource,
+  sourceLabel,
   onDelete,
 }: ArtifactCardMenuItemsProps) {
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
@@ -36,6 +41,12 @@ export function ArtifactCardMenuItems({
         <IconExternalLink size={16} />
         Open in new tab
       </Item>
+      {onOpenSource && sourceLabel ? (
+        <Item onClick={onOpenSource}>
+          <IconMessage size={16} />
+          Open {sourceLabel}
+        </Item>
+      ) : null}
       <Item
         className="text-destructive"
         onClick={onDelete}

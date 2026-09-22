@@ -1,4 +1,3 @@
-import type { Id } from "../_generated/dataModel";
 import {
   buildImplementationSteps,
   buildSummarySection,
@@ -9,44 +8,7 @@ import {
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
 } from "../prompts";
-
-export const WORKSPACE_DIR = "/tmp/repo";
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function buildTypecheckCommand(rootDirectory: string): string {
-  const typecheckDirectory = rootDirectory
-    ? `${WORKSPACE_DIR}/${rootDirectory}`
-    : WORKSPACE_DIR;
-  return `cd ${shellSingleQuote(typecheckDirectory)} && { status=0; timeout --kill-after=10s 120s npx tsc --noEmit --pretty false > /tmp/eva-tsc.log 2>&1 || status=$?; tail -50 /tmp/eva-tsc.log; exit "$status"; }`;
-}
-
-/** Builds a user-facing notification message for a workflow run completion. */
-export function buildWorkflowRunNotificationMessage(params: {
-  success: boolean;
-  projectId: Id<"projects"> | undefined;
-  error: string | null;
-  prUrl: string | null;
-}): string {
-  const scopeLabel = params.projectId ? "project task" : "quick task";
-  if (params.success) {
-    if (params.prUrl) {
-      return `Run succeeded for this ${scopeLabel}. Pull request: ${params.prUrl}`;
-    }
-    return `Run succeeded for this ${scopeLabel}.`;
-  }
-  if (params.error) {
-    const trimmedError = params.error.trim();
-    const clippedError =
-      trimmedError.length > 200
-        ? `${trimmedError.slice(0, 197)}...`
-        : trimmedError;
-    return `Run failed for this ${scopeLabel}. ${clippedError}`;
-  }
-  return `Run failed for this ${scopeLabel}.`;
-}
+import { buildTypecheckCommand } from "../_sandbox_runtime/typecheckCommand";
 
 /**
  * A reviewer change request prepared for a re-run prompt.

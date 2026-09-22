@@ -1,12 +1,18 @@
 import { useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+import { useQueryState } from "nuqs";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
   api,
   type BackgroundAgentEntry,
   type Id,
   type SandboxOwner,
 } from "@eva/backend";
-import { isSessionSandboxTab, sandboxTabIdFromParam } from "@/lib/search-params";
+import {
+  filesRootParser,
+  isSessionSandboxTab,
+  sandboxTabIdFromParam,
+} from "@/lib/search-params";
 import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
 import { IconClipboardList } from "@tabler/icons-react";
 import { SandboxTabBar } from "./_components/SandboxTabBar";
@@ -16,11 +22,22 @@ import { useSessionPlanImplementation } from "./_components/useSessionPlanImplem
 import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
 import type { ProposedPlanRow } from "./_components/proposedPlanLogic";
 import { DesignVariationsPanel } from "./_components/DesignVariationsPanel";
+import {
+  SessionArtifactsPanel,
+  useSourceArtifacts,
+} from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 import { FilesPanel } from "./FilesPanel";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
+import {
+  DEFAULT_PREVIEW_PORT,
+  useSandboxPreview,
+} from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import {
@@ -37,7 +54,9 @@ import {
   type SessionDesignMessage,
 } from "./_utils/designVariations";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import { previewPortOptions } from "./_utils";
 import { designVariationPrompt } from "./_utils/composerPrompts";
+
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
   sandboxId: string | undefined;
@@ -100,20 +119,22 @@ export function SandboxPanel({
 }: SandboxPanelProps) {
   const simpleView = useSimpleView();
   const sessionIdStr = String(sessionId);
-  const submitAnnotation = useSessionAnnotationSend(sessionId);
+  const submitAnnotation = useSessionAnnotationSend(sessionId, isRouteActive);
   const seedChatDraft = useSeedChatDraft({
     kind: "sessionChat",
     sessionId,
   });
-  const proposedPlans = useQuery(api.proposedPlans.listBySession, {
-    sessionId,
-  });
+  const proposedPlans = useHeldQuery(
+    api.proposedPlans.listBySession,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const { implementPlan, implementPlanContent, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
       handleSend: (content) => {
         void seedChatDraft(content);
       },
+      isRouteActive,
     });
   const {
     savePlan,
@@ -132,6 +153,9 @@ export function SandboxPanel({
     : null;
   const planImplemented = capturedPlan?.implementedAt !== undefined;
   const hasDesignsContent = latestVariations.length > 0;
+  const artifactSource = { kind: "session" as const, sessionId };
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
   const isDesignExecuting = isAssistantTurnInProgress(messages);
   // Streaming payloads can outlive their turn; only fold them in while one runs.
   const agents = deriveSubagents({
@@ -146,7 +170,10 @@ export function SandboxPanel({
   );
   // Sticky Preview path/port + console tail, keyed by the sandbox owner so all
   // three surfaces read and write this state through the same functions.
-  const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
+  const viewState = useHeldQuery(
+    api.sandboxPanes.getViewState,
+    isRouteActive ? { owner } : "skip",
+  );
   const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
   const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
   const setTerminalHistoryTail = useMutation(
@@ -163,9 +190,21 @@ export function SandboxPanel({
       void setPreviewPort({ owner, port });
     },
   });
-  const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
+  // Multi-repo sessions: which checkout the Files tab browses. "" is the
+  // primary repo; a linked repo's `sessionRepos.path` otherwise.
+  const [filesRoot, setFilesRoot] = useQueryState("filesRoot", filesRootParser);
+  const sessionRepos = useHeldQuery(api.sessions.listRepos, { sessionId });
+  const fileList = useSandboxFileList({
+    sandboxId,
+    repoId,
+    isActive,
+    rootPath: filesRoot || undefined,
+  });
   // User-defined tabs for this app, in display order, enabled only.
-  const allCustomTabs = useQuery(api.appTabs.list, { repoId });
+  const allCustomTabs = useHeldQuery(
+    api.appTabs.list,
+    isRouteActive ? { repoId } : "skip",
+  );
   const customTabs = (allCustomTabs ?? []).filter((tab) => tab.enabled);
   // If the URL points at a custom tab that no longer exists (deleted / disabled /
   // renamed), fall back to preview. Wait for the query to load before deciding.
@@ -203,6 +242,8 @@ export function SandboxPanel({
           hasPrdContent={hasPlanContent}
           showDesignsTab={hasDesignsContent}
           hasDesignsContent={hasDesignsContent}
+          artifactCount={artifactCount}
+          documentCount={documentCount}
           showFilesTab
           showAgentsTab={hasAgents}
           hasRunningAgents={hasRunningAgents}
@@ -292,6 +333,24 @@ export function SandboxPanel({
         </div>
         <div
           className={
+            activeTab === "artifacts"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionArtifactsPanel source={artifactSource} />
+        </div>
+        <div
+          className={
+            activeTab === "documents"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionDocumentsPanel source={artifactSource} />
+        </div>
+        <div
+          className={
             !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
           }
         >
@@ -300,6 +359,9 @@ export function SandboxPanel({
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            repos={sessionRepos}
+            activeRoot={filesRoot}
+            onRootChange={setFilesRoot}
           />
         </div>
         <div
@@ -338,6 +400,12 @@ export function SandboxPanel({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           onAnnotationSubmit={submitAnnotation}
+          // Multi-repo sessions run a dev server per repo; the Preview port
+          // control offers each one instead of only the primary's.
+          previewPortOptions={previewPortOptions(
+            sessionRepos,
+            devPort ?? DEFAULT_PREVIEW_PORT,
+          )}
           // Only the session on screen may float; cached siblings and a
           // collapsed rail keep their preview parked.
           miniPlayer={

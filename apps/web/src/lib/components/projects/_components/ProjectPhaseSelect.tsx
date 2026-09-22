@@ -8,7 +8,9 @@ import {
   SelectValue,
   SelectGroup,
   SelectLabel,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { FIELD_TRIGGER_CLASS } from "@/lib/components/fields/FieldsSection";
 import {
   phaseConfig,
@@ -42,10 +44,19 @@ export function ProjectPhaseSelect({
     >
       <SelectTrigger className={FIELD_TRIGGER_CLASS}>
         <SelectValue>
-          <div className={`flex items-center gap-1.5 ${config.text}`}>
-            <Icon size={14} />
-            <span>{config.label}</span>
-          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={value}
+              className={`flex items-center gap-1.5 ${config.text}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <Icon size={14} />
+              <span>{config.label}</span>
+            </m.div>
+          </AnimatePresence>
         </SelectValue>
       </SelectTrigger>
       <SelectContent>

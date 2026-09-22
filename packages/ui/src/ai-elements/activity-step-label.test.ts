@@ -313,7 +313,7 @@ describe("deriveStepRowPresentation", () => {
     ).toEqual({ text: "Edited files" });
   });
 
-  it("falls back to step label for question and unknown rows", () => {
+  it("names the wait while a question is open, and the question once answered", () => {
     expect(
       deriveStepRowPresentation(
         step({
@@ -322,7 +322,27 @@ describe("deriveStepRowPresentation", () => {
         }),
         true,
       ),
-    ).toEqual({ text: "Asking a question..." });
+    ).toEqual({ text: "Waiting for your answer" });
+
+    expect(
+      deriveStepRowPresentation(
+        step({
+          type: "question",
+          label: "Asked a question",
+          detail: "Which surface should own this?",
+        }),
+        false,
+      ),
+    ).toEqual({ text: "Asked: Which surface should own this?" });
+  });
+
+  it("falls back to the step label for a question with no detail", () => {
+    expect(
+      deriveStepRowPresentation(
+        step({ type: "question", label: "Asked a question" }),
+        false,
+      ),
+    ).toEqual({ text: "Asked a question" });
   });
 });
 

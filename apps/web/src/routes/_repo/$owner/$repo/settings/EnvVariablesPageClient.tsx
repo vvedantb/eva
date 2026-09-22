@@ -1,6 +1,7 @@
 "use client";
 
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import type { EnvVarScope } from "@/lib/search-params";
 import { useNavigate } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -37,8 +38,18 @@ export function EnvVariablesPageClient({ scope }: { scope: EnvVarScope }) {
         </Tabs>
       }
     >
-      {scope === "repo" ? <EnvVariablesClient /> : null}
-      {scope === "team" ? <TeamEnvVarsClient /> : null}
+      <AnimatePresence mode="wait" initial={false}>
+        <m.div
+          key={scope}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
+          {scope === "repo" ? <EnvVariablesClient /> : null}
+          {scope === "team" ? <TeamEnvVarsClient /> : null}
+        </m.div>
+      </AnimatePresence>
     </SettingsPage>
   );
 }

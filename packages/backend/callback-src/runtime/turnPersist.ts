@@ -1,8 +1,7 @@
-import { spawnSync } from "child_process";
-import { REQUIRE_TASK_COMMIT, RUN_ID, WORK_DIR } from "../config.js";
+import { REQUIRE_TASK_COMMIT, RUN_ID } from "../config.js";
 import { log } from "../utils.js";
+import { git } from "./gitExec.js";
 
-const GIT_STEP_TIMEOUT_MS = 20_000;
 const PUSH_TIMEOUT_MS = 60_000;
 
 // Media exclusions mirror the agent-facing commit convention in
@@ -23,19 +22,6 @@ const COMMIT_ADD_ARGS = [
   ":!recordings/",
   ":!plan.md",
 ];
-
-function git(
-  args: string[],
-  timeoutMs: number = GIT_STEP_TIMEOUT_MS,
-): { ok: boolean; out: string } {
-  const result = spawnSync("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-  });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
 
 type BranchSyncResult =
   | { status: "ready"; remoteExists: boolean }

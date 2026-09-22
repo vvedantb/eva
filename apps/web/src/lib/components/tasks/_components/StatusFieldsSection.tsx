@@ -22,7 +22,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconUserPlus,
   IconFolder,
@@ -69,6 +71,7 @@ import {
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
+import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -83,6 +86,7 @@ interface StatusFieldsSectionProps {
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
   baseBranch: string;
   setBaseBranch: (v: string) => void;
+  /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
   hasActiveRun: boolean;
   /** Locks the model picker — the model that ran must stay on the record. */
@@ -107,6 +111,7 @@ export function StatusFieldsSection({
   isOwner,
   allTags,
 }: StatusFieldsSectionProps) {
+  const viewVercelDeployment = useViewVercelDeployment();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       if (!task?.repoId) return;
@@ -266,16 +271,36 @@ export function StatusFieldsSection({
                     const config = statusConfig[status];
                     const Icon = config.icon;
                     return (
-                      <div
-                        className={`flex items-center gap-1.5 ${config.text}`}
-                      >
-                        <Icon size={14} />
-                        <span>{config.label}</span>
-                        {isBlocked && (
-                          <Badge variant="warning" className="ml-0.5">
-                            Blocked
-                          </Badge>
-                        )}
+                      <div className="flex items-center gap-1.5">
+                        <AnimatePresence mode="wait" initial={false}>
+                          <m.span
+                            key={status}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                            className={`flex items-center gap-1.5 ${config.text}`}
+                          >
+                            <Icon size={14} />
+                            <span>{config.label}</span>
+                          </m.span>
+                        </AnimatePresence>
+                        <AnimatePresence initial={false}>
+                          {isBlocked ? (
+                            <m.span
+                              key="blocked"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={motionFast}
+                              className="inline-flex"
+                            >
+                              <Badge variant="warning" className="ml-0.5">
+                                Blocked
+                              </Badge>
+                            </m.span>
+                          ) : null}
+                        </AnimatePresence>
                       </div>
                     );
                   })()
@@ -363,11 +388,29 @@ export function StatusFieldsSection({
               <div
                 className={`flex items-center gap-1.5 ${!task?.assignedTo ? "text-muted-foreground" : ""}`}
               >
-                {assignedUser ? (
-                  <UserInitials user={assignedUser} size="sm" hideLastSeen />
-                ) : (
-                  <IconUserPlus size={14} className="text-muted-foreground" />
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                  <m.span
+                    key={assignedUser?._id ?? "unassigned"}
+                    className="inline-flex items-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={motionFast}
+                  >
+                    {assignedUser ? (
+                      <UserInitials
+                        user={assignedUser}
+                        size="sm"
+                        hideLastSeen
+                      />
+                    ) : (
+                      <IconUserPlus
+                        size={14}
+                        className="text-muted-foreground"
+                      />
+                    )}
+                  </m.span>
+                </AnimatePresence>
                 <span data-pii={Boolean(task?.assignedTo) || undefined}>
                   {task?.assignedTo ? assignedDisplayName : "Code Reviewer"}
                 </span>
@@ -434,52 +477,70 @@ export function StatusFieldsSection({
           ) : null}
         </div>
 
-        {!task?.projectId && (
-          <div className={FIELD_ROW_CLASS}>
-            {status === "todo" ? (
-              <BranchSelect
-                value={baseBranch}
-                onValueChange={(val) => {
-                  setBaseBranch(val);
-                  updateTask({ id: taskId, baseBranch: val });
-                }}
-                className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
-              />
-            ) : (
-              <div className="flex items-center gap-1.5 text-[13px]">
-                <IconGitBranch size={14} className="text-muted-foreground" />
-                <span>{baseBranch}</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <IconInfoCircle
-                      size={12}
-                      className="text-muted-foreground cursor-help"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Cannot be modified after task has run
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {!task?.projectId ? (
+            <m.div
+              key="base-branch"
+              className={FIELD_ROW_CLASS}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {status === "todo" ? (
+                <BranchSelect
+                  value={baseBranch}
+                  onValueChange={(val) => {
+                    setBaseBranch(val);
+                    updateTask({ id: taskId, baseBranch: val });
+                  }}
+                  className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 text-[13px]">
+                  <IconGitBranch size={14} className="text-muted-foreground" />
+                  <span>{baseBranch}</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <IconInfoCircle
+                        size={12}
+                        className="text-muted-foreground cursor-help"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Cannot be modified after task has run
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </m.div>
+          ) : null}
+        </AnimatePresence>
 
-        {latestDeployment?.deploymentStatus && (
-          <div className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}>
-            <IconBrandVercelFilled
-              size={14}
-              className={
-                DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
-                  ?.iconColor ?? "text-muted-foreground"
-              }
-            />
-            <span>
-              {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
-                ?.label ?? "Unknown"}
-            </span>
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
+            <m.div
+              key="vercel-deployment"
+              className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <IconBrandVercelFilled
+                size={14}
+                className={
+                  DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+                    ?.iconColor ?? "text-muted-foreground"
+                }
+              />
+              <span>
+                {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+                  ?.label ?? "Unknown"}
+              </span>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
       </FieldsSection>
 
       <FieldsSection title="Labels">
@@ -490,23 +551,33 @@ export function StatusFieldsSection({
           className={`${FIELD_ROW_CLASS} group/tags flex-wrap gap-1 cursor-text`}
         >
           <IconTags size={14} className="text-muted-foreground shrink-0" />
-          {task?.tags?.map((tag) => (
-            <Badge
-              key={tag}
-              variant="outline"
-              className="text-xs h-8 gap-0.5 pr-0.5 group/tag sm:h-5"
-            >
-              {tag}
-              <button
-                type="button"
-                aria-label={`Remove label ${tag}`}
-                className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
-                onClick={() => void removeTag(tag)}
+          <AnimatePresence initial={false} mode="popLayout">
+            {task?.tags?.map((tag) => (
+              <m.span
+                key={tag}
+                className="inline-flex"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
               >
-                ×
-              </button>
-            </Badge>
-          ))}
+                <Badge
+                  variant="outline"
+                  className="text-xs h-8 gap-0.5 pr-0.5 group/tag sm:h-5"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    aria-label={`Remove label ${tag}`}
+                    className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
+                    onClick={() => void removeTag(tag)}
+                  >
+                    ×
+                  </button>
+                </Badge>
+              </m.span>
+            ))}
+          </AnimatePresence>
           <Input
             ref={tagDraftRef}
             value={tagDraft}

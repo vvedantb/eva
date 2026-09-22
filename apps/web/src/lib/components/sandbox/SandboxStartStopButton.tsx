@@ -1,10 +1,15 @@
 "use client";
 
-import { Button, cn, Spinner } from "@eva/ui";
+import { Button, cn, CrossfadeIconSlot, Spinner } from "@eva/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
-import { SleepControlTooltip } from "./SleepEvaButton";
+import {
+  SleepControlTooltip,
+  SLEEP_EVA_LABEL,
+  WAKE_EVA_LABEL,
+  WAKE_EVA_RETRY_LABEL,
+} from "./SleepEvaButton";
 
 /**
  * Compact play/stop control used in session, project, and task sandbox chat.
@@ -18,17 +23,24 @@ export function SandboxStartStopButton({
   isToggling,
   onToggle,
   isAssistantResponding = false,
+  hasStartError = false,
 }: {
   isActive: boolean;
   isToggling: boolean;
   onToggle: (action: "start" | "stop") => void;
   /** Makes the stop affordance inert while the assistant holds the turn. */
   isAssistantResponding?: boolean;
+  /** The last wake attempt failed — the control offers a retry, not a start. */
+  hasStartError?: boolean;
 }) {
   // Only stopping is unsafe mid-turn; a turn cannot be running on a sandbox
   // that is asleep, but if the flags ever disagree, starting stays available.
   const blockedMidTurn = isActive && isAssistantResponding;
-  const label = isActive ? "Put Eva to sleep" : "Wake up Eva";
+  const label = isActive
+    ? SLEEP_EVA_LABEL
+    : hasStartError
+      ? WAKE_EVA_RETRY_LABEL
+      : WAKE_EVA_LABEL;
 
   return (
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>
@@ -48,13 +60,17 @@ export function SandboxStartStopButton({
         )}
         aria-label={label}
       >
-        {isToggling ? (
-          <Spinner size="sm" />
-        ) : isActive ? (
-          <IconPlayerStop className="w-4 h-4" />
-        ) : (
-          <IconPlayerPlay className="w-4 h-4" />
-        )}
+        <CrossfadeIconSlot
+          iconKey={isToggling ? "loading" : isActive ? "stop" : "play"}
+        >
+          {isToggling ? (
+            <Spinner size="sm" />
+          ) : isActive ? (
+            <IconPlayerStop className="w-4 h-4" />
+          ) : (
+            <IconPlayerPlay className="w-4 h-4" />
+          )}
+        </CrossfadeIconSlot>
       </Button>
     </SleepControlTooltip>
   );

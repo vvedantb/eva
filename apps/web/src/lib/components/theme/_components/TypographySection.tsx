@@ -11,6 +11,7 @@ import type {
   LetterSpacing,
 } from "@/lib/contexts/ThemeContext";
 import { IconCheck } from "@tabler/icons-react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SectionLabel } from "./SectionLabel";
 import { OptionButton } from "./OptionButton";
 
@@ -60,7 +61,7 @@ export function TypographySection({
       <section>
         <SectionLabel>Border Radius</SectionLabel>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          {RADIUS_OPTIONS.map(({ value, label }) => {
+          {RADIUS_OPTIONS.map(({ value, label }, index) => {
             const previewRadius =
               value === "none"
                 ? "0px"
@@ -75,17 +76,24 @@ export function TypographySection({
                         : "9999px";
 
             return (
-              <OptionButton
+              <ListEnter
                 key={value}
-                active={radius === value}
-                onClick={() => onRadiusChange(value)}
+                index={index}
+                fast
+                slide={false}
+                staggerMax={8}
               >
-                <span
-                  className="h-5 w-5 shrink-0 border-2 border-current"
-                  style={{ borderRadius: previewRadius }}
-                />
-                {label}
-              </OptionButton>
+                <OptionButton
+                  active={radius === value}
+                  onClick={() => onRadiusChange(value)}
+                >
+                  <span
+                    className="h-5 w-5 shrink-0 border-2 border-current"
+                    style={{ borderRadius: previewRadius }}
+                  />
+                  {label}
+                </OptionButton>
+              </ListEnter>
             );
           })}
         </div>
@@ -94,27 +102,34 @@ export function TypographySection({
       <section>
         <SectionLabel>Font</SectionLabel>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          {Object.entries(FONT_FAMILIES).map(([key, font]) => {
+          {Object.entries(FONT_FAMILIES).map(([key, font], index) => {
             if (!isFontFamily(key)) return null;
             const isActive = fontFamily === key;
             return (
-              <OptionButton
+              <ListEnter
                 key={key}
-                active={isActive}
-                onClick={() => onFontChange(key)}
+                index={index}
+                fast
+                slide={false}
+                staggerMax={8}
               >
-                <IconCheck
-                  size={14}
-                  className={
-                    isActive
-                      ? "shrink-0 text-primary opacity-100"
-                      : "shrink-0 text-primary opacity-0"
-                  }
-                  strokeWidth={2.5}
-                  aria-hidden={!isActive}
-                />
-                <span style={{ fontFamily: font.stack }}>{font.label}</span>
-              </OptionButton>
+                <OptionButton
+                  active={isActive}
+                  onClick={() => onFontChange(key)}
+                >
+                  <IconCheck
+                    size={14}
+                    className={
+                      isActive
+                        ? "shrink-0 text-primary opacity-100"
+                        : "shrink-0 text-primary opacity-0"
+                    }
+                    strokeWidth={2.5}
+                    aria-hidden={!isActive}
+                  />
+                  <span style={{ fontFamily: font.stack }}>{font.label}</span>
+                </OptionButton>
+              </ListEnter>
             );
           })}
         </div>
@@ -123,22 +138,29 @@ export function TypographySection({
       <section>
         <SectionLabel>Font Spacing</SectionLabel>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          {LETTER_SPACING_OPTIONS.map(({ value, label }) => (
-            <OptionButton
+          {LETTER_SPACING_OPTIONS.map(({ value, label }, index) => (
+            <ListEnter
               key={value}
-              active={letterSpacing === value}
-              onClick={() => onLetterSpacingChange(value)}
+              index={index}
+              fast
+              slide={false}
+              staggerMax={8}
             >
-              <span
-                className="text-xs font-semibold"
-                style={{
-                  letterSpacing: LETTER_SPACING_VALUES[value].value,
-                }}
+              <OptionButton
+                active={letterSpacing === value}
+                onClick={() => onLetterSpacingChange(value)}
               >
-                Aa
-              </span>
-              {label}
-            </OptionButton>
+                <span
+                  className="text-xs font-semibold"
+                  style={{
+                    letterSpacing: LETTER_SPACING_VALUES[value].value,
+                  }}
+                >
+                  Aa
+                </span>
+                {label}
+              </OptionButton>
+            </ListEnter>
           ))}
         </div>
       </section>

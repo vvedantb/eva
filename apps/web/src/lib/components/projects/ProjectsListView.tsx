@@ -13,6 +13,8 @@ import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
+import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
@@ -20,17 +22,27 @@ interface ProjectsListViewProps {
   projectsByPhase: Record<ProjectPhase, Project[]>;
   visiblePhases: Set<ProjectPhase>;
   onDelete: (id: Id<"projects">, title: string) => void;
+  isSelecting?: boolean;
+  selectedIds?: Set<Id<"projects">>;
+  onToggleSelect?: (
+    id: Id<"projects">,
+    options?: SelectionToggleOptions<Id<"projects">>,
+  ) => void;
 }
 
 export function ProjectsListView({
   projectsByPhase,
   visiblePhases,
   onDelete,
+  isSelecting = false,
+  selectedIds,
+  onToggleSelect,
 }: ProjectsListViewProps) {
   const { owner, name, basePath } = useRepo();
   const { scrollParent, scrollRef } = usePersistedScrollParent(
     `${owner}/${name}/projects/list`,
   );
+  const firstPaint = useFirstPaintGate();
   const [openSections, setOpenSections] = useState<Set<ProjectPhase>>(() => {
     const nonEmpty = new Set(
       PROJECT_PHASES.filter((p) => (projectsByPhase[p] ?? []).length > 0),
@@ -59,6 +71,9 @@ export function ProjectsListView({
         if (!visiblePhases.has(phase)) return [];
         const cfg = phaseConfig[phase];
         const items = projectsByPhase[phase] ?? [];
+        // Shift-click spans this section only — the visible order of the group
+        // the click landed in, not the whole flattened list.
+        const sectionIds = items.map((p) => p._id);
         const Icon = cfg.icon;
 
         return [
@@ -99,7 +114,11 @@ export function ProjectsListView({
                       itemContent={(index) => {
                         const project = items[index];
                         return (
-                          <div className="pb-1.5">
+                          <ListEnter
+                            index={index}
+                            firstPaint={firstPaint.current}
+                            className="pb-1.5"
+                          >
                             <ProjectCard
                               projectId={project._id}
                               userId={project.userId}
@@ -127,8 +146,16 @@ export function ProjectsListView({
                               onDelete={() =>
                                 onDelete(project._id, project.title)
                               }
+                              isSelecting={isSelecting}
+                              isSelected={selectedIds?.has(project._id)}
+                              onToggleSelect={(event) =>
+                                onToggleSelect?.(project._id, {
+                                  range: event.shiftKey,
+                                  orderedIds: sectionIds,
+                                })
+                              }
                             />
-                          </div>
+                          </ListEnter>
                         );
                       }}
                     />

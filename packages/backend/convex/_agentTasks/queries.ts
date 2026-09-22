@@ -2,10 +2,12 @@ import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import { internalQuery } from "../_generated/server";
 import { aiModelValidator, taskStatusValidator } from "../validators";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
+import { resolveStorageEntries } from "../_chat/storageUrls";
 
 /** Validator for a task document enriched with its latest run start time. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -106,19 +108,16 @@ export const listAttachments = authQuery({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return [];
-    return Promise.all(
-      (task.attachmentStorageIds ?? []).map(async (storageId) => {
-        const [url, meta] = await Promise.all([
-          ctx.storage.getUrl(storageId),
-          ctx.db.system.get("_storage", storageId),
-        ]);
-        return {
-          storageId,
-          url: url ?? null,
-          contentType: meta?.contentType ?? null,
-        };
-      }),
+    const entries = await resolveStorageEntries(
+      (id) => ctx.storage.getUrl(id),
+      (id) => ctx.db.system.get("_storage", id),
+      task.attachmentStorageIds,
     );
+    return entries.map((entry) => ({
+      storageId: entry.id,
+      url: entry.url,
+      contentType: entry.contentType,
+    }));
   },
 });
 
@@ -245,7 +244,9 @@ const orchestratorTaskValidator = v.object({
 export const getActiveTasksSlim = authQuery({
   args: {},
   returns: v.array(orchestratorTaskValidator),
-  handler: async (ctx): Promise<Array<Infer<typeof orchestratorTaskValidator>>> => {
+  handler: async (
+    ctx,
+  ): Promise<Array<Infer<typeof orchestratorTaskValidator>>> => {
     const tasks = await activeTasksForUser(ctx, ctx.userId);
     return tasks.map((task) => ({
       _id: task._id,
@@ -339,5 +340,61 @@ export const getStatusesByIds = authQuery({
     return tasks
       .filter((t): t is Exclude<typeof t, null> => t !== null)
       .map((t) => ({ id: t._id, status: t.status }));
+  },
+});
+
+/** Statuses that still describe work in flight, so a finding can duplicate one. */
+const OPEN_TASK_STATUSES = [
+  "todo",
+  "in_progress",
+  "code_review",
+  "business_review",
+] as const;
+
+/**
+ * Cap on duplicate candidates handed to findings triage. Jev takes at most 255
+ * choice options, and a longer list costs tokens without helping — the most
+ * recently touched open tasks are the ones a fresh finding can duplicate.
+ */
+const OPEN_TASK_TITLE_LIMIT = 150;
+
+/**
+ * Titles of a repo's open tasks, newest-touched first. Internal: findings
+ * triage asks Jev whether a finding is already tracked, and only needs an id,
+ * a number and a title per candidate.
+ */
+export const listOpenTaskTitles = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(
+    v.object({
+      _id: v.id("agentTasks"),
+      numId: v.optional(v.number()),
+      title: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const perStatus = await Promise.all(
+      OPEN_TASK_STATUSES.map((status) =>
+        ctx.db
+          .query("agentTasks")
+          .withIndex("by_repo_status_and_deleted", (q) =>
+            q
+              .eq("repoId", args.repoId)
+              .eq("status", status)
+              .eq("deletedAt", undefined),
+          )
+          .order("desc")
+          .take(OPEN_TASK_TITLE_LIMIT),
+      ),
+    );
+    return perStatus
+      .flat()
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, OPEN_TASK_TITLE_LIMIT)
+      .map((task) => ({
+        _id: task._id,
+        numId: task.numId,
+        title: task.title,
+      }));
   },
 });

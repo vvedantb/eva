@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Textarea } from "@eva/ui";
+import { Button, Textarea, motionFast } from "@eva/ui";
 import { IconMessage, IconTrash } from "@tabler/icons-react";
+import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
 
 interface DiffCommentDraftBoxProps {
@@ -18,10 +19,15 @@ export function DiffCommentDraftBox({
   const [text, setText] = useState("");
 
   return (
-    <div
+    <AnimatePresence>
+    <m.div
       className="mx-2 my-2 rounded-lg border border-border bg-card p-3"
       contentEditable={false}
       onPointerDown={(event) => event.stopPropagation()}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={motionFast}
     >
       <div className="flex items-center gap-2">
         <IconMessage className="size-4 text-muted-foreground" />
@@ -64,7 +70,8 @@ export function DiffCommentDraftBox({
           Comment
         </Button>
       </div>
-    </div>
+    </m.div>
+    </AnimatePresence>
   );
 }
 
@@ -80,10 +87,15 @@ export function DiffCommentPendingCard({
   onDelete,
 }: DiffCommentPendingCardProps) {
   return (
-    <div
+    <AnimatePresence>
+    <m.div
       className="mx-2 my-2 rounded-lg border border-border bg-card p-3"
       contentEditable={false}
       onPointerDown={(event) => event.stopPropagation()}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={motionFast}
     >
       <div className="flex items-center gap-2">
         <IconMessage className="size-4 text-muted-foreground" />
@@ -103,6 +115,7 @@ export function DiffCommentPendingCard({
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
         {text}
       </p>
-    </div>
+    </m.div>
+    </AnimatePresence>
   );
 }

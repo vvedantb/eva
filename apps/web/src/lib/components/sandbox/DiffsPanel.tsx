@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import type { Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, Spinner } from "@eva/ui";
+import { Accordion, Spinner, motionBase, motionStagger } from "@eva/ui";
+import { m } from "motion/react";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
@@ -218,8 +219,14 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
             onValueChange={setOpenPaths}
             className="flex flex-col gap-3"
           >
-            {visibleEntries.map((entry) => (
-              <div key={entry.path} ref={setFileRef(entry.path)}>
+            {visibleEntries.map((entry, index) => (
+              <m.div
+                key={entry.path}
+                ref={setFileRef(entry.path)}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...motionBase, delay: motionStagger(index) }}
+              >
                 <DiffFileAccordionItem
                   entry={entry}
                   diffView={effectiveDiffView}
@@ -237,7 +244,7 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
                   // The scroll target must exist before it can be scrolled to.
                   eager={diffFile === entry.path}
                 />
-              </div>
+              </m.div>
             ))}
           </Accordion>
         </div>

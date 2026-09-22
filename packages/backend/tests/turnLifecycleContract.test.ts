@@ -156,3 +156,94 @@ test("one ownership state answers both the lease and the heartbeat gate", () => 
   );
   expect(lifecycle).not.toContain("let activeClaimState");
 });
+
+/**
+ * The lease-terminal exit used to be the one exit path that skipped the
+ * durability push, so a turn the server finalised as stalled left the agent's
+ * finished edits uncommitted in the sandbox (session 66, 11 Sep 2026). Source
+ * text is the only handle on it: the exit calls `process.exit`, which no unit
+ * test can run.
+ */
+test("a lease-terminal exit persists the turn's work before exiting", () => {
+  const heartbeats = source("../callback-src/runtime/heartbeats.ts");
+  const startAt = heartbeats.indexOf("function enforceTurnLease");
+  expect(startAt, "enforceTurnLease moved or was renamed").toBeGreaterThan(-1);
+  const body = heartbeats.slice(startAt, heartbeats.indexOf("\n}", startAt));
+  const persistAt = body.indexOf("persistTurnWork();");
+  const exitAt = body.indexOf("process.exit(0)");
+  expect(persistAt, "the lease-terminal exit lost its durability push")
+    .toBeGreaterThan(-1);
+  expect(exitAt, "the lease-terminal exit moved").toBeGreaterThan(-1);
+  expect(persistAt).toBeLessThan(exitAt);
+  // A superseded daemon shares the worktree with its winner; its commit races.
+  expect(body).toContain('decision.reason !== "superseded"');
+});
+
+/**
+ * Session 225 (21 Sep 2026): a heartbeat answered `terminal: closed` for a
+ * turn this same daemon had just completed was read as a takeover, and the
+ * daemon exited 400ms after minting the next synthetic turn ("Turn stalled",
+ * process_dead, no memory pressure). Two things keep that from recurring: every
+ * completion releases the lease locally before the mutation that closes the
+ * turn is sent, and every heartbeat judges its verdict against the lease it was
+ * sent under rather than whatever the process owns when the reply lands.
+ */
+test("every completion releases the turn lease before the closing mutation is sent", () => {
+  const completion = source("../callback-src/runtime/completion.ts");
+  for (const fn of [
+    "export async function deliverCompletionWithMedia",
+    "export async function postClaimedTurnFailureCompletion",
+  ]) {
+    const startAt = completion.indexOf(fn);
+    expect(startAt, fn + " moved or was renamed").toBeGreaterThan(-1);
+    const releaseAt = completion.indexOf(
+      "releaseTurnLeaseForCompletion();",
+      startAt,
+    );
+    // The first send after the function start is this function's own.
+    const sendAt = completion.indexOf("await callConvexWithRetry(", startAt);
+    expect(releaseAt, fn + " lost its lease release").toBeGreaterThan(-1);
+    expect(sendAt).toBeGreaterThan(-1);
+    expect(releaseAt).toBeLessThan(sendAt);
+  }
+  const daemon = source("../callback-src/providers/claudeSdkDaemon.ts");
+  for (const fn of [
+    "async function failSyntheticTurn",
+    "async function finalizeSyntheticTurn",
+  ]) {
+    const startAt = daemon.indexOf(fn);
+    expect(startAt, fn + " moved or was renamed").toBeGreaterThan(-1);
+    const releaseAt = daemon.indexOf("releaseTurnLeaseForCompletion();", startAt);
+    const sendAt = daemon.indexOf("COMPLETE_SYNTHETIC_TURN_MUTATION ?? \"\"", startAt);
+    expect(releaseAt, fn + " lost its lease release").toBeGreaterThan(-1);
+    expect(releaseAt).toBeLessThan(sendAt);
+  }
+});
+
+test("every heartbeat judges its verdict against the lease it was sent under", () => {
+  const client = source("../callback-src/http/convexClient.ts");
+  const calls = client.match(/noteHeartbeatResponse\([^)]*\)/g) ?? [];
+  expect(calls.length).toBeGreaterThan(0);
+  for (const call of calls) {
+    expect(call).toBe("noteHeartbeatResponse(response, identity)");
+  }
+  // The identity is read once per request, before the body is built, so an
+  // ownership change while the request is in flight cannot rewrite it.
+  for (const fn of [
+    "async function callStreamingHeartbeatTouchOnce",
+    "async function callStreamingHeartbeatOnce",
+  ]) {
+    const startAt = client.indexOf(fn);
+    const identityAt = client.indexOf(
+      "const identity = getCurrentTurnLease();",
+      startAt,
+    );
+    const firstSendAt = client.indexOf("await postSignedForm(", startAt);
+    expect(identityAt, fn + " lost its captured lease").toBeGreaterThan(-1);
+    expect(identityAt).toBeLessThan(firstSendAt);
+  }
+  const bundle = source(
+    "../convex/_sandbox_runtime/callbackScript.generated.ts",
+  );
+  expect(bundle).toContain("stale turn lease verdict ignored");
+});

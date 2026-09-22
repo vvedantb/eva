@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  CrossfadeIcon,
   Spinner,
   toast,
 } from "@eva/ui";
@@ -27,9 +28,11 @@ import {
 } from "@tabler/icons-react";
 import type { ReviewTab } from "@/lib/search-params";
 import { focusPrComposer } from "./prComposerFocus";
+import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import { PrVerdictDialog, type PrVerdict } from "./PrVerdictDialog";
 import type { PrOverview } from "./prOverviewMeta";
+import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
 
 /**
  * The header's right-hand cluster: everything a reader can *do* to this pull
@@ -65,6 +68,8 @@ export function PrHeaderActions({
   const update = useAction(api.github.updatePullRequest);
   const [verdict, setVerdict] = useState<PrVerdict | null>(null);
   const [closing, setClosing] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const altHeld = useAltHeld();
 
   const isOpen = overview.status === "open";
 
@@ -72,6 +77,7 @@ export function PrHeaderActions({
     setClosing(true);
     try {
       await update({ repoId, prNumber: overview.number, state: "closed" });
+      setConfirmingClose(false);
       toast.success("Pull request closed");
       onChanged();
     } catch (error) {
@@ -99,11 +105,15 @@ export function PrHeaderActions({
             className="size-7 p-0 max-sm:size-10"
             aria-label="More actions"
           >
-            {refreshing || closing ? (
-              <Spinner size="sm" />
-            ) : (
-              <IconDots size={16} aria-hidden />
-            )}
+            <CrossfadeIcon
+              show={refreshing || closing}
+              trueKey="loading"
+              falseKey="idle"
+              variant="soft"
+              className="relative flex size-4 items-center justify-center"
+              whenTrue={<Spinner size="sm" />}
+              whenFalse={<IconDots size={16} aria-hidden />}
+            />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -124,13 +134,26 @@ export function PrHeaderActions({
           {isOpen ? (
             <>
               <DropdownMenuSeparator />
+              {/* Closing notifies every reviewer and stops CI, so it asks
+                  first — the same bar merge is held to one control over. The
+                  Radix `onSelect` event carries no modifier, so only the
+                  Alt-held store can skip it. */}
               <DropdownMenuItem
                 className="text-destructive"
                 disabled={closing}
-                onSelect={() => void close()}
+                onSelect={() =>
+                  requestConfirm(
+                    altHeld,
+                    () => setConfirmingClose(true),
+                    () => {
+                      void close();
+                    },
+                  )
+                }
               >
                 <IconGitPullRequestClosed size={14} aria-hidden />
                 Close without merging
+                <ConfirmSkipHint />
               </DropdownMenuItem>
             </>
           ) : null}
@@ -187,6 +210,14 @@ export function PrHeaderActions({
         verdict={verdict}
         onClose={() => setVerdict(null)}
         onSubmitted={onChanged}
+      />
+
+      <PrCloseDialog
+        prNumber={overview.number}
+        open={confirmingClose}
+        onOpenChange={setConfirmingClose}
+        onConfirm={() => void close()}
+        closing={closing}
       />
     </div>
   );

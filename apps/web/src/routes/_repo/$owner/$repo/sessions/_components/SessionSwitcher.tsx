@@ -14,11 +14,11 @@ import { IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { sessionHrefForRow } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { sortSessionsForSidebar } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import { entityPathSegment } from "@/lib/numId";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { repoTileColor } from "@/lib/utils/repoTileColor";
-import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { isSessionSidebarActive } from "../_utils/sessionReadOnly";
 
 interface SessionSwitcherProps {
@@ -27,7 +27,7 @@ interface SessionSwitcherProps {
 }
 
 export function SessionSwitcher({ sessionId, title }: SessionSwitcherProps) {
-  const { repo, basePath } = useRepo();
+  const { repo } = useRepo();
   const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId: repo._id });
   const sessions = useQuery(api.sessions.list, { repoId: repo._id });
   const appName = repoDisplayLabel(repo);
@@ -88,7 +88,7 @@ export function SessionSwitcher({ sessionId, title }: SessionSwitcherProps) {
             return (
               <DropdownMenuItem key={session._id} asChild>
                 <DynamicLink
-                  to={toInternalRepoHref(`${basePath}/sessions/${segment}`)}
+                  to={sessionHrefForRow(repo, session)}
                   className="flex items-center gap-2"
                 >
                   <span className="min-w-0 flex-1 truncate">

@@ -23,7 +23,7 @@ import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";
 import {
   repoBasePaths,
   repoSessionsIndexPath,
-  sessionMatchesPath,
+  sessionRowMatchesPath,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { previewSessions } from "@/lib/components/sidebar/_utils/sessionListPreview";
 import {
@@ -31,7 +31,6 @@ import {
   type SessionListMode,
   type SessionSortOrder,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
-import { entityPathSegment } from "@/lib/numId";
 import {
   catchMutationError,
   mutationError,
@@ -45,6 +44,12 @@ type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 interface GlobalSessionGroupProps {
   repo: RepoWithLogo;
   pathname: string;
+  /**
+   * This app's active sessions, already watched once by the sidebar. The group
+   * used to run its own `sessions.list` watch through a different cache, so
+   * every app in the list held two live subscriptions to the same rows.
+   */
+  activeSessions: SessionListItem[] | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
@@ -63,6 +68,7 @@ interface GlobalSessionGroupProps {
 export function GlobalSessionGroup({
   repo,
   pathname,
+  activeSessions,
   open,
   onOpenChange,
   onNavigate,
@@ -74,10 +80,6 @@ export function GlobalSessionGroup({
 }: GlobalSessionGroupProps) {
   const navigate = useNavigate();
   const [isListExpanded, setIsListExpanded] = useState(false);
-  const activeSessions = useQuery(
-    api.sessions.list,
-    listMode === "active" ? { repoId: repo._id } : "skip",
-  );
   const archivedSessions = useQuery(
     api.sessions.listArchived,
     listMode === "archived" ? { repoId: repo._id } : "skip",
@@ -96,7 +98,7 @@ export function GlobalSessionGroup({
   );
   const selectedSessionId =
     sortedSessions.find((session) =>
-      sessionMatchesPath(repo, entityPathSegment(session), pathname),
+      sessionRowMatchesPath(repo, session, pathname),
     )?._id ?? null;
   const {
     visible: visibleSessions,
@@ -201,9 +203,9 @@ export function GlobalSessionGroup({
             >
               <AnimatePresence initial={false}>
                 {visibleSessions.map((session) => {
-                  const isSelected = sessionMatchesPath(
+                  const isSelected = sessionRowMatchesPath(
                     repo,
-                    entityPathSegment(session),
+                    session,
                     pathname,
                   );
                   if (listMode === "archived") {
@@ -212,7 +214,7 @@ export function GlobalSessionGroup({
                         key={session._id}
                         session={session}
                         isSelected={isSelected}
-                        baseUrl={baseUrl}
+                        repo={repo}
                         onNavigate={onNavigate}
                         onUnarchive={async (s) => {
                           try {
@@ -236,7 +238,7 @@ export function GlobalSessionGroup({
                       key={session._id}
                       session={session}
                       isSelected={isSelected}
-                      baseUrl={baseUrl}
+                      repo={repo}
                       onNavigate={onNavigate}
                       onRename={async () => {}}
                       onDuplicate={async (s) => {

@@ -11,6 +11,7 @@ type AssistantReply = {
   isSystemAlert?: boolean;
   isSyntheticTurn?: boolean;
   finishedAt?: number;
+  errorType?: string;
 };
 
 export const PUBLISH_FAILURE_MARKER =
@@ -74,6 +75,26 @@ export function resultTargetMessage<M extends AssistantReply>(
   newestFirst: readonly M[],
 ): M | undefined {
   return newestFirst.find((message) => isOwnReply(message));
+}
+
+/**
+ * The user message a usage-limit retry should restage. Callers still own
+ * auth, owner-sticky account rules, and which staging helper to invoke.
+ */
+export function selectUsageLimitRetryUserMessage<M extends AssistantReply>(
+  newestFirst: readonly M[],
+): M {
+  const reply = resultTargetMessage(newestFirst);
+  if (
+    reply === undefined ||
+    reply.errorType !== "rate_limit" ||
+    reply.finishedAt === undefined
+  ) {
+    throw new Error("The last turn did not fail on a usage limit");
+  }
+  const userMessage = newestFirst.find((message) => message.role === "user");
+  if (!userMessage) throw new Error("No message to retry");
+  return userMessage;
 }
 
 /**

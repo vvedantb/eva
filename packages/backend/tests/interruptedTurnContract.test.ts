@@ -24,28 +24,63 @@ describe("a signal-killed one-shot turn is never reported as success", () => {
   // any more, so every SDK runner reports it false and the surviving guards
   // below (137/143 exit codes, agentWasInterrupted) carry the invariant.
   test.each([
+    ["callback source", completionSource],
+    ["deployed bundle", bundledScript],
+  ])(
+    "the shared outcome helper never calls an interrupted attempt a success (%s)",
+    (_label, source) => {
+      // Node reports a direct signal with `code=null`; a shell translates it to
+      // 137/143. Both forms have to stay in the predicate so neither can
+      // masquerade as genuine completion.
+      const guard = functionBody(
+        source,
+        "function providerAttemptWasInterrupted(",
+      );
+      expect(guard).toContain("terminatedBySignal");
+      expect(guard).toContain("=== 137");
+      expect(guard).toContain("=== 143");
+
+      // runSucceededWithResult must AND in `!agentWasInterrupted` so a
+      // fabricated cursor result cannot mark an interrupted turn as succeeded.
+      const outcome = functionBody(
+        source,
+        "function resolveProviderAttemptOutcome(",
+      );
+      const defineAt = outcome.indexOf(
+        "const agentWasInterrupted = providerAttemptWasInterrupted(",
+      );
+      const succeededAt = outcome.indexOf("runSucceededWithResult =");
+      expect(
+        defineAt,
+        "agentWasInterrupted moved or was renamed",
+      ).toBeGreaterThan(-1);
+      expect(succeededAt, "runSucceededWithResult moved").toBeGreaterThan(-1);
+      // agentWasInterrupted has to exist before the success expression reads it.
+      expect(defineAt).toBeLessThan(succeededAt);
+      const succeededLine = outcome.slice(
+        succeededAt,
+        outcome.indexOf(";", succeededAt),
+      );
+      expect(succeededLine).toContain("!agentWasInterrupted");
+    },
+  );
+
+  test.each([
     ["callback source", oneShotSource],
     ["deployed bundle", bundledScript],
   ])("signal death defeats the fabricated result (%s)", (_label, source) => {
-    const defineAt = source.indexOf("const agentWasInterrupted =");
+    // The one-shot attempt reads its interruption from the shared predicate and
+    // its success from the shared resolver, so it cannot drift from them.
+    const defineAt = source.indexOf(
+      "const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt)",
+    );
     expect(
       defineAt,
       "agentWasInterrupted moved or was renamed",
     ).toBeGreaterThan(-1);
-    const definition = source.slice(defineAt, source.indexOf(";", defineAt));
-    expect(definition).toContain("finalTerminatedBySignal");
-    expect(definition).toContain("finalCode === 137");
-    expect(definition).toContain("finalCode === 143");
-
-    // runSucceededWithResult must AND in `!agentWasInterrupted` so a fabricated
-    // cursor result cannot mark an interrupted turn as having succeeded.
-    const succeededAt = source.indexOf("runSucceededWithResult =");
-    expect(succeededAt, "runSucceededWithResult moved").toBeGreaterThan(-1);
-    const succeededLine = source.slice(
-      succeededAt,
-      source.indexOf(";", succeededAt),
+    expect(source).toContain(
+      "resolveProviderAttemptOutcome(finalAttempt, finalResultEvent)",
     );
-    expect(succeededLine).toContain("!agentWasInterrupted");
 
     // completionSuccess must short-circuit to false on a signal death, ahead of
     // the result-event / exit-code fallbacks.
@@ -67,8 +102,7 @@ describe("a signal-killed one-shot turn is never reported as success", () => {
     ).toBeGreaterThan(-1);
     expect(killAt).toBeLessThan(resultAt);
 
-    // agentWasInterrupted has to exist before both consumers read it.
-    expect(defineAt).toBeLessThan(succeededAt);
+    // agentWasInterrupted has to exist before completionSuccess reads it.
     expect(defineAt).toBeLessThan(completionAt);
   });
 
@@ -124,6 +158,14 @@ function readSource(relativePath: string): string {
       "\n",
     ),
   );
+}
+
+/** One top-level function, ending on the `\n}` that closes it at column 0. */
+function functionBody(source: string, header: string): string {
+  const startAt = source.indexOf(header);
+  expect(startAt, `${header} moved or was renamed`).toBeGreaterThan(-1);
+  const end = source.indexOf("\n}", startAt);
+  return source.slice(startAt, end < 0 ? undefined : end);
 }
 
 function stripComments(source: string): string {

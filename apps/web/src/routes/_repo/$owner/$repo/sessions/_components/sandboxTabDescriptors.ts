@@ -3,6 +3,8 @@ import {
   IconCode,
   IconDeviceDesktop,
   IconFileText,
+  IconFile,
+  IconLayoutDashboard,
   IconPalette,
   IconRobot,
 } from "@tabler/icons-react";
@@ -25,6 +27,12 @@ interface BuildSandboxTabDescriptorsArgs {
   hasPrdContent: boolean;
   showDesignsTab: boolean;
   hasDesignsContent: boolean;
+  showArtifactsTab: boolean;
+  /** Artifacts in this chat; `undefined` while the query is still loading. */
+  artifactCount: number | undefined;
+  showDocumentsTab: boolean;
+  /** Documents in this chat; `undefined` while the query is still loading. */
+  documentCount: number | undefined;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
 }
 
@@ -47,6 +55,10 @@ export function buildSandboxTabDescriptors({
   hasPrdContent,
   showDesignsTab,
   hasDesignsContent,
+  showArtifactsTab,
+  artifactCount,
+  showDocumentsTab,
+  documentCount,
   customTabs,
 }: BuildSandboxTabDescriptorsArgs): SandboxTabDescriptor[] {
   const descriptors: SandboxTabDescriptor[] = baseTabs.map((tab) => {
@@ -112,6 +124,30 @@ export function buildSandboxTabDescriptors({
       indicator: hasDesignsContent ? "content" : undefined,
       indicatorLabel: hasDesignsContent
         ? "Design variations available"
+        : undefined,
+    });
+  }
+
+  if (showArtifactsTab) {
+    descriptors.push({
+      value: "artifacts",
+      label: "Artifacts",
+      icon: { kind: "component", Icon: IconLayoutDashboard },
+      count: artifactCount,
+      indicatorLabel: artifactCount
+        ? `${artifactCount} artifacts in this chat`
+        : undefined,
+    });
+  }
+
+  if (showDocumentsTab) {
+    descriptors.push({
+      value: "documents",
+      label: "Documents",
+      icon: { kind: "component", Icon: IconFile },
+      count: documentCount,
+      indicatorLabel: documentCount
+        ? `${documentCount} documents in this chat`
         : undefined,
     });
   }
