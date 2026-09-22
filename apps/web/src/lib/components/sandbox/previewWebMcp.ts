@@ -1,3 +1,5 @@
+import { asRecord } from "@/lib/utils/looseRecord";
+
 export interface WebMcpTool {
   readonly name: string;
   readonly title?: string;
@@ -17,12 +19,6 @@ export type WebMcpInbound =
   | { type: "tools"; requestId: string; discovery: WebMcpDiscovery }
   | { type: "result"; requestId: string; name: string; result: unknown }
   | { type: "error"; requestId: string; message: string };
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : null;
-}
 
 function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;

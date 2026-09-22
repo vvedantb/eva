@@ -1,20 +1,18 @@
 const CITE_SOURCE_ATTR = "data-assistant-cite-source";
 
-function closestCiteSource(node: Node | null): HTMLElement | null {
+function elementOf(node: Node | null): HTMLElement | null {
   if (!node) return null;
-  const element =
-    node instanceof HTMLElement ? node : node.parentElement;
-  return element?.closest(`[${CITE_SOURCE_ATTR}]`) ?? null;
+  return node instanceof HTMLElement ? node : node.parentElement;
+}
+
+function closestCiteSource(node: Node | null): HTMLElement | null {
+  return elementOf(node)?.closest(`[${CITE_SOURCE_ATTR}]`) ?? null;
 }
 
 function selectionIsInEditable(node: Node | null): boolean {
-  const element =
-    node instanceof HTMLElement ? node : node.parentElement;
+  const element = elementOf(node);
   if (!element) return false;
-  if (element.closest("textarea, input, [contenteditable='true']")) {
-    return true;
-  }
-  return false;
+  return element.closest("textarea, input, [contenteditable='true']") !== null;
 }
 
 /**

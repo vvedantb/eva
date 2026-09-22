@@ -1,3 +1,5 @@
+import { asRecord } from "@/lib/utils/looseRecord";
+
 export interface PreviewSnapshotElement {
   readonly role: string;
   readonly name: string;
@@ -42,12 +44,6 @@ export interface PreviewSnapshot {
 export type PreviewSnapshotInbound =
   | { type: "snapshot"; requestId: string; snapshot: PreviewSnapshot }
   | { type: "error"; requestId: string; message: string };
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : null;
-}
 
 function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
