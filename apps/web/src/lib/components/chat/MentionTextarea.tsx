@@ -59,6 +59,12 @@ interface MentionTextareaProps {
    * instead of Enter doing nothing at all on a sleeping sandbox.
    */
   onBlockedSubmit?: () => void;
+  /**
+   * The visible draft after every edit. Separate from the prompt-input
+   * controller so a caller can react to typing (skill suggestions) without
+   * subscribing the whole composer to each keystroke.
+   */
+  onDraftChange?: (value: string) => void;
   className?: string;
 }
 
@@ -78,6 +84,7 @@ export const MentionTextarea = forwardRef<
     enableAttachmentPaste,
     completionContext,
     onBlockedSubmit,
+    onDraftChange,
     className,
   },
   ref,
@@ -106,6 +113,7 @@ export const MentionTextarea = forwardRef<
   const handleValueChange = (next: string) => {
     historyIndexRef.current = null;
     setInput(next);
+    onDraftChange?.(next);
   };
 
   const handleHistoryNavigate = (direction: "up" | "down") => {

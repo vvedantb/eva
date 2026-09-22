@@ -21,10 +21,7 @@ export type DocSourceArg =
 /** Documents created from this session / task / project chat. */
 export function useSourceDocuments(source: DocSourceArg) {
   const docs = useQuery(api.docs.listForSource, { source });
-  return {
-    docs,
-    hasDocuments: docs !== undefined && docs.length > 0,
-  };
+  return { docs, documentCount: docs?.length };
 }
 
 /**
@@ -33,14 +30,13 @@ export function useSourceDocuments(source: DocSourceArg) {
  * one object.
  */
 export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
-  const { docs } = useSourceDocuments(source);
+  const { docs, documentCount } = useSourceDocuments(source);
   const { basePath } = useRepo();
-  const count = docs?.length;
 
   return (
     <SessionSourcePane
       title="Documents"
-      count={count}
+      count={documentCount}
       viewAll={
         <Link
           to={toInternalRepoHref(`${basePath}/docs`)}

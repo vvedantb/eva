@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect";
 import type { JsonObject, ProgressStep } from "../types.js";
 import { shortenPath } from "../utils.js";
+import { parseQuestionInput } from "./questionInput.js";
 import {
   capCommand,
   capContentPreview,
@@ -530,12 +531,16 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
       return { type: "tool", label: "Updating tasks...", status: "active" };
     case "TodoRead":
       return { type: "tool", label: "Reading tasks...", status: "active" };
-    case "AskUserQuestion":
+    case "AskUserQuestion": {
+      const questions = parseQuestionInput(input);
       return {
         type: "question",
         label: "Asking a question...",
+        detail: questions ? questions[0].question : undefined,
+        questions,
         status: "active",
       };
+    }
     default:
       return {
         type: "tool",

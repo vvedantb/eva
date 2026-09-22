@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import {
   AgentSpawnCtaRow,
@@ -46,9 +46,13 @@ import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
 import {
+  collectQuestionSteps,
   getAssistantTurnState,
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
+import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
+import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
@@ -146,6 +150,12 @@ interface ChatMessageProps {
     content: string;
     attachmentStorageIds?: Id<"_storage">[];
   };
+  /**
+   * Rendered inside the turn, directly above the meta row (provider mark, copy,
+   * time) so agent-composed panels read as part of the reply rather than as a
+   * detached card below its footer.
+   */
+  belowContent?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -171,6 +181,7 @@ export const ChatMessage = memo(function ChatMessage({
   turnCheckpoint,
   onRetryTurn,
   precedingUser,
+  belowContent,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -187,8 +198,14 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const { isStreamingPlaceholder, changedFiles } =
+  const { isStreamingPlaceholder, changedFiles, questionSteps } =
     getAssistantTurnState(message);
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
+  const streamingQuestionSteps = isStreamingPlaceholder
+    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+    : [];
 
   const copySource =
     message.content.trim().length > 0
@@ -342,6 +359,11 @@ export const ChatMessage = memo(function ChatMessage({
                     className={isOtherUser ? "ml-6" : undefined}
                   />
                 ) : null}
+                {belowContent ? (
+                  <div className="mt-1 flex w-full flex-col gap-2">
+                    {belowContent}
+                  </div>
+                ) : null}
                 <UserMessageMeta
                   align={isOtherUser ? "start" : "end"}
                   copyPlain={copyPlain}
@@ -361,6 +383,7 @@ export const ChatMessage = memo(function ChatMessage({
                         onOpenFile={onOpenFile}
                       />
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
                         <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
                           {streamingContent}
@@ -381,6 +404,7 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                       )}
                       {agentSpawnRow}
+                      <AssistantQuestionCards steps={questionSteps} />
                       <AnimatePresence mode="wait" initial={false}>
                         {turnErrorTitle !== null ? (
                           <m.div
@@ -443,6 +467,20 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {/* Sits above `belowContent` so agent-composed panels keep
+                    their promised slot directly over the meta row, and so the
+                    chip stays next to the changed-files card it judges. */}
+                {showChangedFiles && message.scopeCheck ? (
+                  <div className="mt-1">
+                    <ScopeCheckChip
+                      check={message.scopeCheck}
+                      onViewDiff={onViewDiff}
+                    />
+                  </div>
+                ) : null}
+                {belowContent ? (
+                  <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+                ) : null}
                 {turnModel || copyPlain || checkpoint.items.length > 0 ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
@@ -462,7 +500,10 @@ export const ChatMessage = memo(function ChatMessage({
                         />
                         {message.finishedAt && message.timestamp ? (
                           <span className="text-[11px] tabular-nums text-muted-foreground/60">
-                            {dayjs(message.timestamp).format("h:mm A")} ·{" "}
+                            {/* The turn's clock time is when Eva finished, not
+                                when it started — the duration next to it already
+                                says how long the reply took. */}
+                            {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
                             {formatDuration(
                               message.timestamp,
                               message.finishedAt,

@@ -22,7 +22,12 @@ import {
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
+import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
+import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+
+/** Identity of a session's actual primary repo, for a row linked in from it. */
+export type SessionLinkedFrom = RepoPathParts;
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,
@@ -79,6 +84,37 @@ interface SidebarSessionItemProps {
   prState?: "draft" | "open" | "merged" | "closed";
   /** Branch chosen at session creation, shown in the hover card. */
   baseBranch?: string;
+  /** Multi-repo session: how many repos are cloned alongside the primary. */
+  linkedRepoCount?: number;
+  /**
+   * Set when this row is shown here only because the session links this repo
+   * in — its actual primary repo (and href) is `linkedFrom`, not the repo
+   * whose sidebar this row lives in.
+   */
+  linkedFrom?: SessionLinkedFrom;
+}
+
+/** Multi-repo session: `+N` badge for how many repos clone alongside it. */
+function LinkedRepoCountBadge({ count }: { count?: number }) {
+  if (!count) return null;
+  return (
+    <span
+      className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground"
+      title={`${count} linked ${count === 1 ? "repository" : "repositories"}`}
+    >
+      +{count}
+    </span>
+  );
+}
+
+/** Muted hint on a row linked in from another repo's session. */
+function LinkedFromHint({ linkedFrom }: { linkedFrom?: SessionLinkedFrom }) {
+  if (!linkedFrom) return null;
+  return (
+    <span className="shrink-0 truncate text-[10px] text-muted-foreground/70">
+      via {repoDisplayLabel(linkedFrom)}
+    </span>
+  );
 }
 
 function SessionPrIcon({
@@ -174,6 +210,8 @@ export function SidebarSessionItem({
   prUrl,
   prState,
   baseBranch,
+  linkedRepoCount,
+  linkedFrom,
 }: SidebarSessionItemProps) {
   const { settings } = useSessionsSidebarSettings();
   const isFolder = settings.layout === "folder";
@@ -214,10 +252,15 @@ export function SidebarSessionItem({
             {statusLeading}
             <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
             <TitleRegeneratingHint show={isRegeneratingTitle} />
+            <LinkedRepoCountBadge count={linkedRepoCount} />
           </div>
           <div className="flex min-w-0 items-center gap-2 pl-4 opacity-60">
             <div className="min-w-0 flex-1">
-              <SessionFolderAuthor userId={userId} />
+              {linkedFrom ? (
+                <LinkedFromHint linkedFrom={linkedFrom} />
+              ) : (
+                <SessionFolderAuthor userId={userId} />
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <SessionPrIcon prUrl={prUrl} prState={prState} />
@@ -233,6 +276,8 @@ export function SidebarSessionItem({
           {statusLeading}
           <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
           <TitleRegeneratingHint show={isRegeneratingTitle} />
+          <LinkedRepoCountBadge count={linkedRepoCount} />
+          <LinkedFromHint linkedFrom={linkedFrom} />
           <SessionPrIcon prUrl={prUrl} prState={prState} />
           <RelativeDateTime
             at={activityAt}

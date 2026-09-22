@@ -1,4 +1,8 @@
 import type { Terminal } from "@xterm/xterm";
+import type { FunctionReturnType } from "convex/server";
+import type { api, Id } from "@eva/backend";
+import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
+import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 
 const MAX_TERMINAL_HISTORY_CHARS = 500_000;
 const FLUSH_DELAY_MS = 250;
@@ -233,6 +237,141 @@ export function buildTerminalHistoryKey(
         ? owner.taskId
         : owner.projectId;
   return `eva:terminal-history:${owner.kind}:${ownerId}:${sandboxId}:${ptyInstanceId}`;
+}
+
+/** One row from `sessions.listRepos` — the primary repo or a linked clone. */
+export type SessionRepoListItem = FunctionReturnType<
+  typeof api.sessions.listRepos
+>[number];
+
+/**
+ * Dev-server ports the Preview port control offers, one per checked-out repo.
+ * Empty for a single-repo session, and for a multi-repo session whose linked
+ * clones declare no dev port of their own — there is nothing to choose between,
+ * so the port stays a plain input.
+ */
+export function previewPortOptions(
+  repos: readonly SessionRepoListItem[] | undefined,
+  primaryPort: number,
+): PreviewPortOption[] {
+  if (repos === undefined || repos.length <= 1) return [];
+  const options: PreviewPortOption[] = [];
+  const seenPorts = new Set<number>();
+  for (const repo of repos) {
+    const port = repo.kind === "primary" ? primaryPort : repo.devPort;
+    if (port === undefined || seenPorts.has(port)) continue;
+    seenPorts.add(port);
+    options.push({ port, label: `${repoDisplayLabel(repo)} · ${port}` });
+  }
+  return options.length > 1 ? options : [];
+}
+
+// --- CodebasesPicker (multi-repo sessions) ------------------------------
+
+export type CodebaseRepoRow = FunctionReturnType<
+  typeof api.githubRepos.list
+>[number];
+export type CodebaseGroup = FunctionReturnType<
+  typeof api.repoGroups.listMine
+>[number];
+
+/**
+ * Repos the "Add codebase" popover may ever offer: never the primary itself,
+ * nor a monorepo sibling app of the primary (same `owner/name` — a linked
+ * repo is always the whole checkout, so a sibling row would just clone the
+ * primary a second time). Deduped by `owner/name`, preferring the root app row
+ * (no `rootDirectory`) as the representative when one exists.
+ */
+export function pickableCodebaseRepos<
+  Row extends { owner: string; name: string; rootDirectory?: string },
+>(repos: readonly Row[], primary: { owner: string; name: string }): Row[] {
+  const bySlug = new Map<string, Row>();
+  for (const repo of repos) {
+    if (repo.owner === primary.owner && repo.name === primary.name) continue;
+    const slug = `${repo.owner}/${repo.name}`;
+    const existing = bySlug.get(slug);
+    if (!existing || (existing.rootDirectory && !repo.rootDirectory)) {
+      bySlug.set(slug, repo);
+    }
+  }
+  return [...bySlug.values()];
+}
+
+/**
+ * True when `repo` is already linked into this session. Selection is keyed by
+ * `owner/name`, never by row id: a repo row is one *app* (a monorepo has one
+ * row per `rootDirectory`) while a linked repo is always the whole checkout, so
+ * the picker offers a single representative row per `owner/name` while a saved
+ * group may hold a sibling app's id for the same checkout.
+ */
+export function isCodebaseLinked(
+  repo: { owner: string; name: string },
+  linked: readonly { owner: string; name: string }[],
+): boolean {
+  return linked.some(
+    (item) => item.owner === repo.owner && item.name === repo.name,
+  );
+}
+
+/**
+ * Ticks or unticks `repo`, returning the new linked-repo selection. Unticking
+ * drops every row sharing the repo's `owner/name` — matching on the toggled
+ * row's own id would leave a sibling's id in the selection, and the checkbox
+ * (which reads `isCodebaseLinked`) would stay ticked with no way to clear it.
+ */
+export function toggleLinkedCodebase<
+  RepoId extends string,
+  Row extends { _id: RepoId; owner: string; name: string },
+>(repo: Row, linked: readonly Row[]): RepoId[] {
+  if (isCodebaseLinked(repo, linked)) {
+    return linked
+      .filter((item) => item.owner !== repo.owner || item.name !== repo.name)
+      .map((item) => item._id);
+  }
+  return [...linked.map((item) => item._id), repo._id];
+}
+
+/**
+ * True when picking `repo` as a linked repo would collide with the primary's
+ * or an already-selected linked repo's GitHub `name` (same
+ * `/tmp/workspace/<name>` sandbox directory). Mirrors
+ * `validateRepoGroupMembers` on the backend so the picker disables exactly the
+ * rows the mutation would reject.
+ */
+export function codebaseNameCollides(
+  repo: { name: string },
+  primary: { name: string },
+  selected: readonly { name: string }[],
+): boolean {
+  if (repo.name === primary.name) return true;
+  return selected.some((s) => s.name === repo.name);
+}
+
+/**
+ * Resolves URL-stored repo ids against the loaded repo list. Ids that no
+ * longer resolve (stale link, lost access) are dropped rather than forwarded
+ * to a mutation as an unbranded string.
+ */
+export function resolveRepoIds(
+  repos: readonly CodebaseRepoRow[],
+  ids: readonly string[],
+): Id<"githubRepos">[] {
+  const byId = new Map(repos.map((repo) => [String(repo._id), repo]));
+  const resolved: Id<"githubRepos">[] = [];
+  for (const id of ids) {
+    const repo = byId.get(id);
+    if (repo) resolved.push(repo._id);
+  }
+  return resolved;
+}
+
+/** Resolves a URL-stored codebase group id against the loaded groups list. */
+export function resolveRepoGroupId(
+  groups: readonly CodebaseGroup[],
+  id: string,
+): Id<"repoGroups"> | null {
+  const group = groups.find((g) => String(g._id) === id);
+  return group ? group._id : null;
 }
 
 export function createTerminalHistoryWriter(

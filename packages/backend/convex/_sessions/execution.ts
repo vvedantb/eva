@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { internalMutation, internalQuery, type MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { authAction, authMutation, hasRepoAccess } from "../functions";
 import {
@@ -19,10 +23,13 @@ import { startNextQueuedSessionMessage } from "../_queues/helpers";
 import { buildSessionPrompt, sessionTurnTools } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { resultTargetMessage } from "./resultTarget";
+import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
+import { composerTraitFields } from "../_shared/composerTraits";
+import { detectCancelSupersession } from "../_chat/cancelRace";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   bindTurnWorkflow,
   closeOpenSessionTurn,
@@ -116,16 +123,7 @@ async function stageAndStartSessionTurn(
     pendingTurn,
     providerAccountId: stickyProviderAccountId,
     lastModel: normalizedModel,
-    ...(params.reasoningLevel !== undefined
-      ? { lastReasoningLevel: params.reasoningLevel }
-      : {}),
-    ...(params.thinkingEnabled !== undefined
-      ? { lastThinkingEnabled: params.thinkingEnabled }
-      : {}),
-    ...(params.use1mContext !== undefined
-      ? { lastUse1mContext: params.use1mContext }
-      : {}),
-    ...(params.fastMode !== undefined ? { lastFastMode: params.fastMode } : {}),
+    ...composerTraitFields(params),
     updatedAt: Date.now(),
   });
   await syncSessionDaemonState(ctx, params.session, { pendingTurn });
@@ -264,17 +262,7 @@ export const retryLastTurnWithAccount = authMutation({
       .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
       .order("desc")
       .take(20);
-    const reply = resultTargetMessage(recent);
-    if (
-      reply === undefined ||
-      reply.errorType !== "rate_limit" ||
-      reply.finishedAt === undefined
-    ) {
-      throw new Error("The last turn did not fail on a usage limit");
-    }
-
-    const userMessage = recent.find((message) => message.role === "user");
-    if (!userMessage) throw new Error("No message to retry");
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -400,8 +388,7 @@ export const prewarmDaemon = authMutation({
     // session status stays "closed"). A closed session keeps its sandboxId, so
     // without this guard merely opening its page (SessionDetailClient fires this
     // on mount) wakes the VM behind the user's back.
-    if (session.status === "closed" || session.status === "stopping")
-      return null;
+    if (isSandboxClosingStatus(session.status)) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     // Match the turn path's launch options so the first real message does not
@@ -497,11 +484,7 @@ export const getDaemonPrewarmData = internalQuery({
     if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (
-      !session.sandboxId ||
-      session.status === "closed" ||
-      session.status === "stopping"
-    ) {
+    if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
       return null;
     }
     const normalizedModel = normalizeAIModel(session.lastModel);
@@ -586,16 +569,7 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.sessionId, {
       lastModel: args.model,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
     return null;
@@ -656,14 +630,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.sessionId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeWorkflowId !== undefined &&
-      latest.activeWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+      latestPendingTurn: latest.pendingTurn,
+      cancelPendingRequestedAt: pendingRequestedAt,
+      latestActiveWorkflowId: latest.activeWorkflowId,
+      cancelWorkflowId: workflowIdToCancel,
+    });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -709,7 +683,7 @@ export const cancelExecution = authMutation({
     if (clearsPendingTurn) {
       sessionPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       sessionPatch.syntheticTurnMessageId = undefined;
     }
 

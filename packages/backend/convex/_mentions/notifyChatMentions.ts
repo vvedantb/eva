@@ -1,8 +1,11 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 import { createNotification } from "../notifications";
 import { formatMessagePreview } from "../_messages/preview";
 import { extractMentionedUserIds } from "./extractMentionedUserIds";
+import { stripMentionTokens } from "./resolveDocMentions";
+import { stripSkillTokens } from "./skillToken";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -45,6 +48,22 @@ function notificationTarget(surface: ChatMentionSurface): {
   }
 }
 
+/** The chat's own title, given to routing as context for the message. */
+function surfaceTitle(surface: ChatMentionSurface): string {
+  switch (surface.kind) {
+    case "session":
+      return surface.session.title;
+    case "project":
+      return surface.project.title;
+    case "task":
+      return surface.task.title;
+  }
+}
+
+/** How much of the message routing is shown. Long enough for the ask, short
+ * enough that a pasted log does not dominate the judgement. */
+const ROUTING_MESSAGE_LIMIT = 4000;
+
 /**
  * Notifies every teammate `@`-mentioned in a chat message.
  *
@@ -77,6 +96,14 @@ export async function notifyChatMentions(
   const title = `${authorName} mentioned you in a ${SURFACE_NAME[args.surface.kind]} chat`;
   const message = formatMessagePreview(args.content);
 
+  // Routing runs after every notification exists, in one action: the judgement
+  // is per mentioned person but the message and its context are shared.
+  const routed: {
+    notificationId: Id<"notifications">;
+    userId: Id<"users">;
+    mentionedName: string;
+  }[] = [];
+
   for (const userId of mentionedUserIds) {
     if (userId === args.authorUserId) continue;
     if (teamId) {
@@ -88,12 +115,34 @@ export async function notifyChatMentions(
         .first();
       if (!membership) continue;
     }
-    await createNotification(ctx, {
+    const notificationId = await createNotification(ctx, {
       userId,
       type: "mention",
       title,
       message,
       ...target,
     });
+    const mentioned = await ctx.db.get(userId);
+    routed.push({
+      notificationId,
+      userId,
+      mentionedName: mentioned?.fullName?.trim() || "them",
+    });
   }
+
+  if (routed.length === 0) return;
+
+  // Jev decides how loudly each mention is delivered. Scheduled rather than
+  // awaited because it is a network call, and because a mention must land in
+  // the inbox whether or not the gateway answers — see mentionRouting.ts.
+  await ctx.scheduler.runAfter(0, internal.mentionRouting.routeMentions, {
+    items: routed,
+    message: stripSkillTokens(stripMentionTokens(args.content)).slice(
+      0,
+      ROUTING_MESSAGE_LIMIT,
+    ),
+    authorName,
+    surface: args.surface.kind,
+    entityTitle: surfaceTitle(args.surface),
+  });
 }

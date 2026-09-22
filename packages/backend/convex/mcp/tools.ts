@@ -5,6 +5,9 @@ import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
 import { defineTool, type EvaTool } from "./registry";
+import { evaluateTool } from "../_mcp/evaluateTool";
+import { renderUiTool } from "../_mcp/renderUiTool";
+import { sendEmailTool } from "../_mcp/sendEmailTool";
 import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
 import {
   entityAccess,
@@ -98,7 +101,7 @@ export function buildTools(
     defineTool({
       name: "list_repos",
       description:
-        "List all GitHub repos you have access to. Call this first to discover available repos and their instructions for data routing (e.g. which backend to query for which data).",
+        'List all GitHub repos you have access to, plus your saved codebase groups. Call this first to discover available repos and their instructions for data routing (e.g. which backend to query for which data), and to find a "group" name for create_session\'s multi-repo session.',
       mutating: false,
       input: {},
       handler: async () => {
@@ -107,11 +110,13 @@ export function buildTools(
 
         // Advertise which repos have a Postgres read replica configured, so the
         // agent can pick a postgres_query target without probing each repo.
-        const replicaRepoIds = new Set(
-          await ctx.runQuery(internal.mcp.queries.reposWithPostgresReplica, {
+        const [replicaRepoIdList, savedGroups] = await Promise.all([
+          ctx.runQuery(internal.mcp.queries.reposWithPostgresReplica, {
             repoIds: repos.map((r) => r.id),
           }),
-        );
+          ctx.runQuery(internal.repoGroups.listForUserInternal, { userId }),
+        ]);
+        const replicaRepoIds = new Set(replicaRepoIdList);
 
         const repoList = repos.map((r) => ({
           id: r.id,
@@ -122,6 +127,20 @@ export function buildTools(
           ...(r.mcpRootPrompt ? { mcpRootPrompt: r.mcpRootPrompt } : {}),
         }));
 
+        // A group whose primary repo has since been deleted has nothing to open
+        // a multi-repo session against, so it is dropped rather than shown with
+        // a missing primary.
+        const groups = savedGroups.flatMap((g) => {
+          if (!g.primaryRepo) return [];
+          return [
+            {
+              name: g.name,
+              primary: `${g.primaryRepo.owner}/${g.primaryRepo.name}`,
+              linked: g.linkedRepos.map((r) => `${r.owner}/${r.name}`),
+            },
+          ];
+        });
+
         const rootPrompts = repos
           .filter((r) => r.mcpRootPrompt)
           .map(
@@ -129,12 +148,14 @@ export function buildTools(
               `[${r.owner}/${r.name}${r.rootDirectory ? ` (${r.rootDirectory})` : ""}]: ${r.mcpRootPrompt}`,
           );
 
+        const payload = { repos: repoList, groups };
+
         if (rootPrompts.length > 0) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: JSON.stringify(repoList, null, 2),
+                text: JSON.stringify(payload, null, 2),
               },
               {
                 type: "text" as const,
@@ -144,7 +165,7 @@ export function buildTools(
           };
         }
 
-        return textResult(repoList);
+        return textResult(payload);
       },
     }),
   );
@@ -470,6 +491,65 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       },
     }),
   );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // evaluate — typed decisions from TypeSafe Jev via AI Gateway
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // No repo or entity access check: the tool reads nothing of the user's and
+  // only forwards what the caller hands it, so every MCP caller gets it.
+  tools.push(
+    evaluateTool((input) =>
+      ctx.runAction(internal.mcp.evaluate.runEvaluate, input),
+    ),
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // render_ui — an agent-composed panel rendered inline in the chat
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped to a sandbox token: the panel has to land in *this* chat, so a
+  // caller without an entity (the user's own OAuth connector) has no target.
+  if (entityKind !== undefined && entityId !== undefined) {
+    tools.push(
+      renderUiTool(async (input) => {
+        const outcome = await ctx.runAction(
+          internal.mcp.renderUi.composePanel,
+          {
+            prompt: input.prompt,
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            blocks: input.blocks,
+          },
+        );
+        if (!outcome.ok) return { ok: false, outcome };
+
+        const panelId = await ctx.runMutation(internal.chatUi.create, {
+          entityKind,
+          entityId,
+          prompt: input.prompt,
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          spec: outcome.spec,
+          elementCount: outcome.elementCount,
+        });
+        if (panelId === null) {
+          return {
+            ok: false,
+            outcome: {
+              ok: false,
+              errorCode: "invalid_request",
+              error: "This sandbox is not attached to a chat any more.",
+            },
+          };
+        }
+        return {
+          ok: true,
+          panelId,
+          elementCount: outcome.elementCount,
+          elapsedMs: outcome.elapsedMs,
+        };
+      }),
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Task creation tools
@@ -1274,6 +1354,22 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         }
         return textResult(result);
       },
+    }),
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // send_email — mails the calling user only (every MCP caller)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // No recipient argument: the address is looked up from the token owner, so an
+  // agent can only ever mail the user it is running for.
+  tools.push(
+    sendEmailTool(async (input) => {
+      const { userId } = await getContext();
+      return ctx.runAction(internal.mcp.sendEmail.runSendEmail, {
+        userId,
+        ...input,
+      });
     }),
   );
 

@@ -1,4 +1,5 @@
 import { getAIModelProvider, type Doc } from "@eva/backend";
+import type { ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
@@ -170,22 +171,42 @@ export function otherUserIdsInChat<TUserId extends string>(
   return [...ids].sort();
 }
 
-/** Streaming / changed-files flags for an assistant row. */
+/**
+ * Answered AskUserQuestion prompts, as a read-only record for the transcript.
+ * A still-active question is excluded: the composer dock is showing it live,
+ * so a card for it would be the same prompt twice.
+ */
+export function collectQuestionSteps(steps: ActivityStep[]): ActivityStep[] {
+  return steps.filter(
+    (step) =>
+      step.type === "question" &&
+      step.status === "complete" &&
+      step.questions !== undefined &&
+      step.questions.length > 0,
+  );
+}
+
+/** Streaming / changed-files / question-record flags for an assistant row. */
 export function getAssistantTurnState(message: ChatBodyMessage): {
   isStreamingPlaceholder: boolean;
   changedFiles: ChangedFile[];
+  questionSteps: ActivityStep[];
 } {
   const isStreamingPlaceholder =
     message.role === "assistant" &&
     !message.content &&
     message.finishedAt === undefined;
-  const changedFiles =
+  const steps =
     !isStreamingPlaceholder &&
     message.role === "assistant" &&
     message.activityLog
-      ? collectChangedFiles(parseActivitySteps(message.activityLog) ?? [])
+      ? (parseActivitySteps(message.activityLog) ?? [])
       : [];
-  return { isStreamingPlaceholder, changedFiles };
+  return {
+    isStreamingPlaceholder,
+    changedFiles: collectChangedFiles(steps),
+    questionSteps: collectQuestionSteps(steps),
+  };
 }
 
 /**
@@ -213,6 +234,12 @@ export const SANDBOX_CHAT_COPY = {
   asleepPlaceholder: "Wake Eva up to send a message…",
   /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
+  /**
+   * A quick task's first run owns the sandbox until it finishes, so the chat
+   * shows that turn live but cannot take a follow-up yet.
+   */
+  firstRunDisabledReason:
+    "Eva is running this task — you can reply when it finishes",
   wakeAction: "Wake up Eva",
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",

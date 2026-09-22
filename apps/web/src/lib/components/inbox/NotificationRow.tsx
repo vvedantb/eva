@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import {
+  Badge,
   Button,
   Checkbox,
   ContextMenu,
@@ -158,17 +159,29 @@ export function NotificationRow({
             <NotificationSourceAvatar notification={notification} repo={repo} />
             <div className="flex min-w-0 flex-1 flex-col">
               {/* Read rows drop to the muted tone rather than fading the whole row,
-              so logos and timestamps stay legible. */}
-              <span
-                className={cn(
-                  "truncate text-sm",
-                  unread
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground",
-                )}
-              >
-                {subject}
-              </span>
+              so logos and timestamps stay legible. A `low` urgency row reads as
+              already-read even while unread: routing judged it incidental, and
+              the emphasis belongs on the rows that want something. */}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className={cn(
+                    "truncate text-sm",
+                    unread && notification.urgency !== "low"
+                      ? "font-medium text-foreground"
+                      : "font-normal text-muted-foreground",
+                  )}
+                >
+                  {subject}
+                </span>
+                {notification.urgency === "high" ? (
+                  <Badge
+                    variant="warning"
+                    className="h-4 shrink-0 px-1.5 text-[10px]"
+                  >
+                    Needs reply
+                  </Badge>
+                ) : null}
+              </div>
               {detail ? (
                 <span className="truncate text-xs leading-relaxed text-muted-foreground">
                   {detail}

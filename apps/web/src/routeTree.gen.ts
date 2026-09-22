@@ -14,6 +14,7 @@ import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
 import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
+import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -156,6 +157,11 @@ const AgentCallbackRoute = AgentCallbackRouteImport.update({
 const PreviewAuthRoute = PreviewAuthRouteImport.update({
   id: '/preview-auth',
   path: '/preview-auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesRoute = SlidesRouteImport.update({
+  id: '/slides',
+  path: '/slides',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
@@ -859,6 +865,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -984,6 +991,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
@@ -1087,6 +1095,7 @@ export interface FileRoutesById {
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
   '/preview-auth': typeof PreviewAuthRoute
+  '/slides': typeof SlidesRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1214,6 +1223,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
+    | '/slides'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1339,6 +1349,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agent-callback'
     | '/preview-auth'
+    | '/slides'
     | '/automations'
     | '/ave'
     | '/changelog'
@@ -1441,6 +1452,7 @@ export interface FileRouteTypes {
     | '/_repo'
     | '/agent-callback'
     | '/preview-auth'
+    | '/slides'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1569,6 +1581,7 @@ export interface RootRouteChildren {
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
+  SlidesRoute: typeof SlidesRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1607,6 +1620,13 @@ declare module '@tanstack/react-router' {
       path: '/preview-auth'
       fullPath: '/preview-auth'
       preLoaderRoute: typeof PreviewAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides': {
+      id: '/slides'
+      path: '/slides'
+      fullPath: '/slides'
+      preLoaderRoute: typeof SlidesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -3084,6 +3104,7 @@ const rootRouteChildren: RootRouteChildren = {
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
   PreviewAuthRoute: PreviewAuthRoute,
+  SlidesRoute: SlidesRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport

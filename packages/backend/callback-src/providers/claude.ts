@@ -166,14 +166,26 @@ function readContentBlocks(message: JsonObject | undefined): JsonValue[] {
 function claudeToolCompleteResult(
   resultText: string,
   isError: boolean,
+  toolUseId: string | undefined,
 ): ToolCompleteResult | undefined {
+  // A blocking AskUserQuestion parks the user's structured answers here (see
+  // runtime/pendingQuestion.ts); hand them to the step and drop the entry.
+  let answers: Record<string, string> | undefined;
+  if (toolUseId !== undefined) {
+    const stored = S.questionAnswers.get(toolUseId);
+    if (stored) {
+      answers = stored;
+      S.questionAnswers.delete(toolUseId);
+    }
+  }
   const output = buildStepOutput(resultText);
-  if (!output && !isError) {
+  if (!output && !isError && !answers) {
     return undefined;
   }
   return {
     output,
     isError: isError ? true : undefined,
+    answers,
   };
 }
 
@@ -191,7 +203,7 @@ function completeToolEvent(
   if (toolUseId) {
     trackClaudeToolResult(toolUseId, resultText, isError);
   }
-  const result = claudeToolCompleteResult(resultText, isError);
+  const result = claudeToolCompleteResult(resultText, isError, toolUseId);
   return result
     ? { kind: "complete_tool", trackingId: toolUseId, result }
     : { kind: "complete_tool", trackingId: toolUseId };

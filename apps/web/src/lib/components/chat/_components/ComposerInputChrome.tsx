@@ -78,6 +78,7 @@ export function ComposerInputChrome({
   seedSkillMap,
   messageHistory,
   allowEmptySubmit,
+  onDraftChange,
 }: {
   repoId: Id<"githubRepos">;
   repoBasePath: string;
@@ -101,6 +102,8 @@ export function ComposerInputChrome({
   seedSkillMap?: Map<string, string>;
   messageHistory: string[];
   allowEmptySubmit?: boolean;
+  /** The visible draft after every edit; drives the skill suggestion chips. */
+  onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
   // `layoutId` is global unless a LayoutGroup namespaces it, and several
@@ -260,6 +263,7 @@ export function ComposerInputChrome({
               history={messageHistory}
               enableAttachmentPaste
               onBlockedSubmit={handleBlockedSubmit}
+              onDraftChange={onDraftChange}
               completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
               className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
             />

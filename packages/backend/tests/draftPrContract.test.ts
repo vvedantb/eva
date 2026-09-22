@@ -15,6 +15,7 @@ import {
 
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
+const prWrite = readSource("_github/pullRequestWrite.ts");
 const taskActions = readSource("taskWorkflowActions.ts");
 const prFlow = readSource("_github/prFlow.ts");
 
@@ -44,7 +45,7 @@ describe("isBranchNotAheadError", () => {
    */
   test("does not recognise the wait timeout", () => {
     const timeout = thrownMessages(
-      functionBody(taskActions, "async function waitForPullRequestHead("),
+      functionBody(prWrite, "async function waitForPullRequestHead("),
     ).find((message) => message.includes("did not report"));
     expect(timeout, "the wait timeout throw moved").toBeDefined();
     expect(isBranchNotAheadError(new Error(timeout ?? ""))).toBe(false);
@@ -63,7 +64,7 @@ describe("isBranchNotAheadError", () => {
    */
   test("recognises the sentinel waitForPullRequestHead actually raises", () => {
     const sentinel = taggedErrorMessage(
-      functionBody(taskActions, "async function waitForPullRequestHead("),
+      functionBody(prWrite, "async function waitForPullRequestHead("),
       "GitHubBranchNotAhead",
     );
     expect(sentinel, "the not-ahead sentinel moved").toBeDefined();
@@ -79,10 +80,7 @@ describe("isBranchNotAheadError", () => {
  * delay budget first (fix cf1ddef3).
  */
 describe("the wait for a pushed branch fails fast when it is not ahead", () => {
-  const body = functionBody(
-    taskActions,
-    "async function waitForPullRequestHead(",
-  );
+  const body = functionBody(prWrite, "async function waitForPullRequestHead(");
 
   test("raises on the first not-ahead compare", () => {
     const successAt = body.indexOf("comparison.data.ahead_by > 0");
@@ -139,7 +137,7 @@ describe("the wait for a pushed branch fails fast when it is not ahead", () => {
  */
 describe("an existing pull request is adopted, not re-created", () => {
   const body = functionBody(
-    taskActions,
+    prWrite,
     "async function createPullRequestWithGitHub(",
   );
 

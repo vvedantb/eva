@@ -6,16 +6,21 @@ import { Effect } from "effect";
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "./githubAuth";
-import { extractPrNumber } from "./_github/helpers";
-import {
-  GitHubBranchNotAhead,
-  type GitHubFailure,
-  githubRequest,
-  originalGitHubError,
-} from "./_github/githubErrors";
+import { extractPrNumber } from "./_github/prUrl";
+import type { GitHubFailure } from "./_github/githubErrors";
 import { classifyPrActionFailure } from "./_github/prErrors";
+import {
+  convertPullRequestToDraft,
+  markPullRequestReadyForReview,
+  syncPullRequestDraftState,
+} from "./_github/pullRequestDraftState";
+import {
+  createPullRequestWithGitHub,
+  getPullRequest,
+  patchPullRequest,
+  refreshPullRequestBodyWithGitHub,
+} from "./_github/pullRequestWrite";
 import {
   runActionEffect,
   type UnexpectedActionFailure,
@@ -27,7 +32,6 @@ import {
   buildProjectPrSections,
 } from "./prBody";
 import { buildEvaTaskUrl, buildEvaProjectUrl } from "./_taskWorkflow/urls";
-import { retryAfterDelays, runPromiseRethrowing } from "./_effect/retry";
 import {
   MAX_POLL_ATTEMPTS,
   POLL_INTERVAL_MS,
@@ -39,36 +43,6 @@ import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
 
 // Re-export URL builders for backwards compatibility
 export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
-
-/** Waits between the seven compare attempts, so six gaps. */
-const PR_READY_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 12000, 16000];
-
-type PullRequestCreateParams = {
-  installationId: number;
-  repoOwner: string;
-  repoName: string;
-  branchName: string;
-  baseBranch?: string;
-  title: string;
-  body: string;
-  labels: string[];
-  draft?: boolean;
-};
-
-/**
- * A PR eva just created carries its number so labels can be added. One adopted
- * after losing a create race does not: it already has the labels its own
- * creation applied.
- */
-type PullRequestOutcome = { url: string; createdNumber?: number };
-
-type PullRequestRefreshParams = {
-  installationId: number;
-  repoOwner: string;
-  repoName: string;
-  branchName: string;
-  body: string;
-};
 
 function buildTaskPullRequestBody(params: {
   repoOwner: string;
@@ -106,187 +80,6 @@ function buildTaskPullRequestLabels(params: {
         )
       : []),
   ];
-}
-
-async function findOpenPullRequestForBranch(params: {
-  installationId: number;
-  repoOwner: string;
-  repoName: string;
-  branchName: string;
-}): Promise<{ url: string; number: number; body: string | null } | null> {
-  const octokit = await getInstallationOctokit(params.installationId);
-  const pulls = await octokit.rest.pulls.list({
-    owner: params.repoOwner,
-    repo: params.repoName,
-    state: "open",
-    head: `${params.repoOwner}:${params.branchName}`,
-    per_page: 1,
-  });
-  const pr = pulls.data[0];
-  if (!pr) return null;
-  return { url: pr.html_url, number: pr.number, body: pr.body };
-}
-
-async function createPullRequestWithGitHub(
-  args: PullRequestCreateParams,
-): Promise<string> {
-  const octokit = await getInstallationOctokit(args.installationId);
-  const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-  const existingPr = await findOpenPullRequestForBranch(args);
-  if (existingPr) {
-    await octokit.rest.pulls.update({
-      owner: args.repoOwner,
-      repo: args.repoName,
-      pull_number: existingPr.number,
-      title: `Eva: ${args.title}`,
-      body: args.body,
-      base: baseBranch,
-    });
-    return existingPr.url;
-  }
-
-  await waitForPullRequestHead({
-    octokit,
-    repoOwner: args.repoOwner,
-    repoName: args.repoName,
-    branchName: args.branchName,
-    baseBranch,
-  });
-
-  const outcome = await runPromiseRethrowing(
-    githubRequest(() =>
-      octokit.rest.pulls.create({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        title: `Eva: ${args.title}`,
-        body: args.body,
-        head: args.branchName,
-        base: baseBranch,
-        draft: args.draft ?? false,
-      }),
-    ).pipe(
-      Effect.map(
-        (pr): PullRequestOutcome => ({
-          url: pr.data.html_url,
-          createdNumber: pr.data.number,
-        }),
-      ),
-      // Concurrent create or list lag: adopt the existing PR instead of failing.
-      Effect.catchIf(
-        (failure) => failure._tag === "GitHubPullRequestAlreadyExists",
-        (failure) =>
-          // A single immediate re-lookup would hit the same stale list, so back
-          // off between tries. `fromNullable` turns "still not listed" into the
-          // failure the retry schedule waits on; a lookup that itself throws is
-          // a defect and surfaces straight away. Still not listed after the last
-          // try means there is nothing to adopt, so the create failure stands.
-          Effect.promise(() => findOpenPullRequestForBranch(args)).pipe(
-            Effect.flatMap(Effect.fromNullable),
-            Effect.retry(retryAfterDelays([1000, 2000])),
-            Effect.map((pr): PullRequestOutcome => ({ url: pr.url })),
-            Effect.orElseFail(() => failure),
-          ),
-      ),
-      Effect.mapError(originalGitHubError),
-    ),
-  );
-
-  if (outcome.createdNumber !== undefined && args.labels.length > 0) {
-    try {
-      await octokit.rest.issues.addLabels({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        issue_number: outcome.createdNumber,
-        labels: args.labels,
-      });
-    } catch (labelError) {
-      console.error(
-        `Failed to add labels to PR ${outcome.url}: ${labelError instanceof Error ? labelError.message : String(labelError)}`,
-      );
-    }
-  }
-
-  return outcome.url;
-}
-
-async function refreshPullRequestBodyWithGitHub(
-  args: PullRequestRefreshParams,
-): Promise<string> {
-  const octokit = await getInstallationOctokit(args.installationId);
-  const pr = await findOpenPullRequestForBranch(args);
-  if (!pr) {
-    throw new Error(
-      `No open pull request found for ${args.repoOwner}/${args.repoName}:${args.branchName}`,
-    );
-  }
-
-  await octokit.rest.pulls.update({
-    owner: args.repoOwner,
-    repo: args.repoName,
-    pull_number: pr.number,
-    body: args.body,
-  });
-  return pr.url;
-}
-
-async function waitForPullRequestHead(params: {
-  octokit: Awaited<ReturnType<typeof getInstallationOctokit>>;
-  repoOwner: string;
-  repoName: string;
-  branchName: string;
-  baseBranch: string;
-}): Promise<void> {
-  let lastError = "";
-  const compareHead = githubRequest(() =>
-    params.octokit.rest.repos.compareCommitsWithBasehead({
-      owner: params.repoOwner,
-      repo: params.repoName,
-      basehead: `${params.baseBranch}...${params.branchName}`,
-      per_page: 1,
-    }),
-  ).pipe(
-    Effect.flatMap((comparison) =>
-      comparison.data.ahead_by > 0
-        ? Effect.void
-        : // Compare succeeded: GitHub sees both tips and head is not ahead.
-          // Retrying won't create commits — fail immediately (plan-only turns).
-          // The message is what callers past the action boundary match on, so
-          // it has to stay recognisable to `isBranchNotAheadError`.
-          Effect.fail(
-            new GitHubBranchNotAhead({
-              message: `${params.branchName} is not ahead of ${params.baseBranch}: every commit on it is already in ${params.baseBranch}, or the run committed locally and its push to GitHub failed`,
-              cause: undefined,
-            }),
-          ),
-    ),
-  );
-
-  await runPromiseRethrowing(
-    compareHead.pipe(
-      Effect.tapError((failure) =>
-        Effect.sync(() => {
-          if (failure._tag === "GitHubBranchNotAhead") return;
-          // Branch may not be visible yet right after push — keep retrying.
-          lastError = failure.message || "GitHub compare failed";
-        }),
-      ),
-      Effect.retry({
-        schedule: retryAfterDelays(PR_READY_RETRY_DELAYS_MS),
-        while: (failure) => failure._tag !== "GitHubBranchNotAhead",
-      }),
-      // Only the sentinel survives, and it is thrown as itself: it carries the
-      // message, and its cause is Eva rather than GitHub.
-      Effect.catchIf(
-        (failure) => failure._tag !== "GitHubBranchNotAhead",
-        () =>
-          Effect.fail(
-            new Error(
-              `GitHub did not report ${params.branchName} as ready for a pull request after branch push: ${lastError}`,
-            ),
-          ),
-      ),
-    ),
-  );
 }
 
 /**
@@ -555,18 +348,14 @@ export const updatePrTitle = internalAction({
     if (prNumber === null) return null;
     try {
       const octokit = await getInstallationOctokit(args.installationId);
-      const pr = await octokit.rest.pulls.get({
+      const target = {
         owner: args.repoOwner,
         repo: args.repoName,
         pull_number: prNumber,
-      });
-      if (pr.data.merged) return null;
-      await octokit.rest.pulls.update({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        pull_number: prNumber,
-        title: `Eva: ${args.title}`,
-      });
+      };
+      const pr = await getPullRequest(octokit, target);
+      if (pr.merged) return null;
+      await patchPullRequest(octokit, target, { title: `Eva: ${args.title}` });
     } catch (error) {
       console.error(
         `[github] Failed to update PR title for ${args.prUrl}: ${error instanceof Error ? error.message : String(error)}`,
@@ -589,21 +378,13 @@ export const convertPrToDraft = internalAction({
   handler: async (_ctx, args) => {
     try {
       const octokit = await getInstallationOctokit(args.installationId);
-      // Look up the PR's GraphQL node_id (GraphQL mutations need it).
-      const { data: pr } = await octokit.rest.pulls.get({
+      const pr = await getPullRequest(octokit, {
         owner: args.repoOwner,
         repo: args.repoName,
         pull_number: args.prNumber,
       });
       if (pr.draft) return true; // already draft
-      await octokit.graphql(
-        `mutation($id: ID!) {
-          convertPullRequestToDraft(input: { pullRequestId: $id }) {
-            pullRequest { isDraft }
-          }
-        }`,
-        { id: pr.node_id },
-      );
+      await convertPullRequestToDraft(octokit, pr.node_id);
       console.log(
         `[github] Converted PR #${args.prNumber} back to draft (${args.repoOwner}/${args.repoName})`,
       );
@@ -631,11 +412,12 @@ export const reopenPullRequest = internalAction({
   handler: async (_ctx, args) => {
     try {
       const octokit = await getInstallationOctokit(args.installationId);
-      const { data: initial } = await octokit.rest.pulls.get({
+      const target = {
         owner: args.repoOwner,
         repo: args.repoName,
         pull_number: args.prNumber,
-      });
+      };
+      const initial = await getPullRequest(octokit, target);
       if (initial.merged) {
         console.log(
           `[github] PR #${args.prNumber} is merged — cannot reopen (${args.repoOwner}/${args.repoName})`,
@@ -644,38 +426,14 @@ export const reopenPullRequest = internalAction({
       }
       let pr = initial;
       if (pr.state === "closed") {
-        const { data: reopened } = await octokit.rest.pulls.update({
-          owner: args.repoOwner,
-          repo: args.repoName,
-          pull_number: args.prNumber,
-          state: "open",
-        });
-        pr = reopened;
+        pr = await patchPullRequest(octokit, target, { state: "open" });
         console.log(
           `[github] Reopened PR #${args.prNumber} (${args.repoOwner}/${args.repoName})`,
         );
       }
       // GitHub preserves the previous draft state on reopen, so flip it if the
       // target status doesn't match.
-      if (pr.draft && args.asReady) {
-        await octokit.graphql(
-          `mutation($id: ID!) {
-            markPullRequestReadyForReview(input: { pullRequestId: $id }) {
-              pullRequest { isDraft }
-            }
-          }`,
-          { id: pr.node_id },
-        );
-      } else if (!pr.draft && !args.asReady) {
-        await octokit.graphql(
-          `mutation($id: ID!) {
-            convertPullRequestToDraft(input: { pullRequestId: $id }) {
-              pullRequest { isDraft }
-            }
-          }`,
-          { id: pr.node_id },
-        );
-      }
+      await syncPullRequestDraftState(octokit, pr, args.asReady);
       return true;
     } catch (error) {
       console.error(
@@ -699,18 +457,14 @@ export const closePullRequest = internalAction({
   handler: async (_ctx, args) => {
     try {
       const octokit = await getInstallationOctokit(args.installationId);
-      const { data: pr } = await octokit.rest.pulls.get({
+      const target = {
         owner: args.repoOwner,
         repo: args.repoName,
         pull_number: args.prNumber,
-      });
+      };
+      const pr = await getPullRequest(octokit, target);
       if (pr.state === "closed" || pr.merged) return true;
-      await octokit.rest.pulls.update({
-        owner: args.repoOwner,
-        repo: args.repoName,
-        pull_number: args.prNumber,
-        state: "closed",
-      });
+      await patchPullRequest(octokit, target, { state: "closed" });
       console.log(
         `[github] Closed PR #${args.prNumber} (${args.repoOwner}/${args.repoName})`,
       );
@@ -737,20 +491,13 @@ export const markPrReadyForReview = internalAction({
   handler: async (_ctx, args) => {
     try {
       const octokit = await getInstallationOctokit(args.installationId);
-      const { data: pr } = await octokit.rest.pulls.get({
+      const pr = await getPullRequest(octokit, {
         owner: args.repoOwner,
         repo: args.repoName,
         pull_number: args.prNumber,
       });
       if (!pr.draft) return true; // already ready
-      await octokit.graphql(
-        `mutation($id: ID!) {
-          markPullRequestReadyForReview(input: { pullRequestId: $id }) {
-            pullRequest { isDraft }
-          }
-        }`,
-        { id: pr.node_id },
-      );
+      await markPullRequestReadyForReview(octokit, pr.node_id);
       console.log(
         `[github] Marked PR #${args.prNumber} as ready for review (${args.repoOwner}/${args.repoName})`,
       );

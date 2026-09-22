@@ -14,6 +14,7 @@ import {
 } from "@eva/backend";
 import { toast } from "@eva/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
   readableSendError,
@@ -282,10 +283,6 @@ export function ProjectSandboxChatPanel({
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
         repoId={repo._id}
-        isSandboxActive={isSandboxActive}
-        isSandboxToggling={isSandboxToggling}
-        onSandboxToggle={onSandboxToggle}
-        isAssistantResponding={isExecuting}
         model={model}
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
@@ -294,6 +291,7 @@ export function ProjectSandboxChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={projectId}
+        chatParentId={projectId}
         messages={messages ?? []}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}
@@ -342,6 +340,13 @@ export function ProjectSandboxChatPanel({
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+        underCardLeading={
+          <SandboxBranchChip
+            branch={project?.sandboxBranch}
+            isSandboxActive={isSandboxActive}
+            intendedBranch={project?.branchName}
+          />
+        }
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}

@@ -10,11 +10,13 @@ import {
   resolveTraitsForDisplay,
   type AIModel,
   type Id,
-  type ReasoningLevel,
   type StoredModelTraits,
 } from "@eva/backend";
+import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { toast } from "@eva/ui";
+import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
   readableSendError,
@@ -23,6 +25,8 @@ import {
 import {
   buildFirstRunChatTurn,
   findFirstRunChatTurnRun,
+  isRunInProgress,
+  taskRunStreamingEntityId,
 } from "@/lib/components/tasks/firstRunChatTurn";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
@@ -69,7 +73,8 @@ export function TaskSandboxChatPanel({
 
   // Quick tasks open the chat with the first run rendered as a normal turn:
   // the task prompt as the user message, the run's activity log + summary as
-  // the assistant reply. The detail timeline hides that same run (see
+  // the assistant reply. From the moment the run starts, so its steps stream
+  // here rather than into a timeline accordion on the task page (see
   // firstRunChatTurn.ts).
   const isQuickTask = task != null && task.projectId === undefined;
   const runs = useQuery(
@@ -77,9 +82,19 @@ export function TaskSandboxChatPanel({
     isQuickTask ? { taskId } : "skip",
   );
   const firstRun = findFirstRunChatTurnRun(runs);
+  const isFirstRunInProgress =
+    firstRun !== undefined && isRunInProgress(firstRun.status);
+  // The log row is only written when the run completes, so an in-flight run
+  // reads its live activity off the streaming row instead.
   const firstRunActivityLog = useQuery(
     api.agentRuns.getActivityLog,
-    firstRun ? { id: firstRun._id } : "skip",
+    firstRun && !isFirstRunInProgress ? { id: firstRun._id } : "skip",
+  );
+  const firstRunStreaming = useQuery(
+    api.streaming.get,
+    firstRun && isFirstRunInProgress
+      ? { entityId: taskRunStreamingEntityId(firstRun._id) }
+      : "skip",
   );
   const taskAttachments = useQuery(
     api.agentTasks.listAttachments,
@@ -88,11 +103,13 @@ export function TaskSandboxChatPanel({
       : "skip",
   );
   const firstRunTurn =
-    task && firstRun && firstRunActivityLog !== undefined
+    task &&
+    firstRun &&
+    (isFirstRunInProgress || firstRunActivityLog !== undefined)
       ? buildFirstRunChatTurn({
           task,
           run: firstRun,
-          activityLog: firstRunActivityLog,
+          activityLog: firstRunActivityLog ?? null,
           ...(taskAttachments !== undefined
             ? { attachments: taskAttachments }
             : {}),
@@ -105,6 +122,9 @@ export function TaskSandboxChatPanel({
   const cancelExecution = useMutation(
     api.agentTaskChatWorkflow.cancelExecution,
   );
+  // The first run is its own workflow, not a chat turn, so Stop has to reach
+  // the task workflow while it owns the bubble.
+  const cancelFirstRun = useMutation(api.taskWorkflow.cancelExecution);
   const updateTask = useMutation(api.agentTasks.update);
   const setDraft = useMutation(api.drafts.set);
   const prewarmChatDaemonNow = useAction(
@@ -126,16 +146,7 @@ export function TaskSandboxChatPanel({
       { id: args.id },
       {
         ...current,
-        ...(args.reasoningLevel !== undefined
-          ? { lastReasoningLevel: args.reasoningLevel }
-          : {}),
-        ...(args.thinkingEnabled !== undefined
-          ? { lastThinkingEnabled: args.thinkingEnabled }
-          : {}),
-        ...(args.use1mContext !== undefined
-          ? { lastUse1mContext: args.use1mContext }
-          : {}),
-        ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+        ...composerTraitFields(args),
       },
     );
   });
@@ -145,12 +156,7 @@ export function TaskSandboxChatPanel({
   const model = normalizeAIModel(
     task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
   );
-  const storedTraits: StoredModelTraits = {
-    effortLevel: task?.lastReasoningLevel,
-    thinkingEnabled: task?.lastThinkingEnabled,
-    use1mContext: task?.lastUse1mContext,
-    fastMode: task?.lastFastMode,
-  };
+  const storedTraits: StoredModelTraits = storedComposerTraits(task);
   const displayTraits = resolveTraitsForDisplay(model, storedTraits);
   const executionTraits = buildTraitsExecutionPayload(model, storedTraits);
   const providerAccountId = task?.providerAccountId ?? null;
@@ -202,17 +208,9 @@ export function TaskSandboxChatPanel({
   };
 
   const onTraitsChange = (partial: Partial<StoredModelTraits>) => {
-    const reasoningLevel: ReasoningLevel | undefined = partial.effortLevel;
     void setTraitsMutation({
       id: taskId,
-      ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
-      ...(partial.thinkingEnabled !== undefined
-        ? { thinkingEnabled: partial.thinkingEnabled }
-        : {}),
-      ...(partial.use1mContext !== undefined
-        ? { use1mContext: partial.use1mContext }
-        : {}),
-      ...(partial.fastMode !== undefined ? { fastMode: partial.fastMode } : {}),
+      ...toRunTraitArgs(partial),
     });
   };
 
@@ -223,8 +221,11 @@ export function TaskSandboxChatPanel({
 
   // Server flag first; the message-shape fallback is the shared helper so a
   // finished-but-empty bubble or a trailing system alert cannot pin the
-  // composer in "working" mode (same rule as useSessionSend).
+  // composer in "working" mode (same rule as useSessionSend). The first run
+  // counts too: its bubble is on screen here, so the composer shows Working
+  // and Stop for it like any other turn.
   const isExecuting =
+    isFirstRunInProgress ||
     Boolean(task?.activeChatWorkflowId) ||
     isAssistantTurnInProgress(messages ?? []);
 
@@ -284,6 +285,10 @@ export function TaskSandboxChatPanel({
   };
 
   const handleCancel = async () => {
+    if (isFirstRunInProgress) {
+      await cancelFirstRun({ taskId });
+      return;
+    }
     await cancelExecution({ taskId });
   };
 
@@ -319,10 +324,6 @@ export function TaskSandboxChatPanel({
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
         repoId={repo._id}
-        isSandboxActive={isSandboxActive}
-        isSandboxToggling={isSandboxToggling}
-        onSandboxToggle={onSandboxToggle}
-        isAssistantResponding={isExecuting}
         model={model}
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
@@ -331,12 +332,25 @@ export function TaskSandboxChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={taskId}
+        chatParentId={taskId}
         messages={[...firstRunTurn, ...(messages ?? [])]}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}
-        streamingActivity={streaming?.currentActivity}
-        streamingContent={streaming?.currentContent}
-        streamingPendingQuestion={streaming?.pendingQuestion}
+        streamingActivity={
+          isFirstRunInProgress
+            ? firstRunStreaming?.currentActivity
+            : streaming?.currentActivity
+        }
+        streamingContent={
+          isFirstRunInProgress
+            ? firstRunStreaming?.currentContent
+            : streaming?.currentContent
+        }
+        streamingPendingQuestion={
+          isFirstRunInProgress
+            ? firstRunStreaming?.pendingQuestion
+            : streaming?.pendingQuestion
+        }
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
@@ -359,9 +373,11 @@ export function TaskSandboxChatPanel({
             : SANDBOX_CHAT_COPY.asleepDescription
         }
         disabledReason={
-          isSwitchingAccount
-            ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-            : SANDBOX_CHAT_COPY.asleepDisabledReason
+          isFirstRunInProgress
+            ? SANDBOX_CHAT_COPY.firstRunDisabledReason
+            : isSwitchingAccount
+              ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+              : SANDBOX_CHAT_COPY.asleepDisabledReason
         }
         onStartSandbox={
           !isSandboxActive && !isSandboxToggling && onSandboxToggle
@@ -379,6 +395,12 @@ export function TaskSandboxChatPanel({
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+        underCardLeading={
+          <SandboxBranchChip
+            branch={task?.sandboxBranch}
+            isSandboxActive={isSandboxActive}
+          />
+        }
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}

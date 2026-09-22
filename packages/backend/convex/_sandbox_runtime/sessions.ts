@@ -16,6 +16,7 @@ import {
   errorMessage,
   sleep,
   workspaceDirShell,
+  WORKSPACE_DIR,
 } from "./helpers";
 import {
   setupBranch,
@@ -41,7 +42,10 @@ import {
   installPythonDependenciesBestEffort,
   startSessionServices,
 } from "./devServer";
-import { launchDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
+import {
+  launchDevServerInVercelConsole,
+  launchLinkedRepoDevServerInVercelConsole,
+} from "../_pty/launchDevServerInVercelConsole";
 import { runStartupCommandsDirect } from "./execution";
 import { resolveVercelConsoleDevCommand } from "./vercelAppPorts";
 import type { GenericActionCtx } from "convex/server";
@@ -54,6 +58,12 @@ import { startDesktopWithChrome } from "./desktop";
  *
  * Eva launches `exec next|vite -p <listen>` so customer package.json `-p`
  * flags cannot bind the wrong port. Proxy owns 3000.
+ *
+ * `dir` defaults to the primary repo's workspace root; only the primary uses
+ * this path (framework auto-detection assumes `rootDir` is relative to it).
+ * A linked repo's dev server goes through
+ * `launchLinkedRepoDevServerInVercelConsole` instead, which skips detection
+ * entirely — linked repos always have an explicit `devCommand`.
  */
 export async function launchPreviewDevServer(
   handle: SandboxHandle,
@@ -61,6 +71,7 @@ export async function launchPreviewDevServer(
   devCommand: string,
   devPort: number,
   rootDir: string,
+  dir: string = WORKSPACE_DIR,
 ): Promise<void> {
   const resolved = await resolveVercelConsoleDevCommand(
     handle,
@@ -73,6 +84,7 @@ export async function launchPreviewDevServer(
     ownerKey,
     resolved.devCommand,
     resolved.listenPort,
+    dir,
   );
 }
 
@@ -648,6 +660,16 @@ type SessionSandboxPreparationArgs = {
   baseBranch: string;
   repoId: Id<"githubRepos">;
   startDesktop: boolean;
+  /**
+   * True when the session also has `sessionRepos` rows to clone into
+   * `/tmp/workspace`. Set by both `startSandbox` paths (create and resume —
+   * a resume that falls through to a fresh sandbox has to re-clone them) so
+   * the setup-pending flag stays armed until
+   * `sessionSandboxStartupWorkflow` has provisioned every row. Absent
+   * (`prepareSessionSandbox`, used by `sessionExecuteWorkflow`) behaves as
+   * false: that path runs mid-session, long after provisioning.
+   */
+  hasLinkedRepos?: boolean;
 };
 
 type PreparedSessionSandbox = {
@@ -991,6 +1013,39 @@ async function prepareSessionSandboxInternal(
                 ),
             );
           }
+          // Resume is the only path that can relaunch linked repos' dev
+          // servers: they were cloned by `prepareLinkedRepo` (run once, from
+          // `sessionSandboxStartupWorkflow`, on the session's first-ever
+          // create) and never re-run on a plain resume. Rows a create hasn't
+          // reached yet (`clonedAt` unset) are silently skipped — nothing to
+          // restart until they exist on disk.
+          if (!isOrchestrator) {
+            const linkedRows = await ctx.runQuery(
+              internal.sessions.listLinkedReposInternal,
+              { sessionId: args.sessionId },
+            );
+            for (const linkedRow of linkedRows) {
+              if (
+                linkedRow.clonedAt === undefined ||
+                !linkedRow.devCommand ||
+                linkedRow.devPort === undefined
+              ) {
+                continue;
+              }
+              await runLoggedSessionStep(
+                "reuseSessionSandbox.launchLinkedRepoDevServer",
+                `${sandboxDetails}, linkedRepo=${linkedRow.name}`,
+                () =>
+                  launchLinkedRepoDevServerInVercelConsole(
+                    handle,
+                    `session-${args.sessionId}-${linkedRow.name}`,
+                    linkedRow.path,
+                    linkedRow.devCommand ?? "",
+                    linkedRow.devPort ?? 0,
+                  ),
+              );
+            }
+          }
           reusedResult = {
             sandbox: handle,
             isNew: false,
@@ -1027,7 +1082,11 @@ async function prepareSessionSandboxInternal(
   const { sandboxEnvVars, snapshotName, image } = await runLoggedSessionStep(
     "resolveSessionSandboxContext",
     actionDetails,
-    () => resolveSandboxContext(ctx, args.repoId, { isOrchestrator }),
+    () =>
+      resolveSandboxContext(ctx, args.repoId, {
+        isOrchestrator,
+        repoGroupId: launchSession?.repoGroupId,
+      }),
   );
 
   if (reuseId) {
@@ -1088,7 +1147,11 @@ async function prepareSessionSandboxInternal(
             resumeFellBack: reuseId !== undefined,
             // Snapshot restores keep a stale checkout + baked modules; gate the
             // queued first turn until the base pull + install below finish.
-            markSetupPending: Boolean(snapshotName),
+            // Linked repos gate it too, regardless of snapshot — they still
+            // need to be cloned/installed after this action returns (see
+            // `sessionSandboxStartupWorkflow`), and the workflow — not this
+            // action — clears the gate once they're done.
+            markSetupPending: Boolean(snapshotName) || args.hasLinkedRepos === true,
             // Background + startup commands have not run yet on this fresh VM;
             // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
@@ -1268,9 +1331,14 @@ async function prepareSessionSandboxInternal(
     // daemon can claim the queued first turn. Dev server / background / startup
     // commands below keep warming without blocking the agent. No-op when the
     // gate was never set (non-snapshot path).
-    await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
-      sessionId: args.sessionId,
-    });
+    // Linked repos: leave the gate set. `sessionSandboxStartupWorkflow` still
+    // has to clone/install every `sessionRepos` row after this action returns,
+    // and it — not this action — clears the gate once that finishes (or fails).
+    if (!args.hasLinkedRepos) {
+      await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
+        sessionId: args.sessionId,
+      });
+    }
 
     // Restore baked config files from /home/eva/sandbox-config into the workspace.
     // Skipped when usedSnapshot: createSandboxAndPrepareRepo already ran this
@@ -1535,17 +1603,38 @@ export const performForcePushBranch = internalAction({
     repoOwner: v.string(),
     repoName: v.string(),
     branchName: v.string(),
+    /** When set, force-push this linked repo's clone instead of the primary. */
+    sessionRepoId: v.optional(v.id("sessionRepos")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-      await forcePushBranchToOrigin(
-        sandbox,
-        args.repoOwner,
-        args.repoName,
-        args.branchName,
-      );
+      let owner = args.repoOwner;
+      let name = args.repoName;
+      let branchName = args.branchName;
+      let workspaceDir: string | undefined;
+      if (args.sessionRepoId !== undefined) {
+        const linkedRepos = await ctx.runQuery(
+          internal.sessions.listLinkedReposInternal,
+          { sessionId: args.sessionId },
+        );
+        const linkedRepo = linkedRepos.find(
+          (row) => row._id === args.sessionRepoId,
+        );
+        if (!linkedRepo) {
+          throw new Error(
+            `Linked repo ${args.sessionRepoId} not found for force-push`,
+          );
+        }
+        owner = linkedRepo.owner;
+        name = linkedRepo.name;
+        branchName = linkedRepo.branchName;
+        workspaceDir = linkedRepo.path;
+      }
+      await forcePushBranchToOrigin(sandbox, owner, name, branchName, {
+        workspaceDir,
+      });
       await ctx.runMutation(internal.sessionWorkflow.postSystemAlert, {
         sessionId: args.sessionId,
         content: "Force-pushed session branch to GitHub",
@@ -1576,11 +1665,19 @@ export const startSessionSandbox = internalAction({
     branchName: v.string(),
     baseBranch: v.string(),
     repoId: v.optional(v.id("githubRepos")),
+    /**
+     * True when the session also has `sessionRepos` rows to clone into
+     * `/tmp/workspace`. This action does not clone them: it arms
+     * `sandboxSetupPending` and leaves it armed so the caller —
+     * `sessionSandboxStartupWorkflow` — can run `prepareLinkedRepo` per row
+     * and clear the gate once every row has been attempted.
+     */
+    hasLinkedRepos: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const actionStartedAt = Date.now();
-    const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
+    const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}, linkedRepos=${args.hasLinkedRepos === true}`;
     logSession(`startSessionSandbox invoked (${actionDetails})`);
     try {
       if (!args.repoId) {
@@ -1611,6 +1708,7 @@ export const startSessionSandbox = internalAction({
         baseBranch: args.baseBranch,
         repoId: args.repoId,
         startDesktop: false,
+        hasLinkedRepos: args.hasLinkedRepos === true,
       });
       await runLoggedSessionStep(
         prepared.isNew

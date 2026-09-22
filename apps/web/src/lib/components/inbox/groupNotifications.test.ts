@@ -4,6 +4,7 @@ import type { Id } from "@eva/backend";
 import type { Notification } from "@/lib/components/notifications/notification-config";
 import {
   groupNotifications,
+  urgencyLabel,
   OTHER_REPO_GROUP_LABEL,
 } from "./groupNotifications";
 
@@ -102,5 +103,67 @@ describe("groupNotifications", () => {
 
   test("an empty list has no groups", () => {
     expect(groupNotifications([], "day", repoById)).toEqual([]);
+  });
+
+  test("urgency sections read in rank order, not order of arrival", () => {
+    const groups = groupNotifications(
+      [
+        notification("a", { urgency: "low" }),
+        notification("b", { urgency: "normal" }),
+        notification("c", { urgency: "high" }),
+        notification("d", { urgency: "low" }),
+      ],
+      "urgency",
+      repoById,
+    );
+
+    expect(groups.map((g) => g.label)).toEqual([
+      "Needs reply",
+      "FYI",
+      "Low priority",
+    ]);
+    expect(groups[2]?.items.map((n) => n.title)).toEqual(["a", "d"]);
+  });
+
+  test("urgency buckets an unrouted notification as FYI", () => {
+    // Undefined means routing has not landed (or the row predates urgency);
+    // the backend treats that as normal, so the inbox must too.
+    const groups = groupNotifications(
+      [notification("a"), notification("b", { urgency: "normal" })],
+      "urgency",
+      repoById,
+    );
+
+    expect(groups.map((g) => g.label)).toEqual(["FYI"]);
+    expect(groups[0]?.items.map((n) => n.title)).toEqual(["a", "b"]);
+  });
+
+  test("every mode lifts high urgency to the top of its section", () => {
+    const groups = groupNotifications(
+      [
+        notification("a", { urgency: "low" }),
+        notification("b"),
+        notification("c", { urgency: "high" }),
+      ],
+      "day",
+      repoById,
+    );
+
+    // A mention that wants an answer leads its day even when it is the oldest
+    // of the three; equal urgencies keep the newest-first order they came in.
+    expect(groups[0]?.items.map((n) => n.title)).toEqual(["c", "b", "a"]);
+  });
+});
+
+describe("urgencyLabel", () => {
+  test("names what the reader has to do", () => {
+    expect(urgencyLabel(notification("a", { urgency: "high" }))).toBe(
+      "Needs reply",
+    );
+    expect(urgencyLabel(notification("b", { urgency: "normal" }))).toBe("FYI");
+    expect(urgencyLabel(notification("c", { urgency: "low" }))).toBe(
+      "Low priority",
+    );
+    expect(urgencyLabel(notification("d"))).toBe("FYI");
   });
 });

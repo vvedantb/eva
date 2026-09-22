@@ -4,9 +4,13 @@ import {
   internalMutation,
 } from "./_generated/server";
 import { v, type Infer } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { notificationTypeValidator, withCommentAnchor } from "./validators";
+import {
+  notificationTypeValidator,
+  notificationUrgencyValidator,
+  withCommentAnchor,
+} from "./validators";
 import { authQuery, authMutation } from "./functions";
 
 /** Max unread notifications shown per user in the daily digest email. */
@@ -42,7 +46,15 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
  * Set to 15 minutes so that comment fan-out to a task's subscribers collapses
  * into one email per window rather than one per comment.
  */
-const EMAIL_SEND_DELAY_MS = 15 * 60 * 1000;
+export const EMAIL_SEND_DELAY_MS = 15 * 60 * 1000;
+
+/**
+ * Delay before the instant email for a `high` urgency notification. Much
+ * shorter than {@link EMAIL_SEND_DELAY_MS} because routing has already spent a
+ * few seconds deciding, and "the author asked you a question" is the one case
+ * worth interrupting someone for.
+ */
+export const HIGH_URGENCY_EMAIL_DELAY_MS = 60_000;
 
 /**
  * How many unread notifications to scan per user before filtering. Larger than
@@ -77,7 +89,11 @@ function getRepoHref(
   return `/${owner}/${name}/${appName}`;
 }
 
-/** Creates a notification for a user, auto-generating an href from repo/project/task/doc/session context. */
+/**
+ * Creates a notification for a user, auto-generating an href from
+ * repo/project/task/doc/session context. Returns the new row's id so a caller
+ * that routes the notification afterwards (mentions → urgency) can name it.
+ */
 export async function createNotification(
   ctx: MutationCtx,
   params: {
@@ -95,7 +111,7 @@ export async function createNotification(
     // click-through to the exact comment rather than the top of the page.
     commentId?: Id<"taskComments"> | Id<"docComments">;
   },
-) {
+): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
 
   // Fetched once and shared: the href and the context label below are both
@@ -150,7 +166,7 @@ export async function createNotification(
       contextLabel = session.title;
     }
   }
-  await ctx.db.insert("notifications", {
+  const notificationId = await ctx.db.insert("notifications", {
     userId: params.userId,
     type,
     title: params.title,
@@ -165,13 +181,16 @@ export async function createNotification(
 
   // High-signal types get an instant email after a short debounce. The send is
   // skipped if the user reads it in-app first (see notificationEmail.ts).
-  if (EMAIL_NOTIFICATION_TYPES.has(type)) {
+  // Mentions are the exception: routing (mentionRouting.routeMentions) decides
+  // whether they warrant an email at all, and schedules one itself.
+  if (EMAIL_NOTIFICATION_TYPES.has(type) && type !== "mention") {
     await ctx.scheduler.runAfter(
       EMAIL_SEND_DELAY_MS,
       internal.notificationEmail.sendUnreadForUser,
       { userId: params.userId },
     );
   }
+  return notificationId;
 }
 
 const notificationValidator = v.object({
@@ -189,6 +208,60 @@ const notificationValidator = v.object({
   emailedAt: v.optional(v.number()),
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
+  // Undefined = not yet routed (a mention whose routing action has not landed)
+  // or legacy; treated as normal everywhere it is read.
+  urgency: v.optional(notificationUrgencyValidator),
+});
+
+/**
+ * Records the urgency mention routing decided on, and — for `high` — schedules
+ * the instant email `createNotification` deliberately skipped. `normal` falls
+ * through to the daily digest and `low` stays in the inbox only.
+ *
+ * Internal use only (mentionRouting.routeMentions). Exempt from the per-row
+ * owner check every public notification function makes: the id comes from the
+ * routing action that was handed it at creation, not from a caller.
+ */
+export const setUrgency = internalMutation({
+  args: {
+    notificationId: v.id("notifications"),
+    urgency: notificationUrgencyValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const notification = await ctx.db.get(args.notificationId);
+    // Archived or deleted between creation and routing: nothing left to route.
+    if (!notification) return null;
+    await ctx.db.patch(args.notificationId, { urgency: args.urgency });
+    if (args.urgency === "high") {
+      await ctx.scheduler.runAfter(
+        HIGH_URGENCY_EMAIL_DELAY_MS,
+        internal.notificationEmail.sendUnreadForUser,
+        { userId: notification.userId },
+      );
+    }
+    return null;
+  },
+});
+
+/**
+ * Falls back to the pre-routing behaviour when Jev could not judge a mention:
+ * the same 15-minute debounced instant email every other high-signal type
+ * gets. Leaves `urgency` unset, which reads as normal.
+ *
+ * Internal use only (mentionRouting.routeMentions).
+ */
+export const scheduleLegacyMentionEmail = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.scheduler.runAfter(
+      EMAIL_SEND_DELAY_MS,
+      internal.notificationEmail.sendUnreadForUser,
+      { userId: args.userId },
+    );
+    return null;
+  },
 });
 
 /** Max ids a single bulk notification mutation will accept. */
@@ -432,6 +505,8 @@ export const getDigestRecipients = internalQuery({
           (n) =>
             n.createdAt >= args.since &&
             !DIGEST_EXCLUDED_TYPES.has(n.type) &&
+            // Routing judged this one incidental: inbox only, never emailed.
+            n.urgency !== "low" &&
             n.emailedAt === undefined,
         )
         .slice(0, DIGEST_NOTIFICATION_LIMIT);
@@ -452,6 +527,17 @@ export const getDigestRecipients = internalQuery({
     return recipients;
   },
 });
+
+/**
+ * Whether a notification belongs in an instant email. Only mentions carry an
+ * urgency, and only a `high` one earns the interruption; `normal` waits for the
+ * daily digest and `low` never leaves the inbox. An unrouted mention (urgency
+ * undefined) still emails, so a routing failure degrades to the old behaviour.
+ */
+function isInstantEmailable(notification: Doc<"notifications">): boolean {
+  if (notification.type !== "mention") return true;
+  return notification.urgency === "high" || notification.urgency === undefined;
+}
 
 /**
  * For an instant notification email: returns the user's unread, not-yet-emailed,
@@ -493,7 +579,10 @@ export const getUnreadEmailableForUser = internalQuery({
       .order("desc")
       .take(DIGEST_SCAN_LIMIT);
     const relevant = unread.filter(
-      (n) => EMAIL_NOTIFICATION_TYPES.has(n.type) && n.emailedAt === undefined,
+      (n) =>
+        EMAIL_NOTIFICATION_TYPES.has(n.type) &&
+        n.emailedAt === undefined &&
+        isInstantEmailable(n),
     );
     if (relevant.length === 0) return null;
 

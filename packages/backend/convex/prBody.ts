@@ -72,3 +72,26 @@ export function buildPrBody(sections: PrSection[], evaUrl?: string): string {
   }
   return parts.join("\n");
 }
+
+/** One sibling pull request opened by the same multi-repo session. */
+export type SiblingPr = { label: string; url: string };
+
+/**
+ * Appends a "Related PRs" section listing the other pull requests a multi-repo
+ * session has opened, so a reviewer looking at one repo's PR can jump straight
+ * to the matching PRs in linked repos. Pure and side-effect free so both the
+ * primary session PR and every linked `sessionRepos` PR can call it with
+ * whatever sibling PRs are already known at PR-creation time — a sibling
+ * opened later is not retrofitted into an earlier PR's body.
+ *
+ * No-op when there are no siblings, so a single-repo session's PR body is
+ * byte-identical to before this existed.
+ */
+export function appendRelatedPrsSection(
+  body: string,
+  siblingPrs: SiblingPr[],
+): string {
+  if (siblingPrs.length === 0) return body;
+  const lines = siblingPrs.map((pr) => `- [${pr.label}](${pr.url})`);
+  return `${body}\n\n## Related PRs\n${lines.join("\n")}`;
+}

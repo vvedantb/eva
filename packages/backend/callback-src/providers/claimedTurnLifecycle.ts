@@ -1,3 +1,4 @@
+import { unwrapConvexMutationPayload } from "../http/convexClient.js";
 import type { JsonObject, JsonValue } from "../types.js";
 import {
   beginTurnOwnership,
@@ -29,19 +30,9 @@ export type ClaimedTurn =
       turnLease: TurnLeaseIdentity;
     });
 
-function claimPayload(result: JsonValue): JsonObject | null {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
-    return null;
-  }
-  const inner = result.value;
-  return typeof inner === "object" && inner !== null && !Array.isArray(inner)
-    ? inner
-    : result;
-}
-
 /** Parses the one shared claim contract used by every persistent provider. */
 export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
-  const payload = claimPayload(result);
+  const payload = unwrapConvexMutationPayload(result);
   if (!payload || typeof payload.prompt !== "string") return null;
   const lifecycle = payload.turnLifecycle;
   if (

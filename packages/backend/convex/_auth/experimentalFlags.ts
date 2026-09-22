@@ -7,7 +7,8 @@ export type ExperimentalFlagKey =
   | "composerAutocomplete"
   | "simpleView"
   | "replyChime"
-  | "disablePageMotion";
+  | "disablePageMotion"
+  | "viewVercelDeployment";
 
 export type ResolvedExperimentalFlags = {
   sessionTabs: boolean;
@@ -17,6 +18,7 @@ export type ResolvedExperimentalFlags = {
   simpleView: boolean;
   replyChime: boolean;
   disablePageMotion: boolean;
+  viewVercelDeployment: boolean;
 };
 
 /** Resolves experimental flags for a user. Missing / unset keys are false. */
@@ -32,5 +34,6 @@ export function resolveExperimentalFlags(
     simpleView: flags?.simpleView ?? false,
     replyChime: flags?.replyChime ?? false,
     disablePageMotion: flags?.disablePageMotion ?? false,
+    viewVercelDeployment: flags?.viewVercelDeployment ?? false,
   };
 }

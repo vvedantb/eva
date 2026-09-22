@@ -93,8 +93,8 @@ export function ProjectSandboxPanel({
   // Content-keyed Agents tab, folded from the chat transcript the project's
   // chat panel already subscribes to (same entity ids).
   const artifactSource = { kind: "project" as const, projectId };
-  const { hasArtifacts } = useSourceArtifacts(artifactSource);
-  const { hasDocuments } = useSourceDocuments(artifactSource);
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: projectId,
     streamingEntityId: `project-chat-${projectIdStr}`,
@@ -175,8 +175,8 @@ export function ProjectSandboxPanel({
             showFilesTab
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
-            hasArtifactsContent={hasArtifacts}
-            hasDocumentsContent={hasDocuments}
+            artifactCount={artifactCount}
+            documentCount={documentCount}
             agentBrowsingAt={viewState?.agentBrowsingAt}
             fileList={fileList}
             consoleDock={panes.consoleDock}

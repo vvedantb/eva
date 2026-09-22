@@ -116,7 +116,11 @@ export function ToggleSearch({
         align="end"
         className="w-72 p-2"
         onOpenAutoFocus={(event) => {
-          const input = event.currentTarget.querySelector("input");
+          // Radix types this as a plain `Event`, so the content element has to
+          // be narrowed before it can be searched for the field.
+          const content = event.currentTarget;
+          if (!(content instanceof HTMLElement)) return;
+          const input = content.querySelector("input");
           if (input instanceof HTMLInputElement) {
             event.preventDefault();
             input.focus();

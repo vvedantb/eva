@@ -6,6 +6,7 @@ import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
 import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
@@ -57,6 +58,8 @@ interface ChatPanelProps {
   sessionId: Id<"sessions">;
   title: string;
   branchName?: string;
+  /** Branch the sandbox worktree is on right now, reported by its daemon. */
+  sandboxBranch?: string;
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
@@ -104,6 +107,7 @@ export function ChatPanel({
   sessionId,
   title,
   branchName,
+  sandboxBranch,
   prUrl,
   prState,
   summary,
@@ -432,6 +436,7 @@ export function ChatPanel({
         repoId={repo._id}
         repoBasePath={basePath}
         conversationId={sessionId}
+        chatParentId={sessionId}
         messages={messages}
         queuedMessages={queuedMessages}
         streamingActivity={streamingActivity}
@@ -456,6 +461,16 @@ export function ChatPanel({
             : undefined
         }
         emptyStateOverride={emptyStateOverride}
+        underCardLeading={
+          // The orchestrator chat carries no branch affordances at all.
+          chatOnly ? undefined : (
+            <SandboxBranchChip
+              branch={sandboxBranch}
+              isSandboxActive={isSandboxActive}
+              intendedBranch={branchName}
+            />
+          )
+        }
         beforeQueuedContent={beforeQueuedContent}
         preInputContent={preInputContent}
         preConversationContent={

@@ -72,6 +72,8 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
 import type { Priority } from "@/lib/components/priority/priorityMeta";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
+import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
+import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
 import { AssigneeSelector } from "./_components/AssigneeSelector";
 import { ProjectPicker } from "./_components/ProjectPicker";
 import { TaskFilesSection } from "./_components/TaskFilesSection";
@@ -83,11 +85,7 @@ import {
   visibleDrafts,
 } from "./_utils/draftVisibility";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -167,6 +165,7 @@ export function QuickTaskModal({
     value: description,
     setInput: setDescription,
   });
+  const readiness = useDraftReadiness();
 
   // Seed the mention/skill maps from the initial draft's tokenized description
   // so that @-mention and /skill chips render correctly on deep-link open.
@@ -284,6 +283,7 @@ export function QuickTaskModal({
     setPriority(undefined);
     setHydratedDraftId(null);
     attachments.reset();
+    readiness.reset();
   };
 
   const handleClose = async () => {
@@ -376,6 +376,9 @@ export function QuickTaskModal({
     setActiveDraftId(draft._id);
     setSelectedProjectId(draft.projectId ?? projectId);
     setSelectedTags(draft.tags ?? []);
+    // The loaded text has not been judged; the previous draft's verdict must
+    // not carry over onto it.
+    readiness.reset();
   };
 
   const handleDeleteDraft = async (draftId: Id<"agentTasks">) => {
@@ -470,7 +473,10 @@ export function QuickTaskModal({
               <DescriptionMentionEditor
                 ref={editorRef}
                 value={description}
-                onValueChange={setDescription}
+                onValueChange={(next) => {
+                  setDescription(next);
+                  readiness.noteChange(next, title);
+                }}
                 placeholder="Add description... @ for data, / for skills."
                 minHeight="min-h-[160px]"
                 className="rounded-none border-0 px-0 py-2 shadow-none focus-visible:ring-0"
@@ -487,6 +493,11 @@ export function QuickTaskModal({
                 }
               />
             </div>
+
+            <DraftReadinessBanner
+              result={readiness.resultFor(description)}
+              onDismiss={readiness.dismiss}
+            />
 
             <TaskFilesSection
               attachments={attachments.attachments}

@@ -215,6 +215,7 @@ export function SessionDetailClient({
       sessionId={sessionId}
       title={session.title}
       branchName={session.branchName}
+      sandboxBranch={session.sandboxBranch}
       prUrl={session.prUrl}
       prState={session.prState}
       summary={session.summary}

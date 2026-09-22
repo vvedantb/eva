@@ -22,6 +22,7 @@ import {
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
+import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
 import {
   COREPACK_SANDBOX_ENV,
   renderEvaEnvFile,
@@ -30,6 +31,7 @@ import {
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
   isConvexBackendCommand,
+  CONVEX_FUNCTIONS_READY_ATTEMPTS,
   CONVEX_FUNCTIONS_READY_LOG_LINE,
   CONVEX_LOCAL_BACKEND_HEALTH_URL,
 } from "./_sandbox_runtime/convexLocalBackend";
@@ -355,7 +357,7 @@ export const launchSeedRun = internalAction({
       // ffmpeg for agent-browser WebM recording, baked into the seeded
       // snapshot. Shared with the desktop-start repair so the two cannot drift.
       FFMPEG_INSTALL_SCRIPT,
-      'docker info >/dev/null 2>&1 || sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 & for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done; sudo chmod 666 /var/run/docker.sock 2>/dev/null || true; docker info >/dev/null 2>&1 || { echo "SEEDRUN-FAILED:docker-start"; exit 1; }',
+      buildSeedRunDockerStartCommand(),
       'corepack enable || sudo corepack enable || { echo "SEEDRUN-FAILED:corepack"; exit 1; }',
       'corepack prepare pnpm@10.33.4 --activate || { echo "SEEDRUN-FAILED:pnpm"; exit 1; }',
       // Classic yarn for yarn.lock repos. Soft-fail: yarn installs are best-effort.
@@ -522,14 +524,15 @@ export const launchSeedRun = internalAction({
         `echo ${cb64} | base64 -d > /tmp/bg-cmd-${i}.sh && chmod +x /tmp/bg-cmd-${i}.sh && setsid nohup bash -l /tmp/bg-cmd-${i}.sh </dev/null > /tmp/bg-${i}.log 2>&1 & echo $! > /tmp/bg-${i}.pid`,
       );
     });
-    // Native Convex readiness gate: seed commands (`npx convex env set`,
-    // `npx convex import`) need a *running backend* — not a completed push.
-    // Gating on the functions-ready line deadlocks every repo whose
-    // auth.config.ts reads a deployment env var: the daemon's first push fails
-    // for the missing value, and the seed commands that would set it run after
-    // this gate. So the fatal wait is on the backend health endpoint, and the
-    // push happens after the seed commands instead (convex-push stage below).
-    // Detached script — a plain bash
+    // Native Convex readiness gate, in two parts. The *fatal* wait is on the
+    // backend health endpoint: seed commands (`npx convex env set`, `npx
+    // convex import`) need a running backend, and making a completed push
+    // mandatory deadlocks every repo whose auth.config.ts reads a deployment
+    // env var — the daemon's first push fails for the missing value, and the
+    // seed commands that would set it run after this gate. So the push happens
+    // after the seed commands instead (convex-push stage below). The second,
+    // non-fatal wait gives a push that *is* going to succeed the chance to
+    // land before the seeds touch the data. Detached script — a plain bash
     // wait has no exec ceiling here. 900s covers cold binary plants; a daemon
     // that exits early ends the wait instead of burning the full window.
     (backgroundCommands ?? []).forEach((command, i) => {
@@ -543,7 +546,25 @@ export const launchSeedRun = internalAction({
         "  sleep 5",
         "done",
         `${backendUp} || { echo "SEEDRUN-FAILED:convex-ready-${i}"; tail -n 60 /tmp/bg-${i}.log 2>/dev/null; exit 1; }`,
-        `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
+        // A live backend is necessary but not sufficient. The daemon's first
+        // push applies schema.ts and backfills its indexes, and `npx convex
+        // import` aborts the whole restore with "Could not complete import
+        // because schema changed" when that lands mid-import (observed
+        // 2026-09-21 on cost-model-ts: import got through every table, then
+        // died on the daemon's push finishing 8s in). So wait for the push
+        // too — but bounded and non-fatal, because the repos this gate was
+        // loosened for never finish that first push: their auth.config.ts
+        // reads an env var only the seed commands set, and their push is
+        // retried after the seeds instead (convex-push stage below). Repos
+        // that push cleanly break out in seconds; the cap is only ever paid
+        // by a repo that was going to skip the push anyway.
+        `echo "SEEDRUN-STAGE:convex-functions-ready-${i}"`,
+        `for s in $(seq 1 ${CONVEX_FUNCTIONS_READY_ATTEMPTS}); do`,
+        `  grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && break`,
+        `  if [ -f /tmp/bg-${i}.pid ] && ! kill -0 "$(cat /tmp/bg-${i}.pid)" 2>/dev/null; then echo "convex-ready-${i}: daemon exited"; break; fi`,
+        "  sleep 5",
+        "done",
+        `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && echo "convex-ready-${i}: functions pushed; safe to import" || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
       );
     });
     // ---- seed (post-daemon) ----
@@ -1027,6 +1048,16 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
         {},
       ),
     );
+    // Group seeded snapshots (repoGroups.seededSnapshotName) never appear as a
+    // sandbox's currentSnapshotId or a repo's own seeded/base id, so they need
+    // their own entry in the protected set — otherwise the very first purge
+    // after a group build deletes it as an orphan.
+    for (const name of await ctx.runQuery(
+      internal.repoGroups.listAllGroupSnapshotNames,
+      {},
+    )) {
+      protectedIds.add(name);
+    }
     const knownSandboxIds = new Set(
       await ctx.runQuery(internal.repoSnapshots.listReferencedSandboxIds, {}),
     );

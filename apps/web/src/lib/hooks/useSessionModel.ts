@@ -5,12 +5,13 @@ import {
   normalizeAIModel,
   type AIModel,
   type Id,
-  type ReasoningLevel,
   type StoredModelTraits,
 } from "@eva/backend";
+import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { toRunTraitArgs } from "@/lib/utils/runTraits";
 
 /**
  * Session composer prefs backed by Convex (`sessions.lastModel` / trait fields
@@ -88,16 +89,7 @@ export function useSessionModel(
       { id: args.id },
       {
         ...current,
-        ...(args.reasoningLevel !== undefined
-          ? { lastReasoningLevel: args.reasoningLevel }
-          : {}),
-        ...(args.thinkingEnabled !== undefined
-          ? { lastThinkingEnabled: args.thinkingEnabled }
-          : {}),
-        ...(args.use1mContext !== undefined
-          ? { lastUse1mContext: args.use1mContext }
-          : {}),
-        ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+        ...composerTraitFields(args),
       },
     );
   });
@@ -112,29 +104,16 @@ export function useSessionModel(
   };
 
   const setTraits = (partial: Partial<StoredModelTraits>) => {
-    const reasoningLevel: ReasoningLevel | undefined = partial.effortLevel;
     void setTraitsMutation({
       id: sessionId,
-      ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
-      ...(partial.thinkingEnabled !== undefined
-        ? { thinkingEnabled: partial.thinkingEnabled }
-        : {}),
-      ...(partial.use1mContext !== undefined
-        ? { use1mContext: partial.use1mContext }
-        : {}),
-      ...(partial.fastMode !== undefined ? { fastMode: partial.fastMode } : {}),
+      ...toRunTraitArgs(partial),
     });
   };
 
   return {
     model,
     setModel,
-    traits: {
-      effortLevel: session?.lastReasoningLevel,
-      thinkingEnabled: session?.lastThinkingEnabled,
-      use1mContext: session?.lastUse1mContext,
-      fastMode: session?.lastFastMode,
-    },
+    traits: storedComposerTraits(session),
     setTraits,
     providerAccountId:
       session === undefined ? undefined : (session?.providerAccountId ?? null),

@@ -183,7 +183,7 @@ async function execSdkGitOperation<T>(
 }
 
 /** Wraps a git operation with timing logs and error reporting. */
-async function runLoggedGitStep<T>(
+export async function runLoggedGitStep<T>(
   label: string,
   details: string,
   fn: () => Promise<T>,
@@ -545,6 +545,8 @@ export async function fetchBranchRefs(
     prune?: boolean;
     timeoutSeconds?: number;
     retryAttempts?: number;
+    /** Absolute clone path to fetch into. Defaults to the primary `/tmp/repo`. */
+    workspaceDir?: string;
   },
 ): Promise<string[]> {
   const details = `${owner}/${name}, branches=${branchNames.join(",")}, timeout=${opts?.timeoutSeconds ?? 240}`;
@@ -556,7 +558,7 @@ export async function fetchBranchRefs(
     const repoUrl = bareGitHubRepoUrl(owner, name);
     const pruneArg = opts?.prune === false ? "" : " --prune";
     const timeoutSeconds = opts?.timeoutSeconds ?? 240;
-    const workspaceDir = workspaceDirShell();
+    const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
     const refspecs = normalized.map(
       (b) => `+refs/heads/${b}:refs/remotes/origin/${b}`,
     );
@@ -933,38 +935,39 @@ export async function copySandboxConfigFilesToWorkspace(
 }
 
 /** Installs project dependencies using the detected package manager. */
-async function installDependencies(
+export async function installDependencies(
   sandbox: SandboxHandle,
   pm: string,
+  dir: string = WORKSPACE_DIR,
 ): Promise<void> {
-  const workspaceDir = workspaceDirShell();
   if (pm === "pnpm") {
     await execHandle(
       sandbox,
-      `npm install -g pnpm && cd ${workspaceDir} && pnpm install`,
+      `npm install -g pnpm && cd ${dir} && pnpm install`,
       PNPM_INSTALL_TIMEOUT_SECONDS,
     );
   } else if (pm === "yarn") {
     // Bare node24 has no yarn shim — mirror the pnpm branch's global install.
     await execHandle(
       sandbox,
-      `npm install -g yarn && cd ${workspaceDir} && yarn install`,
+      `npm install -g yarn && cd ${dir} && yarn install`,
       YARN_INSTALL_TIMEOUT_SECONDS,
     );
   } else {
     await execHandle(
       sandbox,
-      `cd ${workspaceDir} && npm install`,
+      `cd ${dir} && npm install`,
       NPM_INSTALL_TIMEOUT_SECONDS,
     );
   }
 }
 
-/** Best-effort pip for root requirements.txt / pyproject.toml (never throws). */
-async function installPythonDependencies(
+/** Best-effort pip for `dir`'s requirements.txt / pyproject.toml (never throws). */
+export async function installPythonDependencies(
   sandbox: SandboxHandle,
+  dir: string = WORKSPACE_DIR,
 ): Promise<void> {
-  const result = await installPythonDependenciesBestEffort(sandbox);
+  const result = await installPythonDependenciesBestEffort(sandbox, dir);
   if (!result.attempted) return;
   if (result.ok) {
     logGit("installPythonDependencies: pip install succeeded");
@@ -973,6 +976,68 @@ async function installPythonDependencies(
   logGit(
     "installPythonDependencies: pip install failed (continuing without Python deps)",
   );
+}
+
+/**
+ * Clones a GitHub repo into `destDir` with retry on transient network errors.
+ * SDK clone doesn't clean the target dir, so this pre-cleans it first.
+ *
+ * Extracted from `cloneAndSetupRepo` so a linked repo's clone (into
+ * `/tmp/workspace/<name>`, not `WORKSPACE_DIR`) shares the same retry loop
+ * instead of copying it — see `linkedRepos.ts`'s `prepareLinkedRepo`. Does
+ * NOT install the git credential helper; callers that need it (both current
+ * ones do) install it themselves before or after, per their own ordering
+ * needs.
+ */
+export async function cloneRepoInto(
+  sandbox: SandboxHandle,
+  installationId: number,
+  owner: string,
+  name: string,
+  destDir: string,
+  onProgress?: (label: string) => Promise<void>,
+): Promise<void> {
+  if (onProgress) await onProgress("Cloning repository...");
+  const githubToken = await getInstallationToken(installationId);
+  const repoUrl = `https://github.com/${owner}/${name}.git`;
+
+  await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
+
+  const maxCloneAttempts = 3;
+  for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
+    try {
+      await execSdkGitOperation(
+        sandbox,
+        `clone ${owner}/${name}`,
+        () =>
+          sandbox.git.clone(repoUrl, destDir, "x-access-token", githubToken),
+        REPO_CLONE_TIMEOUT_SECONDS,
+      );
+      if (attempt > 1) {
+        logGit(
+          `cloneRepoInto: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
+        );
+      }
+      return;
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
+      const shouldRetry =
+        attempt < maxCloneAttempts &&
+        classifyGitFailure(error)._tag === "GitNetworkError";
+      if (!shouldRetry) {
+        throw error;
+      }
+      const delayMs = attempt * 2000;
+      logGit(
+        `cloneRepoInto: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
+      );
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delayMs);
+      });
+    }
+  }
 }
 
 /**
@@ -993,57 +1058,16 @@ export async function cloneAndSetupRepo(
 ): Promise<void> {
   const details = `${owner}/${name}, installDeps=${shouldInstallDeps}`;
   await runLoggedGitStep("cloneAndSetupRepo", details, async () => {
-    if (onProgress) await onProgress("Cloning repository...");
-    const githubToken = await getInstallationToken(installationId);
-    const repoUrl = `https://github.com/${owner}/${name}.git`;
-
-    // SDK clone doesn't clean target dir — pre-clean workspace directories
-    await execHandle(
+    // Legacy pre-migration workspace path; only the primary repo ever used it.
+    await execHandle(sandbox, `rm -rf ${quote([LEGACY_WORKSPACE_DIR])}`, 30);
+    await cloneRepoInto(
       sandbox,
-      `rm -rf ${quote([WORKSPACE_DIR])} ${quote([LEGACY_WORKSPACE_DIR])}`,
-      30,
+      installationId,
+      owner,
+      name,
+      WORKSPACE_DIR,
+      onProgress,
     );
-
-    const maxCloneAttempts = 3;
-    for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
-      try {
-        await execSdkGitOperation(
-          sandbox,
-          `clone ${owner}/${name}`,
-          () =>
-            sandbox.git.clone(
-              repoUrl,
-              WORKSPACE_DIR,
-              "x-access-token",
-              githubToken,
-            ),
-          REPO_CLONE_TIMEOUT_SECONDS,
-        );
-        if (attempt > 1) {
-          logGit(
-            `cloneAndSetupRepo: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
-          );
-        }
-        break;
-      } catch (error) {
-        if (!(error instanceof Error)) {
-          throw error;
-        }
-        const shouldRetry =
-          attempt < maxCloneAttempts &&
-          classifyGitFailure(error)._tag === "GitNetworkError";
-        if (!shouldRetry) {
-          throw error;
-        }
-        const delayMs = attempt * 2000;
-        logGit(
-          `cloneAndSetupRepo: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
-        );
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, delayMs);
-        });
-      }
-    }
 
     // Install the credential helper after the clone so subsequent fetches /
     // pushes (here and from inside the sandbox) auth without URL tokens. The
@@ -1114,8 +1138,9 @@ type BranchPublishSync = {
 async function localBranchReflogShas(
   sandbox: SandboxHandle,
   branchName: string,
+  workspaceDirOverride?: string,
 ): Promise<string[]> {
-  const workspaceDir = workspaceDirShell();
+  const workspaceDir = workspaceDirOverride ?? workspaceDirShell();
   const quotedLocalRef = quote([`refs/heads/${branchName}`]);
   try {
     return parseGitNameOnlyList(
@@ -1168,12 +1193,14 @@ async function synchronizeBranchForPublish(
   owner: string,
   name: string,
   branchName: string,
+  /** Absolute clone path to synchronize. Defaults to the primary `/tmp/repo`. */
+  workspaceDirOverride?: string,
 ): Promise<BranchPublishSync> {
   if (!isSafeBranchName(branchName)) {
     throw new Error(`Unsafe branch name: ${branchName}`);
   }
 
-  const workspaceDir = workspaceDirShell();
+  const workspaceDir = workspaceDirOverride ?? workspaceDirShell();
   const currentBranch = (
     await execGitCommand(
       sandbox,
@@ -1217,6 +1244,7 @@ async function synchronizeBranchForPublish(
     prune: false,
     timeoutSeconds: 60,
     retryAttempts: 2,
+    workspaceDir,
   });
   const remoteRefName = `refs/remotes/origin/${branchName}`;
   const quotedRemoteRef = quote([remoteRefName]);
@@ -1261,7 +1289,11 @@ async function synchronizeBranchForPublish(
         10,
       )
     ).trim();
-    const reflogShas = await localBranchReflogShas(sandbox, branchName);
+    const reflogShas = await localBranchReflogShas(
+      sandbox,
+      branchName,
+      workspaceDir,
+    );
     if (rewrittenBranchIsOwnHistory(remoteTip, reflogShas)) {
       if (!isEvaOwnedBranch(branchName)) {
         throw new Error(rewrittenBranchPublishError(branchName));
@@ -1320,11 +1352,13 @@ export async function pushBranchToOrigin(
   opts?: {
     timeoutSeconds?: number;
     retryAttempts?: number;
+    /** Absolute clone path to push from. Defaults to the primary `/tmp/repo`. */
+    workspaceDir?: string;
   },
 ): Promise<{ pushed: boolean; published: boolean }> {
   const details = `${owner}/${name}, branch=${branchName}`;
   return await runLoggedGitStep("pushBranchToOrigin", details, async () => {
-    const workspaceDir = workspaceDirShell();
+    const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
     // Fully-qualified refspec, both sides. A bare branch name, `HEAD` or `@{u}`
     // can each resolve somewhere else (stale upstream, detached HEAD, a tag of
     // the same name); `refs/heads/x:refs/heads/x` names the exact ref to update.
@@ -1347,7 +1381,13 @@ export async function pushBranchToOrigin(
     const resynchronize = Effect.promise(async () => {
       attempt += 1;
       const { remoteExists, replaceRemoteTip } =
-        await synchronizeBranchForPublish(sandbox, owner, name, branchName);
+        await synchronizeBranchForPublish(
+          sandbox,
+          owner,
+          name,
+          branchName,
+          workspaceDir,
+        );
       // Never a bare --force: the lease names the exact remote sha the sync
       // just verified as the sandbox's own old tip, so a commit that lands in
       // between is rejected ("stale info") and the retry re-syncs against it.
@@ -1441,13 +1481,17 @@ export async function forcePushBranchToOrigin(
   owner: string,
   name: string,
   branchName: string,
+  opts?: {
+    /** Absolute clone path to push from. Defaults to the primary `/tmp/repo`. */
+    workspaceDir?: string;
+  },
 ): Promise<void> {
   if (!isSafeBranchName(branchName)) {
     throw new Error(`Unsafe branch name: ${branchName}`);
   }
   const details = `${owner}/${name}, branch=${branchName}`;
   await runLoggedGitStep("forcePushBranchToOrigin", details, async () => {
-    const workspaceDir = workspaceDirShell();
+    const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
     const quotedLocalRef = quote([`refs/heads/${branchName}`]);
     const localBranchState = (
       await execGitCommand(
@@ -1465,6 +1509,7 @@ export async function forcePushBranchToOrigin(
       prune: false,
       timeoutSeconds: 60,
       retryAttempts: 2,
+      workspaceDir,
     });
     const lease = fetched.includes(branchName)
       ? `--force-with-lease=${quote([`refs/heads/${branchName}`])} `

@@ -17,7 +17,7 @@ If a request is too vague to brief an agent, ask the user one short question and
 - \`list_agents\` — the agents this user can reach. Busy ones by default; pass \`includeIdle: true\` for the rest. Orchestrator sessions are never listed, and on a repo shared with teammates their agents can appear here too — say whose work you are touching before you touch it.
 - \`get_agent_state\` — one agent in depth: status, whether a turn is in flight, live activity, transcript tail, queue depth.
 - \`send_agent_message\` — message an agent as yourself. Queued if it is mid-turn *or already has messages waiting* (so your message never overtakes them), starts a turn if it is genuinely idle. Registers a watch.
-- \`create_session\` — open a new session in any repo and give it a first message. Registers a watch.
+- \`create_session\` — open a new session in any repo and give it a first message. Registers a watch. Pass \`linkedRepos\` or \`group\` to also clone extra repos into the same sandbox for a multi-repo session, each on its own branch and PR.
 - \`stop_agent\` — cancel an agent's in-flight turn.
 - \`watch_agent\` / \`unwatch_agent\` — subscribe to agents you did not start.
 

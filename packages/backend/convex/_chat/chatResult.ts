@@ -21,6 +21,7 @@ import {
   resultTargetMessage,
 } from "../_sessions/resultTarget";
 import { normalizeAIModel } from "../_validators/aiModels";
+import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 
 export type ChatResultParentId =
   | Id<"sessions">
@@ -114,6 +115,12 @@ export async function writeAssistantTurnResult(
   await ctx.db.patch(last._id, {
     ...fields,
     finishedAt: Date.now(),
+  });
+  // Judged out of band; a turn that changed no code schedules nothing.
+  await scheduleScopeCheck(ctx, {
+    _id: last._id,
+    beforeSha: fields.beforeSha,
+    afterSha: fields.afterSha,
   });
   for (const message of orphanPlaceholderMessages(recent, last)) {
     await ctx.db.delete(message._id);
