@@ -57,7 +57,7 @@ export function ScopeCheckChip({
         <p className="text-xs text-foreground">
           {tone === "clear"
             ? "Jev found no changes beyond what you asked for."
-            : `Jev thinks there is a ${percent} chance this turn changed things you did not ask for.`}
+            : `Jev puts the chance this turn changed things you did not ask for at ${percent}.`}
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">
           {check.judgedHunks} of {check.totalHunks} changes judged
