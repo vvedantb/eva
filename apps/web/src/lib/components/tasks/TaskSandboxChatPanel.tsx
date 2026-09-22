@@ -324,10 +324,6 @@ export function TaskSandboxChatPanel({
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
         repoId={repo._id}
-        isSandboxActive={isSandboxActive}
-        isSandboxToggling={isSandboxToggling}
-        onSandboxToggle={onSandboxToggle}
-        isAssistantResponding={isExecuting}
         model={model}
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
