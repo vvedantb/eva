@@ -41,6 +41,7 @@ import {
   insertAssistantPlaceholderIfNeeded,
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
+import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { isUnclaimedOpenTurn } from "./pendingTurnRecovery";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -1648,6 +1649,12 @@ export const completeSyntheticTurn = authMutation({
       patch.model = undefined;
     }
     await ctx.db.patch(args.messageId, patch);
+    // Judged out of band; a turn that changed no code schedules nothing.
+    await scheduleScopeCheck(ctx, {
+      _id: args.messageId,
+      beforeSha: patch.beforeSha,
+      afterSha: patch.afterSha,
+    });
 
     await ctx.db.patch(args.sessionId, {
       syntheticTurnMessageId: undefined,
