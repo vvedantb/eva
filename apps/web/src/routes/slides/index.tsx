@@ -9,12 +9,7 @@ import { getSpeakerNotes } from "../_components/deck/speakerNotes";
 import type { DeckSlide } from "../_components/deck/slides/types";
 import { FRIDAY_SLIDES } from "../_components/deck/slides/friday";
 import { ANNUAL_SLIDES } from "../_components/deck/slides/annual";
-import { SLIDES as INTRO_SLIDES } from "../_components/slides/slides/index";
-import {
-  SlideStepContext,
-  SlideThemeContext,
-} from "../_components/slides/_components/SlideShell";
-import { getSpeakerNotes as getIntroSpeakerNotes } from "../_components/slides/speakerNotes";
+import { INTRO_SLIDES } from "../_components/deck/slides/intro";
 
 /**
  * Public, chrome-less index of the presentation decks. No auth guard and no app
@@ -41,39 +36,14 @@ function countWithNotes(slides: readonly DeckSlide[]): number {
     .length;
 }
 
-/**
- * The intro deck runs on the other engine, so its thumbnail needs that engine's
- * own contexts. Its first slide is a deliberate blank opener, so the card shows
- * the title slide instead.
- */
-function introPreview(): ReactNode {
-  const entry = INTRO_SLIDES.find((slide) => slide.id === "01");
-  if (!entry) return null;
-  const { Component } = entry;
-  return (
-    <SlideThemeContext value={entry.theme}>
-      <SlideStepContext value={0}>
-        <Component />
-      </SlideStepContext>
-    </SlideThemeContext>
-  );
-}
-
-/** Its notes are keyed by slide number rather than by id, hence the index. */
-function countIntroWithNotes(): number {
-  return INTRO_SLIDES.filter(
-    (_slide, index) => getIntroSpeakerNotes(index + 1).notes.trim().length > 0,
-  ).length;
-}
-
 const DECKS: readonly DeckSummary[] = [
   {
     title: "Intro to Eva",
     subtitle: "What Eva is, and how it works",
     path: "/slides/intro-to-eva",
     slideCount: INTRO_SLIDES.length,
-    notedCount: countIntroWithNotes(),
-    preview: introPreview(),
+    notedCount: countWithNotes(INTRO_SLIDES),
+    preview: deckPreview(INTRO_SLIDES),
   },
   {
     title: "Friday session",

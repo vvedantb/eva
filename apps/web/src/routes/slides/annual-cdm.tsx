@@ -10,6 +10,8 @@ const searchSchema = z.object({
   slide: z.coerce.number().int().min(1).optional().default(1),
   /** `presenter` swaps the stage for the second-screen notes view. */
   view: z.enum(["presenter"]).optional(),
+  /** Set while hosting or following a live session. */
+  session: z.coerce.string().optional(),
 });
 
 /**
@@ -23,14 +25,18 @@ export const Route = createFileRoute("/slides/annual-cdm")({
 });
 
 function AnnualCdmPage() {
-  const { slide, view } = Route.useSearch();
+  const { slide, view, session } = Route.useSearch();
   const navigate = useNavigate({ from: BASE_PATH });
 
-  const onNavigate = (next: number) =>
+  const updateSearch = (next: {
+    slide?: number;
+    session?: string | undefined;
+  }) =>
     navigate({
-      search: (prev) => ({ ...prev, slide: next }),
+      search: (prev) => ({ ...prev, ...next }),
       replace: true,
     });
+  const onNavigate = (next: number) => updateSearch({ slide: next });
 
   if (view === "presenter") {
     return (
@@ -47,7 +53,8 @@ function AnnualCdmPage() {
     <Deck
       slides={ANNUAL_SLIDES}
       slide={slide}
-      onNavigate={onNavigate}
+      sessionCode={session}
+      updateSearch={updateSearch}
       basePath={BASE_PATH}
     />
   );

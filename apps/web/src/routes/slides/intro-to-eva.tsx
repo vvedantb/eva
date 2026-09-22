@@ -1,115 +1,61 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { useMemo, useState, useSyncExternalStore } from "react";
-import { SlideDeck } from "../_components/slides/SlideDeck";
-import { usePresentationSync } from "../_components/slides/usePresentationSync";
-import { PresentationControls } from "../_components/slides/_components/PresentationControls";
-import { PresentationDeckProvider } from "../_components/slides/_components/PresentationDeckContext";
-import { PresenterView } from "../_components/slides/PresenterView";
-import {
-  openPresenterWindow,
-  subscribePresenterChannel,
-} from "../_components/slides/presenterWindowSync";
+import { Deck } from "../_components/deck/Deck";
+import { PresenterView } from "../_components/deck/_components/PresenterView";
+import { INTRO_SLIDES } from "../_components/deck/slides/intro";
+
+const BASE_PATH = "/slides/intro-to-eva";
 
 const searchSchema = z.object({
-  slide: z.number().int().min(1).optional().default(1),
-  session: z.coerce.string().optional(),
+  slide: z.coerce.number().int().min(1).optional().default(1),
+  /** `presenter` swaps the stage for the second-screen notes view. */
   view: z.enum(["presenter"]).optional(),
+  /** Set while hosting or following a live session. */
+  session: z.coerce.string().optional(),
 });
 
+/**
+ * Public, chrome-less deck introducing Eva. No auth guard and no app shell: it
+ * is meant to be opened on a projector, or followed live from a shared link.
+ */
 export const Route = createFileRoute("/slides/intro-to-eva")({
   validateSearch: searchSchema,
   staticData: { title: "Intro to Eva" },
-  component: SlidesPage,
+  component: IntroToEvaPage,
 });
 
-function SlidesPage() {
-  const { slide, session, view } = Route.useSearch();
-  const navigate = useNavigate({ from: "/slides/intro-to-eva" });
+function IntroToEvaPage() {
+  const { slide, view, session } = Route.useSearch();
+  const navigate = useNavigate({ from: BASE_PATH });
 
-  const updateSearch = (next: { slide?: number; session?: string }) => {
-    void navigate({
+  const updateSearch = (next: {
+    slide?: number;
+    session?: string | undefined;
+  }) =>
+    navigate({
       search: (prev) => ({ ...prev, ...next }),
       replace: true,
     });
-  };
+  const onNavigate = (next: number) => updateSearch({ slide: next });
 
   if (view === "presenter") {
     return (
       <PresenterView
+        slides={INTRO_SLIDES}
         slide={slide}
-        session={session}
-        updateSearch={updateSearch}
+        onNavigate={onNavigate}
+        basePath={BASE_PATH}
       />
     );
   }
 
   return (
-    <StageView slide={slide} session={session} updateSearch={updateSearch} />
-  );
-}
-
-interface StageViewProps {
-  slide: number;
-  session: string | undefined;
-  updateSearch: (next: { slide?: number; session?: string }) => void;
-}
-
-function StageView({ slide, session, updateSearch }: StageViewProps) {
-  const [presenterDetached, setPresenterDetached] = useState(false);
-
-  useSyncExternalStore(
-    () => {
-      return subscribePresenterChannel({
-        onSlide: (nextSlide) => updateSearch({ slide: nextSlide }),
-        onPresenterOpen: () => setPresenterDetached(true),
-        onPresenterClosed: () => setPresenterDetached(false),
-      });
-    },
-    () => presenterDetached,
-    () => presenterDetached,
-  );
-
-  const sync = usePresentationSync({
-    slide,
-    sessionCode: session,
-    updateSearch,
-  });
-
-  const deckContext = useMemo(
-    () => ({
-      sessionCode: session,
-      participantKey: sync.participantKey,
-      hostKey: sync.hostKey,
-    }),
-    [session, sync.participantKey, sync.hostKey],
-  );
-
-  const isFollower =
-    session !== undefined &&
-    sync.sessionState !== "none" &&
-    sync.sessionState !== "notfound" &&
-    !sync.isHost;
-  const canDrive = !isFollower;
-  const canOpenPresenter = session === undefined || sync.isHost;
-  const stageNavigation = canDrive && !presenterDetached;
-
-  return (
-    <>
-      <PresentationDeckProvider value={deckContext}>
-        <SlideDeck
-          slide={sync.effectiveSlide}
-          onNavigate={sync.onNavigate}
-          allowNavigation={stageNavigation}
-          showOutline={!presenterDetached}
-        />
-      </PresentationDeckProvider>
-      <PresentationControls
-        sync={sync}
-        canOpenPresenter={canOpenPresenter}
-        presenterDetached={presenterDetached}
-        onOpenPresenter={openPresenterWindow}
-      />
-    </>
+    <Deck
+      slides={INTRO_SLIDES}
+      slide={slide}
+      sessionCode={session}
+      updateSearch={updateSearch}
+      basePath={BASE_PATH}
+    />
   );
 }
