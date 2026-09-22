@@ -15,10 +15,12 @@ import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docModeParser, type DocMode } from "@/lib/search-params";
 import { nanoid } from "nanoid";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconMessage } from "@tabler/icons-react";
 import { FloatingToc } from "../FloatingToc";
 import { DocCommentsPanel } from "./DocCommentsPanel";
+import { DocSaveStatus, type DocSaveState } from "./DocSaveStatus";
 import { DocHistoryPanel } from "./DocHistoryPanel";
 import { DocSuggestionsPanel } from "./DocSuggestionsPanel";
 import { DocVersionDiff } from "./DocVersionDiff";
@@ -41,6 +43,13 @@ import {
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
+
+/**
+ * How long editing has to stop before a version is snapshotted. Two minutes
+ * outlived most editing sessions, so a doc could be closed having never been
+ * snapshotted at all.
+ */
+const VERSION_IDLE_MS = 15_000;
 
 const baseEditorExtensions = [
   StarterKit.configure({
@@ -133,6 +142,9 @@ export function DocContentTab({
   const editCountRef = useRef<number>(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMigratedRef = useRef(false);
+  const [docSaveState, setDocSaveState] = useState<DocSaveState>({
+    status: "idle",
+  });
 
   // Lazy migration: ensure sync doc exists for legacy docs
   const needsMigration =
@@ -205,6 +217,33 @@ export function DocContentTab({
     };
   }, [editor]);
 
+  /**
+   * Snapshot the current document as a version. Shared by the idle timer and
+   * the status line's Retry, so a failed snapshot is recoverable without
+   * touching the text again.
+   */
+  const runSaveVersion = () => {
+    if (!editor) return;
+    setDocSaveState({ status: "saving" });
+    saveVersion({
+      docId: doc._id,
+      content: editor.getMarkdown(),
+      pmContent: JSON.stringify(editor.state.doc.toJSON()),
+    })
+      .then(() => {
+        editCountRef.current = 0;
+        setDocSaveState({ status: "saved", at: Date.now() });
+      })
+      .catch(() => setDocSaveState({ status: "error" }));
+  };
+
+  // The transaction listener is registered once per editor; the ref lets it
+  // reach the current save closure without re-registering on every render.
+  const saveVersionRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    saveVersionRef.current = runSaveVersion;
+  }, [runSaveVersion]);
+
   // Version snapshot tracking
   useEffect(() => {
     if (!editor) return;
@@ -218,6 +257,11 @@ export function DocContentTab({
       // so another user's edits don't trigger or attribute a version here.
       if (transaction.getMeta("collab$")) return;
       editCountRef.current += 1;
+      // Returning `prev` unchanged skips a re-render, so this costs nothing per
+      // keystroke once the status line already says "Unsaved version".
+      setDocSaveState((prev) =>
+        prev.status === "pending" ? prev : { status: "pending" },
+      );
 
       const now = Date.now();
       if (now - lastTouchDraftRef.current > 30_000) {
@@ -227,17 +271,8 @@ export function DocContentTab({
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
-        if (editCountRef.current > 0 && editor) {
-          const markdown = editor.getMarkdown();
-          const pmContent = JSON.stringify(editor.state.doc.toJSON());
-          saveVersion({
-            docId: doc._id,
-            content: markdown,
-            pmContent,
-          });
-          editCountRef.current = 0;
-        }
-      }, 120_000);
+        if (editCountRef.current > 0) saveVersionRef.current();
+      }, VERSION_IDLE_MS);
     };
 
     editor.on("update", handleTransaction);
@@ -245,7 +280,7 @@ export function DocContentTab({
       editor.off("update", handleTransaction);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  }, [editor, doc._id, touchDraft, saveVersion]);
+  }, [editor, doc._id, touchDraft]);
 
   // Reflect open/active anchors as highlights in the document.
   useEffect(() => {
@@ -345,86 +380,133 @@ export function DocContentTab({
     // and they position against this row.
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="flex max-sm:min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        {selectedVersionId ? (
-          <div className="scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-            <DocVersionDiff
-              versionId={selectedVersionId}
-              currentContent={doc.content}
-              onRestore={handleRestoreVersion}
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
-            {!commentsOpen &&
-              !historyOpen &&
-              !suggestionsOpen &&
-              tocContent.trim().length > 0 && (
-                <FloatingToc
-                  containerRef={contentScrollRef}
-                  content={tocContent}
-                  className="hidden w-52 shrink-0 border-r border-border py-1 lg:block"
-                />
-              )}
-
-            <div
-              ref={contentScrollRef}
-              className="scrollbar min-h-0 flex-1 overflow-y-auto"
-            >
-              <EditorContent
-                editor={editor}
-                // Code fences scroll inside themselves; an unbroken line would
-                // otherwise widen the whole document past the viewport.
-                className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
-              />
-              {editor && (
-                <BubbleMenu
-                  editor={editor}
-                  className="rounded-menu-item bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-md"
-                >
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs max-sm:h-10 max-sm:px-3"
-                    onClick={handleStartComment}
-                  >
-                    <IconMessage size={14} aria-hidden />
-                    Comment
-                  </Button>
-                </BubbleMenu>
-              )}
-            </div>
-          </div>
+        {/* This tab has no toolbar of its own, so the version state sits top
+            right above the editor. It renders nothing until there is something
+            to say. */}
+        {selectedVersionId ? null : (
+          <DocSaveStatus state={docSaveState} onRetry={runSaveVersion} />
         )}
+        <AnimatePresence mode="wait" initial={false}>
+          {selectedVersionId ? (
+            <m.div
+              key="diff"
+              className="scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <DocVersionDiff
+                versionId={selectedVersionId}
+                currentContent={doc.content}
+                onRestore={handleRestoreVersion}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="live"
+              className="flex min-h-0 flex-1 gap-6 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {!commentsOpen &&
+                !historyOpen &&
+                !suggestionsOpen &&
+                tocContent.trim().length > 0 && (
+                  <FloatingToc
+                    containerRef={contentScrollRef}
+                    content={tocContent}
+                    className="hidden w-52 shrink-0 border-r border-border py-1 lg:block"
+                  />
+                )}
+
+              <div
+                ref={contentScrollRef}
+                className="scrollbar min-h-0 flex-1 overflow-y-auto"
+              >
+                <EditorContent
+                  editor={editor}
+                  // Code fences scroll inside themselves; an unbroken line would
+                  // otherwise widen the whole document past the viewport.
+                  className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
+                />
+                {editor && (
+                  <BubbleMenu
+                    editor={editor}
+                    className="rounded-menu-item bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-md"
+                  >
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs max-sm:h-10 max-sm:px-3"
+                      onClick={handleStartComment}
+                    >
+                      <IconMessage size={14} aria-hidden />
+                      Comment
+                    </Button>
+                  </BubbleMenu>
+                )}
+              </div>
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {commentsOpen && (
-        <DocCommentsPanel
-          docId={doc._id}
-          allowAskEva={isPrRecap}
-          activeAnchorId={activeAnchorId}
-          onAnchorClick={handleAnchorActivate}
-          onClose={onToggleComments}
-          composingAnchorId={composingAnchorId}
-          composingAnchorText={composingAnchorText}
-          onCancelCompose={handleCancelCompose}
-          onCommentCreated={handleCommentCreated}
-          presentAnchorIds={presentAnchorIds}
-        />
-      )}
-
-      {historyOpen && (
-        <DocHistoryPanel
-          docId={doc._id}
-          docKind={doc.kind}
-          selectedVersionId={selectedVersionId}
-          onSelectVersion={(id) => setSelectedVersionId(id)}
-          onClose={onToggleHistory}
-        />
-      )}
-
-      {suggestionsOpen && editor && (
-        <DocSuggestionsPanel editor={editor} onClose={onToggleSuggestions} />
-      )}
+      <AnimatePresence mode="wait">
+        {commentsOpen ? (
+          <m.div
+            key="comments"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocCommentsPanel
+              docId={doc._id}
+              allowAskEva={isPrRecap}
+              activeAnchorId={activeAnchorId}
+              onAnchorClick={handleAnchorActivate}
+              onClose={onToggleComments}
+              composingAnchorId={composingAnchorId}
+              composingAnchorText={composingAnchorText}
+              onCancelCompose={handleCancelCompose}
+              onCommentCreated={handleCommentCreated}
+              presentAnchorIds={presentAnchorIds}
+            />
+          </m.div>
+        ) : historyOpen ? (
+          <m.div
+            key="history"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocHistoryPanel
+              docId={doc._id}
+              docKind={doc.kind}
+              selectedVersionId={selectedVersionId}
+              onSelectVersion={(id) => setSelectedVersionId(id)}
+              onClose={onToggleHistory}
+            />
+          </m.div>
+        ) : suggestionsOpen && editor ? (
+          <m.div
+            key="suggestions"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocSuggestionsPanel editor={editor} onClose={onToggleSuggestions} />
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import type { Id } from "@eva/backend";
-import { Button, Spinner, cn } from "@eva/ui";
+import { Button, Spinner, cn, motionFast } from "@eva/ui";
+import { m } from "motion/react";
 import { IconGitCommit } from "@tabler/icons-react";
 import { usePrCommits } from "../usePrOverview";
 import { PrCommentBubble } from "./PrCommentBubble";
@@ -172,10 +173,15 @@ function TimelineRow({
   children: ReactNode;
 }) {
   return (
-    <li className="relative flex min-w-0 gap-3">
+    <m.li
+      className="relative flex min-w-0 gap-3"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionFast}
+    >
       <span className="relative z-1 shrink-0">{gutter}</span>
       <div className="min-w-0 flex-1">{children}</div>
-    </li>
+    </m.li>
   );
 }
 

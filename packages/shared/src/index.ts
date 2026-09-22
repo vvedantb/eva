@@ -6,8 +6,11 @@ export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
   TASK_TAGS,
+  TASK_TAG_DESCRIPTIONS,
+  TAG_PROBABILITY_THRESHOLD,
   MAX_GENERATED_TAGS,
   parseGeneratedTags,
+  selectTagsByProbability,
   type TaskTag,
 } from "./taskTags";
 export { isUiImplementationTask } from "./uiTaskPrompt";
@@ -15,3 +18,11 @@ export {
   TITLE_REGENERATION_STALE_MS,
   isTitleRegenerating,
 } from "./sessionTitle";
+export {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+  storedComposerTraits,
+  type ComposerTraitFields,
+  type ComposerTraits,
+  type StoredComposerTraits,
+} from "./composerTraits";

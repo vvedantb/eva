@@ -261,9 +261,7 @@ describe("list_entities returns what the caller can already open", () => {
     const ids = (await listFor(f)).entities.map((entity) => entity.id);
     expect(ids).toEqual([f.closedSessionId]);
     // Also gone from the per-status path, which uses different indexes.
-    expect(
-      (await listFor(f, { status: "code_review" })).entities,
-    ).toEqual([]);
+    expect((await listFor(f, { status: "code_review" })).entities).toEqual([]);
   });
 });
 
@@ -346,64 +344,76 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     expect(decideSandboxStartPlan(undefined)).toBe("start");
   });
 
-  test("starting a task from closed moves it to starting", async () => {
-    const f = await fixture();
-    const closedTaskId = await f.t.run(async (ctx) => {
-      const now = Date.now();
-      return ctx.db.insert("agentTasks", {
-        repoId: f.repoId,
-        title: "Closed sandbox",
-        status: "business_review",
-        numId: 22,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: f.ownerUserId,
-        // A resumable sandbox id takes the direct-start path rather than
-        // scheduling the whole startup workflow.
-        sandboxId: "sbx_closed",
-        reviewTaskSandboxStatus: "closed",
+  test(
+    "starting a task from closed moves it to starting",
+    async () => {
+      const f = await fixture();
+      const closedTaskId = await f.t.run(async (ctx) => {
+        const now = Date.now();
+        return ctx.db.insert("agentTasks", {
+          repoId: f.repoId,
+          title: "Closed sandbox",
+          status: "business_review",
+          numId: 22,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: f.ownerUserId,
+          // A resumable sandbox id takes the direct-start path rather than
+          // scheduling the whole startup workflow.
+          sandboxId: "sbx_closed",
+          reviewTaskSandboxStatus: "closed",
+        });
       });
-    });
 
-    const after = await withoutRunningScheduledWork(async () => {
-      await f.t
-        .withIdentity({ subject: OWNER_CLERK_ID })
-        .mutation(api.agentTasks.startTaskSandbox, { taskId: closedTaskId });
-      return f.t.run(async (ctx) => ctx.db.get(closedTaskId));
-    });
+      const after = await withoutRunningScheduledWork(async () => {
+        await f.t
+          .withIdentity({ subject: OWNER_CLERK_ID })
+          .mutation(api.agentTasks.startTaskSandbox, { taskId: closedTaskId });
+        return f.t.run(async (ctx) => ctx.db.get(closedTaskId));
+      });
 
-    expect(after?.reviewTaskSandboxStatus).toBe("starting");
-    // The resumable id is kept, so the paused filesystem comes back.
-    expect(after?.sandboxId).toBe("sbx_closed");
-  }, TIMEOUT_MS);
+      expect(after?.reviewTaskSandboxStatus).toBe("starting");
+      // The resumable id is kept, so the paused filesystem comes back.
+      expect(after?.sandboxId).toBe("sbx_closed");
+    },
+    TIMEOUT_MS,
+  );
 
-  test("stopping a task from active moves it to stopping, keeping the sandbox id", async () => {
-    const f = await fixture();
-    await f.t.run(async (ctx) => {
-      await ctx.db.patch(f.taskId, { sandboxId: "sbx_live" });
-    });
+  test(
+    "stopping a task from active moves it to stopping, keeping the sandbox id",
+    async () => {
+      const f = await fixture();
+      await f.t.run(async (ctx) => {
+        await ctx.db.patch(f.taskId, { sandboxId: "sbx_live" });
+      });
 
-    const after = await withoutRunningScheduledWork(async () => {
+      const after = await withoutRunningScheduledWork(async () => {
+        await f.t
+          .withIdentity({ subject: OWNER_CLERK_ID })
+          .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
+        return f.t.run(async (ctx) => ctx.db.get(f.taskId));
+      });
+
+      expect(after?.reviewTaskSandboxStatus).toBe("stopping");
+      // Kept so the same paused filesystem can be resumed by a later start.
+      expect(after?.sandboxId).toBe("sbx_live");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "stopping a task that never had a sandbox closes it outright",
+    async () => {
+      const f = await fixture();
       await f.t
         .withIdentity({ subject: OWNER_CLERK_ID })
         .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-      return f.t.run(async (ctx) => ctx.db.get(f.taskId));
-    });
 
-    expect(after?.reviewTaskSandboxStatus).toBe("stopping");
-    // Kept so the same paused filesystem can be resumed by a later start.
-    expect(after?.sandboxId).toBe("sbx_live");
-  }, TIMEOUT_MS);
-
-  test("stopping a task that never had a sandbox closes it outright", async () => {
-    const f = await fixture();
-    await f.t
-      .withIdentity({ subject: OWNER_CLERK_ID })
-      .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-
-    const after = await f.t.run(async (ctx) => ctx.db.get(f.taskId));
-    expect(after?.reviewTaskSandboxStatus).toBe("closed");
-  }, TIMEOUT_MS);
+      const after = await f.t.run(async (ctx) => ctx.db.get(f.taskId));
+      expect(after?.reviewTaskSandboxStatus).toBe("closed");
+    },
+    TIMEOUT_MS,
+  );
 
   test("get_agent_state uses the same executing rule as stop and list", () => {
     const nodeActions = convexSource("mcp/nodeActions.ts");
@@ -599,9 +609,7 @@ describe("cancel_queued_message only touches the queue", () => {
     const survivors = await f.t.run(async (ctx) =>
       ctx.db
         .query("queuedMessages")
-        .withIndex("by_parent_and_order", (q) =>
-          q.eq("parentId", f.sessionId),
-        )
+        .withIndex("by_parent_and_order", (q) => q.eq("parentId", f.sessionId))
         .collect(),
     );
     expect(survivors).toHaveLength(2);
@@ -626,7 +634,7 @@ describe("the new tools reach every MCP caller and write no review state", () =>
 
   test("they are registered above the orchestrator gate, like send_chat_message", () => {
     const registered = tools.indexOf(
-      "registerEntityTools(server, credentials, ctx)",
+      "tools.push(...entityTools(credentials, ctx))",
     );
     const gate = tools.indexOf("if (isOrchestrator) {");
     expect(registered).toBeGreaterThan(-1);

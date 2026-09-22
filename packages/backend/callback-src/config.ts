@@ -1,5 +1,6 @@
 import { existsSync } from "fs";
 import { hasEvaMcpConfig } from "./evaMcp.js";
+import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
 export const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || CONVEX_URL;
@@ -92,6 +93,35 @@ export const WORK_DIR = existsSync("/tmp/repo")
   : existsSync("/workspace/repo")
     ? "/workspace/repo"
     : "/tmp/repo";
+
+/**
+ * Multi-repo sessions only: root of the linked-repo clones
+ * (`/tmp/workspace/<name>`, plus a `<primaryName> -> WORK_DIR` symlink for the
+ * primary). Both this and `LINKED_REPOS` are null/empty for ordinary
+ * single-repo sessions.
+ */
+export const WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
+/** Linked repo clones for this session (empty for single-repo sessions). */
+export const LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
+/** Every checked-out repo for this session: the primary first, then linked repos. */
+export const REPO_CHECKOUT_DIRS = [
+  WORK_DIR,
+  ...LINKED_REPOS.map((repo) => repo.path),
+];
+/**
+ * Env-only escape hatch (no rebuild needed): root the agent harness's cwd at
+ * `WORKSPACE_ROOT` instead of `WORK_DIR` when a harness's manual smoke test
+ * (see `tests/linkedReposHarness.manual.md`) shows it cannot edit outside its
+ * configured cwd even when told about the extra directories another way.
+ */
+export const LINKED_REPOS_CWD_ROOT =
+  process.env.EVA_LINKED_REPOS_CWD_ROOT === "1";
+/** The agent harness's working directory — see `resolveAgentCwd`. */
+export const AGENT_CWD = resolveAgentCwd(
+  WORK_DIR,
+  WORKSPACE_ROOT,
+  LINKED_REPOS_CWD_ROOT,
+);
 export const NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000",
 );

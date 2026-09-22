@@ -566,6 +566,28 @@ export const snapshotBuildWorkflow = workflow.define({
         logs: `Seeded snapshot ${effectiveSeededName} built for this app.\n`,
       });
 
+      // This app's own seeded snapshot just moved — any codebase group that
+      // uses it as its primary has a stale fingerprint now, so schedule each
+      // one to rebuild. Best-effort: buildGroupSnapshot logs and no-ops on its
+      // own failures, so a lookup/schedule failure here must not fail the build.
+      try {
+        const groupIdsToRebuild = await step.runQuery(
+          internal.repoGroups.listGroupsByPrimaryRepo,
+          { primaryRepoId: appRepoId },
+        );
+        for (const groupId of groupIdsToRebuild) {
+          await step.runMutation(internal.repoGroups.scheduleGroupRebuild, {
+            groupId,
+          });
+        }
+      } catch (e) {
+        console.error(
+          `[snapshot] failed to schedule repo group rebuilds for repo ${appRepoId}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+
       // Best-effort: delete the previous snapshot if it differed from the new one
       // (keep-last-good already swapped above, so failures here just leave a stray
       // snapshot that the next successful build removes).

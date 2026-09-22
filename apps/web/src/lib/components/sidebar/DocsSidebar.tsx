@@ -22,7 +22,14 @@ import {
   Surface,
   Textarea,
 } from "@eva/ui";
-import { IconFile, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+import {
+  IconFile,
+  IconMessage,
+  IconPlus,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
+import { docSourceLabel, docSourceRoute } from "@/lib/components/docs/_source";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -44,6 +51,7 @@ import {
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface DocsSidebarProps {
   repoId: Id<"githubRepos">;
@@ -309,7 +317,7 @@ export function DocsSidebar({
           </div>
         ) : (
           <SharedLayoutNav layoutId="docs-nav" className="space-y-1">
-            {filteredDocs.map((doc) => {
+            {filteredDocs.map((doc, index) => {
               const segment = entityPathSegment(doc);
               if (!segment) return null;
               const href = `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`;
@@ -317,58 +325,89 @@ export function DocsSidebar({
                 `${basePath}/docs/${segment}`,
               );
               return (
-                <ContextMenu key={doc._id}>
-                  <ContextMenuTrigger asChild>
-                    <SharedLayoutNavSurface
-                      itemId={doc._id}
-                      isActive={isSelected}
-                      className="group"
-                    >
-                      <SidebarListHoverCard
-                        title={doc.title}
-                        preview={doc.contentPreview}
-                        createdAt={doc.createdAt}
-                        userId={doc.createdBy}
+                <ListEnter key={doc._id} index={index} fast>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <SharedLayoutNavSurface
+                        itemId={doc._id}
+                        isActive={isSelected}
+                        className="group"
                       >
-                        <Link
-                          to={href}
-                          search={(prev) => prev}
-                          onClick={onNavigate}
-                          className={sidebarNavLinkClass(isSelected)}
+                        <SidebarListHoverCard
+                          title={doc.title}
+                          preview={doc.contentPreview}
+                          createdAt={doc.createdAt}
+                          userId={doc.createdBy}
                         >
-                          <span className="min-w-0 flex-1 truncate">
-                            {doc.title}
-                          </span>
-                          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                            {compactRelativeTime(doc.updatedAt)}
-                          </span>
-                        </Link>
-                      </SidebarListHoverCard>
-                    </SharedLayoutNavSurface>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent onClick={(e) => e.stopPropagation()}>
-                    {doc.kind !== "pr-recap" ? (
-                      <ContextMenuItem
-                        className="text-destructive"
-                        title={skipConfirmTitle("Delete")}
-                        onClick={() => {
-                          const target = { id: doc._id, title: doc.title };
-                          requestConfirm(
-                            altHeld,
-                            () => setDocToDelete(target),
-                            () => {
-                              void handleDelete(target);
-                            },
-                          );
-                        }}
-                      >
-                        <IconTrash size={16} />
-                        Delete
-                        <ConfirmSkipHint />
-                      </ContextMenuItem>
-                    ) : null}
-                  </ContextMenuContent>
-                </ContextMenu>
+                          <Link
+                            to={href}
+                            search={(prev) => prev}
+                            onClick={onNavigate}
+                            className={sidebarNavLinkClass(isSelected)}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">{doc.title}</span>
+                              {doc.source ? (
+                                <span className="block truncate text-[10px] text-muted-foreground">
+                                  {docSourceLabel(doc.source)}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                              {compactRelativeTime(doc.updatedAt)}
+                            </span>
+                          </Link>
+                        </SidebarListHoverCard>
+                      </SharedLayoutNavSurface>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent onClick={(e) => e.stopPropagation()}>
+                      {doc.source && docSourceRoute(doc.source) ? (
+                        <ContextMenuItem
+                          onClick={() => {
+                            // The guard above narrows the JSX, not this
+                            // callback, so the source is re-checked here.
+                            if (!doc.source) return;
+                            const route = docSourceRoute(doc.source);
+                            if (!route) return;
+                            void navigate({
+                              to: route.to,
+                              params: route.params,
+                            });
+                            if (onNavigate) onNavigate();
+                          }}
+                        >
+                          <IconMessage size={16} />
+                          Open{" "}
+                          {doc.source.kind === "session"
+                            ? "session"
+                            : doc.source.kind === "task"
+                              ? "task"
+                              : "project"}
+                        </ContextMenuItem>
+                      ) : null}
+                      {doc.kind !== "pr-recap" ? (
+                        <ContextMenuItem
+                          className="text-destructive"
+                          title={skipConfirmTitle("Delete")}
+                          onClick={() => {
+                            const target = { id: doc._id, title: doc.title };
+                            requestConfirm(
+                              altHeld,
+                              () => setDocToDelete(target),
+                              () => {
+                                void handleDelete(target);
+                              },
+                            );
+                          }}
+                        >
+                          <IconTrash size={16} />
+                          Delete
+                          <ConfirmSkipHint />
+                        </ContextMenuItem>
+                      ) : null}
+                    </ContextMenuContent>
+                  </ContextMenu>
+                </ListEnter>
               );
             })}
           </SharedLayoutNav>

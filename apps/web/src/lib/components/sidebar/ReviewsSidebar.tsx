@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconGitPullRequest } from "@tabler/icons-react";
 import { useQueryState } from "nuqs";
 import { prErrorMessage, prefetchPrReview } from "@/lib/prReviewQueries";
@@ -77,53 +78,73 @@ export function ReviewsSidebar({
       </div>
 
       <div className="flex-1">
-        {pullsQuery.isPending ? (
-          <div className="flex items-center justify-center py-8">
-            <Spinner size="sm" />
-          </div>
-        ) : pullsQuery.data === undefined ? (
-          <div className="space-y-2 p-4 text-center">
-            <p className="text-sm text-destructive">
-              {prErrorMessage(pullsQuery.error, "Couldn't load pull requests")}
-            </p>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={pullsQuery.isFetching}
-              onClick={() => void pullsQuery.refetch()}
+        <SharedLayoutNav layoutId="reviews-sidebar-nav">
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={listState}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
             >
-              Retry
-            </Button>
-          </div>
-        ) : pulls.length === 0 ? (
-          <div className="p-4 text-center">
-            <IconGitPullRequest
-              size={28}
-              className="mx-auto mb-2 text-muted-foreground"
-            />
-            <p className="text-sm text-muted-foreground">
-              No {listState === "all" ? "" : `${listState} `}pull requests
-            </p>
-          </div>
-        ) : (
-          <SharedLayoutNav layoutId="reviews-sidebar-nav" className="px-2 pb-2">
-            {pulls.map((pr) => (
-              <ReviewsSidebarRow
-                key={pr.number}
-                pr={pr}
-                href={`${basePath}/reviews/${pr.number}/overview`}
-                isActive={activePrNumber === pr.number}
-                onNavigate={onNavigate}
-                onPrefetch={() =>
-                  prefetchPrReview(queryClient, runners, repoId, pr.number)
-                }
-                onRename={() =>
-                  setRenaming({ number: pr.number, title: pr.title })
-                }
-              />
-            ))}
-          </SharedLayoutNav>
-        )}
+              {pullsQuery.isPending ? (
+                <div className="flex items-center justify-center py-8">
+                  <Spinner size="sm" />
+                </div>
+              ) : pullsQuery.data === undefined ? (
+                <div className="space-y-2 p-4 text-center">
+                  <p className="text-sm text-destructive">
+                    {prErrorMessage(
+                      pullsQuery.error,
+                      "Couldn't load pull requests",
+                    )}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={pullsQuery.isFetching}
+                    onClick={() => void pullsQuery.refetch()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : pulls.length === 0 ? (
+                <div className="p-4 text-center">
+                  <IconGitPullRequest
+                    size={28}
+                    className="mx-auto mb-2 text-muted-foreground"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    No {listState === "all" ? "" : `${listState} `}pull requests
+                  </p>
+                </div>
+              ) : (
+                <div className="px-2 pb-2">
+                  {pulls.map((pr) => (
+                    <ReviewsSidebarRow
+                      key={pr.number}
+                      pr={pr}
+                      href={`${basePath}/reviews/${pr.number}/overview`}
+                      isActive={activePrNumber === pr.number}
+                      onNavigate={onNavigate}
+                      onPrefetch={() =>
+                        prefetchPrReview(
+                          queryClient,
+                          runners,
+                          repoId,
+                          pr.number,
+                        )
+                      }
+                      onRename={() =>
+                        setRenaming({ number: pr.number, title: pr.title })
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </m.div>
+          </AnimatePresence>
+        </SharedLayoutNav>
       </div>
 
       <PrRenameDialog

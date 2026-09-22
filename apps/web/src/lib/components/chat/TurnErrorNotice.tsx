@@ -1,3 +1,4 @@
+import { Button } from "@eva/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 
 interface TurnErrorNoticeProps {
@@ -5,6 +6,11 @@ interface TurnErrorNoticeProps {
   title: string;
   /** The provider's own text, kept verbatim under the title. */
   detail?: string;
+  /**
+   * Way out of the failure, on the row itself (usually Retry). Omitted when the
+   * chat is read-only or there is nothing to re-send.
+   */
+  action?: { label: string; onClick: () => void };
 }
 
 /**
@@ -12,7 +18,11 @@ interface TurnErrorNoticeProps {
  * text as markdown body copy reads like Eva answering with the word "Error" in
  * it; the tone step and the icon say the turn did not run at all.
  */
-export function TurnErrorNotice({ title, detail }: TurnErrorNoticeProps) {
+export function TurnErrorNotice({
+  title,
+  detail,
+  action,
+}: TurnErrorNoticeProps) {
   return (
     <div className="flex items-start gap-2 rounded-surface bg-destructive/10 px-3 py-2.5">
       <IconAlertTriangle
@@ -27,6 +37,16 @@ export function TurnErrorNotice({ title, detail }: TurnErrorNoticeProps) {
           </p>
         ) : null}
       </div>
+      {action ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={action.onClick}
+        >
+          {action.label}
+        </Button>
+      ) : null}
     </div>
   );
 }

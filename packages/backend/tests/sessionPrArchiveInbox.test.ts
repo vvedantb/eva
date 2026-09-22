@@ -63,9 +63,7 @@ describe("session PR archive inbox copy", () => {
     expect(
       sessionPrArchiveNotificationCopy({
         sessionTitle: SESSION_TITLE,
-        prUrl: PR_URL,
-        prNumber: 664,
-        merged: true,
+        prs: [{ url: PR_URL, prNumber: 664, merged: true }],
       }),
     ).toEqual({
       title: `PR #664 merged — "${SESSION_TITLE}" archived`,
@@ -77,12 +75,27 @@ describe("session PR archive inbox copy", () => {
     expect(
       sessionPrArchiveNotificationCopy({
         sessionTitle: SESSION_TITLE,
-        prUrl: PR_URL,
-        merged: false,
+        prs: [{ url: PR_URL, prNumber: 664, merged: false }],
       }),
     ).toEqual({
       title: `PR #664 closed — "${SESSION_TITLE}" archived`,
       message: `PR #664 was closed on GitHub without merging (${PR_URL}). Your session was archived.`,
+    });
+  });
+
+  test("multi-repo session lists every PR that triggered the archive", () => {
+    const secondUrl = "https://github.com/vvedantb/eva-api/pull/12";
+    expect(
+      sessionPrArchiveNotificationCopy({
+        sessionTitle: SESSION_TITLE,
+        prs: [
+          { url: PR_URL, prNumber: 664, merged: true },
+          { url: secondUrl, prNumber: 12, merged: true },
+        ],
+      }),
+    ).toEqual({
+      title: `PR #664, PR #12 merged — "${SESSION_TITLE}" archived`,
+      message: `Your session was archived because every pull request it opened is now closed: ${PR_URL}, ${secondUrl}.`,
     });
   });
 });
@@ -94,9 +107,7 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
       const { t, ownerUserId, sessionId } = await fixture();
       const expected = sessionPrArchiveNotificationCopy({
         sessionTitle: SESSION_TITLE,
-        prUrl: PR_URL,
-        prNumber: 664,
-        merged: true,
+        prs: [{ url: PR_URL, prNumber: 664, merged: true }],
       });
 
       await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
@@ -130,9 +141,7 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
       const { t, ownerUserId } = await fixture();
       const expected = sessionPrArchiveNotificationCopy({
         sessionTitle: SESSION_TITLE,
-        prUrl: PR_URL,
-        prNumber: 664,
-        merged: false,
+        prs: [{ url: PR_URL, prNumber: 664, merged: false }],
       });
 
       await t.mutation(internal.githubWebhook.handleSessionPrEvent, {

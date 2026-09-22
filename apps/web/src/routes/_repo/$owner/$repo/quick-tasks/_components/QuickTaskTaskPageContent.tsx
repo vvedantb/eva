@@ -85,6 +85,18 @@ export function QuickTaskTaskPageContent({
               search: (prev) => ({ ...prev, file: path }),
             });
           },
+          onViewDiff: (repoRelativePath?: string) => {
+            if (simpleView) return;
+            void navigate({
+              to: toInternalRepoHref(
+                `${basePath}/quick-tasks/${pathSegment}/sandbox/review/diffs/unified`,
+              ),
+              search: (prev) => ({
+                ...prev,
+                ...(repoRelativePath ? { diffFile: repoRelativePath } : {}),
+              }),
+            });
+          },
         },
       };
     }
@@ -160,17 +172,17 @@ export function QuickTaskTaskPageContent({
           }}
         />
       ) : null}
-    <TaskDetailInline
-      onClose={() =>
-        navigate({
-          to: toInternalRepoHref(`${basePath}/quick-tasks`),
-          search: (prev) => prev,
-        })
-      }
-      taskId={taskId}
-      allTags={allTags}
-      routing={routing}
-    />
+      <TaskDetailInline
+        onClose={() =>
+          navigate({
+            to: toInternalRepoHref(`${basePath}/quick-tasks`),
+            search: (prev) => prev,
+          })
+        }
+        taskId={taskId}
+        allTags={allTags}
+        routing={routing}
+      />
     </>
   );
 }

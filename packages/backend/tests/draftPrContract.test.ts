@@ -9,7 +9,7 @@ import {
 
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
-const taskActions = readSource("taskWorkflowActions.ts");
+const taskActions = readSource("_github/pullRequestWrite.ts");
 const prFlow = readSource("_github/prFlow.ts");
 
 /**

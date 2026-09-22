@@ -13,6 +13,7 @@ import {
   Spinner,
   toast,
 } from "@eva/ui";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IconLoader2 } from "@tabler/icons-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
@@ -67,6 +68,7 @@ export function ActivityTimeline({
   createdAt,
   creatorUser,
   runs,
+  activityInChatRunId,
   comments,
   taskActivity,
   users,
@@ -81,6 +83,12 @@ export function ActivityTimeline({
   creatorUser: User | undefined;
   isProjectTask: boolean;
   runs: Runs | undefined;
+  /**
+   * The run whose live activity belongs to the sandbox chat instead of this
+   * timeline. Its row still renders (status, timing, Stop) with the activity
+   * steps and log left out.
+   */
+  activityInChatRunId?: Id<"agentRuns">;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
@@ -234,6 +242,7 @@ export function ActivityTimeline({
         <RunTimelineItem
           run={run}
           isActiveRun={isActiveRun}
+          activityInChat={run._id === activityInChatRunId}
           streaming={streaming}
           activeRunElapsed={activeRunElapsed}
           isStopping={isStopping}
@@ -258,28 +267,42 @@ export function ActivityTimeline({
             if (segment.kind === "comment") {
               const comment = segment.item.comment;
               return (
-                <CommentThread
+                <ListEnter
                   key={`comment-${comment._id}`}
-                  comment={comment}
-                  taskId={taskId}
-                  users={users}
-                  repliesByParentId={repliesByParentId}
-                  onDeleteRequest={(commentId) =>
-                    requestConfirm(
-                      altHeld,
-                      () => setDeletingCommentId(commentId),
-                      () => {
-                        void deleteComment(commentId);
-                      },
-                    )
-                  }
-                />
+                  index={segmentIndex}
+                  fast
+                >
+                  <CommentThread
+                    comment={comment}
+                    taskId={taskId}
+                    users={users}
+                    repliesByParentId={repliesByParentId}
+                    onDeleteRequest={(commentId) =>
+                      requestConfirm(
+                        altHeld,
+                        () => setDeletingCommentId(commentId),
+                        () => {
+                          void deleteComment(commentId);
+                        },
+                      )
+                    }
+                  />
+                </ListEnter>
               );
             }
 
             return (
-              <div
-                key={`rail-${segmentIndex}`}
+              <ListEnter
+                key={`rail-${segment.items
+                  .map((item) =>
+                    item.kind === "run"
+                      ? item.run._id
+                      : item.kind === "taskActivity"
+                        ? item.activity._id
+                        : "created",
+                  )
+                  .join("-")}`}
+                index={segmentIndex}
                 className="relative flex flex-col gap-4"
               >
                 {/* Rail only through non-comment events in this contiguous block. */}
@@ -288,7 +311,7 @@ export function ActivityTimeline({
                   className="pointer-events-none absolute bottom-2 left-2 top-2 w-px -translate-x-1/2 bg-border"
                 />
                 {segment.items.map((item) => renderTimelineItem(item))}
-              </div>
+              </ListEnter>
             );
           })
         )}

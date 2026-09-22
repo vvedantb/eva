@@ -5,12 +5,13 @@ import {
   normalizeAIModel,
   type AIModel,
   type Id,
-  type ReasoningLevel,
   type StoredModelTraits,
 } from "@eva/backend";
+import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { toRunTraitArgs } from "@/lib/utils/runTraits";
 
 /**
  * Session composer prefs backed by Convex (`sessions.lastModel` / trait fields
@@ -20,11 +21,13 @@ import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff
  *
  * Changes go through sticky setters with optimistic patches. While the session
  * query is still loading the picker shows `defaultModel`, model-default traits,
- * and Team account.
+ * and Team account. Cached-hidden shells pass `active: false` so this does
+ * not keep a second `sessions.get` live after SessionDetailClient skips it.
  */
 export function useSessionModel(
   sessionId: Id<"sessions">,
   defaultModel: AIModel,
+  active = true,
 ): {
   model: AIModel;
   setModel: (model: AIModel) => void;
@@ -39,7 +42,10 @@ export function useSessionModel(
   ) => Promise<void>;
   isSwitchingAccount: boolean;
 } {
-  const session = useQuery(api.sessions.get, { id: sessionId });
+  const session = useHeldQuery(
+    api.sessions.get,
+    active ? { id: sessionId } : "skip",
+  );
   const prewarmDaemonNow = useAction(api.sessionWorkflow.prewarmDaemonNow);
   const setModelMutation = useMutation(
     api.sessions.setModel,
@@ -83,16 +89,7 @@ export function useSessionModel(
       { id: args.id },
       {
         ...current,
-        ...(args.reasoningLevel !== undefined
-          ? { lastReasoningLevel: args.reasoningLevel }
-          : {}),
-        ...(args.thinkingEnabled !== undefined
-          ? { lastThinkingEnabled: args.thinkingEnabled }
-          : {}),
-        ...(args.use1mContext !== undefined
-          ? { lastUse1mContext: args.use1mContext }
-          : {}),
-        ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+        ...composerTraitFields(args),
       },
     );
   });
@@ -107,29 +104,16 @@ export function useSessionModel(
   };
 
   const setTraits = (partial: Partial<StoredModelTraits>) => {
-    const reasoningLevel: ReasoningLevel | undefined = partial.effortLevel;
     void setTraitsMutation({
       id: sessionId,
-      ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
-      ...(partial.thinkingEnabled !== undefined
-        ? { thinkingEnabled: partial.thinkingEnabled }
-        : {}),
-      ...(partial.use1mContext !== undefined
-        ? { use1mContext: partial.use1mContext }
-        : {}),
-      ...(partial.fastMode !== undefined ? { fastMode: partial.fastMode } : {}),
+      ...toRunTraitArgs(partial),
     });
   };
 
   return {
     model,
     setModel,
-    traits: {
-      effortLevel: session?.lastReasoningLevel,
-      thinkingEnabled: session?.lastThinkingEnabled,
-      use1mContext: session?.lastUse1mContext,
-      fastMode: session?.lastFastMode,
-    },
+    traits: storedComposerTraits(session),
     setTraits,
     providerAccountId:
       session === undefined ? undefined : (session?.providerAccountId ?? null),

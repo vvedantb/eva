@@ -1,16 +1,13 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { createNotification } from "../notifications";
 import { runModeValidator } from "../validators";
-import type { Id } from "../_generated/dataModel";
 import {
   hasActiveRun,
   isSupersededTaskRun,
   recomputeProjectPhase,
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
-import { buildWorkflowRunNotificationMessage } from "./prompts";
 import { buildTaskDoneEvent } from "./events";
 import {
   STALE_CHECK_DELAY_MS,
@@ -347,31 +344,8 @@ export const completeRun = internalMutation({
     await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));
     await clearStreamingActivity(ctx, String(args.taskId));
 
-    if (task) {
-      const scopeLabel = task.projectId ? "Task" : "Quick task";
-      const statusText = args.success ? "completed" : "failed";
-      const notifyUsers = new Set(
-        [task.createdBy, task.assignedTo].filter(
-          (id): id is Id<"users"> => id !== undefined,
-        ),
-      );
-      for (const userId of notifyUsers) {
-        await createNotification(ctx, {
-          userId,
-          type: args.success ? "run_completed" : "run_failed",
-          title: `${scopeLabel} ${statusText}: ${task.title}`,
-          repoId: task.repoId,
-          projectId: task.projectId,
-          taskId: args.taskId,
-          message: buildWorkflowRunNotificationMessage({
-            success: args.success,
-            projectId: task.projectId,
-            error: args.error,
-            prUrl: args.prUrl,
-          }),
-        });
-      }
-    }
+    // Run success/failure deliberately sends no notification: the task card and
+    // chat already show the outcome, so an inbox row per run is pure noise.
 
     // Auto-schedule retry on usage-limit errors
     if (!args.success && args.error && isUsageLimitError(args.error)) {

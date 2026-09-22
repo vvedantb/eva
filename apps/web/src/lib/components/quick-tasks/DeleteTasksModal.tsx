@@ -14,12 +14,18 @@ import {
   DialogFooter,
   Button,
   Spinner,
+  toast,
 } from "@eva/ui";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  mutationError,
+  mutationSuccess,
+} from "@/lib/utils/mutationToast";
 
 /** Bulk-deletes selected quick tasks. Shared by the modal and Alt-click bypass. */
 export function useBulkDeleteTasks() {
   const { repoId } = useRepo();
+  const restoreTask = useMutation(api.agentTasks.restore);
   const removeTask = useMutation(api.agentTasks.remove).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.agentTasks.getAllTasks, {
@@ -36,14 +42,30 @@ export function useBulkDeleteTasks() {
   );
 
   return async (selectedTaskIds: Set<Id<"agentTasks">>) => {
-    const count = selectedTaskIds.size;
-    const successMessage = `Deleted ${count} task${count === 1 ? "" : "s"}`;
-    await withMutationToast(
-      Promise.all([...selectedTaskIds].map((id) => removeTask({ id }))),
-      successMessage,
+    const ids = [...selectedTaskIds];
+    const noun = `task${ids.length === 1 ? "" : "s"}`;
+    await catchMutationError(
+      Promise.all(ids.map((id) => removeTask({ id }))),
       "Couldn't delete tasks",
       "tasks-bulk-delete",
     );
+    // Delete is a soft delete, so the way back is one mutation per row. The
+    // sandbox and the scheduled run do not come back — `restore` says so.
+    toast.success(`${ids.length} ${noun} deleted`, {
+      id: "tasks-bulk-delete",
+      action: {
+        label: "Undo",
+        onClick: () => {
+          void Promise.all(ids.map((id) => restoreTask({ id })))
+            .then(() => {
+              mutationSuccess(`${ids.length} ${noun} restored`, "tasks-bulk-restore");
+            })
+            .catch(() => {
+              mutationError("Couldn't restore tasks", "tasks-bulk-restore");
+            });
+        },
+      },
+    });
   };
 }
 
@@ -91,8 +113,9 @@ export function DeleteTasksModal({
             Delete {count} task{count === 1 ? "" : "s"}?
           </DialogTitle>
           <DialogDescription>
-            This action cannot be undone. The selected task
-            {count === 1 ? "" : "s"} will be permanently deleted.
+            The selected task{count === 1 ? "" : "s"} will be removed from every
+            list. Undo is offered once, in the toast that follows; the sandbox
+            and any scheduled run are gone either way.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

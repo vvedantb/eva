@@ -100,10 +100,15 @@ export const evalFixStatusValidator = v.union(
   v.literal("fix_error"),
 );
 
+/**
+ * Theme preference, not resolved appearance. "system" is a real, persisted
+ * choice: the client resolves it against `prefers-color-scheme` on every boot.
+ */
 export const themeValidator = v.union(
   v.literal("light"),
   v.literal("dark"),
   v.literal("neutral"),
+  v.literal("system"),
 );
 
 export const auditSeverityValidator = v.union(
@@ -357,4 +362,21 @@ export const usageLimitCompletenessValidator = v.union(
   v.literal("complete"),
   v.literal("partial"),
   v.literal("refused"),
+);
+
+/**
+ * How loudly a notification should be delivered. Set by mention routing today
+ * (reply → high, fyi → normal, incidental → low):
+ *
+ * - `high`: instant email shortly after the notification lands.
+ * - `normal`: daily digest only.
+ * - `low`: inbox only — no email, no digest, no toast or chime.
+ *
+ * Absent means "not routed yet" (a mention whose routing action has not landed)
+ * or a row created before urgency existed; both are treated as normal.
+ */
+export const notificationUrgencyValidator = v.union(
+  v.literal("low"),
+  v.literal("normal"),
+  v.literal("high"),
 );

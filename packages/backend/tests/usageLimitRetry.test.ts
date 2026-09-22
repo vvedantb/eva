@@ -46,8 +46,8 @@ function mutationBody(source: string, name: string): string {
 function expectRetryReusesStaging(relative: string, stagingHelper: string) {
   const body = mutationBody(readSource(relative), "retryLastTurnWithAccount");
   expect(body).toContain(stagingHelper);
-  expect(body).toContain("resultTargetMessage(");
-  expect(body).toContain('"rate_limit"');
+  expect(body).toContain("selectUsageLimitRetryUserMessage(");
+  expect(body).not.toContain('"rate_limit"');
   expect(body).not.toContain("notifyChatMentions(");
 }
 

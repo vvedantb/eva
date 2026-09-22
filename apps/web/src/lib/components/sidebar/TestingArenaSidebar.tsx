@@ -33,6 +33,7 @@ import {
 } from "@/lib/components/sidebar/SharedLayoutNav";
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment } from "@/lib/numId";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import {
   mutationError,
@@ -132,47 +133,48 @@ export function TestingArenaSidebar({
           </div>
         ) : (
           <SharedLayoutNav layoutId="testing-arena-nav" className="space-y-1">
-            {docs.map((doc) => {
+            {docs.map((doc, index) => {
               const segment = entityPathSegment(doc);
               if (!segment) return null;
               const href = `${basePath}/testing-arena/${segment}`;
               const isSelected = pathname.startsWith(href);
               return (
-                <SharedLayoutNavSurface
-                  key={doc._id}
-                  itemId={doc._id}
-                  isActive={isSelected}
-                  className="group"
-                >
-                  <SidebarListHoverCard
-                    title={doc.title}
-                    preview={doc.contentPreview}
-                    createdAt={doc.createdAt}
-                    userId={doc.createdBy}
+                <ListEnter key={doc._id} index={index} fast>
+                  <SharedLayoutNavSurface
+                    itemId={doc._id}
+                    isActive={isSelected}
+                    className="group"
                   >
-                    <Link
-                      to={href}
-                      onClick={onNavigate}
-                      className={sidebarNavLinkClass(isSelected)}
+                    <SidebarListHoverCard
+                      title={doc.title}
+                      preview={doc.contentPreview}
+                      createdAt={doc.createdAt}
+                      userId={doc.createdBy}
                     >
-                      <IconFileText
-                        size={16}
-                        className={cn(
-                          "shrink-0",
-                          isSelected
-                            ? "text-sidebar-primary"
-                            : "text-muted-foreground",
-                        )}
-                      />
-                      <MarqueeOnHover className="min-w-0 flex-1">
-                        {doc.title}
-                      </MarqueeOnHover>
-                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                        {compactRelativeTime(doc.updatedAt)}
-                      </span>
-                    </Link>
-                  </SidebarListHoverCard>
-                </SharedLayoutNavSurface>
+                      <Link
+                        to={href}
+                        onClick={onNavigate}
+                        className={sidebarNavLinkClass(isSelected)}
+                      >
+                        <IconFileText
+                          size={16}
+                          className={cn(
+                            "shrink-0",
+                            isSelected
+                              ? "text-sidebar-primary"
+                              : "text-muted-foreground",
+                          )}
+                        />
+                        <MarqueeOnHover className="min-w-0 flex-1">
+                          {doc.title}
+                        </MarqueeOnHover>
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                          {compactRelativeTime(doc.updatedAt)}
+                        </span>
+                      </Link>
+                    </SidebarListHoverCard>
+                  </SharedLayoutNavSurface>
+                </ListEnter>
               );
             })}
           </SharedLayoutNav>

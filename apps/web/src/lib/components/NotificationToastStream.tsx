@@ -17,6 +17,7 @@ import {
   type Notification,
 } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
 
 const TOAST_LIMIT = 4;
 const TOAST_TTL_MS = 9000;
@@ -29,8 +30,23 @@ type ToastEntry = {
   expiresAt: number;
 };
 
+/**
+ * Whether a notification has finished arriving. A mention is written to the
+ * inbox before routing has judged it, and its urgency decides whether it
+ * announces itself at all — so an unrouted mention is held back rather than
+ * toasted on the guess that it matters. Routing lands seconds later and the
+ * row arrives properly then. Every other type is complete on insert.
+ */
+function hasArrived(notification: Notification): boolean {
+  return !(
+    notification.type === "mention" && notification.urgency === undefined
+  );
+}
+
 export function NotificationToastStream() {
-  const notifications = useQuery(api.notifications.list);
+  // `{}` is the unarchived inbox: `notifications.list` now takes an `archived`
+  // flag, and toasts only ever announce live notifications.
+  const notifications = useQuery(api.notifications.list, {});
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
@@ -59,21 +75,25 @@ export function NotificationToastStream() {
     if (!notifications) {
       return;
     }
-    const currentIds = new Set(
-      notifications.map((notification) => notification._id),
-    );
+    const arrived = notifications.filter(hasArrived);
+    const currentIds = new Set(arrived.map((notification) => notification._id));
     const seenNotificationIds = seenNotificationIdsRef.current;
     if (!seenNotificationIds) {
       seenNotificationIdsRef.current = currentIds;
       return;
     }
 
-    const newlyArrived = notifications.filter(
+    const newlyArrived = arrived.filter(
       (notification) => !seenNotificationIds.has(notification._id),
     );
     seenNotificationIdsRef.current = currentIds;
 
-    if (newlyArrived.length === 0) {
+    // Routing judged these incidental, so they are inbox-only: seen (they will
+    // not toast later) but never announced.
+    const announced = newlyArrived.filter(
+      (notification) => notification.urgency !== "low",
+    );
+    if (announced.length === 0) {
       return;
     }
 
@@ -81,7 +101,7 @@ export function NotificationToastStream() {
     // arrivals. `list` returns the newest 100, so pruning an old notification
     // pulls the next one into the window and it reads as newly arrived â€” but
     // anything resurfacing that way is long since read.
-    if (newlyArrived.some((notification) => !notification.read)) {
+    if (announced.some((notification) => !notification.read)) {
       playNotificationChime();
     }
 
@@ -91,7 +111,7 @@ export function NotificationToastStream() {
       );
       const next = [...previous];
       const now = Date.now();
-      for (const notification of [...newlyArrived].reverse()) {
+      for (const notification of [...announced].reverse()) {
         if (existingIds.has(notification._id)) {
           continue;
         }
@@ -106,17 +126,19 @@ export function NotificationToastStream() {
   }, [notifications]);
 
   useEffect(() => {
-    if (toasts.length === 0) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
+    const delay = nextToastExpiryDelay(
+      toasts.map((entry) => entry.expiresAt),
+      Date.now(),
+    );
+    if (delay === null) return;
+    const timeoutId = window.setTimeout(() => {
       const now = Date.now();
       setToasts((previous) =>
         previous.filter((entry) => entry.expiresAt > now),
       );
-    }, 500);
-    return () => window.clearInterval(intervalId);
-  }, [toasts.length]);
+    }, delay);
+    return () => window.clearTimeout(timeoutId);
+  }, [toasts]);
 
   const dismissToast = (id: Id<"notifications">) => {
     setToasts((previous) =>

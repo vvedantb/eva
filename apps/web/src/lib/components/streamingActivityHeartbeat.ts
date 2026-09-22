@@ -52,3 +52,13 @@ export function thinkingHeartbeatSeconds(
 export function thinkingHeartbeatLabel(seconds: number): string {
   return `Model is thinking... (${seconds}s since last output)`;
 }
+
+/** ms until the silent-stream notice should appear, or 0 if it already should. */
+export function silentStreamDelayMs(
+  startedAt: number | undefined,
+  now: number,
+  thresholdSeconds: number,
+): number {
+  const start = startedAt ?? now;
+  return Math.max(0, thresholdSeconds * 1000 - (now - start));
+}

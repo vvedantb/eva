@@ -34,7 +34,21 @@ export interface SandboxTabDescriptor {
   indicator?: SandboxTabIndicator;
   /** Accessible name for the indicator dot. */
   indicatorLabel?: string;
+  /**
+   * How many items this tab holds. A count says more than the plain `content`
+   * dot, so when it is present (and non-zero) the badge replaces the dot.
+   */
+  count?: number;
 }
+
+/**
+ * How one chip is arranged. The three cases are genuinely different shapes, so
+ * they are named rather than derived from booleans at each call site:
+ * `row` is the phone strip (icon beside label), `icon` is the 44px desktop rail
+ * and the crowded phone strip (label in a tooltip), `stacked` is the labelled
+ * desktop rail (icon over label).
+ */
+export type SandboxTabLayout = "row" | "icon" | "stacked";
 
 /* The chip: `TabsTrigger` already supplies `rounded-lg`, `motion-press`,
    `relative z-1` and the active text colour, and the active *fill* is the
@@ -44,9 +58,24 @@ export interface SandboxTabDescriptor {
    sits under the comfortable-tap floor. `hit-target` is the wrong tool here —
    its 8px bleed would overlap the neighbouring chip across the 4px gap. */
 const TAB_CLASS =
-  "h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground md:w-8 md:justify-center md:px-0";
+  "h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
+
+/* Geometry only — the `md:` prefixes hold because the two rail layouts are
+   chosen off the same 768px breakpoint the media query reads. */
+const TAB_LAYOUT_CLASS: Record<SandboxTabLayout, string> = {
+  row: "",
+  icon: "md:w-8 md:justify-center md:px-0",
+  stacked:
+    "md:h-auto md:w-full md:flex-col md:justify-center md:gap-0.5 md:px-1 md:py-1.5",
+};
 
 const ICON_CLASS = "size-4 shrink-0";
+
+/* Two-digit counts still fit: the pill grows from a 14px circle via `px-1`
+   rather than being fixed-width, and `tabular-nums` keeps it from twitching as
+   the number changes. */
+const COUNT_BADGE_CLASS =
+  "inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center rounded-full bg-primary px-1 font-medium text-[9px] text-primary-foreground leading-none tabular-nums";
 
 function TabIcon({ icon }: { icon: SandboxTabIcon }) {
   if (icon.kind === "name") {
@@ -58,8 +87,8 @@ function TabIcon({ icon }: { icon: SandboxTabIcon }) {
 
 interface SandboxTabTriggerProps {
   tab: SandboxTabDescriptor;
-  /** Icon-only, label moved into a tooltip — desktop rail, or a crowded mobile strip. */
-  labelHidden?: boolean;
+  /** Defaults to the icon rail — the shape every surface but the phone uses. */
+  layout?: SandboxTabLayout;
   /**
    * Fired on click when this tab is already selected. Radix skips
    * `onValueChange` in that case, so a collapsed rail would otherwise ignore
@@ -70,24 +99,43 @@ interface SandboxTabTriggerProps {
 
 export function SandboxTabTrigger({
   tab,
-  labelHidden = false,
+  layout = "icon",
   onReselect,
 }: SandboxTabTriggerProps) {
+  const labelHidden = layout === "icon";
+  const count = tab.count !== undefined && tab.count > 0 ? tab.count : undefined;
   const trigger = (
     <TabsTrigger
       value={tab.value}
       aria-label={labelHidden ? tab.label : undefined}
-      className={TAB_CLASS}
+      className={cn(TAB_CLASS, TAB_LAYOUT_CLASS[layout])}
       onClick={onReselect}
     >
       <TabIcon icon={tab.icon} />
-      {labelHidden ? null : tab.label}
-      {tab.indicator ? (
+      {layout === "row" ? tab.label : null}
+      {layout === "stacked" ? (
+        /* One line, clipped: a rail that reflows per tab name would make the
+           whole column ragged, and the tooltip is gone at this width. */
+        <span className="w-full truncate text-[10px] leading-3">
+          {tab.label}
+        </span>
+      ) : null}
+      {count !== undefined ? (
+        <span
+          aria-label={tab.indicatorLabel}
+          className={cn(
+            COUNT_BADGE_CLASS,
+            layout !== "row" && "absolute right-0 top-0",
+          )}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : tab.indicator ? (
         <span
           aria-label={tab.indicatorLabel}
           className={cn(
             "size-1.5 shrink-0 rounded-full bg-primary",
-            labelHidden && "absolute right-0.5 top-0.5",
+            layout !== "row" && "absolute right-0.5 top-0.5",
             tab.indicator === "activity" &&
               "animate-pulse ring-2 ring-primary/30",
           )}
@@ -95,6 +143,8 @@ export function SandboxTabTrigger({
       ) : null}
     </TabsTrigger>
   );
+  // A visible label needs no tooltip repeating it.
+  if (!labelHidden) return trigger;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -102,10 +152,7 @@ export function SandboxTabTrigger({
             uses `data-state` for active/inactive. */}
         <span className="inline-flex">{trigger}</span>
       </TooltipTrigger>
-      <TooltipContent
-        side={labelHidden ? "left" : "bottom"}
-        className="text-xs"
-      >
+      <TooltipContent side="left" className="text-xs">
         {tab.label}
       </TooltipContent>
     </Tooltip>

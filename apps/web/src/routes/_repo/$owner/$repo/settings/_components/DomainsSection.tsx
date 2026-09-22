@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Button } from "@eva/ui";
+import { Input, Button, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import type { Id } from "@eva/backend";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { extractHostname } from "../_utils";
@@ -44,22 +45,28 @@ export function DomainsSection({
       <div className="space-y-2">
         {domains.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {domains.map((domain) => (
-              <span
-                key={domain}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-foreground"
-              >
-                {domain}
-                <button
-                  type="button"
-                  onClick={() => removeDomain(domain)}
-                  className="relative rounded-sm p-0.5 text-muted-foreground transition-colors after:absolute after:inset-[-6px] hover:bg-muted hover:text-foreground"
-                  aria-label={`Remove ${domain}`}
+            <AnimatePresence initial={false} mode="popLayout">
+              {domains.map((domain) => (
+                <m.span
+                  key={domain}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-foreground"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={motionFast}
                 >
-                  <IconX size={12} />
-                </button>
-              </span>
-            ))}
+                  {domain}
+                  <button
+                    type="button"
+                    onClick={() => removeDomain(domain)}
+                    className="relative rounded-sm p-0.5 text-muted-foreground transition-colors after:absolute after:inset-[-6px] hover:bg-muted hover:text-foreground"
+                    aria-label={`Remove ${domain}`}
+                  >
+                    <IconX size={12} />
+                  </button>
+                </m.span>
+              ))}
+            </AnimatePresence>
           </div>
         ) : null}
 

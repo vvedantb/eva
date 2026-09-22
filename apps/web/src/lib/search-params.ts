@@ -133,6 +133,8 @@ const sandboxTabs = [
   "agents",
   "prd",
   "designs",
+  "artifacts",
+  "documents",
 ] as const;
 export type SandboxTab = (typeof sandboxTabs)[number];
 
@@ -176,6 +178,8 @@ const taskRouteSandboxTabs = [
   "review",
   "files",
   "agents",
+  "artifacts",
+  "documents",
 ] as const;
 export type TaskRouteSandboxTab = (typeof taskRouteSandboxTabs)[number];
 
@@ -380,7 +384,10 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
-export const inboxFilters = ["all", "unread"] as const;
+// "archived" is a separate list rather than a third state of the same one: the
+// backend splits the 100-row window on `archivedAt`, so Unread only ever means
+// "unread and not archived".
+export const inboxFilters = ["all", "unread", "archived"] as const;
 export type InboxFilter = (typeof inboxFilters)[number];
 export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
   .withDefault("all")
@@ -388,6 +395,18 @@ export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
 
 export function isInboxFilter(s: string): s is InboxFilter {
   return inboxFilters.some((filter) => filter === s);
+}
+
+// How the inbox list is sectioned. Presentation, but shareable: "group by repo"
+// is part of what you are looking at, so it rides the URL with the filter.
+export const inboxGroups = ["day", "repo", "type", "urgency"] as const;
+export type InboxGroup = (typeof inboxGroups)[number];
+export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
+  .withDefault("day")
+  .withOptions(searchOptions);
+
+export function isInboxGroup(s: string): s is InboxGroup {
+  return inboxGroups.some((group) => group === s);
 }
 
 // Selected notification id in the two-pane inbox, kept in the URL so the
@@ -447,4 +466,30 @@ export function isTeamDetailTab(s: string): s is TeamDetailTab {
 const logViews = ["overview", "type", "project"] as const;
 export const logViewParser = parseAsStringLiteral(logViews)
   .withDefault("overview")
+  .withOptions(searchOptions);
+
+// New-session "linked codebases" picker (multi-repo sessions). Comma-separated
+// repo ids resolved against `githubRepos.list` by the picker — stale/unknown
+// ids are dropped rather than passed into `sessions.create` unbranded. Saved
+// codebase groups whose primary is a DIFFERENT repo deep-link here with these
+// same keys prefilled (see CodebasesPicker.tsx).
+export const linkedRepoIdsParser = parseAsArrayOf(parseAsString)
+  .withDefault([])
+  .withOptions(searchOptions);
+
+export const repoGroupIdParser = parseAsString
+  .withDefault("")
+  .withOptions(searchOptions);
+
+const installDependenciesValues = ["1", "0"] as const;
+export const installDependenciesParser = parseAsStringLiteral(
+  installDependenciesValues,
+)
+  .withDefault("1")
+  .withOptions(searchOptions);
+
+// Session Files tab root selector (multi-repo sessions): "" is the primary
+// repo (/tmp/repo), otherwise a linked repo's sandbox path.
+export const filesRootParser = parseAsString
+  .withDefault("")
   .withOptions(searchOptions);

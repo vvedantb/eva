@@ -23,6 +23,8 @@ const spotlightTypeValidator = v.union(
   v.literal("doc"),
   v.literal("automation"),
   v.literal("artifact"),
+  v.literal("pr"),
+  v.literal("draft"),
 );
 
 const spotlightHitValidator = v.object({
@@ -42,7 +44,9 @@ type SpotlightHit = {
     | "session"
     | "doc"
     | "automation"
-    | "artifact";
+    | "artifact"
+    | "pr"
+    | "draft";
   title: string;
   subtitle: string;
   href: string;
@@ -108,9 +112,50 @@ function rankMatch(title: string, query: string): number {
   return 100;
 }
 
+/**
+ * The PR number a GitHub pull request URL ends with, or null when the stored
+ * value is not one (a stale link, or a URL shape we do not route to). Callers
+ * skip the row rather than build a `/reviews/NaN` href.
+ */
+function prNumberFromUrl(prUrl: string): number | null {
+  const match = /\/pull\/(\d+)\/?$/.exec(prUrl);
+  const digits = match?.[1];
+  if (digits === undefined) return null;
+  const parsed = Number(digits);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function pushHit(hits: SpotlightHit[], hit: SpotlightHit, limit: number) {
   if (hits.length >= limit * 3) return;
   hits.push(hit);
+}
+
+/**
+ * A session's or task's pull request as its own hit: `#123 Title`, opening the
+ * in-app review rather than the entity it came from. Ranked below the entity
+ * itself so typing a title still lands on the session or task first.
+ */
+function pushPrHit(
+  hits: SpotlightHit[],
+  row: { title: string; prUrl?: string },
+  options: { base: string; label: string; query: string; limit: number },
+) {
+  if (row.prUrl === undefined) return;
+  const prNumber = prNumberFromUrl(row.prUrl);
+  if (prNumber === null) return;
+  const title = `#${prNumber} ${row.title}`;
+  if (!matchesQuery(title, options.query)) return;
+  pushHit(
+    hits,
+    {
+      type: "pr",
+      title,
+      subtitle: options.label,
+      href: `${options.base}/reviews/${prNumber}`,
+      rank: rankMatch(title, options.query) + 25,
+    },
+    options.limit,
+  );
 }
 
 function isTeamDoc(team: Doc<"teams"> | null): team is Doc<"teams"> {
@@ -301,6 +346,7 @@ export const search = authQuery({
 
           for (const session of filterActiveEntities(sessions)) {
             if (session.archived === true) continue;
+            pushPrHit(hits, session, { base, label, query, limit });
             if (session.numId === undefined) continue;
             if (!matchesQuery(session.title, query)) continue;
             pushHit(
@@ -317,7 +363,26 @@ export const search = authQuery({
           }
 
           for (const task of filterActiveEntities(tasks)) {
-            if (task.status === "draft") continue;
+            // A draft has no task page of its own yet, so it opens the repo's
+            // Drafts list. The card there deep-links through a search param,
+            // which a plain href string cannot carry.
+            if (task.status === "draft") {
+              const draftTitle = task.title || "Untitled draft";
+              if (!matchesQuery(draftTitle, query)) continue;
+              pushHit(
+                hits,
+                {
+                  type: "draft",
+                  title: draftTitle,
+                  subtitle: label,
+                  href: `${base}/drafts`,
+                  rank: rankMatch(draftTitle, query) + 20,
+                },
+                limit,
+              );
+              continue;
+            }
+            pushPrHit(hits, task, { base, label, query, limit });
             if (task.numId === undefined) continue;
             if (!matchesQuery(task.title, query)) continue;
             pushHit(

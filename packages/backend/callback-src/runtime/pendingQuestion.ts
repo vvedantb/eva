@@ -1,18 +1,19 @@
 import { CLAIM_MUTATION, ENTITY_ID } from "../config.js";
-import { callConvexWithRetry } from "../http/convexClient.js";
+import {
+  callConvexWithRetry,
+  unwrapConvexMutationPayload,
+} from "../http/convexClient.js";
 import { callbackState as S } from "./state.js";
 import type { JsonValue } from "../types.js";
 import type { JsonLike, SdkCanUseTool } from "../providers/claudeSdk.js";
 import { log } from "../utils.js";
+import { sleep } from "./daemonProcess.js";
 
 // How often the paused turn polls Convex for the user's answer. Matches the
 // daemon's turn-claim cadence — the model is idle while waiting, so this only
 // adds at most one poll of latency once the answer lands.
 const POLL_INTERVAL_MS = 300;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Reads `.value.answer` (a JSON string, or null) out of a claimAnswer result.
@@ -20,14 +21,8 @@ function sleep(ms: number): Promise<void> {
  * lives under `.value`; falls back to the top level for an unwrapped value.
  */
 function readClaimedAnswer(result: JsonValue): string | null {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
-    return null;
-  }
-  const inner = result.value;
-  const payload =
-    typeof inner === "object" && inner !== null && !Array.isArray(inner)
-      ? inner
-      : result;
+  const payload = unwrapConvexMutationPayload(result);
+  if (!payload) return null;
   const answer = payload.answer;
   return typeof answer === "string" ? answer : null;
 }
@@ -115,10 +110,20 @@ export function buildCanUseTool(): SdkCanUseTool {
       if (answerJson === null) {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      return {
-        behavior: "allow",
-        updatedInput: { ...input, answers: parseAnswers(answerJson) },
-      };
+      const answers = parseAnswers(answerJson);
+      if (toolUseId) {
+        // The tool_result handler in providers/claude.ts moves this onto the
+        // step, so the activity row carries the exact answers the user picked
+        // rather than the SDK's prose retelling of them.
+        const stringAnswers: Record<string, string> = {};
+        for (const [question, answer] of Object.entries(answers)) {
+          if (typeof answer === "string") {
+            stringAnswers[question] = answer;
+          }
+        }
+        S.questionAnswers.set(toolUseId, stringAnswers);
+      }
+      return { behavior: "allow", updatedInput: { ...input, answers } };
     } finally {
       S.awaitingQuestionAnswer = false;
     }

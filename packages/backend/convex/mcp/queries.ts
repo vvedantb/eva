@@ -4,6 +4,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { listAutomationsForRepo } from "../_automations/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
+import { prStateValidator } from "../validators";
 import {
   openSessionIdsForRepo,
   projectIsExecuting,
@@ -366,6 +367,8 @@ const listedEntityValidator = v.object({
   repoOwner: v.string(),
   repoName: v.string(),
   repoRootDirectory: v.optional(v.string()),
+  /** Sessions only, and only when it has linked repos beside its primary. */
+  linkedRepoCount: v.optional(v.number()),
 });
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
@@ -605,6 +608,7 @@ export const listEntitiesForUser = internalQuery({
               prUrl: doc.prUrl,
               branchName: doc.branchName,
               updatedAt: doc.updatedAt ?? doc._creationTime,
+              linkedRepoCount: doc.linkedRepoCount,
               ...columns,
             });
           }
@@ -918,6 +922,43 @@ export const getLiveOrchestratorSessionIdForUser = internalQuery({
     if (session.isOrchestrator !== true) return null;
     if (session.userId !== uid) return null;
     return session._id;
+  },
+});
+
+/** One extra repo cloned into a session's sandbox, as reported over MCP. */
+export const mcpLinkedRepoValidator = v.object({
+  repo: v.string(),
+  path: v.string(),
+  branch: v.string(),
+  prUrl: v.optional(v.string()),
+  prState: v.optional(prStateValidator),
+});
+
+export type McpLinkedRepo = Infer<typeof mcpLinkedRepoValidator>;
+
+/**
+ * The linked repos cloned into one session's sandbox beside its primary, for
+ * `create_session`'s result and `get_agent_state`'s session summary. Takes a
+ * plain string so an action holding an untyped id parsed off a JSON response
+ * can call it directly.
+ */
+export const sessionLinkedRepos = internalQuery({
+  args: { sessionId: v.string() },
+  returns: v.array(mcpLinkedRepoValidator),
+  handler: async (ctx, { sessionId }): Promise<McpLinkedRepo[]> => {
+    const id = ctx.db.normalizeId("sessions", sessionId);
+    if (!id) return [];
+    const links = await ctx.db
+      .query("sessionRepos")
+      .withIndex("by_session", (q) => q.eq("sessionId", id))
+      .collect();
+    return links.map((link) => ({
+      repo: `${link.owner}/${link.name}`,
+      path: link.path,
+      branch: link.branchName,
+      prUrl: link.prUrl,
+      prState: link.prState,
+    }));
   },
 });
 
