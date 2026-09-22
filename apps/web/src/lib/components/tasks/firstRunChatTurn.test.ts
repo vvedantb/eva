@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { findFirstRunChatTurnRun } from "./firstRunChatTurn";
+import {
+  findFirstRunChatTurnRun,
+  firstRunAssistantContent,
+} from "./firstRunChatTurn";
+import { findStreamingTargetMessage } from "@/lib/components/chat/chatBodyUtils";
 
 // Regression guard for commit bc9af1efe.
 //
@@ -155,5 +159,85 @@ describe("findFirstRunChatTurnRun", () => {
       run("created-earlier", { _creationTime: 3_000 }),
     ];
     expect(findFirstRunChatTurnRun(runs)?.label).toBe("created-earlier");
+  });
+});
+
+/**
+ * The in-flight bubble is load-bearing but invisible in types: `ChatBody`
+ * streams a run's live steps into the *first* assistant row that is empty and
+ * has no `finishedAt` (findStreamingTargetMessage). Give the placeholder a
+ * `finishedAt` — or any content — and the quick task simply shows a silent,
+ * frozen bubble for the whole run, with nothing failing anywhere. Stamp one
+ * onto a settled turn's row and it steals the *next* turn's tokens instead.
+ *
+ * So assert the shape through the real rule rather than field by field.
+ */
+describe("firstRunAssistantContent", () => {
+  /** The row as ChatBody sees it, minus the ids the builder fills in. */
+  const asRow = (
+    fields: ReturnType<typeof firstRunAssistantContent>,
+  ): { role: "assistant"; content: string; finishedAt?: number } => ({
+    role: "assistant",
+    ...fields,
+  });
+
+  test("a running run renders the live streaming placeholder", () => {
+    const fields = firstRunAssistantContent({
+      status: "running",
+      activityLog: null,
+      startedAt: 1_000,
+    });
+    expect(fields.content).toBe("");
+    expect(findStreamingTargetMessage([asRow(fields)])).toBeDefined();
+  });
+
+  test("a queued run renders it too", () => {
+    // The bubble appears the moment the task is launched, before the sandbox
+    // has booted — that gap is the longest stretch of an empty chat.
+    const fields = firstRunAssistantContent({
+      status: "queued",
+      activityLog: null,
+      startedAt: 1_000,
+    });
+    expect(findStreamingTargetMessage([asRow(fields)])).toBeDefined();
+  });
+
+  test("a settled run is never mistaken for the placeholder", () => {
+    const fields = firstRunAssistantContent({
+      status: "success",
+      resultSummary: "Done",
+      finishedAt: 2_000,
+      activityLog: "step one",
+      startedAt: 1_000,
+    });
+    expect(fields).toEqual({
+      content: "Done",
+      activityLog: "step one",
+      finishedAt: 2_000,
+    });
+    expect(findStreamingTargetMessage([asRow(fields)])).toBeUndefined();
+  });
+
+  test("a settled run with no finishedAt still closes its bubble", () => {
+    // Runs recovered by the watchdog can settle without one; falling back to
+    // startedAt keeps the row out of the streaming slot.
+    const fields = firstRunAssistantContent({
+      status: "error",
+      activityLog: null,
+      startedAt: 1_000,
+    });
+    expect(fields.finishedAt).toBe(1_000);
+    expect(findStreamingTargetMessage([asRow(fields)])).toBeUndefined();
+  });
+
+  test("the placeholder does not carry an activity log key", () => {
+    // The log row is only written on completion, so an in-flight run has none;
+    // an empty-string log would also read as "no log" downstream.
+    const fields = firstRunAssistantContent({
+      status: "running",
+      activityLog: "leftover",
+      startedAt: 1_000,
+    });
+    expect(fields).toEqual({ content: "" });
   });
 });

@@ -37,9 +37,11 @@ import {
   PickerSeparator,
 } from "./CodebasesPickerList";
 import {
+  isCodebaseLinked,
   pickableCodebaseRepos,
   resolveRepoGroupId,
   resolveRepoIds,
+  toggleLinkedCodebase,
   type CodebaseGroup,
   type CodebaseRepoRow,
 } from "../_utils";
@@ -163,22 +165,12 @@ export function CodebasesPicker() {
     pickableCodebaseRepos(codebases.repos, primary).map((repo) => repo._id),
   );
 
-  /** Selection is keyed by `owner/name`: a saved group may hold a sibling row. */
   const isLinked = (repo: CodebaseRepoRow) =>
-    codebases.linkedRepos.some(
-      (linked) => linked.owner === repo.owner && linked.name === repo.name,
-    );
+    isCodebaseLinked(repo, codebases.linkedRepos);
 
   const toggleRepo = (repo: CodebaseRepoRow) => {
     codebases.setLinkedRepoIds(
-      isLinked(repo)
-        ? codebases.linkedRepos
-            .filter(
-              (linked) =>
-                linked.owner !== repo.owner || linked.name !== repo.name,
-            )
-            .map((linked) => linked._id)
-        : [...codebases.linkedRepoIds, repo._id],
+      toggleLinkedCodebase(repo, codebases.linkedRepos),
     );
   };
 

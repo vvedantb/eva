@@ -282,11 +282,10 @@ export type CodebaseGroup = FunctionReturnType<
  * primary a second time). Deduped by `owner/name`, preferring the root app row
  * (no `rootDirectory`) as the representative when one exists.
  */
-export function pickableCodebaseRepos(
-  repos: readonly CodebaseRepoRow[],
-  primary: { owner: string; name: string },
-): CodebaseRepoRow[] {
-  const bySlug = new Map<string, CodebaseRepoRow>();
+export function pickableCodebaseRepos<
+  Row extends { owner: string; name: string; rootDirectory?: string },
+>(repos: readonly Row[], primary: { owner: string; name: string }): Row[] {
+  const bySlug = new Map<string, Row>();
   for (const repo of repos) {
     if (repo.owner === primary.owner && repo.name === primary.name) continue;
     const slug = `${repo.owner}/${repo.name}`;
@@ -296,6 +295,40 @@ export function pickableCodebaseRepos(
     }
   }
   return [...bySlug.values()];
+}
+
+/**
+ * True when `repo` is already linked into this session. Selection is keyed by
+ * `owner/name`, never by row id: a repo row is one *app* (a monorepo has one
+ * row per `rootDirectory`) while a linked repo is always the whole checkout, so
+ * the picker offers a single representative row per `owner/name` while a saved
+ * group may hold a sibling app's id for the same checkout.
+ */
+export function isCodebaseLinked(
+  repo: { owner: string; name: string },
+  linked: readonly { owner: string; name: string }[],
+): boolean {
+  return linked.some(
+    (item) => item.owner === repo.owner && item.name === repo.name,
+  );
+}
+
+/**
+ * Ticks or unticks `repo`, returning the new linked-repo selection. Unticking
+ * drops every row sharing the repo's `owner/name` — matching on the toggled
+ * row's own id would leave a sibling's id in the selection, and the checkbox
+ * (which reads `isCodebaseLinked`) would stay ticked with no way to clear it.
+ */
+export function toggleLinkedCodebase<
+  RepoId extends string,
+  Row extends { _id: RepoId; owner: string; name: string },
+>(repo: Row, linked: readonly Row[]): RepoId[] {
+  if (isCodebaseLinked(repo, linked)) {
+    return linked
+      .filter((item) => item.owner !== repo.owner || item.name !== repo.name)
+      .map((item) => item._id);
+  }
+  return [...linked.map((item) => item._id), repo._id];
 }
 
 /**
