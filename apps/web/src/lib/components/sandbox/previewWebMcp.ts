@@ -149,7 +149,13 @@ function parseInputSchema(value: unknown): {
   }
   const record = asRecord(value);
   if (!record) return EMPTY_SCHEMA;
-  return toJsonRecord(record, 0, new Set(), { remaining: MAX_SCHEMA_NODES });
+  // asRecord copies the top level, so seed the walk with the original object:
+  // a schema that points back at its own root is a cycle like any other.
+  const ancestors = new Set<object>();
+  if (typeof value === "object" && value !== null) ancestors.add(value);
+  return toJsonRecord(record, 0, ancestors, {
+    remaining: MAX_SCHEMA_NODES,
+  });
 }
 
 function parseSource(value: unknown): WebMcpTool["source"] {

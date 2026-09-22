@@ -137,8 +137,13 @@ export function shouldCaptureChatFindShortcut(input: {
   readonly inEditable: boolean;
   readonly isDocumentRoot: boolean;
 }): boolean {
-  if (input.inFindBar || input.inChatPane) return true;
+  // The find bar's own input is editable, so it has to be answered first.
+  if (input.inFindBar) return true;
+  // The composer sits inside [data-chat-pane], so `inChatPane` is true while
+  // the user types a prompt. Editable focus wins: mid-prompt Cmd+F belongs to
+  // the browser's native find, not to us.
   if (input.inEditable) return false;
+  if (input.inChatPane) return true;
   return input.isDocumentRoot;
 }
 
@@ -156,6 +161,20 @@ export function shouldCaptureChatFindShortcutFromTarget(
     isDocumentRoot:
       target === document.body || target === document.documentElement,
   });
+}
+
+/**
+ * Escape closes the bar from anywhere in the transcript, not just from its own
+ * input — the user's focus is usually still on the message they were reading.
+ */
+export function isWithinChatFindScope(target: EventTarget | null): boolean {
+  if (typeof Element === "undefined") return false;
+  if (!(target instanceof Element)) return false;
+  return (
+    target.closest(
+      "[data-thread-find-bar], [data-chat-pane], [data-thread-find-scope]",
+    ) !== null
+  );
 }
 
 export const DEMO_THREAD_FIND_MESSAGES: ReadonlyArray<{

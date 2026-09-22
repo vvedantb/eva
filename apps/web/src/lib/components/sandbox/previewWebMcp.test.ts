@@ -119,7 +119,9 @@ describe("hostile input schemas stay serialisable", () => {
     const schema = discovery.tools[0]?.inputSchema;
 
     expect(() => JSON.stringify(schema)).not.toThrow();
-    expect(JSON.stringify(schema)).not.toContain("self");
+    expect(JSON.stringify(schema)).toBe(
+      '{"type":"object","properties":{"nested":{}}}',
+    );
     expect(() => formatWebMcpPrompt(discovery)).not.toThrow();
   });
 

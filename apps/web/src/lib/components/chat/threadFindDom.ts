@@ -3,24 +3,33 @@ import {
   normalizeFindQuery,
 } from "@/lib/components/chat/threadFind";
 
-export const THREAD_FIND_MARK_ATTR = "data-thread-find-match";
+const HIGHLIGHT_NAME = "eva-thread-find";
+const ACTIVE_HIGHLIGHT_NAME = "eva-thread-find-active";
 
-const MARK_CLASS =
-  "thread-find-match rounded-sm bg-primary/30 text-inherit box-decoration-clone";
-const MARK_ACTIVE_CLASS =
-  "thread-find-match-active bg-primary/60 ring-1 ring-primary";
+/**
+ * `::highlight()` only matches highlights registered by name, so these rules
+ * cannot be expressed as a Tailwind class. Rendered by ThreadFindBar through
+ * React 19's hoisted `<style href precedence>` because globals.css is owned
+ * elsewhere.
+ */
+export const THREAD_FIND_HIGHLIGHT_CSS = `::highlight(${HIGHLIGHT_NAME}){background-color:rgb(var(--primary)/0.3);}
+::highlight(${ACTIVE_HIGHLIGHT_NAME}){background-color:rgb(var(--primary)/0.65);color:rgb(var(--primary-foreground));}`;
 
-export function clearThreadFindMarks(root: ParentNode): void {
-  const marks = root.querySelectorAll(`mark[${THREAD_FIND_MARK_ATTR}]`);
-  for (const mark of marks) {
-    const parent = mark.parentNode;
-    if (!parent) continue;
-    while (mark.firstChild) {
-      parent.insertBefore(mark.firstChild, mark);
-    }
-    parent.removeChild(mark);
-    parent.normalize();
-  }
+/**
+ * Null on browsers without the CSS Custom Highlight API (Firefox < 140 at time
+ * of writing). Counting and scroll-to still work there; only the paint is lost.
+ */
+function highlightRegistry(): HighlightRegistry | null {
+  if (typeof CSS === "undefined") return null;
+  if (!("highlights" in CSS)) return null;
+  return CSS.highlights;
+}
+
+export function clearThreadFindHighlights(): void {
+  const registry = highlightRegistry();
+  if (!registry) return;
+  registry.delete(HIGHLIGHT_NAME);
+  registry.delete(ACTIVE_HIGHLIGHT_NAME);
 }
 
 function collectMessageTextNodes(message: Element): Text[] {
@@ -47,46 +56,68 @@ function collectMessageTextNodes(message: Element): Text[] {
   return nodes;
 }
 
-function wrapQueryInTextNode(node: Text, needle: string): HTMLElement[] {
-  const ranges = collectCaseInsensitiveSubstringRanges(node.data, needle);
-  const marks: HTMLElement[] = [];
-  for (let index = ranges.length - 1; index >= 0; index--) {
-    const range = ranges[index];
-    if (!range) continue;
-    node.splitText(range.endOffset);
-    const match = node.splitText(range.startOffset);
-    const mark = document.createElement("mark");
-    mark.setAttribute(THREAD_FIND_MARK_ATTR, "true");
-    mark.className = MARK_CLASS;
-    match.parentNode?.insertBefore(mark, match);
-    mark.appendChild(match);
-    marks.unshift(mark);
+function collectThreadFindRanges(root: ParentNode, needle: string): Range[] {
+  const ranges: Range[] = [];
+  for (const message of root.querySelectorAll("[data-message-id]")) {
+    for (const node of collectMessageTextNodes(message)) {
+      for (const hit of collectCaseInsensitiveSubstringRanges(
+        node.data,
+        needle,
+      )) {
+        const range = document.createRange();
+        range.setStart(node, hit.startOffset);
+        range.setEnd(node, hit.endOffset);
+        ranges.push(range);
+      }
+    }
   }
-  return marks;
+  return ranges;
 }
 
-export function applyThreadFindMarks(
+/**
+ * Paints the matches inside `root` and returns the element holding the active
+ * one so the caller can scroll to it.
+ *
+ * Ranges are handed to the Custom Highlight API rather than wrapped in `<mark>`
+ * elements: the transcript is React-rendered markdown, and splitting its text
+ * nodes leaves React's fiber `stateNode` pointers aimed at nodes that are now
+ * empty, wrapped or (after `normalize()`) detached — which duplicated text on
+ * streaming messages and threw NotFoundError on unmount. A highlight paints
+ * over the same DOM without changing it.
+ */
+export function paintThreadFindHighlights(
   root: ParentNode,
   query: string,
   activeIndex: number,
-): HTMLElement | null {
-  clearThreadFindMarks(root);
+): Element | null {
+  clearThreadFindHighlights();
   const needle = normalizeFindQuery(query);
   if (needle.length === 0) return null;
 
-  const marks: HTMLElement[] = [];
-  const messages = root.querySelectorAll("[data-message-id]");
-  for (const message of messages) {
-    for (const node of collectMessageTextNodes(message)) {
-      marks.push(...wrapQueryInTextNode(node, needle));
-    }
-  }
-
-  if (marks.length === 0) return null;
-  const safe = Math.min(Math.max(activeIndex, 0), marks.length - 1);
-  const active = marks[safe];
+  const ranges = collectThreadFindRanges(root, needle);
+  if (ranges.length === 0) return null;
+  const safe = Math.min(Math.max(activeIndex, 0), ranges.length - 1);
+  const active = ranges[safe];
   if (!active) return null;
-  active.setAttribute(THREAD_FIND_MARK_ATTR, "active");
-  active.className = `${MARK_CLASS} ${MARK_ACTIVE_CLASS}`;
-  return active;
+
+  const registry = highlightRegistry();
+  if (registry) {
+    // Two registrations, not one: the active match needs its own rule, and a
+    // range that is in both highlights would paint with the later one's colour.
+    const rest = ranges.filter((_, index) => index !== safe);
+    if (rest.length > 0) registry.set(HIGHLIGHT_NAME, new Highlight(...rest));
+    registry.set(ACTIVE_HIGHLIGHT_NAME, new Highlight(active));
+  }
+  return active.startContainer.parentElement;
+}
+
+/**
+ * Scrolls only when the match is off screen. The painter re-runs whenever the
+ * transcript grows, and an unconditional scroll would yank the view on every
+ * streamed token.
+ */
+export function revealThreadFindMatch(element: Element): void {
+  const rect = element.getBoundingClientRect();
+  if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
+  element.scrollIntoView({ block: "center", behavior: "smooth" });
 }
