@@ -15,6 +15,7 @@ import {
 import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { RolePresetPicker } from "./RolePresetPicker";
+import { WorkProfileSection } from "./WorkProfileSection";
 import {
   catchMutationError,
   withMutationToast,
@@ -134,6 +135,8 @@ export function PersonalisationClient() {
           )}
         </div>
       </SettingsSection>
+
+      <WorkProfileSection />
 
       <SettingsSection
         title="Custom instructions"

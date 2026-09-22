@@ -413,6 +413,17 @@ export function isInboxGroup(s: string): s is InboxGroup {
 // selection survives reload and a notification can be linked directly.
 export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
 
+export const messagesScopes = ["mine", "team"] as const;
+export type MessagesScope = (typeof messagesScopes)[number];
+export function isMessagesScope(s: string): s is MessagesScope {
+  return messagesScopes.some((scope) => scope === s);
+}
+export const messagesScopeParser = parseAsStringLiteral(messagesScopes)
+  .withDefault("mine")
+  .withOptions(searchOptions);
+
+export const messagesThreadParser = parseAsString.withOptions(searchOptions);
+
 // The comment a notification click-through is aimed at. Written by the backend
 // into the notification href (`?comment=<id>`), never by the UI, so it replaces
 // rather than pushes — going back should leave the page, not the highlight.

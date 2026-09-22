@@ -17,6 +17,7 @@ export const KNOWN_REPO_SUB_PAGES = new Set([
   "today",
   "automations",
   "inbox",
+  "messages",
   "drafts",
 ]);
 
@@ -28,6 +29,7 @@ const NON_REPO_PATH_PREFIXES = new Set([
   "setup",
   "teams",
   "inbox",
+  "messages",
   "artifacts",
   "sessions",
   "automations",

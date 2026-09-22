@@ -1089,6 +1089,110 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
   tools.push(
     defineTool({
+      name: "list_work_profiles",
+      description:
+        "List teammates and what they own so you can route a clarification. Returns each non-personal team's directory: userId, name, role (business/dev/designer), headline, owns, askMeAbout. Call this before ask_teammate when you do not already know who to ping.",
+      mutating: false,
+      input: {},
+      handler: async () => {
+        const { userId } = await getContext();
+        const teams = await ctx.runQuery(internal.workProfiles.listForAgent, {
+          userId,
+        });
+        if (teams.length === 0) {
+          return textResult({
+            teams: [],
+            note: "No shared team directory. Ask in this chat instead.",
+          });
+        }
+        return textResult({ teams });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "ask_teammate",
+      description:
+        "Route a clarification to one or more teammates (Messages area) as a group thread that any of them can answer. Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. The first reply is injected back into this session/task/project and wakes the run. Omit userIds and Eva picks the right people automatically; pass userIds from list_work_profiles when you already know who owns the decision, or role to narrow the pool. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
+      mutating: true,
+      input: {
+        question: z.string().describe("The question for the teammate."),
+        context: z
+          .string()
+          .describe(
+            "Background they need before answering: what is being built, why this decision matters, constraints or options already in play. Not just a restatement of the question.",
+          ),
+        topicKey: z
+          .string()
+          .describe(
+            'Stable slug for this topic, e.g. "empty-state-copy". Follow-ups with the same topic append to the same thread.',
+          ),
+        role: z
+          .enum(["business", "dev", "designer"])
+          .optional()
+          .describe("Job function to route to when userId is omitted."),
+        userIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Teammate user ids from list_work_profiles. Omit to let Eva pick who should answer.",
+          ),
+        sourceKind: z
+          .enum(["session", "task", "project"])
+          .optional()
+          .describe("Override the source chat. Defaults to this sandbox."),
+        sourceId: z
+          .string()
+          .optional()
+          .describe("Override the source chat id. Defaults to this sandbox."),
+      },
+      handler: async ({
+        question,
+        context,
+        topicKey,
+        role,
+        userIds,
+        sourceKind,
+        sourceId,
+      }) => {
+        const { userId: actorId } = await getContext();
+        const kind = sourceKind ?? entityKind;
+        const id = sourceId ?? entityId;
+        if (!kind || !id) {
+          return errorResult(
+            "No source chat. Pass sourceKind and sourceId, or call this from a session, task, or project sandbox.",
+          );
+        }
+        const result = await ctx.runAction(
+          internal.routedThreadRouting.askRouted,
+          {
+            userId: actorId,
+            sourceKind: kind,
+            sourceId: id,
+            question,
+            context,
+            topicKey,
+            role,
+            assigneeUserIds: userIds,
+          },
+        );
+        if (!result.ok) {
+          return errorResult(
+            result.candidates
+              ? `${result.error} Candidates: ${result.candidates
+                  .map((c) => `${c.name} (${c.userId})`)
+                  .join(", ")}`
+              : result.error,
+          );
+        }
+        return textResult(result);
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
       name: "create_artifact",
       description: `Save an HTML artifact to Eva and get back a hosted link to view it.
 

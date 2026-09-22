@@ -19,6 +19,7 @@ import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
 import { Route as GlobalHomeRouteImport } from './routes/_global/home'
 import { Route as GlobalInboxRouteImport } from './routes/_global/inbox'
+import { Route as GlobalMessagesRouteImport } from './routes/_global/messages'
 import { Route as GlobalSessionsRouteImport } from './routes/_global/sessions'
 import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settings/route'
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
@@ -45,6 +46,7 @@ import { Route as GlobalTeamsTeamIdTeamTabRouteImport } from './routes/_global/t
 import { Route as RepoOwnerRepoIndexRouteImport } from './routes/_repo/$owner/$repo/index'
 import { Route as RepoOwnerRepoAutomationsRouteRouteImport } from './routes/_repo/$owner/$repo/automations/route'
 import { Route as RepoOwnerRepoInboxRouteImport } from './routes/_repo/$owner/$repo/inbox'
+import { Route as RepoOwnerRepoMessagesRouteImport } from './routes/_repo/$owner/$repo/messages'
 import { Route as RepoOwnerRepoQuickTasksRouteRouteImport } from './routes/_repo/$owner/$repo/quick-tasks/route'
 import { Route as RepoOwnerRepoReviewsRouteRouteImport } from './routes/_repo/$owner/$repo/reviews/route'
 import { Route as RepoOwnerRepoSessionsRouteRouteImport } from './routes/_repo/$owner/$repo/sessions/route'
@@ -183,6 +185,11 @@ const GlobalInboxRoute = GlobalInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => GlobalRoute,
 } as any)
+const GlobalMessagesRoute = GlobalMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => GlobalRoute,
+} as any)
 const GlobalSessionsRoute = GlobalSessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
@@ -317,6 +324,11 @@ const RepoOwnerRepoAutomationsRouteRoute =
 const RepoOwnerRepoInboxRoute = RepoOwnerRepoInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => RepoOwnerRepoRoute,
+} as any)
+const RepoOwnerRepoMessagesRoute = RepoOwnerRepoMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
   getParentRoute: () => RepoOwnerRepoRoute,
 } as any)
 const RepoOwnerRepoQuickTasksRouteRoute =
@@ -865,6 +877,7 @@ export interface FileRoutesByFullPath {
   '/changelog': typeof GlobalChangelogRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
+  '/messages': typeof GlobalMessagesRoute
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
@@ -892,6 +905,7 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo/settings': typeof RepoOwnerRepoSettingsRouteRouteWithChildren
   '/teams/$teamId/$teamTab': typeof GlobalTeamsTeamIdTeamTabRoute
   '/$owner/$repo/inbox': typeof RepoOwnerRepoInboxRoute
+  '/$owner/$repo/messages': typeof RepoOwnerRepoMessagesRoute
   '/$owner/$repo/stats': typeof RepoOwnerRepoStatsRoute
   '/$owner/$repo/today': typeof RepoOwnerRepoTodayRoute
   '/teams/$teamId/': typeof GlobalTeamsTeamIdIndexRoute
@@ -989,6 +1003,7 @@ export interface FileRoutesByTo {
   '/changelog': typeof GlobalChangelogRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
+  '/messages': typeof GlobalMessagesRoute
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
@@ -1009,6 +1024,7 @@ export interface FileRoutesByTo {
   '/teams': typeof GlobalTeamsIndexRoute
   '/teams/$teamId/$teamTab': typeof GlobalTeamsTeamIdTeamTabRoute
   '/$owner/$repo/inbox': typeof RepoOwnerRepoInboxRoute
+  '/$owner/$repo/messages': typeof RepoOwnerRepoMessagesRoute
   '/$owner/$repo/stats': typeof RepoOwnerRepoStatsRoute
   '/$owner/$repo/today': typeof RepoOwnerRepoTodayRoute
   '/teams/$teamId': typeof GlobalTeamsTeamIdIndexRoute
@@ -1093,6 +1109,7 @@ export interface FileRoutesById {
   '/_global/changelog': typeof GlobalChangelogRoute
   '/_global/home': typeof GlobalHomeRoute
   '/_global/inbox': typeof GlobalInboxRoute
+  '/_global/messages': typeof GlobalMessagesRoute
   '/_global/sessions': typeof GlobalSessionsRoute
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
@@ -1120,6 +1137,7 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo/settings': typeof RepoOwnerRepoSettingsRouteRouteWithChildren
   '/_global/teams/$teamId/$teamTab': typeof GlobalTeamsTeamIdTeamTabRoute
   '/_repo/$owner/$repo/inbox': typeof RepoOwnerRepoInboxRoute
+  '/_repo/$owner/$repo/messages': typeof RepoOwnerRepoMessagesRoute
   '/_repo/$owner/$repo/stats': typeof RepoOwnerRepoStatsRoute
   '/_repo/$owner/$repo/today': typeof RepoOwnerRepoTodayRoute
   '/_global/teams/$teamId/': typeof GlobalTeamsTeamIdIndexRoute
@@ -1220,6 +1238,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/home'
     | '/inbox'
+    | '/messages'
     | '/sessions'
     | '/testing'
     | '/whats-new'
@@ -1247,6 +1266,7 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings'
     | '/teams/$teamId/$teamTab'
     | '/$owner/$repo/inbox'
+    | '/$owner/$repo/messages'
     | '/$owner/$repo/stats'
     | '/$owner/$repo/today'
     | '/teams/$teamId/'
@@ -1344,6 +1364,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/home'
     | '/inbox'
+    | '/messages'
     | '/sessions'
     | '/testing'
     | '/whats-new'
@@ -1364,6 +1385,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/teams/$teamId/$teamTab'
     | '/$owner/$repo/inbox'
+    | '/$owner/$repo/messages'
     | '/$owner/$repo/stats'
     | '/$owner/$repo/today'
     | '/teams/$teamId'
@@ -1447,6 +1469,7 @@ export interface FileRouteTypes {
     | '/_global/changelog'
     | '/_global/home'
     | '/_global/inbox'
+    | '/_global/messages'
     | '/_global/sessions'
     | '/_global/testing'
     | '/_global/whats-new'
@@ -1474,6 +1497,7 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo/settings'
     | '/_global/teams/$teamId/$teamTab'
     | '/_repo/$owner/$repo/inbox'
+    | '/_repo/$owner/$repo/messages'
     | '/_repo/$owner/$repo/stats'
     | '/_repo/$owner/$repo/today'
     | '/_global/teams/$teamId/'
@@ -1642,6 +1666,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof GlobalInboxRouteImport
+      parentRoute: typeof GlobalRoute
+    }
+    '/_global/messages': {
+      id: '/_global/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof GlobalMessagesRouteImport
       parentRoute: typeof GlobalRoute
     }
     '/_global/sessions': {
@@ -1824,6 +1855,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/$owner/$repo/inbox'
       preLoaderRoute: typeof RepoOwnerRepoInboxRouteImport
+      parentRoute: typeof RepoOwnerRepoRoute
+    }
+    '/_repo/$owner/$repo/messages': {
+      id: '/_repo/$owner/$repo/messages'
+      path: '/messages'
+      fullPath: '/$owner/$repo/messages'
+      preLoaderRoute: typeof RepoOwnerRepoMessagesRouteImport
       parentRoute: typeof RepoOwnerRepoRoute
     }
     '/_repo/$owner/$repo/quick-tasks': {
@@ -2504,6 +2542,7 @@ interface GlobalRouteChildren {
   GlobalChangelogRoute: typeof GlobalChangelogRoute
   GlobalHomeRoute: typeof GlobalHomeRoute
   GlobalInboxRoute: typeof GlobalInboxRoute
+  GlobalMessagesRoute: typeof GlobalMessagesRoute
   GlobalSessionsRoute: typeof GlobalSessionsRoute
   GlobalTestingRoute: typeof GlobalTestingRoute
   GlobalWhatsNewRoute: typeof GlobalWhatsNewRoute
@@ -2521,6 +2560,7 @@ const GlobalRouteChildren: GlobalRouteChildren = {
   GlobalChangelogRoute: GlobalChangelogRoute,
   GlobalHomeRoute: GlobalHomeRoute,
   GlobalInboxRoute: GlobalInboxRoute,
+  GlobalMessagesRoute: GlobalMessagesRoute,
   GlobalSessionsRoute: GlobalSessionsRoute,
   GlobalTestingRoute: GlobalTestingRoute,
   GlobalWhatsNewRoute: GlobalWhatsNewRoute,
@@ -3028,6 +3068,7 @@ interface RepoOwnerRepoRouteChildren {
   RepoOwnerRepoSessionsRouteRoute: typeof RepoOwnerRepoSessionsRouteRouteWithChildren
   RepoOwnerRepoSettingsRouteRoute: typeof RepoOwnerRepoSettingsRouteRouteWithChildren
   RepoOwnerRepoInboxRoute: typeof RepoOwnerRepoInboxRoute
+  RepoOwnerRepoMessagesRoute: typeof RepoOwnerRepoMessagesRoute
   RepoOwnerRepoStatsRoute: typeof RepoOwnerRepoStatsRoute
   RepoOwnerRepoTodayRoute: typeof RepoOwnerRepoTodayRoute
   RepoOwnerRepoIndexRoute: typeof RepoOwnerRepoIndexRoute
@@ -3049,6 +3090,7 @@ const RepoOwnerRepoRouteChildren: RepoOwnerRepoRouteChildren = {
   RepoOwnerRepoSessionsRouteRoute: RepoOwnerRepoSessionsRouteRouteWithChildren,
   RepoOwnerRepoSettingsRouteRoute: RepoOwnerRepoSettingsRouteRouteWithChildren,
   RepoOwnerRepoInboxRoute: RepoOwnerRepoInboxRoute,
+  RepoOwnerRepoMessagesRoute: RepoOwnerRepoMessagesRoute,
   RepoOwnerRepoStatsRoute: RepoOwnerRepoStatsRoute,
   RepoOwnerRepoTodayRoute: RepoOwnerRepoTodayRoute,
   RepoOwnerRepoIndexRoute: RepoOwnerRepoIndexRoute,

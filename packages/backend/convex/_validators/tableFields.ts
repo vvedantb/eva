@@ -20,6 +20,9 @@ import {
   reactionTargetValidator,
   roleUserValidator,
   roleValidator,
+  routedAuthorKindValidator,
+  routedSourceKindValidator,
+  routedThreadStatusValidator,
   runModeValidator,
   runStatusValidator,
   sandboxProviderKindValidator,
@@ -1377,4 +1380,57 @@ export const proposedPlanFields = {
   implementationSessionId: v.optional(v.id("sessions")),
   createdAt: v.number(),
   updatedAt: v.number(),
+};
+
+/** Team-scoped routing directory — what a person owns and should be asked. */
+export const workProfileFields = {
+  teamId: v.id("teams"),
+  userId: v.id("users"),
+  role: v.optional(roleUserValidator),
+  headline: v.string(),
+  owns: v.string(),
+  askMeAbout: v.string(),
+  updatedAt: v.number(),
+};
+
+/** One routed question thread: one topic, one source entity, many teammates. */
+export const routedThreadFields = {
+  teamId: v.id("teams"),
+  repoId: v.id("githubRepos"),
+  sourceKind: routedSourceKindValidator,
+  sourceId: v.string(),
+  sourceNumId: v.optional(v.number()),
+  sourceTitle: v.string(),
+  topicKey: v.string(),
+  title: v.string(),
+  status: routedThreadStatusValidator,
+  lastMessageAt: v.number(),
+  lastPreview: v.string(),
+  createdAt: v.number(),
+  resolvedAt: v.optional(v.number()),
+};
+
+/** One teammate on a routed thread. Denormalises the thread's clock so "my
+ *  threads" is one indexed scan rather than a get per thread. */
+export const routedParticipantFields = {
+  threadId: v.id("routedThreads"),
+  userId: v.id("users"),
+  teamId: v.id("teams"),
+  lastMessageAt: v.number(),
+  /** True while Eva is still waiting on this person specifically. */
+  needsReply: v.boolean(),
+  addedAt: v.number(),
+  repliedAt: v.optional(v.number()),
+};
+
+export const routedMessageFields = {
+  threadId: v.id("routedThreads"),
+  authorKind: routedAuthorKindValidator,
+  authorUserId: v.optional(v.id("users")),
+  body: v.string(),
+  /** Why Eva is asking — source work + agent briefing. Absent on older rows. */
+  context: v.optional(v.string()),
+  createdAt: v.number(),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  mirroredMessageId: v.optional(v.id("messages")),
 };

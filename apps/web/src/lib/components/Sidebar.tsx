@@ -201,6 +201,7 @@ export function Sidebar() {
       "setup",
       "teams",
       "inbox",
+      "messages",
       "artifacts",
       "sessions",
       "automations",

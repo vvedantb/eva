@@ -253,6 +253,16 @@ export function TestingArenaIcon({ size = 24, className }: IconProps) {
   );
 }
 
+export function MessagesIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg {...baseSvgProps(size, className)}>
+      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8A2.5 2.5 0 0 1 17.5 17H11l-4 3v-3H6.5A2.5 2.5 0 0 1 4 14.5z" />
+      <line x1="8" y1="9" x2="16" y2="9" className="nav-icon-doc-line nav-icon-doc-line-1" />
+      <line x1="8" y1="12.5" x2="13" y2="12.5" className="nav-icon-doc-line nav-icon-doc-line-2" />
+    </svg>
+  );
+}
+
 export function InboxIcon({ size = 24, className }: IconProps) {
   return (
     <svg {...baseSvgProps(size, className)}>
