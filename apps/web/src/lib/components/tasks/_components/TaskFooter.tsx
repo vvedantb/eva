@@ -31,7 +31,7 @@ import dayjs from "@eva/shared/dates";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
-import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
+import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
@@ -52,6 +52,7 @@ interface TaskFooterProps {
   isStarting: boolean;
   canStartSandbox: boolean;
   isSandboxActive: boolean;
+  isSandboxStarting: boolean;
   isSandboxStopping: boolean;
   isRetryingStartupCommands: boolean;
   isRunningDevServer: boolean;
@@ -59,6 +60,7 @@ interface TaskFooterProps {
   canCreatePr: boolean;
   isCreatingPr: boolean;
   onCreatePr: () => void;
+  onStartSandbox: () => void;
   onStopSandbox: () => void;
   onRunStartupCommands: () => void;
   onRunDevServer: () => void;
@@ -80,6 +82,7 @@ export function TaskFooter({
   isStarting,
   canStartSandbox,
   isSandboxActive,
+  isSandboxStarting,
   isSandboxStopping,
   isRetryingStartupCommands,
   isRunningDevServer,
@@ -87,6 +90,7 @@ export function TaskFooter({
   canCreatePr,
   isCreatingPr,
   onCreatePr,
+  onStartSandbox,
   onStopSandbox,
   onRunStartupCommands,
   onRunDevServer,
@@ -102,12 +106,14 @@ export function TaskFooter({
   const showRunButton =
     !task?.projectId &&
     (status === "todo" || (status === "in_progress" && !hasActiveRun));
-  // Shown on every surface: this is the only stop control now, the sandbox
-  // chat header no longer carries one.
-  const showStopSandbox = isSandboxActive && !isSandboxStopping;
-  // Inert, not hidden, mid-turn — see `SleepEvaButton`. Gated on the chat turn
-  // only, not `hasActiveRun`: that also counts *queued* runs, and a task waiting
-  // in the queue is no reason to refuse to sleep a sandbox. A main run has its
+  // One control for both directions, on every surface: the sandbox chat header
+  // no longer carries a start/stop pair, so a header that only knew how to stop
+  // left a slept sandbox with no way back. Held open through both transitions
+  // rather than popping out, so the row does not jump while it wakes or sleeps.
+  const showSandboxToggle = isSandboxActive || canStartSandbox;
+  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the chat
+  // turn only, not `hasActiveRun`: that also counts *queued* runs, and a task
+  // waiting in the queue is no reason to refuse to sleep it. A main run has its
   // own confirmed Stop; blocking this during one is a separate call.
   const sleepBlockedMidTurn = Boolean(task?.activeChatWorkflowId);
   // Simple view hides the git/sandbox plumbing: conflict resolution and the
@@ -137,7 +143,7 @@ export function TaskFooter({
     showResolveConflicts ||
     hasSandboxCommandItems ||
     prLinks.hasItems;
-  const hasSecondaryContent = isHeader || showStopSandbox || showMoreMenu;
+  const hasSecondaryContent = isHeader || showSandboxToggle || showMoreMenu;
 
   return (
     <div
@@ -301,18 +307,22 @@ export function TaskFooter({
             </DropdownMenu>
           )}
           <AnimatePresence initial={false} mode="popLayout">
-            {showStopSandbox ? (
+            {showSandboxToggle ? (
               <m.div
-                key="stop-sandbox"
+                key="toggle-sandbox"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={motionFast}
               >
-                <SleepEvaButton
-                  onStop={onStopSandbox}
-                  isStopping={isSandboxStopping}
-                  blockedMidTurn={sleepBlockedMidTurn}
+                <SandboxStartStopButton
+                  isActive={isSandboxActive}
+                  isToggling={isSandboxStarting || isSandboxStopping}
+                  onToggle={(action) => {
+                    if (action === "start") onStartSandbox();
+                    else onStopSandbox();
+                  }}
+                  isAssistantResponding={sleepBlockedMidTurn}
                   size={buttonSize}
                 />
               </m.div>

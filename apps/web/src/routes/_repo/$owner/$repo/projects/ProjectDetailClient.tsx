@@ -41,7 +41,7 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
-import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
+import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -550,16 +550,20 @@ export function ProjectDetailClient({
                   <CopyLinkMenuItem />
                 </DropdownMenuContent>
               </DropdownMenu>
-              {/* Inert while a chat turn is in flight — see `SleepEvaButton`.
-                  A running build keeps its own confirmed "Stop Build", so it is
-                  not gated here. Shown on every surface: this is the only stop
-                  control now, the sandbox chat header no longer carries one. */}
-              {isSandboxActive && !isSandboxStopping ? (
-                <SleepEvaButton
-                  onStop={handleStopSandbox}
-                  isStopping={isSandboxStopping}
-                  blockedMidTurn={Boolean(project?.activeChatWorkflowId)}
-                  size="sm"
+              {/* One control for both directions — see `SandboxStartStopButton`.
+                  Inert while a chat turn is in flight; a running build keeps its
+                  own confirmed "Stop Build", so it is not gated here. This is the
+                  only wake/sleep control now, the sandbox chat header carries
+                  usage alone. */}
+              {isSandboxActive || canStartSandbox ? (
+                <SandboxStartStopButton
+                  isActive={isSandboxActive}
+                  isToggling={isSandboxStarting || isSandboxStopping}
+                  onToggle={(action) => {
+                    if (action === "start") void handleStartSandbox();
+                    else void handleStopSandbox();
+                  }}
+                  isAssistantResponding={Boolean(project?.activeChatWorkflowId)}
                 />
               ) : null}
               {canBuildProject ? (

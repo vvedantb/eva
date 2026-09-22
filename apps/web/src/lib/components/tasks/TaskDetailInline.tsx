@@ -484,11 +484,13 @@ export function TaskDetailInline({
         isStarting={isStarting}
         canStartSandbox={canStartSandbox}
         isSandboxActive={isSandboxActive}
+        isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
         isRetryingStartupCommands={isRetryingStartupCommands}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
+        onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
         onRunStartupCommands={() =>
           requestConfirm(

@@ -9,14 +9,17 @@ import {
   SLEEP_EVA_LABEL,
   WAKE_EVA_LABEL,
   WAKE_EVA_RETRY_LABEL,
-} from "./SleepEvaButton";
+} from "./SleepControlTooltip";
 
 /**
- * Compact play/stop control used in session, project, and task sandbox chat.
+ * Compact play/stop control: the single sandbox wake/sleep affordance, used by
+ * the session chat header and by the task and project page headers. One
+ * component so the two directions cannot drift apart — a header that only knows
+ * how to stop leaves a slept sandbox with no way back.
  *
  * Held open but inert while a turn is in flight, with a tooltip saying why —
  * see {@link SleepControlTooltip} for the reasoning and for the `aria-disabled`
- * treatment this shares with the header sleep button.
+ * treatment.
  */
 export function SandboxStartStopButton({
   isActive,
@@ -24,6 +27,7 @@ export function SandboxStartStopButton({
   onToggle,
   isAssistantResponding = false,
   hasStartError = false,
+  size = "sm",
 }: {
   isActive: boolean;
   isToggling: boolean;
@@ -32,6 +36,8 @@ export function SandboxStartStopButton({
   isAssistantResponding?: boolean;
   /** The last wake attempt failed — the control offers a retry, not a start. */
   hasStartError?: boolean;
+  /** Task and project footers run the larger icon button; headers stay compact. */
+  size?: "sm" | "default";
 }) {
   // Only stopping is unsafe mid-turn; a turn cannot be running on a sandbox
   // that is asleep, but if the flags ever disagree, starting stays available.
@@ -45,7 +51,7 @@ export function SandboxStartStopButton({
   return (
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>
       <Button
-        size="icon-sm"
+        size={size === "sm" ? "icon-sm" : "icon"}
         variant={isActive ? "destructive" : "secondary"}
         onClick={() => {
           if (blockedMidTurn) return;
