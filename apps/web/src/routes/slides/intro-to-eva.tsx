@@ -1,15 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { SlideDeck } from "./_components/slides/SlideDeck";
-import { usePresentationSync } from "./_components/slides/usePresentationSync";
-import { PresentationControls } from "./_components/slides/_components/PresentationControls";
-import { PresentationDeckProvider } from "./_components/slides/_components/PresentationDeckContext";
-import { PresenterView } from "./_components/slides/PresenterView";
+import { SlideDeck } from "../_components/slides/SlideDeck";
+import { usePresentationSync } from "../_components/slides/usePresentationSync";
+import { PresentationControls } from "../_components/slides/_components/PresentationControls";
+import { PresentationDeckProvider } from "../_components/slides/_components/PresentationDeckContext";
+import { PresenterView } from "../_components/slides/PresenterView";
 import {
   openPresenterWindow,
   subscribePresenterChannel,
-} from "./_components/slides/presenterWindowSync";
+} from "../_components/slides/presenterWindowSync";
 
 const searchSchema = z.object({
   slide: z.number().int().min(1).optional().default(1),
@@ -17,14 +17,15 @@ const searchSchema = z.object({
   view: z.enum(["presenter"]).optional(),
 });
 
-export const Route = createFileRoute("/slides")({
+export const Route = createFileRoute("/slides/intro-to-eva")({
   validateSearch: searchSchema,
+  staticData: { title: "Intro to Eva" },
   component: SlidesPage,
 });
 
 function SlidesPage() {
   const { slide, session, view } = Route.useSearch();
-  const navigate = useNavigate({ from: "/slides" });
+  const navigate = useNavigate({ from: "/slides/intro-to-eva" });
 
   const updateSearch = (next: { slide?: number; session?: string }) => {
     void navigate({

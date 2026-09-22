@@ -1,5 +1,5 @@
 import { useRef, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { motionBase, motionFast } from "@eva/ui";
 import { SLIDES } from "./slides/index";
 import { SlideStepContext, SlideThemeContext } from "./_components/SlideShell";
@@ -197,30 +197,39 @@ export function SlideDeck({
           role="presentation"
         >
           {showOrbs && (
-            <div
-              className="pointer-events-none absolute inset-0"
-              aria-hidden
-            >
-              <motion.div
+            <div className="pointer-events-none absolute inset-0" aria-hidden>
+              <m.div
                 className="absolute -left-44 -top-40 h-[560px] w-[560px] rounded-full bg-primary/5 blur-[110px]"
                 animate={{ x: [0, 70, 0], y: [0, 50, 0] }}
-                transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 22,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
-              <motion.div
+              <m.div
                 className="absolute -bottom-52 -right-40 h-[640px] w-[640px] rounded-full bg-primary/4 blur-[120px]"
                 animate={{ x: [0, -80, 0], y: [0, -55, 0] }}
-                transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 28,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
-              <motion.div
+              <m.div
                 className="absolute left-[52%] top-[58%] h-[380px] w-[380px] rounded-full bg-primary/3 blur-[100px]"
                 animate={{ x: [0, 55, 0], y: [0, -65, 0] }}
-                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 18,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
             </div>
           )}
 
           <AnimatePresence custom={direction} mode="wait">
-            <motion.div
+            <m.div
               key={slide}
               custom={direction}
               variants={variants}
@@ -234,7 +243,7 @@ export function SlideDeck({
                   <Component />
                 </SlideStepContext>
               </SlideThemeContext>
-            </motion.div>
+            </m.div>
           </AnimatePresence>
         </div>
 

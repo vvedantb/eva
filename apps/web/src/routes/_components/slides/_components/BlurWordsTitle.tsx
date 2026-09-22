@@ -1,6 +1,6 @@
 import { use } from "react";
 import type { ReactNode } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { Variants } from "motion/react";
 import { SlideStepContext } from "./SlideShell";
 
@@ -64,7 +64,7 @@ export function BlurWordsTitle({
   };
 
   return (
-    <motion.h1
+    <m.h1
       className={`font-sans ${sizeClass} font-semibold leading-tight tracking-tight text-foreground`}
       variants={containerVariants}
       initial="hidden"
@@ -73,20 +73,20 @@ export function BlurWordsTitle({
       {lines.flatMap((line, lineIdx) => {
         const words = line.split(" ").filter(Boolean);
         const wordSpans = words.map((word, wordIdx) => (
-          <motion.span
+          <m.span
             key={`${lineIdx}-${wordIdx}`}
             variants={wordVariants}
             className="inline-block"
             style={{ marginRight: "0.22em" }}
           >
             {renderWord(word)}
-          </motion.span>
+          </m.span>
         ));
         if (lineIdx < lines.length - 1) {
           return [...wordSpans, <br key={`br-${lineIdx}`} />];
         }
         return wordSpans;
       })}
-    </motion.h1>
+    </m.h1>
   );
 }

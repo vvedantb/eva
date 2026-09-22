@@ -20,12 +20,7 @@ interface UsePresentationSyncArgs {
   updateSearch: (next: { slide?: number; session?: string }) => void;
 }
 
-export type SessionState =
-  | "none"
-  | "loading"
-  | "live"
-  | "ended"
-  | "notfound";
+export type SessionState = "none" | "loading" | "live" | "ended" | "notfound";
 
 export function usePresentationSync({
   slide,
@@ -139,7 +134,7 @@ export function usePresentationSync({
 
   const shareUrl =
     sessionCode && typeof window !== "undefined"
-      ? `${window.location.origin}/slides?session=${sessionCode}`
+      ? `${window.location.origin}/slides/intro-to-eva?session=${sessionCode}`
       : null;
 
   return {

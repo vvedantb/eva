@@ -1,6 +1,6 @@
 import { createContext, use } from "react";
 import type { ReactNode } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { motionBase } from "@eva/ui";
 
 /**
@@ -33,7 +33,7 @@ export function SlideReveal({
   const contextStep = use(SlideStepContext);
   const isVisible = contextStep >= step;
   return (
-    <motion.div
+    <m.div
       initial="hidden"
       animate={isVisible ? "show" : "hidden"}
       variants={fadeUpVariants}
@@ -45,7 +45,7 @@ export function SlideReveal({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -67,7 +67,7 @@ export function SlideStagger({
   const contextStep = use(SlideStepContext);
   const isVisible = contextStep >= step;
   return (
-    <motion.div
+    <m.div
       initial="hidden"
       animate={isVisible ? "show" : "hidden"}
       variants={{
@@ -82,7 +82,7 @@ export function SlideStagger({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -93,13 +93,16 @@ interface SlideItemProps {
 
 export function SlideItem({ children, className = "" }: SlideItemProps) {
   return (
-    <motion.div
+    <m.div
       variants={fadeUpVariants}
-      transition={{ duration: motionBase.duration as number, ease: motionBase.ease }}
+      transition={{
+        duration: motionBase.duration as number,
+        ease: motionBase.ease,
+      }}
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
