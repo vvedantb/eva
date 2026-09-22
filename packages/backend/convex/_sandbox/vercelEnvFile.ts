@@ -4,6 +4,25 @@ export const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 /** Shell snippet that loads sandbox env when the file exists. */
 export const EVA_ENV_SOURCE_CMD = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`;
 
+/**
+ * Corepack env every sandbox shell gets (session env file AND the seed script).
+ *
+ * DEFAULT_TO_LATEST=0: for a repo with no `packageManager` pin, Corepack
+ * otherwise resolves npm's `latest` dist-tag (pnpm 12.3.4 as of Sept 2026)
+ * whenever the shell has no Last Known Good file — session sandboxes never
+ * run `corepack prepare`, so that is every session shell. A pnpm major
+ * changes build-script policy (11+ dropped `onlyBuiltDependencies`), which
+ * is how carepulse-ts lost its `supabase` CLI binary in Sept 2026 after its
+ * own pin moved to pnpm 12. With it off, Corepack uses the LKG (the seed
+ * activates pnpm@10.33.4) or its bundled default: the version only changes
+ * when the repo pin or eva's toolchain changes, never when npm retags.
+ * DOWNLOAD_PROMPT=0: non-interactive shells must never hang on the prompt.
+ */
+export const COREPACK_SANDBOX_ENV: Record<string, string> = {
+  COREPACK_DEFAULT_TO_LATEST: "0",
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+};
+
 /** Renders env vars as sourceable `export K='V'` lines (single-quote-escaped). */
 export function renderEvaEnvFile(env: Record<string, string>): string {
   return (

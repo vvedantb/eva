@@ -154,27 +154,27 @@ export function entitySummary(target: EntityTarget): EntitySummary {
 }
 
 /**
- * Repo and entity resolution bound to one MCP caller's credentials. Every
- * resolved entity has passed the same two checks the web mutations run: the
- * user reaches the repo, and a sandbox token has not wandered outside the repo
- * it was minted for.
+ * Repo and entity resolution bound to one MCP caller's credentials.
+ *
+ * Two access levels, on purpose:
+ * - Chats (sessions, quick tasks, projects) are reachable across every repo
+ *   the user can reach in Eva — a sandbox token acts as its user, the same way
+ *   `create_and_run_task` already lets one repo's sandbox open work in another.
+ *   A session on eva can therefore continue the carepulse PR it diagnosed
+ *   instead of having to open a second task.
+ * - Repo credentials (Convex deploy keys, Postgres, system skills) keep the
+ *   sandbox token's single-repo pin: code running in one repo's sandbox must
+ *   not be able to pull another repo's production database out of Eva.
  */
 export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   const { scopedRepoId } = credentials;
   const isOrchestrator = credentials.isOrchestrator === true;
 
-  async function assertRepoAccess(
+  /** The check the web mutations run: does this user reach this repo? */
+  async function assertUserRepoAccess(
     repoId: string,
     userId: string,
   ): Promise<void> {
-    // The master session reaches every repo the user can reach, so the token's
-    // single-repo pin does not apply to it — the per-user check below does.
-    if (scopedRepoId && scopedRepoId !== repoId && !isOrchestrator) {
-      throw new Error(
-        "Access denied: this token is scoped to a different repository.",
-      );
-    }
-
     const hasAccess = await ctx.runQuery(
       internal.mcp.queries.checkRepoAccessForUser,
       { repoId, userId },
@@ -185,14 +185,20 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   }
 
   /**
-   * Narrows a repo list to what this token may read. A sandbox token is pinned
-   * to the repo it was minted for, so an unfiltered listing must not become a
-   * way around that pin. An OAuth connector and the master session carry no
-   * pin and keep the full list.
+   * Credential-grade check: the user check plus the token pin. The master
+   * session reaches every repo the user can reach, so the pin does not apply
+   * to it.
    */
-  function tokenScopedRepoIds(repoIds: string[]): string[] {
-    if (!scopedRepoId || isOrchestrator) return repoIds;
-    return repoIds.filter((repoId) => repoId === scopedRepoId);
+  async function assertRepoAccess(
+    repoId: string,
+    userId: string,
+  ): Promise<void> {
+    if (scopedRepoId && scopedRepoId !== repoId && !isOrchestrator) {
+      throw new Error(
+        "Access denied: this token is scoped to a different repository.",
+      );
+    }
+    await assertUserRepoAccess(repoId, userId);
   }
 
   async function resolveRepoRef(
@@ -264,17 +270,17 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
       );
     }
 
-    // Re-checked against the token as well as the user: a sandbox token stays
-    // pinned to its own repo, so one sandbox cannot drive another repo's.
-    await assertRepoAccess(target.repoId, userId);
+    // Re-checked per user (the lookup already filtered on access; this is the
+    // belt for the braces). Deliberately not the token pin — see entityAccess.
+    await assertUserRepoAccess(target.repoId, userId);
 
     return { target };
   }
 
   return {
     assertRepoAccess,
+    assertUserRepoAccess,
     resolveRepoRef,
     resolveEntityTarget,
-    tokenScopedRepoIds,
   };
 }

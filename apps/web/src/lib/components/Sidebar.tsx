@@ -30,7 +30,6 @@ import {
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
-import { RepoStatsSummary } from "@/lib/components/sidebar/RepoStatsSummary";
 import { OnlineTeamAvatars } from "@/lib/components/sidebar/TeamMembers";
 import { SidebarResizeHandle } from "@/lib/components/sidebar/SidebarResizeHandle";
 import { ContextSidebarHeaderActionProvider } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -735,19 +734,12 @@ export function Sidebar() {
                     </div>
                   </nav>
 
-                  {/* Main/context keep stats+avatars; sessions/automations only
-                      hide the cook-rate block — online teammates stay visible. */}
-                  {showGlobalSessionsPanel || showGlobalAutomationsPanel ? (
+                  {/* Footer shows online teammates only. */}
+                  {showGlobalSessionsPanel ||
+                  showGlobalAutomationsPanel ||
+                  (isRepoRoute && repoBasePath) ? (
                     <div className="px-6 py-3">
                       <OnlineTeamAvatars collapsed={false} />
-                    </div>
-                  ) : isRepoRoute && repoBasePath ? (
-                    <div className="px-6 py-3">
-                      <RepoStatsSummary
-                        repo={repo}
-                        repoBasePath={repoBasePath}
-                        collapsed={false}
-                      />
                     </div>
                   ) : null}
                   {!collapsed ? (

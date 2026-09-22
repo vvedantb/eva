@@ -10,12 +10,13 @@ import {
   writeFileSync,
 } from "fs";
 import {
+  AGENT_CWD,
   OPENCODE_RUNTIME_HOME_DIR,
   OPENCODE_SERVER_PORT,
-  WORK_DIR,
   opencodeCommand,
 } from "../config.js";
 import { log, tryParseJson } from "../utils.js";
+import { pidAlive, sleep, writeOomScoreAdj } from "../runtime/daemonProcess.js";
 
 /**
  * Eva-managed `opencode serve` process — one healthy HTTP server per sandbox,
@@ -50,9 +51,6 @@ const LOG_TAIL_BYTES = 4_000;
 const opencodeServerBaseUrl =
   "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** Tail of the detached server's stdout+stderr, for failure diagnostics. */
 export function readOpencodeServerLogTail(
@@ -127,7 +125,11 @@ function spawnServer(): number {
         "--port=" + String(OPENCODE_SERVER_PORT),
       ],
       {
-        cwd: WORK_DIR,
+        // Manual smoke test (tests/linkedReposHarness.manual.md) decides
+        // whether Opencode can edit outside cwd in a multi-repo session; if
+        // not, set EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace
+        // instead — no rebuild needed.
+        cwd: AGENT_CWD,
         env: { ...process.env },
         // Detached: the server must outlive this turn's callback process so the
         // next turn reuses it instead of paying a cold start.
@@ -143,13 +145,7 @@ function spawnServer(): number {
     // reporter. Without this the server would inherit that protection and a
     // memory-hungry tool could get the reporter killed instead of itself.
     // Raising a score on our own child is always permitted.
-    if (pid) {
-      try {
-        writeFileSync("/proc/" + String(pid) + "/oom_score_adj", "300");
-      } catch {
-        /* non-Linux or already exited — ignore */
-      }
-    }
+    writeOomScoreAdj(pid, "300");
     writeFileSync(
       SERVER_STATE_FILE,
       JSON.stringify({ pid, port: OPENCODE_SERVER_PORT }),
@@ -160,21 +156,11 @@ function spawnServer(): number {
   }
 }
 
-function processAlive(pid: number): boolean {
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function waitForHealth(pid: number): Promise<void> {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (await probeHealth()) return;
-    if (pid && !processAlive(pid)) {
+    if (pid && !pidAlive(pid)) {
       throw new Error(
         "opencode serve exited during startup. Server log tail:\n" +
           readOpencodeServerLogTail(),

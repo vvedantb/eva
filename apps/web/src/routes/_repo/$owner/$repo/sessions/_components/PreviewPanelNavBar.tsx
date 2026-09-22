@@ -16,6 +16,7 @@ import {
 import {
   PreviewNavBar,
   normalizePreviewPath,
+  type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
 import { PreviewScreenshotButton } from "./PreviewScreenshotButton";
 import type { PreviewViewport } from "../_utils/previewViewport";
@@ -34,6 +35,7 @@ export function PreviewPanelNavBar({
   onToggleFullscreen,
   port,
   onPortChange,
+  portOptions,
   previewPath,
   onPathChange,
   viewport,
@@ -53,6 +55,8 @@ export function PreviewPanelNavBar({
   onToggleFullscreen?: () => void;
   port: number;
   onPortChange: (port: number) => void;
+  /** Multi-repo sessions: one dev-server port per checked-out repo. */
+  portOptions?: readonly PreviewPortOption[];
   previewPath: string;
   onPathChange: (path: string) => void;
   viewport: PreviewViewport;
@@ -139,6 +143,7 @@ export function PreviewPanelNavBar({
         port={port}
         path={previewPath}
         onPortChange={onPortChange}
+        portOptions={portOptions}
         onPathChange={(path) => onPathChange(normalizePreviewPath(path))}
         isLoading={isLoading}
         onRefresh={onRefresh}

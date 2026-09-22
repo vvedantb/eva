@@ -1,31 +1,34 @@
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { motionSpring } from "@eva/ui";
-import type { DeckSlide } from "../slides/types";
-import { getSpeakerNotes } from "../speakerNotes";
-import { BRAND, DeckStepContext, EASE_OUT } from "./DeckPrimitives";
+import { BRAND, EASE_OUT } from "./DeckPrimitives";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./deckStage";
 
-/** The deck routes a card may point at. Both share the same search schema. */
-export type DeckPath = "/friday-session" | "/annual-cdm";
+/** The deck routes a card may point at. All three live under `/slides`. */
+export type DeckPath =
+  | "/slides/intro-to-eva"
+  | "/slides/friday-session"
+  | "/slides/annual-cdm";
 
 export interface DeckSummary {
   title: string;
   subtitle: string;
   path: DeckPath;
-  slides: readonly DeckSlide[];
+  slideCount: number;
+  notedCount: number;
+  /**
+   * The thumbnail, already wrapped in whichever contexts its deck needs. The
+   * card only scales it: the two deck engines disagree about slide shape, so
+   * the caller is the only place that knows how to render one.
+   */
+  preview: ReactNode;
 }
 
 interface DeckCardProps {
   deck: DeckSummary;
   /** Position in the grid, used for the entrance stagger. */
   index: number;
-}
-
-function countWithNotes(slides: readonly DeckSlide[]): number {
-  return slides.filter((slide) => getSpeakerNotes(slide.id).trim().length > 0)
-    .length;
 }
 
 /**
@@ -35,8 +38,6 @@ function countWithNotes(slides: readonly DeckSlide[]): number {
  */
 export function DeckCard({ deck, index }: DeckCardProps) {
   const stage = useStageScale();
-  const First = deck.slides[0]?.Component;
-  const withNotes = countWithNotes(deck.slides);
 
   function stopCardClick(event: MouseEvent<HTMLAnchorElement>) {
     event.stopPropagation();
@@ -74,21 +75,17 @@ export function DeckCard({ deck, index }: DeckCardProps) {
         aria-hidden
         className="pointer-events-none relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-zinc-950"
       >
-        {First ? (
-          <div
-            style={{
-              width: DESIGN_W,
-              height: DESIGN_H,
-              transform: `scale(${stage.scale})`,
-              transformOrigin: "top left",
-            }}
-            className="absolute top-0 left-0"
-          >
-            <DeckStepContext value={0}>
-              <First />
-            </DeckStepContext>
-          </div>
-        ) : null}
+        <div
+          style={{
+            width: DESIGN_W,
+            height: DESIGN_H,
+            transform: `scale(${stage.scale})`,
+            transformOrigin: "top left",
+          }}
+          className="absolute top-0 left-0"
+        >
+          {deck.preview}
+        </div>
       </div>
 
       {/* No z-index here: an auto z-index keeps the notes link's z-20 in the
@@ -99,7 +96,7 @@ export function DeckCard({ deck, index }: DeckCardProps) {
         </h2>
         <p className="mt-1 text-white/55">{deck.subtitle}</p>
         <p className="mt-3 text-xs text-white/40">
-          {deck.slides.length} slides · {withNotes} with notes
+          {deck.slideCount} slides · {deck.notedCount} with notes
         </p>
 
         <Link

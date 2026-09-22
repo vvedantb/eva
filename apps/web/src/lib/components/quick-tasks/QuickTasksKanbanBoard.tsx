@@ -7,7 +7,9 @@ import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { KanbanBoard } from "@/lib/components/kanban/KanbanBoard";
-import { isTaskAgentActive, QuickTaskCard } from "./QuickTaskCard";
+import { QuickTaskCard } from "./QuickTaskCard";
+import { isTaskAgentActive } from "@/lib/components/tasks/taskAgentActivity";
+import type { SelectionToggleOptions } from "./selectionRange";
 import { RunAllDialog } from "./RunAllDialog";
 import { Button, Spinner, toast } from "@eva/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
@@ -30,7 +32,10 @@ interface QuickTasksKanbanBoardProps {
   projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
-  onToggleSelect: (id: Id<"agentTasks">) => void;
+  onToggleSelect: (
+    id: Id<"agentTasks">,
+    options?: SelectionToggleOptions<Id<"agentTasks">>,
+  ) => void;
 }
 
 export function QuickTasksKanbanBoard({
@@ -96,6 +101,18 @@ export function QuickTasksKanbanBoard({
   >();
   for (const entry of deploymentStatuses ?? []) {
     deploymentStatusMap.set(entry.taskId, entry.deploymentStatus);
+  }
+
+  // Shift-click spans one column. `KanbanBoard` groups by status in `tasks`
+  // order, so grouping the same way here reproduces each column's visible order.
+  const idsByStatus = new Map<TaskStatus, Id<"agentTasks">[]>();
+  for (const task of tasks) {
+    const column = idsByStatus.get(task.status);
+    if (column) {
+      column.push(task._id);
+    } else {
+      idsByStatus.set(task.status, [task._id]);
+    }
   }
 
   if (tasks.length === 0) {
@@ -206,14 +223,22 @@ export function QuickTasksKanbanBoard({
               isSelecting
                 ? (event) => {
                     event.preventDefault();
-                    onToggleSelect(task._id);
+                    onToggleSelect(task._id, {
+                      range: event.shiftKey,
+                      orderedIds: idsByStatus.get(task.status),
+                    });
                   }
                 : undefined
             }
             groupedCodebases={groupedCodebases ?? undefined}
             isSelecting={isSelecting}
             isSelected={selectedIds.has(task._id)}
-            onToggleSelect={() => onToggleSelect(task._id)}
+            onToggleSelect={(event) =>
+              onToggleSelect(task._id, {
+                range: event.shiftKey,
+                orderedIds: idsByStatus.get(task.status),
+              })
+            }
             assignedTo={task.assignedTo}
             model={task.model}
             providerAccountId={task.providerAccountId}

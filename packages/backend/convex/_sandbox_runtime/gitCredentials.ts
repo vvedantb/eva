@@ -23,13 +23,15 @@ const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
 // install so git uses our credential helper instead of stale URL credentials.
 const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 
-// Bash credential helper. Git invokes it with `get` and supplies the
-// host/proto/path on stdin; we read the `path=` line (git sends it because the
-// install sets `credential.useHttpPath`) and forward it. We POST the
-// per-sandbox bearer secret plus that path to the eva backend, which mints a
-// full installation token for the sandbox's own repo and a read-only,
-// single-repository token for any other repo its owner can reach in eva.
-// A short per-path file cache trims duplicate mints during a single git
+// Bash credential helper. Git invokes it with `get` and supplies protocol, host
+// and (with `credential.useHttpPath`) the repository path on stdin. We read the
+// `path=` line and POST it to the eva backend with the per-sandbox bearer
+// secret. The backend mints a full installation token for the sandbox's own
+// repo, a token for that repository's own GitHub App installation when it is a
+// session's linked repo (those may live under a different installation than the
+// primary), and a read-only, single-repository token for any other repo its
+// owner can reach in eva. A short file cache, keyed by repository so tokens
+// never cross installations, trims duplicate mints during a single git
 // operation (clone/fetch/push fan out into several helper invocations).
 const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
@@ -39,12 +41,24 @@ if [ "\${1:-}" != "get" ]; then
   exit 0
 fi
 
+REQ_HOST=""
 REQ_PATH=""
 while IFS= read -r LINE; do
   case "$LINE" in
+    host=*) REQ_HOST="\${LINE#host=}" ;;
     path=*) REQ_PATH="\${LINE#path=}" ;;
   esac
 done
+
+# We only hold GitHub credentials; staying silent lets git try its other helpers.
+case "$REQ_HOST" in
+  ""|github.com|github.com:*) ;;
+  *) exit 0 ;;
+esac
+
+# Repo names cannot contain anything outside this set, so dropping the rest
+# keeps the request path safe whatever quoting the body below uses.
+REQ_PATH=$(printf '%s' "$REQ_PATH" | tr -cd 'A-Za-z0-9._/-')
 
 CONFIG_FILE="${HELPER_CONFIG_PATH}"
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -60,6 +74,10 @@ if [ -z "\${EVA_SANDBOX_SECRET:-}" ] || [ -z "\${CONVEX_SITE_URL:-}" ]; then
   exit 1
 fi
 
+# A multi-repo session's linked repos can live under a different GitHub App
+# installation than the primary, so the cache is keyed by the repository path
+# git supplied — a cache hit for one repo must never serve another repo's
+# token. "home" covers the no-path case (old baked helper scripts).
 CACHE_KEY=$(printf '%s' "\${REQ_PATH:-home}" | cksum | cut -d' ' -f1)
 CACHE_FILE="/tmp/git-cred-cache-$CACHE_KEY"
 CACHE_TTL_SECONDS=3000
@@ -119,18 +137,36 @@ function resolveConvexSiteUrl(): string {
  * `https://github.com/...` without any token in the URL — the helper mints a
  * fresh installation token on demand via the eva backend.
  *
+ * `homeRepo` is the repository the sandbox was created for. It is pinned on the
+ * credential row so the backend can grant the home token to sandboxes bound to
+ * no eva entity (seed-prep, ephemeral automation runs) — see
+ * `sandboxGitCredentials.resolveCredentialRequest`.
+ *
  * Idempotent: re-running rotates the secret and re-writes the helper script.
+ *
+ * `extraInstallationIds` covers a multi-repo session's linked repos: each may
+ * belong to a different GitHub App installation than the primary, and the
+ * sandbox's credential row must allow-list all of them (see
+ * `gitCredentialsPath.ts`) or `/api/git-credentials` refuses to mint a token
+ * for the linked repo's path.
  */
 export async function ensureGitCredentialHelper(
   ctx: GenericActionCtx<DataModel>,
   sandbox: SandboxHandle,
   installationId: number,
+  homeRepo: { owner: string; name: string },
+  extraInstallationIds: number[] = [],
 ): Promise<void> {
   const secret = randomBytes(32).toString("hex");
   await ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
     sandboxId: sandbox.id,
     installationId,
+    installationIds: Array.from(
+      new Set([installationId, ...extraInstallationIds]),
+    ),
     secret,
+    repoOwner: homeRepo.owner,
+    repoName: homeRepo.name,
   });
 
   const siteUrl = resolveConvexSiteUrl();
@@ -162,6 +198,10 @@ export async function ensureGitCredentialHelper(
       `rm -f /tmp/git-cred-cache /tmp/git-cred-cache-*`,
       // Wipe any inherited URL-embedded token / extraheader before switching to the helper.
       `git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true`,
+      // Sends the repository path to `/api/git-credentials` (git's `path=`
+      // component) so the helper can mint a token for a linked repo's own
+      // installation instead of always the primary's.
+      `git config --global credential.useHttpPath true`,
       // Reset credential.helper to exactly `''` + our helper. `--unset-all`
       // first so re-runs don't error with "credential.helper has multiple
       // values" — git's plain `config` refuses to overwrite a multi-valued

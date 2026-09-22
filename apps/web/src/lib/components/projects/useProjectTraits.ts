@@ -3,15 +3,12 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, ReasoningLevel, StoredModelTraits } from "@eva/backend";
+import {
+  composerTraitFields,
+  storedComposerTraits,
+  type ComposerTraitFields,
+} from "@eva/shared";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
-
-/** The sticky trait fields as they are stored on a project. */
-interface ProjectStickyTraits {
-  lastReasoningLevel?: ReasoningLevel;
-  lastThinkingEnabled?: boolean;
-  lastUse1mContext?: boolean;
-  lastFastMode?: boolean;
-}
 
 /**
  * Project traits in the shape the traits menu reads. A project has one trait
@@ -19,14 +16,9 @@ interface ProjectStickyTraits {
  * row, so the two surfaces cannot show different reasoning or context.
  */
 export function projectStoredTraits(
-  project: ProjectStickyTraits | undefined | null,
+  project: ComposerTraitFields<ReasoningLevel> | undefined | null,
 ): StoredModelTraits {
-  return {
-    effortLevel: project?.lastReasoningLevel,
-    thinkingEnabled: project?.lastThinkingEnabled,
-    use1mContext: project?.lastUse1mContext,
-    fastMode: project?.lastFastMode,
-  };
+  return storedComposerTraits(project);
 }
 
 /**
@@ -43,18 +35,7 @@ export function useSetProjectTraits(projectId: Id<"projects">) {
         { id: projectId },
         {
           ...current,
-          ...(args.reasoningLevel !== undefined
-            ? { lastReasoningLevel: args.reasoningLevel }
-            : {}),
-          ...(args.thinkingEnabled !== undefined
-            ? { lastThinkingEnabled: args.thinkingEnabled }
-            : {}),
-          ...(args.use1mContext !== undefined
-            ? { lastUse1mContext: args.use1mContext }
-            : {}),
-          ...(args.fastMode !== undefined
-            ? { lastFastMode: args.fastMode }
-            : {}),
+          ...composerTraitFields(args),
         },
       );
     },

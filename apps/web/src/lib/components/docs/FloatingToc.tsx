@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { cn } from "@eva/ui";
+import { cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import {
   assignHeadingIds,
   getHeadingElements,
@@ -123,42 +125,81 @@ export function FloatingToc({
     }, 800);
   };
 
-  if (items.length < 2) return null;
-
-  const minLevel = Math.min(...items.map((item) => item.level));
+  const minLevel =
+    items.length >= 2 ? Math.min(...items.map((item) => item.level)) : 0;
 
   return (
-    <nav
-      aria-label="On this page"
-      className={cn("min-h-0 overflow-y-auto", className)}
-    >
-      <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        On this page
-      </p>
-      <ul className="border-l border-border">
-        {items.map((item) => {
-          const isActive = item.id === activeId;
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => handleClick(item.id)}
-                style={{
-                  paddingLeft: `${(item.level - minLevel) * 12 + 12}px`,
-                }}
-                className={cn(
-                  "-ml-px block w-full border-l-2 py-1 pr-3 text-left text-[13px] leading-snug transition-colors",
-                  isActive
-                    ? "border-primary font-medium text-foreground"
-                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
-                )}
-              >
-                {item.text}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <AnimatePresence>
+      {items.length >= 2 ? (
+        <m.nav
+          key="toc"
+          aria-label="On this page"
+          className={cn("min-h-0 overflow-y-auto", className)}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
+          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            On this page
+          </p>
+          <FloatingTocItems
+            items={items}
+            activeId={activeId}
+            minLevel={minLevel}
+            onItemClick={handleClick}
+          />
+        </m.nav>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function FloatingTocItems({
+  items,
+  activeId,
+  minLevel,
+  onItemClick,
+}: {
+  items: TocItem[];
+  activeId: string | null;
+  minLevel: number;
+  onItemClick: (id: string) => void;
+}) {
+  // Mounts with the nav shell (headings >= 2). Later content edits keep this
+  // mounted, so `useFirstPaintGate` blocks restagger after the first scan.
+  const firstPaint = useFirstPaintGate();
+
+  return (
+    <ul className="border-l border-border">
+      {items.map((item, index) => {
+        const isActive = item.id === activeId;
+        return (
+          <ListEnter
+            key={item.id}
+            as="li"
+            index={index}
+            slide={false}
+            firstPaint={firstPaint.current}
+          >
+            <button
+              type="button"
+              onClick={() => onItemClick(item.id)}
+              style={{
+                paddingLeft: `${(item.level - minLevel) * 12 + 12}px`,
+              }}
+              className={cn(
+                "-ml-px block w-full border-l-2 py-1 pr-3 text-left text-[13px] leading-snug transition-colors",
+                isActive
+                  ? "border-primary font-medium text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+              )}
+            >
+              {item.text}
+            </button>
+          </ListEnter>
+        );
+      })}
+    </ul>
   );
 }

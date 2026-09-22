@@ -12,14 +12,16 @@ import {
   DropdownMenuTrigger,
   cn,
 } from "@eva/ui";
-import { IconChevronDown, IconPlus } from "@tabler/icons-react";
+import { IconChevronDown, IconPlus, IconX } from "@tabler/icons-react";
+import { useClosedSessionTabs } from "@/lib/components/sidebar/session-tabs/useClosedSessionTabs";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
-  repoBasePaths,
   repoSessionsIndexPath,
+  sessionHrefForRow,
+  sessionRowMatchesPath,
+  type RepoPathParts,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
-import { entityPathSegment } from "@/lib/numId";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 interface OverflowSession {
@@ -28,6 +30,8 @@ interface OverflowSession {
   title: string;
   updatedAt?: number;
   _creationTime: number;
+  /** Linked-in row: the session's primary repo owns its URL. */
+  linkedFrom?: RepoPathParts;
 }
 
 export interface OverflowGroup {
@@ -37,18 +41,24 @@ export interface OverflowGroup {
 
 interface SessionTabsOverflowMenuProps {
   groups: OverflowGroup[];
-  /** All apps â€” so empty apps still get a New session entry. */
+  /** All apps - so empty apps still get a New session entry. */
   allRepos: RepoWithLogo[];
   pathname: string;
 }
 
-/** Full active-session list by app (Chrome-style overflow) + new-session links. */
+/**
+ * Full active-session list by app (Chrome-style overflow) + new-session links.
+ *
+ * This is also how a closed tab comes back: every active session is listed here
+ * whether or not its tab is in the strip, and opening one from here reopens it.
+ */
 export function SessionTabsOverflowMenu({
   groups,
   allRepos,
   pathname,
 }: SessionTabsOverflowMenuProps) {
   const navigate = useNavigate();
+  const { isClosed, reopen } = useClosedSessionTabs();
   const sessionsByRepoId = new Map(
     groups.map((group) => [group.repo._id, group.sessions]),
   );
@@ -76,7 +86,6 @@ export function SessionTabsOverflowMenu({
         ) : (
           allRepos.map((repo) => {
             const label = repoDisplayLabel(repo);
-            const baseUrl = `${repoBasePaths(repo)[0]}/sessions`;
             const sessions = sessionsByRepoId.get(repo._id) ?? [];
             return (
               <DropdownMenuSub key={repo._id}>
@@ -99,22 +108,39 @@ export function SessionTabsOverflowMenu({
                     </p>
                   ) : (
                     sessions.map((session) => {
-                      const pathSegment = entityPathSegment(session);
-                      const href = pathSegment
-                        ? `${baseUrl}/${pathSegment}`
-                        : baseUrl;
-                      const isSelected =
-                        pathname === href || pathname.startsWith(`${href}/`);
+                      const href = sessionHrefForRow(repo, session);
+                      const isSelected = sessionRowMatchesPath(
+                        repo,
+                        session,
+                        pathname,
+                      );
+                      const closed = isClosed(session._id);
                       return (
-                        <DropdownMenuItem key={session._id} asChild>
+                        <DropdownMenuItem
+                          key={session._id}
+                          asChild
+                          onSelect={() => reopen(session._id)}
+                        >
                           <DynamicLink
                             to={href}
+                            title={
+                              closed
+                                ? "Closed tab — opens it again"
+                                : undefined
+                            }
                             className={cn(
                               "cursor-pointer",
                               isSelected && "bg-accent",
                             )}
                           >
                             <span className="truncate">{session.title}</span>
+                            {closed ? (
+                              <IconX
+                                size={12}
+                                aria-hidden
+                                className="ml-auto shrink-0 text-muted-foreground"
+                              />
+                            ) : null}
                           </DynamicLink>
                         </DropdownMenuItem>
                       );

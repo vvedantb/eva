@@ -1,10 +1,22 @@
 "use client";
 
 import { useState, useEffect, useRef, type RefObject } from "react";
-import { Input, Spinner, WebPreviewNavigationButton } from "@eva/ui";
+import {
+  Button,
+  CrossfadeIcon,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Input,
+  Spinner,
+  WebPreviewNavigationButton,
+} from "@eva/ui";
 import {
   IconArrowLeft,
   IconArrowRight,
+  IconCheck,
+  IconChevronDown,
   IconRefresh,
   IconExternalLink,
   IconMaximize,
@@ -13,6 +25,7 @@ import {
   stripPreviewGrant,
   carryPreviewGrant,
 } from "@/lib/utils/previewGrant";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import { normalizePreviewPath } from "./previewPathHistory";
 
@@ -80,6 +93,16 @@ function stepIframeHistory(
   }
 }
 
+/**
+ * A named dev-server port the preview can switch to. Multi-repo sessions offer
+ * one per checked-out repo; a single-repo session passes none and the port
+ * stays a plain text input.
+ */
+export interface PreviewPortOption {
+  port: number;
+  label: string;
+}
+
 interface PreviewNavBarProps {
   previewUrl: string | null;
   iframeRef: RefObject<HTMLIFrameElement | null>;
@@ -96,6 +119,8 @@ interface PreviewNavBarProps {
   port: number;
   path?: string;
   onPortChange?: (port: number) => void;
+  /** Offered beside the port input; hidden when fewer than two are known. */
+  portOptions?: readonly PreviewPortOption[];
   defaultPath?: string;
   onPathChange?: (path: string) => void;
   isLoading?: boolean;
@@ -115,6 +140,7 @@ export function PreviewNavBar({
   port,
   path,
   onPortChange,
+  portOptions,
   defaultPath = "/",
   onPathChange,
   isLoading = false,
@@ -123,6 +149,7 @@ export function PreviewNavBar({
   function currentIframe(): HTMLIFrameElement | null {
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
   }
+  const simpleView = useSimpleView();
   const [portInput, setPortInput] = useState(String(port));
   const [pathInput, setPathInput] = useState(path ?? defaultPath);
   // Tracks the last value emitted via onPathChange so the three event sources
@@ -293,27 +320,66 @@ export function PreviewNavBar({
         onClick={isLoading && onRefresh ? onRefresh : reload}
         disabled={isLoading}
       >
-        {isLoading ? (
-          <Spinner size="sm" />
-        ) : (
-          <IconRefresh className="w-3.5 h-3.5" />
-        )}
+        <CrossfadeIcon
+          show={isLoading}
+          trueKey="loading"
+          falseKey="idle"
+          variant="soft"
+          className="relative flex size-3.5 items-center justify-center"
+          whenTrue={<Spinner size="sm" />}
+          whenFalse={<IconRefresh className="w-3.5 h-3.5" />}
+        />
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}
         onValueChange={setPathInput}
         onCommit={commitPath}
       />
-      <Input
-        className="h-8 w-14 max-sm:shrink-0 text-base text-center px-1 sm:w-16 sm:text-xs"
-        value={portInput}
-        onChange={(e) => setPortInput(e.target.value)}
-        onBlur={commitPort}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commitPort();
-        }}
-        aria-label="Preview port"
-      />
+      {/* The port is developer plumbing; simple view keeps path, reload,
+          open-in-tab and fullscreen. */}
+      {simpleView ? null : (
+        <>
+          <Input
+            className="h-8 w-14 max-sm:shrink-0 text-base text-center px-1 sm:w-16 sm:text-xs"
+            value={portInput}
+            onChange={(e) => setPortInput(e.target.value)}
+            onBlur={commitPort}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitPort();
+            }}
+            aria-label="Preview port"
+          />
+          {portOptions !== undefined && portOptions.length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-6 shrink-0 p-0 hover:text-foreground"
+                  aria-label="Choose a repository's dev server port"
+                >
+                  <IconChevronDown className="w-3.5 h-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {portOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.port}
+                    onSelect={() => onPortChange?.(option.port)}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {option.label}
+                    </span>
+                    {option.port === port ? (
+                      <IconCheck className="ml-auto size-3.5 shrink-0 text-primary" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </>
+      )}
       <WebPreviewNavigationButton
         tooltip="Open in new tab"
         disabled={!previewUrl}

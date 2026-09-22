@@ -21,7 +21,7 @@ interface PresenterViewProps {
   slides: readonly DeckSlide[];
   slide: number;
   onNavigate: (slide: number) => void;
-  /** The deck's own route path, e.g. "/annual-cdm". Also the sync channel key. */
+  /** The deck's own route path, e.g. "/slides/annual-cdm". Also the sync channel key. */
   basePath: string;
 }
 

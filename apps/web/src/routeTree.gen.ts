@@ -13,10 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GlobalRouteImport } from './routes/_global'
 import { Route as RepoRouteImport } from './routes/_repo'
 import { Route as AgentCallbackRouteImport } from './routes/agent-callback'
-import { Route as AnnualCdmRouteImport } from './routes/annual-cdm'
-import { Route as FridaySessionRouteImport } from './routes/friday-session'
 import { Route as PreviewAuthRouteImport } from './routes/preview-auth'
-import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
@@ -26,10 +23,16 @@ import { Route as GlobalSessionsRouteImport } from './routes/_global/sessions'
 import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settings/route'
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
+import { Route as SlidesIndexRouteImport } from './routes/slides/index'
+import { Route as SlidesAnnualCdmRouteImport } from './routes/slides/annual-cdm'
+import { Route as SlidesFridaySessionRouteImport } from './routes/slides/friday-session'
+import { Route as SlidesIntroToEvaRouteImport } from './routes/slides/intro-to-eva'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
+import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
 import { Route as GlobalSettingsAccountsRouteImport } from './routes/_global/settings/accounts'
 import { Route as GlobalSettingsExperimentalRouteImport } from './routes/_global/settings/experimental'
+import { Route as GlobalSettingsGrokBotRouteImport } from './routes/_global/settings/grok-bot'
 import { Route as GlobalSettingsNotificationsRouteImport } from './routes/_global/settings/notifications'
 import { Route as GlobalSettingsPersonalisationRouteImport } from './routes/_global/settings/personalisation'
 import { Route as GlobalSettingsSandboxesRouteImport } from './routes/_global/settings/sandboxes'
@@ -154,24 +157,9 @@ const AgentCallbackRoute = AgentCallbackRouteImport.update({
   path: '/agent-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AnnualCdmRoute = AnnualCdmRouteImport.update({
-  id: '/annual-cdm',
-  path: '/annual-cdm',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FridaySessionRoute = FridaySessionRouteImport.update({
-  id: '/friday-session',
-  path: '/friday-session',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PreviewAuthRoute = PreviewAuthRouteImport.update({
   id: '/preview-auth',
   path: '/preview-auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SlidesRoute = SlidesRouteImport.update({
-  id: '/slides',
-  path: '/slides',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalAutomationsRoute = GlobalAutomationsRouteImport.update({
@@ -219,6 +207,26 @@ const GlobalWhatsNewRoute = GlobalWhatsNewRouteImport.update({
   path: '/whats-new',
   getParentRoute: () => GlobalRoute,
 } as any)
+const SlidesIndexRoute = SlidesIndexRouteImport.update({
+  id: '/slides/',
+  path: '/slides/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesAnnualCdmRoute = SlidesAnnualCdmRouteImport.update({
+  id: '/slides/annual-cdm',
+  path: '/slides/annual-cdm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesFridaySessionRoute = SlidesFridaySessionRouteImport.update({
+  id: '/slides/friday-session',
+  path: '/slides/friday-session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesIntroToEvaRoute = SlidesIntroToEvaRouteImport.update({
+  id: '/slides/intro-to-eva',
+  path: '/slides/intro-to-eva',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GlobalArtifactsIndexRoute = GlobalArtifactsIndexRouteImport.update({
   id: '/artifacts/',
   path: '/artifacts/',
@@ -230,6 +238,11 @@ const GlobalArtifactsArtifactIdRoute =
     path: '/artifacts/$artifactId',
     getParentRoute: () => GlobalRoute,
   } as any)
+const GlobalSettingsIndexRoute = GlobalSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => GlobalSettingsRouteRoute,
+} as any)
 const GlobalSettingsAccountsRoute = GlobalSettingsAccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
@@ -241,6 +254,11 @@ const GlobalSettingsExperimentalRoute =
     path: '/experimental',
     getParentRoute: () => GlobalSettingsRouteRoute,
   } as any)
+const GlobalSettingsGrokBotRoute = GlobalSettingsGrokBotRouteImport.update({
+  id: '/grok-bot',
+  path: '/grok-bot',
+  getParentRoute: () => GlobalSettingsRouteRoute,
+} as any)
 const GlobalSettingsNotificationsRoute =
   GlobalSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -864,10 +882,7 @@ const RepoOwnerRepoQuickTasksNumIdSandboxReviewDiffsDiffViewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
-  '/annual-cdm': typeof AnnualCdmRoute
-  '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/slides': typeof SlidesRoute
   '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
@@ -877,10 +892,15 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
+  '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/friday-session': typeof SlidesFridaySessionRoute
+  '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
+  '/slides/': typeof SlidesIndexRoute
   '/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
+  '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
@@ -891,6 +911,7 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
+  '/settings/': typeof GlobalSettingsIndexRoute
   '/teams/': typeof GlobalTeamsIndexRoute
   '/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsRouteRouteWithChildren
   '/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksRouteRouteWithChildren
@@ -990,11 +1011,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agent-callback': typeof AgentCallbackRoute
-  '/annual-cdm': typeof AnnualCdmRoute
-  '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/slides': typeof SlidesRoute
-  '/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
@@ -1003,9 +1020,14 @@ export interface FileRoutesByTo {
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
+  '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/friday-session': typeof SlidesFridaySessionRoute
+  '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
+  '/slides': typeof SlidesIndexRoute
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
+  '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
@@ -1015,6 +1037,7 @@ export interface FileRoutesByTo {
   '/setup/$id': typeof GlobalSetupIdRoute
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
+  '/settings': typeof GlobalSettingsIndexRoute
   '/teams': typeof GlobalTeamsIndexRoute
   '/teams/$teamId/$teamTab': typeof GlobalTeamsTeamIdTeamTabRoute
   '/$owner/$repo/inbox': typeof RepoOwnerRepoInboxRoute
@@ -1095,10 +1118,7 @@ export interface FileRoutesById {
   '/_global': typeof GlobalRouteWithChildren
   '/_repo': typeof RepoRouteWithChildren
   '/agent-callback': typeof AgentCallbackRoute
-  '/annual-cdm': typeof AnnualCdmRoute
-  '/friday-session': typeof FridaySessionRoute
   '/preview-auth': typeof PreviewAuthRoute
-  '/slides': typeof SlidesRoute
   '/_global/settings': typeof GlobalSettingsRouteRouteWithChildren
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
@@ -1108,10 +1128,15 @@ export interface FileRoutesById {
   '/_global/sessions': typeof GlobalSessionsRoute
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
+  '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/friday-session': typeof SlidesFridaySessionRoute
+  '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
+  '/slides/': typeof SlidesIndexRoute
   '/_global/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/_global/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/_global/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/_global/settings/experimental': typeof GlobalSettingsExperimentalRoute
+  '/_global/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/_global/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/_global/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
   '/_global/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
@@ -1122,6 +1147,7 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
+  '/_global/settings/': typeof GlobalSettingsIndexRoute
   '/_global/teams/': typeof GlobalTeamsIndexRoute
   '/_repo/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsRouteRouteWithChildren
   '/_repo/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksRouteRouteWithChildren
@@ -1223,10 +1249,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agent-callback'
-    | '/annual-cdm'
-    | '/friday-session'
     | '/preview-auth'
-    | '/slides'
     | '/settings'
     | '/automations'
     | '/ave'
@@ -1236,10 +1259,15 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/testing'
     | '/whats-new'
+    | '/slides/annual-cdm'
+    | '/slides/friday-session'
+    | '/slides/intro-to-eva'
+    | '/slides/'
     | '/teams/$teamId'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
     | '/settings/experimental'
+    | '/settings/grok-bot'
     | '/settings/notifications'
     | '/settings/personalisation'
     | '/settings/sandboxes'
@@ -1250,6 +1278,7 @@ export interface FileRouteTypes {
     | '/$owner/$repo'
     | '/mcp/oauth/authorize'
     | '/artifacts/'
+    | '/settings/'
     | '/teams/'
     | '/$owner/$repo/automations'
     | '/$owner/$repo/quick-tasks'
@@ -1349,11 +1378,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agent-callback'
-    | '/annual-cdm'
-    | '/friday-session'
     | '/preview-auth'
-    | '/slides'
-    | '/settings'
     | '/automations'
     | '/ave'
     | '/changelog'
@@ -1362,9 +1387,14 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/testing'
     | '/whats-new'
+    | '/slides/annual-cdm'
+    | '/slides/friday-session'
+    | '/slides/intro-to-eva'
+    | '/slides'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
     | '/settings/experimental'
+    | '/settings/grok-bot'
     | '/settings/notifications'
     | '/settings/personalisation'
     | '/settings/sandboxes'
@@ -1374,6 +1404,7 @@ export interface FileRouteTypes {
     | '/setup/$id'
     | '/mcp/oauth/authorize'
     | '/artifacts'
+    | '/settings'
     | '/teams'
     | '/teams/$teamId/$teamTab'
     | '/$owner/$repo/inbox'
@@ -1453,10 +1484,7 @@ export interface FileRouteTypes {
     | '/_global'
     | '/_repo'
     | '/agent-callback'
-    | '/annual-cdm'
-    | '/friday-session'
     | '/preview-auth'
-    | '/slides'
     | '/_global/settings'
     | '/_global/automations'
     | '/_global/ave'
@@ -1466,10 +1494,15 @@ export interface FileRouteTypes {
     | '/_global/sessions'
     | '/_global/testing'
     | '/_global/whats-new'
+    | '/slides/annual-cdm'
+    | '/slides/friday-session'
+    | '/slides/intro-to-eva'
+    | '/slides/'
     | '/_global/teams/$teamId'
     | '/_global/artifacts/$artifactId'
     | '/_global/settings/accounts'
     | '/_global/settings/experimental'
+    | '/_global/settings/grok-bot'
     | '/_global/settings/notifications'
     | '/_global/settings/personalisation'
     | '/_global/settings/sandboxes'
@@ -1480,6 +1513,7 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo'
     | '/mcp/oauth/authorize'
     | '/_global/artifacts/'
+    | '/_global/settings/'
     | '/_global/teams/'
     | '/_repo/$owner/$repo/automations'
     | '/_repo/$owner/$repo/quick-tasks'
@@ -1582,10 +1616,11 @@ export interface RootRouteChildren {
   GlobalRoute: typeof GlobalRouteWithChildren
   RepoRoute: typeof RepoRouteWithChildren
   AgentCallbackRoute: typeof AgentCallbackRoute
-  AnnualCdmRoute: typeof AnnualCdmRoute
-  FridaySessionRoute: typeof FridaySessionRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
-  SlidesRoute: typeof SlidesRoute
+  SlidesAnnualCdmRoute: typeof SlidesAnnualCdmRoute
+  SlidesFridaySessionRoute: typeof SlidesFridaySessionRoute
+  SlidesIntroToEvaRoute: typeof SlidesIntroToEvaRoute
+  SlidesIndexRoute: typeof SlidesIndexRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1619,32 +1654,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/annual-cdm': {
-      id: '/annual-cdm'
-      path: '/annual-cdm'
-      fullPath: '/annual-cdm'
-      preLoaderRoute: typeof AnnualCdmRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/friday-session': {
-      id: '/friday-session'
-      path: '/friday-session'
-      fullPath: '/friday-session'
-      preLoaderRoute: typeof FridaySessionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/preview-auth': {
       id: '/preview-auth'
       path: '/preview-auth'
       fullPath: '/preview-auth'
       preLoaderRoute: typeof PreviewAuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/slides': {
-      id: '/slides'
-      path: '/slides'
-      fullPath: '/slides'
-      preLoaderRoute: typeof SlidesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/automations': {
@@ -1710,6 +1724,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GlobalWhatsNewRouteImport
       parentRoute: typeof GlobalRoute
     }
+    '/slides/': {
+      id: '/slides/'
+      path: '/slides'
+      fullPath: '/slides/'
+      preLoaderRoute: typeof SlidesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/annual-cdm': {
+      id: '/slides/annual-cdm'
+      path: '/slides/annual-cdm'
+      fullPath: '/slides/annual-cdm'
+      preLoaderRoute: typeof SlidesAnnualCdmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/friday-session': {
+      id: '/slides/friday-session'
+      path: '/slides/friday-session'
+      fullPath: '/slides/friday-session'
+      preLoaderRoute: typeof SlidesFridaySessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/intro-to-eva': {
+      id: '/slides/intro-to-eva'
+      path: '/slides/intro-to-eva'
+      fullPath: '/slides/intro-to-eva'
+      preLoaderRoute: typeof SlidesIntroToEvaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_global/artifacts/': {
       id: '/_global/artifacts/'
       path: '/artifacts'
@@ -1724,6 +1766,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GlobalArtifactsArtifactIdRouteImport
       parentRoute: typeof GlobalRoute
     }
+    '/_global/settings/': {
+      id: '/_global/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof GlobalSettingsIndexRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
+    }
     '/_global/settings/accounts': {
       id: '/_global/settings/accounts'
       path: '/accounts'
@@ -1736,6 +1785,13 @@ declare module '@tanstack/react-router' {
       path: '/experimental'
       fullPath: '/settings/experimental'
       preLoaderRoute: typeof GlobalSettingsExperimentalRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
+    }
+    '/_global/settings/grok-bot': {
+      id: '/_global/settings/grok-bot'
+      path: '/grok-bot'
+      fullPath: '/settings/grok-bot'
+      preLoaderRoute: typeof GlobalSettingsGrokBotRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/notifications': {
@@ -2479,23 +2535,27 @@ declare module '@tanstack/react-router' {
 interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsAccountsRoute: typeof GlobalSettingsAccountsRoute
   GlobalSettingsExperimentalRoute: typeof GlobalSettingsExperimentalRoute
+  GlobalSettingsGrokBotRoute: typeof GlobalSettingsGrokBotRoute
   GlobalSettingsNotificationsRoute: typeof GlobalSettingsNotificationsRoute
   GlobalSettingsPersonalisationRoute: typeof GlobalSettingsPersonalisationRoute
   GlobalSettingsSandboxesRoute: typeof GlobalSettingsSandboxesRoute
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
   GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
   GlobalSettingsThemeRoute: typeof GlobalSettingsThemeRoute
+  GlobalSettingsIndexRoute: typeof GlobalSettingsIndexRoute
 }
 
 const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsAccountsRoute: GlobalSettingsAccountsRoute,
   GlobalSettingsExperimentalRoute: GlobalSettingsExperimentalRoute,
+  GlobalSettingsGrokBotRoute: GlobalSettingsGrokBotRoute,
   GlobalSettingsNotificationsRoute: GlobalSettingsNotificationsRoute,
   GlobalSettingsPersonalisationRoute: GlobalSettingsPersonalisationRoute,
   GlobalSettingsSandboxesRoute: GlobalSettingsSandboxesRoute,
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
   GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,
   GlobalSettingsThemeRoute: GlobalSettingsThemeRoute,
+  GlobalSettingsIndexRoute: GlobalSettingsIndexRoute,
 }
 
 const GlobalSettingsRouteRouteWithChildren =
@@ -3103,10 +3163,11 @@ const rootRouteChildren: RootRouteChildren = {
   GlobalRoute: GlobalRouteWithChildren,
   RepoRoute: RepoRouteWithChildren,
   AgentCallbackRoute: AgentCallbackRoute,
-  AnnualCdmRoute: AnnualCdmRoute,
-  FridaySessionRoute: FridaySessionRoute,
   PreviewAuthRoute: PreviewAuthRoute,
-  SlidesRoute: SlidesRoute,
+  SlidesAnnualCdmRoute: SlidesAnnualCdmRoute,
+  SlidesFridaySessionRoute: SlidesFridaySessionRoute,
+  SlidesIntroToEvaRoute: SlidesIntroToEvaRoute,
+  SlidesIndexRoute: SlidesIndexRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport

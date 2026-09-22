@@ -77,7 +77,8 @@ export function AvePanel({
       className={cn(
         "fixed z-50",
         "flex flex-col overflow-hidden",
-        "rounded-surface bg-popover/95 text-popover-foreground backdrop-blur-md smooth-shadow-ring-xl",
+        "rounded-surface bg-popover/95 text-popover-foreground smooth-shadow-ring-xl",
+        visible ? "backdrop-blur-md" : null,
         isDesktop
           ? "origin-bottom-right"
           : "inset-x-2 top-[calc(var(--eva-mobile-header-height)+0.5rem)] bottom-[calc(0.5rem+env(safe-area-inset-bottom))] origin-top",

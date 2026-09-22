@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -18,7 +18,10 @@ import {
   Textarea,
   getSpeechRecognition,
   useSpeechRecognition,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconTrash,
   IconMicrophone,
@@ -249,151 +252,172 @@ export function DocInterviewDialog({
                 No interview history yet.
               </p>
             )}
-            {messages.map((m, i) => {
-              if (m.role === "assistant") {
-                if (!m.content) {
+            {messages.map((message, i) => {
+              let body: ReactNode;
+              if (message.role === "assistant") {
+                if (!message.content) {
                   const steps = parseActivitySteps(streaming?.currentActivity);
-                  return steps ? (
-                    <ActivityTasks key={`msg-${i}`} steps={steps} isStreaming />
+                  body = steps ? (
+                    <ActivityTasks steps={steps} isStreaming />
                   ) : (
                     <ChatMessage
-                      key={`msg-${i}`}
                       role="assistant"
                       content={streaming?.currentActivity || "Starting..."}
                       isStreaming
                     />
                   );
-                }
-                const parsed = parseJsonOrNull(m.content);
-                if (parsed !== null) {
-                  if (parsed.question) {
-                    return (
+                } else {
+                  const parsed = parseJsonOrNull(message.content);
+                  if (parsed !== null && parsed.question) {
+                    body = (
                       <ChatMessage
-                        key={`msg-${i}`}
                         role="assistant"
                         content={parsed.question}
-                        logs={m.activityLog}
+                        logs={message.activityLog}
                       />
                     );
-                  }
-                  if (parsed.description && parsed.requirements) {
-                    return (
+                  } else if (
+                    parsed !== null &&
+                    parsed.description &&
+                    parsed.requirements
+                  ) {
+                    body = (
                       <ChatMessage
-                        key={`msg-${i}`}
                         role="assistant"
                         content="Generated description, requirements, and user flows."
                       />
                     );
-                  }
-                  if (parsed.error) {
-                    return (
+                  } else if (parsed !== null && parsed.error) {
+                    body = (
                       <ChatMessage
-                        key={`msg-${i}`}
                         role="assistant"
                         content="Something went wrong. Please try again."
                       />
                     );
+                  } else {
+                    body = (
+                      <ChatMessage
+                        role="assistant"
+                        content={message.content}
+                        logs={message.activityLog}
+                      />
+                    );
                   }
                 }
-                return (
+              } else {
+                body = (
                   <ChatMessage
-                    key={`msg-${i}`}
-                    role="assistant"
-                    content={m.content}
-                    logs={m.activityLog}
+                    role="user"
+                    content={message.content}
+                    userId={message.userId}
                   />
                 );
               }
               return (
-                <ChatMessage
-                  key={`msg-${i}`}
-                  role="user"
-                  content={m.content}
-                  userId={m.userId}
-                />
+                <ListEnter key={`msg-${i}`} index={i} fast>
+                  {body}
+                </ListEnter>
               );
             })}
-            {!readOnly &&
-              (isLoading || waitingForResponse) &&
-              !messages.some((m) => m.role === "assistant" && !m.content) && (
-                <div className="flex gap-3 items-center">
-                  <Spinner size="sm" />
-                  <span className="text-sm text-muted-foreground">
-                    Thinking...
-                  </span>
-                </div>
-              )}
             <div ref={messagesEndRef} />
           </div>
 
           {!readOnly && (
             <div className="space-y-3 pt-2 border-t border-border">
-              {showQuestion && (
-                <>
-                  <MultipleChoiceQuestion
-                    question={currentQuestion.question}
-                    options={currentQuestion.options}
-                    onAnswer={handleAnswer}
-                    isLoading={isLoading}
-                    questionNumber={questionCount}
-                  />
-                  {hasSpeech && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-px flex-1 bg-border" />
-                        <span className="text-xs text-muted-foreground">
-                          or describe in your own words
-                        </span>
-                        <div className="h-px flex-1 bg-border" />
-                      </div>
-                      <div className="flex gap-2">
-                        <Textarea
-                          value={dictation}
-                          onChange={(e) => setDictation(e.target.value)}
-                          placeholder={
-                            isListening
-                              ? "Listening..."
-                              : "Click the mic or type here..."
-                          }
-                          rows={2}
-                          className="text-sm bg-card flex-1"
-                          disabled={isLoading}
-                        />
-                        <div className="flex flex-col gap-1">
-                          <Button
-                            size="icon"
-                            variant={isListening ? "destructive" : "secondary"}
-                            aria-label={
+              <AnimatePresence mode="wait" initial={false}>
+                {showQuestion ? (
+                  <m.div
+                    key="question"
+                    className="space-y-3"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={motionFast}
+                  >
+                    <MultipleChoiceQuestion
+                      question={currentQuestion.question}
+                      options={currentQuestion.options}
+                      onAnswer={handleAnswer}
+                      isLoading={isLoading}
+                      questionNumber={questionCount}
+                    />
+                    {hasSpeech && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-px flex-1 bg-border" />
+                          <span className="text-xs text-muted-foreground">
+                            or describe in your own words
+                          </span>
+                          <div className="h-px flex-1 bg-border" />
+                        </div>
+                        <div className="flex gap-2">
+                          <Textarea
+                            value={dictation}
+                            onChange={(e) => setDictation(e.target.value)}
+                            placeholder={
                               isListening
-                                ? "Stop dictation"
-                                : "Dictate an answer"
+                                ? "Listening..."
+                                : "Click the mic or type here..."
                             }
-                            onClick={() => toggleSpeech(dictation)}
+                            rows={2}
+                            className="text-sm bg-card flex-1"
                             disabled={isLoading}
-                            className="size-10 sm:size-8"
-                          >
-                            {isListening ? (
-                              <IconPlayerStop size={14} aria-hidden />
-                            ) : (
-                              <IconMicrophone size={14} aria-hidden />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="default"
-                            aria-label="Send answer"
-                            onClick={handleDictationSubmit}
-                            disabled={isLoading || !dictation.trim()}
-                            className="size-10 sm:size-8"
-                          >
-                            <IconArrowRight size={14} aria-hidden />
-                          </Button>
+                          />
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              size="icon"
+                              variant={
+                                isListening ? "destructive" : "secondary"
+                              }
+                              aria-label={
+                                isListening
+                                  ? "Stop dictation"
+                                  : "Dictate an answer"
+                              }
+                              onClick={() => toggleSpeech(dictation)}
+                              disabled={isLoading}
+                              className="size-10 sm:size-8"
+                            >
+                              {isListening ? (
+                                <IconPlayerStop size={14} aria-hidden />
+                              ) : (
+                                <IconMicrophone size={14} aria-hidden />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="default"
+                              aria-label="Send answer"
+                              onClick={handleDictationSubmit}
+                              disabled={isLoading || !dictation.trim()}
+                              className="size-10 sm:size-8"
+                            >
+                              <IconArrowRight size={14} aria-hidden />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
+                    )}
+                  </m.div>
+                ) : (isLoading || waitingForResponse) &&
+                  !messages.some(
+                    (msg) => msg.role === "assistant" && !msg.content,
+                  ) ? (
+                  <m.div
+                    key="thinking"
+                    className="flex gap-3 items-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={motionFast}
+                  >
+                    <Spinner size="sm" />
+                    <span className="text-sm text-muted-foreground">
+                      Thinking...
+                    </span>
+                  </m.div>
+                ) : null}
+              </AnimatePresence>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   Questions: {questionCount}

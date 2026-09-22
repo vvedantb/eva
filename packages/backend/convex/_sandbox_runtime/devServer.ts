@@ -15,30 +15,35 @@ const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
 const SUPABASE_RESTORE_MARKER = "/tmp/.eva-supabase-db-web-restored";
 
-/** Absolute shell path to the package root, defaulting to the workspace root. */
-function packageDirShell(rootDir: string): string {
-  const workspaceRoot = workspaceDirShell();
-  return rootDir ? `${workspaceRoot}/${rootDir}` : workspaceRoot;
+/** Absolute shell path to the package root, defaulting to `baseDir`. */
+function packageDirShell(rootDir: string, baseDir: string): string {
+  return rootDir ? `${baseDir}/${rootDir}` : baseDir;
 }
 
-/** Detects the package manager (pnpm, yarn, or npm) by checking lock files. */
+/**
+ * Detects the package manager (pnpm, yarn, or npm) by checking lock files.
+ *
+ * `baseDir` defaults to the primary repo's workspace root; a linked repo's
+ * prep passes its own clone directory instead so detection never looks at
+ * `/tmp/repo`. `rootDir` stays relative to `baseDir` for monorepo apps.
+ */
 export async function detectPackageManager(
   sandbox: SandboxHandle,
   rootDir = "",
+  baseDir: string = workspaceDirShell(),
 ): Promise<string> {
-  const workspaceRoot = workspaceDirShell();
-  const dir = packageDirShell(rootDir);
-  // Prefer the package rootDir, then fall back to the workspace root — monorepos
-  // often keep pnpm-lock.yaml at the repo root while rootDirectory points at an app.
+  const dir = packageDirShell(rootDir, baseDir);
+  // Prefer the package rootDir, then fall back to baseDir — monorepos often
+  // keep pnpm-lock.yaml at the repo root while rootDirectory points at an app.
   // Also treat packageManager / workspace: deps as pnpm so npm never hits workspace:*.
   const detection = (
     await execHandle(
       sandbox,
       [
-        `if [ -f ${dir}/pnpm-lock.yaml ] || [ -f ${workspaceRoot}/pnpm-lock.yaml ]; then echo pnpm;`,
-        `elif [ -f ${dir}/yarn.lock ] || [ -f ${workspaceRoot}/yarn.lock ]; then echo yarn;`,
-        `elif grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' ${dir}/package.json ${workspaceRoot}/package.json 2>/dev/null; then echo pnpm;`,
-        `elif grep -q 'workspace:' ${dir}/package.json ${workspaceRoot}/package.json 2>/dev/null; then echo pnpm;`,
+        `if [ -f ${dir}/pnpm-lock.yaml ] || [ -f ${baseDir}/pnpm-lock.yaml ]; then echo pnpm;`,
+        `elif [ -f ${dir}/yarn.lock ] || [ -f ${baseDir}/yarn.lock ]; then echo yarn;`,
+        `elif grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' ${dir}/package.json ${baseDir}/package.json 2>/dev/null; then echo pnpm;`,
+        `elif grep -q 'workspace:' ${dir}/package.json ${baseDir}/package.json 2>/dev/null; then echo pnpm;`,
         `else echo npm; fi`,
       ].join(" "),
       5,
@@ -50,19 +55,20 @@ export async function detectPackageManager(
 }
 
 /**
- * Detects a Python install manifest at the workspace root.
- * `requirements.txt` wins over `pyproject.toml` when both exist.
+ * Detects a Python install manifest at `baseDir` (default: the primary
+ * repo's workspace root). `requirements.txt` wins over `pyproject.toml` when
+ * both exist.
  */
 export async function detectPythonManifest(
   sandbox: SandboxHandle,
+  baseDir: string = workspaceDirShell(),
 ): Promise<"requirements" | "pyproject" | null> {
-  const workspaceRoot = workspaceDirShell();
   const detection = (
     await execHandle(
       sandbox,
       [
-        `if [ -f ${workspaceRoot}/requirements.txt ]; then echo requirements;`,
-        `elif [ -f ${workspaceRoot}/pyproject.toml ]; then echo pyproject;`,
+        `if [ -f ${baseDir}/requirements.txt ]; then echo requirements;`,
+        `elif [ -f ${baseDir}/pyproject.toml ]; then echo pyproject;`,
         `else echo none; fi`,
       ].join(" "),
       5,
@@ -76,22 +82,23 @@ export async function detectPythonManifest(
 const PIP_INSTALL_TIMEOUT_SECONDS = 900;
 
 /**
- * Best-effort `pip install --user` for root requirements.txt / pyproject.toml.
- * Fresh sandboxes may lack gcc/libpq-devel — failures must not kill the caller.
- * Returns whether an install was attempted and whether it succeeded.
+ * Best-effort `pip install --user` for `baseDir`'s requirements.txt /
+ * pyproject.toml (default: the primary repo's workspace root). Fresh sandboxes
+ * may lack gcc/libpq-devel — failures must not kill the caller. Returns
+ * whether an install was attempted and whether it succeeded.
  */
 export async function installPythonDependenciesBestEffort(
   sandbox: SandboxHandle,
+  baseDir: string = workspaceDirShell(),
 ): Promise<{ attempted: boolean; ok: boolean }> {
-  const kind = await detectPythonManifest(sandbox);
+  const kind = await detectPythonManifest(sandbox, baseDir);
   if (!kind) return { attempted: false, ok: true };
-  const workspaceRoot = workspaceDirShell();
   const pipArgs = kind === "requirements" ? "-r requirements.txt" : "-e .";
   try {
     await execHandle(
       sandbox,
       // Match websockify / seed: --break-system-packages then plain --user.
-      `cd ${workspaceRoot} && (python3 -m pip install --user --break-system-packages ${pipArgs} || python3 -m pip install --user ${pipArgs})`,
+      `cd ${baseDir} && (python3 -m pip install --user --break-system-packages ${pipArgs} || python3 -m pip install --user ${pipArgs})`,
       PIP_INSTALL_TIMEOUT_SECONDS,
     );
     return { attempted: true, ok: true };
@@ -123,7 +130,7 @@ export async function detectDevPort(
   sandbox: SandboxHandle,
   rootDir: string,
 ): Promise<number> {
-  const dir = packageDirShell(rootDir);
+  const dir = packageDirShell(rootDir, workspaceDirShell());
   try {
     const raw = await execHandle(
       sandbox,
@@ -178,7 +185,7 @@ export async function startSessionServices(
   }
 
   const pm = await detectPackageManager(sandbox, rootDir);
-  const dir = packageDirShell(rootDir);
+  const dir = packageDirShell(rootDir, workspaceDirShell());
   const devCommand = `cd ${dir} && HOSTNAME=0.0.0.0 PORT=${port} ${pm} run dev`;
   return { port, devCommand };
 }

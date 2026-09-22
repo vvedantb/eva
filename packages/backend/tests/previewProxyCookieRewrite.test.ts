@@ -132,7 +132,7 @@ describe("previewProxy unpartitionedCookieDeletion", () => {
 const responseHeadersFactory = new Function(
   [
     "const targetPort = 3000;",
-    extractFunctionSource("function rewriteLocationHeader(value) {"),
+    extractFunctionSource("function rewriteLocationHeader(value, route) {"),
     rewriteSetCookieSource,
     unpartitionedCookieDeletionSource,
     extractFunctionSource("function responseHeaders("),
@@ -144,7 +144,16 @@ const responseHeaders: (
   injectsHtml: boolean,
   addCors: boolean,
   rewriteCookies: boolean,
+  route: {
+    port: number;
+    path: string;
+    injects: boolean;
+    tabPrefix: string | null;
+  },
 ) => Record<string, string | string[]> = responseHeadersFactory();
+
+/** The default (non-tab) dev-server route every cookie case runs on. */
+const DEV_ROUTE = { port: 3000, path: "/", injects: true, tabPrefix: null };
 
 describe("previewProxy responseHeaders Set-Cookie pairing", () => {
   test("emits the unpartitioned deletion before the rewritten cookie", () => {
@@ -153,6 +162,7 @@ describe("previewProxy responseHeaders Set-Cookie pairing", () => {
       false,
       false,
       true,
+      DEV_ROUTE,
     );
     expect(headers["set-cookie"]).toEqual([
       "sid=; Path=/; Max-Age=0; Secure; SameSite=None",
@@ -166,6 +176,7 @@ describe("previewProxy responseHeaders Set-Cookie pairing", () => {
       false,
       false,
       true,
+      DEV_ROUTE,
     );
     expect(headers["set-cookie"]).toEqual([
       "sid=; Path=/; Max-Age=0; Secure; SameSite=None",
@@ -184,6 +195,7 @@ describe("previewProxy responseHeaders Set-Cookie pairing", () => {
       false,
       false,
       true,
+      DEV_ROUTE,
     );
     expect(headers["set-cookie"]).toEqual([
       "sid=; Path=/; Max-Age=0; Secure; SameSite=None",
@@ -199,6 +211,7 @@ describe("previewProxy responseHeaders Set-Cookie pairing", () => {
       false,
       false,
       false,
+      DEV_ROUTE,
     );
     expect(headers["set-cookie"]).toEqual(["sid=abc; Path=/; SameSite=Lax"]);
   });

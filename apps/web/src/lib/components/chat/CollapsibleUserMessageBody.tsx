@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Button, cn } from "@eva/ui";
+import {
+  Button,
+  cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@eva/ui";
 
 /** Match t3code MessagesTimeline collapsible user prompts. */
 const MAX_COLLAPSED_USER_MESSAGE_LINES = 8;
@@ -36,37 +42,56 @@ export function CollapsibleUserMessageBody({
   const canCollapse = shouldCollapseUserMessage(text);
   const isCollapsed = canCollapse && !expanded;
 
-  return (
-    <div>
+  if (!canCollapse) {
+    return (
       <div
-        className={cn("relative", isCollapsed && "max-h-44 overflow-hidden")}
-        data-user-message-collapsed={isCollapsed ? "true" : "false"}
-        data-user-message-collapsible={canCollapse ? "true" : "false"}
-        style={
-          isCollapsed
-            ? {
-                WebkitMaskImage: COLLAPSED_USER_MESSAGE_FADE_MASK,
-                maskImage: COLLAPSED_USER_MESSAGE_FADE_MASK,
-              }
-            : undefined
-        }
+        className="relative"
+        data-user-message-collapsed="false"
+        data-user-message-collapsible="false"
       >
         {children}
       </div>
-      {canCollapse ? (
-        <div className="mt-1.5 flex items-center justify-start">
+    );
+  }
+
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <div
+        className={cn(
+          "relative max-h-44 overflow-hidden",
+          !isCollapsed && "hidden",
+        )}
+        data-user-message-collapsed="true"
+        data-user-message-collapsible="true"
+        style={{
+          WebkitMaskImage: COLLAPSED_USER_MESSAGE_FADE_MASK,
+          maskImage: COLLAPSED_USER_MESSAGE_FADE_MASK,
+        }}
+      >
+        {children}
+      </div>
+      <CollapsibleContent>
+        <div
+          className="relative"
+          data-user-message-collapsed="false"
+          data-user-message-collapsible="true"
+        >
+          {children}
+        </div>
+      </CollapsibleContent>
+      <div className="mt-1.5 flex items-center justify-start">
+        <CollapsibleTrigger asChild>
           <Button
             type="button"
             size="sm"
             variant="ghost"
             aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
             className="-ml-1.5 h-6 rounded-md px-1.5 text-xs font-normal text-muted-foreground/72 hover:bg-muted/55 hover:text-foreground/85"
           >
             {expanded ? "Show less" : "Show full message"}
           </Button>
-        </div>
-      ) : null}
-    </div>
+        </CollapsibleTrigger>
+      </div>
+    </Collapsible>
   );
 }

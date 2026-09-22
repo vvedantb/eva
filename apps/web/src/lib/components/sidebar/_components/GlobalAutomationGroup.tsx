@@ -5,14 +5,16 @@ import { Link } from "@tanstack/react-router";
 import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
-  Badge,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
   Spinner,
   cn,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconChevronDown, IconLayoutGrid, IconPlus } from "@tabler/icons-react";
+import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
 import {
@@ -106,16 +108,10 @@ export function GlobalAutomationGroup({
               <span className="truncate text-xs font-medium text-muted-foreground">
                 {label}
               </span>
-              {sorted.length > 0 ? (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 border-0 bg-transparent px-1.5 py-0"
-                >
-                  <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
-                    {sorted.length}
-                  </span>
-                </Badge>
-              ) : null}
+              <CountPop
+                label={countLabel(sorted.length)}
+                className="shrink-0 px-1.5 py-0 text-[11px] font-medium tabular-nums text-muted-foreground"
+              />
               <IconChevronDown
                 size={14}
                 className={cn(
@@ -169,56 +165,65 @@ export function GlobalAutomationGroup({
               layoutId={`global-automations-${repo._id}`}
               className="space-y-1"
             >
-              {visibleAutomations.map((automation) => {
-                const segment = entityPathSegment(automation);
-                if (!segment) return null;
-                const isSelected = automationMatchesPath(
-                  repo,
-                  segment,
-                  pathname,
-                );
-                // Plain `string`, not a template-literal type: `<Link to>` is a
-                // union of known route paths and rejects the narrowed form.
-                const href: string = `${baseUrl}/${segment}`;
-                return (
-                  <SharedLayoutNavSurface
-                    key={automation._id}
-                    itemId={automation._id}
-                    isActive={isSelected}
-                    className="group"
-                  >
-                    <SidebarListHoverCard
-                      title={automation.title}
-                      preview={sidebarTextPreview(automation.description)}
-                      createdAt={automation.createdAt}
-                      userId={automation.createdBy}
+              <AnimatePresence initial={false}>
+                {visibleAutomations.map((automation) => {
+                  const segment = entityPathSegment(automation);
+                  if (!segment) return null;
+                  const isSelected = automationMatchesPath(
+                    repo,
+                    segment,
+                    pathname,
+                  );
+                  // Plain `string`, not a template-literal type: `<Link to>` is a
+                  // union of known route paths and rejects the narrowed form.
+                  const href: string = `${baseUrl}/${segment}`;
+                  return (
+                    <m.div
+                      key={automation._id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      transition={motionFast}
                     >
-                      <Link
-                        to={href}
-                        onClick={onNavigate}
-                        className={sidebarNavLinkClass(isSelected)}
+                      <SharedLayoutNavSurface
+                        itemId={automation._id}
+                        isActive={isSelected}
+                        className="group"
                       >
-                        <span
-                          className={cn(
-                            "h-2 w-2 shrink-0 rounded-full",
-                            automation.enabled
-                              ? "bg-success"
-                              : "bg-muted-foreground/30",
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {automation.title}
-                        </span>
-                        {automation.systemKey !== undefined && (
-                          <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
-                            System
-                          </span>
-                        )}
-                      </Link>
-                    </SidebarListHoverCard>
-                  </SharedLayoutNavSurface>
-                );
-              })}
+                        <SidebarListHoverCard
+                          title={automation.title}
+                          preview={sidebarTextPreview(automation.description)}
+                          createdAt={automation.createdAt}
+                          userId={automation.createdBy}
+                        >
+                          <Link
+                            to={href}
+                            onClick={onNavigate}
+                            className={sidebarNavLinkClass(isSelected)}
+                          >
+                            <span
+                              className={cn(
+                                "h-2 w-2 shrink-0 rounded-full",
+                                automation.enabled
+                                  ? "bg-success"
+                                  : "bg-muted-foreground/30",
+                              )}
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              {automation.title}
+                            </span>
+                            {automation.systemKey !== undefined && (
+                              <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
+                                System
+                              </span>
+                            )}
+                          </Link>
+                        </SidebarListHoverCard>
+                      </SharedLayoutNavSurface>
+                    </m.div>
+                  );
+                })}
+              </AnimatePresence>
               {hasOverflow ? (
                 <SessionListShowMore
                   expanded={isListExpanded}

@@ -42,6 +42,10 @@ import { useFilteredQuickTasks, useQuickTaskFilters } from "./_utils";
 import { useAgentTaskByNumId } from "@/lib/useResolveByNumId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { TASK_TAGS } from "@eva/shared";
+import {
+  rangeBetween,
+  type SelectionToggleOptions,
+} from "@/lib/components/quick-tasks/selectionRange";
 import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
 import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
 import {
@@ -77,6 +81,8 @@ export function QuickTasksClient() {
   const [selectedIds, setSelectedIds] = useState<Set<Id<"agentTasks">>>(
     new Set(),
   );
+  // Where the next shift-click measures from: the last row toggled on its own.
+  const [anchorId, setAnchorId] = useState<Id<"agentTasks"> | null>(null);
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
   );
@@ -146,7 +152,22 @@ export function QuickTasksClient() {
 
   const selectedTasks = quickTasks.filter((t) => selectedIds.has(t._id));
 
-  const toggleSelect = (id: Id<"agentTasks">) => {
+  const toggleSelect = (
+    id: Id<"agentTasks">,
+    options?: SelectionToggleOptions<Id<"agentTasks">>,
+  ) => {
+    // A range only ever adds: shift-clicking back over a span you just selected
+    // should not punch holes in it.
+    if (options?.range) {
+      const range = rangeBetween(options.orderedIds ?? [], anchorId, id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const rangeId of range) next.add(rangeId);
+        return next;
+      });
+      return;
+    }
+    setAnchorId(id);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -161,6 +182,7 @@ export function QuickTasksClient() {
   const exitSelectMode = () => {
     setIsSelecting(false);
     setSelectedIds(new Set());
+    setAnchorId(null);
     setActiveBulkAction(null);
   };
 
@@ -539,7 +561,15 @@ export function QuickTasksClient() {
             <QuickTasksBulkBar
               isSelecting={isSelecting}
               selectedCount={selectedIds.size}
+              totalCount={quickTasks.length}
               onExitSelect={exitSelectMode}
+              onSelectAll={() =>
+                setSelectedIds(new Set(quickTasks.map((t) => t._id)))
+              }
+              onClearSelection={() => {
+                setSelectedIds(new Set());
+                setAnchorId(null);
+              }}
               activeBulkAction={activeBulkAction}
               onSetBulkAction={setActiveBulkAction}
               onSkipConfirm={{

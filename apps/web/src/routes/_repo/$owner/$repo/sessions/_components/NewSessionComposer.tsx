@@ -25,7 +25,8 @@ import {
   defaultProviderAccountId,
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
-import { ComposerAppSwitcher } from "./ComposerAppSwitcher";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 
 /**
  * Shared landing composer for repo home and `/sessions`: branding + prompt,
@@ -40,6 +41,7 @@ export function NewSessionComposer() {
   const createSession = useMutation(api.sessions.create);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { baseBranch, setBaseBranch } = useBaseBranchState();
+  const codebases = useCodebasesSelection();
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
   const {
@@ -107,6 +109,16 @@ export function NewSessionComposer() {
     // Resolved before the try: React Compiler bails on the whole file when a
     // nullish-coalescing expression sits inside a try/catch.
     const accountId = resolveAccountId(providerAccountId) ?? null;
+    // Only sent when the codebases picker actually links other repos — an
+    // empty array would still be a meaningful signal server-side.
+    const linkedCodebases =
+      codebases.linkedRepoIds.length > 0
+        ? {
+            linkedRepoIds: codebases.linkedRepoIds,
+            repoGroupId: codebases.repoGroupId ?? undefined,
+            installDependencies: codebases.installDependencies,
+          }
+        : {};
     try {
       const { numId } = await createSession({
         repoId: repo._id,
@@ -122,9 +134,13 @@ export function NewSessionComposer() {
         fastMode: displayTraits.fastMode,
         providerAccountId: accountId,
         attachmentStorageIds,
+        ...linkedCodebases,
       });
       clearDraft();
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      codebases.clear();
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Couldn't create session";
@@ -146,7 +162,7 @@ export function NewSessionComposer() {
               "What are we building for"
             )}
           </span>
-          <ComposerAppSwitcher />
+          <CodebasesPicker />
           <span>?</span>
         </h1>
         <ChatComposer

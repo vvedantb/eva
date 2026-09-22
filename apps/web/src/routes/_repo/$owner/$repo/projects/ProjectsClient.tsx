@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import {
@@ -50,14 +48,20 @@ import { ProjectsTimeline } from "@/lib/components/projects/ProjectsTimeline";
 import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
 import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
 import { ProjectDeleteDialog } from "./_components/ProjectDeleteDialog";
+import { ProjectsSelectButton } from "./_components/ProjectsSelectButton";
+import {
+  ProjectsBulkBar,
+  type ProjectBulkAction,
+} from "./_components/ProjectsBulkBar";
+import { ProjectsChangePhaseDialog } from "./_components/ProjectsChangePhaseDialog";
+import { useProjectsSelection } from "./_components/useProjectsSelection";
+import { useProjectDelete } from "./_components/useProjectDelete";
 import {
   ProjectsListSkeleton,
   ProjectsTimelineSkeleton,
 } from "./_components/ProjectsSkeletons";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
 import { KanbanBoardSkeleton } from "@/lib/components/kanban/KanbanBoardSkeleton";
-import { withMutationToast } from "@/lib/utils/mutationToast";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import {
   useProjectFilters,
   SORT_FIELDS,
@@ -88,20 +92,6 @@ const SORT_FIELD_LABELS: Record<SortField, string> = {
 export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
   const projects = useQuery(api.projects.list, { repoId: repo._id });
-  const deleteProject = useMutation(
-    api.projects.deleteCascade,
-  ).withOptimisticUpdate((localStore, args) => {
-    const currentList = localStore.getQuery(api.projects.list, {
-      repoId: repo._id,
-    });
-    if (currentList !== undefined) {
-      localStore.setQuery(
-        api.projects.list,
-        { repoId: repo._id },
-        currentList.filter((p) => p._id !== args.id),
-      );
-    }
-  });
   const [isCreating, setIsCreating] = useState(false);
   const [
     { q, view, hiddenPhases, sortField, sortDir, timelineRange, timelineZoom },
@@ -114,12 +104,16 @@ export function ProjectsClient() {
   const visiblePhases = new Set<ProjectPhase>(
     PROJECT_PHASES.filter((p) => !hiddenPhaseSet.has(p)),
   );
-  const [projectToDelete, setProjectToDelete] = useState<{
-    id: Id<"projects">;
-    title: string;
-  } | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const selection = useProjectsSelection(
+    (projects ?? []).map((project) => project._id),
+  );
+  const [activeBulkAction, setActiveBulkAction] =
+    useState<ProjectBulkAction | null>(null);
+  const exitSelectMode = () => {
+    selection.exit();
+    setActiveBulkAction(null);
+  };
+  const projectDelete = useProjectDelete(repo._id, exitSelectMode);
   const hasProjects = projects !== undefined && projects.length > 0;
 
   const filteredSorted = (() => {
@@ -165,31 +159,6 @@ export function ProjectsClient() {
     acc[phase] = filteredSorted.filter((p) => p.phase === phase);
     return acc;
   }, projectsByPhaseInitial);
-
-  const handleDelete = async (target = projectToDelete) => {
-    if (!target) return;
-    setIsDeleting(true);
-    try {
-      await withMutationToast(
-        deleteProject({ id: target.id }),
-        "Project deleted",
-        "Couldn't delete project",
-        "project-delete",
-      );
-      setProjectToDelete(null);
-    } catch {
-      setIsDeleting(false);
-      return;
-    }
-    setIsDeleting(false);
-  };
-
-  const requestDelete = (id: Id<"projects">, title: string) => {
-    const target = { id, title };
-    requestConfirm(altHeld, () => setProjectToDelete(target), () => {
-      void handleDelete(target);
-    });
-  };
 
   const handlePhaseToggle = (phase: ProjectPhase) => {
     const hidden = new Set<ProjectPhase>(hiddenPhases);
@@ -281,6 +250,11 @@ export function ProjectsClient() {
           </TabsList>
         </Tabs>
       )}
+      {/* The timeline has no rows to check, so selection is not offered there. */}
+      <ProjectsSelectButton
+        visible={hasProjects && view !== "timeline" && !selection.isSelecting}
+        onClick={selection.enter}
+      />
       {hasProjects && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -463,7 +437,10 @@ export function ProjectsClient() {
                       owner={owner}
                       name={name}
                       basePath={basePath}
-                      onDelete={requestDelete}
+                      onDelete={projectDelete.requestSingle}
+                      isSelecting={selection.isSelecting}
+                      selectedIds={selection.selectedIds}
+                      onToggleSelect={selection.toggle}
                     />
                   </div>
                 </m.div>
@@ -497,11 +474,30 @@ export function ProjectsClient() {
                   <ProjectsListView
                     projectsByPhase={projectsByPhase}
                     visiblePhases={visiblePhases}
-                    onDelete={requestDelete}
+                    onDelete={projectDelete.requestSingle}
+                    isSelecting={selection.isSelecting}
+                    selectedIds={selection.selectedIds}
+                    onToggleSelect={selection.toggle}
                   />
                 </m.div>
               )}
             </AnimatePresence>
+          )}
+          {hasProjects && (
+            <ProjectsBulkBar
+              isSelecting={selection.isSelecting}
+              selectedCount={selection.selectedIds.size}
+              totalCount={filteredSorted.length}
+              onExitSelect={exitSelectMode}
+              onSelectAll={() =>
+                selection.selectAll(filteredSorted.map((p) => p._id))
+              }
+              onClearSelection={selection.clear}
+              onSetBulkAction={setActiveBulkAction}
+              onDelete={() =>
+                projectDelete.requestBulk([...selection.selectedIds])
+              }
+            />
           )}
         </div>
       </PageWrapper>
@@ -509,11 +505,17 @@ export function ProjectsClient() {
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
       />
+      <ProjectsChangePhaseDialog
+        isOpen={activeBulkAction === "phase"}
+        onClose={() => setActiveBulkAction(null)}
+        selectedProjectIds={selection.selectedIds}
+        onSuccess={exitSelectMode}
+      />
       <ProjectDeleteDialog
-        project={projectToDelete}
-        onClose={() => setProjectToDelete(null)}
-        onConfirm={() => handleDelete()}
-        isDeleting={isDeleting}
+        target={projectDelete.target}
+        onClose={projectDelete.close}
+        onConfirm={projectDelete.confirm}
+        isDeleting={projectDelete.isDeleting}
       />
     </>
   );

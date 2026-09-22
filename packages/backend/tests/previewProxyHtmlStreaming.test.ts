@@ -51,6 +51,7 @@ interface FakeUpstreamRes extends EventEmitter {
 type HandleUpstream = (upstreamRes: FakeUpstreamRes) => void;
 
 const handleUpstreamFactory = new Function(
+  "TAB_SKIP_PREFIX_RE",
   "BUFFER_WHOLE_HTML",
   "INJECTION_TAG",
   "targetPort",
@@ -67,12 +68,12 @@ const handleUpstreamFactory = new Function(
     extractFunctionSource("function stripModuleCrossorigin(html) {"),
     extractFunctionSource("function rewriteNovncModuleImports(html) {"),
     extractFunctionSource("function injectHtml(html) {"),
-    extractFunctionSource("function rewriteHtml(html, injects) {"),
-    extractFunctionSource("function rewriteLocationHeader(value) {"),
+    extractFunctionSource("function prefixTabPath(value, tabPrefix) {"),
+    extractFunctionSource("function rewriteTabHtml(html, tabPrefix) {"),
+    extractFunctionSource("function rewriteHtml(html, injects, tabPrefix) {"),
+    extractFunctionSource("function rewriteLocationHeader(value, route) {"),
     extractFunctionSource("function rewriteSetCookie(value) {"),
-    extractFunctionSource(
-      "function responseHeaders(upstreamHeaders, injectsHtml, addCors, rewriteCookies) {",
-    ),
+    extractFunctionSource("function responseHeaders("),
     extractFunctionSource("function handleUpstream(upstreamRes) {"),
     "return handleUpstream;",
   ].join("\n\n"),
@@ -116,13 +117,14 @@ function createHarness(options: HarnessOptions = {}) {
   };
 
   const handleUpstream: HandleUpstream = handleUpstreamFactory(
+    /^\/(?:__tab\/|__convex|__agentation|__eva_preview_proxy)/,
     bufferWholeHtml,
     INJECTION_TAG,
     3000,
     ".vercel.run",
     /^$/,
     () => false,
-    { port: 3000, path: "/", injects: true },
+    { port: 3000, path: "/", injects: true, tabPrefix: null },
     { headers: {} },
     clientRes,
   );

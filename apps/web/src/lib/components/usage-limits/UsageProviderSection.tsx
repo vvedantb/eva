@@ -5,6 +5,7 @@ import {
   snapshotOf,
   type UsageAccountEntry,
 } from "./_utils";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { UsageWindowRow } from "./UsageWindowRow";
 
 interface UsageProviderSectionProps {
@@ -38,12 +39,10 @@ export function UsageProviderSection({
       </p>
       {windows.length > 0 ? (
         <div className="space-y-2.5">
-          {windows.map((usageWindow) => (
-            <UsageWindowRow
-              key={usageWindow.key}
-              usageWindow={usageWindow}
-              now={now}
-            />
+          {windows.map((usageWindow, index) => (
+            <ListEnter key={usageWindow.key} index={index} fast>
+              <UsageWindowRow usageWindow={usageWindow} now={now} />
+            </ListEnter>
           ))}
         </div>
       ) : (

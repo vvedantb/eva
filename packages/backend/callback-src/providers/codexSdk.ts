@@ -11,16 +11,17 @@ import {
   WORK_DIR,
   normalizedCodexModel,
 } from "../config.js";
-import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
+import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { updateThinkingStep } from "../parse/canonical.js";
 import {
   appendToRawLogFile,
-  appendToRawOutput,
+  recordSdkAttemptFailure,
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { callbackState as S, resetAttemptState } from "../runtime/state.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
 import { log } from "../utils.js";
+import { buildStandardSdkAttemptResult } from "./attemptResult.js";
 
 function readPromptText(): string {
   const prompt = readFileSync("/tmp/design-prompt.txt", "utf8");
@@ -152,10 +153,8 @@ export async function runCodexSdkAttempt(
   }, NO_OUTPUT_CHECK_INTERVAL_MS);
 
   const emitLine = (line: string): void => {
-    appendToRawLogFile(line);
+    emitParsedStreamLine(line);
     attemptOutput = trimBufferHead(attemptOutput + line);
-    appendToRawOutput(line);
-    processRealtimeStdoutChunk(line);
   };
 
   try {
@@ -194,10 +193,7 @@ export async function runCodexSdkAttempt(
   }
 
   if (attemptErrorMessage) {
-    appendToRawLogFile("[sdk-error] " + attemptErrorMessage + "\n");
-    S.stderrOutput = trimBufferHead(
-      S.stderrOutput + attemptErrorMessage + "\n",
-    );
+    recordSdkAttemptFailure(attemptErrorMessage);
   }
 
   const code =
@@ -227,16 +223,10 @@ export async function runCodexSdkAttempt(
       ")",
   );
 
-  return {
+  return buildStandardSdkAttemptResult({
     code,
-    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
-    timedOutForFirstEvent: false,
-    timedOutForFirstAssistant: false,
-    timedOutAfterFirstText: false,
-    timedOutForZombie: false,
-    toolStallErrorMessage: "",
-  };
+  });
 }

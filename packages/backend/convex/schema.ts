@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import {
   activityLogTypeValidator,
   notificationTypeValidator,
+  notificationUrgencyValidator,
   snapshotScheduleValidator,
   teamMemberRoleValidator,
   webhookEventStatusValidator,
@@ -12,6 +13,8 @@ import {
   agentTaskFields,
   agentRunFields,
   sessionFields,
+  sessionRepoFields,
+  repoGroupFields,
   githubRepoFields,
   teamFields,
   syncSettingFields,
@@ -50,6 +53,7 @@ import {
   snapshotBuildFields,
   sessionDaemonStateFields,
   turnFields,
+  chatUiPanelFields,
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
@@ -64,7 +68,10 @@ const schema = defineSchema({
 
   artifacts: defineTable(artifactFields)
     .index("by_team", ["boundTeamId"])
-    .index("by_uploader", ["uploadedBy"]),
+    .index("by_uploader", ["uploadedBy"])
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"]),
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])
@@ -168,11 +175,24 @@ const schema = defineSchema({
     "by_session",
     ["sessionId"],
   ),
+  // Extra repos cloned into a session's sandbox beside the primary (which stays
+  // on `sessions.repoId`). One row per linked repo per session.
+  sessionRepos: defineTable(sessionRepoFields)
+    .index("by_session", ["sessionId"])
+    .index("by_repo", ["repoId"])
+    .index("by_pr_url", ["prUrl"]),
+  // Saved codebase groups that prefill a new session's repo selection.
+  repoGroups: defineTable(repoGroupFields)
+    .index("by_created_by", ["createdBy"])
+    .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
     .index("by_entity_open", ["surface", "entityId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
+  // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
+  // sessions, quick tasks and projects — the chat surface is one surface.
+  chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
   proposedPlans: defineTable(proposedPlanFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_capture_key", ["sessionId", "captureKey"])
@@ -231,6 +251,9 @@ const schema = defineSchema({
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_session", ["sessionId"])
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
 
@@ -289,14 +312,20 @@ const schema = defineSchema({
     // Set once this notification has been included in an email (instant send or
     // daily digest), so neither path emails the same notification twice.
     emailedAt: v.optional(v.number()),
+    // When the user archived this notification out of the inbox. Absent means
+    // "in the inbox" — archiving is reversible, so the row is kept and only
+    // this stamp moves. Archived rows never count as unread.
+    archivedAt: v.optional(v.number()),
     // The comment this notification was generated from, when it came from one.
     // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
     // field so the anchor survives independently of the href string. Absent on
     // non-comment notifications and on every notification created before this
     // field existed — those keep landing at the top of the target page.
-    commentId: v.optional(
-      v.union(v.id("taskComments"), v.id("docComments")),
-    ),
+    commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
+    // How loudly to deliver this one: high = instant email, normal = daily
+    // digest only, low = inbox only. Undefined means not yet routed (a mention
+    // whose routing action has not landed) or legacy; treated as normal.
+    urgency: v.optional(notificationUrgencyValidator),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
@@ -466,6 +495,33 @@ const schema = defineSchema({
     "userId",
     "repoId",
   ]),
+
+  // Live sharing for the `/slides` deck — "follow the presenter" (Teams-style).
+  // The presenter is the sole driver: only the browser holding the secret
+  // `hostKey` (returned once from `createSession`) may move the deck.
+  presentationSessions: defineTable({
+    code: v.string(),
+    hostKey: v.string(),
+    slide: v.number(),
+    status: v.union(v.literal("live"), v.literal("ended")),
+    lastActiveAt: v.number(),
+  }).index("by_code", ["code"]),
+
+  // Per-participant poll votes within a presentation session.
+  presentationVotes: defineTable({
+    code: v.string(),
+    pollId: v.string(),
+    participantKey: v.string(),
+    optionId: v.string(),
+  })
+    .index("by_code_poll", ["code", "pollId"])
+    .index("by_code_poll_participant", ["code", "pollId", "participantKey"])
+    .index("by_code_poll_participant_option", [
+      "code",
+      "pollId",
+      "participantKey",
+      "optionId",
+    ]),
 });
 
 export default schema;

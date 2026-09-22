@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "../functions";
 import { proposedPlanFields } from "../validators";
 import { findOpenSessionTurn } from "../_chat/turnStore";
@@ -36,7 +35,8 @@ export const capture = authMutation({
     const planMarkdown = args.planMarkdown.trim();
     if (!planMarkdown) return null;
     // ENTITY_ID is the session Convex id on session daemons.
-    const sessionId = args.entityId as Id<"sessions">;
+    const sessionId = ctx.db.normalizeId("sessions", args.entityId);
+    if (!sessionId) return null;
     const session = await ctx.db.get(sessionId);
     if (!session) return null;
 
@@ -64,10 +64,11 @@ export const capture = authMutation({
     }
 
     const openTurn = await findOpenSessionTurn(ctx, sessionId);
-    const turnId =
+    const requestedTurnId =
       args.turnId !== undefined && args.turnId.length > 0
-        ? (args.turnId as Id<"turns">)
-        : openTurn?._id;
+        ? ctx.db.normalizeId("turns", args.turnId)
+        : null;
+    const turnId = requestedTurnId ?? openTurn?._id;
     const now = Date.now();
     const id = await ctx.db.insert("proposedPlans", {
       sessionId,

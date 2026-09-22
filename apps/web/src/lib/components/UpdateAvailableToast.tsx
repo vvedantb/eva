@@ -62,6 +62,7 @@ export function UpdateAvailableToast() {
 
     void check();
     const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       void check();
     }, POLL_MS);
 

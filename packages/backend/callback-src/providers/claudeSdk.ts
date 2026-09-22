@@ -19,6 +19,7 @@ import {
   NO_OUTPUT_TIMEOUT_MS,
   SYSTEM_PROMPT,
   WORK_DIR,
+  WORKSPACE_ROOT,
   claudeEffort,
   claudeThinkingDisabled,
   normalizedClaudeModel,
@@ -26,11 +27,12 @@ import {
 } from "../config.js";
 import { evaMcpServers } from "../evaMcp.js";
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
-import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
+import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { updateThinkingStep } from "../parse/canonical.js";
 import {
   appendToRawLogFile,
-  appendToRawOutput,
+  recordSdkAttemptFailure,
+  recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { buildCanUseTool } from "../runtime/pendingQuestion.js";
@@ -45,6 +47,7 @@ import type {
   SessionMode,
 } from "../types.js";
 import { log, tryParseJson } from "../utils.js";
+import { buildStandardSdkAttemptResult } from "./attemptResult.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
@@ -411,6 +414,9 @@ function buildSdkOptionsFromParts(
 
   return {
     cwd: WORK_DIR,
+    // Multi-repo sessions only: lets Claude read/edit linked repo clones
+    // under the workspace root without moving cwd off the primary repo.
+    ...(WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {}),
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
     systemPrompt: SYSTEM_PROMPT
@@ -534,10 +540,8 @@ export async function runClaudeSdkAttempt(
         log("runClaudeSdkAttempt: ignored zero-work task notification result");
         continue;
       }
-      appendToRawLogFile(line);
+      emitParsedStreamLine(line);
       attemptOutput = trimBufferHead(attemptOutput + line);
-      appendToRawOutput(line);
-      processRealtimeStdoutChunk(line);
       if (message.type === "result") {
         sawResult = true;
         resultIsError = message.is_error === true;
@@ -584,7 +588,7 @@ export async function runClaudeSdkAttempt(
         log(
           "runClaudeSdkAttempt: resume target missing — retrying as a new session with the same id",
         );
-        appendToRawLogFile("[sdk-retry] " + messageText + "\n");
+        recordSdkRetry(messageText);
         sawResult = false;
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
@@ -601,8 +605,7 @@ export async function runClaudeSdkAttempt(
     const messageText = error instanceof Error ? error.message : String(error);
     queryErrorMessage = messageText;
     log("runClaudeSdkAttempt: query failed — " + messageText);
-    appendToRawLogFile("[sdk-error] " + messageText + "\n");
-    S.stderrOutput = trimBufferHead(S.stderrOutput + messageText + "\n");
+    recordSdkAttemptFailure(messageText);
   } finally {
     clearInterval(healthTimer);
   }
@@ -641,16 +644,10 @@ export async function runClaudeSdkAttempt(
       (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") +
       ")",
   );
-  return {
+  return buildStandardSdkAttemptResult({
     code,
-    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
-    timedOutForFirstEvent: false,
-    timedOutForFirstAssistant: false,
-    timedOutAfterFirstText: false,
-    timedOutForZombie: false,
-    toolStallErrorMessage: "",
-  };
+  });
 }

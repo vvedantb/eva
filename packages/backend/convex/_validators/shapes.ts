@@ -10,17 +10,32 @@ import {
   roleValidator,
 } from "./enums";
 
+/** Git HEAD of one checked-out repo, keyed by its sandbox path. */
+export const repoShaValidator = v.object({
+  path: v.string(),
+  sha: v.string(),
+});
+
 /**
  * Turn checkpoint shas the sandbox callback stamps on every completion it posts
  * (`callback-src/runtime/turnCheckpoint.ts`), whatever the surface. Every
  * completion receiver must spread these into its args: a closed validator
  * rejects the whole call with ArgumentValidationError, the reply is lost and
- * the turn hangs on "Working…". Only sessions persist them
- * (`messageFields.beforeSha`); other surfaces accept and ignore them.
+ * the turn hangs on "Working…". Session, quick-task and project chat persist
+ * them (`messageFields.beforeSha`); other surfaces accept and ignore them, and
+ * the callback's own allow-list stops it stamping those in the first place.
  */
 export const turnCheckpointArgs = {
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
+  /**
+   * Multi-repo turn checkpoints (see `messageFields.beforeShas`): one entry
+   * per checked-out repo. Every completion receiver accepts these so the
+   * sandbox callback's argument shape stays uniform across surfaces; the three
+   * chat surfaces persist them.
+   */
+  beforeShas: v.optional(v.array(repoShaValidator)),
+  afterShas: v.optional(v.array(repoShaValidator)),
 };
 
 export const workflowCompleteValidator = v.object({
@@ -96,6 +111,52 @@ export const conversationMessageValidator = v.object({
   finishedAt: v.optional(v.number()),
 });
 
+/**
+ * Jev's verdict on one automation finding: the severity it judged (which may
+ * disagree with the agent's own `severity`) and the open task it looks like a
+ * duplicate of, if any. `duplicateProbability` is 0 when Jev picked "none", so
+ * the UI thresholds one number instead of branching on absence.
+ */
+export const findingTriageValidator = v.object({
+  severity: findingSeverityValidator,
+  duplicateOfTaskId: v.optional(v.id("agentTasks")),
+  duplicateOfNumId: v.optional(v.number()),
+  duplicateProbability: v.number(),
+  evaluatedAt: v.number(),
+});
+
+/** One diff hunk Jev judged the prompt did not ask for. */
+export const scopeCheckHunkValidator = v.object({
+  /** Repo-relative path of the file the hunk touches. */
+  file: v.string(),
+  /** The hunk's `@@ -a,b +c,d @@ context` line, for locating it in a diff. */
+  header: v.string(),
+  /** P(the prompt asked for this change), 0..1. */
+  requested: v.number(),
+  /** P(the change is required to make a requested change work), 0..1. */
+  necessary: v.number(),
+});
+
+/**
+ * Jev's scope verdict on one assistant turn: did the diff between the turn's
+ * `beforeSha` and `afterSha` contain changes the user's prompt did not ask for?
+ * Written out of band after the turn completes (`scopeCheck.ts`); absent when
+ * the turn changed no code, the diff never became fetchable, or Jev failed.
+ */
+export const scopeCheckValidator = v.object({
+  /** P(this turn contains changes the prompt did not ask for), whole-diff question. */
+  unrequestedProbability: v.number(),
+  /** Hunks in the turn diff after dropping lockfiles and binaries. */
+  totalHunks: v.number(),
+  /** Hunks actually judged — capped, so may be below `totalHunks`. */
+  judgedHunks: v.number(),
+  /** Judged hunks under the requested/necessary threshold, worst first, capped. */
+  flagged: v.array(scopeCheckHunkValidator),
+  /** True when the diff was clipped or hunks past the cap were skipped. */
+  partial: v.boolean(),
+  evaluatedAt: v.number(),
+});
+
 export const automationFindingValidator = v.object({
   id: v.string(),
   title: v.string(),
@@ -104,6 +165,7 @@ export const automationFindingValidator = v.object({
   filePaths: v.optional(v.array(v.string())),
   suggestedFix: v.optional(v.string()),
   taskId: v.optional(v.id("agentTasks")),
+  triage: v.optional(findingTriageValidator),
 });
 
 // Task-count breakdown for a project, used by both the single-project
@@ -129,6 +191,8 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("composerAutocomplete"),
   v.literal("simpleView"),
   v.literal("replyChime"),
+  v.literal("disablePageMotion"),
+  v.literal("viewVercelDeployment"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -139,6 +203,8 @@ export const experimentalFlagsFields = {
   composerAutocomplete: v.optional(v.boolean()),
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
+  disablePageMotion: v.optional(v.boolean()),
+  viewVercelDeployment: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -151,6 +217,8 @@ export const resolvedExperimentalFlagsValidator = v.object({
   composerAutocomplete: v.boolean(),
   simpleView: v.boolean(),
   replyChime: v.boolean(),
+  disablePageMotion: v.boolean(),
+  viewVercelDeployment: v.boolean(),
 });
 
 /**

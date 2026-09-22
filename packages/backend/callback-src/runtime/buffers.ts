@@ -27,6 +27,24 @@ export function appendToRawOutput(text: string): void {
 }
 
 /** Durable append-only mirror of stdout chunks. */
+export function recordSdkRetry(detail: string): void {
+  appendToRawLogFile("[sdk-retry] " + detail + "\n");
+}
+
+/** Records an SDK attempt failure in the raw log and the trimmed stderr buffer. */
+export function recordSdkAttemptFailure(
+  message: string,
+  extras?: { stderrMessage?: string; extraStderr?: string },
+): void {
+  appendToRawLogFile("[sdk-error] " + message + "\n");
+  const stderr =
+    (extras?.stderrMessage ?? message) +
+    "\n" +
+    (extras?.extraStderr ? extras.extraStderr + "\n" : "");
+  S.stderrOutput = trimBufferHead(S.stderrOutput + stderr);
+}
+
+/** Durable append-only mirror of stdout chunks. */
 export function appendToRawLogFile(text: string): void {
   if (S.rawLogStreamFailed || !text) return;
   try {

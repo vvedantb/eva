@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { m } from "motion/react";
 import { motionFast } from "@eva/ui";
 import type { MentionPopupPlacement } from "./mentionPopupPosition";
+import { optionId } from "./mentionOptionId";
 
 /**
  * `caret` is the compact list next to the caret (comment boxes, modals, task
@@ -14,6 +15,12 @@ export type MentionPopupLayout = "caret" | "panel";
 
 interface MentionPickerPopupProps<TItem extends { id: string }> {
   title: string;
+  /**
+   * Id of the `listbox` element. The editor owns it (one `useId` per editor)
+   * because it is the combobox pointing here through `aria-controls` and
+   * `aria-activedescendant`.
+   */
+  listboxId: string;
   placement: MentionPopupPlacement;
   items: TItem[];
   selectedIndex: number;
@@ -25,6 +32,7 @@ interface MentionPickerPopupProps<TItem extends { id: string }> {
 
 export function MentionPickerPopup<TItem extends { id: string }>({
   title,
+  listboxId,
   placement,
   items,
   selectedIndex,
@@ -89,6 +97,7 @@ export function MentionPickerPopup<TItem extends { id: string }>({
         {items.length > 0 ? (
           <div
             ref={listRef}
+            id={listboxId}
             role="listbox"
             aria-label={title}
             className="scrollbar scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"
@@ -98,6 +107,7 @@ export function MentionPickerPopup<TItem extends { id: string }>({
               return (
                 <button
                   key={item.id}
+                  id={optionId(listboxId, item.id)}
                   type="button"
                   role="option"
                   aria-selected={isSelected}

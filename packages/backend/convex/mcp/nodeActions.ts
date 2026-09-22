@@ -1,6 +1,6 @@
 "use node";
 
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
 import { jwtVerify, SignJWT, importJWK } from "jose";
@@ -8,8 +8,11 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { registerTools } from "./tools";
-import { registerSupabaseTools } from "./supabase";
+import { buildTools } from "./tools";
+import { supabaseTools } from "./supabase";
+import { mountFlat, type EvaTool } from "./registry";
+import { codeModeTools } from "../_mcp/codeModeTools";
+import { jsonValue, type JsonValue } from "../_jev/jsonValue";
 import {
   buildChatMessageCalls,
   decideSandboxStartPlan,
@@ -22,7 +25,8 @@ import {
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
-import { normalizeAIModel } from "../validators";
+import { prStateValidator } from "../validators";
+import type { McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
@@ -286,25 +290,6 @@ export const verifyAccessToken = internalAction({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-const jsonValue: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValue),
-    z.record(z.string(), jsonValue),
-  ]),
-);
 
 const convexSuccessResponse = z.object({
   status: z.literal("success"),
@@ -828,27 +813,23 @@ export const runTestQuery = internalAction({
   },
 });
 
-const mcpClaudeModelValidator = v.union(
-  v.literal("opus"),
-  v.literal("sonnet"),
-  v.literal("haiku"),
-  v.literal("fable"),
-);
-
+// Task and session creation deliberately take no model: the mutations behind
+// them fall back to `repo.defaultModel`, and that per-repo choice (provider,
+// cost, plan limits) is the one the MCP surface must not override. Per-turn
+// sends (orchestratorSendMessage) keep their model override.
 export const createTask = internalAction({
   args: {
     clerkUserId: v.string(),
     repoId: v.string(),
     title: v.string(),
     description: v.string(),
-    model: v.optional(mcpClaudeModelValidator),
     baseBranch: v.optional(v.string()),
     projectId: v.optional(v.string()),
   },
   returns: v.string(),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, title, description, model, baseBranch, projectId },
+    { clerkUserId, repoId, title, description, baseBranch, projectId },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
     const mutationArgs: Record<string, JsonValue> = {
@@ -856,7 +837,6 @@ export const createTask = internalAction({
       title,
       description,
     };
-    if (model) mutationArgs.model = normalizeAIModel(model);
     if (baseBranch) mutationArgs.baseBranch = baseBranch;
     if (projectId) mutationArgs.projectId = projectId;
 
@@ -901,13 +881,12 @@ export const createTasksBatch = internalAction({
       }),
     ),
     projectTitle: v.optional(v.string()),
-    model: v.optional(mcpClaudeModelValidator),
     baseBranch: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (
     _ctx,
-    { clerkUserId, repoId, tasks, projectTitle, model, baseBranch },
+    { clerkUserId, repoId, tasks, projectTitle, baseBranch },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
     const mutationArgs: Record<string, JsonValue> = {
@@ -919,7 +898,6 @@ export const createTasksBatch = internalAction({
       })),
     };
     if (projectTitle) mutationArgs.projectTitle = projectTitle;
-    if (model) mutationArgs.model = normalizeAIModel(model);
     if (baseBranch) mutationArgs.baseBranch = baseBranch;
 
     const result = await runMutationAsUser(
@@ -946,14 +924,30 @@ export const createEvaDoc = internalAction({
     repoId: v.string(),
     title: v.string(),
     content: v.string(),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.string(),
-  handler: async (_ctx, { clerkUserId, repoId, title, content }) => {
+  handler: async (
+    _ctx,
+    { clerkUserId, repoId, title, content, sourceKind, sourceId },
+  ) => {
+    const createArgs: Record<string, JsonValue> = { repoId, title, content };
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const docId = await runMutationAsUser(
       getEvaConvexCloudUrl(),
       clerkUserId,
       "docs:create",
-      { repoId, title, content },
+      createArgs,
     );
     if (typeof docId !== "string") {
       throw new Error("Unexpected response from docs:create");
@@ -1052,11 +1046,24 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
+    sourceKind: v.optional(
+      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+    ),
+    sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
   handler: async (
     _ctx,
-    { clerkUserId, name, html, description, boundTeamId, declaredTools },
+    {
+      clerkUserId,
+      name,
+      html,
+      description,
+      boundTeamId,
+      declaredTools,
+      sourceKind,
+      sourceId,
+    },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
 
@@ -1092,6 +1099,14 @@ export const createArtifact = internalAction({
       htmlStorageId: storageId,
     };
     if (description) createArgs.description = description;
+    if (sourceKind !== undefined && sourceId !== undefined) {
+      createArgs.source =
+        sourceKind === "session"
+          ? { kind: "session", sessionId: sourceId }
+          : sourceKind === "task"
+            ? { kind: "task", taskId: sourceId }
+            : { kind: "project", projectId: sourceId };
+    }
     const artifactId = await runMutationAsUser(
       convexUrl,
       clerkUserId,
@@ -1166,31 +1181,6 @@ export const listArtifacts = internalAction({
 
 const agentKindValidator = v.union(v.literal("session"), v.literal("task"));
 type AgentKind = "session" | "task";
-
-type AgentStateTranscript = {
-  role: string;
-  content: string;
-  timestamp: number;
-  truncated: boolean;
-};
-
-type AgentStateResult = {
-  kind: AgentKind;
-  id: string;
-  numId?: number;
-  title: string;
-  status: string;
-  isExecuting: boolean;
-  model?: string;
-  updatedAt: number;
-  deploymentUrl?: string;
-  deploymentStatus?: string;
-  currentActivity?: string;
-  currentContent?: string;
-  pendingQuestion?: string;
-  queuedMessageCount: number;
-  transcript: AgentStateTranscript[];
-};
 
 /**
  * Sending a message reaches one surface more than the fleet tools do: a
@@ -1289,6 +1279,7 @@ const sessionDocSchema = z.object({
   activeWorkflowId: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
+  linkedRepoCount: z.number().optional(),
 });
 
 const streamingStateSchema = z
@@ -1465,6 +1456,50 @@ export const orchestratorListAgents = internalAction({
   },
 });
 
+/**
+ * `get_agent_state`'s result. Named (rather than inline) so the handler can be
+ * annotated with its own shape: an action's registered type comes from the
+ * handler's *inferred* return type, so a handler that reads back through
+ * `internal` — as the session branch does for its linked repos — would
+ * otherwise make `internal` depend on itself.
+ */
+const orchestratorAgentStateValidator = v.object({
+  kind: agentKindValidator,
+  id: v.string(),
+  numId: v.optional(v.number()),
+  title: v.string(),
+  status: v.string(),
+  isExecuting: v.boolean(),
+  model: v.optional(v.string()),
+  updatedAt: v.number(),
+  deploymentUrl: v.optional(v.string()),
+  deploymentStatus: v.optional(v.string()),
+  currentActivity: v.optional(v.string()),
+  currentContent: v.optional(v.string()),
+  pendingQuestion: v.optional(v.string()),
+  queuedMessageCount: v.number(),
+  transcript: v.array(
+    v.object({
+      role: v.string(),
+      content: v.string(),
+      timestamp: v.number(),
+      truncated: v.boolean(),
+    }),
+  ),
+  /** Sessions only, and only when it has linked repos beside its primary. */
+  linkedRepos: v.optional(
+    v.array(
+      v.object({
+        repo: v.string(),
+        path: v.string(),
+        branch: v.string(),
+        prUrl: v.optional(v.string()),
+        prState: v.optional(prStateValidator),
+      }),
+    ),
+  ),
+});
+
 export const orchestratorGetAgentState = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -1472,34 +1507,11 @@ export const orchestratorGetAgentState = internalAction({
     id: v.string(),
     transcriptTail: v.number(),
   },
-  returns: v.object({
-    kind: agentKindValidator,
-    id: v.string(),
-    numId: v.optional(v.number()),
-    title: v.string(),
-    status: v.string(),
-    isExecuting: v.boolean(),
-    model: v.optional(v.string()),
-    updatedAt: v.number(),
-    deploymentUrl: v.optional(v.string()),
-    deploymentStatus: v.optional(v.string()),
-    currentActivity: v.optional(v.string()),
-    currentContent: v.optional(v.string()),
-    pendingQuestion: v.optional(v.string()),
-    queuedMessageCount: v.number(),
-    transcript: v.array(
-      v.object({
-        role: v.string(),
-        content: v.string(),
-        timestamp: v.number(),
-        truncated: v.boolean(),
-      }),
-    ),
-  }),
+  returns: orchestratorAgentStateValidator,
   handler: async (
     ctx,
     { clerkUserId, kind, id, transcriptTail },
-  ): Promise<AgentStateResult> => {
+  ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
     const convexUrl = getEvaConvexCloudUrl();
     const streamingEntityId =
       kind === "session" ? id : `${TASK_CHAT_STREAM_PREFIX}${id}`;
@@ -1561,6 +1573,12 @@ export const orchestratorGetAgentState = internalAction({
 
     if (kind === "session") {
       const session = sessionDocSchema.parse(rawDoc);
+      const linkedRepos: McpLinkedRepo[] | undefined =
+        session.linkedRepoCount !== undefined && session.linkedRepoCount > 0
+          ? await ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
+              sessionId: id,
+            })
+          : undefined;
       return {
         ...common,
         numId: session.numId,
@@ -1570,6 +1588,7 @@ export const orchestratorGetAgentState = internalAction({
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
+        linkedRepos,
       };
     }
 
@@ -2013,23 +2032,50 @@ export const orchestratorCreateSession = internalAction({
     repoId: v.string(),
     title: v.optional(v.string()),
     message: v.string(),
-    model: v.optional(v.string()),
     baseBranch: v.optional(v.string()),
     masterSessionId: v.optional(v.string()),
+    /** Extra repos to clone beside `repoId`. Mutually exclusive with `repoGroupId`. */
+    linkedRepoIds: v.optional(v.array(v.string())),
+    /** Saved codebase group whose members prefill the selection. */
+    repoGroupId: v.optional(v.string()),
+    installDependencies: v.optional(v.boolean()),
   },
-  returns: v.object({ sessionId: v.string(), numId: v.number() }),
+  returns: v.object({
+    sessionId: v.string(),
+    numId: v.number(),
+    linkedRepos: v.array(v.object({ repo: v.string(), path: v.string() })),
+  }),
   handler: async (
-    _ctx,
-    { clerkUserId, repoId, title, message, model, baseBranch, masterSessionId },
+    ctx,
+    {
+      clerkUserId,
+      repoId,
+      title,
+      message,
+      baseBranch,
+      masterSessionId,
+      linkedRepoIds,
+      repoGroupId,
+      installDependencies,
+    },
   ) => {
+    // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
+    // Passing normalizeAIModel(undefined) here used to force claude:sonnet on
+    // every MCP-created session regardless of the repo's configured default.
     const createArgs: Record<string, JsonValue> = {
       repoId,
       message,
-      model: normalizeAIModel(model),
       sentViaOrchestrator: true,
     };
     if (title) createArgs.title = title;
     if (baseBranch) createArgs.baseBranch = baseBranch;
+    if (linkedRepoIds && linkedRepoIds.length > 0) {
+      createArgs.linkedRepoIds = linkedRepoIds;
+    }
+    if (repoGroupId) createArgs.repoGroupId = repoGroupId;
+    if (installDependencies !== undefined) {
+      createArgs.installDependencies = installDependencies;
+    }
 
     const created = createdSessionSchema.parse(
       await runMutationAsUser(
@@ -2045,7 +2091,17 @@ export const orchestratorCreateSession = internalAction({
       created.sessionId,
       masterSessionId,
     );
-    return created;
+    const linkedRepos: McpLinkedRepo[] = await ctx.runQuery(
+      internal.mcp.queries.sessionLinkedRepos,
+      { sessionId: created.sessionId },
+    );
+    return {
+      ...created,
+      linkedRepos: linkedRepos.map((link) => ({
+        repo: link.repo,
+        path: link.path,
+      })),
+    };
   },
 });
 
@@ -2171,15 +2227,20 @@ export const handleMcpRequest = internalAction({
         entityKind,
         isOrchestrator,
       };
-      registerTools(server, credentials, ctx);
+      const tools = buildTools(credentials, ctx);
+      let supabase: EvaTool[] = [];
       try {
-        await registerSupabaseTools(server, credentials, ctx);
+        supabase = await supabaseTools(credentials, ctx);
       } catch (err) {
         console.error(
           "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
           err instanceof Error ? err.message : err,
         );
       }
+      const allTools = [...tools, ...supabase];
+      // Code mode is additive: `execute` and `search_tools` sit beside the flat
+      // tools and dispatch to the same definitions.
+      mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
 
       // Create transport in stateless mode with JSON responses (no SSE).
       // WebStandardStreamableHTTPServerTransport works with Web Standard

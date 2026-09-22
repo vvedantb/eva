@@ -44,6 +44,8 @@ import {
   evalIssueValidator,
   experimentalFlagsValidator,
   logEntryValidator,
+  repoShaValidator,
+  scopeCheckValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
   userFlowValidator,
@@ -76,6 +78,10 @@ export const userFields = {
   // The user's single persistent orchestrator ("master") session. Absent until
   // first opened; repointed if the master is archived/deleted and recreated.
   orchestratorSessionId: v.optional(v.id("sessions")),
+  /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
+  grokBotWebhookUrl: v.optional(v.string()),
+  /** AES-GCM ciphertext of the routine bearer key (`enc:…`). Never returned. */
+  grokBotWebhookKey: v.optional(v.string()),
 };
 
 /** Heartbeat/path writes. Isolated so they do not invalidate `users` subscribers. */
@@ -206,6 +212,12 @@ export const turnFields = {
   model: aiModelValidator,
   sandboxId: v.optional(v.string()),
   repoId: v.id("githubRepos"),
+  /**
+   * Set by the lease reconciler the first time it finds the lease expired
+   * while the sandbox process was still alive; cleared by the next successful
+   * lease renewal. Bounds how long a silent-but-alive turn is tolerated.
+   */
+  silentSince: v.optional(v.number()),
 };
 
 export const pendingTurnFields = {
@@ -344,6 +356,13 @@ export const agentTaskFields = {
   // Orchestrator session watching this task for completion notifications
   // (mirrors sessions.watchedByOrchestrator).
   watchedByOrchestrator: v.optional(v.id("sessions")),
+  /**
+   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
+   * daemon (see callback-src/runtime/branchWatcher.ts). Tasks store no intended
+   * branch — that is derived as `eva/task-<id>` — so this is the only record of
+   * where the checkout really is. Detached HEAD is reported as the short sha.
+   */
+  sandboxBranch: v.optional(v.string()),
 };
 
 export const agentRunFields = {
@@ -381,6 +400,14 @@ export const agentRunFields = {
   model: v.optional(aiModelValidator),
 };
 
+/** Lifecycle of a pull request Eva opened, shared by every surface that tracks one. */
+export const prStateValidator = v.union(
+  v.literal("draft"),
+  v.literal("open"),
+  v.literal("merged"),
+  v.literal("closed"),
+);
+
 export const sessionFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -397,17 +424,18 @@ export const sessionFields = {
   // silently falling back to the repo default.
   baseBranch: v.optional(v.string()),
   prUrl: v.optional(v.string()),
-  prState: v.optional(
-    v.union(
-      v.literal("draft"),
-      v.literal("open"),
-      v.literal("merged"),
-      v.literal("closed"),
-    ),
-  ),
+  prState: v.optional(prStateValidator),
   /** Live PR status (open/draft) Eva closed when archiving. Unarchive reopens it. */
   prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
+  /**
+   * Short, user-safe reason the last wake attempt failed (≤200 chars, stack and
+   * request-id noise stripped). Set wherever a failed start puts the row back to
+   * `closed`; cleared at the start of every new attempt and on every transition
+   * to `active`. Without it a failed start is indistinguishable from a sleeping
+   * sandbox — a grey dot with no explanation and no retry.
+   */
+  sandboxError: v.optional(v.string()),
   /** Earliest time an archived session's sandbox may be deleted (48h grace). */
   sandboxDeleteAfter: v.optional(v.number()),
   ptySessionId: v.optional(v.string()),
@@ -480,6 +508,69 @@ export const sessionFields = {
   // implicitly when the master touches this session (send/create) or via
   // watch_agent; cleared by unwatch_agent or when the master is gone.
   watchedByOrchestrator: v.optional(v.id("sessions")),
+  /**
+   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
+   * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
+   * `branchName`, which is what Eva asked the sandbox to check out at boot.
+   * Detached HEAD is reported as the short commit sha.
+   */
+  sandboxBranch: v.optional(v.string()),
+  // Saved codebase group the session was created from, when one prefilled the
+  // linked repo selection. Informational: the `sessionRepos` rows are the
+  // source of truth, so editing the group later never rewrites this session.
+  repoGroupId: v.optional(v.id("repoGroups")),
+  // How many `sessionRepos` rows this session has. Denormalised so list rows
+  // and resume paths can tell a multi-repo session apart without a join.
+  linkedRepoCount: v.optional(v.number()),
+};
+
+/**
+ * One extra GitHub repo cloned into a session's sandbox alongside the primary.
+ * The primary stays at `/tmp/repo` (symlinked into the workspace); every linked
+ * repo is a whole checkout at `/tmp/workspace/<name>` on the same branch name as
+ * the primary, with its own optional pull request.
+ *
+ * A row is always the entire repository — monorepo sibling app rows share one
+ * checkout, so `rootDirectory` has no meaning here and is deliberately absent.
+ */
+export const sessionRepoFields = {
+  sessionId: v.id("sessions"),
+  repoId: v.id("githubRepos"),
+  owner: v.string(),
+  name: v.string(),
+  installationId: v.number(),
+  /** Absolute clone path in the sandbox: `/tmp/workspace/<name>`. */
+  path: v.string(),
+  /** The session branch, identical to the primary's `eva/session-<id>`. */
+  branchName: v.string(),
+  baseBranch: v.string(),
+  prUrl: v.optional(v.string()),
+  prState: v.optional(prStateValidator),
+  installDependencies: v.boolean(),
+  /** Set once the sandbox has finished cloning this repo. */
+  clonedAt: v.optional(v.number()),
+  devPort: v.optional(v.number()),
+  devCommand: v.optional(v.string()),
+};
+
+/**
+ * A saved "codebase group": one primary repo plus the linked repos that should
+ * be cloned with it. Prefills the new-session picker; never edits live sessions.
+ */
+export const repoGroupFields = {
+  name: v.string(),
+  createdBy: v.id("users"),
+  /** Copied from the primary repo so teammates see the group. */
+  teamId: v.optional(v.id("teams")),
+  primaryRepoId: v.id("githubRepos"),
+  linkedRepoIds: v.array(v.id("githubRepos")),
+  installDependencies: v.optional(v.boolean()),
+  // Seeded multi-repo snapshot captured for this exact membership, and the
+  // fingerprint of the inputs it was built from (mirrors `githubRepos`).
+  seededSnapshotName: v.optional(v.string()),
+  seededFingerprint: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.optional(v.number()),
 };
 
 export const syncSettingFields = {
@@ -726,6 +817,13 @@ export const projectFields = {
   // Soft UX lock while the agent drives the shared desktop Chrome via
   // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
   agentBrowsingAt: v.optional(v.number()),
+  /**
+   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
+   * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
+   * `branchName`, which is what Eva asked the sandbox to check out at boot.
+   * Detached HEAD is reported as the short commit sha.
+   */
+  sandboxBranch: v.optional(v.string()),
 };
 
 export const projectDetailsFields = {
@@ -852,12 +950,22 @@ export const messageFields = {
   // User-role wake-up row inserted into the master session when a watched
   // child agent finishes. Drives distinct UI styling.
   orchestratorNotification: v.optional(v.boolean()),
-  // Turn checkpoint (assistant rows, sessions only): sandbox git HEAD when the
-  // turn started and after persistTurnWork committed/pushed at turn end. Equal
-  // shas mean the turn changed no code. Absent on turns from pre-checkpoint
-  // callback bundles and on task runs.
+  // Turn checkpoint (assistant rows on session, quick-task and project chat):
+  // sandbox git HEAD when the turn started and after persistTurnWork
+  // committed/pushed at turn end. Equal shas mean the turn changed no code.
+  // Absent on turns from pre-checkpoint callback bundles and on task runs.
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
+  // Multi-repo turn checkpoints: one entry per checked-out repo, the primary
+  // filed under "/tmp/repo" and each linked repo under its workspace path.
+  // Supersede `beforeSha`/`afterSha` when present; single-repo sessions keep
+  // writing only the scalars.
+  beforeShas: v.optional(v.array(repoShaValidator)),
+  afterShas: v.optional(v.array(repoShaValidator)),
+  // Assistant rows: Jev's verdict on whether the turn's diff strayed beyond
+  // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
+  // three chat surfaces; task runs never checkpoint and so never carry one.
+  scopeCheck: v.optional(scopeCheckValidator),
 };
 
 export const queuedMessageFields = {
@@ -962,7 +1070,19 @@ export const appSettingsFields = {
 export const sandboxGitCredentialsFields = {
   sandboxId: v.string(),
   installationId: v.number(),
+  // Every installation the sandbox may mint a token for. A multi-repo session
+  // clones repos from more than one GitHub App installation, so the helper's
+  // single `installationId` above is only the primary's. Absent on rows written
+  // before linked repos existed; readers fall back to `[installationId]`.
+  installationIds: v.optional(v.array(v.number())),
   secret: v.string(),
+  // GitHub repository the sandbox was created for. /api/git-credentials grants
+  // the full installation token for this repository without the sandbox being
+  // bound to a session/task/project — snapshot seed-prep and ephemeral
+  // automation sandboxes never are. Optional: rows written before the pin lack
+  // it until the helper is next reinstalled (every create/resume rotates it).
+  repoOwner: v.optional(v.string()),
+  repoName: v.optional(v.string()),
   createdAt: v.number(),
 };
 
@@ -971,6 +1091,15 @@ export const docFields = {
   repoId: v.id("githubRepos"),
   kind: v.optional(docKindValidator),
   sessionId: v.optional(v.id("sessions")),
+  // Chat that created this doc (`create_eva_doc` from a sandbox token, or
+  // Save-as-document from a session plan). Manual New Document leaves these
+  // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -1137,6 +1266,14 @@ export const artifactFields = {
   htmlStorageId: v.id("_storage"),
   uploadedBy: v.id("users"),
   createdAt: v.number(),
+  // Chat that created this artifact (`create_artifact` from a sandbox token).
+  // Manual uploads leave these unset. Indexes skip rows with no source.
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port
@@ -1213,6 +1350,24 @@ export const agentUsageLimitFields = {
    * treat that as "unknown", not as any of the three states.
    */
   completeness: v.optional(usageLimitCompletenessValidator),
+};
+
+/**
+ * One agent-generated UI panel rendered inline in a chat. `spec` is a
+ * json-render Spec serialised as JSON — kept as a string because its shape is
+ * the catalog's business, not the database's, and it is re-parsed at the
+ * client boundary (`@eva/shared/generativeUi`).
+ */
+export const chatUiPanelFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the panel appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  title: v.optional(v.string()),
+  /** The layout request the agent made, kept for debugging and provenance. */
+  prompt: v.string(),
+  spec: v.string(),
+  elementCount: v.number(),
+  createdAt: v.number(),
 };
 
 /** A captured ExitPlanMode plan, linked to the turn that proposed it. */

@@ -1,6 +1,7 @@
 "use node";
 
 import { v, type Infer } from "convex/values";
+import { quote } from "shell-quote";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
@@ -60,6 +61,7 @@ import {
   shouldDeferDaemonRespawn,
   type DaemonTurnSnapshot,
 } from "../_chat/daemonClaimPause";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
 /** True if anything is LISTEN on `port` (Vercel images often lack `ss`). */
 function portListenProbeCmd(port: number): string {
@@ -110,6 +112,7 @@ import {
 import { startDesktopWithChrome } from "./desktop";
 import {
   ensurePreviewNavigationProxy,
+  PREVIEW_TAB_PREFIX,
   VERCEL_PREVIEW_PROXY_PORT,
   VERCEL_DESKTOP_INTERNAL_PORT,
   VERCEL_EDITOR_INTERNAL_PORT,
@@ -867,13 +870,23 @@ export const runStopCommands = internalAction({
   },
 });
 
-/** Returns a signed preview URL for a sandbox port, optionally checking readiness. */
+/**
+ * Returns a signed preview URL for a sandbox port, optionally checking
+ * readiness.
+ *
+ * `customTabPort` serves a user-defined tab (e.g. Supabase Studio on 54323).
+ * Vercel exposes only four ports and the proxy owns the public one, so tabs do
+ * not get their own proxy: `port` stays the app's Preview port (same proxy
+ * target, no clobbering) and the URL points at the proxy's `/__tab/<port>/`
+ * prefix, which forwards to that in-sandbox port.
+ */
 export const getPreviewUrl = action({
   args: {
     sandboxId: v.string(),
     port: v.number(),
     checkReady: v.optional(v.boolean()),
     navigationSync: v.optional(v.boolean()),
+    customTabPort: v.optional(v.number()),
     repoId: v.id("githubRepos"),
   },
   returns: v.object({
@@ -886,6 +899,26 @@ export const getPreviewUrl = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
+
+    const customTabPort = args.customTabPort;
+    if (customTabPort !== undefined) {
+      // 3000/6080/8080 are the proxy's own exposed slots, never an upstream.
+      const reserved =
+        customTabPort === VERCEL_PREVIEW_PROXY_PORT ||
+        customTabPort === 6080 ||
+        customTabPort === 8080;
+      if (
+        !Number.isInteger(customTabPort) ||
+        customTabPort <= 0 ||
+        customTabPort > 65535 ||
+        reserved
+      ) {
+        throw new Error(
+          `Invalid custom tab port: ${customTabPort} (must be 1-65535 and not a reserved proxy port 3000/6080/8080)`,
+        );
+      }
+    }
+    const responsePort = customTabPort ?? args.port;
 
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
@@ -914,7 +947,7 @@ export const getPreviewUrl = action({
       // touching the VM; polling recovers once the sandbox is started again.
       // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
       if (handle.state !== "running") {
-        return { url: "", port: args.port, ready: false };
+        return { url: "", port: responsePort, ready: false };
       }
       // Background daemons (e.g. `npx convex dev`) only relaunch on sandbox
       // start/resume. If they die while status stays active, Preview would
@@ -925,9 +958,15 @@ export const getPreviewUrl = action({
       // inside the sandbox, which flooded prod logs and burned action time.
       // sandboxHeal.claim grants the slot to one caller per interval across
       // all concurrent viewers.
-      const healClaimed = await ctx.runMutation(internal.sandboxHeal.claim, {
-        sandboxId: args.sandboxId,
-      });
+      // Custom tabs never heal or claim: both the background-daemon heal and
+      // the recovery below are about the app's dev server, and a stopped
+      // Supabase must not restart it.
+      const healClaimed =
+        customTabPort === undefined
+          ? await ctx.runMutation(internal.sandboxHeal.claim, {
+              sandboxId: args.sandboxId,
+            })
+          : false;
       if (healClaimed) {
         try {
           await ctx.runAction(internal.sandbox.runBackgroundCommands, {
@@ -941,7 +980,8 @@ export const getPreviewUrl = action({
           );
         }
       }
-      ready = await probePreviewReady(handle, upstreamPort);
+      // A custom tab's readiness is its own port, not the app's dev server.
+      ready = await probePreviewReady(handle, customTabPort ?? upstreamPort);
       // Preview never launches the app inline: Lifecycle owns Console
       // (`launchPreviewDevServer` → tmux) as the single launcher. But nothing
       // watches the dev server after launch — an OOM kill or a lazily-resumed
@@ -982,7 +1022,11 @@ export const getPreviewUrl = action({
     // Same upstream mapping used for the readiness probe above.
     const proxyTargetPort = upstreamPort;
     const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
-    if (ready && shouldStartPreviewProxy) {
+    // The proxy fronts the app, so a custom tab gates it on the sandbox being
+    // up rather than on `ready` (which describes the tab's own port).
+    const proxyUsable =
+      customTabPort === undefined ? ready : handle.state === "running";
+    if (proxyUsable && shouldStartPreviewProxy) {
       try {
         previewPort = await ensurePreviewNavigationProxy(
           handle,
@@ -1023,7 +1067,7 @@ export const getPreviewUrl = action({
     // user's "open in new tab") loads without a login round-trip. The proxy
     // exchanges it for a session cookie on first load. Only when gating is
     // configured — otherwise the URL stays a plain proxied URL.
-    if (previewPublicJwk && ready) {
+    if (previewPublicJwk && proxyUsable) {
       const grant = await signPreviewGrant({
         sandboxId: args.sandboxId,
         // Grant must match AUTH_PORT (public proxy on Vercel app previews).
@@ -1033,8 +1077,13 @@ export const getPreviewUrl = action({
       parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
     }
 
+    // Custom tabs are served by the same proxy under its per-port prefix.
+    if (customTabPort !== undefined) {
+      parsedUrl.pathname = `${PREVIEW_TAB_PREFIX}/${customTabPort}/`;
+    }
+
     const url = parsedUrl.toString();
-    return { url, port: args.port, ready };
+    return { url, port: responsePort, ready };
   },
 });
 
@@ -1545,6 +1594,123 @@ export const pushSandboxBranch = internalAction({
       // recovery. Swallowing here made every caller's error handling dead code.
       throw error;
     }
+  },
+});
+
+const pushLinkedRepoBranchResultValidator = v.object({
+  sessionRepoId: v.id("sessionRepos"),
+  pushed: v.boolean(),
+  published: v.boolean(),
+});
+
+/**
+ * Publishes every linked repo's branch that has commits origin lacks — the
+ * multi-repo counterpart of `pushSandboxBranch`, one push per `sessionRepos`
+ * row cloned into the same sandbox. Each row is independent: a missing clone
+ * directory or a network failure on one repo is logged and reported as
+ * `{ pushed: false, published: false }` rather than aborting the loop, so one
+ * bad linked repo never strands a good push on its siblings.
+ */
+export const pushLinkedRepoBranches = internalAction({
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+  },
+  returns: v.array(pushLinkedRepoBranchResultValidator),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    Array<{
+      sessionRepoId: Id<"sessionRepos">;
+      pushed: boolean;
+      published: boolean;
+    }>
+  > => {
+    const linkedRepos = await ctx.runQuery(
+      internal.sessions.listLinkedReposInternal,
+      { sessionId: args.sessionId },
+    );
+    if (linkedRepos.length === 0) return [];
+
+    const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    const results: Array<{
+      sessionRepoId: Id<"sessionRepos">;
+      pushed: boolean;
+      published: boolean;
+    }> = [];
+
+    for (const row of linkedRepos) {
+      try {
+        const quotedPath = quote([row.path]);
+        const dirExists = (
+          await execHandle(
+            sandbox,
+            `test -d ${quotedPath} && echo yes || echo no`,
+            10,
+          )
+        ).trim();
+        if (dirExists !== "yes") {
+          console.warn(
+            `[sandbox][execution] pushLinkedRepoBranches: ${row.path} is missing on sandbox=${args.sandboxId}, skipping (sessionRepoId=${row._id})`,
+          );
+          results.push({
+            sessionRepoId: row._id,
+            pushed: false,
+            published: false,
+          });
+          continue;
+        }
+
+        await execHandle(
+          sandbox,
+          `cd ${quotedPath} && git config --unset-all http.https://github.com/.extraheader 2>/dev/null; git remote set-url origin ${quote([`https://github.com/${row.owner}/${row.name}.git`])} && GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin ${quote([row.baseBranch])}`,
+          120,
+        );
+        const rangeSpec = `origin/${row.baseBranch}..${row.branchName}`;
+        const unpublishedCount = (
+          await execHandle(
+            sandbox,
+            `cd ${quotedPath} && git rev-list --count ${quote([rangeSpec])}`,
+            15,
+          )
+        ).trim();
+
+        if (unpublishedCount === "0") {
+          results.push({
+            sessionRepoId: row._id,
+            pushed: false,
+            published: false,
+          });
+          continue;
+        }
+
+        const pushResult = await pushBranchToOrigin(
+          sandbox,
+          row.owner,
+          row.name,
+          row.branchName,
+          { timeoutSeconds: 90, retryAttempts: 3, workspaceDir: row.path },
+        );
+        results.push({
+          sessionRepoId: row._id,
+          pushed: pushResult.pushed,
+          published: pushResult.published,
+        });
+      } catch (error) {
+        console.error(
+          `[sandbox][execution] pushLinkedRepoBranches failed for sessionRepoId=${row._id} (${row.owner}/${row.name}): ${errorMessage(error, "push failed")}`,
+        );
+        results.push({
+          sessionRepoId: row._id,
+          pushed: false,
+          published: false,
+        });
+      }
+    }
+
+    return results;
   },
 });
 
@@ -2126,8 +2292,7 @@ export const prewarmSessionDaemon = internalAction({
     const skipPrewarm =
       session === null ||
       session === undefined ||
-      session.status === "closed" ||
-      session.status === "stopping";
+      isSandboxClosingStatus(session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,

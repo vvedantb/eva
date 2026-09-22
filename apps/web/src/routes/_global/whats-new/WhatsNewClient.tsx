@@ -2,7 +2,13 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { cn, STREAMDOWN_TABLE_RADIUS_CLASS } from "@eva/ui";
+import {
+  cn,
+  STREAMDOWN_TABLE_RADIUS_CLASS,
+  motionBase,
+  motionStagger,
+} from "@eva/ui";
+import { m } from "motion/react";
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
@@ -38,7 +44,13 @@ export function WhatsNewClient() {
         // between cards instead of restarting at each one.
         <ol className="relative space-y-4 border-l border-border pl-6 sm:pl-8">
           {entries.map((entry, index) => (
-            <li key={entry.id} className="relative">
+            <m.li
+              key={entry.id}
+              className="relative"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...motionBase, delay: motionStagger(index) }}
+            >
               <span
                 className={cn(
                   "absolute -left-6 top-4 size-2 rounded-full ring-4 ring-background sm:-left-8",
@@ -69,7 +81,7 @@ export function WhatsNewClient() {
                   </Streamdown>
                 </div>
               </article>
-            </li>
+            </m.li>
           ))}
         </ol>
       )}

@@ -260,18 +260,57 @@ export const stopSandbox = internalAction({
   },
 });
 
-// Evidence of why a run's callback process died, gathered before the sandbox
-// (and with it /tmp and the kernel log) is destroyed. The dmesg grep directly
-// confirms or rules out OOM kills; a missing done file means the callback was
-// SIGKILLed (its exit handler never ran); the log tail shows its last words.
+// Evidence of why a run's callback process died — or stopped heartbeating —
+// gathered before the sandbox (and with it /tmp and the kernel log) is
+// destroyed. The dmesg grep directly confirms or rules out OOM kills; a missing
+// done file means the callback was SIGKILLed (its exit handler never ran); the
+// log tail shows its last words. The resource block distinguishes a dead
+// process from a live one starved by swap, which is what froze a session
+// daemon for six minutes and cost it its turn (see captureStalledTurnDiagnostics).
 const KILL_DIAGNOSTICS_COMMAND = [
   "echo '--- oom (dmesg) ---'",
   "(dmesg 2>/dev/null | grep -iE 'out of memory|oom[-_ ]kill|killed process' | tail -n 12) || true",
+  "echo '--- memory/swap (free -m) ---'",
+  "free -m 2>/dev/null || true",
+  "echo '--- disk (/tmp) ---'",
+  "df -h /tmp 2>/dev/null || true",
+  "echo '--- load ---'",
+  "cat /proc/loadavg 2>/dev/null || true",
+  "echo '--- top rss ---'",
+  "(ps -eo pid,rss,stat,etime,args --sort=-rss 2>/dev/null | head -n 8) || true",
   "echo '--- done file ---'",
   "cat /tmp/run-design.done 2>/dev/null || echo '(missing: callback died without running its exit handler, e.g. SIGKILL/OOM)'",
   "echo; echo '--- callback log tail ---'",
   "tail -n 30 /tmp/design.log 2>/dev/null || true",
 ].join("; ");
+
+/**
+ * Read-only post-mortem for a session turn whose lease expired on a sandbox
+ * that is still running. The sandbox is left running — this only reads
+ * evidence (OOM lines, memory/swap, load, top processes, callback log) so the
+ * stall can be root-caused without manual sandbox access. Never throws: a
+ * failed capture must not block finalising the turn.
+ */
+export const captureStalledTurnDiagnostics = internalAction({
+  args: {
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    try {
+      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      const diagnostics = await execHandle(
+        sandbox,
+        KILL_DIAGNOSTICS_COMMAND,
+        15,
+      );
+      return diagnostics.trim().slice(0, 4000);
+    } catch (error) {
+      return `diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  },
+});
 
 /**
  * Captures post-mortem diagnostics from a sandbox whose run was killed by the

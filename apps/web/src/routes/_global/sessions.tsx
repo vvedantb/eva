@@ -5,6 +5,7 @@ import { Card, CardContent, Skeleton } from "@eva/ui";
 import { IconBrandGithub, IconTerminal2 } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { repoSessionsIndexPath } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 
@@ -55,35 +56,36 @@ function SessionsCodebasePicker() {
           />
         ) : (
           <div className="space-y-2">
-            {repos.map((repo) => (
-              <Link
-                key={repo._id}
-                to={repoSessionsIndexPath(repo)}
-                className="block rounded-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35"
-              >
-                <Card className="motion-emphasized ui-surface-interactive cursor-pointer">
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <RepoLogo
-                      logoUrl={repo.logoUrl}
-                      size={28}
-                      fallback={
-                        <IconBrandGithub
-                          size={28}
-                          className="text-muted-foreground"
-                        />
-                      }
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {repoDisplayLabel(repo)}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {repo.owner}/{repo.name}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+            {repos.map((repo, index) => (
+              <ListEnter key={repo._id} index={index}>
+                <Link
+                  to={repoSessionsIndexPath(repo)}
+                  className="block rounded-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35"
+                >
+                  <Card className="motion-emphasized ui-surface-interactive cursor-pointer">
+                    <CardContent className="flex items-center gap-3 p-4">
+                      <RepoLogo
+                        logoUrl={repo.logoUrl}
+                        size={28}
+                        fallback={
+                          <IconBrandGithub
+                            size={28}
+                            className="text-muted-foreground"
+                          />
+                        }
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {repoDisplayLabel(repo)}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {repo.owner}/{repo.name}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </ListEnter>
             ))}
           </div>
         )}

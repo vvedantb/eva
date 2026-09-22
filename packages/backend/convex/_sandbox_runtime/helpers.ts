@@ -14,8 +14,16 @@ import {
   SandboxExecTimeoutError,
 } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
+import {
+  buildDockerdBackgroundStart,
+  buildDockerdProcessCleanup,
+  buildDockerdStaleRuntimeCleanup,
+  buildDockerInfoWaitLoop,
+  buildDockerSockPerms,
+} from "./dockerBootstrap";
 import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
+import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
 import { buildStubMarkdown, SYSTEM_SKILLS } from "../_systemSkills/registry";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
@@ -202,14 +210,13 @@ export async function ensureDockerDaemon(
       [
         "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker 2>/dev/null || true",
         "command -v docker >/dev/null 2>&1 || exit 1",
-        "sudo pkill -9 containerd 2>/dev/null",
-        "sudo pkill -9 dockerd 2>/dev/null",
+        ...buildDockerdProcessCleanup(),
         "sleep 1",
-        "sudo rm -f /var/run/docker.pid /var/run/docker.sock /run/docker/containerd/containerd.pid /run/docker/containerd/containerd.sock /run/docker/containerd/containerd.sock.ttrpc /run/docker/containerd/containerd-debug.sock 2>/dev/null",
+        buildDockerdStaleRuntimeCleanup(),
         "sudo systemctl start docker 2>/dev/null || true",
-        "sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 &",
-        "for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done",
-        "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+        buildDockerdBackgroundStart(),
+        buildDockerInfoWaitLoop(60),
+        buildDockerSockPerms(),
         "docker info >/dev/null 2>&1",
       ].join("; "),
       90,
@@ -247,16 +254,12 @@ export async function bootstrapVercelDocker(
     'echo "bootstrap-docker:start"',
     "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker",
     "command -v docker >/dev/null 2>&1 || { echo \"bootstrap-docker:no-binary\"; exit 1; }",
-    "sudo pkill -9 dockerd 2>/dev/null || true",
-    "sudo pkill -9 containerd 2>/dev/null || true",
-    "sudo rm -f /var/run/docker.pid /var/run/docker.sock /run/docker/containerd/containerd.pid /run/docker/containerd/containerd.sock /run/docker/containerd/containerd.sock.ttrpc /run/docker/containerd/containerd-debug.sock 2>/dev/null || true",
+    ...buildDockerdProcessCleanup(true),
+    buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",
-    "sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 &",
-    "for i in $(seq 1 90); do",
-    "  docker info >/dev/null 2>&1 && break",
-    "  sleep 1",
-    "done",
-    "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+    buildDockerdBackgroundStart(),
+    buildDockerInfoWaitLoop(90),
+    buildDockerSockPerms(),
     "docker info >/dev/null 2>&1 || { tail -30 /tmp/dockerd.log 2>/dev/null || true; exit 1; }",
     'echo "bootstrap-docker:ok"',
   ].join("\n");
@@ -540,6 +543,13 @@ export async function resolveSandboxContext(
   opts?: {
     /** Orchestrator sessions boot from the managed image, not a repo snapshot. */
     isOrchestrator?: boolean;
+    /**
+     * A multi-repo session's saved codebase group. When its seeded snapshot
+     * (primary + linked repos, deps installed) is still current for this
+     * primary repo, boot from it instead of the plain per-repo snapshot — see
+     * `getGroupSnapshotForBoot`.
+     */
+    repoGroupId?: Id<"repoGroups">;
   },
 ): Promise<{
   client: SandboxClient;
@@ -561,9 +571,16 @@ export async function resolveSandboxContext(
     : await ctx.runQuery(internal.repoSnapshots.getRepoSnapshotName, {
         repoId,
       });
-  const snapshotName = repoSnapshot?.snapshotName;
+  let snapshotName = repoSnapshot?.snapshotName;
+  if (!isOrchestrator && opts?.repoGroupId) {
+    const groupSnapshotName = await ctx.runQuery(
+      internal.repoGroups.getGroupSnapshotForBoot,
+      { groupId: opts.repoGroupId },
+    );
+    if (groupSnapshotName) snapshotName = groupSnapshotName;
+  }
   console.log(
-    `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} orchestrator=${isOrchestrator} elapsed=${Date.now() - startedAt}ms`,
+    `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} orchestrator=${isOrchestrator} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,
   );
   return {
     client,
@@ -656,6 +673,21 @@ export async function signAndLaunchScript(
       ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
       : null;
 
+  // Same reasoning for the workspace description: every launch path (prewarm
+  // daemon, launch on an existing sandbox, relaunch/heal) comes through here,
+  // so resolving the linked clones once means the agent is told about the same
+  // workspace on all of them. Absent entirely for single-repo sessions.
+  // Annotated locally so this `runQuery` cannot feed a generated-api type
+  // cycle back into `_generated/api.d.ts`.
+  let linkedRepos: LinkedRepoEnvRow[] = [];
+  if (launchSession && (launchSession.linkedRepoCount ?? 0) > 0) {
+    const linkedRows: LinkedRepoEnvRow[] = await ctx.runQuery(
+      internal.sessions.listLinkedReposInternal,
+      { sessionId: launchSession._id },
+    );
+    linkedRepos = linkedRows;
+  }
+
   // Mint the sandbox auth token and MCP token in a single node action. This
   // replaces three separate runAction hops across two "use node" isolates, which
   // cold-started Node twice and dominated launch latency (~3s).
@@ -737,6 +769,7 @@ export async function signAndLaunchScript(
       mcpBaseUrl,
       systemSkillsJson: JSON.stringify({ skills: systemSkillStubs }),
       harnessCatalogToken,
+      ...(linkedRepos.length > 0 ? { linkedRepos } : {}),
     },
   );
   console.log(
