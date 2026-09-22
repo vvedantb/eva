@@ -53,6 +53,7 @@ import {
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
 import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
@@ -493,6 +494,17 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {/* Sits above `belowContent` so agent-composed panels keep
+                    their promised slot directly over the meta row, and so the
+                    chip stays next to the changed-files card it judges. */}
+                {showChangedFiles && message.scopeCheck ? (
+                  <div className="mt-1">
+                    <ScopeCheckChip
+                      check={message.scopeCheck}
+                      onViewDiff={onViewDiff}
+                    />
+                  </div>
+                ) : null}
                 {belowContent ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}

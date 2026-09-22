@@ -11,6 +11,7 @@ import {
 } from "../validators";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "../_sessions/backgroundAgents";
+import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import {
@@ -310,6 +311,10 @@ export const completeSyntheticTurn = authMutation({
       finishedAt: number;
       pendingQuestion?: string;
       model?: Doc<"messages">["model"];
+      beforeSha?: string;
+      afterSha?: string;
+      beforeShas?: Array<{ path: string; sha: string }>;
+      afterShas?: Array<{ path: string; sha: string }>;
     } = {
       content: assistantReplyContent({
         success: args.success,
@@ -320,11 +325,25 @@ export const completeSyntheticTurn = authMutation({
     };
     if (args.activityLog) patch.activityLog = args.activityLog;
     if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;
+    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
+      patch.beforeSha = args.beforeSha;
+      patch.afterSha = args.afterSha;
+    }
+    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
+      patch.beforeShas = args.beforeShas;
+      patch.afterShas = args.afterShas;
+    }
     // Drops the open-time stamp so a failed turn never becomes a checkpoint.
     if (!args.success) {
       patch.model = undefined;
     }
     await ctx.db.patch(args.messageId, patch);
+    // Judged out of band; a turn that changed no code schedules nothing.
+    await scheduleScopeCheck(ctx, {
+      _id: args.messageId,
+      beforeSha: patch.beforeSha,
+      afterSha: patch.afterSha,
+    });
 
     await ctx.db.patch(args.taskId, {
       syntheticTurnMessageId: undefined,

@@ -228,6 +228,10 @@ import type * as _sandbox_runtime_turnRevert from "../_sandbox_runtime/turnRever
 import type * as _sandbox_runtime_typecheckCommand from "../_sandbox_runtime/typecheckCommand.js";
 import type * as _sandbox_runtime_vercelAppPorts from "../_sandbox_runtime/vercelAppPorts.js";
 import type * as _sandbox_runtime_workspaceLayout from "../_sandbox_runtime/workspaceLayout.js";
+import type * as _scopeCheck_hunks from "../_scopeCheck/hunks.js";
+import type * as _scopeCheck_mutations from "../_scopeCheck/mutations.js";
+import type * as _scopeCheck_queries from "../_scopeCheck/queries.js";
+import type * as _scopeCheck_verdict from "../_scopeCheck/verdict.js";
 import type * as _sessions_backgroundAgents from "../_sessions/backgroundAgents.js";
 import type * as _sessions_baseBranch from "../_sessions/baseBranch.js";
 import type * as _sessions_daemonState from "../_sessions/daemonState.js";
@@ -407,6 +411,7 @@ import type * as sandboxGitCredentials from "../sandboxGitCredentials.js";
 import type * as sandboxHeal from "../sandboxHeal.js";
 import type * as sandboxJwt from "../sandboxJwt.js";
 import type * as sandboxPanes from "../sandboxPanes.js";
+import type * as scopeCheck from "../scopeCheck.js";
 import type * as screenshots from "../screenshots.js";
 import type * as sessionWorkflow from "../sessionWorkflow.js";
 import type * as sessions from "../sessions.js";
@@ -673,6 +678,10 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/typecheckCommand": typeof _sandbox_runtime_typecheckCommand;
   "_sandbox_runtime/vercelAppPorts": typeof _sandbox_runtime_vercelAppPorts;
   "_sandbox_runtime/workspaceLayout": typeof _sandbox_runtime_workspaceLayout;
+  "_scopeCheck/hunks": typeof _scopeCheck_hunks;
+  "_scopeCheck/mutations": typeof _scopeCheck_mutations;
+  "_scopeCheck/queries": typeof _scopeCheck_queries;
+  "_scopeCheck/verdict": typeof _scopeCheck_verdict;
   "_sessions/backgroundAgents": typeof _sessions_backgroundAgents;
   "_sessions/baseBranch": typeof _sessions_baseBranch;
   "_sessions/daemonState": typeof _sessions_daemonState;
@@ -852,6 +861,7 @@ declare const fullApi: ApiFromModules<{
   sandboxHeal: typeof sandboxHeal;
   sandboxJwt: typeof sandboxJwt;
   sandboxPanes: typeof sandboxPanes;
+  scopeCheck: typeof scopeCheck;
   screenshots: typeof screenshots;
   sessionWorkflow: typeof sessionWorkflow;
   sessions: typeof sessions;
