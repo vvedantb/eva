@@ -172,6 +172,48 @@ Figures: 176 pieces of finished work waiting to be checked in, against 455 alrea
 → Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
 Figures: 4,705 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.`,
+
+  // ---------------------------------------------------------------------------
+  // Intro to Eva deck
+  // ---------------------------------------------------------------------------
+  "intro-01-title": `Welcome, and the one line to open on: Eva is a platform for AI agents that actually ship code.
+Detail: say what it is not before what it is. Not a chatbot that suggests diffs, and not an autocomplete. These are agents that clone your repo, run your tests, and open real pull requests. The word lands out of a blur, so let it settle before speaking.`,
+
+  "intro-02-gap": `The gap between an AI demo and real work comes down to three things, and the rest of the deck answers each one.
+Detail: context, because the agent needs your codebase, your style and your CI. Execution, because it needs somewhere to run commands rather than only generate text. Review, because you need to see what it did rather than trust a summary. The slide names the symptom: context scattered across chat windows, browser tabs and terminal sessions.`,
+
+  "intro-03-quick-tasks": `Quick tasks are the simplest unit of work in Eva: one prompt, one result.
+Detail: the examples to give are fix this bug, add a test, update this copy. Eva spins up an isolated sandbox, does the work and shows you the result. No boilerplate and no pull request dance — just a diff you can merge. The three bullets arrive one at a time, so pace the sentence to each.`,
+
+  "intro-04-sessions": `A session is a longer-lived development environment that you and the agent share.
+Detail: you describe what you are building and Eva sets up a sandbox with your app running. You iterate together, and you can see the preview, the logs and the terminal. The line to land it is that it is like pairing with someone who never gets tired.`,
+
+  "intro-05-projects": `Projects are for larger features that span several sessions or tasks.
+Detail: a product spec, broken into phases and tracked over time. Eva reads your documents, plans the work and executes it piece by piece.`,
+
+  "intro-06-documents": `Documents are first class in Eva, not an attachment bolted on the side.
+Detail: specs, notes and context all live here, and Eva reads them while working, so the agent knows what you are building. No copy-pasting into prompts — write it once.`,
+
+  "intro-07-prs": `When Eva finishes a task it opens a pull request, which is the point where the work becomes ordinary again.
+Detail: you review it like any other pull request — code, tests and CI status. No magic and no hidden prompts, just code you can read.`,
+
+  "intro-08-stack": `Nothing in the stack is exotic, which is deliberate: the interesting part is what is built on it.
+Detail: React and Vite for the frontend, Convex for the backend because it is real-time and type-safe, Vercel sandboxes for isolated execution, Clerk for authentication and a GitHub App for repository access. Close on the licence: it is MIT open source.`,
+
+  "intro-09-github": `Eva connects straight to your GitHub repositories, on your terms.
+Detail: it clones the code, respects your .gitignore and pushes to branches. You control what it can access.`,
+
+  "intro-10-sandboxes": `Sandboxes are ephemeral virtual machines, and that is what makes the whole thing safe to try.
+Detail: each task or session gets its own isolated environment. Your code runs, your tests run and your app runs, then it is gone.`,
+
+  "intro-11-insight": `The sentence the deck exists to deliver: agents need execution, not just generation.
+Detail: they need to run npm install, run your build and see whether the tests pass. That is the difference between here is a diff and here is working code. The slide frames the same point as context being the expensive part, which is what Eva preserves across tasks, sessions and projects.`,
+
+  "intro-12-demo": `Hand over to the live demo here rather than reading the slide.
+Detail: what the room will see is Eva taking a quick task, spinning up a sandbox, making the change, running the tests and opening a pull request — all from a one-line description.`,
+
+  "intro-13-closing": `Thank the room, then leave the two addresses on screen.
+Detail: Eva is live at eva.vedantb.com and the code is at github.com/vvedantb/eva. It is MIT open source, so anyone in the room can run it themselves.`,
 };
 
 /** Notes for a slide id, or "" when the slide needs none. */
