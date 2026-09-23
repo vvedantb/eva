@@ -479,6 +479,10 @@ export const sessionExecuteWorkflow = workflow.define({
         turnId: args.turnId,
         sandboxId,
       });
+      await step.runMutation(
+        internal.sessionWorkflow.clearSessionClosedStatus,
+        { sessionId: args.sessionId },
+      );
     }
 
     // A cancel can race with startExecute and wipe pendingTurn while a daemon
@@ -966,6 +970,49 @@ export const updateSandboxId = internalMutation({
       updates.branchName = args.branchName;
     }
     await ctx.db.patch(args.sessionId, updates);
+    return null;
+  },
+});
+
+/**
+ * Drops a session's stale `closed` status once this turn has a sandbox that
+ * validated as running.
+ *
+ * `prepareSessionSandbox` flips the status back to "active" whenever it starts
+ * or replaces a VM, but the reuse branch above never calls it — a healthy
+ * sandbox needs no preparing — so the status stayed at whatever the last stop
+ * left. `prewarmSessionDaemon` then refuses to start the agent daemon on a
+ * closing session (`isSandboxClosingStatus`, `_sandbox_runtime/execution.ts`),
+ * returning in ~60ms without launching anything: the turn opens, no daemon ever
+ * calls `claimPendingTurn`, its lease is never acquired, and the watchdog
+ * stalls it out 15 minutes later. That is how Manager Ave (session 111) went
+ * silent — every agent-notification wake-up revalidated the same healthy
+ * sandbox, skipped prewarm, and posted "Turn stalled".
+ *
+ * Only "closed" is cleared, never "stopping": a stop that is genuinely in
+ * flight must win over a turn that raced it, and the stop path flips the status
+ * itself when it settles.
+ *
+ * This does not weaken the `prewarmNeverResurrects` contract. It runs only
+ * after the workflow validated the VM as running, and the page-open guard in
+ * `prewarmDaemon` is untouched, so opening a stopped session's page still
+ * cannot wake its sandbox.
+ */
+export const clearSessionClosedStatus = internalMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.status !== "closed") return null;
+    await ctx.db.patch(args.sessionId, {
+      status: "active",
+      // Awake again: whatever the last attempt failed on is history.
+      sandboxError: undefined,
+      updatedAt: Date.now(),
+    });
+    console.log(
+      `[sessionWorkflow] clearSessionClosedStatus sessionId=${args.sessionId}`,
+    );
     return null;
   },
 });

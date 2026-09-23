@@ -7,6 +7,7 @@ export {
   addAssistantPlaceholder,
   getSessionData,
   updateSandboxId,
+  clearSessionClosedStatus,
   saveResult,
   handleCompletion,
   claimPendingTurn,
