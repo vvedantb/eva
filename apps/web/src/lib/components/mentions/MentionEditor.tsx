@@ -423,13 +423,22 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     }, 250);
   };
 
+  /* eslint-disable no-effect/no-derived-state, no-effect/no-chain-state-updates, no-effect/no-event-handler --
+     `value` is owned by whichever controller wraps the editor (send, draft pull,
+     programmatic seed), so "the input was emptied" has no single call site to
+     drop the token maps from. Clearing them here is the one place that catches
+     every route. */
   useEffect(() => {
     if (value === "" && (mentionMap.size > 0 || skillMap.size > 0)) {
       setMentionMap(new Map());
       setSkillMap(new Map());
     }
   }, [value, mentionMap.size, skillMap.size]);
+  /* eslint-enable no-effect/no-derived-state, no-effect/no-chain-state-updates, no-effect/no-event-handler */
 
+  /* eslint-disable no-effect/no-event-handler --
+     Writes chip HTML into a contenteditable and repositions the caret: the DOM
+     is the external system being synchronised, not React state. */
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -457,6 +466,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     skillChipClassName,
     chipsClickable,
   ]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const appendToken = (
     prefix: "@" | "/",
@@ -592,6 +602,11 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     if (item) insertMentionItem(item);
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent, no-effect/no-event-handler --
+     The open trigger is not a pure function of `value`: `insertedTokenRef` has
+     to be released across renders so the chip an accept just wrote is not read
+     back as a trigger the user is typing. Deriving it during render would
+     mutate that ref while rendering. */
   useEffect(() => {
     const next = findActiveTrigger(
       value,
@@ -620,7 +635,12 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     setTrigger(next);
     setSelectedIndex(0);
   }, [value, items.length, slashItems.length, emptySlashContent]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent, no-effect/no-event-handler */
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     Popup placement is measured from live layout (viewport rects, anchor
+     element), so it can only be computed after the browser has laid the trigger
+     out — not during render. */
   useEffect(() => {
     if (!trigger.isOpen) {
       setPopupPlacement(null);
@@ -669,6 +689,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
       }
     };
   }, [trigger.isOpen, trigger.query, trigger.startIndex, value, isPanel]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   const handleInput = () => {
     const el = editorRef.current;
@@ -684,7 +705,9 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
    * never leaves the editor — the picker has nothing focusable in it — so this
    * is the only path that navigates the list.
    */
-  const handlePickerKeyDown = (e: React.KeyboardEvent<HTMLElement>): boolean => {
+  const handlePickerKeyDown = (
+    e: React.KeyboardEvent<HTMLElement>,
+  ): boolean => {
     if (!trigger.isOpen) return false;
     if (popupItems.length > 0) {
       if (e.key === "ArrowDown") {
@@ -995,9 +1018,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
           items={activeSlashItems}
           renderItem={renderSlashItem}
           onSelectItem={insertSlashItem}
-          emptyContent={
-            slashItems.length === 0 ? emptySlashContent : undefined
-          }
+          emptyContent={slashItems.length === 0 ? emptySlashContent : undefined}
         />
       ) : (
         <MentionPickerPopup

@@ -161,12 +161,17 @@ export function RepoSetupClient({
     navigate({ to: "/home" });
   };
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change, no-effect/no-derived-state --
+     `?autoSync` returning from the GitHub App install means "add everything as
+     soon as the repo list loads"; the trigger is the redirect back, not a
+     click, and the ref keeps it to once. */
   useEffect(() => {
     if (!loading && repos.length > 0 && autoSync && !syncedRef.current) {
       syncedRef.current = true;
       handleAddAll();
     }
   }, [loading, repos, autoSync]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change, no-effect/no-derived-state */
 
   const handleDetectMonorepo = async (repo: GitHubRepo) => {
     if (expandedRepo === repo.fullName) {
