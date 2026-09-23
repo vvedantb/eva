@@ -54,6 +54,22 @@ export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
 
 /**
+ * Every visual change must be named in the reply, especially one the agent
+ * chose rather than was asked for. A trophy icon and a `green.1` alert wash
+ * nobody requested rode along inside a large tabs feature, were never
+ * mentioned, and shipped to production unreviewed — a diff that size hides a
+ * one-line icon swap. Explicitly overrides RESPONSE_LENGTH_INSTRUCTION so the
+ * concise-reply rule cannot swallow these lines.
+ */
+export const UI_CHANGE_DISCLOSURE_INSTRUCTION = `
+
+## Visual changes (always report)
+Name every visible change you made, however small, and separately flag the ones you chose rather than were asked for — icon, colour, spacing, radius, shadow, copy, empty/loading state, hover/focus/disabled state, motion, layout. A one-line icon swap inside a large feature diff is exactly what slips through review and reaches production unseen.
+- Write invented choices as "chose X (not asked for)" with what you picked and why.
+- This overrides the reply-length limit: these lines are always in scope.
+- Prefer reusing the existing pattern for the same thing over inventing a new one, and say which you did.`;
+
+/**
  * Nudge towards `render_ui`. Appended to the shared chat-turn prompt, so
  * sessions, quick tasks and project chat all get it — the tool is available on
  * every sandbox token, and without a prompt line agents never reach for it.
