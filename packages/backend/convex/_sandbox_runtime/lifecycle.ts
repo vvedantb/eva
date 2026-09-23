@@ -10,6 +10,7 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
+import { isSandboxGoneError } from "./sandboxErrors";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -239,10 +240,21 @@ export const stopSandbox = internalAction({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // Already gone / already idle — treat as success so finalize can close.
+      //
+      // The structured verdict comes first. The provider's own 404 carries no
+      // prose at all — the SDK message is the bare status line ("Status code
+      // 404 is not ok") — so the regex below never matched it and every Stop
+      // click failed, finalize reverted the entity to "active", and the user
+      // could never stop a sandbox Vercel had already dropped (prod, 23 Sep
+      // 2026: quick task 107, gray-precise-lungfish-2cEbcB, nine failed stops).
+      // A sandbox record the provider no longer has cannot be running, so this
+      // is the one case where closing without a confirmed stop is honest.
       const benign =
-        /already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
+        isSandboxGoneError(error) ||
+        (/already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
           message,
-        ) && !/did not reach a terminal stopped state/i.test(message);
+        ) &&
+          !/did not reach a terminal stopped state/i.test(message));
       if (benign) {
         console.log(
           `[sandbox] stopSandbox ignored benign error for ${args.sandboxId}: ${message}`,
