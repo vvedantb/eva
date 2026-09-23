@@ -1,8 +1,8 @@
 import { use } from "react";
-import { motion } from "motion/react";
+import { motion, type Variants } from "motion/react";
 import { SlideStepContext } from "../_components/SlideShell";
 
-const wordVariants = {
+const wordVariants: Variants = {
   hidden: { opacity: 0, y: 8, filter: "blur(8px)" },
   show: {
     opacity: 1,

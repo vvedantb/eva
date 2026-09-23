@@ -476,12 +476,19 @@ export const ChatMessage = memo(function ChatMessage({
                 </MessageContent>
                 {/* Sits above `belowContent` so agent-composed panels keep
                     their promised slot directly over the meta row, and so the
-                    chip stays next to the changed-files card it judges. */}
-                {showChangedFiles && message.scopeCheck ? (
+                    chip stays next to the changed-files card it judges.
+                    Deliberately not gated on `showChangedFiles`: the verdict is
+                    a safety signal, and simple view hiding it is exactly the
+                    reader who needs it. The hover card's per-hunk rows only
+                    link out when the diff surface exists — simple view bounces
+                    away from that tab, so they degrade to plain rows there. */}
+                {message.scopeCheck ? (
                   <div className="mt-1">
                     <ScopeCheckChip
                       check={message.scopeCheck}
-                      onViewDiff={onViewDiff}
+                      {...(showChangedFiles && onViewDiff
+                        ? { onViewDiff }
+                        : {})}
                     />
                   </div>
                 ) : null}
