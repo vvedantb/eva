@@ -230,6 +230,7 @@ import type * as _sandbox_runtime_turnRevert from "../_sandbox_runtime/turnRever
 import type * as _sandbox_runtime_typecheckCommand from "../_sandbox_runtime/typecheckCommand.js";
 import type * as _sandbox_runtime_vercelAppPorts from "../_sandbox_runtime/vercelAppPorts.js";
 import type * as _sandbox_runtime_workspaceLayout from "../_sandbox_runtime/workspaceLayout.js";
+import type * as _scopeCheck_describe from "../_scopeCheck/describe.js";
 import type * as _scopeCheck_hunks from "../_scopeCheck/hunks.js";
 import type * as _scopeCheck_mutations from "../_scopeCheck/mutations.js";
 import type * as _scopeCheck_queries from "../_scopeCheck/queries.js";
@@ -683,6 +684,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/typecheckCommand": typeof _sandbox_runtime_typecheckCommand;
   "_sandbox_runtime/vercelAppPorts": typeof _sandbox_runtime_vercelAppPorts;
   "_sandbox_runtime/workspaceLayout": typeof _sandbox_runtime_workspaceLayout;
+  "_scopeCheck/describe": typeof _scopeCheck_describe;
   "_scopeCheck/hunks": typeof _scopeCheck_hunks;
   "_scopeCheck/mutations": typeof _scopeCheck_mutations;
   "_scopeCheck/queries": typeof _scopeCheck_queries;

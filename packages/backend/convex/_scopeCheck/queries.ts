@@ -38,9 +38,12 @@ async function resolveRepoId(
 }
 
 /**
- * The turn's checkpoint shas, its repo and the prompt it answered — or null
- * when there is nothing to judge (no code changed, no prompt to judge against,
- * or a verdict already landed).
+ * The turn's checkpoint shas, its repo, the prompt it answered and the reply it
+ * gave — or null when there is nothing to judge (no code changed, no prompt to
+ * judge against, or a verdict already landed).
+ *
+ * The reply is what the mention question reads: a change the user was told
+ * about is reviewable, one they were not is a surprise in production.
  */
 export const getTurnContext = internalQuery({
   args: { messageId: v.id("messages") },
@@ -51,6 +54,7 @@ export const getTurnContext = internalQuery({
       beforeSha: v.string(),
       afterSha: v.string(),
       prompt: v.string(),
+      reply: v.string(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -80,6 +84,12 @@ export const getTurnContext = internalQuery({
       .find((row) => row.role === "user" && row.isSystemAlert !== true);
     if (!prompt) return null;
 
-    return { repoId, beforeSha, afterSha, prompt: prompt.content };
+    return {
+      repoId,
+      beforeSha,
+      afterSha,
+      prompt: prompt.content,
+      reply: message.content,
+    };
   },
 });

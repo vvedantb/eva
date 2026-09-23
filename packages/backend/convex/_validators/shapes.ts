@@ -125,7 +125,26 @@ export const findingTriageValidator = v.object({
   evaluatedAt: v.number(),
 });
 
-/** One diff hunk Jev judged the prompt did not ask for. */
+/** What a reader sees change; mirrors `_scopeCheck/describe.ts`. */
+export const changeKindValidator = v.union(
+  v.literal("icon"),
+  v.literal("colour"),
+  v.literal("wording"),
+  v.literal("layout"),
+  v.literal("motion"),
+  v.literal("new_element"),
+  v.literal("behaviour"),
+  v.literal("content"),
+  v.literal("internal"),
+);
+
+/**
+ * One diff hunk Jev judged the prompt did not ask for.
+ *
+ * Everything past `necessary` is optional: rows written before the plain-English
+ * pass, and hunks whose extra Jev calls failed, still render from the file and
+ * header alone.
+ */
 export const scopeCheckHunkValidator = v.object({
   /** Repo-relative path of the file the hunk touches. */
   file: v.string(),
@@ -135,6 +154,14 @@ export const scopeCheckHunkValidator = v.object({
   requested: v.number(),
   /** P(the change is required to make a requested change work), 0..1. */
   necessary: v.number(),
+  /** What a user sees change, for grouping and for the visible/invisible split. */
+  kind: v.optional(changeKindValidator),
+  /** Plain-English headline, e.g. `Icon changed (IconAward → IconTrophy)`. */
+  summary: v.optional(v.string()),
+  /** Plain-English screen name, e.g. `Awarded panel`. */
+  surface: v.optional(v.string()),
+  /** P(the assistant's reply told the user about this change), 0..1. */
+  mentioned: v.optional(v.number()),
 });
 
 /**
