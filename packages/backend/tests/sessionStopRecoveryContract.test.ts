@@ -193,6 +193,23 @@ describe("an unreachable VM cannot stop the stop from being issued", () => {
       "throwerror",
     );
   });
+
+  /**
+   * A sandbox the provider has dropped answers every call with a bare 404, and
+   * the SDK's message is only the status line — no "not found", no "gone". The
+   * message-only benign check therefore never matched it, so finalize reverted
+   * the entity to "active" and Stop could never succeed (prod, 23 Sep 2026:
+   * quick task 107 logged nine straight `stop_failed` on a 404). The structured
+   * classifier is what makes that case closable.
+   */
+  test("a provider 404 counts as already stopped", () => {
+    expect(dense).toContain("isSandboxGoneError(error)");
+    const benignAt = dense.indexOf("constbenign=");
+    expect(benignAt, "the benign gate moved or was renamed").toBeGreaterThan(-1);
+    expect(dense.indexOf("isSandboxGoneError(error)")).toBeGreaterThan(
+      benignAt,
+    );
+  });
 });
 
 /**
