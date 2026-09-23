@@ -15,10 +15,16 @@ import {
   type ScopeCheckTone,
 } from "@/lib/components/chat/_components/scopeCheckSummary";
 
+/**
+ * Opaque tint plus its darkened text partner. The earlier pairing put
+ * `--warning` / `--destructive` on a 12% wash of themselves, which measures
+ * around 2:1 in light mode — the score was the least readable thing in the
+ * turn. The `-strong` tokens clear WCAG AA on these backgrounds in both themes.
+ */
 const TONE_CLASS: Record<ScopeCheckTone, string> = {
-  clear: "bg-muted text-muted-foreground",
-  review: "bg-warning/12 text-warning",
-  flagged: "bg-destructive/12 text-destructive",
+  clear: "bg-muted text-foreground",
+  review: "bg-warning-bg text-warning-strong",
+  flagged: "bg-destructive-bg text-destructive-strong",
 };
 
 /**
@@ -41,14 +47,17 @@ export function ScopeCheckChip({
       <HoverCardTrigger asChild>
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none",
+            // 10px was below the size at which these hues stay legible even
+            // once the contrast is fixed, so the chip reads at 11px like the
+            // hunk rows it opens.
+            "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium leading-none tabular-nums",
             TONE_CLASS[tone],
           )}
         >
           {tone === "clear" ? (
-            <IconShieldCheck size={11} stroke={2} />
+            <IconShieldCheck size={12} stroke={2} />
           ) : (
-            <IconAlertTriangle size={11} stroke={2} />
+            <IconAlertTriangle size={12} stroke={2} />
           )}
           {scopeCheckLabel(check)} · {percent}
         </span>

@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Button } from "@eva/ui";
 import {
   IconChevronLeft,

@@ -54,9 +54,15 @@ export const themeExtend = {
     destructive: {
       DEFAULT: c("destructive"),
       foreground: c("destructive-foreground"),
+      bg: c("destructive-bg"),
+      strong: c("destructive-strong"),
     },
     success: { DEFAULT: c("success"), foreground: c("success-foreground") },
-    warning: { DEFAULT: c("warning"), foreground: c("warning-foreground") },
+    warning: {
+      DEFAULT: c("warning"),
+      foreground: c("warning-foreground"),
+      strong: c("warning-strong"),
+    },
     muted: { DEFAULT: c("muted"), foreground: c("muted-foreground") },
     accent: { DEFAULT: c("accent"), foreground: c("accent-foreground") },
     popover: { DEFAULT: c("popover"), foreground: c("popover-foreground") },
