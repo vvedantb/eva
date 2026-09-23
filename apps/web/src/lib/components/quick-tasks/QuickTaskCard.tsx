@@ -276,7 +276,24 @@ export function QuickTaskCard({
               <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
             </Tooltip>
           ) : null}
-          {sandboxStatus ? (
+          {/* One mark, never two: a turn in flight already implies an awake
+              sandbox, so the pixel grid stands in for the status dot — the same
+              swap the session rows and the sandbox surface tabs make. */}
+          {showAgentPulse ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="relative flex items-center hit-target">
+                  <LoadingState
+                    label="Working"
+                    variant="Drive"
+                    size="sm"
+                    iconOnly
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Eva is replying</TooltipContent>
+            </Tooltip>
+          ) : sandboxStatus ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -303,21 +320,6 @@ export function QuickTaskCard({
                   ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
                   : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
               </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {showAgentPulse ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center hit-target">
-                  <LoadingState
-                    label="Working"
-                    variant="Drive"
-                    size="sm"
-                    iconOnly
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Eva is replying</TooltipContent>
             </Tooltip>
           ) : null}
         </div>

@@ -323,6 +323,14 @@ export const completeRun = internalMutation({
       await ctx.db.patch(args.taskId, {
         status: args.success ? "business_review" : "todo",
         updatedAt: now,
+        // Released with the status, not in the workflow's `finally`: the
+        // remaining steps (PR description, sandbox stop) run for tens of
+        // seconds after this patch, and a set `activeWorkflowId` on a task that
+        // has already left `in_progress` shows the card the "Eva is replying"
+        // grid long after eva stopped. The `finally` stays as the safety net
+        // for runs that never reach here. Guarded by `staleCompletion`, so a
+        // queued or superseding run keeps its own id.
+        activeWorkflowId: undefined,
       });
       if (task.projectId) {
         await recomputeProjectPhase(ctx, task.projectId);
