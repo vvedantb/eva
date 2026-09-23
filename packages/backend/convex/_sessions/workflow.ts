@@ -42,7 +42,10 @@ import {
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
-import { isUnclaimedOpenTurn } from "./pendingTurnRecovery";
+import {
+  isPendingTurnLive,
+  isUnclaimedOpenTurn,
+} from "./pendingTurnRecovery";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
@@ -1385,7 +1388,10 @@ export const ensurePendingTurn = internalMutation({
       .first();
     if (
       !isUnclaimedOpenTurn({
-        hasPendingTurn: session.pendingTurn !== undefined,
+        hasPendingTurn: isPendingTurnLive({
+          pendingTurn: session.pendingTurn,
+          openTurnId: openTurn?._id,
+        }),
         lastAssistant: last,
       })
     ) {
@@ -1428,7 +1434,15 @@ export const restageOpenTurn = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session)
       return { restaged: false as const, reason: "session not found" };
-    if (session.pendingTurn)
+    // Orphans do not count: a slot left behind by a turn that already closed is
+    // exactly the wedge this escape hatch exists to clear, and refusing on it
+    // made the hatch useless on the sessions that needed it most.
+    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
+    const pendingTurnLive = isPendingTurnLive({
+      pendingTurn: session.pendingTurn,
+      openTurnId: openTurn?._id,
+    });
+    if (pendingTurnLive)
       return { restaged: false as const, reason: "pendingTurn already set" };
 
     const messages = await ctx.db
@@ -1442,7 +1456,7 @@ export const restageOpenTurn = internalMutation({
     if (
       lastAssistant === undefined ||
       !isUnclaimedOpenTurn({
-        hasPendingTurn: session.pendingTurn !== undefined,
+        hasPendingTurn: pendingTurnLive,
         lastAssistant,
       }) ||
       lastAssistant.content !== ""
@@ -1482,7 +1496,6 @@ export const restageOpenTurn = internalMutation({
       model: session.lastModel ?? lastUser.model ?? DEFAULT_AI_MODEL,
     });
 
-    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
     const pendingTurn = {
       prompt,
       requestedAt: Date.now(),

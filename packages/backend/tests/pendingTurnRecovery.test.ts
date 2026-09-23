@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { isUnclaimedOpenTurn } from "../convex/_sessions/pendingTurnRecovery";
+import {
+  isPendingTurnLive,
+  isUnclaimedOpenTurn,
+} from "../convex/_sessions/pendingTurnRecovery";
 
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
@@ -72,6 +75,63 @@ describe("isUnclaimedOpenTurn", () => {
     expect(
       isUnclaimedOpenTurn({ hasPendingTurn: false, lastAssistant: null }),
     ).toBe(false);
+  });
+});
+
+/**
+ * Manager Ave (session 111) carried a `pendingTurn` staged on 27 Aug whose turn
+ * had long closed. `ensurePendingTurn` read the full slot as "already staged"
+ * and refused every later turn a prompt, so each one opened, was never claimed
+ * (`leaseGeneration` 0) and stalled out ~15 minutes later — for weeks.
+ */
+describe("isPendingTurnLive", () => {
+  const openTurnId = "turn_open";
+
+  test("an empty slot is not live", () => {
+    expect(
+      isPendingTurnLive({ pendingTurn: undefined, openTurnId }),
+    ).toBe(false);
+  });
+
+  test("the slot staged by the open turn is live", () => {
+    expect(
+      isPendingTurnLive({ pendingTurn: { turnId: openTurnId }, openTurnId }),
+    ).toBe(true);
+  });
+
+  test("a slot left by a turn that already closed is not live", () => {
+    expect(
+      isPendingTurnLive({ pendingTurn: { turnId: "turn_dead" }, openTurnId }),
+    ).toBe(false);
+  });
+
+  /** Ave's orphan predated durable turns, so it carried no turnId at all. */
+  test("a slot with no turnId is not live once a durable turn is open", () => {
+    expect(isPendingTurnLive({ pendingTurn: {}, openTurnId })).toBe(false);
+  });
+
+  /** Legacy sessions have no durable turn, so the slot is the only record. */
+  test("any slot is live when no durable turn is open", () => {
+    expect(
+      isPendingTurnLive({ pendingTurn: {}, openTurnId: undefined }),
+    ).toBe(true);
+  });
+});
+
+/**
+ * Orphans only exist because the stall teardown left the slot full. Clearing it
+ * there is what stops a single stalled turn wedging the session permanently.
+ */
+describe("the stall teardown frees the handoff slot", () => {
+  const adapters = readSource("_chat/surfaceAdapters.ts");
+
+  test("session release clears pendingTurn on the session and the mirror", () => {
+    const release = adapters.slice(
+      adapters.indexOf('kind: "session"'),
+      adapters.indexOf('kind: "taskChat"'),
+    );
+    expect(release).toContain("pendingTurn: undefined");
+    expect(release).toContain("syncSessionDaemonState(ctx, session, {");
   });
 });
 
