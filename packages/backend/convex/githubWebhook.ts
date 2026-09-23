@@ -404,108 +404,14 @@ export const handlePrClosed = internalMutation({
       return null;
     }
 
-    // Project PRs still have to move the project's phase even when the task
-    // that opened them is already terminal, so only quick tasks bail early.
-    const isProjectPr = task.projectId !== undefined;
-    if (
-      !isProjectPr &&
-      (task.status === "done" || task.status === "cancelled")
-    ) {
-      await ctx.db.patch(eventId, { status: "skipped" });
-      return null;
-    }
-
-    const newStatus = args.merged ? "done" : "cancelled";
     const now = Date.now();
+    const projectId = task.projectId;
 
-    // Closing a project PR without merging cancels the project only — its tasks
-    // keep the status they had so the work stays resumable. A merge still rolls
-    // every task in the project to done.
-    const tasksToUpdate = task.projectId
-      ? args.merged
-        ? await ctx.db
-            .query("agentTasks")
-            .withIndex("by_project", (q) => q.eq("projectId", task.projectId))
-            .collect()
-        : []
-      : [task];
-
-    for (const t of tasksToUpdate) {
-      if (t.status === "done" || t.status === "cancelled") continue;
-
-      await ctx.db.patch(t._id, {
-        status: newStatus,
-        updatedAt: now,
-      });
-
-      if (t.scheduledFunctionId) {
-        try {
-          await ctx.scheduler.cancel(t.scheduledFunctionId);
-        } catch {
-          // may have already fired
-        }
-        await ctx.db.patch(t._id, {
-          scheduledAt: undefined,
-          scheduledFunctionId: undefined,
-        });
-      }
-
-      // Project PRs notify once for the project below — a merge would otherwise
-      // fire one notification per task in the project.
-      if (!isProjectPr) {
-        const notificationTitle = args.merged
-          ? `PR merged — "${t.title}" moved to done`
-          : `PR closed — "${t.title}" moved to cancelled`;
-        const notificationMessage = args.merged
-          ? `GitHub merged ${args.prUrl}. Task moved to done.`
-          : `GitHub closed ${args.prUrl} without merge. Task moved to cancelled.`;
-        await notifySubscribers(ctx, {
-          taskId: t._id,
-          type: args.merged ? "task_complete" : "system",
-          title: notificationTitle,
-          message: notificationMessage,
-          repoId: t.repoId,
-          projectId: t.projectId,
-        });
-
-        // Record the PR event on the task's activity timeline so the merge/close
-        // is visible there, not just as a notification. System-driven, so no
-        // actor.
-        await logTaskActivity(
-          ctx,
-          t._id,
-          undefined,
-          "pr",
-          undefined,
-          args.merged ? "merged" : "closed",
-        );
-      }
-
-      // Quick tasks: a merged/closed PR makes the task read-only, so stop any
-      // live preview sandbox now (mirrors handleSessionPrEvent) and then
-      // grace-delete it. Project tasks share the project sandbox (deleted
-      // immediately on merge below).
-      if (t.projectId === undefined) {
-        if (
-          t.reviewTaskSandboxStatus === "active" ||
-          t.reviewTaskSandboxStatus === "starting" ||
-          t.reviewTaskSandboxStatus === "stopping" ||
-          t.sandboxId !== undefined
-        ) {
-          await requestTaskSandboxStop(ctx, t._id);
-        }
-        if (t.sandboxId) {
-          await scheduleTaskSandboxGraceDelete(ctx, {
-            ...t,
-            status: newStatus,
-            updatedAt: now,
-          });
-        }
-      }
-    }
-
-    if (task.projectId) {
-      const project = await ctx.db.get(task.projectId);
+    if (projectId) {
+      // Project PRs move the project phase only. Task statuses are the record of
+      // what each task actually did, and a merge or close can be undone on
+      // GitHub, so overwriting them would destroy history we cannot restore.
+      const project = await ctx.db.get(projectId);
       const newPhase = args.merged ? "completed" : "cancelled";
       if (args.merged && project) {
         const nextVersion = (project.branchVersion ?? 1) + 1;
@@ -518,31 +424,31 @@ export const handlePrClosed = internalMutation({
             repoId: project.repoId,
           });
         }
-        await ctx.db.patch(task.projectId, {
+        await ctx.db.patch(projectId, {
           phase: newPhase,
           sandboxId: undefined,
 
           lastSandboxActivity: undefined,
           branchVersion: nextVersion,
-          branchName: buildProjectBranchName(task.projectId, nextVersion),
+          branchName: buildProjectBranchName(projectId, nextVersion),
           prUrl: undefined,
         });
       } else {
-        await ctx.db.patch(task.projectId, { phase: newPhase });
+        await ctx.db.patch(projectId, { phase: newPhase });
       }
 
       // One notification for the project as a whole, never one per task, and a
       // single activity entry on the task that opened the PR so the merge/close
-      // still leaves a trace on the timeline.
+      // still leaves a trace on a timeline.
       const projectTitle = project?.title ?? "project";
       await notifyProjectSubscribers(ctx, {
-        projectId: task.projectId,
+        projectId,
         type: args.merged ? "task_complete" : "system",
         title: args.merged
-          ? `PR merged — "${projectTitle}" moved to done`
-          : `PR closed — "${projectTitle}" moved to cancelled`,
+          ? `PR merged — project "${projectTitle}" moved to Merged`
+          : `PR closed — project "${projectTitle}" moved to Cancelled`,
         message: args.merged
-          ? `GitHub merged ${args.prUrl}. The project moved to done, along with its tasks.`
+          ? `GitHub merged ${args.prUrl}. The project moved to merged; its tasks kept their status.`
           : `GitHub closed ${args.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
         repoId: task.repoId,
       });
@@ -554,6 +460,71 @@ export const handlePrClosed = internalMutation({
         undefined,
         args.merged ? "merged" : "closed",
       );
+
+      await ctx.db.patch(eventId, { status: "completed", taskId: task._id });
+      return null;
+    }
+
+    // Quick task: the PR is the task, so its status follows the PR.
+    if (task.status === "done" || task.status === "cancelled") {
+      await ctx.db.patch(eventId, { status: "skipped" });
+      return null;
+    }
+
+    const newStatus = args.merged ? "done" : "cancelled";
+    await ctx.db.patch(task._id, { status: newStatus, updatedAt: now });
+
+    if (task.scheduledFunctionId) {
+      try {
+        await ctx.scheduler.cancel(task.scheduledFunctionId);
+      } catch {
+        // may have already fired
+      }
+      await ctx.db.patch(task._id, {
+        scheduledAt: undefined,
+        scheduledFunctionId: undefined,
+      });
+    }
+
+    await notifySubscribers(ctx, {
+      taskId: task._id,
+      type: args.merged ? "task_complete" : "system",
+      title: args.merged
+        ? `PR merged — "${task.title}" moved to done`
+        : `PR closed — "${task.title}" moved to cancelled`,
+      message: args.merged
+        ? `GitHub merged ${args.prUrl}. Task moved to done.`
+        : `GitHub closed ${args.prUrl} without merge. Task moved to cancelled.`,
+      repoId: task.repoId,
+    });
+
+    // Record the PR event on the task's activity timeline so the merge/close is
+    // visible there, not just as a notification. System-driven, so no actor.
+    await logTaskActivity(
+      ctx,
+      task._id,
+      undefined,
+      "pr",
+      undefined,
+      args.merged ? "merged" : "closed",
+    );
+
+    // A merged/closed PR makes the task read-only, so stop any live preview
+    // sandbox now (mirrors handleSessionPrEvent) and then grace-delete it.
+    if (
+      task.reviewTaskSandboxStatus === "active" ||
+      task.reviewTaskSandboxStatus === "starting" ||
+      task.reviewTaskSandboxStatus === "stopping" ||
+      task.sandboxId !== undefined
+    ) {
+      await requestTaskSandboxStop(ctx, task._id);
+    }
+    if (task.sandboxId) {
+      await scheduleTaskSandboxGraceDelete(ctx, {
+        ...task,
+        status: newStatus,
+        updatedAt: now,
+      });
     }
 
     await ctx.db.patch(eventId, {
