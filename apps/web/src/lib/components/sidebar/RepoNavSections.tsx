@@ -15,7 +15,7 @@ import {
 } from "@/lib/components/sidebar/icons/AnimatedNavIcons";
 import { type api } from "@eva/backend";
 import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
-import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksPopover";
+import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksBadge";
 import { BuildingProjectsBadge } from "@/lib/components/sidebar/BuildingProjectsBadge";
 import {
   SharedLayoutNav,
@@ -232,7 +232,7 @@ export function RepoNavSections({
           />
           {!collapsed && <span className="truncate">{item.name}</span>}
           {item.name === "Quick Tasks" && !collapsed && repo && (
-            <ActiveTasksBadge repoId={repo._id} basePath={repoBasePath} />
+            <ActiveTasksBadge repoId={repo._id} />
           )}
           {item.name === "Projects" && !collapsed && repo && (
             <BuildingProjectsBadge repoId={repo._id} basePath={repoBasePath} />
