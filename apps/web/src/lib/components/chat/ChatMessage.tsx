@@ -51,6 +51,7 @@ import {
   stripErrorPrefix,
 } from "@/lib/components/chat/chatBodyUtils";
 import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ChatUiPanelTabs } from "@/lib/components/chat/generativeUi/ChatUiPanelTabs";
 import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
@@ -157,9 +158,11 @@ interface ChatMessageProps {
     attachmentStorageIds?: Id<"_storage">[];
   };
   /**
-   * Rendered inside the turn, directly above the meta row (provider mark, copy,
-   * time) so agent-composed panels read as part of the reply rather than as a
-   * detached card below its footer.
+   * Agent-composed panels (`render_ui`) for this turn. On a settled assistant
+   * reply they take the prose's slot behind a UI / Text tab strip, so only one
+   * of the two renderings is on screen. Otherwise (user turn, still streaming,
+   * failed turn, no prose) they render directly above the meta row so a panel
+   * is never dropped.
    */
   belowContent?: ReactNode;
 }
@@ -267,6 +270,20 @@ export const ChatMessage = memo(function ChatMessage({
       : message.errorType === "generic"
         ? "This turn failed"
         : null;
+  // A panel and the prose that introduced it are two renderings of one answer,
+  // so the panel takes the slot and the prose moves behind a tab. Needs real
+  // prose to switch to, and a failed turn shows its error notice instead.
+  const panelTabs =
+    belowContent !== undefined &&
+    turnErrorTitle === null &&
+    message.content.trim().length > 0;
+  /* wrap-anywhere: without it a long unbreakable token is silently clipped by
+     MessageContent's overflow-hidden. */
+  const turnProse = (
+    <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+      {message.content}
+    </MessageResponse>
+  );
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
@@ -428,8 +445,6 @@ export const ChatMessage = memo(function ChatMessage({
                             />
                           </m.div>
                         ) : (
-                          /* wrap-anywhere: without it a long unbreakable token is
-                          silently clipped by MessageContent's overflow-hidden. */
                           <m.div
                             key="turn-content"
                             initial={{ opacity: 0 }}
@@ -437,9 +452,14 @@ export const ChatMessage = memo(function ChatMessage({
                             exit={{ opacity: 0 }}
                             transition={motionFast}
                           >
-                            <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                              {message.content}
-                            </MessageResponse>
+                            {panelTabs ? (
+                              <ChatUiPanelTabs
+                                panel={belowContent}
+                                text={turnProse}
+                              />
+                            ) : (
+                              turnProse
+                            )}
                           </m.div>
                         )}
                       </AnimatePresence>
@@ -492,7 +512,9 @@ export const ChatMessage = memo(function ChatMessage({
                     />
                   </div>
                 ) : null}
-                {belowContent ? (
+                {/* Only the panels the tab strip did not claim — a still-
+                    streaming or failed turn has no prose to trade places with. */}
+                {belowContent && !panelTabs ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}
                 {turnModel || copyPlain || checkpoint.items.length > 0 ? (
