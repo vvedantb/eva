@@ -1,5 +1,5 @@
 import { AnimatePresence, m } from "motion/react";
-import { cn, motionSpring } from "@eva/ui";
+import { cn, motionFast, motionSpring } from "@eva/ui";
 import type { DeckSlide } from "../slides/types";
 
 interface DeckOutlineProps {
@@ -25,9 +25,14 @@ export function DeckOutline({
           key="deck-outline"
           initial={{ x: -288, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -288, opacity: 0 }}
+          // The drawer travels its full width in, but only a token distance
+          // out: a long exit holds the stage hostage after the choice is made.
+          exit={{ x: -24, opacity: 0, transition: motionFast }}
           transition={motionSpring}
-          className="pointer-events-auto z-20 flex w-72 shrink-0 flex-col gap-1 overflow-y-auto bg-zinc-900/90 p-4 backdrop-blur-md"
+          // Concentric: 24px outer corner = 8px row corner + the 16px of
+          // padding between the two. Explicit pixels, because the `rounded-*`
+          // scale is derived from a user-settable `--radius`.
+          className="pointer-events-auto z-20 flex w-72 shrink-0 flex-col gap-1 overflow-y-auto rounded-r-[24px] bg-zinc-900/90 p-4 backdrop-blur-md"
           aria-label="Slide outline"
         >
           {slides.map((entry, index) => {
@@ -42,7 +47,9 @@ export function DeckOutline({
                   onClose();
                 }}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-white/70 transition-colors",
+                  // py-2.5 on a 20px line is a 40px row — the tap floor.
+                  "flex min-h-10 items-center gap-3 rounded-[8px] px-3 py-2.5 text-left text-sm text-white/70",
+                  "motion-press active:scale-[0.96]",
                   "hover:bg-white/5 hover:text-white",
                   active && "bg-white/10 text-white",
                 )}

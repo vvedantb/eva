@@ -45,21 +45,23 @@ Detail: do not read the grid. Pick two the room will care about and move on — 
 Figures: eight items, all shipped between June and September 2026.`,
 
   "09-team": `The point is not that Eva is used, it is that people who do not write code raised the work themselves.
-→ Step 1: Matt, referral portal. AQP list map, referral dashboard, tabs and cancellation reasons.
-→ Step 2: Zuza, design and admin, and the heaviest non-developer user of the tool.
-→ Step 3: Kezia, referral portal and domiciliary care. Exports, filters and automated emails.
-→ Step 4: Vedant, product, and the total underneath. Colleagues described what they needed, Eva built it, and they reviewed it.
+→ Step 1: Matt, referral portal, since May. The AQP list map, the referral dashboard, and referral tabs with cancellation reasons.
+→ Step 2: Zuza, design and admin, since March, and the heaviest non-developer user of the tool. User management pages, admin KPI dashboards, and the polish on KPI cards, badges and tables.
+→ Step 3: Kezia, referral portal and domiciliary care, since May. Exports and audit trails, broker and borough filters, and automated decline and expiry emails.
+→ Step 4: Vedant, product, since January, and the total underneath. The domiciliary care SUPA archive, the nursing home SUPA archive, and eProcurement fixes.
+Detail: the cards carry names and counts only. Say the roles, the months and the projects aloud. The shape of the work is the same every time — a colleague described what they needed, Eva built it in the browser, and they reviewed it.
 Figures: Matt 27, Zuza 237, Kezia 39, Vedant 912, and 303 pieces of work raised by colleagues. Sessions, quick tasks and projects created in Eva between 11 January and 16 September 2026, including items later cancelled.`,
 
   "10-code-reviews": `Reading every change by hand was the slowest step, so it moved to the model and people kept the part that matters.
-→ Step 1: the old lane strikes out and the model lane arrives. The model reads the whole change, finds ordinary bugs, suggests the fix and runs the checks.
-→ Step 2: the guarded lane. People still hold data structure changes, deletions and migrations, payments and permissions, and anything hard to roll back.
+→ Step 0: the old way, five lines. A person read every line, comments went back and forth, work waited days for a reviewer, small bugs still slipped through, and a one-line change got the same attention as a database migration.
+→ Step 1: the strike draws through all five and the old lane fades back.
+→ Step 2: the two statements. The model reads the whole change, finds ordinary bugs, suggests the fix and runs the checks. People still hold data structure changes, deletions and migrations, payments, permissions and access, and anything hard to roll back.
 → Step 3: the closing line. This is the sentence to leave in the room.
 Detail: the mechanics are already on slide 6 — the nightly critical bugs and code quality routines, and auto-merge.`,
 
   "11-whats-next": `The constraint has moved: Eva now finishes work faster than people can check it in.
-→ Step 1: the review segment glows and the 43 card arrives. More finished work is waiting than has been merged all summer.
-→ Step 2: the pipeline card. The fix is not to review faster, it is to give CarePulse the same pipeline Eva already runs on itself.
+→ Step 1: the review segment glows and the 43 card arrives. That is more finished work waiting than the 29 already merged.
+→ Step 2: the four pipeline steps. The fix is not to review faster, it is to give CarePulse the same pipeline Eva already runs on itself — the same automations behind Eva's own releases on slide 6.
 Detail: cancelled work is shown rather than hidden, because a queue that quietly drops items is not a queue.
 Figures: 141 quick tasks — 29 done, 43 waiting in code review, 14 in business check, 25 not started, 30 cancelled. CarePulse quick tasks created in Eva between 1 June and 10 September 2026, by status on 11 September 2026.`,
 
@@ -70,6 +72,7 @@ Figures: 141 quick tasks — 29 done, 43 waiting in code review, 14 in business 
 Detail: say plainly that this is a direction of travel, not a plan with dates. Nothing here is a commitment.`,
 
   "13-developer": `The job did not disappear when the model started writing the code, it moved.
+→ Step 0: the five archetypes. The Prototyper churns out ideas that mostly never ship, the Builder turns a prototype into a real product, the Sweeper simplifies, removes and tunes, the Grower iterates towards fit, and the Maintainer keeps a mature system safe and fast.
 → Step 1: the bracket lands over Sweeper and Maintainer. That blend is the work that is growing, not the other three.
 → Step 2: what gardening actually means — lints, types, checks and written rules that the model reads before it starts.
 → Step 3: the CarePulse line. The biggest single job is finishing the v3 migration, because it removes most of what trips the model up today.
@@ -79,8 +82,8 @@ Figures: archetypes from Boris Cherny, X, 28 June 2026; the eight months without
   "14-personal": `Cloud coding agents are now a category, and the honest position is that ours is not the cleverest but it is the one we can bend.
 → Step 1: what Eva has that the others do not — our repositories, data and rules, new features in an afternoon by anyone on the team, and the freedom to delete anything unused.
 → Step 2: the demo switches into Simple Mode, showing the same product with the machinery removed.
-→ Step 3: the Notion line. Software that serves everyone ends up fitting no one.
-Detail: name the six competitors without disparaging them; they are all good, they simply do not know CarePulse.
+→ Step 3: the Notion line. Notion began as notes and kept adding features most people never open, and software that serves everyone ends up fitting no one.
+Detail: name the six competitors without disparaging them; they are all good, they simply do not know CarePulse, our team or our rules.
 Figures: comparison reflects our own use, September 2026. Product names are their owners' trademarks.`,
 
   "15-closing": `Close on the one fact that carries the whole argument: the deck itself was built the way everything else was.
@@ -113,14 +116,14 @@ Figures: sessions per month in 2026 — Jan 13, Feb 11, Mar 31, Apr 28, May 9, J
   "a06-impact": `Three things changed, and none of them is about speed of typing.
 → Step 1: who can ask. A request, a queue and a developer became anyone describing what they need in their own words.
 → Step 2: where work runs. One laptop at a time became cloud workspaces running many jobs at once.
-→ Step 3: what a person does, and the supporting counts. Writing every line became directing work and guarding what is hard to undo.
-Detail: the third row is the one to dwell on, because it is the change that makes the others safe.
+→ Step 3: what a person does, and the two counts beside it. Writing every line became directing the work and guarding what is hard to undo.
+Detail: the rows carry no category label, so name each one — who can ask, where work runs, what a person does — as it lands. Eva was built to remove the wait between someone needing something and it being built. The third row is the one to dwell on, because it is the change that makes the others safe.
 Figures: 13 people other than the developer have raised work in Eva; 390 pieces of that work were for CarePulse. Eva's own records to 16 September 2026.`,
 
   "a07-how": `The whole loop in one pass, so nobody is guessing what using the tool actually looks like.
 → Step 1: the flow line runs and the browser tab line lands. There is no install, no ticket and no handover.
-→ Step 2: the four ways to ask. The choice is about size of job, not about type of user.
-Detail: the live preview in stage two is the part non-technical colleagues care about, because it is the first point at which they can judge the work themselves.`,
+→ Step 2: the four ways to ask, as names only. A session is a running conversation; a quick task is one job start to finish; a project is several jobs in order; an automation is a job that runs itself. The choice is about size of job, not about type of user.
+Detail: the three cards are headings only, so describe each stage. You describe it in plain English in a chat, with no forms and no tickets. Eva builds it in its own cloud workspace, with a live preview you can click through. You try it, ask for changes, and then it goes live. The live preview in stage two is the part non-technical colleagues care about, because it is the first point at which they can judge the work themselves.`,
 
   "a09-design": `Technical design happened on paper first, and replacing the engine every workspace runs on is the proof.
 → Step 1: the six phases. A spike, a provider-neutral contract with no consumer, the old provider moved behind it, the new provider, the switch-over, then the old code deleted.
@@ -162,9 +165,9 @@ Detail: the rows in order — Simple Mode hid reviews, differences, token meters
 Figures: Simple Mode 14 August 2026, slider 24 August 2026, mobile audits August and September 2026.`,
 
   "a08-ahead": `The constraint has moved from building to deciding, and the next year is about the steps either side of the build.
-→ Step 1: the first strand lights and the queue figure arrives. Marking work ready should be the last human step, as it already is for Eva itself.
+→ Step 1: the first strand lights and the queue figure arrives, which is finished work waiting to be checked in. Marking work ready should be the last human step, as it already is for Eva itself.
 → Step 2: the closing question. How fast can we build it becomes how fast can we decide.
-Detail: the other two strands are guarding the irreversible — data, permissions and anything hard to undo — and shaping tools around how we work. Neither is a dated commitment.
+Detail: the three strands are headings only. Automate the release, so marking work ready is the last human step. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us, meaning tools shaped around how we work rather than the other way round. The next year is about the steps either side of the building, and none of the three is a dated commitment.
 Figures: 176 pieces of finished work waiting to be checked in, against 455 already finished. Quick task status across all 887 raised in Eva, at 16 September 2026.`,
 
   "a15-framework": `This is the map an assessor reads: nine capabilities, each one evidenced by a slide already shown.

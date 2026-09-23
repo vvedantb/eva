@@ -47,7 +47,8 @@ export function BlurWordsTitle({
   return (
     <h1
       className={cn(
-        "font-semibold tracking-[-0.025em] text-white",
+        // Lines are authored, but one long enough to wrap still balances.
+        "font-semibold tracking-[-0.025em] text-balance text-white",
         "leading-[1.02]",
         SIZES[size],
         className,

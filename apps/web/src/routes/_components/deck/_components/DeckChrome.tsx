@@ -5,7 +5,7 @@ import {
   IconNotes,
   IconShare,
 } from "@tabler/icons-react";
-import { cn, motionSlow } from "@eva/ui";
+import { cn, motionFast, motionSlow } from "@eva/ui";
 import type { DeckTheme } from "./DeckPrimitives";
 import { DECK_TONES } from "./deckTone";
 import { DeckShareBar } from "./DeckShareBar";
@@ -35,8 +35,12 @@ export function DeckChrome({
   const pct = `${(slide / total) * 100}%`;
   const tone = DECK_TONES[theme];
   const idle = share.sessionState === "none";
+  // 40×40 is the comfortable-tap floor, so the box is the target rather than a
+  // 30px icon pad. `motion-press` names the properties it animates (transform,
+  // scale and colour) — never `all`.
   const control = cn(
-    "pointer-events-auto absolute bottom-3 rounded-md p-1.5 transition-colors",
+    "pointer-events-auto absolute bottom-2 inline-flex size-10 items-center justify-center rounded-[12px]",
+    "motion-press active:scale-[0.96]",
     tone.control,
   );
 
@@ -63,7 +67,7 @@ export function DeckChrome({
         type="button"
         onClick={onToggleOutline}
         aria-label="Toggle outline"
-        className={cn(control, "left-4")}
+        className={cn(control, "left-3")}
       >
         <IconLayoutSidebarLeftExpand size={18} />
       </button>
@@ -72,7 +76,7 @@ export function DeckChrome({
         type="button"
         onClick={onOpenPresenter}
         aria-label="Open presenter view"
-        className={cn(control, "left-12")}
+        className={cn(control, "left-15")}
       >
         <IconNotes size={18} />
       </button>
@@ -83,7 +87,7 @@ export function DeckChrome({
           onClick={() => void share.startSharing()}
           disabled={share.isStarting}
           aria-label="Share this deck live"
-          className={cn(control, "left-20")}
+          className={cn(control, "left-27")}
         >
           {share.isStarting ? (
             <IconLoader2 size={18} className="animate-spin" />
@@ -101,7 +105,8 @@ export function DeckChrome({
             key="hint"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
+            // Leaving is quieter than arriving: half the travel, half the time.
+            exit={{ opacity: 0, y: 4, transition: motionFast }}
             transition={motionSlow}
             className={cn(
               "absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs",

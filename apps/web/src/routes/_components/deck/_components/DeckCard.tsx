@@ -53,11 +53,17 @@ export function DeckCard({ deck, index }: DeckCardProps) {
         transition: { duration: 0.5, ease: EASE_OUT, delay: index * 0.08 },
       }}
       whileHover={{ y: -4, transition: motionSpring }}
-      className="group relative rounded-2xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm"
+      whileTap={{ scale: 0.96, transition: motionSpring }}
+      // Concentric: 28px outer corner = the 12px thumbnail corner plus the 16px
+      // of card padding around it. Explicit pixels on both sides of the pair,
+      // because the `rounded-*` scale is derived from a user-settable
+      // `--radius` and the relationship has to survive that.
+      className="group relative rounded-[28px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm"
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-60"
+        // One pixel outside the card, so one pixel rounder.
+        className="pointer-events-none absolute -inset-px rounded-[29px] opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-60"
         style={{
           background: `linear-gradient(120deg, ${BRAND.purple}, ${BRAND.blue})`,
         }}
@@ -67,13 +73,13 @@ export function DeckCard({ deck, index }: DeckCardProps) {
       <Link
         to={deck.path}
         aria-label={`Present ${deck.title}`}
-        className="absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+        className="absolute inset-0 z-10 rounded-[28px] outline-none focus-visible:ring-2 focus-visible:ring-white/50"
       />
 
       <div
         ref={stage.measure}
         aria-hidden
-        className="pointer-events-none relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-zinc-950"
+        className="pointer-events-none relative aspect-video overflow-hidden rounded-[12px] border border-white/10 bg-zinc-950"
       >
         <div
           style={{
@@ -103,7 +109,7 @@ export function DeckCard({ deck, index }: DeckCardProps) {
           to={deck.path}
           search={{ view: "presenter" }}
           onClick={stopCardClick}
-          className="relative z-20 mt-5 inline-flex rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/70 transition-colors hover:border-white/30 hover:text-white"
+          className="hit-target motion-press relative z-20 mt-5 inline-flex rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/70 hover:border-white/30 hover:text-white active:scale-[0.96]"
         >
           Speaker notes
         </Link>

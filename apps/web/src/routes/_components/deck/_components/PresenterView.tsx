@@ -113,11 +113,14 @@ export function PresenterView({
               step {step} of {entry.steps}
             </span>
           )}
-          <div className="flex shrink-0 items-center gap-1">
+          {/* `icon` not `icon-sm`: 40×40 each, and gap-2 keeps the two targets
+              clear of one another. The Button variant already carries the
+              house press (scale 0.96 on named properties). */}
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label="Previous"
               onClick={nav.prev}
               className="text-white/60 hover:bg-white/10 hover:text-white"
@@ -127,7 +130,7 @@ export function PresenterView({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label="Next"
               onClick={nav.next}
               className="text-white/60 hover:bg-white/10 hover:text-white"

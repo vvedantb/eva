@@ -1,8 +1,7 @@
-import { IconAdjustments } from "@tabler/icons-react";
+import { m } from "motion/react";
 import {
   Accent,
-  Body,
-  Card,
+  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -10,9 +9,11 @@ import {
   Stagger,
   StaggerItem,
   Title,
+  useDeckStep,
 } from "../_components/DeckPrimitives";
 import { EvaSidebarDemo } from "./_parts/EvaSidebarDemo";
 
+/** The category, named without comment. The comment is in the notes. */
 const SIMILAR: readonly string[] = [
   "Cursor background agents",
   "OpenAI Codex",
@@ -23,81 +24,76 @@ const SIMILAR: readonly string[] = [
 ];
 
 const OURS: readonly string[] = [
-  "Built around our repos, data and rules",
-  "New features in an afternoon, by anyone on the team",
-  "Anything we do not use can go",
+  "Built around our repos and rules",
+  "New features in an afternoon",
+  "Anything unused can go",
 ];
 
 export function Slide14Personal() {
+  const step = useDeckStep();
+
   return (
     <Shell className="py-10">
       <Reveal>
         <Kicker>Eva and everyone else</Kicker>
-        <Title size="md">
+        <Title size="md" className="text-balance">
           Same idea. <Accent>Ours to shape.</Accent>
         </Title>
-        <Body className="mt-4 max-w-4xl text-lg">
-          Cloud coding agents are becoming a category. Eva is the one we can
-          bend to the way we work.
-        </Body>
       </Reveal>
 
-      <div className="mt-7 flex gap-6">
-        <div className="w-[472px] shrink-0">
-          <Card className="p-5">
-            <div className="text-xs tracking-[0.18em] text-white/40 uppercase">
-              Similar products
-            </div>
-            <Stagger delayChildren={0.3} className="mt-3 flex flex-wrap gap-2">
-              {SIMILAR.map((name) => (
+      <div className="mt-10 flex gap-14">
+        <div className="w-[600px] shrink-0">
+          <Stagger delayChildren={0.3} className="flex flex-wrap gap-2.5">
+            {SIMILAR.map((name) => (
+              <StaggerItem
+                key={name}
+                className="rounded-full bg-white/[0.07] px-4 py-2 text-sm text-white/70"
+              >
+                {name}
+              </StaggerItem>
+            ))}
+          </Stagger>
+
+          <div className="relative mt-12 pl-6">
+            <m.span
+              aria-hidden
+              className="absolute top-1 bottom-1 left-0 w-[3px] origin-top rounded-full bg-gradient-to-b from-[#8B3FB8] to-[#3B7DD8]"
+              initial={{ scaleY: 0 }}
+              animate={{ scaleY: step >= 1 ? 1 : 0 }}
+              transition={{ duration: 0.5, ease: EASE_OUT }}
+            />
+            <Stagger
+              step={1}
+              delayChildren={0.2}
+              className="flex flex-col gap-5"
+            >
+              {OURS.map((item) => (
                 <StaggerItem
-                  key={name}
-                  className="rounded-full bg-white/[0.07] px-3 py-1 text-xs text-white/80"
+                  key={item}
+                  className="text-2xl font-semibold text-balance text-white"
                 >
-                  {name}
+                  {item}
                 </StaggerItem>
               ))}
             </Stagger>
-            <div className="mt-4 text-sm text-white/60">
-              All good. None of them knows CarePulse, our team or our rules.
-            </div>
-          </Card>
-
-          <Reveal step={1} className="mt-3">
-            <Card className="p-5">
-              <div className="flex items-center gap-2">
-                <IconAdjustments size={18} className="text-white/70" />
-                <span className="text-sm font-semibold text-white">
-                  What Eva has that they do not
-                </span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {OURS.map((item) => (
-                  <div key={item} className="flex items-start gap-2.5">
-                    <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]" />
-                    <span className="text-sm text-white/75">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </Reveal>
+          </div>
         </div>
 
-        <div className="flex w-[560px] shrink-0 flex-col items-center">
+        <div className="flex shrink-0 justify-center">
           <EvaSidebarDemo />
         </div>
       </div>
 
-      <Reveal step={3} className="mt-4">
-        <p className="text-lg text-white/85">
-          Notion began as notes and kept adding features most people never open.
-          The future fits <Accent>one person</Accent>, not everyone.
+      <Reveal step={3} className="mt-6">
+        <p className="text-2xl text-pretty text-white/85">
+          Notion added features most people never open. The future fits{" "}
+          <Accent>one person</Accent>, not everyone.
         </p>
       </Reveal>
 
       <Footnote>
-        Product names are their owners' trademarks. Comparison reflects our own
-        use, September 2026.
+        Product names are their owners&apos; trademarks. Comparison reflects our
+        own use, September 2026.
       </Footnote>
     </Shell>
   );

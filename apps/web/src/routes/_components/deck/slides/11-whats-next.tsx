@@ -9,8 +9,6 @@ import {
   Kicker,
   Reveal,
   Shell,
-  Stagger,
-  StaggerItem,
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
@@ -22,56 +20,33 @@ interface Segment {
   count: number;
   /** Bar fill. The done segment carries the brand gradient. */
   fill: string;
-  /** Legend swatch, kept separate so faint fills stay visible at 12 px. */
-  swatch: string;
 }
 
-/** Left to right, in the order the bar reads. */
-const SEGMENTS: Segment[] = [
+/** Left to right, in the order the bar reads. The full split is in the notes. */
+const SEGMENTS: readonly Segment[] = [
   {
     label: "Done",
     count: 29,
     fill: "bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]",
-    swatch: "bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]",
   },
-  {
-    label: "Waiting in code review",
-    count: 43,
-    fill: "bg-white/70",
-    swatch: "bg-white/70",
-  },
-  {
-    label: "Business check",
-    count: 14,
-    fill: "bg-white/35",
-    swatch: "bg-white/35",
-  },
-  {
-    label: "Not started",
-    count: 25,
-    fill: "bg-white/15",
-    swatch: "bg-white/15",
-  },
-  {
-    label: "Cancelled",
-    count: 30,
-    fill: "bg-white/[0.07]",
-    swatch: "bg-white/[0.12]",
-  },
+  { label: "Waiting in code review", count: 43, fill: "bg-white/70" },
+  { label: "Business check", count: 14, fill: "bg-white/35" },
+  { label: "Not started", count: 25, fill: "bg-white/15" },
+  { label: "Cancelled", count: 30, fill: "bg-white/[0.07]" },
 ];
 
 const REVIEW_INDEX = 1;
 
 const percent = (count: number) => (count / TOTAL) * 100;
 
-/** Where the review segment sits, so the glow can line up behind it. */
-const sumPercent = (segments: Segment[]) =>
+/** Where the review segment sits, so the glow and its label line up with it. */
+const sumPercent = (segments: readonly Segment[]) =>
   segments.reduce((total, segment) => total + percent(segment.count), 0);
 
 const REVIEW_LEFT = sumPercent(SEGMENTS.slice(0, REVIEW_INDEX));
 const REVIEW_WIDTH = sumPercent(SEGMENTS.slice(REVIEW_INDEX, REVIEW_INDEX + 1));
 
-const NEXT_STEPS = [
+const NEXT_STEPS: readonly string[] = [
   "Model reviews first",
   "Ready means merge",
   "Deploys itself",
@@ -82,27 +57,26 @@ export function Slide11WhatsNext() {
   const step = useDeckStep();
 
   return (
-    <Shell className="py-12">
+    <Shell className="py-14">
       <Reveal>
         <Kicker>What&apos;s next</Kicker>
         <Title size="md">The bottleneck has moved.</Title>
-        <Body className="mt-4 max-w-4xl text-lg">
-          Eva now finishes work faster than we can check it in. On CarePulse the
-          queue is the review, not the build.
+        <Body className="mt-4 max-w-3xl text-lg text-pretty">
+          Eva finishes work faster than we can check it in.
         </Body>
       </Reveal>
 
-      <div className="mt-8 flex items-start gap-12">
-        <div className="w-[600px]">
+      <div className="mt-14 grid grid-cols-[640px_1fr] gap-16">
+        <div>
           <CountUp
             value={TOTAL}
-            className="text-6xl font-semibold tabular-nums"
+            className="text-7xl leading-none font-semibold tabular-nums"
           />
-          <div className="mt-1 text-sm text-white/50">
-            quick tasks raised on CarePulse since June
+          <div className="mt-3 text-base text-white/50">
+            quick tasks on CarePulse since June
           </div>
 
-          <div className="relative mt-6">
+          <div className="relative mt-8">
             {step >= 1 ? (
               <m.div
                 aria-hidden
@@ -121,7 +95,7 @@ export function Slide11WhatsNext() {
               />
             ) : null}
 
-            <div className="relative flex h-10 overflow-hidden rounded-full">
+            <div className="relative flex h-12 overflow-hidden rounded-full">
               {SEGMENTS.map((segment, index) => (
                 <m.div
                   key={segment.label}
@@ -136,66 +110,65 @@ export function Slide11WhatsNext() {
                   }}
                 />
               ))}
-            </div>
-          </div>
 
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/55">
-            {SEGMENTS.map((segment) => (
-              <div key={segment.label} className="flex items-center gap-2">
-                <span
-                  aria-hidden
-                  className={`size-2.5 rounded-full ${segment.swatch}`}
-                />
-                {segment.label} · {segment.count}
-              </div>
-            ))}
+              {/* The only segment worth naming, named where it sits. */}
+              <m.div
+                className="pointer-events-none absolute inset-y-0 flex items-center justify-center text-sm font-medium tabular-nums text-black/70"
+                style={{
+                  left: `${REVIEW_LEFT}%`,
+                  width: `${REVIEW_WIDTH}%`,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, ease: EASE_OUT, delay: 1.1 }}
+              >
+                In review · 43
+              </m.div>
+            </div>
           </div>
         </div>
 
-        <Reveal step={1} className="w-[380px]" from="right">
+        <Reveal step={1} from="right">
           <Card>
             <CountUp
               value={43}
               step={1}
-              className="text-5xl font-semibold tabular-nums"
+              className="text-6xl leading-none font-semibold tabular-nums"
             />
-            <div className="mt-2 text-[15px] leading-snug text-white/75">
-              bundles of finished work waiting for a human to merge them
-            </div>
-            <div className="mt-3 text-xs text-white/45">
-              That is more than the 29 already merged.
+            <div className="mt-4 text-lg leading-snug text-pretty text-white/75">
+              finished bundles waiting for a human
             </div>
           </Card>
         </Reveal>
       </div>
 
-      <Reveal step={2} className="mt-8">
-        <Card className="p-5">
-          <div className="text-sm font-medium text-white/85">
-            Next: give CarePulse the same pipeline as Eva
-          </div>
-          <Stagger
-            step={2}
-            staggerChildren={0.08}
-            className="mt-3 flex flex-wrap items-center gap-2"
+      <div className="mt-20 flex items-center gap-3">
+        {NEXT_STEPS.map((label, index) => (
+          <m.div
+            key={label}
+            className="flex items-center gap-3"
+            initial={{ opacity: 0, y: 14, scale: 0.94 }}
+            animate={
+              step >= 2
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 14, scale: 0.94 }
+            }
+            transition={{
+              type: "spring",
+              bounce: 0,
+              duration: 0.55,
+              delay: step >= 2 ? index * 0.08 : 0,
+            }}
           >
-            {NEXT_STEPS.map((label, index) => (
-              <StaggerItem key={label} className="flex items-center gap-2">
-                {index > 0 ? (
-                  <IconArrowRight size={16} className="text-white/35" />
-                ) : null}
-                <span className="rounded-full bg-white/[0.07] px-3 py-1 text-sm text-white/80">
-                  {label}
-                </span>
-              </StaggerItem>
-            ))}
-          </Stagger>
-          <div className="mt-3 text-xs text-white/45">
-            The same automations that already run Eva&apos;s own releases (slide
-            6), applied to CarePulse.
-          </div>
-        </Card>
-      </Reveal>
+            {index > 0 ? (
+              <IconArrowRight size={18} className="text-white/35" aria-hidden />
+            ) : null}
+            <span className="rounded-full bg-white/[0.07] px-5 py-2.5 text-base text-white/80">
+              {label}
+            </span>
+          </m.div>
+        ))}
+      </div>
 
       <Footnote>
         Counts are CarePulse quick tasks created in Eva between 1 June and 10

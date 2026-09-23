@@ -208,7 +208,9 @@ export function Title({
   return (
     <h1
       className={cn(
-        "font-semibold tracking-[-0.02em] text-white",
+        // Balanced: a two-line title on a 1280px stage should not strand one
+        // word on the second line.
+        "font-semibold tracking-[-0.02em] text-balance text-white",
         "leading-[1.05]",
         sizeClass,
         className,
@@ -229,7 +231,8 @@ export function Body({
   return (
     <p
       className={cn(
-        "mt-6 max-w-2xl text-xl leading-relaxed text-white/65",
+        // Prose gets `pretty`, not `balance`: orphans go, the rest holds still.
+        "mt-6 max-w-2xl text-xl leading-relaxed text-pretty text-white/65",
         className,
       )}
     >
@@ -271,7 +274,7 @@ export function Footnote({
   return (
     <div
       className={cn(
-        "absolute right-24 bottom-10 left-24 text-xs text-white/35",
+        "absolute right-24 bottom-10 left-24 text-xs text-pretty text-white/35",
         className,
       )}
     >

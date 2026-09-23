@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { Icon } from "@tabler/icons-react";
 import {
   IconBrush,
   IconBulb,
@@ -10,7 +10,6 @@ import {
 import { m } from "motion/react";
 import {
   Accent,
-  Body,
   Card,
   EASE_OUT,
   Footnote,
@@ -25,51 +24,25 @@ import {
 
 interface Archetype {
   name: string;
-  icon: ReactNode;
-  line: string;
-  /** Part of the Sweeper + Maintainer blend we call the Gardener. */
+  icon: Icon;
+  /** Part of the Sweeper and Maintainer blend we call the Gardener. */
   gardener: boolean;
 }
 
-/** Boris Cherny's five archetypes, in his order. */
-const ARCHETYPES: Archetype[] = [
-  {
-    name: "Prototyper",
-    icon: <IconBulb size={24} className="text-white/70" />,
-    line: "Churns out ideas; most never ship",
-    gardener: false,
-  },
-  {
-    name: "Builder",
-    icon: <IconHammer size={24} className="text-white/70" />,
-    line: "Turns a prototype into a real product",
-    gardener: false,
-  },
-  {
-    name: "Sweeper",
-    icon: <IconBrush size={24} className="text-white/70" />,
-    line: "Simplifies, removes, tunes",
-    gardener: true,
-  },
-  {
-    name: "Grower",
-    icon: <IconTrendingUp size={24} className="text-white/70" />,
-    line: "Iterates a product towards fit",
-    gardener: false,
-  },
-  {
-    name: "Maintainer",
-    icon: <IconShieldCheck size={24} className="text-white/70" />,
-    line: "Keeps a mature system safe and fast",
-    gardener: true,
-  },
+/** Boris Cherny's five archetypes, in his order. What each does is in the notes. */
+const ARCHETYPES: readonly Archetype[] = [
+  { name: "Prototyper", icon: IconBulb, gardener: false },
+  { name: "Builder", icon: IconHammer, gardener: false },
+  { name: "Sweeper", icon: IconBrush, gardener: true },
+  { name: "Grower", icon: IconTrendingUp, gardener: false },
+  { name: "Maintainer", icon: IconShieldCheck, gardener: true },
 ];
 
-const GARDENING = [
-  "Lints that catch mistakes before the model makes them",
-  "Types that tell the model what is allowed",
-  "Checks that run on every change",
-  "Clear written rules the model reads first",
+const GARDENING: readonly string[] = [
+  "Lints that catch mistakes early",
+  "Types that say what is allowed",
+  "Checks on every change",
+  "Written rules the model reads",
 ];
 
 function ArchetypeCard({ archetype }: { archetype: Archetype }) {
@@ -89,16 +62,18 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
       <m.div
         className="relative"
         initial={{ opacity: 1, scale: 1 }}
-        animate={{ opacity: dimmed ? 0.4 : 1, scale: lit ? 1.04 : 1 }}
+        animate={{ opacity: dimmed ? 0.35 : 1, scale: lit ? 1.04 : 1 }}
         transition={{ duration: 0.5, ease: EASE_OUT }}
       >
-        <Card className="h-[136px] p-4">
-          {archetype.icon}
-          <div className="mt-3 text-base font-semibold text-white">
+        <Card className="flex h-[124px] flex-col justify-between p-5">
+          <archetype.icon
+            size={26}
+            stroke={1.6}
+            className="text-white/70"
+            aria-hidden
+          />
+          <div className="text-xl leading-none font-semibold text-white">
             {archetype.name}
-          </div>
-          <div className="mt-1 text-xs leading-snug text-white/50">
-            {archetype.line}
           </div>
         </Card>
       </m.div>
@@ -107,20 +82,18 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
 }
 
 export function Slide13Developer() {
+  const step = useDeckStep();
+
   return (
-    <Shell className="py-10">
+    <Shell className="py-12">
       <Reveal>
         <Kicker>The role of the developer</Kicker>
-        <Title size="md">
+        <Title size="md" className="text-balance">
           From writing code to <Accent>tending the garden</Accent>.
         </Title>
-        <Body className="mt-4 max-w-5xl text-lg">
-          The head of Claude Code has not written a line by hand in eight
-          months. The job did not disappear. It moved.
-        </Body>
       </Reveal>
 
-      <div className="mt-6">
+      <div className="mt-12">
         <Stagger delayChildren={0.4} className="flex gap-4">
           {ARCHETYPES.map((archetype) => (
             <ArchetypeCard key={archetype.name} archetype={archetype} />
@@ -132,7 +105,7 @@ export function Slide13Developer() {
           <Reveal
             step={1}
             distance={8}
-            className="absolute top-2 left-[424px] flex w-[620px] flex-col items-center"
+            className="absolute top-3 left-[424px] flex w-[620px] flex-col items-center"
           >
             <div className="h-2 w-full rounded-t-lg border-x border-t border-white/15" />
             <div className="mt-2 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-1 text-sm font-medium text-white">
@@ -142,40 +115,39 @@ export function Slide13Developer() {
         </div>
       </div>
 
-      <Reveal step={2} className="mt-2">
-        <Card className="p-5">
-          <div className="text-lg font-semibold text-white">
-            What gardening looks like
-          </div>
-          <Stagger
-            step={2}
-            delayChildren={0.2}
-            staggerChildren={0.06}
-            className="mt-3 flex flex-wrap gap-2"
+      <div className="mt-16 flex gap-3">
+        {GARDENING.map((item, index) => (
+          <m.div
+            key={item}
+            className="rounded-full bg-white/[0.07] px-5 py-2.5 text-base text-white/80"
+            initial={{ opacity: 0, y: 14, scale: 0.94 }}
+            animate={
+              step >= 2
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 14, scale: 0.94 }
+            }
+            transition={{
+              type: "spring",
+              bounce: 0,
+              duration: 0.55,
+              delay: step >= 2 ? index * 0.08 : 0,
+            }}
           >
-            {GARDENING.map((item) => (
-              <StaggerItem
-                key={item}
-                className="rounded-full bg-white/[0.07] px-3 py-1 text-sm text-white/80"
-              >
-                {item}
-              </StaggerItem>
-            ))}
-          </Stagger>
-          <div className="mt-3 text-xs text-white/45">
-            A tidy codebase is one the model can work in without breaking
-            things.
-          </div>
-        </Card>
-      </Reveal>
+            {item}
+          </m.div>
+        ))}
+      </div>
 
-      <Reveal step={3} className="mt-5">
-        <p className="flex items-center gap-3 text-lg text-white/85">
-          <IconSeeding size={22} className="shrink-0 text-[#3B7DD8]" />
+      <Reveal step={3} className="mt-14">
+        <p className="flex items-center gap-4 text-2xl text-pretty text-white/85">
+          <IconSeeding
+            size={28}
+            stroke={1.6}
+            className="shrink-0 text-[#3B7DD8]"
+            aria-hidden
+          />
           <span>
-            For CarePulse the biggest job is finishing the{" "}
-            <Accent>v3 migration</Accent>, which removes most of what trips the
-            model up today.
+            For CarePulse, that job is the <Accent>v3 migration</Accent>.
           </span>
         </p>
       </Reveal>

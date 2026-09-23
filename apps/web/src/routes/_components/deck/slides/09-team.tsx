@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import { CountUp } from "../_components/CountUp";
 import {
   Accent,
-  Body,
   Card,
   EASE_OUT,
   Footnote,
@@ -18,64 +17,17 @@ import {
 interface Person {
   /** First name only — the deck is shown outside the team. */
   name: string;
-  role: string;
-  headlines: string[];
   count: number;
+  /** One label under the figure. Roles and projects live in the notes. */
   countLabel: string;
-  /** Month this person first used Eva. */
-  since: string;
 }
 
 /** Spotlight order, left to right. */
 const PEOPLE: Person[] = [
-  {
-    name: "Matt",
-    role: "Referral portal",
-    headlines: [
-      "AQP list map",
-      "Referral dashboard",
-      "Referral tabs and cancellation reasons",
-    ],
-    count: 27,
-    countLabel: "sessions and quick tasks",
-    since: "Since May",
-  },
-  {
-    name: "Zuza",
-    role: "Design and admin",
-    headlines: [
-      "User management pages",
-      "Admin KPI dashboards",
-      "KPI cards, badges and tables polish",
-    ],
-    count: 237,
-    countLabel: "sessions and quick tasks",
-    since: "Since March",
-  },
-  {
-    name: "Kezia",
-    role: "Referral portal and dom care",
-    headlines: [
-      "Exports and audit trails",
-      "Broker and borough filters",
-      "Automated decline and expiry emails",
-    ],
-    count: 39,
-    countLabel: "quick tasks",
-    since: "Since May",
-  },
-  {
-    name: "Vedant",
-    role: "Product",
-    headlines: [
-      "Dom care SUPA archive",
-      "Nursing home SUPA archive",
-      "eProcurement fixes",
-    ],
-    count: 912,
-    countLabel: "sessions and quick tasks",
-    since: "Since January",
-  },
+  { name: "Matt", count: 27, countLabel: "sessions and tasks" },
+  { name: "Zuza", count: 237, countLabel: "sessions and tasks" },
+  { name: "Kezia", count: 39, countLabel: "quick tasks" },
+  { name: "Vedant", count: 912, countLabel: "sessions and tasks" },
 ];
 
 const BRAND_GRADIENT = "bg-gradient-to-br from-[#8B3FB8] to-[#3B7DD8]";
@@ -87,7 +39,7 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
   const lit = step >= position;
 
   return (
-    <div className="relative w-64">
+    <div className="relative w-[250px]">
       <m.div
         aria-hidden
         className={`pointer-events-none absolute -inset-3 rounded-[28px] blur-2xl ${BRAND_GRADIENT}`}
@@ -96,52 +48,47 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
         transition={{ duration: 0.5, ease: EASE_OUT }}
       />
       <m.div
-        initial={{ opacity: 0.45, scale: 0.97, y: 0 }}
+        initial={{ opacity: 0.4, scale: 0.97, y: 0 }}
         animate={{
-          opacity: lit ? 1 : 0.45,
-          scale: spotlit ? 1.03 : lit ? 1 : 0.97,
-          y: spotlit ? -6 : 0,
+          opacity: lit ? 1 : 0.4,
+          scale: spotlit ? 1.04 : lit ? 1 : 0.97,
+          y: spotlit ? -8 : 0,
         }}
         transition={{ type: "spring", bounce: 0, duration: 0.6 }}
       >
-        <Card className="relative flex h-[344px] flex-col p-6">
+        {/* p-7 (28px) inside a 28px outer radius keeps the avatar concentric
+            with the card corner. */}
+        <Card className="relative flex h-[300px] flex-col rounded-[28px] p-7">
           <div
-            className={`flex size-11 items-center justify-center rounded-full text-lg font-semibold text-white ${BRAND_GRADIENT}`}
+            className={`flex size-12 items-center justify-center rounded-full text-xl font-semibold text-white ${BRAND_GRADIENT}`}
           >
             {person.name.slice(0, 1)}
           </div>
 
-          <div className="mt-4 text-xl font-semibold text-white">
+          <div className="mt-5 text-3xl font-semibold text-white">
             {person.name}
           </div>
-          {/* Fixed two-line box so a role that wraps does not push one card's
-              list out of line with the other three. */}
-          <div className="mt-1 h-8 text-xs leading-4 tracking-[0.18em] text-white/40 uppercase">
-            {person.role}
-          </div>
-          <div className="text-xs text-white/40">{person.since}</div>
-
-          <ul className="mt-4 space-y-2">
-            {person.headlines.map((headline) => (
-              <li key={headline} className="flex gap-2 text-sm text-white/80">
-                <span
-                  aria-hidden
-                  className={`mt-[7px] size-1.5 shrink-0 rounded-full ${BRAND_GRADIENT}`}
-                />
-                <span className="leading-snug">{headline}</span>
-              </li>
-            ))}
-          </ul>
 
           <div className="mt-auto">
             <CountUp
               value={person.count}
               step={position}
-              className="text-3xl font-semibold tabular-nums"
+              className="text-6xl leading-none font-semibold tabular-nums text-white"
             />
-            <div className="mt-1 text-xs text-white/45">
+            {/* The label arrives with its figure, so a lit card never shows a
+                caption hanging under an empty space. */}
+            <m.div
+              className="mt-3 text-sm text-white/45"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: lit ? 1 : 0 }}
+              transition={{
+                duration: 0.4,
+                ease: EASE_OUT,
+                delay: lit ? 0.1 : 0,
+              }}
+            >
               {person.countLabel}
-            </div>
+            </m.div>
           </div>
         </Card>
       </m.div>
@@ -154,17 +101,15 @@ export function Slide09Team() {
     <Shell className="py-12">
       <Reveal>
         <Kicker>Eva at work on CarePulse</Kicker>
-        <Title size="md">Built by the team, not just for them.</Title>
-        <Body className="mt-4 max-w-4xl text-lg">
-          Colleagues described what they needed. Eva built it in the browser,
-          and they reviewed it.
-        </Body>
+        <Title size="md" className="text-balance">
+          Built by the team, not just for them.
+        </Title>
       </Reveal>
 
       <Stagger
         delayChildren={0.3}
         staggerChildren={0.1}
-        className="mt-8 flex gap-5"
+        className="mt-14 flex gap-6"
       >
         {PEOPLE.map((person, index) => (
           <StaggerItem key={person.name}>
@@ -173,13 +118,12 @@ export function Slide09Team() {
         ))}
       </Stagger>
 
-      <Reveal step={4} delay={0.4} className="mt-7">
-        <p className="text-lg text-white/70">
+      <Reveal step={4} delay={0.4} className="mt-12">
+        <p className="text-3xl text-white/85">
           <Accent>
             <CountUp value={303} step={4} delay={0.4} />
           </Accent>{" "}
-          pieces of work raised by colleagues, straight from the people who
-          needed them.
+          pieces of work, raised by colleagues.
         </p>
       </Reveal>
 

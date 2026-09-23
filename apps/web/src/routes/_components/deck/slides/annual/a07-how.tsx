@@ -19,49 +19,36 @@ import {
 
 interface Stage {
   icon: Icon;
+  number: string;
   heading: string;
-  line: string;
 }
 
-/** Left to right: the whole loop, once. */
+/** Left to right: the whole loop, once. What each stage involves is in the notes. */
 const STAGES: Stage[] = [
-  {
-    icon: IconMessage,
-    heading: "1 · You describe it",
-    line: "Plain English, in a chat. No forms, no tickets.",
-  },
-  {
-    icon: IconCloudComputing,
-    heading: "2 · Eva builds it",
-    line: "In its own cloud workspace, with a live preview you can click through.",
-  },
-  {
-    icon: IconChecks,
-    heading: "3 · You review it",
-    line: "Try it, ask for changes, then it goes live.",
-  },
+  { icon: IconMessage, number: "1", heading: "You describe it" },
+  { icon: IconCloudComputing, number: "2", heading: "Eva builds it" },
+  { icon: IconChecks, number: "3", heading: "You review it" },
 ];
 
-const WAYS = [
-  "Sessions — a running conversation",
-  "Quick tasks — one job, start to finish",
-  "Projects — several jobs in order",
-  "Automations — jobs that run themselves",
-];
+/** Names only. The difference between them is a speaking point, not a slide. */
+const WAYS = ["Sessions", "Quick tasks", "Projects", "Automations"];
 
 const BRAND_GRADIENT = "bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]";
 
 export function AnnualHow() {
-  const flowing = useDeckStep() >= 1;
+  const step = useDeckStep();
+  const flowing = step >= 1;
 
   return (
-    <Shell className="py-10">
+    <Shell className="py-12">
       <Reveal>
         <Kicker>How it works</Kicker>
-        <Title size="md">Describe it. Watch it. Review it.</Title>
+        <Title size="md" className="text-balance">
+          Describe it. Watch it. Review it.
+        </Title>
       </Reveal>
 
-      <div className="mt-8 w-[1038px]">
+      <div className="mt-14 w-[1038px]">
         <Stagger
           delayChildren={0.25}
           staggerChildren={0.1}
@@ -69,13 +56,19 @@ export function AnnualHow() {
         >
           {STAGES.map((stage) => (
             <StaggerItem key={stage.heading}>
-              <Card className="flex h-[200px] w-[330px] flex-col p-7">
-                <stage.icon size={30} stroke={1.6} className="text-white/70" />
-                <div className="mt-6 text-2xl leading-tight font-semibold text-white">
-                  {stage.heading}
+              {/* p-8 inside a 32px outer radius keeps the corners concentric. */}
+              <Card className="flex h-[220px] w-[330px] flex-col rounded-[32px] p-8">
+                <stage.icon
+                  size={32}
+                  stroke={1.6}
+                  className="text-white/70"
+                  aria-hidden
+                />
+                <div className="mt-auto text-5xl leading-none font-semibold tabular-nums text-white/25">
+                  {stage.number}
                 </div>
-                <div className="mt-3 text-base leading-snug text-white/60">
-                  {stage.line}
+                <div className="mt-4 text-3xl leading-tight font-semibold text-balance text-white">
+                  {stage.heading}
                 </div>
               </Card>
             </StaggerItem>
@@ -84,7 +77,7 @@ export function AnnualHow() {
 
         {/* The flow line runs under the three cards, so the loop reads as one
             left-to-right move without crossing the card text. */}
-        <div aria-hidden className="relative mt-5 h-2">
+        <div aria-hidden className="relative mt-6 h-2">
           <m.div
             className={`absolute top-1/2 h-px w-full origin-left ${BRAND_GRADIENT}`}
             initial={{ scaleX: 0 }}
@@ -107,33 +100,34 @@ export function AnnualHow() {
         </div>
       </div>
 
-      <Reveal step={1} delay={0.5} className="mt-3">
-        <p className="text-sm text-white/55">
+      <Reveal step={1} delay={0.5} className="mt-4">
+        <p className="text-base text-white/55">
           The whole loop happens in a browser tab.
         </p>
       </Reveal>
 
-      <Reveal step={2} className="mt-6">
-        <Card className="w-[1038px] p-5">
-          <Stagger
-            step={2}
-            staggerChildren={0.08}
-            className="flex flex-wrap gap-2"
+      <div className="mt-10 flex gap-3">
+        {WAYS.map((way, index) => (
+          <m.div
+            key={way}
+            className="rounded-full bg-white/[0.07] px-5 py-2.5 text-lg text-white/85"
+            initial={{ opacity: 0, y: 14, scale: 0.94 }}
+            animate={
+              step >= 2
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 14, scale: 0.94 }
+            }
+            transition={{
+              type: "spring",
+              bounce: 0,
+              duration: 0.55,
+              delay: step >= 2 ? index * 0.08 : 0,
+            }}
           >
-            {WAYS.map((way) => (
-              <StaggerItem
-                key={way}
-                className="rounded-full bg-white/[0.07] px-3 py-1 text-sm text-white/80"
-              >
-                {way}
-              </StaggerItem>
-            ))}
-          </Stagger>
-          <div className="mt-3 text-xs text-white/45">
-            Four ways to ask, depending on how big the job is.
-          </div>
-        </Card>
-      </Reveal>
+            {way}
+          </m.div>
+        ))}
+      </div>
     </Shell>
   );
 }

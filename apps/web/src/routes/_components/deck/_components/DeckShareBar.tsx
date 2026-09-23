@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { m } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
   IconCopy,
   IconPlayerStop,
   IconUsers,
 } from "@tabler/icons-react";
-import { cn, motionSpring } from "@eva/ui";
+import { cn, motionFast, motionSpring } from "@eva/ui";
 import type { DeckTheme } from "./DeckPrimitives";
 import { DECK_TONES } from "./deckTone";
 import type { LiveShare } from "./useLiveShare";
@@ -24,14 +24,32 @@ interface DeckShareBarProps {
  * competing with the slide.
  */
 export function DeckShareBar({ share, basePath, theme }: DeckShareBarProps) {
+  const code = share.sessionCode;
+  const live = share.sessionState !== "none" && code !== undefined;
+
+  return (
+    <AnimatePresence>
+      {live && code !== undefined && (
+        <SharePanel
+          key="deck-share-bar"
+          share={share}
+          basePath={basePath}
+          theme={theme}
+          code={code}
+        />
+      )}
+    </AnimatePresence>
+  );
+}
+
+function SharePanel({
+  share,
+  basePath,
+  theme,
+  code,
+}: DeckShareBarProps & { code: string }) {
   const [copied, setCopied] = useState(false);
   const tone = DECK_TONES[theme];
-
-  if (share.sessionState === "none" || share.sessionCode === undefined) {
-    return null;
-  }
-
-  const code = share.sessionCode;
 
   function copyLink() {
     const url = `${window.location.origin}${basePath}?session=${code}`;
@@ -44,8 +62,12 @@ export function DeckShareBar({ share, basePath, theme }: DeckShareBarProps) {
       .catch(() => undefined);
   }
 
+  // The pill stays visually small — `hit-target` grows the pressable area to
+  // 40×40 with a pseudo-element instead. `gap-5` is what keeps two of those
+  // grown areas (8px of bleed each) from meeting in the middle.
   const action = cn(
-    "rounded-full px-3 py-1 text-xs transition-colors",
+    "hit-target inline-flex items-center rounded-full px-3 py-1 text-xs",
+    "motion-press active:scale-[0.96]",
     tone.surface,
     tone.text,
   );
@@ -54,9 +76,14 @@ export function DeckShareBar({ share, basePath, theme }: DeckShareBarProps) {
     <m.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      // A smaller, faster departure than the arrival — the bar should not draw
+      // the room's eye on its way out.
+      exit={{ opacity: 0, y: 4, transition: motionFast }}
       transition={motionSpring}
       className={cn(
-        "pointer-events-auto absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-xs backdrop-blur-md",
+        // Concentric: the bar and its buttons are both pills, so the outer
+        // radius is the inner radius plus the 8px of padding by construction.
+        "pointer-events-auto absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-5 rounded-full px-4 py-2 text-xs backdrop-blur-md",
         tone.surface,
         tone.muted,
       )}
@@ -64,7 +91,9 @@ export function DeckShareBar({ share, basePath, theme }: DeckShareBarProps) {
       {share.isHost ? (
         <>
           <LiveDot />
-          <span className={cn("font-mono tracking-widest", tone.text)}>
+          <span
+            className={cn("font-mono tracking-widest tabular-nums", tone.text)}
+          >
             {code}
           </span>
           <button type="button" onClick={copyLink} className={action}>
@@ -92,7 +121,9 @@ export function DeckShareBar({ share, basePath, theme }: DeckShareBarProps) {
         <>
           <IconUsers size={14} className={tone.muted} />
           <span className={tone.text}>{followerLabel(share.sessionState)}</span>
-          <span className={cn("font-mono tracking-widest", tone.muted)}>
+          <span
+            className={cn("font-mono tracking-widest tabular-nums", tone.muted)}
+          >
             {code}
           </span>
           <button type="button" onClick={share.leave} className={action}>
