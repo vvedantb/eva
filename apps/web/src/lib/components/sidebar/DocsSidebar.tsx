@@ -46,10 +46,7 @@ import {
   skipConfirmTitle,
   useAltHeld,
 } from "@/lib/confirm";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 
@@ -105,12 +102,17 @@ export function DocsSidebar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastCreateRequestIdRef = useRef(createRequestId ?? 0);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     `createRequestId` is a bumped counter from the shell's "New document"
+     command, which lives outside this subtree; the ref guard makes repeats
+     no-ops. */
   useEffect(() => {
     if (createRequestId === undefined) return;
     if (createRequestId <= lastCreateRequestIdRef.current) return;
     lastCreateRequestIdRef.current = createRequestId;
     setIsCreateDialogOpen(true);
   }, [createRequestId]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   // PR recaps live under Reviews now — Documents is non-recap only.
   const filteredDocs = docs
@@ -235,7 +237,10 @@ export function DocsSidebar({
       await createDocFromPrd({ title, prdContent });
     } catch (error) {
       console.error("PRD upload failed", error);
-      mutationError("Couldn't read that file. Pick a plain text file.", "doc-upload");
+      mutationError(
+        "Couldn't read that file. Pick a plain text file.",
+        "doc-upload",
+      );
     }
   };
 
@@ -310,7 +315,9 @@ export function DocsSidebar({
               size={20}
               className="mx-auto mb-2 text-muted-foreground opacity-50"
             />
-            <p className="text-sm font-medium text-foreground">No documents yet</p>
+            <p className="text-sm font-medium text-foreground">
+              No documents yet
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Create one to get started.
             </p>
@@ -346,7 +353,9 @@ export function DocsSidebar({
                             className={sidebarNavLinkClass(isSelected)}
                           >
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate">{doc.title}</span>
+                              <span className="block truncate">
+                                {doc.title}
+                              </span>
                               {doc.source ? (
                                 <span className="block truncate text-[10px] text-muted-foreground">
                                   {docSourceLabel(doc.source)}

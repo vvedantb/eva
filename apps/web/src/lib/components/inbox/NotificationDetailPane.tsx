@@ -29,6 +29,9 @@ function NotificationPagePreview({ href }: { href: string }) {
   // The src only seeds the first document; later hrefs arrive via postMessage.
   const [initialHref] = useState(href);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     Drives an iframe: either postMessage into the embedded document or swap its
+     `src`. Both are writes to another window, not state this component owns. */
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
@@ -44,6 +47,7 @@ function NotificationPagePreview({ href }: { href: string }) {
       frame.setAttribute("src", href);
     }
   }, [href]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {

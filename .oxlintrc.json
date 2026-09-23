@@ -6,6 +6,10 @@
     {
       "name": "anti-slop",
       "specifier": "./scripts/oxlint-plugin-anti-slop/index.mjs"
+    },
+    {
+      "name": "no-effect",
+      "specifier": "eslint-plugin-react-you-might-not-need-an-effect"
     }
   ],
   "categories": {
@@ -33,6 +37,15 @@
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "off",
     "anti-slop/no-widen-then-assert": "error",
+    "no-effect/no-derived-state": "error",
+    "no-effect/no-chain-state-updates": "error",
+    "no-effect/no-event-handler": "error",
+    "no-effect/no-adjust-state-on-prop-change": "error",
+    "no-effect/no-reset-all-state-on-prop-change": "error",
+    "no-effect/no-pass-live-state-to-parent": "error",
+    "no-effect/no-pass-data-to-parent": "error",
+    "no-effect/no-external-store-subscription": "error",
+    "no-effect/no-initialize-state": "error",
     "eva/no-is-record": "error",
     "eva/no-json-parse": "warn",
     "eva/no-double-cast": "warn",
