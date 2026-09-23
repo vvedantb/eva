@@ -328,29 +328,6 @@ export const taskExecutionWorkflow = workflow.define({
       });
       runFinalized = true;
 
-      // Project tasks only. A quick task lands in business_review here, so its
-      // diff is not final yet — its description is written when the reviewer
-      // moves the task to code_review (`agentTasks.updateStatus`), the same
-      // point a session writes one on "Send for review". Project tasks share
-      // one PR across many tasks and never make that transition, so they keep
-      // writing it per run. Best-effort: the static body stays if this fails.
-      if (args.projectId && completionPrUrl && sandboxId) {
-        try {
-          await step.runAction(internal.github.generatePrDescription, {
-            installationId: args.installationId,
-            repoOwner: data.repoOwner,
-            repoName: data.repoName,
-            prUrl: completionPrUrl,
-            sandboxId,
-            repoId: args.repoId,
-          });
-        } catch (descriptionError) {
-          console.error(
-            `[task-workflow] run=${args.runId} generatePrDescription failed: ${descriptionError instanceof Error ? descriptionError.message : String(descriptionError)}`,
-          );
-        }
-      }
-
       if (!args.projectId && !finalSuccess) {
         try {
           await step.runMutation(
@@ -431,16 +408,27 @@ export const taskExecutionWorkflow = workflow.define({
         }
       }
     } finally {
-      // A quick-task sandbox is left running after its run so the reviewer can
-      // chat, preview and open a terminal without waiting for a cold resume.
+      // A run's sandbox is left running afterwards so the reviewer can chat,
+      // preview and open a terminal without waiting for a cold resume.
       // Recording it as active is what points the reviewer UI at the live
       // sandbox — and what lets the idle auto-stop sweep reap it later. Both
-      // exits come through here so a failed run keeps its sandbox too.
-      if (!args.projectId && sandboxId) {
-        await step.runMutation(internal.taskWorkflow.markTaskSandboxActive, {
-          taskId: args.taskId,
-          sandboxId,
-        });
+      // exits come through here so a failed run keeps its sandbox too. Quick
+      // tasks record it on the task, project tasks on the shared project.
+      if (sandboxId) {
+        if (args.projectId) {
+          await step.runMutation(
+            internal.taskWorkflow.markProjectSandboxActive,
+            {
+              projectId: args.projectId,
+              sandboxId,
+            },
+          );
+        } else {
+          await step.runMutation(internal.taskWorkflow.markTaskSandboxActive, {
+            taskId: args.taskId,
+            sandboxId,
+          });
+        }
       }
       await step.runMutation(internal.taskWorkflow.clearActiveWorkflow, {
         taskId: args.taskId,

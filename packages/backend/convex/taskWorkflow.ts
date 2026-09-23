@@ -8,6 +8,7 @@ export {
   saveSandboxId,
   saveTaskSandboxId,
   markTaskSandboxActive,
+  markProjectSandboxActive,
   clearTaskSandbox,
   scheduleDeploymentTracking,
   updateProjectSandbox,

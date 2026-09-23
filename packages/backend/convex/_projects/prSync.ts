@@ -1,4 +1,5 @@
 import type { Doc } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 import type { MutationCtx } from "../_generated/server";
 import { extractPrNumberFromUrl } from "../_github/prUrl";
 import {
@@ -75,6 +76,23 @@ export async function scheduleProjectPrSync(
     },
     transition,
   );
+
+  // Write the reviewer-facing description here rather than at the end of every
+  // task run: this is the moment the project's work is offered for review, so
+  // the diff is final and it costs one model call per review instead of one
+  // per task (mirrors a quick task's code_review transition and a session's
+  // "Send for review"). Scheduled, not awaited, and best-effort — a stopped
+  // sandbox just logs and leaves the static PR body in place.
+  if (enteringCodeReview && project.sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
+      installationId: repo.installationId,
+      repoOwner: repo.owner,
+      repoName: repo.name,
+      prUrl: project.prUrl,
+      sandboxId: project.sandboxId,
+      repoId: project.repoId,
+    });
+  }
 }
 
 /** Maps GitHub PR webhook actions to project review phases (inbound sync). */

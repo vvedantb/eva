@@ -179,9 +179,19 @@ export const updateProjectSandbox = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
     await ctx.db.patch(args.projectId, {
       sandboxId: args.sandboxId,
       lastSandboxActivity: Date.now(),
+      // The run has just booted this sandbox, so a `closed` left over from an
+      // earlier stop (a user Stop, or last night's auto-stop sweep) is stale.
+      // Clearing it back to "no stop recorded" is what lets
+      // `markProjectSandboxActive` flip the project to `active` when the run
+      // winds down; a `closed` written *during* the run still wins, because it
+      // is written after this point. `stopping` and `active` are left alone.
+      ...(project?.reviewProjectSandboxStatus === "closed"
+        ? { reviewProjectSandboxStatus: undefined }
+        : {}),
     });
     return null;
   },
@@ -234,6 +244,41 @@ export const markTaskSandboxActive = internalMutation({
       sandboxId: args.sandboxId,
       reviewTaskSandboxStatus: "active",
       updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+/** Project counterpart of {@link markTaskSandboxActive}: a project task's run
+ * also leaves its sandbox up, so the project row has to say so or the reviewer
+ * UI shows a stopped sandbox (and the idle auto-stop sweep, which only reaps
+ * `active` projects, leaks the VM). Same guards: never resurrect a sandbox that
+ * is being torn down, never claim one the project has already moved off. */
+export const markProjectSandboxActive = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    sandboxId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) return null;
+    if (
+      project.sandboxId !== undefined &&
+      project.sandboxId !== args.sandboxId
+    ) {
+      return null;
+    }
+    if (
+      project.reviewProjectSandboxStatus === "stopping" ||
+      project.reviewProjectSandboxStatus === "closed"
+    ) {
+      return null;
+    }
+    await ctx.db.patch(args.projectId, {
+      sandboxId: args.sandboxId,
+      reviewProjectSandboxStatus: "active",
+      lastSandboxActivity: Date.now(),
     });
     return null;
   },
