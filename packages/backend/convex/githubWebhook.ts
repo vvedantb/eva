@@ -2,7 +2,10 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { notifySubscribers } from "./taskSubscribers";
+import {
+  notifyProjectSubscribers,
+  notifySubscribers,
+} from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
 import type { Doc } from "./_generated/dataModel";
 import { preferPersistedSandboxId } from "./_sandbox/resolveExistingSandboxId";
@@ -447,31 +450,36 @@ export const handlePrClosed = internalMutation({
         });
       }
 
-      const notificationTitle = args.merged
-        ? `PR merged — "${t.title}" moved to done`
-        : `PR closed — "${t.title}" moved to cancelled`;
-      const notificationMessage = args.merged
-        ? `GitHub merged ${args.prUrl}. Task moved to done.`
-        : `GitHub closed ${args.prUrl} without merge. Task moved to cancelled.`;
-      await notifySubscribers(ctx, {
-        taskId: t._id,
-        type: args.merged ? "task_complete" : "system",
-        title: notificationTitle,
-        message: notificationMessage,
-        repoId: t.repoId,
-        projectId: t.projectId,
-      });
+      // Project PRs notify once for the project below — a merge would otherwise
+      // fire one notification per task in the project.
+      if (!isProjectPr) {
+        const notificationTitle = args.merged
+          ? `PR merged — "${t.title}" moved to done`
+          : `PR closed — "${t.title}" moved to cancelled`;
+        const notificationMessage = args.merged
+          ? `GitHub merged ${args.prUrl}. Task moved to done.`
+          : `GitHub closed ${args.prUrl} without merge. Task moved to cancelled.`;
+        await notifySubscribers(ctx, {
+          taskId: t._id,
+          type: args.merged ? "task_complete" : "system",
+          title: notificationTitle,
+          message: notificationMessage,
+          repoId: t.repoId,
+          projectId: t.projectId,
+        });
 
-      // Record the PR event on the task's activity timeline so the merge/close
-      // is visible there, not just as a notification. System-driven, so no actor.
-      await logTaskActivity(
-        ctx,
-        t._id,
-        undefined,
-        "pr",
-        undefined,
-        args.merged ? "merged" : "closed",
-      );
+        // Record the PR event on the task's activity timeline so the merge/close
+        // is visible there, not just as a notification. System-driven, so no
+        // actor.
+        await logTaskActivity(
+          ctx,
+          t._id,
+          undefined,
+          "pr",
+          undefined,
+          args.merged ? "merged" : "closed",
+        );
+      }
 
       // Quick tasks: a merged/closed PR makes the task read-only, so stop any
       // live preview sandbox now (mirrors handleSessionPrEvent) and then
@@ -523,26 +531,29 @@ export const handlePrClosed = internalMutation({
         await ctx.db.patch(task.projectId, { phase: newPhase });
       }
 
-      // No task changed status on an unmerged close, so record the PR event on
-      // the task that opened the PR — otherwise the close leaves no trace.
-      if (!args.merged) {
-        await notifySubscribers(ctx, {
-          taskId: task._id,
-          type: "system",
-          title: `PR closed — "${project?.title ?? "project"}" moved to cancelled`,
-          message: `GitHub closed ${args.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
-          repoId: task.repoId,
-          projectId: task.projectId,
-        });
-        await logTaskActivity(
-          ctx,
-          task._id,
-          undefined,
-          "pr",
-          undefined,
-          "closed",
-        );
-      }
+      // One notification for the project as a whole, never one per task, and a
+      // single activity entry on the task that opened the PR so the merge/close
+      // still leaves a trace on the timeline.
+      const projectTitle = project?.title ?? "project";
+      await notifyProjectSubscribers(ctx, {
+        projectId: task.projectId,
+        type: args.merged ? "task_complete" : "system",
+        title: args.merged
+          ? `PR merged — "${projectTitle}" moved to done`
+          : `PR closed — "${projectTitle}" moved to cancelled`,
+        message: args.merged
+          ? `GitHub merged ${args.prUrl}. The project moved to done, along with its tasks.`
+          : `GitHub closed ${args.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
+        repoId: task.repoId,
+      });
+      await logTaskActivity(
+        ctx,
+        task._id,
+        undefined,
+        "pr",
+        undefined,
+        args.merged ? "merged" : "closed",
+      );
     }
 
     await ctx.db.patch(eventId, {
