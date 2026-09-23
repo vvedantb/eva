@@ -2,13 +2,16 @@ import { use } from "react";
 import { motion, type Variants } from "motion/react";
 import { SlideStepContext } from "../_components/SlideShell";
 
+/** `--motion-ease-out`, as a bezier tuple `motion/react` accepts. */
+const INSIGHT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 const wordVariants: Variants = {
   hidden: { opacity: 0, y: 8, filter: "blur(8px)" },
   show: {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.45, ease: INSIGHT_EASE },
   },
 };
 
