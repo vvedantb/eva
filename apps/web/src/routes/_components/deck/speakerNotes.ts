@@ -89,6 +89,100 @@ Figures: comparison reflects our own use, September 2026. Product names are thei
   "15-closing": `Close on the one fact that carries the whole argument: the deck itself was built the way everything else was.
 Detail: hold here rather than rushing to questions. If the room takes one thing away, it is that the tool was good enough to build its own presentation. Do not add new material at this point; the numbers have already been made.`,
 
+  "friday-b01-ask": `Nothing else in the deck shows the tool actually being used, so this is the slide that does it: a sentence in, working software out.
+→ Step 1: the cloud workspace. Eva takes the sentence away and builds it somewhere that is not anyone's laptop, so nothing has to be installed and nothing can be broken locally.
+→ Step 2: the live preview. This is the moment a non-technical colleague can judge the work themselves, rather than reading a summary of it. You try it, you ask for changes, and the same loop runs again.
+→ Step 3: the closing line. Leave it in the room.
+Detail: the resting state is the ask itself, typed in plain English into an ordinary chat box. There is no form, no ticket, no queue and no handover, and the words on screen are the exact words a person would use to a colleague. If asked what happens to the sentence, Eva reads the codebase, writes the change, runs the checks, and only then offers it back.`,
+
+  "friday-b02-preview": `A preview you can click through is the difference between trusting a summary and seeing the thing.
+→ Step 1: the frame walks phone, then tablet, then desktop, and the rotate and screenshot buttons arrive with it. Anyone can check how a change looks on the device their colleagues actually use, without owning that device.
+→ Step 2: the note pin drops. Click any element on the preview and leave a note attached to that element, so feedback points at the thing rather than describing where it is.
+Detail: a preview outlives the conversation that made it. Leave the session, come back later and the preview is still there, which is what makes it usable for someone who only has ten minutes in the afternoon. None of this is merged: it is a proposal you can walk through before anyone agrees to it.
+Figures: click-to-comment and the phone, tablet and desktop widths landed 21 July 2026; the device toolbar with rotate and screenshot 25 August 2026; previews surviving a session being left 14 August 2026.`,
+
+  "friday-b03-inbox": `Work that needs a person used to be scattered across email, chat and half-remembered tabs; now there is one list.
+→ Step 1: a row selects and the linked page appears in the pane beside it. Nothing opens in a new tab and nothing is lost: the list and the thing itself sit side by side, and the whole list is driven by the arrow keys.
+→ Step 2: the browser tab and its count. New notifications play a two-note chime that still works when Eva is in a background tab, and the number of unread items is written on the browser tab itself, so the answer to is anything waiting for me is visible without switching to it.
+Detail: a row can be marked unread again, which matters because reading something is not the same as dealing with it.
+Figures: the two-pane inbox with in-place preview and arrow-key navigation, 20 August 2026; the chime and the unread count on the browser tab, both 1 August 2026; marking a row unread again, 29 August 2026.`,
+
+  "friday-b04-documents": `Plans, notes and specifications live in Eva rather than beside it, and several people can be in the same one at once.
+→ Step 1: the comment pin anchors to a line. Comments attach to the text they are about and can be resolved once they are dealt with, so a document does not accumulate stale argument.
+→ Step 2: the version list. Every edit is kept, so you can see what the document said before and who changed it.
+Detail: the resting state is two people typing in the same paragraph at the same time — that is real-time collaborative editing, not a file being passed around. There is also a suggestion mode, where an edit is proposed rather than applied and someone else accepts it, which is how a plan gets reviewed without being overwritten. Eva reads these documents while it works, so writing the plan down is also how you brief it.
+Figures: collaborative editing, anchored comments, suggestion mode and version history all landed 10 June 2026.`,
+
+  "friday-b05-plan": `The fastest way to make a big job safe is to ask for the plan before the work, and asking is now all it takes.
+→ Step 1: the control disappears and a sentence takes its place. The plan tab appears on its own once a plan exists, so there is nothing to switch on and nothing to switch off afterwards.
+Detail: the resting state is the old machinery — a mode dropdown above the prompt box that people had to know about, find and remember to turn off again. Removing it is the pattern behind most of this deck: fewer controls, more plain English. Say why a plan is worth asking for at all — it is far cheaper to argue with a paragraph than with a finished feature.
+Figures: the plan mode dropdown was removed on 23 August 2026 and replaced by simply asking.`,
+
+  "friday-b06-projects": `When a job is really several jobs, the shape of it has to be visible, which is what the roadmap is for.
+→ Step 1: the bars fill. Each bar is one job, and how far it has filled is how far along it is, so the state of the whole piece of work reads in one glance.
+→ Step 2: the zoom changes and the bars re-scale. Quarter, month or week, depending on whether you are looking at the year or at this afternoon.
+Detail: there is also a jump straight to today, and the roadmap can be dragged along to move through time, which is what makes a long project navigable rather than a wall of bars. Jobs run in the order they are laid out, so a later job can depend on an earlier one finishing.
+Figures: the projects timeline was rebuilt as a roadmap with completion bars, quarter, month and week zoom, a jump to today and drag-to-pan, 17 June 2026.`,
+
+  "friday-b07-three-ways": `One engine, three sizes of ask — and the choice is about the size of the job, not about the type of person asking.
+→ Step 1: a session. A running conversation about one codebase that stays open for as long as the work does, so you can iterate, change your mind and come back to it.
+→ Step 2: a project. Several jobs in order, which is the roadmap on the previous slide.
+→ Step 3: the closing line. Nobody has to learn three products.
+Detail: the resting state is a quick task — one job, start to finish, with no conversation expected. Describe it once and the finished work comes back for review. If asked which to use, the honest answer is start with a quick task and move up only when the job turns out to be bigger than one ask.`,
+
+  "friday-b08-reviews": `Checking the work no longer means leaving for another tool, which is the last place the old workflow leaked out of Eva.
+→ Step 1: a comment lands on the change. A bundle of changes can be read, commented on and acted upon here, laid out the way the room already recognises from GitHub.
+→ Step 2: the search overlay. One search reaches every codebase, team, project, task, session, document and artifact, so finding something does not depend on remembering where it was filed.
+Detail: keyboard shortcuts are rebindable, so the people in the tool all day can set it up the way their hands expect. The point of the slide is that the whole loop — ask, build, preview, review, merge — happens in one browser tab.
+Figures: reviewing and answering bundles of changes inside Eva, 3 August 2026; search across everything, 24 July 2026; rebindable keyboard shortcuts, 6 August 2026.`,
+
+  "friday-b09-automations": `Some work does not need a person to start it, so it now starts itself overnight.
+→ Step 1: the dial sweeps from three to five in the morning and the five routines light up in order. Say that these are ready-made, and that installing one takes a click rather than each person retyping the same instructions.
+→ Step 2: the review cards land. The routines do not just run, they open their own bundles of changes, so the morning starts with finished work to look at.
+Detail: the Automations Hub is a shelf of routines anyone on a codebase can install; before it, the same instruction had to be written out again by every person who wanted it. The five are staggered rather than fired together so they do not all compete for the same machines at once. Times are UTC.
+Figures: the Automations Hub landed 6 August 2026. The five maintenance routines — find critical bugs, add test coverage, generate docs, improve code structure and a code-quality review — were added 21 August 2026, staggered between 03:00 and 05:00 UTC.`,
+
+  "friday-b10-standup": `Every weekday morning a short summary of the day before is written for you, in plain English.
+→ Step 1: the summary writes itself into the card. About 150 words, and deliberately readable by someone who has never opened the codebase.
+→ Step 2: the Today and Yesterday timeline slides in. That is the /today page, where the summaries stack up day by day.
+Detail: the routine is read-only. It looks at what happened and writes about it; it cannot change anything. The first version read like an engineer's log, so the instructions were rewritten the next day to ban file names and jargon outright. The words on the card are a stand-in for the shape of a real summary, not a real one.
+Figures: the 08:00 UTC weekday summary started 20 August 2026 and was rewritten for non-technical readers on 21 August 2026.`,
+
+  "friday-b11-skills": `A skill is a command someone has already written down, so nobody has to explain the same job twice.
+→ Step 1: the picker opens out of the composer and the commands stagger in. The point is that there is nothing to remember: type a slash and choose.
+Detail: skills are turned on per codebase from Settings, with no change to the code itself, and they then appear for everyone working in it. Claude's own built-in skills were added to the same picker a fortnight later, so the list is not limited to what we wrote ourselves. The six on screen are real commands from this codebase.
+Figures: Eva's own skills landed 6 August 2026; Claude's built-in skills joined the picker on 22 August 2026.`,
+
+  "friday-b12-ave": `One permanent chat sits above all the others and keeps track of them for you.
+→ Step 1: the lines draw out to six running agents. From this one chat you can list them, look inside any of them, send one a message and stop one, across every codebase you have, and it is told when each of them finishes.
+→ Step 2: two of them report back with a tick. You do not have to go looking; finished work comes to you.
+Detail: it started as a master chat that could also write code itself, and that turned out to be the wrong shape — a supervisor that keeps editing stops supervising. Six days later it was renamed Manager Ave and limited to supervising only.
+Figures: the master chat landed 18 August 2026; it became Manager Ave, restricted to supervising, on 24 August 2026.`,
+
+  "friday-b13-reliability": `Things still go wrong; what changed is how long you are left not knowing.
+→ Step 1: the hanging spinner gives up. An agent that had died used to leave the chat saying Working for up to two hours. A watchdog now confirms the process really is dead and closes the turn within minutes, and whatever the agent had already written is kept rather than thrown away.
+→ Step 2: the retry card. A turn that stalls with nothing written at all now tries once more on its own before anyone is told.
+→ Step 3: the usage-limit card. When a model's usage limit is reached, the chat says so, says when it resets, and offers a teammate's shared account in one click.
+Detail: let the first card sit for a moment before clicking — the discomfort of the spinner is the argument. The account switch was built for sessions first and extended to quick tasks and projects a week later.
+Figures: watchdog 30 July 2026; stalled empty turns retry once, 26 August 2026; usage-limit card and one-click account switch 4 September 2026, extended to quick tasks and projects 10 September 2026.`,
+
+  "friday-b14-mobile": `Work gets raised when you think of it, which is usually not when you are sat at a desk.
+→ Step 1: the desktop frame folds down into a phone and the content reflows into a single pane. Pinch-zoom was put back, and the controls were moved where a thumb can reach them.
+Detail: be precise if asked — there is no app to install. This is the same web app in a phone browser; a separate mobile app was abandoned and deleted in May 2026. Every route was audited rather than a few important ones, and a second pass followed a fortnight later.
+Figures: the responsive audit landed 17 August 2026, with a second pass on 4 September 2026. The target was every route at 640 pixels wide and below.`,
+
+  "friday-b15-artifacts": `Not everything an agent makes belongs in a codebase; some of it just needs to be looked at.
+→ Step 1: the saved page becomes a hosted page with a link. The agent builds a self-contained page and hands back an address anyone on the team can open.
+→ Step 2: the tabs arrive on the chat. Artifacts and Documents now sit beside the conversation, so what was made is next to where it was asked for.
+Detail: useful for a one-off report, a comparison table or a small interactive view — things that would otherwise be pasted into a message and lost. The tabs came much later than the hosting: for three months the pages existed but were awkward to find again.
+Figures: hosted artifacts landed 17 June 2026; every chat gained its own Artifacts and Documents tabs on 12 September 2026.`,
+
+  "friday-b16-close": `Close on three concrete things to do on Monday, not on a summary of the deck.
+→ Step 1: raise one quick task. One sentence describing what you want is enough to start.
+→ Step 2: open the inbox. Finished work is waiting there rather than needing to be chased.
+→ Step 3: review what is waiting, then the closing line lands. Say it and stop.
+Detail: do not add new material here. If anyone asks where to start, the answer is the smallest annoying thing they already know about. The gradient behind the list moves slowly on purpose; let it run while the room reads.`,
+
   // ---------------------------------------------------------------------------
   // Annual CDM deck
   // ---------------------------------------------------------------------------
@@ -176,9 +270,161 @@ Figures: 176 pieces of finished work waiting to be checked in, against 455 alrea
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
 Figures: 4,705 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.`,
 
+  "annual-b01-day-one": `The data layer the product still runs on was settled on the very first day, not migrated to later.
+→ Step 1: the three commits stack in. The first commit, then the schema for projects and tasks, then the queries and mutations behind it.
+→ Step 2: the closing line. Nothing in the deck that follows required that decision to be unpicked.
+Detail: this is the one slide where the hashes are worth showing, because anyone can check them. Say that the same schema, extended many times, is still what every session, quick task and project is stored in. Note for accuracy if pressed on the wording: the first commit was at 16:36 and the schema commit at 20:15 on the same evening, so "the first hour" is the sense of it rather than a stopwatch reading.
+Figures: 5468954a6 Initial commit, 317b85cd5 projects and tasks schema, 5467d4ca2 Convex queries and mutations, all on 11 January 2026.`,
+
+  "annual-b02-first-week": `Both of the two ideas the product is built out of arrived inside the first week.
+→ Step 1: quick tasks land on 12 January, one day after the first commit. One prompt, one result, start to finish.
+→ Step 2: sessions land on 14 January, and the closing line follows. A session is a running conversation about one codebase, and everything since has been an elaboration of those two shapes.
+Detail: projects and automations came later, but both are built out of quick tasks and sessions rather than alongside them. The point to land is stability of concept — eight months on, nobody has needed a third primitive.
+Figures: quick tasks appear in the code on 12 January 2026 and sessions on 14 January 2026, within four days of the first commit on 11 January 2026.`,
+
+  "annual-b03-q1": `The first quarter was about getting a usable surface in front of people, and it was the heaviest building of the year.
+→ Step 1: the quarter total counts up. 1,758 changes in three months, before anyone outside the project was using it.
+→ Step 2: the three months appear and March is picked out. 1,070 changes in one month is the single biggest month of the year, and it is where most of the interface came from.
+→ Step 3: the streaming figure. Live output used to be written back to the database 60 to 120 times during a single run; separating it into its own small table cut that to two writes.
+Detail: the streaming change is the first example in the deck of a fix that was measured rather than felt. It is also why long sessions stopped slowing the whole workspace down.
+Figures: January 280, February 408, March 1,070, totalling 1,758 changes shipped. Live streaming moved to its own table on 5 February 2026.`,
+
+  "annual-b04-load": `Building the surface was only half the job; the surface then had to arrive quickly on someone else's machine.
+→ Step 1: both bars collapse and the figures count down. The main bundle fell from 1,355 kB to 273 kB, and the heaviest single screen from 1,048 kB to 84 kB.
+→ Step 2: the closing line, which is the only thing a non-technical room needs from the numbers.
+Detail: the work was automatic code splitting in the router, lazy-loaded code blocks, and removing a cyclic dependency. Nothing was taken out of the product — the same screens are there, they simply load when they are opened rather than all at once.
+Figures: main bundle 1,355 kB to 273 kB, a fall of 80%; heaviest screen 1,048 kB to 84 kB, a fall of 92%. Bundle optimisation, 31 March 2026.`,
+
+  "annual-b05-q2": `The quietest quarter of the year was not a slow one, it was the quarter the tool stopped being single-player.
+→ Step 1: documents. Comments anchored to a passage, suggestion mode, and version history, all on the same day.
+→ Step 2: the projects roadmap, which is where several pieces of work in order become one thing a person can see.
+→ Step 3: Testing Arena opened to everyone, so trying a change stopped being a developer-only act.
+Detail: 943 changes is the lowest quarter in the year, and that is the point — the three months went on making existing work solid and shared rather than adding new surface. If asked whether momentum was lost, the answer is on the next slide: the quarter after it was the biggest of the three.
+Figures: April 377, May 336, June 230, totalling 943 changes shipped. Documents with comments, suggestions and version history 10 June 2026; projects roadmap 17 June 2026; Testing Arena opened to everyone 17 June 2026.`,
+
+  "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
+→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and the Design slide takes that apart phase by phase.
+→ Step 2: August, 877 changes. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system that the whole interface now sits on.
+→ Step 3: September, 139 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
+Detail: September is a part month, so do not read the drop as a slowdown. The theme across all three is that nothing here adds a new thing to do — it makes the existing things safe to depend on.
+Figures: July 1,052, August 877, September 139, totalling 2,068 changes shipped, to 16 September 2026.`,
+
+  "annual-b07-volume": `The year was not steady, and the shape of it explains more than the total does.
+→ Step 1: March and July stay lit while the rest dim, and the line names them. March was the surface being built; July was the cutover that moved every workspace to a new engine.
+→ Step 2: the total counts up. 4,769 changes across nine months, or roughly nineteen a day including weekends.
+Detail: the two troughs are as informative as the peaks. June is the consolidation quarter's low point, and September only looks thin because it stops on the 16th. Do not let the room read the last bar as a decline — say the part-month caveat aloud rather than leaving it to the footnote.
+Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 139. Total 4,769 changes shipped, September to the 16th.`,
+
+  "annual-b08-rename": `A breath between chapters: the project people now call Eva spent its first five months under another name.
+→ Step 1: Conductor dissolves into Eva. Say only that the name changed when the repository moved.
+→ Step 2: the two dates. The rename on 3 June and the internal packages catching up on 24 July.
+Detail: keep this short — it is a pause, not an argument. If it is worth a sentence, it is that the six-week gap between the public rename and the internal one was deliberate, because renaming every package is the kind of wide, risky change that is better done on its own than mixed into feature work.
+Figures: renamed from Conductor to Eva when the repository moved on 3 June 2026; internal packages renamed from @conductor/* to @eva/* on 24 July 2026.`,
+
+  "annual-d01-security": `Signing in was never the problem; knowing whose data you were looking at once you were in was.
+→ Step 1: the guards land and the rail draws. Every check moved into shared helpers, so a new surface inherits the boundary rather than remembering to add it.
+→ Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
+→ Step 3: the closing line. On 19 August the boundary was exercised against real production data, not only against tests, which is the difference between believing it and knowing it.
+Detail: the 8 August audit found sign-in enforced everywhere but ownership checked inconsistently across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. The sign-in flow was hardened in the same pass: explicit consent, a stronger proof-key exchange, registered return addresses and refresh tokens bound to the client that asked for them. If asked why this slide exists in a report about building quickly, the answer is that speed without a boundary is how a small team creates a large incident.
+Figures: 2 critical and 48 high production dependency warnings down to 0 critical and 2 high. Ownership audit 8 August 2026; verified against production data 19 August 2026.`,
+
+  "annual-d02-design-system": `A shared component library is what stops every new screen being a fresh argument about how things should look.
+→ Step 1: the two figures count up. 110 files and 18,197 lines, which is the size of the thing every screen is assembled from.
+→ Step 2: the closing line. Consistency is now the starting condition rather than a clean-up job.
+Detail: the conventions are written down, not folklore — surfaces are separated by tone rather than by decorative lines, there is one shadow system, and motion runs on shared tokens. Two supporting moves made it possible: Tailwind v4 was adopted across the web app and the browser extension on 5 August 2026, and the project moved to a single icon library on 2 August 2026. The tiles are the library in miniature: four colours, four surface tones and four of the shapes every screen is built from.
+Figures: 110 files and 18,197 lines in the shared component library. Measured 23 September 2026.`,
+
+  "annual-d03-motion": `Ten motion changes landed on one day, and the point of them was to stop motion being a matter of taste.
+→ Step 1: all ten samples restart together on one duration, one curve and one rest. Let the grid run — the synchronisation is the argument, so stop talking while it happens.
+→ Step 2: the closing line. Motion is a house style now, not an opinion held per component.
+Detail: the ten changes were house transition defaults, tokenised durations, gesture physics, focus rings and drag sensors, all on 7 August 2026. Before that, every component picked its own timing, which is what the resting state of this slide is showing. This is the most purely animated slide in the deck; it is meant to be watched rather than read, so do not narrate the tiles.
+Figures: ten motion changes, 7 August 2026.`,
+
+  "annual-d04-frontend-perf": `Waiting is the tax everyone pays on every change, so three separate waits were measured and cut.
+→ Step 1: the local build falls from 28 seconds to 2.6 seconds, on 20 August 2026. That is the wait between making a change and seeing it.
+→ Step 2: the public landing page's first download falls from 516 kB to 362 kB, on 8 August 2026. That is the wait a visitor pays.
+→ Step 3: the code checker's false warnings fall from 8,862 to none. A checker nobody reads is a checker that is not running.
+Detail: a further 489 kB of icons plus 1.2 MB of other code came off the application's first load on 4 August 2026, which is in the footnote rather than on the stage because three falling figures is already the limit of what a room will hold.
+Figures: build 28 s to 2.6 s and 8,862 false warnings to 0, both 20 August 2026; landing page 516 kB to 362 kB, 8 August 2026; 489 kB of icons and a further 1.2 MB off the first load, 4 August 2026.`,
+
+  "annual-d05-scale": `The size of what now exists, in units a non-engineer can weigh rather than in lines of code.
+→ Step 1: the two supporting figures. 2,151 TypeScript files, and 18,197 lines in the shared component library alone.
+→ Step 2: the closing line. Eight months, one codebase, one person directing the work.
+Detail: 363 screens is the number that usually lands hardest, because most people can picture what one screen costs to build by hand. 71 data tables is the shape of the business the product now models, and 976 backend functions is what sits behind them. The 9,854 lines of release notes matter for a different reason: the record was written at the time, which is what makes every other figure in this deck checkable.
+Figures: 2,936 tracked files, 2,151 TypeScript files, 363 screens, 71 data tables, 976 backend functions, 18,197 lines in the shared component library, 9,854 lines of written release notes. Measured 23 September 2026.`,
+
+  "annual-d06-abandoned": `Deciding not to do something is design work, and it only counts if it is written down.
+→ Step 1: the framework evaluation. A formal assessment on 17 July 2026 with the verdict recorded verbatim as do not adopt.
+→ Step 2: unifying design sessions, cancelled on 29 July 2026 and replaced by a mode which was itself removed on 23 August — the same question answered, reversed, and reversed again.
+→ Step 3: the closing line. The plans stay in writing, so the same argument is not re-run from memory a quarter later.
+Detail: the resting state is the plan to move background workers to another host, abandoned because the new architecture removed the problem the move was meant to solve — the cheapest kind of cancellation. The third card is the honest one: reversing a decision twice is not a good look, and volunteering it is what makes the other two credible. Seven cancelled plans are kept in the repository in full.
+Figures: framework evaluation 17 July 2026; design sessions cancelled 29 July 2026, replacement mode removed 23 August 2026; seven cancelled plans in total.`,
+
+  "annual-d07-lessons": `Two sentences from the project's own notes, and both say the same thing about where the difficulty actually lives.
+→ Step 1: cross-fade to the second quote. Autonomy is an infrastructure decision — how far an agent can be trusted to run is set by what surrounds it, not by which model is chosen.
+→ Step 2: both sit together and the closing line lands. Read them once, then stop talking.
+Detail: the first quote is the one to dwell on, because it is the opposite of the usual conversation. Most of this deck is evidence for it: the durable lifecycle slide, the security boundary, the enforced quality bar. None of those are about the model. Say plainly that both lines are verbatim from notes written during the year, not composed for this deck.
+Figures: from the project's own written notes.`,
+
+  "annual-d08-durable": `Most reports of the tool being stuck were one structural fault, and it was fixed once rather than patched repeatedly.
+→ Step 1: the same turn runs again. It is interrupted at the same point, survives, and finishes — because the lifecycle is durable and fenced rather than held in one process's memory.
+→ Step 2: the closing line. Interrupted stopped meaning lost.
+Detail: the resting state is what used to happen — a turn breaks part-way and the interface sits on Working with nothing behind it. On 19 August 2026 every turn was given one durable, fenced lifecycle, and the rollout closed the remaining gaps on 23 August. Fencing is the part that matters: a turn that has been superseded cannot come back and write over the one that replaced it. This is the structural fix behind most stuck on Working reports, and it pairs with the Debugging slide, where the same symptom was chased case by case before the cause was addressed once.
+Figures: one durable lifecycle for every turn, 19 August 2026; remaining gaps closed 23 August 2026.`,
+
   // ---------------------------------------------------------------------------
   // Intro to Eva deck
   // ---------------------------------------------------------------------------
+  "annual-c01-providers": `Nothing here depends on one supplier staying cheap, fast or available.
+→ Step 1: the model count. Four providers, twenty-one models, one picker inside Eva.
+→ Step 2: the point. If a supplier raises its prices, falls behind or goes down, the work moves to another without anyone changing how they work.
+Detail: the columns are the shipped catalogue, not a wish list; legacy entries kept only so old sessions still load are excluded. Each provider needs an account behind it, which is the accounts slide. A session remembers its last model, so nobody chooses every time.
+Figures: Claude 7, Codex 4, OpenCode 4, Cursor 6 — 21 models in all. Repository catalogue at 16 September 2026.`,
+
+  "annual-c02-sdks": `Every provider was moved off reading text out of a terminal and onto its own official connection.
+→ Step 1: the three connections convert, one at a time — Cursor on 5 August, Codex on 12 August, OpenCode on 14 August.
+→ Step 2: the old command-line runner is struck out and removed on 18 August, so no half-abandoned path is left to rot.
+Detail: the old method started each provider as a command-line program and read its printed output, so any change to that output broke Eva silently. The official connections report events, errors and completion directly, which is why failures now surface as failures instead of silence. The OpenCode entry is the line to quote: the last CLI subprocess is gone.
+Figures: Cursor 5 August 2026, Codex 12 August 2026, OpenCode 14 August 2026; the old runner deleted 18 August 2026.`,
+
+  "annual-c03-handoff": `A choice of supplier is worth little if changing your mind means starting again.
+→ Step 1: the conversation card moves from one provider to the other and the messages do not change.
+Detail: each provider keeps its own private record of the conversation inside the workspace, so before this a mid-conversation switch started the new provider blind. Replies are now stamped with the model that produced them, and on a switch only the turns the incoming provider has not seen are passed across, capped in size and clearly marked. The chat shows a badge on the turn where the handover happened, so the transcript stays honest about who wrote what.
+Figures: cross-provider handoffs landed 24 August 2026.`,
+
+  "annual-c04-accounts": `Provider capacity is bought per person, so the useful question is whether it can be shared.
+→ Step 1: each colleague attaches their own provider account, so their work spends their own allowance.
+→ Step 2: one account is shared with the team and a second person draws from it.
+Detail: an account is attached once and then stays with that person's sessions, tasks and projects. Sharing is deliberate and controlled by the owner, not automatic — a new session does not quietly pick up a teammate's account. Switching account mid-conversation keeps the conversation and rotates the running process, so the next reply is charged to the right place.
+Figures: per-user provider accounts 17 July 2026; sharing an account with the team 7 August 2026.`,
+
+  "annual-c05-mcp": `Eva is not only something people open; it is something other tools and agents can drive.
+→ Step 1: reading. Anything connected can list the work in flight and see what each piece is doing.
+→ Step 2: acting. It can send a message into an existing session, task or project, start and stop workspaces, and run code across several tools in one pass.
+→ Step 3: the newest ring. It can make typed judgements — a calibrated score or category applied the same way every time — and draw an interactive panel straight into a chat.
+Detail: this is what lets one agent supervise others, which is how Manager Ave works. The value for a stakeholder is that Eva plugs into whatever else the organisation runs rather than being a closed box. How that is kept safe is the next slide.
+Figures: chat into an existing session, task or project 27 August 2026; drive sandboxes 28 August 2026; run code across tools 3 September 2026; typed judgements 17 September 2026; interactive panels in chat 21 September 2026.`,
+
+  "annual-c06-mcp-security": `Opening an interface to the outside is only safe if who is asking is enforced rather than assumed.
+→ Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
+→ Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice — once at the interface and again at the data layer.
+Detail: sign-in is the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets are used, one for the passes and one for the connection to the data layer, so one leak does not compromise the other. Every request also re-checks that the user still exists, secret comparisons are constant-time, error messages give nothing away, and the endpoints are rate limited.
+Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.`,
+
+  "annual-c07-sandbox-economics": `Every piece of work gets its own cloud workspace, so the discipline is making sure they do not quietly accumulate.
+→ Step 1: while the work is alive its snapshot never expires, and only the most recent one is kept.
+→ Step 2: when a session or task ends, the workspace is deleted after a 48-hour grace period. Reopening the work inside that window cancels the deletion.
+→ Step 3: a weekly sweep clears anything the ordinary path missed.
+Detail: short-lived workspaces expire after a day instead. This is also part of why the provider changed: the previous provider's snapshots could not capture running processes or a seeded database, so every start re-ran the setup. Deleting a workspace now actively purges its snapshots rather than trusting the provider to cascade.
+Figures: one snapshot retained per workspace, 48-hour grace period, weekly sweep, one-day expiry for short-lived workspaces. Snapshot lifecycle documented in the repository.`,
+
+  "annual-c08-occ": `A slow product looked like a capacity problem and turned out to be the system arguing with itself.
+→ Step 1: the symptom. Three days of live traffic, and almost all the load was writes colliding with other writes rather than reads being expensive.
+→ Step 2: the cause. Two parts of the system were writing the same row at the same moment, so each one made the other retry.
+→ Step 3: the fix, in two figures. Lease renewals fell from about 6.7 writes a second while streaming to roughly one a minute, and live cursor writes from 20 a second to at most 6.7.
+Detail: use this slide if anyone asks whether faults are diagnosed or merely patched. The evidence came from searching live traffic, not from a report. Renewals now write only on a phase change or when less than half the lease remains; cursor writes are throttled and ignore movement too small to see.
+Figures: retries over three days — presence heartbeats 30, streaming touches 24, lease renewals 18, stall watchdog 17. Fixes landed 24 August 2026.`,
+
   "intro-01-title": `Welcome, and the one line to open on: Eva is a platform for AI agents that actually ship code.
 Detail: say what it is not before what it is. Not a chatbot that suggests diffs, and not an autocomplete. These are agents that clone your repo, run your tests, and open real pull requests. The word lands out of a blur, so let it settle before speaking.`,
 
