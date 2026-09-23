@@ -98,7 +98,6 @@ export function TaskDetailInline({
     latestPrError,
     latestDeployment,
     baseBranch,
-    setBaseBranch,
     executionError,
     showStopConfirm,
     setShowStopConfirm,
@@ -456,7 +455,6 @@ export function TaskDetailInline({
                 users={users}
                 projects={projects}
                 baseBranch={baseBranch}
-                setBaseBranch={setBaseBranch}
                 latestDeployment={latestDeployment}
                 hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}
