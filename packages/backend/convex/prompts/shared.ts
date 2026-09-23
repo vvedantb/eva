@@ -54,20 +54,37 @@ export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
 
 /**
- * Every visual change must be named in the reply, especially one the agent
- * chose rather than was asked for. A trophy icon and a `green.1` alert wash
- * nobody requested rode along inside a large tabs feature, were never
- * mentioned, and shipped to production unreviewed — a diff that size hides a
- * one-line icon swap. Explicitly overrides RESPONSE_LENGTH_INSTRUCTION so the
- * concise-reply rule cannot swallow these lines.
+ * Ask before inventing a visual, and name every visual you changed.
+ *
+ * A trophy icon and a `green.1` alert wash nobody requested rode along inside a
+ * large tabs feature, were never mentioned, and shipped to production
+ * unreviewed — a diff that size hides a one-line icon swap.
+ *
+ * Deliberately narrow. "Ask whenever unsure" produces a turn that stalls on
+ * every judgement call, and a user who learns to wave questions through; the
+ * trigger here is only a *visible* choice the ask did not make, where an
+ * existing pattern cannot settle it. Both tools are named because blocking
+ * `AskUserQuestion` only exists on session runs
+ * (`callback-src/config.ts` `BLOCKING_QUESTIONS_ENABLED`) and only on the Claude
+ * SDK provider, while `render_ui` is on every sandbox token — the trophy came
+ * from a quick task on a Cursor model, where the first tool does not block.
+ *
+ * The report half explicitly overrides RESPONSE_LENGTH_INSTRUCTION so the
+ * concise-reply rule cannot swallow those lines.
  */
-export const UI_CHANGE_DISCLOSURE_INSTRUCTION = `
+export const VISUAL_CHANGE_INSTRUCTION = `
+
+## Visual decisions: ask first, then report
+When the work needs a visible choice the user did not make — which icon, which colour, which wording, where a new control goes — do not invent one silently.
+1. **Reuse first.** If the codebase already solves the same thing, copy that pattern and say you did. This settles most cases without a question.
+2. **Otherwise ask, before you build it.** \`AskUserQuestion\` when you have it (it blocks and waits for a real answer); otherwise the eva MCP tool \`render_ui\` with two or three \`reply\` buttons naming the concrete options. Ask once, with options, not an open-ended "what would you like?".
+3. **Never stall.** If nobody can answer (an autonomous run), pick the closest existing pattern, build it, and report it as a choice. A blocked turn helps nobody.
+This is for visible choices only. Implementation details — naming, file layout, how you structure the code — are yours to make; asking about those wastes the user's attention and trains them to wave questions through.
 
 ## Visual changes (always report)
 Name every visible change you made, however small, and separately flag the ones you chose rather than were asked for — icon, colour, spacing, radius, shadow, copy, empty/loading state, hover/focus/disabled state, motion, layout. A one-line icon swap inside a large feature diff is exactly what slips through review and reaches production unseen.
 - Write invented choices as "chose X (not asked for)" with what you picked and why.
-- This overrides the reply-length limit: these lines are always in scope.
-- Prefer reusing the existing pattern for the same thing over inventing a new one, and say which you did.`;
+- This overrides the reply-length limit: these lines are always in scope.`;
 
 /**
  * Nudge towards `render_ui`. Appended to the shared chat-turn prompt, so
