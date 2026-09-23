@@ -15,6 +15,11 @@ import {
   pickSnapshotCredentialRepoId,
   type AppRepoPickFields,
 } from "./_githubRepos/sandboxRepoPick";
+import {
+  PREVIEW_LOGIN_EMAIL_ENV,
+  PREVIEW_LOGIN_PASSWORD_ENV,
+  type PreviewLoginCredentials,
+} from "./previewLoginConfig";
 
 /** Resolves and decrypts all env vars (team + repo), including sandbox-excluded ones. Repo vars override team vars. */
 export async function resolveAllEnvVars(
@@ -39,6 +44,22 @@ export async function resolveAllEnvVars(
   const repoEnvVars = decryptCredentialMap(repoVars);
 
   return { ...teamEnvVars, ...repoEnvVars };
+}
+
+/**
+ * Sign-in credentials the preview proxy autofills, or null when unset. Read
+ * from the full env-var set (not the sandbox one) because the password is
+ * marked sandbox-excluded: it belongs to the proxy, not the app's process env.
+ */
+export async function resolvePreviewLogin(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<PreviewLoginCredentials | null> {
+  const vars = await resolveAllEnvVars(ctx, repoId);
+  const email = vars[PREVIEW_LOGIN_EMAIL_ENV]?.trim() ?? "";
+  const password = vars[PREVIEW_LOGIN_PASSWORD_ENV] ?? "";
+  if (!email && !password) return null;
+  return { email, password };
 }
 
 /** Resolves and decrypts sandbox-eligible env vars (team + repo). Repo vars override team vars. */

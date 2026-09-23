@@ -41,6 +41,7 @@ import {
   buildAttachmentPromptNote,
 } from "./attachments";
 import {
+  resolvePreviewLogin,
   resolveProviderAccountCredentialRevision,
   resolveSandboxCredentials,
 } from "../envVarResolver";
@@ -1039,6 +1040,10 @@ export const getPreviewUrl = action({
             inject: args.navigationSync === true,
             // Browser-facing port for /preview-auth (public proxy, not listen).
             authPort: fixedVercelProxyPort ?? args.port,
+            // Each preview gets its own `*.vercel.run` host, which the browser
+            // password manager cannot match against a password saved on any
+            // other preview, so the proxy fills the app's sign-in form itself.
+            login: await resolvePreviewLogin(ctx, args.repoId),
           },
           fixedVercelProxyPort,
         );

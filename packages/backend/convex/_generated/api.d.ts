@@ -380,6 +380,7 @@ import type * as presence from "../presence.js";
 import type * as presentations from "../presentations.js";
 import type * as previewGrant from "../previewGrant.js";
 import type * as previewGrantConfig from "../previewGrantConfig.js";
+import type * as previewLoginConfig from "../previewLoginConfig.js";
 import type * as projectChatWorkflow from "../projectChatWorkflow.js";
 import type * as projectInterviewWorkflow from "../projectInterviewWorkflow.js";
 import type * as projectSandboxWorkflow from "../projectSandboxWorkflow.js";
@@ -831,6 +832,7 @@ declare const fullApi: ApiFromModules<{
   presentations: typeof presentations;
   previewGrant: typeof previewGrant;
   previewGrantConfig: typeof previewGrantConfig;
+  previewLoginConfig: typeof previewLoginConfig;
   projectChatWorkflow: typeof projectChatWorkflow;
   projectInterviewWorkflow: typeof projectInterviewWorkflow;
   projectSandboxWorkflow: typeof projectSandboxWorkflow;
