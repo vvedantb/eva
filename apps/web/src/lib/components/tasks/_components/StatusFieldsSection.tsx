@@ -84,8 +84,8 @@ interface StatusFieldsSectionProps {
   isBlocked: boolean | undefined;
   users: FunctionReturnType<typeof api.users.listAll> | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
+  /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
   baseBranch: string;
-  setBaseBranch: (v: string) => void;
   /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
   hasActiveRun: boolean;
@@ -104,7 +104,6 @@ export function StatusFieldsSection({
   users,
   projects,
   baseBranch,
-  setBaseBranch,
   latestDeployment,
   hasActiveRun: _hasActiveRun,
   hasRuns,
@@ -491,7 +490,6 @@ export function StatusFieldsSection({
                 <BranchSelect
                   value={baseBranch}
                   onValueChange={(val) => {
-                    setBaseBranch(val);
                     updateTask({ id: taskId, baseBranch: val });
                   }}
                   className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"

@@ -105,13 +105,9 @@ export function NotificationRow({
 
   // Keyboard stepping (arrow keys in the inbox) must keep the selected row in
   // view; nearest-block scrolling is a no-op when it is already visible.
-  /* eslint-disable no-effect/no-event-handler --
-     Scrolls the DOM row into view; selection can also move from a keyboard
-     handler that lives on the list, so the row has no event of its own. */
   useEffect(() => {
     if (selected) rowRef.current?.scrollIntoView({ block: "nearest" });
   }, [selected]);
-  /* eslint-enable no-effect/no-event-handler */
 
   // Right-click opens the menu instead of selecting: `contextmenu` does not
   // fire the row button's `onClick`, so the notification is neither opened nor

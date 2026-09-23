@@ -136,10 +136,6 @@ export function DocInterviewDialog({
     }
   }
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
-     `messages` is a Convex live query: the interview workflow appending a row
-     on the server is what closes the dialog or chains generation, and no local
-     handler sees it. */
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage?.role === "assistant" && lastMessage.content) {
@@ -161,7 +157,6 @@ export function DocInterviewDialog({
       }
     }
   }, [messages, onOpenChange, answers, doc._id, doc.title, startDocGenerate]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -176,10 +171,6 @@ export function DocInterviewDialog({
     });
   };
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-derived-state --
-     The dialog can be opened from several call sites (and from a route), so the
-     "ask the first question" kick-off belongs to the open transition, not to any
-     one trigger's click handler. */
   useEffect(() => {
     if (!open || readOnly || hasTriggeredRef.current) return;
     if (messages.length === 0) {
@@ -187,7 +178,6 @@ export function DocInterviewDialog({
       askQuestion([]);
     }
   }, [open]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-derived-state */
 
   const handleAnswer = async (answer: string) => {
     const lastAssistantMsg = [...messages]

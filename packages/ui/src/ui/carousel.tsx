@@ -104,19 +104,11 @@ const Carousel = React.forwardRef<
       [scrollPrev, scrollNext],
     );
 
-    /* eslint-disable no-effect/no-event-handler, no-effect/no-pass-data-to-parent --
-       Embla creates its instance from a DOM ref, so the parent cannot own it:
-       handing the instance up once it exists is the only way to expose the
-       imperative API. */
     React.useEffect(() => {
       if (!api || !setApi) return;
       setApi(api);
     }, [api, setApi]);
-    /* eslint-enable no-effect/no-event-handler, no-effect/no-pass-data-to-parent */
 
-    /* eslint-disable no-effect/no-external-store-subscription --
-       Embla emits on its own event bus and has no getSnapshot; subscribing and
-       mirroring the snap list is the API it ships. */
     React.useEffect(() => {
       if (!api) return;
 
@@ -129,7 +121,6 @@ const Carousel = React.forwardRef<
         api.off("select", onSelect);
       };
     }, [api, onSelect]);
-    /* eslint-enable no-effect/no-external-store-subscription */
 
     return (
       <CarouselContext.Provider

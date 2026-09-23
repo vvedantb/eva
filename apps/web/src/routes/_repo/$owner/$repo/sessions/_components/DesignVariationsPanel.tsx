@@ -70,9 +70,6 @@ export function DesignVariationsPanel({
     activeIframeRef.current = iframeRefs.current.get(activeTabIndex) ?? null;
   }, [activeTabIndex]);
 
-  /* eslint-disable no-effect/no-event-handler --
-     Repairs a `?variation=` value that the URL can carry before the variations
-     arrive from the server, so the trigger is the query landing. */
   useEffect(() => {
     if (
       latestVariations.length > 0 &&
@@ -81,7 +78,6 @@ export function DesignVariationsPanel({
       void setDesignParams({ variation: "0" });
     }
   }, [latestVariations.length, setDesignParams, tab]);
-  /* eslint-enable no-effect/no-event-handler */
 
   return (
     <div className="flex h-full min-w-0 flex-col">

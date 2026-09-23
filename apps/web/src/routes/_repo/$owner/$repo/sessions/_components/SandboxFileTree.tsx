@@ -95,9 +95,6 @@ export function SandboxFileTree({
 
   // Keep highlight + scroll in sync when `?file=` changes while mounted
   // (chat chip). Re-setting the same path is a nuqs no-op — no loop.
-  /* eslint-disable no-effect/no-event-handler --
-     Drives the tree library imperatively (select + scroll) when `?file=`
-     changes, including from a chat chip in another subtree. */
   useEffect(() => {
     if (!selectedPath) return;
     const item = model.getItem(selectedPath);
@@ -107,7 +104,6 @@ export function SandboxFileTree({
     }
     model.scrollToPath(selectedPath, { offset: "nearest" });
   }, [selectedPath, model]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const setAllExpanded = (next: boolean) => {
     for (const directoryPath of collectDirectoryPaths(paths)) {

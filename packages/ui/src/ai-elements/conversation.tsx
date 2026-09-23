@@ -104,14 +104,10 @@ export const ConversationScrollButton = ({
     }
   }, []);
 
-  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
-     The reset also has to cancel the pending show timer, which is a side effect
-     and cannot run during render. */
   useEffect(() => {
     clearShowTimer();
     setShowScrollToEnd(false);
   }, [resetKey, clearShowTimer]);
-  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   useEffect(() => {
     if (isAtBottom) {

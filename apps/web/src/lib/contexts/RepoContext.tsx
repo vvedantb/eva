@@ -97,9 +97,6 @@ export function RepoProvider({
     appName,
   });
 
-  /* eslint-disable no-effect/no-event-handler --
-     Canonicalises the URL the user landed on (bookmark, shared link, back
-     button) once the repo row arrives from Convex — no click involved. */
   // Bare /owner/repo URLs for monorepos without a visible root row resolve to an
   // app repo — canonicalize to the public slash form (router rewrite maps it
   // to the internal `--` segment for matching).
@@ -122,7 +119,6 @@ export function RepoProvider({
       replace: true,
     });
   }, [repo, appName, owner, name, location.pathname, navigate, passive]);
-  /* eslint-enable no-effect/no-event-handler */
 
   /**
    * Public path prefix for the active repo. Monorepo apps use slash form
@@ -135,7 +131,11 @@ export function RepoProvider({
     ? `/${owner}/${name}/${resolvedAppName}`
     : `/${owner}/${name}`;
 
-  const loadState = resolveLoadState(repo, { basePath, owner, name }, passive);
+  const loadState = resolveLoadState(
+    repo,
+    { basePath, owner, name },
+    passive,
+  );
 
   return (
     <RepoLoadStateContext.Provider value={loadState}>

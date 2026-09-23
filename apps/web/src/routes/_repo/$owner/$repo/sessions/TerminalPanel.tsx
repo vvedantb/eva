@@ -114,9 +114,6 @@ export function TerminalPanel({
   );
   // Prefer Convex sticky seed when this tab has no local scrollback yet.
   const seededHistoryRef = useRef(false);
-  /* eslint-disable no-effect/no-event-handler --
-     Seeds sessionStorage scrollback from the Convex sticky tail the first time
-     it arrives; both sides are stores outside React. */
   useEffect(() => {
     if (seededHistoryRef.current) return;
     if (stickyHistoryTail === undefined) return;
@@ -125,7 +122,6 @@ export function TerminalPanel({
       setTerminalHistory(stickyHistoryTail);
     }
   }, [stickyHistoryTail, terminalHistory.length, setTerminalHistory]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const terminalHistoryRef = useRef(terminalHistory);
   useEffect(() => {
@@ -242,16 +238,12 @@ export function TerminalPanel({
         // Vercel Console attaches via tmux; sessions usually start the server
         // from the backend into that tmux session. Tasks/projects still auto-
         // start here when isNewPty (no prior tmux session).
-        /* eslint-disable no-effect/no-event-handler --
-           Runs on the PTY websocket's connect handshake, which is a socket
-           event rather than anything React dispatched. */
         if (
           isNewPty &&
           runDevCommandOnConnect &&
           devCommand &&
           ws.readyState === WebSocket.OPEN
         ) {
-          /* eslint-enable no-effect/no-event-handler */
           terminalInstanceRef.current.writeln(
             "\x1b[33m* Starting dev server...\x1b[0m\r\n",
           );

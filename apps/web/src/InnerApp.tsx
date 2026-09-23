@@ -13,9 +13,6 @@ export function InnerApp({
 }) {
   const { isLoaded, isSignedIn } = useAuth();
 
-  /* eslint-disable no-effect/no-event-handler --
-     Clerk resolving the session is the event, and it happens outside React:
-     the cookie write and the router invalidation both have to follow it. */
   useEffect(() => {
     if (!isLoaded) return;
     writeSignedInHint(isSignedIn ?? false);
@@ -26,7 +23,6 @@ export function InnerApp({
       void router.invalidate();
     }
   }, [isLoaded, isSignedIn]);
-  /* eslint-enable no-effect/no-event-handler */
 
   // Returning signed-in users keep the previous behavior: hold paint until
   // the session is restored, so protected routes never flash the landing.

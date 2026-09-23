@@ -22,9 +22,6 @@ export function LocalChatDraftSync({
   const { textInput } = usePromptInputController();
   const isMountedRef = useRef(false);
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-pass-data-to-parent --
-     Same shape as ChatDraftSync: the editor value is provider-owned and changes
-     from several places, so persisting it lives here rather than in a handler. */
   useEffect(() => {
     if (!isMountedRef.current) {
       isMountedRef.current = true;
@@ -37,7 +34,6 @@ export function LocalChatDraftSync({
     const tokenized = mentionRef.current?.tokenize(visible) ?? visible;
     onSave(tokenized);
   }, [textInput.value]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-pass-data-to-parent */
   // Same dep rationale as ChatDraftSync: seed/skip only needs mount; mentionRef
   // is a stable ref; onSave identity changes are fine for a local write.
 

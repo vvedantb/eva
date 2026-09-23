@@ -206,9 +206,6 @@ export function ResizablePanelLayout({
     { enabled: hotkeyEnabled },
   );
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
-     `expandRightSignal` is a bumped counter from elsewhere in the tree, and the
-     response is an imperative `panel.resize()` on the layout library. */
   useEffect(() => {
     if (expandRightSignal === undefined || expandRightSignal === 0) return;
     if (isMobile) {
@@ -230,11 +227,7 @@ export function ResizablePanelLayout({
     railMinSizePx,
     rightPanelRef,
   ]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
-  /* eslint-disable no-effect/no-event-handler --
-     Re-applies a pixel snap on the layout library's panel handle, which only
-     reports its size after it has laid out. */
   // The rail can change width while it is on screen (the sandbox rail's label
   // preference). `Panel` re-registers with the new `collapsedSize`, but a panel
   // already snapped to the old pixel width is left sitting at it, so re-apply
@@ -251,7 +244,6 @@ export function ResizablePanelLayout({
       return;
     panel.resize(`${rightCollapsedSizePx}px`);
   }, [isMobile, railMinSizePx, rightCollapsedSizePx, rightPanelRef]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const handleResize = (size: PanelSize) => {
     // Hiding the panel (a kept-alive session shell going `display: none`) is not

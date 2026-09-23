@@ -98,11 +98,6 @@ export function ProjectChatTab({
     (m) => m.role === "assistant" && m.content && isSpecContent(m.content),
   );
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
-     `initialMessages` is a Convex live query, so the "event" happens on the
-     server: the interview workflow writing a row is what has to clear the
-     pending state and chain the spec mutation. There is no client event to
-     hang this off. */
   useEffect(() => {
     const lastMessage = initialMessages[initialMessages.length - 1];
     if (lastMessage?.role === "assistant" && lastMessage.content) {
@@ -134,7 +129,6 @@ export function ProjectChatTab({
     hasSpecMessage,
     hasActiveWorkflow,
   ]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -149,10 +143,6 @@ export function ProjectChatTab({
     });
   };
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-pass-data-to-parent --
-     Mount-only recovery: a project whose first question never came back (tab
-     closed mid-request) has no user event left to retry from, so the retry has
-     to fire when the component remounts. */
   useEffect(() => {
     if (isLocked || isLoading) return;
     const hasAssistant = initialMessages.some((m) => m.role === "assistant");
@@ -160,7 +150,6 @@ export function ProjectChatTab({
       void askQuestion();
     }
   }, []);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-pass-data-to-parent */
 
   const handleStartInterview = () => {
     void askQuestion();

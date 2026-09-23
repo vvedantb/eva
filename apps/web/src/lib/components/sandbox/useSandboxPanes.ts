@@ -123,14 +123,10 @@ export function useSandboxPanes({
   // the sandbox is inactive — TerminalView needs a slot to render its
   // "start the sandbox to view terminal" empty state. The mutation is
   // idempotent for concurrent viewers.
-  /* eslint-disable no-effect/no-event-handler --
-     The pane list is shared Convex state that any collaborator can empty, so
-     re-creating the default pane follows the live query, not a local action. */
   useEffect(() => {
     if (termIds.length > 0) return;
     void ensureDefaultTerminalPane({ owner });
   }, [termIds.length, ensureDefaultTerminalPane, owner]);
-  /* eslint-enable no-effect/no-event-handler */
 
   // Ensure a default preview pane exists even before the Preview tab is
   // selected, so the iframe can mount (hidden) and stay cached across tab
@@ -144,15 +140,11 @@ export function useSandboxPanes({
 
   // Reconcile active id if it points at a removed pane (or the console pane,
   // whose id can linger in localStorage from before this became user-only).
-  /* eslint-disable no-effect/no-event-handler --
-     Same reason: a pane can disappear because another collaborator closed it,
-     or because a stale id survived in localStorage. */
   useEffect(() => {
     if (userTermIds.length === 0) return;
     if (termActive && userTermIds.includes(termActive)) return;
     setTermActive(userTermIds[0]);
   }, [userTermIds, termActive, setTermActive]);
-  /* eslint-enable no-effect/no-event-handler */
 
   useEffect(() => {
     if (previewIds.length === 0) return;

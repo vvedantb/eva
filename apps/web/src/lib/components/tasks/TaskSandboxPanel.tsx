@@ -118,14 +118,10 @@ export function TaskSandboxPanel({
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
-  /* eslint-disable no-effect/no-event-handler --
-     "prd" is a session-only tab that can arrive from a deep link or persisted
-     state, so the redirect has to follow the prop rather than a click. */
   useEffect(() => {
     if (activeTab !== "prd") return;
     onTabChange("preview");
   }, [activeTab, onTabChange]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const tabBarValue = activeTab === "prd" ? "preview" : activeTab;
 
@@ -146,21 +142,21 @@ export function TaskSandboxPanel({
           onTabChange={handleTabChange}
           collapsed={collapsed}
           onToggle={onToggle}
-          onNewPreview={() => {
-            panes.handleNewPreview();
-            onTabChange("preview");
-          }}
-          newPreviewDisabled={panes.newPreviewDisabled}
-          enabledTabs={enabledTabs}
-          showFilesTab
-          showAgentsTab={hasAgents}
-          hasRunningAgents={hasRunningAgents}
-          artifactCount={artifactCount}
-          documentCount={documentCount}
-          agentBrowsingAt={viewState?.agentBrowsingAt}
-          fileList={fileList}
-          consoleDock={panes.consoleDock}
-          terminalPanel={terminalPanel}
+        onNewPreview={() => {
+          panes.handleNewPreview();
+          onTabChange("preview");
+        }}
+        newPreviewDisabled={panes.newPreviewDisabled}
+        enabledTabs={enabledTabs}
+        showFilesTab
+        showAgentsTab={hasAgents}
+        hasRunningAgents={hasRunningAgents}
+        artifactCount={artifactCount}
+        documentCount={documentCount}
+        agentBrowsingAt={viewState?.agentBrowsingAt}
+        fileList={fileList}
+        consoleDock={panes.consoleDock}
+        terminalPanel={terminalPanel}
         />
       }
     >
@@ -183,11 +179,7 @@ export function TaskSandboxPanel({
         >
           <SessionDocumentsPanel source={artifactSource} />
         </div>
-        <div
-          className={
-            !simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"
-          }
-        >
+        <div className={!simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"}>
           <FilesPanel
             sandboxId={sandboxId}
             repoId={repoId}
@@ -197,15 +189,10 @@ export function TaskSandboxPanel({
         </div>
         <div
           className={
-            !simpleView && tabBarValue === "agents"
-              ? "h-full min-h-0"
-              : "hidden"
+            !simpleView && tabBarValue === "agents" ? "h-full min-h-0" : "hidden"
           }
         >
-          <SandboxAgentsPanel
-            entity={{ kind: "task", taskId }}
-            agents={agents}
-          />
+          <SandboxAgentsPanel entity={{ kind: "task", taskId }} agents={agents} />
         </div>
         <SandboxPaneSlots
           activeTab={tabBarValue}

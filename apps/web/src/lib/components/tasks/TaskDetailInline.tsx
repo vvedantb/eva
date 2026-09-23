@@ -98,7 +98,6 @@ export function TaskDetailInline({
     latestPrError,
     latestDeployment,
     baseBranch,
-    setBaseBranch,
     executionError,
     showStopConfirm,
     setShowStopConfirm,
@@ -191,9 +190,6 @@ export function TaskDetailInline({
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const agentBrowsingAt = task?.agentBrowsingAt;
-  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent --
-     The agent taking the browser happens in the sandbox and arrives as a live
-     query change, so there is no local event to switch the tab from. */
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
@@ -203,7 +199,6 @@ export function TaskDetailInline({
     // Full deps are safe: the ref guard above makes re-runs no-ops, and a
     // disable comment here makes React Compiler skip the whole file.
   }, [agentBrowsingAt, handleSandboxTabChange]);
-  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent */
 
   if (isLoading) {
     return (
@@ -456,7 +451,6 @@ export function TaskDetailInline({
                 users={users}
                 projects={projects}
                 baseBranch={baseBranch}
-                setBaseBranch={setBaseBranch}
                 latestDeployment={latestDeployment}
                 hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}

@@ -48,10 +48,6 @@ export function ChatDraftSync({
   // Every tokenized content this client has put on the wire, newest last.
   const savedContentsRef = useRef<string[]>([]);
 
-  /* eslint-disable no-effect/no-event-handler --
-     The editor value is owned by `PromptInputProvider` and changes from typing,
-     paste, programmatic seeds and clear-on-send alike; this component exists
-     precisely to be the one place that persists all of them. */
   useEffect(() => {
     const tokenized =
       mentionRef.current?.tokenize(textInput.value) ?? textInput.value;
@@ -77,7 +73,6 @@ export function ChatDraftSync({
     // row server-side (handles clear-on-send and manual clearing alike).
     save(textInput.value);
   }, [textInput.value]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* eslint-enable no-effect/no-event-handler */
   // Intentionally omitting target/mentionRef/save/initialDisplay from
   // the dep array: target is stable (keyed to session id), mentionRef is a ref,
   // save identity changes are inconsequential for an autosave effect, and

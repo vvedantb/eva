@@ -114,13 +114,9 @@ function CalendarDayButton({
   const defaultClassNames = getDefaultClassNames();
   const ref = React.useRef<HTMLButtonElement>(null);
 
-  /* eslint-disable no-effect/no-event-handler --
-     react-day-picker decides which day is focused; moving DOM focus to match is
-     a browser side effect, not state the parent could hand down. */
   React.useEffect(() => {
     if (modifiers.focused) ref.current?.focus();
   }, [modifiers.focused]);
-  /* eslint-enable no-effect/no-event-handler */
 
   return (
     <button

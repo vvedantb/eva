@@ -82,9 +82,6 @@ export function NewSessionComposer() {
   // because setProviderAccountId writes to localStorage, which dispatches a
   // sync event — doing that during render triggers React's
   // event-handler-in-render error.
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-chain-state-updates --
-     See the comment above: setProviderAccountId writes localStorage and
-     dispatches a sync event, which React forbids during render. */
   useEffect(() => {
     if (accountsReady && !accountDefaulted) {
       const storedResolvesToOwn = accounts.some(
@@ -103,7 +100,6 @@ export function NewSessionComposer() {
     providerAccountId,
     setProviderAccountId,
   ]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-chain-state-updates */
 
   const handleSend = async (
     content: string,

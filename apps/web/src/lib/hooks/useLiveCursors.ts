@@ -67,9 +67,6 @@ export function useLiveCursors(
     presenceState?.some((member) => member.userId !== userId && member.online),
   );
 
-  /* eslint-disable no-effect/no-external-store-subscription --
-     The "store" is the clock: a timer that only runs while the tab is visible
-     and other people are online. There is no snapshot to subscribe to. */
   useEffect(() => {
     if (!hasRemoteOnline) return;
     let intervalId = 0;
@@ -100,19 +97,15 @@ export function useLiveCursors(
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [hasRemoteOnline]);
-  /* eslint-enable no-effect/no-external-store-subscription */
 
   const updateCursorRef = useRef(updateCursor);
   updateCursorRef.current = updateCursor;
 
-  const sendUpdate = useCallback(
-    (x: number, y: number) => {
-      if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
-      lastPosRef.current = { x, y };
-      updateCursorRef.current({ roomId, x, y }).catch(console.error);
-    },
-    [roomId],
-  );
+  const sendUpdate = useCallback((x: number, y: number) => {
+    if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
+    lastPosRef.current = { x, y };
+    updateCursorRef.current({ roomId, x, y }).catch(console.error);
+  }, [roomId]);
 
   useEffect(() => {
     if (!hasRemoteOnline) return;

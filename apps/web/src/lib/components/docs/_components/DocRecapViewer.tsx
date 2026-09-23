@@ -111,9 +111,6 @@ export function DocRecapViewer({
 
   const viewTab = canonicalizeRecapDocTab(activeTab);
 
-  /* eslint-disable no-effect/no-event-handler --
-     Redirects a legacy URL the user can arrive at from a bookmark or a link, so
-     the trigger is the route itself rather than anything clicked here. */
   // Legacy `/html` and `/content` on recap docs → `/recap` and `/summary`.
   useEffect(() => {
     if (activeTab === viewTab) return;
@@ -125,7 +122,6 @@ export function DocRecapViewer({
       replace: true,
     });
   }, [activeTab, basePath, doc, navigate, viewTab]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const handleDocTabChange = (value: string) => {
     if (value !== "recap" && value !== "summary") return;

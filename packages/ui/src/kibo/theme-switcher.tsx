@@ -3,7 +3,7 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { IconDeviceDesktop, IconMoon, IconSun } from "@tabler/icons-react";
 import { motion } from "motion/react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "../utils/cn";
 import { motionSpring } from "../utils/motion";
 
@@ -45,6 +45,8 @@ export const ThemeSwitcher = ({
     prop: value,
     onChange,
   });
+  const [mounted, setMounted] = useState(false);
+
   const handleThemeClick = useCallback(
     (themeKey: ThemeKey) => {
       setTheme(themeKey);
@@ -52,9 +54,14 @@ export const ThemeSwitcher = ({
     [setTheme],
   );
 
-  // No mount gate: eva is a client-rendered SPA, and the selected theme comes
-  // from props rather than anything browser-only, so there is no hydration
-  // mismatch to skip the first paint for.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <div
       className={cn(

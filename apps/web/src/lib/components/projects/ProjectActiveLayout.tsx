@@ -130,10 +130,6 @@ export function ProjectActiveLayout({
   }
   const allTags = [...tagSet].sort();
 
-  /* eslint-disable no-effect/no-event-handler --
-     The project can reach a terminal phase from the server (another client, or
-     the workflow itself), so tearing the sandbox down has to follow the live
-     query rather than a local click. */
   useEffect(() => {
     if (
       (project.phase === "completed" || project.phase === "cancelled") &&
@@ -144,7 +140,6 @@ export function ProjectActiveLayout({
       clearProjectSandbox({ id: project._id }).catch(() => {});
     }
   }, [project.phase, project.sandboxId, project._id, clearProjectSandbox]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const notFoundPane = (
     <EntityNotFound

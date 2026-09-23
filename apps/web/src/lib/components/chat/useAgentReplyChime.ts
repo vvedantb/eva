@@ -32,10 +32,6 @@ export function useAgentReplyChime({
     wasExecuting: boolean;
   } | null>(null);
 
-  /* eslint-disable no-effect/no-event-handler --
-     The edge being watched is the agent finishing its turn on the server, which
-     arrives as a live-query change; there is no local event to play the chime
-     from. */
   useEffect(() => {
     const watched = watchedRef.current;
     watchedRef.current = { conversationId, wasExecuting: isExecuting };
@@ -56,5 +52,4 @@ export function useAgentReplyChime({
     // The edge is tracked even while the flag is off, so turning it on mid-turn
     // chimes on the next finish rather than replaying a stale one.
   }, [conversationId, isExecuting, isOwnTurn, isEnabled]);
-  /* eslint-enable no-effect/no-event-handler */
 }

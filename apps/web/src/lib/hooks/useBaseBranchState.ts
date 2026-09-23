@@ -17,7 +17,12 @@ import { useRepo } from "@/lib/contexts/RepoContext";
  * tradeoff is that a deliberate pick no longer survives moving between sibling
  * apps of one monorepo — the wrong-branch merges cost more than that
  * convenience. Adjusting state during render is React's documented pattern for
- * derived-state resets, and matches `useTaskDetail`.
+ * derived-state resets.
+ *
+ * Only the create surfaces need state at all: there is no row to read from yet.
+ * An existing task's branch is read straight off the row in `useTaskDetail`,
+ * because a mirror there showed the repo default for a task that had picked a
+ * different branch.
  */
 export function useBaseBranchState(initialBranch?: string) {
   const { repo } = useRepo();

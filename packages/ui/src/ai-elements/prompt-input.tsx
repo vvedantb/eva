@@ -649,16 +649,11 @@ export const PromptInput = ({
 
   // Note: File input cannot be programmatically set for security reasons
   // The syncHiddenInput prop is no longer functional
-  /* eslint-disable no-effect/no-event-handler --
-     Clears the native file input's value, which React does not control; files
-     can also be dropped from the attachment list by the provider, so there is
-     no single handler to do it in. */
   useEffect(() => {
     if (syncHiddenInput && inputRef.current && files.length === 0) {
       inputRef.current.value = "";
     }
   }, [files, syncHiddenInput]);
-  /* eslint-enable no-effect/no-event-handler */
 
   /**
    * Drop handling binds to the nearest form, or to the document when

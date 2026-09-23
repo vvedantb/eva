@@ -69,9 +69,6 @@ export function FloatingToc({
     return () => cancelAnimationFrame(raf);
   }, [containerRef, content]);
 
-  /* eslint-disable no-effect/no-external-store-subscription --
-     Reads live scroll position and element geometry on every scroll/resize;
-     useSyncExternalStore would re-measure the whole heading list per render. */
   // Highlight the last heading that has scrolled past the top of the viewport.
   useEffect(() => {
     const container = containerRef.current;
@@ -104,7 +101,6 @@ export function FloatingToc({
       resizeObserver.disconnect();
     };
   }, [containerRef, items]);
-  /* eslint-enable no-effect/no-external-store-subscription */
 
   const handleClick = (id: string) => {
     const container = containerRef.current;

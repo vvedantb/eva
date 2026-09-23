@@ -21,7 +21,11 @@ import { compactRelativeTime } from "@eva/shared/dates";
 import { useQueryState } from "nuqs";
 import { branchParser } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
+import {
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import {
   SharedLayoutNav,
   SharedLayoutNavSurface,
@@ -31,7 +35,10 @@ import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverC
 import { entityPathSegment } from "@/lib/numId";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
+import {
+  mutationError,
+  mutationSuccess,
+} from "@/lib/utils/mutationToast";
 
 interface TestingArenaSidebarProps {
   repoId: Id<"githubRepos">;
@@ -57,16 +64,12 @@ export function TestingArenaSidebar({
   const [isTestingAll, setIsTestingAll] = useState(false);
   const lastCreateRequestIdRef = useRef(createRequestId ?? 0);
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
-     Same shape as DocsSidebar: a bumped counter from the shell's command bar,
-     guarded by a ref so repeats are no-ops. */
   useEffect(() => {
     if (createRequestId === undefined) return;
     if (createRequestId <= lastCreateRequestIdRef.current) return;
     lastCreateRequestIdRef.current = createRequestId;
     setShowTestAllModal(true);
   }, [createRequestId]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   // Only docs with content can be evaluated; the rest are skipped.
   const testableDocs = (docs ?? []).filter((d) => d.hasContent);

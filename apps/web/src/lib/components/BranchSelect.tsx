@@ -50,15 +50,11 @@ export function BranchSelect({
   );
   const listRef = useRef<HTMLDivElement>(null);
 
-  /* eslint-disable no-effect/no-event-handler --
-     Resets the popover list's DOM scroll position; the list only exists once
-     Radix has mounted it, so this cannot run in the trigger's click handler. */
   useEffect(() => {
     if (open && listRef.current) {
       listRef.current.scrollTop = 0;
     }
   }, [open]);
-  /* eslint-enable no-effect/no-event-handler */
 
   useEffect(() => {
     if (!isLoading && listRef.current) {
