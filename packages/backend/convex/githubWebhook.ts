@@ -396,7 +396,18 @@ export const handlePrClosed = internalMutation({
     }
 
     const task = await ctx.db.get(run.taskId);
-    if (!task || task.status === "done" || task.status === "cancelled") {
+    if (!task) {
+      await ctx.db.patch(eventId, { status: "skipped" });
+      return null;
+    }
+
+    // Project PRs still have to move the project's phase even when the task
+    // that opened them is already terminal, so only quick tasks bail early.
+    const isProjectPr = task.projectId !== undefined;
+    if (
+      !isProjectPr &&
+      (task.status === "done" || task.status === "cancelled")
+    ) {
       await ctx.db.patch(eventId, { status: "skipped" });
       return null;
     }
@@ -404,11 +415,16 @@ export const handlePrClosed = internalMutation({
     const newStatus = args.merged ? "done" : "cancelled";
     const now = Date.now();
 
+    // Closing a project PR without merging cancels the project only — its tasks
+    // keep the status they had so the work stays resumable. A merge still rolls
+    // every task in the project to done.
     const tasksToUpdate = task.projectId
-      ? await ctx.db
-          .query("agentTasks")
-          .withIndex("by_project", (q) => q.eq("projectId", task.projectId))
-          .collect()
+      ? args.merged
+        ? await ctx.db
+            .query("agentTasks")
+            .withIndex("by_project", (q) => q.eq("projectId", task.projectId))
+            .collect()
+        : []
       : [task];
 
     for (const t of tasksToUpdate) {
@@ -505,6 +521,27 @@ export const handlePrClosed = internalMutation({
         });
       } else {
         await ctx.db.patch(task.projectId, { phase: newPhase });
+      }
+
+      // No task changed status on an unmerged close, so record the PR event on
+      // the task that opened the PR — otherwise the close leaves no trace.
+      if (!args.merged) {
+        await notifySubscribers(ctx, {
+          taskId: task._id,
+          type: "system",
+          title: `PR closed — "${project?.title ?? "project"}" moved to cancelled`,
+          message: `GitHub closed ${args.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
+          repoId: task.repoId,
+          projectId: task.projectId,
+        });
+        await logTaskActivity(
+          ctx,
+          task._id,
+          undefined,
+          "pr",
+          undefined,
+          "closed",
+        );
       }
     }
 
