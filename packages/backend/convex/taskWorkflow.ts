@@ -7,7 +7,7 @@ export {
   appendRunLog,
   saveSandboxId,
   saveTaskSandboxId,
-  markTaskSandboxStopped,
+  markTaskSandboxActive,
   clearTaskSandbox,
   scheduleDeploymentTracking,
   updateProjectSandbox,
