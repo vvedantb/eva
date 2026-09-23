@@ -76,7 +76,9 @@ export const CommentMentionInput = forwardRef<
       initialSkillMap={initialSkillMap}
       disabled={disabled}
       className={cn(
-        "min-h-9 max-h-40 overflow-y-auto rounded-control border border-input bg-card px-3 py-2 pr-12 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35",
+        // Focus stays a single hairline (ring width 1): a 2px ring around an
+        // already-bordered box read as a heavy double edge.
+        "min-h-9 max-h-40 overflow-y-auto rounded-control border border-input bg-card px-3 py-2 pr-12 transition-[border-color,box-shadow] focus-visible:border-ring/45 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/20",
         className,
       )}
     />
