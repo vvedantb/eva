@@ -42,7 +42,6 @@ import {
   KNOWN_ENV_VARS,
   INFRA_ENV_VARS,
   CONVEX_ENV_VARS,
-  PREVIEW_LOGIN_ENV_VARS,
   SLOT_ENV_VAR_KEYS,
   filterSlotsForScope,
   type EnvVarScope,
@@ -267,7 +266,6 @@ export function EnvVarsTable({
   const agentSlots = filterSlotsForScope(KNOWN_ENV_VARS, scope);
   const infraSlots = filterSlotsForScope(INFRA_ENV_VARS, scope);
   const convexSlots = filterSlotsForScope(CONVEX_ENV_VARS, scope);
-  const previewLoginSlots = filterSlotsForScope(PREVIEW_LOGIN_ENV_VARS, scope);
   // Known slot keys are surfaced above — keep them out of the free-form table.
   const freeformVars = vars?.filter((v) => !SLOT_ENV_VAR_KEYS.has(v.key));
   const sandboxVars = (
@@ -551,18 +549,6 @@ export function EnvVarsTable({
               onRemove={onRemove}
               readOnly={readOnly}
               removeDialogDescription="The sandboxed app may lose access to its Convex backend until you paste it again."
-            />
-          </SettingsSection>
-          <SettingsSection title="Preview login">
-            <EnvVarProviderSlots
-              entries={previewLoginSlots}
-              defaultSandboxExclude
-              vars={vars}
-              onUpsert={onUpsert}
-              onReveal={onReveal}
-              onRemove={onRemove}
-              readOnly={readOnly}
-              removeDialogDescription="Previews will stop pre-filling this app's sign-in form."
             />
           </SettingsSection>
         </>

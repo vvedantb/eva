@@ -7,10 +7,6 @@ export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPu
 export { parseUsageLimitResetTime } from "./convex/_taskWorkflow/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
-  PREVIEW_LOGIN_EMAIL_ENV,
-  PREVIEW_LOGIN_PASSWORD_ENV,
-} from "./convex/previewLoginConfig";
-export {
   INCOMPLETE_PR_RECAP_MESSAGE,
   isIncompleteReadyRecap,
   isViewableRecap,

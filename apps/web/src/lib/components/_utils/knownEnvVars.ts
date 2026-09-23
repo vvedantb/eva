@@ -11,14 +11,12 @@ import {
 } from "@/lib/components/ui/providerLogos";
 import type { EnvVarSlotEntry } from "./envVarSlotTypes";
 import { CONVEX_ENV_VARS } from "./convexEnvVars";
-import { PREVIEW_LOGIN_ENV_VARS } from "./previewLoginEnvVars";
 import { INFRA_ENV_VARS } from "./infraEnvVars";
 import { slotEnvVarKeys } from "./envVarSlotTypes";
 
 export type { EnvVarSlotEntry, EnvVarScope } from "./envVarSlotTypes";
 export { filterSlotsForScope } from "./envVarSlotTypes";
 export { CONVEX_ENV_VARS } from "./convexEnvVars";
-export { PREVIEW_LOGIN_ENV_VARS } from "./previewLoginEnvVars";
 export { INFRA_ENV_VARS } from "./infraEnvVars";
 
 /**
@@ -69,12 +67,7 @@ export const KNOWN_ENV_VARS: ReadonlyArray<EnvVarSlotEntry> = [
   },
 ];
 
-/** Keys owned by slots — hidden from the free-form table. */
+/** Agent + infra + Convex keys owned by slots — hidden from the free-form table. */
 export const SLOT_ENV_VAR_KEYS: ReadonlySet<string> = new Set(
-  slotEnvVarKeys([
-    ...KNOWN_ENV_VARS,
-    ...INFRA_ENV_VARS,
-    ...CONVEX_ENV_VARS,
-    ...PREVIEW_LOGIN_ENV_VARS,
-  ]),
+  slotEnvVarKeys([...KNOWN_ENV_VARS, ...INFRA_ENV_VARS, ...CONVEX_ENV_VARS]),
 );

@@ -1,9 +1,7 @@
 "use node";
 
-import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import type { SandboxHandle } from "../_sandbox/provider";
-import type { PreviewLoginCredentials } from "../previewLoginConfig";
 import { execHandle } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import {
@@ -37,7 +35,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v21";
+const SCRIPT_VERSION = "stream-v20";
 
 /** Values injected into the generated proxy script to drive the auth gate. */
 interface PreviewProxyAuthParams {
@@ -56,33 +54,6 @@ interface PreviewProxyAuthParams {
    * pass the exposed port here so grants and /preview-auth stay aligned.
    */
   authPort?: number;
-  /**
-   * Sign-in credentials to autofill into the app's login form, or null. Every
-   * preview lives on its own `*.vercel.run` host and `vercel.run` is a public
-   * suffix, so the browser's password manager treats each one as a brand-new
-   * site and never offers a saved password. Eva fills the form instead.
-   */
-  login?: PreviewLoginCredentials | null;
-}
-
-/**
- * Short hash of the injected credentials, mixed into the health response so a
- * running proxy started with different (or no) credentials is treated as stale
- * and relaunched — the script bakes them in, it cannot reload them.
- */
-function loginFingerprint(login: PreviewLoginCredentials | null): string {
-  if (!login) return "none";
-  return createHash("sha256")
-    .update(`${login.email}\n${login.password}`)
-    .digest("hex")
-    .slice(0, 12);
-}
-
-export function healthBody(
-  targetPort: number,
-  login: PreviewLoginCredentials | null,
-): string {
-  return `target=${targetPort};${SCRIPT_VERSION};login=${loginFingerprint(login)}`;
 }
 
 function isPort(value: number): boolean {
@@ -147,7 +118,7 @@ async function resolvePreviewProxyPort(
 
   for (const candidate of candidates) {
     if (!listeningPorts.has(candidate)) continue;
-    if (await proxyServesTarget(sandbox, targetPort, candidate)) {
+    if (await proxyAlreadyRunning(sandbox, targetPort, candidate)) {
       return candidate;
     }
   }
@@ -163,10 +134,7 @@ async function resolvePreviewProxyPort(
   );
 }
 
-/** Exported for tests, which run the generated script for real. */
-export function buildPreviewProxyScript(
-  params: PreviewProxyAuthParams,
-): string {
+function buildPreviewProxyScript(params: PreviewProxyAuthParams): string {
   return String.raw`
 import http from "node:http";
 import net from "node:net";
@@ -213,9 +181,6 @@ const GRANT_PARAM = ${JSON.stringify(PREVIEW_GRANT_PARAM)};
 const SESSION_TTL_SECONDS = ${PREVIEW_SESSION_TTL_SECONDS};
 const INJECT_ENABLED = ${params.inject ? "true" : "false"};
 const SCRIPT_VERSION = ${JSON.stringify(SCRIPT_VERSION)};
-const LOGIN_EMAIL = ${JSON.stringify(params.login?.email ?? "")};
-const LOGIN_PASSWORD = ${JSON.stringify(params.login?.password ?? "")};
-const LOGIN_FINGERPRINT = ${JSON.stringify(loginFingerprint(params.login ?? null))};
 const GATE_ENABLED = PUBLIC_KEY_JWK !== null && WEB_APP_URL.length > 0;
 // Port shown to /preview-auth and matched against grant claims. May differ from
 // targetPort when the proxy fronts an internal-only upstream (Vercel desktop).
@@ -820,162 +785,6 @@ const cookiePatchScript =
   "(" + installPartitionedDocumentCookie.toString() + ")(" +
   rewriteSetCookie.toString() + ", " + unpartitionedCookieDeletion.toString() + ");";
 
-// Fills the app's own sign-in form from the credentials saved for this repo.
-// Browsers key saved passwords to the registrable domain, and "vercel.run" is
-// a public suffix, so every sandbox host is an unrelated site to the password
-// manager and nothing is ever offered. This stands in for that: fill what the
-// user would have picked from the autofill dropdown, leave the submit to them.
-function installPreviewLoginAutofill(email, password) {
-  const flag = "__evaPreviewLoginAutofill";
-  if (window[flag]) return;
-  window[flag] = true;
-  if (!email && !password) return;
-
-  // Matched against name/id/autocomplete/placeholder/aria-label of text inputs.
-  const IDENTIFIER_RE = /e-?mail|user-?name|identifier|login/i;
-  // Lets the email land on step one of a two-step form (Clerk, WorkOS), where
-  // no password field exists yet.
-  const SIGN_IN_PATH_RE = /sign-?in|sign-?up|log-?in|login|auth/i;
-  const THROTTLE_MS = 250;
-  const filled = new WeakSet();
-  let lastRun = 0;
-  let scheduled = false;
-
-  // React tracks the last value it wrote on the DOM node, so a plain
-  // "input.value = x" is reverted on the next render. Go through the native
-  // setter and fire the events React listens for.
-  function setNativeValue(input, value) {
-    const descriptor = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value",
-    );
-    if (descriptor && descriptor.set) {
-      descriptor.set.call(input, value);
-    } else {
-      input.value = value;
-    }
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-
-  function isVisible(input) {
-    return (
-      input.offsetWidth > 0 ||
-      input.offsetHeight > 0 ||
-      input.getClientRects().length > 0
-    );
-  }
-
-  function fillable(input) {
-    if (filled.has(input)) return false;
-    if (input.disabled || input.readOnly) return false;
-    // Never overwrite what the user (or the app) already put there.
-    if (input.value) return false;
-    return isVisible(input);
-  }
-
-  function inputType(input) {
-    return String(input.type || "").toLowerCase();
-  }
-
-  function isIdentifier(input) {
-    const type = inputType(input);
-    if (type === "email") return true;
-    if (type !== "text" && type !== "tel" && type !== "") return false;
-    const haystack = [
-      input.name,
-      input.id,
-      input.getAttribute("autocomplete"),
-      input.getAttribute("placeholder"),
-      input.getAttribute("aria-label"),
-    ]
-      .filter(Boolean)
-      .join(" ");
-    return IDENTIFIER_RE.test(haystack);
-  }
-
-  function hasPasswordField(root) {
-    return root.querySelector('input[type="password"]') !== null;
-  }
-
-  function fillPasswords(inputs) {
-    if (!password) return;
-    // One per form: the first empty password field is "the" password on a
-    // sign-in form and "current password" on a change-password form. Confirm
-    // fields (and anything marked new-password) are left alone.
-    const seenForms = new Set();
-    for (const input of inputs) {
-      if (inputType(input) !== "password") continue;
-      if (input.getAttribute("autocomplete") === "new-password") continue;
-      const form = input.form || document;
-      if (seenForms.has(form)) continue;
-      if (!fillable(input)) continue;
-      seenForms.add(form);
-      filled.add(input);
-      setNativeValue(input, password);
-    }
-  }
-
-  function fillIdentifiers(inputs, onSignInPath) {
-    if (!email) return;
-    for (const input of inputs) {
-      if (!isIdentifier(input) || !fillable(input)) continue;
-      // An email box on a settings or search page is not a login form: only
-      // fill one that sits with a password field, or on a sign-in route.
-      const scope = input.form;
-      const nearPassword = scope
-        ? hasPasswordField(scope)
-        : hasPasswordField(document);
-      if (!nearPassword && !onSignInPath) continue;
-      filled.add(input);
-      setNativeValue(input, email);
-    }
-  }
-
-  function fillNow() {
-    lastRun = Date.now();
-    const inputs = document.querySelectorAll("input");
-    if (inputs.length === 0) return;
-    const onSignInPath = SIGN_IN_PATH_RE.test(
-      window.location.pathname + window.location.search,
-    );
-    if (!onSignInPath && !hasPasswordField(document)) return;
-    fillPasswords(inputs);
-    fillIdentifiers(inputs, onSignInPath);
-  }
-
-  // Sign-in forms mount late (client-rendered), in steps, and re-mount across
-  // SPA routes, so watch the tree instead of filling once on load.
-  function schedule() {
-    if (scheduled) return;
-    scheduled = true;
-    const wait = Math.max(0, THROTTLE_MS - (Date.now() - lastRun));
-    window.setTimeout(function runFill() {
-      scheduled = false;
-      try {
-        fillNow();
-      } catch {}
-    }, wait);
-  }
-
-  new MutationObserver(schedule).observe(document.documentElement, {
-    subtree: true,
-    childList: true,
-  });
-  window.addEventListener("load", schedule);
-  window.addEventListener("pageshow", schedule);
-  schedule();
-}
-
-const loginAutofillScript =
-  "(" +
-  installPreviewLoginAutofill.toString() +
-  ")(" +
-  JSON.stringify(LOGIN_EMAIL) +
-  "," +
-  JSON.stringify(LOGIN_PASSWORD) +
-  ");";
-
 const ANNOTATION_SCRIPT = ${JSON.stringify(PREVIEW_ANNOTATION_SCRIPT)};
 
 function buildInjectionTag() {
@@ -985,8 +794,6 @@ function buildInjectionTag() {
     convexRewriteScript +
     "\n" +
     injectedScript +
-    "\n" +
-    loginAutofillScript +
     "\n" +
     ANNOTATION_SCRIPT;
   const safeScript = combined.replace(/<\/script/gi, "<\\/script");
@@ -1199,14 +1006,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
   const path = clientReq.url || "/";
   if (path === healthPath) {
     clientRes.writeHead(200, { "content-type": "text/plain" });
-    clientRes.end(
-      "target=" +
-        String(targetPort) +
-        ";" +
-        SCRIPT_VERSION +
-        ";login=" +
-        LOGIN_FINGERPRINT,
-    );
+    clientRes.end("target=" + String(targetPort) + ";" + SCRIPT_VERSION);
     return;
   }
   if (path.split("?")[0] === html2canvasPath) {
@@ -1441,10 +1241,11 @@ server.listen(proxyPort, "0.0.0.0", function handleListen() {
 `.trim();
 }
 
-async function readProxyHealth(
+async function proxyAlreadyRunning(
   sandbox: SandboxHandle,
+  targetPort: number,
   proxyPort: number,
-): Promise<string | null> {
+): Promise<boolean> {
   try {
     const health = await execHandle(
       sandbox,
@@ -1452,39 +1253,11 @@ async function readProxyHealth(
       5,
       "/tmp",
     );
-    return health.trim();
+    // Version suffix forces a relaunch when the script changes across deploys.
+    return health.trim() === `target=${targetPort};${SCRIPT_VERSION}`;
   } catch {
-    return null;
+    return false;
   }
-}
-
-/**
- * Whether a proxy is already serving this target — used to find which port an
- * existing proxy sits on, so it deliberately ignores the version and login
- * segments (a stale proxy still owns its port and must be relaunched there).
- */
-async function proxyServesTarget(
-  sandbox: SandboxHandle,
-  targetPort: number,
-  proxyPort: number,
-): Promise<boolean> {
-  const health = await readProxyHealth(sandbox, proxyPort);
-  return health !== null && health.startsWith(`target=${targetPort};`);
-}
-
-/**
- * Whether the running proxy is the one this deploy would launch. The version
- * segment catches script changes across deploys; the login segment catches
- * credentials edited since launch, which the script bakes in.
- */
-async function proxyAlreadyRunning(
-  sandbox: SandboxHandle,
-  targetPort: number,
-  proxyPort: number,
-  login: PreviewLoginCredentials | null,
-): Promise<boolean> {
-  const health = await readProxyHealth(sandbox, proxyPort);
-  return health === healthBody(targetPort, login);
 }
 
 async function launchProxy(
@@ -1544,14 +1317,7 @@ export async function ensurePreviewNavigationProxy(
     targetPort,
     fixedProxyPort,
   );
-  if (
-    await proxyAlreadyRunning(
-      sandbox,
-      targetPort,
-      proxyPort,
-      authParams.login ?? null,
-    )
-  ) {
+  if (await proxyAlreadyRunning(sandbox, targetPort, proxyPort)) {
     return proxyPort;
   }
 
