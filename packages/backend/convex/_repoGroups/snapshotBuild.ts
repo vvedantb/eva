@@ -18,6 +18,7 @@ import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { SandboxHandle } from "../_sandbox/provider";
+import { DRIVE_CACHE_WRITER } from "../_sandbox/driveCache";
 import { execHandle, resolveSandboxContext } from "../_sandbox_runtime/helpers";
 import {
   cloneRepoInto,
@@ -156,6 +157,13 @@ export const buildGroupSnapshot = internalAction({
         { mode: "none" }, // syncStrategy — this builder is thrown away, no need to sync
         BUILDER_SANDBOX_READY_TIMEOUT_SECONDS,
         true, // skipInstallDeps — primary already carries its own deps
+        undefined, // image
+        false, // skipDocker
+        // Cache WRITER: runDependencyInstall below installs every linked repo
+        // from scratch, so this builder both benefits most from a warm cache
+        // and is the right place to populate it. Falls back to a read-only
+        // mount automatically if a seed build already holds the write lock.
+        DRIVE_CACHE_WRITER,
       );
       sandbox = created.sandbox;
 
