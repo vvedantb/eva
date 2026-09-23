@@ -8,6 +8,8 @@ interface CommentSendButtonProps {
   disabled: boolean;
   isSubmitting: boolean;
   size?: "icon-xs" | "icon-sm";
+  /** `outline` for the quiet inline reply row; `default` for full composers. */
+  variant?: "default" | "outline";
   className?: string;
   ariaLabel?: string;
 }
@@ -21,6 +23,7 @@ export function CommentSendButton({
   disabled,
   isSubmitting,
   size = "icon-xs",
+  variant = "default",
   className,
   ariaLabel = "Send",
 }: CommentSendButtonProps) {
@@ -28,6 +31,7 @@ export function CommentSendButton({
     <Button
       type="button"
       size={size}
+      variant={variant}
       className={cn("rounded-full", className)}
       disabled={disabled}
       onClick={onClick}
