@@ -13,10 +13,12 @@ import {
 } from "@eva/ui";
 import {
   isEmptyActivityPayload,
+  isSandboxStartupActivity,
   parseActivitySteps,
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
 import {
   silentStreamDelayMs,
   thinkingHeartbeatLabel,
@@ -145,6 +147,7 @@ export function StreamingActivityDisplay({
   thinkingLabel = "Working...",
   startedAt,
   onOpenFile,
+  isSandboxStartup = false,
 }: {
   activity: string | undefined;
   isStreaming?: boolean;
@@ -153,6 +156,12 @@ export function StreamingActivityDisplay({
   thinkingLabel?: string;
   startedAt?: number;
   onOpenFile?: (path: string) => void;
+  /**
+   * The stream is a sandbox startup run. Set it where the caller already knows
+   * (the session chat reads the startup stream directly); elsewhere the steps
+   * themselves give it away.
+   */
+  isSandboxStartup?: boolean;
 }) {
   const simpleView = useSimpleView();
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
@@ -161,8 +170,12 @@ export function StreamingActivityDisplay({
     isStreaming,
     startedAt,
   );
+  const startingSandbox =
+    isSandboxStartup || isSandboxStartupActivity(activity);
+
   if (simpleView) {
     if (!isStreaming) return null;
+    if (startingSandbox) return <SandboxStartupIndicator />;
     return (
       <div className="space-y-1.5">
         <SimpleViewWorkingStatus startedAt={startedAt} />

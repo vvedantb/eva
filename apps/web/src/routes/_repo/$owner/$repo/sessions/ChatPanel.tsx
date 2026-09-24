@@ -342,6 +342,7 @@ export function ChatPanel({
       <StreamingActivityDisplay
         activity={startupStreamingActivity}
         thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
+        isSandboxStartup
       />
     </div>
   );
@@ -351,6 +352,7 @@ export function ChatPanel({
       <StreamingActivityDisplay
         activity={startupStreamingActivity}
         thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
+        isSandboxStartup
       />
     </div>
   ) : null;
