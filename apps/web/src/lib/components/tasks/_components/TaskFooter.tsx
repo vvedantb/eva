@@ -15,12 +15,12 @@ import {
   DropdownMenuSeparator,
   motionFast,
   CrossfadeIconSlot,
+  Spinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
   IconPlayerPlay,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -236,7 +236,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <Spinner size="sm" className="size-3.5" />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -254,7 +254,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <Spinner size="sm" className="size-3.5" />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -269,7 +269,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <Spinner size="sm" className="size-3.5" />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -283,7 +283,7 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <Spinner size="sm" className="size-3.5" />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -381,7 +381,10 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <IconLoader2 size={iconSize} className="animate-spin" />
+                  <Spinner
+                    size="sm"
+                    style={{ width: iconSize, height: iconSize }}
+                  />
                 ) : isScheduled ? (
                   <IconCalendarClock size={iconSize} />
                 ) : (

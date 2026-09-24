@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  IconLoader2,
-  IconMicrophone,
-  IconPlayerStop,
-} from "@tabler/icons-react";
+import { IconMicrophone, IconPlayerStop } from "@tabler/icons-react";
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import {
@@ -13,6 +9,7 @@ import {
   getSpeechRecognition,
   usePromptInputController,
   useSpeechRecognition,
+  Spinner,
 } from "@eva/ui";
 import { useGatewayDictation } from "@/lib/hooks/useGatewayDictation";
 import { useTranscriptPolish } from "@/lib/hooks/useTranscriptPolish";
@@ -91,7 +88,7 @@ function GatewaySpeechButton({
     >
       <CrossfadeIconSlot iconKey={iconKey}>
         {iconKey === "connecting" ? (
-          <IconLoader2 className="size-4 animate-spin" />
+          <Spinner size="sm" />
         ) : iconKey === "listening" ? (
           <IconPlayerStop className="size-4" />
         ) : (
@@ -138,7 +135,7 @@ function WebSpeechButton({
     >
       <CrossfadeIconSlot iconKey={iconKey}>
         {iconKey === "connecting" ? (
-          <IconLoader2 className="size-4 animate-spin" />
+          <Spinner size="sm" />
         ) : iconKey === "listening" ? (
           <IconPlayerStop className="size-4" />
         ) : (

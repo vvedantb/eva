@@ -9,6 +9,7 @@ import {
   Input,
   LIST_ROW_CONTROL_CLASS,
   motionBase,
+  Spinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -16,7 +17,6 @@ import {
   IconPencil,
   IconArrowRight,
   IconArrowLeft,
-  IconLoader2,
 } from "@tabler/icons-react";
 
 /**
@@ -346,9 +346,7 @@ export function MultipleChoiceQuestion({
           onClick={handleNext}
           disabled={!currentHasAnswer || isLoading}
         >
-          {isLoading ? (
-            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
+          {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
           {isLastStep ? "Submit" : "Next"}
           {!isLoading && (
             <IconArrowRight size={15} strokeWidth={2.5} className="ml-1" />

@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  Spinner,
 } from "@eva/ui";
-import { IconLoader2 } from "@tabler/icons-react";
 
 export function StopConfirmDialog({
   open,
@@ -43,7 +43,7 @@ export function StopConfirmDialog({
             }}
             disabled={isStopping}
           >
-            {isStopping && <IconLoader2 size={16} className="animate-spin" />}
+            {isStopping && <Spinner size="sm" />}
             Stop Execution
           </Button>
         </DialogFooter>

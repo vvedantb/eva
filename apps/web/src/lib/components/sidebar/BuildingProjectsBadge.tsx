@@ -6,12 +6,13 @@ import {
   HoverCardContent,
   Badge,
   motionFast,
+  Spinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { IconFolder, IconLoader2 } from "@tabler/icons-react";
+import { IconFolder } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { entityPathSegment } from "@/lib/numId";
@@ -65,10 +66,7 @@ export function BuildingProjectsBadge({
                   label={countLabel(buildingProjects.length)}
                   className="flex items-center gap-1.5"
                 >
-                  <IconLoader2
-                    size={11}
-                    className="animate-spin text-muted-foreground"
-                  />
+                  <Spinner size="sm" className="size-[11px]" />
                   <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
                     {buildingProjects.length}
                   </span>
@@ -116,12 +114,7 @@ export function BuildingProjectsBadge({
                     <Section
                       label="Building"
                       count={buildingProjects.length}
-                      glyph={
-                        <IconLoader2
-                          size={11}
-                          className="animate-spin text-muted-foreground"
-                        />
-                      }
+                      glyph={<Spinner size="sm" className="size-[11px]" />}
                     >
                       {buildingProjects.map((project) => (
                         <ProjectRow

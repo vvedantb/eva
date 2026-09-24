@@ -1,5 +1,5 @@
-import { IconCheck, IconGitBranch, IconLoader2 } from "@tabler/icons-react";
-import { cn } from "@eva/ui";
+import { IconCheck, IconGitBranch } from "@tabler/icons-react";
+import { Spinner, cn } from "@eva/ui";
 import { BrandMark, type BrandName } from "../BrandMark";
 import {
   MockChip,
@@ -122,9 +122,9 @@ export function QuickTasksPreview() {
               className="flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-2"
             >
               {task.state === "running" ? (
-                <IconLoader2
-                  size={13}
-                  className="shrink-0 animate-spin text-warning"
+                <Spinner
+                  size="sm"
+                  className="size-[13px] shrink-0"
                   aria-hidden
                 />
               ) : (

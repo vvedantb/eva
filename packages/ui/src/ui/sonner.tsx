@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
 import { SURFACE_RADIUS_CLASS } from "../utils/surface-radius";
+import { Spinner } from "./spinner";
 
 /**
  * Icons mirroring HeroUI's toast icon map (`@heroui/shared-icons`): info-filled
@@ -72,30 +73,7 @@ function DangerIcon() {
 
 /** Replaces sonner's 16px bar spinner so the loading slot matches the 24px icons. */
 function LoadingIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-6 w-6 animate-spin text-muted-foreground"
-      fill="none"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="2"
-      />
-      <path
-        d="M21 12a9 9 0 0 0-9-9"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-    </svg>
-  );
+  return <Spinner size="md" aria-hidden="true" />;
 }
 
 /** HeroUI's `CloseIcon` â€” 2px round-capped cross. */

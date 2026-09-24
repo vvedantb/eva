@@ -14,7 +14,6 @@ import {
   toast,
 } from "@eva/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { IconLoader2 } from "@tabler/icons-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
@@ -342,9 +341,7 @@ export function ActivityTimeline({
               onClick={handleDeleteComment}
               disabled={isDeletingComment}
             >
-              {isDeletingComment && (
-                <IconLoader2 size={16} className="animate-spin" />
-              )}
+              {isDeletingComment && <Spinner size="sm" />}
               Delete
             </Button>
           </DialogFooter>

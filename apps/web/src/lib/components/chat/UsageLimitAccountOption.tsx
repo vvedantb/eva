@@ -1,4 +1,5 @@
-import { IconArrowRight, IconLoader2, IconUsers } from "@tabler/icons-react";
+import { IconArrowRight, IconUsers } from "@tabler/icons-react";
+import { Spinner } from "@eva/ui";
 import {
   formatUtilization,
   maxUtilization,
@@ -112,7 +113,7 @@ export function UsageLimitAccountOption({
       </span>
       {inFlight ? (
         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-          <IconLoader2 size={14} className="animate-spin" />
+          <Spinner size="sm" className="size-3.5" />
           Switching…
         </span>
       ) : (

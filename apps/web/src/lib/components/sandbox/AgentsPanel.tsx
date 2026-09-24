@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   IconChevronDown,
-  IconLoader2,
   IconPlayerStop,
   IconRobot,
 } from "@tabler/icons-react";
@@ -13,6 +12,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
+  Spinner,
   cn,
   formatElapsed,
   useElapsedSeconds,
@@ -76,7 +76,7 @@ function AgentStopButton({
       }}
     >
       {isStopping ? (
-        <IconLoader2 className="size-3.5 animate-spin" />
+        <Spinner size="sm" className="size-3.5" />
       ) : (
         <IconPlayerStop className="size-3.5" />
       )}

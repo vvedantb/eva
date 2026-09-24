@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  Spinner,
 } from "@eva/ui";
-import { IconLoader2 } from "@tabler/icons-react";
 
 export function RunDevServerConfirmDialog({
   open,
@@ -60,7 +60,7 @@ export function RunDevServerConfirmDialog({
             }}
             disabled={isRunning}
           >
-            {isRunning && <IconLoader2 size={16} className="animate-spin" />}
+            {isRunning && <Spinner size="sm" />}
             Run dev server
           </Button>
         </DialogFooter>

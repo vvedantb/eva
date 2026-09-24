@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  Spinner,
 } from "@eva/ui";
-import { IconLoader2 } from "@tabler/icons-react";
 
 export function ResolveConfirmDialog({
   open,
@@ -43,7 +43,7 @@ export function ResolveConfirmDialog({
             }}
             disabled={isStarting}
           >
-            {isStarting && <IconLoader2 size={16} className="animate-spin" />}
+            {isStarting && <Spinner size="sm" />}
             Resolve Conflicts
           </Button>
         </DialogFooter>

@@ -1,10 +1,5 @@
-import {
-  IconCheck,
-  IconFileCode,
-  IconFolder,
-  IconLoader2,
-} from "@tabler/icons-react";
-import { cn } from "@eva/ui";
+import { IconCheck, IconFileCode, IconFolder } from "@tabler/icons-react";
+import { Spinner, cn } from "@eva/ui";
 import { MockChip, MockDot, MockLabel, MockWindow } from "./MockParts";
 
 const AUTOMATIONS = [
@@ -116,11 +111,7 @@ export function SnapshotsPreview() {
                 aria-hidden
               />
             ) : (
-              <IconLoader2
-                size={12}
-                className="shrink-0 animate-spin text-warning"
-                aria-hidden
-              />
+              <Spinner size="sm" className="size-3 shrink-0" aria-hidden />
             )}
             <p
               className={cn(

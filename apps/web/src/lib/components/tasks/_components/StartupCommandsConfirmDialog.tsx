@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  Spinner,
 } from "@eva/ui";
-import { IconLoader2 } from "@tabler/icons-react";
 
 export function StartupCommandsConfirmDialog({
   open,
@@ -42,7 +42,7 @@ export function StartupCommandsConfirmDialog({
             }}
             disabled={isStarting}
           >
-            {isStarting && <IconLoader2 size={16} className="animate-spin" />}
+            {isStarting && <Spinner size="sm" />}
             Run Startup Commands
           </Button>
         </DialogFooter>

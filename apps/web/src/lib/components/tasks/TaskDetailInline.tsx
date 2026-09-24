@@ -6,10 +6,10 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, cn, motionFast } from "@eva/ui";
+import { Badge, Spinner, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
-import { IconLoader2, IconClock } from "@tabler/icons-react";
+import { IconClock } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { useTaskDetail } from "./useTaskDetail";
 import { TaskHeader } from "./_components/TaskHeader";
@@ -207,7 +207,7 @@ export function TaskDetailInline({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <IconLoader2 size={20} className="animate-spin text-muted-foreground" />
+        <Spinner size="sm" className="size-5" />
       </div>
     );
   }

@@ -14,7 +14,6 @@ import {
   IconCircle,
   IconCircleCheck,
   IconGitBranch,
-  IconLoader,
   IconSearch,
   IconTerminal2,
 } from "@tabler/icons-react";
@@ -151,7 +150,7 @@ function TodoStatusIcon({ status }: { status: TodoItem["status"] }) {
       {status === "completed" ? (
         <IconCircleCheck className="size-3.5 text-primary" />
       ) : status === "in_progress" ? (
-        <IconLoader className="size-3.5 animate-spin text-primary" />
+        <Spinner size="sm" className="size-3.5" />
       ) : (
         <IconCircle className="size-3.5 text-muted-foreground" />
       )}
