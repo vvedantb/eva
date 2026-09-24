@@ -12,6 +12,7 @@ import {
   otherUserIdsInChat,
   readableSendError,
   stripErrorPrefix,
+  turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
 
@@ -247,6 +248,72 @@ describe("stripErrorPrefix", () => {
 
   test("only the leading stamp goes", () => {
     expect(stripErrorPrefix("Error: Error: twice")).toBe("Error: twice");
+  });
+});
+
+/**
+ * Reported bug: "Usage limit reached wrong provider name" (fix 64e95e7e). The
+ * notice was hard-coded to "Claude usage limit reached", so a chat running on
+ * Cursor or Codex blamed a provider it never used — and the recovery it
+ * suggests (switch account, wait for the reset) is per provider, so the user
+ * was sent to the wrong account list.
+ */
+describe("turnErrorTitle", () => {
+  const rateLimited = (turnModel?: string, messageModel?: string) =>
+    turnErrorTitle({
+      errorType: "rate_limit",
+      turnModel,
+      messageModel,
+    });
+
+  test.each([
+    ["claude:opus", "Claude usage limit reached"],
+    ["cursor:composer-2.5", "Cursor usage limit reached"],
+    ["codex:gpt-5.6", "GPT usage limit reached"],
+    ["opencode:openai/gpt-5.2", "Opencode usage limit reached"],
+  ])("%s reports its own provider", (model, expected) => {
+    expect(rateLimited(model)).toBe(expected);
+  });
+
+  test("falls back to the assistant row's own stamp", () => {
+    // Retry paths render a failure with no user turn above it to read.
+    expect(rateLimited(undefined, "cursor:composer-2.5")).toBe(
+      "Cursor usage limit reached",
+    );
+  });
+
+  test("the turn's stamp wins over the row's", () => {
+    // The row is stamped when the reply lands; the turn's stamp is what the
+    // run was actually sent on, so it is the one that ran out.
+    expect(rateLimited("cursor:composer-2.5", "claude:opus")).toBe(
+      "Cursor usage limit reached",
+    );
+  });
+
+  test("an unstamped legacy turn names no provider", () => {
+    expect(rateLimited()).toBe("Usage limit reached");
+  });
+
+  test("every other failure is still framed as one", () => {
+    // Only "rate_limit" used to get a notice, so any other failed turn
+    // rendered as markdown and read like Eva answering "Error: …".
+    expect(
+      turnErrorTitle({
+        errorType: "generic",
+        turnModel: "claude:opus",
+        messageModel: undefined,
+      }),
+    ).toBe("This turn failed");
+  });
+
+  test("a turn that did not fail gets no notice", () => {
+    expect(
+      turnErrorTitle({
+        errorType: undefined,
+        turnModel: "claude:opus",
+        messageModel: undefined,
+      }),
+    ).toBeNull();
   });
 });
 

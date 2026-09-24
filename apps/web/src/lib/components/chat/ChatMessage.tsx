@@ -1,7 +1,6 @@
 import {
   cn,
   formatModelDisplayLabel,
-  getProviderLabel,
   Message as AIMessage,
   MessageContent,
   MessageResponse,
@@ -21,7 +20,6 @@ import dayjs from "@eva/shared/dates";
 import { formatDuration } from "@eva/shared/duration";
 import {
   findAIModelOption,
-  getAIModelProvider,
   getReasoningLevelLabel,
   type BackgroundAgentEntry,
   type Id,
@@ -51,6 +49,7 @@ import {
   collectQuestionSteps,
   getAssistantTurnState,
   stripErrorPrefix,
+  turnErrorTitle as getTurnErrorTitle,
 } from "@/lib/components/chat/chatBodyUtils";
 import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
 import { ChatUiPanelTabs } from "@/lib/components/chat/generativeUi/ChatUiPanelTabs";
@@ -263,22 +262,11 @@ export const ChatMessage = memo(function ChatMessage({
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
 
-  // Both failure classes are failures, not replies: as markdown they read as
-  // Eva answering "Error: …" in body copy. Only "rate_limit" used to get the
-  // notice, so every other failed turn looked like an answer.
-  // The limit belongs to whichever provider ran the turn, so the title reads
-  // its model stamp (the preceding user turn's, or the row's own) instead of
-  // naming Claude — a Cursor turn used to be reported as a Claude limit. An
-  // unstamped legacy turn names no provider rather than guessing one.
-  const turnErrorModel = turnModel ?? message.model;
-  const turnErrorTitle =
-    message.errorType === "rate_limit"
-      ? turnErrorModel === undefined
-        ? "Usage limit reached"
-        : `${getProviderLabel(getAIModelProvider(turnErrorModel))} usage limit reached`
-      : message.errorType === "generic"
-        ? "This turn failed"
-        : null;
+  const turnErrorTitle = getTurnErrorTitle({
+    errorType: message.errorType,
+    turnModel,
+    messageModel: message.model,
+  });
   // A panel and the prose that introduced it are two renderings of one answer,
   // so the panel takes the slot and the prose moves behind a tab. Needs real
   // prose to switch to, and a failed turn shows its error notice instead.
