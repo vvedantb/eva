@@ -118,12 +118,37 @@ describe("the workflow only stops sandboxes it is safe to stop", () => {
     expect(workflow.slice(0, stopAt)).toContain(clause);
   });
 
-  test("the PR description is generated before the sandbox goes down", () => {
+  test("the run only writes a PR description for project tasks", () => {
     const describeAt = workflow.indexOf("internal.github.generatePrDescription");
-    const stopAt = workflow.indexOf("internal.sandbox.stopSandbox");
     expect(describeAt).toBeGreaterThan(-1);
-    // It reads the diff off that sandbox, so the order is load-bearing.
-    expect(stopAt).toBeGreaterThan(describeAt);
+    // A quick task lands in business_review with its diff not yet final, so
+    // its description is written once, on the move to code_review.
+    expect(workflow.slice(0, describeAt)).toContain(
+      "if (args.projectId && completionPrUrl && sandboxId)",
+    );
+  });
+
+  test("the review transition asks for the stopped sandbox back", () => {
+    const mutations = readSource("_agentTasks/mutations.ts");
+    const describeAt = mutations.indexOf(
+      "internal.github.generatePrDescription",
+    );
+    expect(describeAt, "the code_review description call moved").toBeGreaterThan(
+      -1,
+    );
+    expect(mutations.slice(describeAt)).toContain(
+      'restoreStoppedSandbox: task.reviewTaskSandboxStatus !== "active"',
+    );
+  });
+
+  test("a resumed sandbox is stopped again once the description is written", () => {
+    const description = readSource("_github/prDescription.ts");
+    const resumeAt = description.indexOf("ensureSandboxRunning");
+    const stopAt = description.indexOf("internal.sandbox.stopSandbox");
+    expect(resumeAt).toBeGreaterThan(-1);
+    // Otherwise a description leaks the VM the run just stopped.
+    expect(stopAt).toBeGreaterThan(resumeAt);
+    expect(description).toContain("} finally {");
   });
 
   test("an already-open preview is what sets the keep flag", () => {
