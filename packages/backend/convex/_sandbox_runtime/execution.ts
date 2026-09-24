@@ -28,6 +28,7 @@ import {
   restartUnresponsiveSandbox,
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
+import { pollPreviewReadiness } from "./previewPoll";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import {
   buildDaemonAliveCheckCmd,
@@ -950,69 +951,53 @@ async function buildPreviewUrl(
 
   let ready = true;
   if (args.checkReady) {
-    // Never probe or restart the dev server on a sandbox that is not
-    // running. Every exec goes through the SDK's withResume: on a
-    // stopped sandbox it RESUMES it, and on a stopping/snapshotting one it
-    // waits the stop out and then revives it — so the preview poll loop was
-    // waking sandboxes the user had just stopped. Report not-ready without
-    // touching the VM; polling recovers once the sandbox is started again.
+    // Ordering rules live in `pollPreviewReadiness`; this only binds them to
+    // this sandbox. Background daemons (e.g. `npx convex dev`) only relaunch
+    // on sandbox start/resume, so a dead one leaves Preview loading a
+    // frontend with a dead backend until the heal restarts it.
     // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
-    if (handle.state !== "running") {
+    const poll = await pollPreviewReadiness(
+      {
+        sandboxRunning: handle.state === "running",
+        customTabPort,
+        port: args.port,
+      },
+      {
+        claimHeal: () =>
+          ctx.runMutation(internal.sandboxHeal.claim, {
+            sandboxId: args.sandboxId,
+          }),
+        healBackgroundCommands: async () => {
+          await ctx.runAction(internal.sandbox.runBackgroundCommands, {
+            sandboxId: args.sandboxId,
+            repoId: args.repoId,
+            onlyRestartDead: true,
+          });
+        },
+        // A custom tab's readiness is its own port, not the app's dev server.
+        probeReady: () =>
+          probePreviewReady(handle, customTabPort ?? upstreamPort),
+        scheduleRecovery: async () => {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.sandbox.ensureSessionPreviewServices,
+            {
+              sandboxId: args.sandboxId,
+              repoId: args.repoId,
+              expectedPort: upstreamPort,
+            },
+          );
+        },
+        onHealFailed: (e) =>
+          console.warn(
+            `[sandbox] preview background heal failed sandbox=${args.sandboxId}: ${errorMessage(e, "heal failed")}`,
+          ),
+      },
+    );
+    if (poll.kind === "sandbox-not-running") {
       return { url: "", port: responsePort, ready: false };
     }
-    // Background daemons (e.g. `npx convex dev`) only relaunch on sandbox
-    // start/resume. If they die while status stays active, Preview would
-    // keep loading a frontend with a dead backend — the app port can serve
-    // while a backend daemon is down, so this heal must NOT be gated on the
-    // readiness probe. It IS rate-limited: the poll fires every ~2s per
-    // open page and each heal execs a pid check per background command
-    // inside the sandbox, which flooded prod logs and burned action time.
-    // sandboxHeal.claim grants the slot to one caller per interval across
-    // all concurrent viewers.
-    // Custom tabs never heal or claim: both the background-daemon heal and
-    // the recovery below are about the app's dev server, and a stopped
-    // Supabase must not restart it.
-    const healClaimed =
-      customTabPort === undefined
-        ? await ctx.runMutation(internal.sandboxHeal.claim, {
-            sandboxId: args.sandboxId,
-          })
-        : false;
-    if (healClaimed) {
-      try {
-        await ctx.runAction(internal.sandbox.runBackgroundCommands, {
-          sandboxId: args.sandboxId,
-          repoId: args.repoId,
-          onlyRestartDead: true,
-        });
-      } catch (e) {
-        console.warn(
-          `[sandbox] preview background heal failed sandbox=${args.sandboxId}: ${errorMessage(e, "heal failed")}`,
-        );
-      }
-    }
-    // A custom tab's readiness is its own port, not the app's dev server.
-    ready = await probePreviewReady(handle, customTabPort ?? upstreamPort);
-    // Preview never launches the app inline: Lifecycle owns Console
-    // (`launchPreviewDevServer` → tmux) as the single launcher. But nothing
-    // watches the dev server after launch — an OOM kill or a lazily-resumed
-    // VM (exec on a stopped sandbox restores no services) leaves the app
-    // port dead while the sandbox runs, and only this poll notices. So on a
-    // claimed heal with a failed probe, schedule recovery THROUGH the
-    // Console launcher (visible in Console, port-busy idempotent). Reusing
-    // the heal claim rate-limits recovery attempts to one per interval.
-    // Desktop (6080) and editor (8080) have their own lifecycles.
-    if (!ready && healClaimed && args.port !== 6080 && args.port !== 8080) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.ensureSessionPreviewServices,
-        {
-          sandboxId: args.sandboxId,
-          repoId: args.repoId,
-          expectedPort: upstreamPort,
-        },
-      );
-    }
+    ready = poll.ready;
   }
 
   // Always front the service with the in-sandbox auth proxy so open-in-new-tab
