@@ -22,21 +22,30 @@ describe("quick-task pull-request close stops the preview sandbox", () => {
     expect(deleteAt).toBeGreaterThan(stopAt);
   });
 
-  test("the stop is gated on the task being a quick task", () => {
-    const gateAt = handler.indexOf("if (t.projectId === undefined) {");
-    expect(gateAt, "the quick-task gate moved or was renamed").toBeGreaterThan(
-      -1,
-    );
-    expect(handler.indexOf("requestTaskSandboxStop(")).toBeGreaterThan(gateAt);
+  /**
+   * A project's tasks share one sandbox with the project, so the stop belongs
+   * to the quick-task branch only — which is now the code after the project
+   * branch returns (fix 51cdced9). Behavioural coverage of what each branch
+   * leaves behind lives in prClosedProjectScope.test.ts.
+   */
+  test("a project pull request returns before reaching the stop", () => {
+    const gateAt = handler.indexOf("if (projectId) {");
+    expect(gateAt, "the project gate moved or was renamed").toBeGreaterThan(-1);
+    const stopAt = handler.indexOf("requestTaskSandboxStop(");
+    expect(stopAt, "the stop moved").toBeGreaterThan(gateAt);
+    expect(
+      handler.slice(gateAt, stopAt),
+      "the project branch must return rather than fall through",
+    ).toContain("return null;");
   });
 
   test.each([
-    ['reviewTaskSandboxStatus === "active"'],
-    ['reviewTaskSandboxStatus === "starting"'],
-    ['reviewTaskSandboxStatus === "stopping"'],
-    ["t.sandboxId !== undefined"],
+    ['task.reviewTaskSandboxStatus === "active"'],
+    ['task.reviewTaskSandboxStatus === "starting"'],
+    ['task.reviewTaskSandboxStatus === "stopping"'],
+    ["task.sandboxId !== undefined"],
   ])("the stop condition covers %s", (clause) => {
-    const gateAt = handler.indexOf("if (t.projectId === undefined) {");
+    const gateAt = handler.indexOf("if (projectId) {");
     const stopAt = handler.indexOf("requestTaskSandboxStop(");
     expect(handler.slice(gateAt, stopAt)).toContain(clause);
   });
