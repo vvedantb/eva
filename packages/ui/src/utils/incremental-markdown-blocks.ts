@@ -11,8 +11,8 @@ import { parseMarkdownIntoBlocks } from "streamdown";
  *
  * This is the same split, done incrementally. Blocks already produced from a
  * byte-identical prefix are reused verbatim and only the tail is re-lexed, so
- * the per-token cost tracks the paragraph being written rather than the reply.
- * Identical output, not an approximation — see the invariant test.
+ * the per-token cost is one prefix comparison plus lexing the paragraph being
+ * written. Identical output, not an approximation — see the invariant test.
  *
  * Reuse is only allowed up to a block that ends on a blank line. A blank line
  * closes every leaf block in CommonMark, so marked's tokeniser starts the next
@@ -34,6 +34,15 @@ interface BlockSplit {
    * returned but never used as a base.
    */
   exact: boolean;
+  /** Source offset at which block `i` ends. */
+  offsets: number[];
+  /** Whether block `i` ends on a blank line, i.e. is a safe cut point. */
+  endsClean: boolean[];
+  /** Longest reusable prefix: block count, source length, and the text itself.
+   *  Precomputed so a tick costs one string comparison, not a per-block scan. */
+  cleanCount: number;
+  cleanLength: number;
+  cleanText: string;
 }
 
 const cache: BlockSplit[] = [];
@@ -51,27 +60,72 @@ function mayContainFootnotes(markdown: string): boolean {
   return markdown.includes("[^");
 }
 
-function fullSplit(markdown: string): BlockSplit {
-  const blocks = parseMarkdownIntoBlocks(markdown);
-  return { source: markdown, blocks, exact: blocks.join("") === markdown };
+/**
+ * Indexes a split so later ticks can slice it by offset without re-scanning.
+ * The final block is never a cut point: it is the one still being written.
+ */
+function describeSplit(
+  source: string,
+  blocks: string[],
+  exact: boolean,
+): BlockSplit {
+  const offsets: number[] = [];
+  const endsClean: boolean[] = [];
+  let offset = 0;
+  let cleanCount = 0;
+  let cleanLength = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i] ?? "";
+    offset += block.length;
+    offsets.push(offset);
+    const clean = ENDS_ON_BLANK_LINE.test(block);
+    endsClean.push(clean);
+    if (clean && i < blocks.length - 1) {
+      cleanCount = i + 1;
+      cleanLength = offset;
+    }
+  }
+  return {
+    source,
+    blocks,
+    exact,
+    offsets,
+    endsClean,
+    cleanCount,
+    cleanLength,
+    cleanText: exact && cleanLength > 0 ? source.slice(0, cleanLength) : "",
+  };
 }
 
-/** How much of `base` is a byte-identical, cleanly-closed prefix of `markdown`. */
+function fullSplit(markdown: string): BlockSplit {
+  const blocks = parseMarkdownIntoBlocks(markdown);
+  return describeSplit(markdown, blocks, blocks.join("") === markdown);
+}
+
+/**
+ * How much of `base` is a byte-identical, cleanly-closed prefix of `markdown`.
+ * The common case — the reply only grew — is one string comparison. The slow
+ * walk is for a rewritten tail: Streamdown closes an open code fence before
+ * splitting, so the string it hands us can change at the end between ticks.
+ */
 function reusablePrefix(
   base: BlockSplit,
   markdown: string,
 ): { count: number; length: number } {
-  let offset = 0;
+  if (base.cleanLength === 0) return { count: 0, length: 0 };
+  if (markdown.startsWith(base.cleanText)) {
+    return { count: base.cleanCount, length: base.cleanLength };
+  }
   let count = 0;
   let length = 0;
-  // The final block is always re-lexed: it is the one still being written.
   for (let i = 0; i < base.blocks.length - 1; i++) {
     const block = base.blocks[i];
-    if (block === undefined || !markdown.startsWith(block, offset)) break;
-    offset += block.length;
-    if (ENDS_ON_BLANK_LINE.test(block)) {
+    const end = base.offsets[i];
+    if (block === undefined || end === undefined) break;
+    if (!markdown.startsWith(block, end - block.length)) break;
+    if (base.endsClean[i] === true) {
       count = i + 1;
-      length = offset;
+      length = end;
     }
   }
   return { count, length };
@@ -91,11 +145,11 @@ function splitIncrementally(markdown: string): BlockSplit {
 
   const tail = markdown.slice(best.length);
   const tailBlocks = parseMarkdownIntoBlocks(tail);
-  return {
-    source: markdown,
-    blocks: [...best.base.blocks.slice(0, best.count), ...tailBlocks],
-    exact: tailBlocks.join("") === tail,
-  };
+  return describeSplit(
+    markdown,
+    [...best.base.blocks.slice(0, best.count), ...tailBlocks],
+    tailBlocks.join("") === tail,
+  );
 }
 
 /**
@@ -103,9 +157,7 @@ function splitIncrementally(markdown: string): BlockSplit {
  * module-level identity, so passing it does not invalidate Streamdown's own
  * memo on the split.
  */
-export function parseMarkdownIntoBlocksIncremental(
-  markdown: string,
-): string[] {
+export function parseMarkdownIntoBlocksIncremental(markdown: string): string[] {
   for (let i = 0; i < cache.length; i++) {
     const entry = cache[i];
     if (entry === undefined || entry.source !== markdown) continue;
