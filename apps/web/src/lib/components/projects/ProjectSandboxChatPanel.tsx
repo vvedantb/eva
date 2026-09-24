@@ -18,6 +18,7 @@ import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
   readableSendError,
+  sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
@@ -245,6 +246,12 @@ export function ProjectSandboxChatPanel({
     }
   };
 
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+  });
+
   const handleCancel = async () => {
     await cancelExecution({ projectId });
   };
@@ -301,14 +308,8 @@ export function ProjectSandboxChatPanel({
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
-        isInputDisabled={!isSandboxActive || isSwitchingAccount}
-        placeholder={
-          !isSandboxActive
-            ? SANDBOX_CHAT_COPY.asleepPlaceholder
-            : isSwitchingAccount
-              ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-              : SANDBOX_CHAT_COPY.activePlaceholder
-        }
+        isInputDisabled={composer.isInputDisabled}
+        placeholder={composer.placeholder}
         emptyStateTitle={
           isSandboxActive
             ? "Ask Eva anything about this project's running sandbox."
@@ -319,11 +320,7 @@ export function ProjectSandboxChatPanel({
             ? SANDBOX_CHAT_COPY.activeDescription
             : SANDBOX_CHAT_COPY.asleepDescription
         }
-        disabledReason={
-          isSwitchingAccount
-            ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-            : SANDBOX_CHAT_COPY.asleepDisabledReason
-        }
+        disabledReason={composer.disabledReason}
         onStartSandbox={
           !isSandboxActive && !isSandboxToggling && onSandboxToggle
             ? () => onSandboxToggle("start")

@@ -11,6 +11,8 @@ import {
   chatNeedsOtherUserDirectory,
   otherUserIdsInChat,
   readableSendError,
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
   stripErrorPrefix,
   turnErrorTitle,
   type ChatBodyMessage,
@@ -406,4 +408,59 @@ test("ChatBody looks up other senders, not the whole user table", () => {
   );
   expect(chatBody).toContain("api.users.getMany");
   expect(chatBody).not.toContain("api.users.listAll");
+});
+
+/**
+ * The bug this covers: quick task chat locked its composer whenever the
+ * sandbox was not marked active, and a quick task's first run only marks it
+ * active once the run winds down. So the whole time there was something to
+ * queue behind, there was no way to type it — while sessions queued fine.
+ */
+describe("sandboxComposerState", () => {
+  test("a running turn takes a follow-up even before the sandbox is active", () => {
+    const state = sandboxComposerState({
+      isSandboxActive: false,
+      isSwitchingAccount: false,
+      isExecuting: true,
+    });
+    expect(state.isInputDisabled).toBe(false);
+    expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.activePlaceholder);
+  });
+
+  test("an idle chat with no sandbox still says to wake Eva", () => {
+    const state = sandboxComposerState({
+      isSandboxActive: false,
+      isSwitchingAccount: false,
+      isExecuting: false,
+    });
+    expect(state.isInputDisabled).toBe(true);
+    expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.asleepPlaceholder);
+    expect(state.disabledReason).toBe(SANDBOX_CHAT_COPY.asleepDisabledReason);
+  });
+
+  test("an account swap blocks the composer even mid-turn", () => {
+    const state = sandboxComposerState({
+      isSandboxActive: true,
+      isSwitchingAccount: true,
+      isExecuting: true,
+    });
+    expect(state.isInputDisabled).toBe(true);
+    expect(state.disabledReason).toBe(
+      SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
+    );
+  });
+
+  test("an awake, idle chat is open for a normal send", () => {
+    expect(
+      sandboxComposerState({
+        isSandboxActive: true,
+        isSwitchingAccount: false,
+        isExecuting: false,
+      }),
+    ).toEqual({
+      isInputDisabled: false,
+      placeholder: SANDBOX_CHAT_COPY.activePlaceholder,
+      disabledReason: SANDBOX_CHAT_COPY.asleepDisabledReason,
+    });
+  });
 });
