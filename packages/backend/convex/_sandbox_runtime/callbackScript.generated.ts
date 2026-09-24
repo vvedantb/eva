@@ -5409,7 +5409,7 @@ function buildCanUseTool() {
         updatedInput: { ...input, run_in_background: false }
       };
     }
-    if (toolName !== "AskUserQuestion") {
+    if (toolName !== "AskUserQuestion" || !BLOCKING_QUESTIONS_ENABLED) {
       return { behavior: "allow", updatedInput: input };
     }
     const toolUseId = typeof options.toolUseID === "string" && options.toolUseID ? options.toolUseID : "";
@@ -5596,7 +5596,7 @@ function buildSdkOptions(sessionMode) {
 var EVA_SDK_SYSTEM_APPEND = "You are running inside Eva, a platform that runs coding agents in remote sandboxes against GitHub repos. Treat the workspace as the active repo checkout.";
 function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   const allowedToolsOption = tools === "agent" && ALLOWED_TOOLS ? { allowedTools: ALLOWED_TOOLS.split(",") } : { allowedTools: [] };
-  const permissionOption = tools === "agent" && BLOCKING_QUESTIONS_ENABLED ? {
+  const permissionOption = tools === "agent" ? {
     permissionMode: "default",
     allowDangerouslySkipPermissions: false,
     canUseTool: buildCanUseTool()
