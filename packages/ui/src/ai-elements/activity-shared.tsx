@@ -104,6 +104,12 @@ export interface ActivityStep {
   questions?: ActivityQuestion[];
   /** AskUserQuestion answers keyed by question text. Absent when the turn ended without a structured answer. */
   answers?: Record<string, string>;
+  /**
+   * The transcript query stripped this step's expanded-only fields (`output`,
+   * `edits`, `contentPreview`) to keep the chat subscription small. The row
+   * still opens; the body fills in once the full payload is fetched.
+   */
+  hasHiddenDetail?: boolean;
 }
 
 /** True when the step has expandable rich detail to show. */
@@ -113,7 +119,8 @@ export function stepHasRichDetail(step: ActivityStep): boolean {
     step.output ||
     (step.edits && step.edits.length > 0) ||
     (step.files && step.files.length > 0) ||
-    step.contentPreview,
+    step.contentPreview ||
+    step.hasHiddenDetail,
   );
 }
 

@@ -31,10 +31,21 @@ export function ActivityStepDetail({
           .join("\n\n")
       : "";
 
+  // The transcript query strips output/edits/preview; until the full payload
+  // lands there is genuinely nothing to show but the command that produced it.
+  const awaitingDetail =
+    step.hasHiddenDetail === true &&
+    !step.output &&
+    !step.edits?.length &&
+    !step.contentPreview;
+
   return (
     <div
       className={cn("space-y-2 text-xs", step.isError && "text-destructive")}
     >
+      {awaitingDetail ? (
+        <p className="text-muted-foreground">Loading output...</p>
+      ) : null}
       {(step.output?.exitCode !== undefined || step.output?.truncated) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {step.output.exitCode !== undefined ? (
