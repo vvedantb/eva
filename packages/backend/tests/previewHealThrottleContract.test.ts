@@ -18,7 +18,12 @@ const sandboxHeal = readSource("convex/sandboxHeal.ts");
  */
 describe("the preview heal is rate-limited per sandbox", () => {
   test("the heal runs only after winning the claim", () => {
-    const body = definitionBody(sandboxExecution, "getPreviewUrl");
+    // `getPreviewUrl`'s body lives in `buildPreviewUrl`, shared with the MCP
+    // get_preview_url path — so the poll rules are pinned where they run.
+    const body = functionBody(
+      sandboxExecution,
+      "async function buildPreviewUrl(",
+    );
     const stateGuardAt = body.indexOf('handle.state !== "running"');
     const claimAt = body.indexOf("internal.sandboxHeal.claim");
     const healAt = body.indexOf("internal.sandbox.runBackgroundCommands");
@@ -91,6 +96,14 @@ function definitionBody(source: string, name: string): string {
   const startAt = source.indexOf(`export const ${name} =`);
   expect(startAt, `${name} moved or was renamed`).toBeGreaterThan(-1);
   const end = source.indexOf("\n});", startAt);
+  return source.slice(startAt, end < 0 ? undefined : end);
+}
+
+/** One top-level function, ending on the `\n}` that closes it at column 0. */
+function functionBody(source: string, header: string): string {
+  const startAt = source.indexOf(header);
+  expect(startAt, `${header} moved or was renamed`).toBeGreaterThan(-1);
+  const end = source.indexOf("\n}", startAt);
   return source.slice(startAt, end < 0 ? undefined : end);
 }
 

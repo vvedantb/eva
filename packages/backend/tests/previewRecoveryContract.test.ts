@@ -21,7 +21,9 @@ const previewProxy = readSource("convex/_sandbox_runtime/previewProxy.ts");
  */
 describe("a dead dev server recovers through the Console launcher", () => {
   test("the poll schedules recovery only on a claimed heal with a failed probe", () => {
-    const body = definitionBody(sandboxExecution, "getPreviewUrl");
+    // `getPreviewUrl`'s body lives in `buildPreviewUrl`, shared with the MCP
+    // get_preview_url path — so the poll rules are pinned where they run.
+    const body = previewUrlBody();
     const probeAt = body.indexOf("probePreviewReady(");
     const recoveryAt = body.indexOf("ensureSessionPreviewServices");
     expect(probeAt, "the readiness probe moved").toBeGreaterThan(-1);
@@ -36,7 +38,7 @@ describe("a dead dev server recovers through the Console launcher", () => {
   test("the poll itself never launches the app", () => {
     // Lifecycle owns Console as the single launcher; recovery goes through a
     // scheduled action, never inline from the poll.
-    const body = definitionBody(sandboxExecution, "getPreviewUrl");
+    const body = previewUrlBody();
     expect(body).not.toContain("launchPreviewDevServer");
     expect(body).not.toContain("launchDevServerInVercelConsole");
   });
@@ -186,6 +188,11 @@ function definitionBody(source: string, name: string): string {
   expect(startAt, `${name} moved or was renamed`).toBeGreaterThan(-1);
   const end = source.indexOf("\n});", startAt);
   return source.slice(startAt, end < 0 ? undefined : end);
+}
+
+/** The shared preview-URL body both `getPreviewUrl` and the MCP tool run. */
+function previewUrlBody(): string {
+  return functionBody(sandboxExecution, "async function buildPreviewUrl(");
 }
 
 /** One top-level function, ending on the `\n}` that closes it at column 0. */
