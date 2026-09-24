@@ -15,7 +15,10 @@ import {
   PopoverTrigger,
 } from "@eva/ui";
 import { IconPlus } from "@tabler/icons-react";
-import { FIELD_ROW_CLASS } from "@/lib/components/fields/FieldsSection";
+import {
+  FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
+} from "@/lib/components/fields/FieldsSection";
 
 interface LabelsFieldProps {
   /** Labels on the record. */
@@ -64,7 +67,7 @@ export function LabelsField({ tags, allTags, onChange }: LabelsFieldProps) {
         <button
           type="button"
           aria-label="Change or add labels"
-          className={`${FIELD_ROW_CLASS} w-full flex-wrap gap-1 text-left text-[13px]`}
+          className={`${FIELD_ROW_CLASS} w-full flex-wrap gap-1 text-left ${FIELD_TEXT_CLASS}`}
         >
           {current.length === 0 ? (
             <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -74,7 +77,11 @@ export function LabelsField({ tags, allTags, onChange }: LabelsFieldProps) {
           ) : (
             <>
               {current.map((tag) => (
-                <Badge key={tag} variant="outline" className="h-5 text-xs">
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  className={`h-6 ${FIELD_TEXT_CLASS}`}
+                >
                   {tag}
                 </Badge>
               ))}
