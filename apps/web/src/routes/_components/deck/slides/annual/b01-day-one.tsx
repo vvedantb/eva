@@ -52,7 +52,7 @@ export function AnnualDayOne() {
       <Reveal step={2} delay={0.15} className="mt-12">
         <p className="max-w-3xl text-3xl leading-snug text-balance text-white/85">
           The foundation it still runs on was{" "}
-          <Accent>chosen in the first hour</Accent>.
+          <Accent>chosen on day one</Accent>.
         </p>
       </Reveal>
 

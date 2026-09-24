@@ -22,7 +22,7 @@ interface Stat {
 }
 
 const HEADLINE: Stat[] = [
-  { value: 4705, label: "changes shipped", delay: 0.6, accent: true },
+  { value: 4732, label: "changes shipped", delay: 0.6, accent: true },
   { value: 887, label: "pieces of work raised", delay: 0.75 },
   { value: 367, label: "working sessions", delay: 0.9 },
   { value: 1348, label: "release notes written", delay: 1.05 },

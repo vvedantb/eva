@@ -13,7 +13,7 @@ import type { AnnABeat } from "../_parts/AnnABeats";
 const BEATS: readonly AnnABeat[] = [
   { heading: 1052, label: "July, the sandbox cutover", accent: true },
   { heading: 877, label: "August, durable turns and security" },
-  { heading: 139, label: "September, multi-repo and decisions" },
+  { heading: 102, label: "September, multi-repo and decisions" },
 ];
 
 export function AnnualQ3() {
@@ -31,7 +31,7 @@ export function AnnualQ3() {
 
         <Reveal delay={0.3} className="text-right">
           <div className="text-6xl leading-none font-semibold tabular-nums text-white">
-            <CountUp value={2068} delay={0.4} />
+            <CountUp value={2031} delay={0.4} />
           </div>
           <div className="mt-4 text-base text-white/50">
             changes shipped, July to September

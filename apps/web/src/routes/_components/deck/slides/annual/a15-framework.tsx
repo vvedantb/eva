@@ -160,7 +160,7 @@ export function AnnualFramework() {
         <p className="text-center text-2xl text-white/85">
           <span className="text-5xl leading-[1.3] font-semibold tracking-tight">
             <Accent>
-              <CountUp value={4705} step={3} />
+              <CountUp value={4732} step={3} />
             </Accent>
           </span>{" "}
           changes.{" "}

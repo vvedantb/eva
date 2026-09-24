@@ -194,12 +194,12 @@ Figures: the window is 11 January to 16 September 2026.`,
 → Step 1: first session on 24 January and first quick task on 1 February. Two weeks from empty to usable.
 → Step 2: work moves to the cloud in July, and in August Eva starts opening its own work.
 → Step 3: the totals land. This is the evidence base for everything that follows.
-Figures: empty repository 11 January 2026; 4,705 changes shipped and 1,348 sets of release notes, from Eva's own records and the project's history to 16 September 2026.`,
+Figures: empty repository 11 January 2026; 4,732 changes shipped and 1,348 sets of release notes, from Eva's own records and the project's history to 16 September 2026.`,
 
   "a03-numbers": `Eight months in numbers, headline first, supporting detail second.
 → Step 1: the secondary card. This is the answer to whether the tool is used by anyone else — sixteen accounts, nineteen automations and 504 automation runs.
 Detail: the closing rate line is deliberately unglamorous. Nineteen changes a day sustained for eight months matters more than any single peak.
-Figures: 4,705 changes, 887 pieces of work raised, 367 working sessions, 1,348 sets of release notes; 16 people with accounts, 19 automations, 504 automation runs, 107 documents. Eva's own records and project history, 11 January to 16 September 2026.`,
+Figures: 4,732 changes, 887 pieces of work raised, 367 working sessions, 1,348 sets of release notes; 16 people with accounts, 19 automations, 504 automation runs, 107 documents. Eva's own records and project history, 11 January to 16 September 2026.`,
 
   "a04-adoption": `Adoption was not announced, it followed the tool becoming easy enough to use.
 → Step 1: July onward lights and the earlier months dim. The step change is July, when work moved to the cloud.
@@ -268,12 +268,12 @@ Figures: 176 pieces of finished work waiting to be checked in, against 455 alrea
 → Step 1: the ticks land. Owns technical design, understands trade-offs and breaks down large problems all come from Design and its six phases; debugs without flailing, Debugging; a skill beyond coding, Beyond code; improves the process, Quality; mentors and onboards, Working with others; business and user empathy, The people using it; identifies work to do, The year ahead.
 → Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
-Figures: 4,705 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.`,
+Figures: 4,732 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the very first day, not migrated to later.
 → Step 1: the three commits stack in. The first commit, then the schema for projects and tasks, then the queries and mutations behind it.
 → Step 2: the closing line. Nothing in the deck that follows required that decision to be unpicked.
-Detail: this is the one slide where the hashes are worth showing, because anyone can check them. Say that the same schema, extended many times, is still what every session, quick task and project is stored in. Note for accuracy if pressed on the wording: the first commit was at 16:36 and the schema commit at 20:15 on the same evening, so "the first hour" is the sense of it rather than a stopwatch reading.
+Detail: this is the one slide where the hashes are worth showing, because anyone can check them. Say that the same schema, extended many times, is still what every session, quick task and project is stored in. Note for accuracy if pressed on the wording: the first commit was at 16:36 and the schema commit at 20:15 on the same evening, about three and a half hours apart, so the slide says "day one", which is exact.
 Figures: 5468954a6 Initial commit, 317b85cd5 projects and tasks schema, 5467d4ca2 Convex queries and mutations, all on 11 January 2026.`,
 
   "annual-b02-first-week": `Both of the two ideas the product is built out of arrived inside the first week.
@@ -305,15 +305,15 @@ Figures: April 377, May 336, June 230, totalling 943 changes shipped. Documents 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
 → Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and the Design slide takes that apart phase by phase.
 → Step 2: August, 877 changes. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system that the whole interface now sits on.
-→ Step 3: September, 139 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
+→ Step 3: September, 102 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: September is a part month, so do not read the drop as a slowdown. The theme across all three is that nothing here adds a new thing to do — it makes the existing things safe to depend on.
-Figures: July 1,052, August 877, September 139, totalling 2,068 changes shipped, to 16 September 2026.`,
+Figures: July 1,052, August 877, September 102, totalling 2,031 changes shipped, to 16 September 2026.`,
 
   "annual-b07-volume": `The year was not steady, and the shape of it explains more than the total does.
 → Step 1: March and July stay lit while the rest dim, and the line names them. March was the surface being built; July was the cutover that moved every workspace to a new engine.
-→ Step 2: the total counts up. 4,769 changes across nine months, or roughly nineteen a day including weekends.
+→ Step 2: the total counts up. 4,732 changes across nine months, or roughly nineteen a day including weekends.
 Detail: the two troughs are as informative as the peaks. June is the consolidation quarter's low point, and September only looks thin because it stops on the 16th. Do not let the room read the last bar as a decline — say the part-month caveat aloud rather than leaving it to the footnote.
-Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 139. Total 4,769 changes shipped, September to the 16th.`,
+Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 102. Total 4,732 changes shipped, September to the 16th.`,
 
   "annual-b08-rename": `A breath between chapters: the project people now call Eva spent its first five months under another name.
 → Step 1: Conductor dissolves into Eva. Say only that the name changed when the repository moved.

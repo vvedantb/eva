@@ -48,7 +48,7 @@ export function AnnualOrigin() {
         <p className="text-lg text-white/85">
           In between,{" "}
           <Accent>
-            <CountUp value={4705} step={3} delay={0.2} />
+            <CountUp value={4732} step={3} delay={0.2} />
           </Accent>{" "}
           changes shipped and{" "}
           <Accent>

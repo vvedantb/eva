@@ -30,7 +30,7 @@ const MONTHS: readonly AnnABar[] = [
   { label: "Jun", value: 230 },
   { label: "Jul", value: 1052 },
   { label: "Aug", value: 877 },
-  { label: "Sep", value: 139 },
+  { label: "Sep", value: 102 },
 ];
 
 /** March and July, the two peaks. */
@@ -54,7 +54,7 @@ export function AnnualVolume() {
         <Reveal step={2} delay={0.1} className="text-right">
           <div className="text-7xl leading-none font-semibold tabular-nums">
             <Accent>
-              <CountUp value={4769} step={2} delay={0.2} />
+              <CountUp value={4732} step={2} delay={0.2} />
             </Accent>
           </div>
           <div className="mt-4 text-base text-white/50">
