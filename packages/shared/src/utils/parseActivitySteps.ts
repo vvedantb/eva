@@ -1,18 +1,65 @@
 import type { ActivityStep } from "@eva/ui";
 
-export function parseActivitySteps(
-  data: string | undefined,
-): ActivityStep[] | null {
-  if (!data) return null;
+/**
+ * One streaming tick fans the same `currentActivity` string out to every
+ * activity consumer at once — the timeline, the composer todo badge, the
+ * sub-agent CTA row, the question cards, the silence clock — and each one used
+ * to `JSON.parse` it independently. The payload is capped at 600 KB, so a
+ * tool-heavy turn paid seven full parses of a few hundred KB per token, which
+ * is where the mid-stream freezes came from.
+ *
+ * Convex hands every consumer the *same string reference*, so an identity-first
+ * cache collapses those seven parses into one. Entries are MRU-ordered and the
+ * list is short: the live payload plus whichever settled `activityLog`s are
+ * re-rendering.
+ *
+ * Callers must treat the result as read-only — they share one array.
+ */
+const CACHE_SIZE = 4;
+
+interface ParsedActivity {
+  source: string;
+  steps: ActivityStep[] | null;
+  /** Well-formed payload carrying zero steps (writer alive, nothing to say). */
+  isEmpty: boolean;
+}
+
+const cache: ParsedActivity[] = [];
+
+function parseUncached(data: string): ParsedActivity {
   try {
     const parsed = JSON.parse(data);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].type) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) return { source: data, steps: null, isEmpty: true };
+      if (parsed[0].type) return { source: data, steps: parsed, isEmpty: false };
     }
   } catch {
     // Legacy plain text format
   }
-  return null;
+  return { source: data, steps: null, isEmpty: false };
+}
+
+function readActivity(data: string): ParsedActivity {
+  for (let i = 0; i < cache.length; i++) {
+    const entry = cache[i];
+    if (entry === undefined || entry.source !== data) continue;
+    if (i > 0) {
+      cache.splice(i, 1);
+      cache.unshift(entry);
+    }
+    return entry;
+  }
+  const entry = parseUncached(data);
+  cache.unshift(entry);
+  if (cache.length > CACHE_SIZE) cache.length = CACHE_SIZE;
+  return entry;
+}
+
+export function parseActivitySteps(
+  data: string | undefined,
+): ActivityStep[] | null {
+  if (!data) return null;
+  return readActivity(data).steps;
 }
 
 /**
@@ -52,10 +99,5 @@ export function isSandboxStartupActivity(data: string | undefined): boolean {
  */
 export function isEmptyActivityPayload(data: string | undefined): boolean {
   if (!data) return false;
-  try {
-    const parsed = JSON.parse(data);
-    return Array.isArray(parsed) && parsed.length === 0;
-  } catch {
-    return false;
-  }
+  return readActivity(data).isEmpty;
 }

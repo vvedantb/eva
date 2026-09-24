@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { cn } from "../utils/cn";
+import { parseMarkdownIntoBlocksIncremental } from "../utils/incremental-markdown-blocks";
 import { STREAMDOWN_TABLE_RADIUS_CLASS } from "../utils/surface-radius";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
@@ -333,6 +334,10 @@ export const MessageResponse = memo(
         className,
       )}
       plugins={streamdownPlugins}
+      // Streamdown re-renders only the block still being written, but its
+      // default split re-lexes the whole reply behind every token. This one
+      // reuses the blocks a byte-identical prefix already produced.
+      parseMarkdownIntoBlocksFn={parseMarkdownIntoBlocksIncremental}
       {...props}
     />
   ),
