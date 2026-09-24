@@ -398,6 +398,11 @@ export const agentRunFields = {
   // Snapshot of the model used for this run. Absent on runs created before
   // this field existed.
   model: v.optional(aiModelValidator),
+  // Screenshots and recordings the agent left in the sandbox deliverable
+  // folders, uploaded as the run finishes. A run has no `messages` row to hang
+  // media on — it renders as the quick task's first chat turn or as a timeline
+  // row, both built from this doc — so the ids live here instead.
+  mediaStorageIds: v.optional(v.array(v.id("_storage"))),
 };
 
 /** Lifecycle of a pull request Eva opened, shared by every surface that tracks one. */

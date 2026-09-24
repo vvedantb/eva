@@ -5128,17 +5128,13 @@ function buildTurnCompletionPayload(params) {
   );
 }
 async function postClaimedTurnFailureCompletion(params) {
-  const completionArgs = buildEntityMutationArgs(
-    ENTITY_ID_FIELD,
-    ENTITY_ID,
-    {
-      success: false,
-      result: null,
-      error: params.error,
-      activityLog: params.activityLog,
-      ...RUN_ID ? { runId: RUN_ID } : {}
-    }
-  );
+  const completionArgs = buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, {
+    success: false,
+    result: null,
+    error: params.error,
+    activityLog: params.activityLog,
+    ...RUN_ID ? { runId: RUN_ID } : {}
+  });
   appendClaimedTurnCompletion(completionArgs);
   appendTurnCheckpoint(completionArgs);
   releaseTurnLeaseForCompletion();
@@ -5198,15 +5194,28 @@ async function attachChatMediaIfAny(uploaded, target2) {
   if (target2.messageId) mediaArgs.messageId = target2.messageId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
+async function attachRunMediaIfAny(uploaded) {
+  if (uploaded.length === 0) return;
+  await callConvexWithRetry(
+    "mutation",
+    "agentRuns:attachMedia",
+    {
+      id: RUN_ID ?? "",
+      mediaStorageIds: uploaded.map((item) => item.storageId)
+    },
+    3
+  );
+}
 async function deliverCompletionWithMedia(completionArgs) {
   appendTurnCheckpoint(completionArgs);
   releaseTurnLeaseForCompletion();
+  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",
     completionArgs
   );
-  await uploadAndAttachSandboxMedia({});
+  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
 }
 function archivePostedFile(dir, file) {
   const postedDir = dir + "/.posted";
@@ -5214,7 +5223,6 @@ function archivePostedFile(dir, file) {
   renameSync(dir + "/" + file, postedDir + "/" + file);
 }
 async function uploadAndAttachSandboxMedia(target2) {
-  if (RUN_ID) return;
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
   const isDuplicate = (filePath) => {
@@ -5265,7 +5273,11 @@ async function uploadAndAttachSandboxMedia(target2) {
     }
   }
   try {
-    await attachChatMediaIfAny(uploaded, target2);
+    if (RUN_ID) {
+      await attachRunMediaIfAny(uploaded);
+    } else {
+      await attachChatMediaIfAny(uploaded, target2);
+    }
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }

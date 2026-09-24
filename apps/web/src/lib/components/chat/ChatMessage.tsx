@@ -24,8 +24,7 @@ import {
   type BackgroundAgentEntry,
   type Id,
 } from "@eva/backend";
-import { VideoPreview } from "@/lib/components/MediaPreview";
-import { ImageGalleryPreview } from "@/lib/components/MediaGallery";
+import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
 import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
@@ -234,19 +233,7 @@ export const ChatMessage = memo(function ChatMessage({
       ? "via MCP"
       : undefined;
 
-  // Videos render as inline players; images collapse into one Twitter-style
-  // grid + lightbox so a screenshot-heavy turn is not a long vertical stack.
   const mediaEntries = message.media ?? [];
-  const videoMedia = mediaEntries.flatMap((entry) =>
-    entry.url && entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
-  const imageMedia = mediaEntries.flatMap((entry) =>
-    entry.url && !entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
 
   // Only surfaces with an Agents tab get the doorway to it.
   const agentSpawn = !onOpenAgentsTab
@@ -476,19 +463,7 @@ export const ChatMessage = memo(function ChatMessage({
                           onViewDiff={onViewDiff}
                         />
                       ) : null}
-                      {videoMedia.map((entry, index) => (
-                        // Capped to the same width `ImageGalleryPreview` uses, so
-                        // a video and a screenshot in the same reply line up
-                        // instead of the video spanning the whole pane.
-                        <VideoPreview
-                          key={index}
-                          url={entry.url}
-                          className="max-w-lg"
-                        />
-                      ))}
-                      {imageMedia.length > 0 ? (
-                        <ImageGalleryPreview images={imageMedia} />
-                      ) : null}
+                      <AgentMedia entries={mediaEntries} />
                     </>
                   )}
                 </MessageContent>

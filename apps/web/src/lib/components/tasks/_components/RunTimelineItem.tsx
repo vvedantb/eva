@@ -41,6 +41,7 @@ import type { TaskComment } from "../_utils/commentThread";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { RunActivityLog } from "../RunActivityLog";
+import { RunMedia } from "../RunMedia";
 import { Streamdown } from "streamdown";
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
@@ -298,6 +299,14 @@ export function RunTimelineItem({
                   finishedAt={run.finishedAt}
                 />
               </>
+            )}
+            {/* Captures the run left behind. Skipped when the run renders in
+                the sandbox chat — the chat turn shows the same files. */}
+            {activityInChat ? null : (
+              <RunMedia
+                runId={run._id}
+                hasMedia={(run.mediaStorageIds?.length ?? 0) > 0}
+              />
             )}
             {run.resultSummary && (
               <Streamdown
