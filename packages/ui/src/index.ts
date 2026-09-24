@@ -14,10 +14,7 @@ export {
 } from "./utils/gesture";
 export { useDragSensors } from "./utils/useDragSensors";
 export { ensureRuntimeVisibility } from "./utils/runtimeVisibility";
-export {
-  quantizedSnapshot,
-  subscribeQuantized,
-} from "./utils/sharedClock";
+export { quantizedSnapshot, subscribeQuantized } from "./utils/sharedClock";
 
 export * from "./ui/accordion";
 export * from "./ui/alert";
@@ -41,6 +38,7 @@ export * from "./ui/dropdown-menu";
 export * from "./ui/hover-card";
 export * from "./ui/input";
 export * from "./ui/input-group";
+export * from "./ui/refresh-spin-icon";
 export * from "./ui/search-input";
 export * from "./ui/label";
 export * from "./ui/list-row";

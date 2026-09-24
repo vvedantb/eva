@@ -7,9 +7,10 @@ import {
   PopoverContent,
   PopoverTrigger,
   motionFast,
+  CircleSpinner,
 } from "@eva/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
-import { IconLoader2, IconPlayerStop, IconRobot } from "@tabler/icons-react";
+import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
 import { CountPop } from "@/lib/components/ui/CountPop";
@@ -100,35 +101,35 @@ export function BackgroundAgentsChip({
                       fast
                       className="flex items-start gap-2 px-3 py-2.5"
                     >
-                        <IconRobot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 grow">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {agent.description?.trim() || "Background agent"}
-                          </p>
-                          <p className="text-xs capitalize text-muted-foreground">
-                            {formatStatus(agent.status)}
-                            {agent.backgrounded ? " · backgrounded" : ""}
-                          </p>
-                        </div>
-                        {!isReadOnly ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0"
-                            disabled={isStopping}
-                            onClick={() => {
-                              void handleStop(agent.toolUseId);
-                            }}
-                          >
-                            {isStopping ? (
-                              <IconLoader2 className="size-3.5 animate-spin" />
-                            ) : (
-                              <IconPlayerStop className="size-3.5" />
-                            )}
-                            Stop
-                          </Button>
-                        ) : null}
+                      <IconRobot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 grow">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {agent.description?.trim() || "Background agent"}
+                        </p>
+                        <p className="text-xs capitalize text-muted-foreground">
+                          {formatStatus(agent.status)}
+                          {agent.backgrounded ? " · backgrounded" : ""}
+                        </p>
+                      </div>
+                      {!isReadOnly ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          disabled={isStopping}
+                          onClick={() => {
+                            void handleStop(agent.toolUseId);
+                          }}
+                        >
+                          {isStopping ? (
+                            <CircleSpinner size="sm" className="size-3.5" />
+                          ) : (
+                            <IconPlayerStop className="size-3.5" />
+                          )}
+                          Stop
+                        </Button>
+                      ) : null}
                     </ListEnter>
                   );
                 })}

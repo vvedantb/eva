@@ -1,11 +1,16 @@
 import type { Id } from "@eva/backend";
-import { Button, Collapsible, CollapsibleContent, Spinner } from "@eva/ui";
+import {
+  Button,
+  CircleSpinner,
+  Collapsible,
+  CollapsibleContent,
+  Spinner,
+} from "@eva/ui";
 import {
   IconCheck,
   IconChevronDown,
   IconChevronRight,
   IconClock,
-  IconLoader2,
   IconPlayerStop,
   IconX,
 } from "@tabler/icons-react";
@@ -132,9 +137,9 @@ export function BuildRow({
                       <div key={a.repoId} className="flex items-start gap-2">
                         {a.status === "running" ? (
                           <span className="inline-flex items-center gap-1 text-blue-500">
-                            <IconLoader2
-                              size={12}
-                              className="shrink-0 animate-spin"
+                            <CircleSpinner
+                              size="sm"
+                              className="size-3 shrink-0"
                             />
                             {a.app ?? a.repoId} — seeding…
                           </span>
@@ -253,7 +258,7 @@ function SeededSummary({ seededApps }: { seededApps?: SeededAppResult[] }) {
   if (seededApps.some((a) => a.status === "running")) {
     return (
       <span className="inline-flex items-center gap-1 text-blue-500">
-        <IconLoader2 size={12} className="animate-spin" />
+        <CircleSpinner size="sm" className="size-3" />
         {seeded}/{total}
       </span>
     );

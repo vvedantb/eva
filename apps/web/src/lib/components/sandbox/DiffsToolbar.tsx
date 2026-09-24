@@ -11,12 +11,11 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconChevronsDown,
   IconChevronsUp,
-  IconRefresh,
   IconTextWrap,
 } from "@tabler/icons-react";
 import { isDiffView, type DiffView } from "@/lib/search-params";
@@ -158,9 +157,7 @@ export function DiffsToolbar({
               disabled={isLoading}
               aria-label="Refresh diffs"
             >
-              <IconRefresh
-                className={cn("size-4", isLoading && "animate-spin")}
-              />
+              <RefreshSpinIcon busy={isLoading} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Refresh</TooltipContent>

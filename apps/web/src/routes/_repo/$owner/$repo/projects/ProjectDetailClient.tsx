@@ -22,6 +22,7 @@ import {
   CenteredSpinner,
   toast,
   motionFast,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -62,7 +63,6 @@ import {
   IconHammer,
   IconPlayerStop,
   IconTerminal2,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -478,7 +478,7 @@ export function ProjectDetailClient({
                       disabled={isResolvingConflicts}
                     >
                       {isResolvingConflicts ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconHammer size={14} />
                       )}
@@ -502,7 +502,7 @@ export function ProjectDetailClient({
                       disabled={isRetryingStartupCommands}
                     >
                       {isRetryingStartupCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconRefresh size={14} />
                       )}
@@ -516,7 +516,7 @@ export function ProjectDetailClient({
                       disabled={isRunningBackgroundCommands}
                     >
                       {isRunningBackgroundCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconServerBolt size={14} />
                       )}
@@ -585,11 +585,7 @@ export function ProjectDetailClient({
                     disabled={isStoppingBuild}
                   >
                     {isStoppingBuild ? (
-                      <IconLoader2
-                        size={16}
-                        className="animate-spin"
-                        aria-hidden
-                      />
+                      <CircleSpinner size="sm" aria-hidden />
                     ) : (
                       <IconPlayerStop size={16} aria-hidden />
                     )}

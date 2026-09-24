@@ -17,14 +17,11 @@ import {
   IconListCheck,
   IconInfoCircle,
   IconAnchor,
-  IconLoader2,
 } from "@tabler/icons-react";
+import { CircleSpinner } from "../ui/spinner";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import {
-  quantizedSnapshot,
-  subscribeQuantized,
-} from "../utils/sharedClock";
+import { quantizedSnapshot, subscribeQuantized } from "../utils/sharedClock";
 
 /** One item in a todo checklist step (type "todos"). */
 export interface TodoItem {
@@ -151,7 +148,7 @@ export const stepConfig = {
   tool: { icon: IconTool, defaultLabel: "Used tool" },
   notice: { icon: IconInfoCircle, defaultLabel: "Notice" },
   hook: { icon: IconAnchor, defaultLabel: "Hook" },
-  status: { icon: IconLoader2, defaultLabel: "Status" },
+  status: { icon: CircleSpinner, defaultLabel: "Status" },
 };
 
 const SPINNER_VERBS = [
