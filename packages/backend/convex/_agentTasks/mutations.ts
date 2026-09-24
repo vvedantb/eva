@@ -415,8 +415,10 @@ export const updateStatus = authMutation({
       // every run: this is the moment the work is offered for review, so the
       // diff is final and it costs one model call per review instead of one
       // per run (mirrors a session's "Send for review"). Scheduled, not
-      // awaited, and best-effort — a stopped sandbox just logs and leaves the
-      // static PR body in place.
+      // awaited, and best-effort — a failure leaves the static PR body in
+      // place. The run stops the sandbox on its way out, so the action resumes
+      // it for the model call and stops it again unless the reviewer already
+      // has it open.
       if (enteringCodeReview && prUrl && repo && task.sandboxId) {
         await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
           installationId: repo.installationId,
@@ -425,6 +427,7 @@ export const updateStatus = authMutation({
           prUrl,
           sandboxId: task.sandboxId,
           repoId: task.repoId,
+          restoreStoppedSandbox: task.reviewTaskSandboxStatus !== "active",
         });
       }
     }
