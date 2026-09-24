@@ -48,6 +48,7 @@ import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
 import {
   FieldsSection,
   FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
 import {
@@ -423,7 +424,7 @@ export function StatusFieldsSection({
             onTraitsChange={(partial) =>
               updateTask({ id: taskId, ...toRunTraitArgs(partial) })
             }
-            className="px-0"
+            className={`px-0 ${FIELD_TEXT_CLASS}`}
           />
           {modelLockReason ? (
             <Tooltip>
@@ -454,10 +455,10 @@ export function StatusFieldsSection({
                   onValueChange={(val) => {
                     updateTask({ id: taskId, baseBranch: val });
                   }}
-                  className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
+                  className={`h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent [&>svg:last-child]:hidden ${FIELD_TEXT_CLASS}`}
                 />
               ) : (
-                <div className="flex items-center gap-1.5 text-[13px]">
+                <div className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}>
                   <IconGitBranch size={14} className="text-muted-foreground" />
                   <span>{baseBranch}</span>
                   <Tooltip>
@@ -481,7 +482,7 @@ export function StatusFieldsSection({
           {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
             <m.div
               key="vercel-deployment"
-              className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}
+              className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
