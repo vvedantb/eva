@@ -262,12 +262,6 @@ export const SANDBOX_CHAT_COPY = {
   asleepPlaceholder: "Wake Eva up to send a message…",
   /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
-  /**
-   * A quick task's first run owns the sandbox until it finishes, so the chat
-   * shows that turn live but cannot take a follow-up yet.
-   */
-  firstRunDisabledReason:
-    "Eva is running this task — you can reply when it finishes",
   wakeAction: "Wake up Eva",
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
@@ -275,6 +269,41 @@ export const SANDBOX_CHAT_COPY = {
   activeDescription:
     "Type / for skills, @ to mention, or drop files to attach.",
 } as const;
+
+/**
+ * Whether a sandbox chat composer accepts input, and the copy that goes with
+ * it. One rule for all three surfaces: a running turn always takes a follow-up,
+ * because that send is queued rather than handed to the sandbox. Sessions got
+ * that for free — their sandbox is active whenever a turn runs — while a quick
+ * task's first run owns the sandbox before it is marked active, which locked
+ * the composer and made queueing impossible there.
+ */
+export function sandboxComposerState({
+  isSandboxActive,
+  isSwitchingAccount,
+  isExecuting,
+}: {
+  isSandboxActive: boolean;
+  isSwitchingAccount: boolean;
+  isExecuting: boolean;
+}): {
+  isInputDisabled: boolean;
+  placeholder: string;
+  disabledReason: string;
+} {
+  const isAsleep = !isSandboxActive && !isExecuting;
+  return {
+    isInputDisabled: isAsleep || isSwitchingAccount,
+    placeholder: isAsleep
+      ? SANDBOX_CHAT_COPY.asleepPlaceholder
+      : isSwitchingAccount
+        ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+        : SANDBOX_CHAT_COPY.activePlaceholder,
+    disabledReason: isSwitchingAccount
+      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+      : SANDBOX_CHAT_COPY.asleepDisabledReason,
+  };
+}
 
 /**
  * The failure a send threw, as the user should read it. Convex wraps a server
