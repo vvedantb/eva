@@ -250,6 +250,16 @@ export function ChatBody({
   // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
 
+  // Streamed prose and the tool timeline arrive in the same Convex patch, but
+  // they cost wildly different amounts to render: the prose grows by a few
+  // characters, while the activity payload is a JSON blob capped at 600 KB
+  // that fans out into the timeline, the composer's todo badge, the sub-agent
+  // row and the question cards. Deferring the activity splits them across two
+  // passes — the text the user is reading commits at full priority, and the
+  // timeline re-renders at transition priority, where React can abandon a long
+  // render when the next token lands instead of holding the frame.
+  const deferredStreamingActivity = useDeferredValue(streamingActivity);
+
   const lastMessage = displayMessages[displayMessages.length - 1];
   // The oldest unfinished Working bubble owns the session-scoped streaming
   // row — turns run FIFO, so a newer queued placeholder must not steal a
@@ -434,7 +444,9 @@ export function ChatBody({
           turnModel={precedingUser?.model}
           turnReasoningLevel={precedingUser?.reasoningLevel}
           turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
-          streamingActivity={isStreamingTarget ? streamingActivity : undefined}
+          streamingActivity={
+            isStreamingTarget ? deferredStreamingActivity : undefined
+          }
           streamingContent={isStreamingTarget ? streamingContent : undefined}
           onOpenFile={onOpenFile}
           onViewDiff={onViewDiff}
@@ -554,7 +566,7 @@ export function ChatBody({
                 onCancel={onCancel}
                 beforeQueuedContent={beforeQueuedContent}
                 preInputContent={preInputContent}
-                streamingActivity={streamingActivity}
+                streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}
                 draft={draft}
