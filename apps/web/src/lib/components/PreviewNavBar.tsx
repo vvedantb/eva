@@ -3,21 +3,19 @@
 import { useState, useEffect, useRef, type RefObject } from "react";
 import {
   Button,
-  CrossfadeIcon,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
-  CircleSpinner,
   WebPreviewNavigationButton,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconArrowLeft,
   IconArrowRight,
   IconCheck,
   IconChevronDown,
-  IconRefresh,
   IconExternalLink,
   IconMaximize,
 } from "@tabler/icons-react";
@@ -317,15 +315,7 @@ export function PreviewNavBar({
         onClick={isLoading && onRefresh ? onRefresh : reload}
         disabled={isLoading}
       >
-        <CrossfadeIcon
-          show={isLoading}
-          trueKey="loading"
-          falseKey="idle"
-          variant="soft"
-          className="relative flex size-3.5 items-center justify-center"
-          whenTrue={<CircleSpinner size="sm" />}
-          whenFalse={<IconRefresh className="w-3.5 h-3.5" />}
-        />
+        <RefreshSpinIcon busy={isLoading} className="size-3.5" />
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}
