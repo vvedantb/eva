@@ -52,6 +52,86 @@ export const DRIVE_MOUNT_PATH = "/eva-drive";
  */
 export const DRIVE_CACHE_ROOT = "/eva-cache";
 
+/** Where Vercel attaches the shared toolchain Drive. See TOOLCHAIN_SHARES. */
+export const TOOLCHAIN_MOUNT_PATH = "/eva-toolchain";
+
+/**
+ * One Drive for the whole Vercel project, holding toolchain artefacts that are
+ * byte-identical for every repo — unlike the per-repo package cache, there is
+ * nothing repo-specific about a Convex backend build or a cursor-agent release.
+ */
+export const TOOLCHAIN_DRIVE_NAME = "eva-toolchain";
+
+/**
+ * Directories redirected onto the toolchain Drive, as `[local path, name on
+ * the Drive]`. Each is bind-mounted over its normal location, so the tools
+ * themselves need no configuration and keep working if the Drive is absent.
+ *
+ * Both entries are version-keyed download caches: the tool writes a new
+ * directory per release and reads it back on every later start, which is
+ * exactly the access pattern a Drive suits. Together they are ~410 MB that is
+ * currently duplicated into the seeded snapshot of every repo.
+ *
+ * Chrome (~416 MB in /opt/google) is deliberately NOT here despite being the
+ * single largest candidate: it is installed by `dnf` and owned by the RPM
+ * database, so bind-mounting over its directory would leave rpm describing
+ * files that are no longer visible — a broken package manager is not worth
+ * 400 MB. Anything added here must be plain downloaded files that no package
+ * manager tracks.
+ */
+export const TOOLCHAIN_SHARES: ReadonlyArray<readonly [string, string]> = [
+  ["/home/vercel-sandbox/.cache/convex/binaries", "convex-binaries"],
+  ["/home/eva/.local/share/cursor-agent/versions", "cursor-agent"],
+];
+
+/**
+ * Shell that redirects {@link TOOLCHAIN_SHARES} onto the toolchain Drive.
+ *
+ * Same three-way degradation as {@link driveCacheSetupScript}, and the same
+ * writability probe rather than a trusted role. One extra rule: a share is only
+ * redirected if the Drive actually has content for it OR the Drive is writable.
+ * Bind-mounting an empty read-only directory over a populated local cache would
+ * HIDE a working toolchain and force a re-download — worse than doing nothing.
+ */
+export function toolchainSetupScript(): string {
+  const probe = `${TOOLCHAIN_MOUNT_PATH}/.eva-write-probe`;
+  return [
+    `if [ ! -d ${TOOLCHAIN_MOUNT_PATH} ]; then exit 0; fi`,
+    `TC_RW=0`,
+    `if sudo touch ${probe} 2>/dev/null; then sudo rm -f ${probe} 2>/dev/null || true; TC_RW=1; fi`,
+    ...TOOLCHAIN_SHARES.flatMap(([localPath, driveDir]) => {
+      const src = `${TOOLCHAIN_MOUNT_PATH}/${driveDir}`;
+      return [
+        `if mountpoint -q ${localPath} 2>/dev/null; then :;`,
+        // Writable Drive: seed it from whatever is already on local disk, then
+        // take it over. `cp -an` never clobbers a newer copy on the Drive.
+        `elif [ "$TC_RW" = "1" ]; then`,
+        `  sudo mkdir -p ${src} ${localPath} 2>/dev/null || true`,
+        `  sudo cp -an ${localPath}/. ${src}/ 2>/dev/null || true`,
+        `  sudo mount --bind ${src} ${localPath} 2>/dev/null || true`,
+        `  sudo chmod 777 ${localPath} 2>/dev/null || true`,
+        // Read-only Drive: only take over when the Drive has something to
+        // give, and overlay rather than bind — these tools write a new version
+        // directory into their own cache, and a read-only bind would turn that
+        // into a hard failure instead of a re-download.
+        `elif [ -d ${src} ] && [ -n "$(ls -A ${src} 2>/dev/null)" ]; then`,
+        `  sudo mkdir -p ${localPath} ${OVERLAY_UPPER}/${driveDir} ${OVERLAY_WORK}/${driveDir} 2>/dev/null || true`,
+        `  sudo mount -t overlay overlay -o lowerdir=${src},upperdir=${OVERLAY_UPPER}/${driveDir},workdir=${OVERLAY_WORK}/${driveDir} ${localPath} 2>/dev/null || true`,
+        `  sudo chmod 777 ${localPath} 2>/dev/null || true`,
+        `fi`,
+      ];
+    }),
+    `exit 0`,
+  ].join("\n");
+}
+
+/** Releases the {@link TOOLCHAIN_SHARES} bind mounts before a snapshot capture. */
+function toolchainTeardownLines(): string[] {
+  return TOOLCHAIN_SHARES.map(
+    ([localPath]) => `sudo umount -l ${localPath} 2>/dev/null || true`,
+  );
+}
+
 /**
  * Detaches the cache before an explicit snapshot capture, so what gets baked is
  * an empty directory rather than a live mount. A snapshot captures the sandbox
@@ -64,6 +144,10 @@ export const DRIVE_CACHE_ROOT = "/eva-cache";
 export function driveCacheTeardownScript(): string {
   return [
     `sudo umount -l ${DRIVE_CACHE_ROOT} 2>/dev/null || true`,
+    // Toolchain binds first-class here rather than as a separate script: both
+    // must come down before the same capture, and two scripts joined by the
+    // caller would put an `exit 0` between them and silently skip the second.
+    ...toolchainTeardownLines(),
     `sudo rm -rf ${OVERLAY_UPPER} ${OVERLAY_WORK} 2>/dev/null || true`,
     `exit 0`,
   ].join("\n");
@@ -104,6 +188,11 @@ export function driveCacheName(repoId: string): string {
 export const DRIVE_CACHE_ENV: Record<string, string> = {
   npm_config_cache: `${DRIVE_CACHE_ROOT}/npm`,
   npm_config_store_dir: `${DRIVE_CACHE_ROOT}/pnpm-store`,
+  // pnpm's registry-metadata cache is a SEPARATE key from the store: the store
+  // holds package contents, `cache-dir` holds the resolution metadata (167 MB
+  // of it on a seeded sandbox). Without this it stays on local disk and gets
+  // baked into every snapshot.
+  npm_config_cache_dir: `${DRIVE_CACHE_ROOT}/pnpm-metadata`,
   YARN_CACHE_FOLDER: `${DRIVE_CACHE_ROOT}/yarn`,
 };
 
@@ -125,6 +214,7 @@ export const DRIVE_CACHE_ENV: Record<string, string> = {
  */
 export function driveCacheSetupScript(): string {
   const probe = `${DRIVE_MOUNT_PATH}/.eva-write-probe`;
+  const cacheDirs = Object.values(DRIVE_CACHE_ENV).join(" ");
   return [
     `sudo mkdir -p ${DRIVE_CACHE_ROOT} 2>/dev/null || true`,
     // Already set up (resumed sandbox, or this ran earlier in create) — stop.
@@ -146,8 +236,10 @@ export function driveCacheSetupScript(): string {
     // World-writable so the `eva` user and root share one cache; the mount may
     // be owned by root. Deliberately NOT recursive — on a warm Drive that would
     // walk the entire package store on every single sandbox create.
-    `sudo mkdir -p ${DRIVE_CACHE_ENV.npm_config_cache} ${DRIVE_CACHE_ENV.npm_config_store_dir} ${DRIVE_CACHE_ENV.YARN_CACHE_FOLDER} 2>/dev/null || true`,
-    `sudo chmod 777 ${DRIVE_CACHE_ROOT} ${DRIVE_CACHE_ENV.npm_config_cache} ${DRIVE_CACHE_ENV.npm_config_store_dir} ${DRIVE_CACHE_ENV.YARN_CACHE_FOLDER} 2>/dev/null || true`,
+    // Derived from DRIVE_CACHE_ENV, never hand-listed: adding a cache above
+    // must not require remembering to create and chmod its directory here.
+    `sudo mkdir -p ${cacheDirs} 2>/dev/null || true`,
+    `sudo chmod 777 ${DRIVE_CACHE_ROOT} ${cacheDirs} 2>/dev/null || true`,
     `exit 0`,
   ].join("\n");
 }

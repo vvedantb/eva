@@ -180,6 +180,7 @@ import type * as _sandbox_ffmpegInstall from "../_sandbox/ffmpegInstall.js";
 import type * as _sandbox_owner from "../_sandbox/owner.js";
 import type * as _sandbox_provider from "../_sandbox/provider.js";
 import type * as _sandbox_resolveExistingSandboxId from "../_sandbox/resolveExistingSandboxId.js";
+import type * as _sandbox_snapshotPrune from "../_sandbox/snapshotPrune.js";
 import type * as _sandbox_startupActivity from "../_sandbox/startupActivity.js";
 import type * as _sandbox_stickyPreview from "../_sandbox/stickyPreview.js";
 import type * as _sandbox_stopRecovery from "../_sandbox/stopRecovery.js";
@@ -632,6 +633,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/owner": typeof _sandbox_owner;
   "_sandbox/provider": typeof _sandbox_provider;
   "_sandbox/resolveExistingSandboxId": typeof _sandbox_resolveExistingSandboxId;
+  "_sandbox/snapshotPrune": typeof _sandbox_snapshotPrune;
   "_sandbox/startupActivity": typeof _sandbox_startupActivity;
   "_sandbox/stickyPreview": typeof _sandbox_stickyPreview;
   "_sandbox/stopRecovery": typeof _sandbox_stopRecovery;

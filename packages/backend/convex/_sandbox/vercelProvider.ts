@@ -49,6 +49,7 @@ import {
 } from "./vercelSnapshotOptions";
 import { driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
+import { snapshotPruneScript } from "./snapshotPrune";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
 
 export {
@@ -1072,6 +1073,17 @@ class VercelSandboxHandle implements SandboxHandle {
     } catch (error) {
       console.warn(
         `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    // Drop regenerable junk so it is not baked in and then restored by every
+    // sandbox for this repo (~740 MB measured). Strictly best-effort: a failed
+    // prune costs disk, a failed capture costs the whole snapshot.
+    try {
+      await this.exec(snapshotPruneScript(), { timeoutSeconds: 120 });
+    } catch (error) {
+      console.warn(
+        `[vercel] snapshot prune failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 

@@ -6,7 +6,11 @@ import { formatDurationMsShort } from "@eva/shared/duration";
 import { getInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
-import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
+import type {
+  SandboxClient,
+  SandboxHandle,
+  SandboxMount,
+} from "../_sandbox/provider";
 import {
   execHandle,
   LEGACY_WORKSPACE_DIR,
@@ -42,8 +46,11 @@ import {
   DRIVE_CACHE_READER,
   DRIVE_CACHE_WRITER,
   DRIVE_MOUNT_PATH,
+  TOOLCHAIN_DRIVE_NAME,
+  TOOLCHAIN_MOUNT_PATH,
   driveCacheName,
   driveCacheSetupScript,
+  toolchainSetupScript,
   type DriveCacheRole,
 } from "../_sandbox/driveCache";
 import {
@@ -338,8 +345,11 @@ export async function createSandbox(
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<SandboxHandle> {
   // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
-  // only on paths that never resolve a repo, which then get no mount at all.
+  // only on paths that never resolve a repo, which then get the project-wide
+  // toolchain Drive but no package cache.
   const repoId = sandboxEnvVars.REPO_ID;
+  const driveMountMode: SandboxMount["mode"] =
+    driveCacheRole === DRIVE_CACHE_WRITER ? "read-write" : "snapshot";
   const details = [
     `installation=${installationId}`,
     snapshotName ? `snapshot=${snapshotName}` : "snapshot=none",
@@ -387,18 +397,25 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
-      mounts: repoId
-        ? [
-            {
-              path: DRIVE_MOUNT_PATH,
-              volumeName: driveCacheName(repoId),
-              mode:
-                driveCacheRole === DRIVE_CACHE_WRITER
-                  ? "read-write"
-                  : "snapshot",
-            },
-          ]
-        : undefined,
+      // Two Drives, both following driveCacheRole: the per-repo package cache
+      // and the project-wide toolchain share. Vercel allows four per sandbox.
+      // The toolchain Drive needs no repoId — it is identical for every repo.
+      mounts: [
+        ...(repoId
+          ? [
+              {
+                path: DRIVE_MOUNT_PATH,
+                volumeName: driveCacheName(repoId),
+                mode: driveMountMode,
+              },
+            ]
+          : []),
+        {
+          path: TOOLCHAIN_MOUNT_PATH,
+          volumeName: TOOLCHAIN_DRIVE_NAME,
+          mode: driveMountMode,
+        },
+      ],
     });
     logGit(
       `createSandbox: created id=${sandbox.id}, cpu=${sandbox.cpu}, memory=${sandbox.memory}, disk=${sandbox.disk}`,
@@ -433,6 +450,12 @@ export async function createSandbox(
       // the script itself soft-fails to a plain directory.
       await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
         execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
+      );
+      // Separate step: the toolchain Drive seeds itself from local disk on the
+      // writer, so it can take noticeably longer than the package cache and
+      // deserves its own timing line in the logs.
+      await runLoggedGitStep("createSandbox.toolchainDrive", sandbox.id, () =>
+        execHandle(sandbox, toolchainSetupScript(), 180, "/"),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources
       // eva-env. Never fail create over this hook.
