@@ -20,10 +20,12 @@
  *   `ptyProtocol: v.literal("vercel")` discriminator and hands the browser a ws
  *   URL. See ../_pty/vercel.ts (tmux-backed shared panes).
  * - desktop: implemented, see VercelDesktop below (TigerVNC + websockify/noVNC).
- * - volumes: the one genuine gap. `ensureVolume` throws — Drives are still beta.
+ * - volumes: Drives, attached at create via `SandboxCreateParams.mounts`. See
+ *   resolveMounts below and ./driveCache.ts for the shared-cache policy.
  */
 
-import { Sandbox } from "@vercel/sandbox";
+import { Drive, Sandbox } from "@vercel/sandbox";
+import type { SandboxMounts, SandboxRegion } from "@vercel/sandbox";
 import { z } from "zod";
 import { SandboxProviderError } from "./provider";
 import type {
@@ -36,6 +38,7 @@ import type {
   SandboxDesktop,
   SandboxGit,
   SandboxHandle,
+  SandboxMount,
   SandboxProviderKind,
   SandboxSnapshotInfo,
   SandboxState,
@@ -44,6 +47,7 @@ import {
   KEEP_LAST_SNAPSHOTS,
   vercelSnapshotCreateOptions,
 } from "./vercelSnapshotOptions";
+import { driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
 
@@ -82,6 +86,20 @@ const SNAPSHOT_REQUEST_TIMEOUT_MS = 120_000;
 export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
   3000, 8080, 6080, 54321,
 ];
+/**
+ * Region for both sandboxes and Drives. Drives are region-pinned and a sandbox
+ * can only mount one created in its own region, so the two must be set from a
+ * single value — `iad1` is the SDK default for both, making this a no-op pin
+ * that stops the pair drifting apart if either default ever moves.
+ */
+const SANDBOX_REGION: SandboxRegion = "iad1";
+/**
+ * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
+ * bytes ($0.05/GB-month in iad1), so the cap only bounds a runaway cache. The
+ * SDK default is 1 TiB, which is far more headroom than a package store needs.
+ */
+const DRIVE_MAX_SIZE_BYTES =
+  Number(process.env.SANDBOX_VERCEL_DRIVE_MAX_GIB ?? "64") * 1024 ** 3;
 
 /** Maps Vercel's session status onto the neutral {@link SandboxState}. */
 function normalizeState(raw: string | undefined): SandboxState {
@@ -364,6 +382,43 @@ class VercelDesktop implements SandboxDesktop {
       { timeoutSeconds: 30 },
     );
   }
+}
+
+/**
+ * `path=mode` summary of a mount map for logs. A bare `Drive` in the SDK's
+ * union means read-write; `drive.snapshot()` returns the tagged object form.
+ */
+function describeMounts(mounts: SandboxMounts | undefined): string {
+  if (!mounts) return "none";
+  return Object.entries(mounts)
+    .map(
+      ([path, value]) =>
+        `${path}=${value instanceof Drive ? "read-write" : value.mode}`,
+    )
+    .join(",");
+}
+
+/**
+ * Progressively weaker mount sets to try at create, most capable first:
+ * as requested → read-write demoted to read-only snapshots → nothing. Stages
+ * that would repeat the previous one are skipped, so a request with no
+ * read-write mounts yields two entries rather than three.
+ */
+function mountFallbackLadder(
+  mounts: SandboxMounts | undefined,
+): ReadonlyArray<SandboxMounts | undefined> {
+  if (!mounts) return [undefined];
+  const demoted: SandboxMounts = {};
+  let changed = false;
+  for (const [path, value] of Object.entries(mounts)) {
+    if (value instanceof Drive) {
+      demoted[path] = value.snapshot();
+      changed = true;
+    } else {
+      demoted[path] = value;
+    }
+  }
+  return changed ? [mounts, demoted, undefined] : [mounts, undefined];
 }
 
 /** A handle to one Vercel sandbox, exposing the neutral {@link SandboxHandle}. */
@@ -1008,6 +1063,18 @@ class VercelSandboxHandle implements SandboxHandle {
   async createSnapshot(
     params: CreateSnapshotParams,
   ): Promise<{ snapshotId: string }> {
+    // Detach the cache Drive first so the capture cannot pick it up — see
+    // driveCacheTeardownScript. Deliberately NOT done in stop(): that path must
+    // never depend on a live command stream (a dead one would block shutdown),
+    // so auto-snapshots on stop keep whatever is mounted.
+    try {
+      await this.exec(driveCacheTeardownScript(), { timeoutSeconds: 30 });
+    } catch (error) {
+      console.warn(
+        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
     // Vercel snapshots are id-addressed (name is ignored for addressing).
     // Retention is also set at create/stop; re-apply here so explicit captures
     // still evict older snap_* objects. snapshotWorkflow separately deletes the
@@ -1060,12 +1127,49 @@ class VercelSandboxClient implements SandboxClient {
 
   constructor(private readonly creds: VercelCredentials) {}
 
+  /**
+   * Turns neutral {@link SandboxMount}s into the SDK's `mounts` map, resolving
+   * each volume name to a Drive (created on first use).
+   *
+   * Best-effort by contract (see SandboxCreateParams.mounts): every failure
+   * drops the mount and returns what resolved. The two that actually happen:
+   * a `read-write` request for a Drive another sandbox already holds the write
+   * lock on (the previous seed-prep sandbox outlived its teardown), and a plain
+   * API error. Both must degrade to a cold cache, never to a failed create.
+   */
+  private async resolveMounts(
+    mounts: ReadonlyArray<SandboxMount>,
+  ): Promise<SandboxMounts | undefined> {
+    const resolved: SandboxMounts = {};
+    for (const mount of mounts) {
+      try {
+        const drive = await Drive.getOrCreate({
+          ...this.creds,
+          name: mount.volumeName,
+          region: SANDBOX_REGION,
+          maxSize: DRIVE_MAX_SIZE_BYTES,
+        });
+        resolved[mount.path] =
+          mount.mode === "read-write" ? drive : drive.snapshot();
+      } catch (e) {
+        console.warn(
+          `[vercel] drive mount skipped name=${mount.volumeName} path=${mount.path} mode=${mount.mode}: ${extractApiErrorDetail(e)}`,
+        );
+      }
+    }
+    return Object.keys(resolved).length > 0 ? resolved : undefined;
+  }
+
   async create(params: SandboxCreateParams): Promise<SandboxHandle> {
     // env is written to a file post-create (see EVA_ENV_FILE) rather than passed
     // here — Vercel's create-time env cap is 4 KB and eva's env exceeds it.
     const persistent = params.lifecycle.ephemeral !== true;
+    const mounts = params.mounts?.length
+      ? await this.resolveMounts(params.mounts)
+      : undefined;
     const base = {
       ...this.creds,
+      region: SANDBOX_REGION,
       // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
       // hard-kill a long seed build or agent turn mid-run. Floor it to the Pro
@@ -1078,19 +1182,45 @@ class VercelSandboxClient implements SandboxClient {
       ports: (params.ports ?? VERCEL_DEFAULT_EXPOSED_PORTS).slice(0, MAX_PORTS),
       ...(params.lifecycle.labels ? { tags: params.lifecycle.labels } : {}),
     };
-    try {
-      const sandbox = params.snapshot
-        ? await Sandbox.create({
-            ...base,
+    const attempt = (withMounts: SandboxMounts | undefined) => {
+      const opts = { ...base, ...(withMounts ? { mounts: withMounts } : {}) };
+      return params.snapshot
+        ? Sandbox.create({
+            ...opts,
             source: { type: "snapshot", snapshotId: params.snapshot },
           })
         : params.image
           ? // VCR image boot. `image` and the legacy `runtime` are mutually
             // exclusive in the SDK types, hence the separate call.
-            await Sandbox.create({ ...base, image: params.image })
-          : await Sandbox.create({ ...base, runtime: "node24" });
+            Sandbox.create({ ...opts, image: params.image })
+          : Sandbox.create({ ...opts, runtime: "node24" });
+    };
+    // Mounts attach at create, and the Drive write lock is enforced there too —
+    // so a read-write request for a Drive an earlier sandbox still holds fails
+    // the CREATE, not the earlier getOrCreate. Degrade rather than fail, in the
+    // order that keeps the most value: demote read-write to a read-only
+    // snapshot (still a warm cache, just not writable), then drop mounts
+    // entirely (cold cache). A sandbox always wins over a cache.
+    const ladder = mountFallbackLadder(mounts);
+    try {
+      let used = ladder[0];
+      const sandbox = await attempt(used).catch(async (e: unknown) => {
+        let lastError = e;
+        for (const next of ladder.slice(1)) {
+          console.warn(
+            `[vercel] create failed with mounts=${describeMounts(used)}; retrying with mounts=${describeMounts(next)}: ${extractApiErrorDetail(lastError)}`,
+          );
+          used = next;
+          try {
+            return await attempt(next);
+          } catch (retryError) {
+            lastError = retryError;
+          }
+        }
+        throw lastError;
+      });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"}`,
+        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1110,7 +1240,10 @@ class VercelSandboxClient implements SandboxClient {
       // params we sent (env values redacted) so a create failure is diagnosable.
       const detail = extractApiErrorDetail(e);
       throw new Error(
-        `vercel create failed (snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}): ${detail}`,
+        // requestedMounts is what the ladder STARTED from: by the time this
+        // throws every weaker stage (including no mounts at all) has already
+        // failed too, so mounts are never the remaining suspect.
+        `vercel create failed (snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }
@@ -1154,12 +1287,6 @@ class VercelSandboxClient implements SandboxClient {
     }
   }
 
-  async ensureVolume(_name: string): Promise<{ id: string; ready: boolean }> {
-    // Persistent named volumes map to Vercel Drives (beta) — not wired yet.
-    throw new Error(
-      "Vercel provider does not implement named volumes yet (Drives, beta — Phase 2 follow-up).",
-    );
-  }
 }
 
 /** Recovers the underlying Vercel sandbox from a handle (PTY, etc.). */

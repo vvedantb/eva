@@ -22,6 +22,7 @@ import {
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
+import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
 import {
   COREPACK_SANDBOX_ENV,
@@ -326,6 +327,12 @@ export const launchSeedRun = internalAction({
       // Same Corepack env as the session env file: never fetch npm `latest`
       // for an unpinned repo, never hang on the download prompt.
       renderEvaEnvFile(COREPACK_SANDBOX_ENV).trimEnd(),
+      // The seed run's `pnpm install` is the single biggest download in the
+      // whole system, and this sandbox holds the cache Drive's read-write
+      // mount — so it must point at the cache, or nothing ever populates it.
+      // The script is detached and does not source EVA_ENV_FILE, hence the
+      // second copy of these exports.
+      renderEvaEnvFile(DRIVE_CACHE_ENV).trimEnd(),
       GITHUB_RELEASE_DOWNLOAD_FUNCTION,
       "rm -f /tmp/.seedrun-done",
     ];
@@ -800,6 +807,13 @@ export const createSeedPrepSandbox = internalAction({
       // 600s per-action ceiling on providers (Vercel) that don't have deps
       // pre-baked into their base snapshot.
       true,
+      undefined, // image
+      false, // skipDocker
+      // Cache WRITER: this is the sandbox where the seed run's `pnpm install`
+      // actually downloads the repo's dependency tree, and the snapshot
+      // workflow runs at most one per repo at a time — so it takes the Drive's
+      // single read-write mount and fills the cache every session then reads.
+      DRIVE_CACHE_WRITER,
     );
     return { ok: true, sandboxId: sandbox.id };
   },

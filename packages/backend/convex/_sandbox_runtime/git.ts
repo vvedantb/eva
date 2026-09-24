@@ -38,6 +38,15 @@ import {
 import { ensureSwapFile } from "./swap";
 import { COREPACK_SANDBOX_ENV } from "../_sandbox/vercelEnvFile";
 import {
+  DRIVE_CACHE_ENV,
+  DRIVE_CACHE_READER,
+  DRIVE_CACHE_WRITER,
+  DRIVE_MOUNT_PATH,
+  driveCacheName,
+  driveCacheSetupScript,
+  type DriveCacheRole,
+} from "../_sandbox/driveCache";
+import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
   renderEvaEnvFile,
@@ -320,12 +329,23 @@ export async function createSandbox(
    * of `docker info` loops). Skip it.
    */
   skipDocker = false,
+  /**
+   * How this sandbox uses the repo's shared package cache Drive. Defaults to
+   * the read-only reader role; only the seed-prep and group-builder sandboxes
+   * pass `writer`, since a Drive allows one read-write mount at a time.
+   * See ../_sandbox/driveCache.ts.
+   */
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<SandboxHandle> {
+  // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
+  // only on paths that never resolve a repo, which then get no mount at all.
+  const repoId = sandboxEnvVars.REPO_ID;
   const details = [
     `installation=${installationId}`,
     snapshotName ? `snapshot=${snapshotName}` : "snapshot=none",
     image ? `image=${image}` : "image=none",
     lifecycle.ephemeral ? "ephemeral=true" : "ephemeral=false",
+    `driveCache=${repoId ? driveCacheRole : "none"}`,
   ].join(", ");
   return await runLoggedGitStep("createSandbox", details, async () => {
     const timeoutSeconds =
@@ -367,6 +387,18 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
+      mounts: repoId
+        ? [
+            {
+              path: DRIVE_MOUNT_PATH,
+              volumeName: driveCacheName(repoId),
+              mode:
+                driveCacheRole === DRIVE_CACHE_WRITER
+                  ? "read-write"
+                  : "snapshot",
+            },
+          ]
+        : undefined,
     });
     logGit(
       `createSandbox: created id=${sandbox.id}, cpu=${sandbox.cpu}, memory=${sandbox.memory}, disk=${sandbox.disk}`,
@@ -386,11 +418,21 @@ export async function createSandbox(
           renderEvaEnvFile({
             VNC_RESOLUTION: "1920x1080",
             ...COREPACK_SANDBOX_ENV,
+            // Safe to set unconditionally: driveCacheSetupScript guarantees the
+            // cache root exists and is writable even when no Drive attached, so
+            // the worst case is an ordinary empty local cache.
+            ...DRIVE_CACHE_ENV,
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),
           }),
         ),
+      );
+      // Must run before any install: it turns the raw Drive mount into the
+      // writable cache root the env above points at. Never fails a create —
+      // the script itself soft-fails to a plain directory.
+      await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
+        execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources
       // eva-env. Never fail create over this hook.
@@ -1588,6 +1630,8 @@ export async function createSandboxAndPrepareRepo(
   image?: string,
   // Orchestrator: skip dockerd. See createSandbox.skipDocker.
   skipDocker = false,
+  // Shared package-cache Drive role. See createSandbox.driveCacheRole.
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
   let sandbox: SandboxHandle | undefined;
   try {
@@ -1609,6 +1653,7 @@ export async function createSandboxAndPrepareRepo(
             onSandboxAcquired,
             image,
             skipDocker,
+            driveCacheRole,
           );
         } catch (err) {
           if (effectiveSnapshot && isSnapshotUnusableError(err)) {
@@ -1628,6 +1673,7 @@ export async function createSandboxAndPrepareRepo(
               onSandboxAcquired,
               image,
               skipDocker,
+              driveCacheRole,
             );
           } else {
             throw err;
