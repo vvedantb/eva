@@ -12,6 +12,7 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 type PanelState = "loading" | "running" | "error";
 
@@ -146,9 +147,7 @@ export function CustomTabPanel({
         }, 3000);
       } catch (err) {
         if (gen !== generation.current) return;
-        setError(
-          err instanceof Error ? err.message : `Failed to load ${name}.`,
-        );
+        setError(convexErrorMessage(err, `Failed to load ${name}.`));
         setState("error");
       }
     };

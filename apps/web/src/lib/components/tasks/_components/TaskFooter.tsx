@@ -35,6 +35,10 @@ import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartSto
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import {
+  errorToneClassName,
+  type ConvexErrorPresentation,
+} from "@/lib/utils/convexErrorMessage";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -48,7 +52,8 @@ interface TaskFooterProps {
   latestPrUrl: string | undefined;
   latestPrError: string | undefined;
   latestDeployment: RunDoc | undefined;
-  executionError: string | null;
+  /** Carries its own tone: not every failed action is a failure. */
+  executionError: ConvexErrorPresentation | null;
   isStarting: boolean;
   canStartSandbox: boolean;
   isSandboxActive: boolean;
@@ -144,6 +149,10 @@ export function TaskFooter({
     hasSandboxCommandItems ||
     prLinks.hasItems;
   const hasSecondaryContent = isHeader || showSandboxToggle || showMoreMenu;
+  // A run's own stored `prError` predates tagged errors, so it stays a failure.
+  const shownError: ConvexErrorPresentation | null =
+    executionError ??
+    (latestPrError ? { message: latestPrError, tone: "error" } : null);
 
   return (
     <div
@@ -154,16 +163,16 @@ export function TaskFooter({
       }
     >
       <AnimatePresence initial={false}>
-        {!isHeader && (executionError || latestPrError) ? (
+        {!isHeader && shownError ? (
           <m.p
             key="footer-error"
-            className="text-xs text-destructive text-right"
+            className={`text-xs text-right ${errorToneClassName(shownError.tone)}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={motionFast}
           >
-            {executionError ?? latestPrError}
+            {shownError.message}
           </m.p>
         ) : null}
       </AnimatePresence>
@@ -175,16 +184,18 @@ export function TaskFooter({
         }
       >
         <AnimatePresence initial={false}>
-          {isHeader && (executionError || latestPrError) ? (
+          {isHeader && shownError ? (
+            // Truncated here, so the full prose lives on the title.
             <m.p
               key="header-error"
-              className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
+              title={shownError.message}
+              className={`text-xs max-w-[min(240px,40vw)] truncate ${errorToneClassName(shownError.tone)}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={motionFast}
             >
-              {executionError ?? latestPrError}
+              {shownError.message}
             </m.p>
           ) : null}
         </AnimatePresence>
