@@ -12,7 +12,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  Spinner,
+  CircleSpinner,
   cn,
   formatElapsed,
   useElapsedSeconds,
@@ -76,7 +76,7 @@ function AgentStopButton({
       }}
     >
       {isStopping ? (
-        <Spinner size="sm" className="size-3.5" />
+        <CircleSpinner size="sm" className="size-3.5" />
       ) : (
         <IconPlayerStop className="size-3.5" />
       )}

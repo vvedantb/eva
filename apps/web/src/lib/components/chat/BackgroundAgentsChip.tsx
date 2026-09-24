@@ -7,7 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   motionFast,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
@@ -123,7 +123,7 @@ export function BackgroundAgentsChip({
                           }}
                         >
                           {isStopping ? (
-                            <Spinner size="sm" className="size-3.5" />
+                            <CircleSpinner size="sm" className="size-3.5" />
                           ) : (
                             <IconPlayerStop className="size-3.5" />
                           )}

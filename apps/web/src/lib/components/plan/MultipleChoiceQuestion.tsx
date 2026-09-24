@@ -9,7 +9,7 @@ import {
   Input,
   LIST_ROW_CONTROL_CLASS,
   motionBase,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -346,7 +346,7 @@ export function MultipleChoiceQuestion({
           onClick={handleNext}
           disabled={!currentHasAnswer || isLoading}
         >
-          {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
+          {isLoading ? <CircleSpinner size="sm" className="mr-2" /> : null}
           {isLastStep ? "Submit" : "Next"}
           {!isLoading && (
             <IconArrowRight size={15} strokeWidth={2.5} className="ml-1" />

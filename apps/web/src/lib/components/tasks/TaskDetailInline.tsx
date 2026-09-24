@@ -6,7 +6,7 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, Spinner, cn, motionFast } from "@eva/ui";
+import { Badge, CircleSpinner, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
@@ -207,7 +207,7 @@ export function TaskDetailInline({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Spinner size="sm" className="size-5" />
+        <CircleSpinner size="sm" className="size-5" />
       </div>
     );
   }

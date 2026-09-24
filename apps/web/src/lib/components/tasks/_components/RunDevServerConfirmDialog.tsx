@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 
 export function RunDevServerConfirmDialog({
@@ -60,7 +60,7 @@ export function RunDevServerConfirmDialog({
             }}
             disabled={isRunning}
           >
-            {isRunning && <Spinner size="sm" />}
+            {isRunning && <CircleSpinner size="sm" />}
             Run dev server
           </Button>
         </DialogFooter>

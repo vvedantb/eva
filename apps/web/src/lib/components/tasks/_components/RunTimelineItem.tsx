@@ -19,7 +19,7 @@ import {
   formatModelDisplayLabel,
   findModelOption,
   motionFast,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconPlayerStop } from "@tabler/icons-react";
@@ -237,7 +237,7 @@ export function RunTimelineItem({
                       disabled={isStopping}
                     >
                       {isStopping ? (
-                        <Spinner size="sm" className="size-3.5" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconPlayerStop size={14} />
                       )}

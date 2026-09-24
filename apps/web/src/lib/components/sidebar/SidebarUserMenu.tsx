@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -176,7 +176,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
               onClick={() => void handleSignOut()}
               disabled={isSigningOut}
             >
-              {isSigningOut && <Spinner size="sm" />}
+              {isSigningOut && <CircleSpinner size="sm" />}
               Sign out
             </Button>
           </DialogFooter>

@@ -6,7 +6,7 @@ import { bindRuntimeAnimation } from "../utils/runtimeVisibility";
 const PURPLE = "#8B3FB8";
 const BLUE = "#3B7DD8";
 
-// Eva logo geometry (matches public/icon.svg), used by LogoSpinner.
+// Eva logo geometry (matches public/icon.svg), used by the mark Spinner.
 const PURPLE_MARK = "0,256 217,237 256,64 295,237 512,256";
 const BLUE_MARK = "0,256 217,275 256,449 295,275 512,256";
 
@@ -15,6 +15,73 @@ const sizeClasses = {
   md: "size-6",
   lg: "size-8",
 };
+
+/**
+ * Runs the dash around one half: `stroke-dashoffset` 0 → -1 over 2s, forever,
+ * against `pathLength=1`. Web Animations rather than SMIL `<animate>`: SMIL
+ * ticks each polygon's animated attribute on its own, so every spinner forced
+ * ~9 style recalcs per frame (traced 420/s for eight spinners); WAAPI folds
+ * into the frame's single recalc (49/s) and cut main-thread time 37% with the
+ * same keyframes, and the component stays self-contained — no app stylesheet
+ * keyframes. Module-level so the ref identity is stable across renders; React
+ * 19 runs the returned cleanup on detach.
+ */
+function traceDash(polygon: SVGPolygonElement): () => void {
+  const trace = polygon.animate(
+    [{ strokeDashoffset: 0 }, { strokeDashoffset: -1 }],
+    { duration: 2000, iterations: Infinity },
+  );
+  return bindRuntimeAnimation(polygon, trace);
+}
+
+/**
+ * Default loading indicator: the Eva mark drawn as an outline with a dash that
+ * continuously traces each half's perimeter (see `traceDash`). Use it for page
+ * and panel loads, where the brand moment is worth the extra pixels.
+ *
+ * For small inline slots — a button, a menu row, the preview nav bar — reach
+ * for {@link CircleSpinner} instead: the mark's detail collapses below ~20px.
+ */
+function Spinner({
+  size = "md",
+  className,
+  ...props
+}: React.ComponentProps<"svg"> & {
+  size?: "sm" | "md" | "lg";
+}) {
+  return (
+    <svg
+      viewBox="0 0 512 512"
+      role="status"
+      aria-label="Loading"
+      className={cn(sizeClasses[size], className)}
+      {...props}
+    >
+      <polygon
+        ref={traceDash}
+        points={PURPLE_MARK}
+        fill="none"
+        stroke={PURPLE}
+        strokeWidth={40}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray="0.28 0.72"
+      />
+      <polygon
+        ref={traceDash}
+        points={BLUE_MARK}
+        fill="none"
+        stroke={BLUE}
+        strokeWidth={40}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray="0.28 0.72"
+      />
+    </svg>
+  );
+}
 
 /**
  * Rotates the arc around the viewBox centre, forever. Web Animations rather
@@ -33,8 +100,10 @@ function spinArc(arc: SVGGElement): () => void {
 }
 
 /**
- * Loading indicator: a plain circular spinner — a faint full ring with a
- * two-tone brand arc sweeping around it.
+ * Plain circular spinner in the brand colours: a faint full ring with a
+ * two-tone arc sweeping around it. For slots where {@link Spinner}'s mark is
+ * too small to read — inline buttons, menu rows, the preview nav bar reload —
+ * and anywhere a generic `animate-spin` loader icon used to sit.
  *
  * The arc is two circles rather than one gradient stroke: a gradient only
  * samples the slice of its box the arc crosses, so at 12–16px the purple end
@@ -42,7 +111,7 @@ function spinArc(arc: SVGGElement): () => void {
  * purple dash keeps both logo colours legible at every size, and needs no
  * per-instance gradient id.
  */
-function Spinner({
+function CircleSpinner({
   size = "md",
   className,
   ...props
@@ -97,70 +166,4 @@ function Spinner({
   );
 }
 
-/**
- * Runs the dash around one half: `stroke-dashoffset` 0 → -1 over 2s, forever,
- * against `pathLength=1`. Web Animations rather than SMIL `<animate>`: SMIL
- * ticks each polygon's animated attribute on its own, so every spinner forced
- * ~9 style recalcs per frame (traced 420/s for eight spinners); WAAPI folds
- * into the frame's single recalc (49/s) and cut main-thread time 37% with the
- * same keyframes, and the component stays self-contained — no app stylesheet
- * keyframes. Module-level so the ref identity is stable across renders; React
- * 19 runs the returned cleanup on detach.
- */
-function traceDash(polygon: SVGPolygonElement): () => void {
-  const trace = polygon.animate(
-    [{ strokeDashoffset: 0 }, { strokeDashoffset: -1 }],
-    { duration: 2000, iterations: Infinity },
-  );
-  return bindRuntimeAnimation(polygon, trace);
-}
-
-/**
- * The original loading indicator: the Eva mark drawn as an outline with a dash
- * that continuously traces each half's perimeter (see `traceDash`). Kept
- * alongside {@link Spinner} for surfaces that want the branded mark rather than
- * a plain ring — brand moments (splash, empty states), not inline button
- * loading, where the mark's detail is lost below ~24px.
- */
-function LogoSpinner({
-  size = "md",
-  className,
-  ...props
-}: React.ComponentProps<"svg"> & {
-  size?: "sm" | "md" | "lg";
-}) {
-  return (
-    <svg
-      viewBox="0 0 512 512"
-      role="status"
-      aria-label="Loading"
-      className={cn(sizeClasses[size], className)}
-      {...props}
-    >
-      <polygon
-        ref={traceDash}
-        points={PURPLE_MARK}
-        fill="none"
-        stroke={PURPLE}
-        strokeWidth={40}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        pathLength={1}
-        strokeDasharray="0.28 0.72"
-      />
-      <polygon
-        ref={traceDash}
-        points={BLUE_MARK}
-        fill="none"
-        stroke={BLUE}
-        strokeWidth={40}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        pathLength={1}
-        strokeDasharray="0.28 0.72"
-      />
-    </svg>
-  );
-}
-
-export { LogoSpinner, Spinner };
+export { CircleSpinner, Spinner };

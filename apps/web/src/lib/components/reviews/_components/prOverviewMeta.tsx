@@ -2,7 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { Spinner, cn } from "@eva/ui";
+import { CircleSpinner, cn } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCircleCheck,
@@ -56,7 +56,7 @@ export function ToneIcon({
 }) {
   if (tone === "pending") {
     return (
-      <Spinner
+      <CircleSpinner
         size="sm"
         style={{ width: size, height: size }}
         className="shrink-0"

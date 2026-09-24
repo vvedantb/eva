@@ -12,7 +12,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  Spinner,
+  CircleSpinner,
   cn,
 } from "@eva/ui";
 import { IconGitBranch, IconCheck, IconChevronDown } from "@tabler/icons-react";
@@ -121,7 +121,7 @@ export function BranchSelect({
           >
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                <Spinner size="sm" className="size-3.5" />
+                <CircleSpinner size="sm" className="size-3.5" />
                 <span>Loading branches...</span>
               </div>
             ) : (

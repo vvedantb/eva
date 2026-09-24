@@ -9,7 +9,7 @@ import {
   getSpeechRecognition,
   usePromptInputController,
   useSpeechRecognition,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { useGatewayDictation } from "@/lib/hooks/useGatewayDictation";
 import { useTranscriptPolish } from "@/lib/hooks/useTranscriptPolish";
@@ -88,7 +88,7 @@ function GatewaySpeechButton({
     >
       <CrossfadeIconSlot iconKey={iconKey}>
         {iconKey === "connecting" ? (
-          <Spinner size="sm" />
+          <CircleSpinner size="sm" />
         ) : iconKey === "listening" ? (
           <IconPlayerStop className="size-4" />
         ) : (
@@ -135,7 +135,7 @@ function WebSpeechButton({
     >
       <CrossfadeIconSlot iconKey={iconKey}>
         {iconKey === "connecting" ? (
-          <Spinner size="sm" />
+          <CircleSpinner size="sm" />
         ) : iconKey === "listening" ? (
           <IconPlayerStop className="size-4" />
         ) : (

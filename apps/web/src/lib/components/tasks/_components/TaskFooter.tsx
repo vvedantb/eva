@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   motionFast,
   CrossfadeIconSlot,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -236,7 +236,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <Spinner size="sm" className="size-3.5" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -254,7 +254,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <Spinner size="sm" className="size-3.5" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -269,7 +269,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <Spinner size="sm" className="size-3.5" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -283,7 +283,7 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <Spinner size="sm" className="size-3.5" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -381,7 +381,7 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <Spinner
+                  <CircleSpinner
                     size="sm"
                     style={{ width: iconSize, height: iconSize }}
                   />

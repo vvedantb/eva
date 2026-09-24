@@ -15,7 +15,7 @@ import {
   QueueSectionTrigger,
   toast,
   motionBase,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconPlayerStop, IconTerminal2 } from "@tabler/icons-react";
@@ -178,7 +178,10 @@ export function BackgroundProcessesPanel({
                                 }}
                               >
                                 {isKilling ? (
-                                  <Spinner size="sm" className="size-3.5" />
+                                  <CircleSpinner
+                                    size="sm"
+                                    className="size-3.5"
+                                  />
                                 ) : (
                                   <IconPlayerStop className="size-3.5" />
                                 )}

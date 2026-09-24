@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
-  Spinner,
+  CircleSpinner,
   WebPreviewNavigationButton,
 } from "@eva/ui";
 import {
@@ -21,10 +21,7 @@ import {
   IconExternalLink,
   IconMaximize,
 } from "@tabler/icons-react";
-import {
-  stripPreviewGrant,
-  carryPreviewGrant,
-} from "@/lib/utils/previewGrant";
+import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import { normalizePreviewPath } from "./previewPathHistory";
@@ -326,7 +323,7 @@ export function PreviewNavBar({
           falseKey="idle"
           variant="soft"
           className="relative flex size-3.5 items-center justify-center"
-          whenTrue={<Spinner size="sm" />}
+          whenTrue={<CircleSpinner size="sm" />}
           whenFalse={<IconRefresh className="w-3.5 h-3.5" />}
         />
       </WebPreviewNavigationButton>

@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 
 export function ResolveConfirmDialog({
@@ -43,7 +43,7 @@ export function ResolveConfirmDialog({
             }}
             disabled={isStarting}
           >
-            {isStarting && <Spinner size="sm" />}
+            {isStarting && <CircleSpinner size="sm" />}
             Resolve Conflicts
           </Button>
         </DialogFooter>

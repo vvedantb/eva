@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 
 export function StopConfirmDialog({
@@ -43,7 +43,7 @@ export function StopConfirmDialog({
             }}
             disabled={isStopping}
           >
-            {isStopping && <Spinner size="sm" />}
+            {isStopping && <CircleSpinner size="sm" />}
             Stop Execution
           </Button>
         </DialogFooter>

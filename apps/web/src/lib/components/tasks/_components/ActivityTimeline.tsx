@@ -10,6 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  CircleSpinner,
   Spinner,
   toast,
 } from "@eva/ui";
@@ -341,7 +342,7 @@ export function ActivityTimeline({
               onClick={handleDeleteComment}
               disabled={isDeletingComment}
             >
-              {isDeletingComment && <Spinner size="sm" />}
+              {isDeletingComment && <CircleSpinner size="sm" />}
               Delete
             </Button>
           </DialogFooter>

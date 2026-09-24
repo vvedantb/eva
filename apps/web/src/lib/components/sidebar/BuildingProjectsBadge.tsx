@@ -6,7 +6,7 @@ import {
   HoverCardContent,
   Badge,
   motionFast,
-  Spinner,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
@@ -66,7 +66,7 @@ export function BuildingProjectsBadge({
                   label={countLabel(buildingProjects.length)}
                   className="flex items-center gap-1.5"
                 >
-                  <Spinner size="sm" className="size-[11px]" />
+                  <CircleSpinner size="sm" className="size-[11px]" />
                   <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
                     {buildingProjects.length}
                   </span>
@@ -114,7 +114,9 @@ export function BuildingProjectsBadge({
                     <Section
                       label="Building"
                       count={buildingProjects.length}
-                      glyph={<Spinner size="sm" className="size-[11px]" />}
+                      glyph={
+                        <CircleSpinner size="sm" className="size-[11px]" />
+                      }
                     >
                       {buildingProjects.map((project) => (
                         <ProjectRow
