@@ -1,27 +1,22 @@
 import { existsSync } from "fs";
-import { hasEvaMcpConfig } from "./evaMcp.js";
-import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
 export const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || CONVEX_URL;
 export const CONVEX_TOKEN = process.env.CONVEX_TOKEN;
 export const STREAMING_HMAC = process.env.STREAMING_HMAC || "";
-/** Short-lived, single-use credential for `/api/harness-skills/report`. */
-export const HARNESS_CATALOG_TOKEN = process.env.HARNESS_CATALOG_TOKEN || "";
-export const HARNESS_CATALOG_SANDBOX_ID =
-  process.env.HARNESS_CATALOG_SANDBOX_ID || "";
 export const ENTITY_ID = process.env.ENTITY_ID;
 export const STREAMING_ENTITY_ID = process.env.STREAMING_ENTITY_ID || ENTITY_ID;
 export const RUN_ID = process.env.RUN_ID || null;
+/**
+ * The turn this process owns, for one-shot launches. Warm daemons span many
+ * turns, so they ignore this and take the id from each `claimPendingTurn`
+ * instead — see `runtime/turnLease.ts`.
+ */
 export const TURN_ID = process.env.TURN_ID || null;
-const parsedTurnLeaseGeneration = Number(process.env.TURN_LEASE_GENERATION);
-export const TURN_LEASE_GENERATION =
-  Number.isSafeInteger(parsedTurnLeaseGeneration) &&
-  parsedTurnLeaseGeneration > 0
-    ? parsedTurnLeaseGeneration
-    : null;
 export const ENTITY_ID_FIELD = process.env.ENTITY_ID_FIELD;
-/** App subdirectory (e.g. apps/eprocurement) — also scanned for agent media. */
+export const TASK_PROOF_CAPTURE_ENABLED =
+  process.env.TASK_PROOF_CAPTURE_ENABLED !== "false";
+/** App subdirectory (e.g. apps/eprocurement) — also scanned for proof media. */
 export const ROOT_DIRECTORY = process.env.ROOT_DIRECTORY || "";
 export const COMPLETION_MUTATION = process.env.COMPLETION_MUTATION;
 /** Public mutation the warm daemon polls to claim staged turns. */
@@ -33,33 +28,26 @@ export const COMPLETE_SYNTHETIC_TURN_MUTATION =
   process.env.COMPLETE_SYNTHETIC_TURN_MUTATION;
 export const UPDATE_BACKGROUND_AGENTS_MUTATION =
   process.env.UPDATE_BACKGROUND_AGENTS_MUTATION;
+/** Proof workflow resumes on completion — media must be saved before that mutation. */
+export function isProofCompletionMutation(
+  mutation: string | undefined = COMPLETION_MUTATION,
+): boolean {
+  return (mutation ?? "").includes("handleProofCompletion");
+}
 export const REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 export const PROVIDER = process.env.AI_PROVIDER || "claude";
 export const MODEL =
   process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 export const ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
 /**
- * This turn may not modify the workspace (set for Manager Ave, the master
- * session, which supervises agents and never implements).
- *
- * Provider-agnostic on purpose: `ALLOWED_TOOLS` above is Claude's tool
- * vocabulary and only `claudeSdk.ts` can read it, so every other adapter keys
- * off this boolean and applies its own restriction — Cursor `disallowedTools`,
- * Codex `sandboxMode: "read-only"`. On Claude and Cursor, shell and MCP stay
- * fully available: the master reads production logs through the shell and
- * orchestrates the fleet through MCP. Codex restricts at the sandbox instead of
- * per tool, so see `codexSdk.ts` for what that does and does not guarantee.
- * OpenCode has no restriction — its SDK is fetched at runtime and exposes no
- * verified tool-permission option, so there the prompt is the only gate.
- */
-export const NO_WRITES = process.env.EVA_NO_WRITES === "1";
-/**
  * Human-in-the-loop AskUserQuestion. The Agent SDK exposes the `canUseTool`
  * pause needed to block a turn on an answer, and only sessions currently wire the
  * answering UI — so this is gated to session runs. Elsewhere AskUserQuestion
- * stays the old fire-and-forget metadata (surfaced after the turn). When enabled
- * the SDK drops `bypassPermissions` for a `canUseTool` gate that auto-allows every
- * tool except AskUserQuestion (which waits for the user's answer via Convex).
+ * stays the old fire-and-forget metadata (surfaced after the turn).
+ *
+ * Scope is only that question behaviour. Every agent turn installs `canUseTool`
+ * regardless (see `providers/claudeSdk.ts`) — it is what grants MCP tools, which
+ * `bypassPermissions` does not. Do not fold the two concerns back together.
  */
 export const BLOCKING_QUESTIONS_ENABLED =
   process.env.ENTITY_ID_FIELD === "sessionId";
@@ -71,59 +59,25 @@ export const CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
  * and respawn the daemon instead of reusing it with the wrong options.
  */
 export const DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
-/** Internal process-isolation handoff used by the Cursor daemon. */
-export const CURSOR_TURN_WORKER_PROMPT_FILE =
-  process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-export const CURSOR_TURN_WORKER_LIFECYCLE =
-  process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
-export const CURSOR_TURN_WORKER_TURN_ID =
-  process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
-const parsedCursorWorkerLeaseGeneration = Number(
-  process.env.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION,
-);
-export const CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
-  parsedCursorWorkerLeaseGeneration,
-)
-  ? parsedCursorWorkerLeaseGeneration
-  : 0;
-export const IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 export const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
 export const WORK_DIR = existsSync("/tmp/repo")
   ? "/tmp/repo"
   : existsSync("/workspace/repo")
     ? "/workspace/repo"
     : "/tmp/repo";
-
-/**
- * Multi-repo sessions only: root of the linked-repo clones
- * (`/tmp/workspace/<name>`, plus a `<primaryName> -> WORK_DIR` symlink for the
- * primary). Both this and `LINKED_REPOS` are null/empty for ordinary
- * single-repo sessions.
- */
-export const WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
-/** Linked repo clones for this session (empty for single-repo sessions). */
-export const LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
-/** Every checked-out repo for this session: the primary first, then linked repos. */
-export const REPO_CHECKOUT_DIRS = [
-  WORK_DIR,
-  ...LINKED_REPOS.map((repo) => repo.path),
-];
-/**
- * Env-only escape hatch (no rebuild needed): root the agent harness's cwd at
- * `WORKSPACE_ROOT` instead of `WORK_DIR` when a harness's manual smoke test
- * (see `tests/linkedReposHarness.manual.md`) shows it cannot edit outside its
- * configured cwd even when told about the extra directories another way.
- */
-export const LINKED_REPOS_CWD_ROOT =
-  process.env.EVA_LINKED_REPOS_CWD_ROOT === "1";
-/** The agent harness's working directory — see `resolveAgentCwd`. */
-export const AGENT_CWD = resolveAgentCwd(
-  WORK_DIR,
-  WORKSPACE_ROOT,
-  LINKED_REPOS_CWD_ROOT,
-);
 export const NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000",
+);
+/**
+ * Mid-stream silence cap for CLI attempts: kill when the provider stream emits
+ * nothing for this long with no tool in flight and no result yet. The original
+ * 45s idle-stdout kill was removed (c8bb7fb8) for murdering healthy quiet
+ * runs; that left hung provider streams riding until MAX_TOTAL_RUNTIME_MS —
+ * observed in prod as a cursor:grok turn silent for 29 minutes mid-turn.
+ * 10 minutes is far beyond any legitimate token gap but bounds a dead stream.
+ */
+export const STREAM_SILENCE_TIMEOUT_MS = Number(
+  process.env.CLAUDE_STREAM_SILENCE_TIMEOUT_MS || String(10 * 60 * 1000),
 );
 export const FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000",
@@ -164,9 +118,19 @@ export const HEARTBEAT_ABSOLUTE_MAX_FAILURES = Number(
 export const OUTPUT_BUFFER_MAX_BYTES = Number(
   process.env.CALLBACK_OUTPUT_BUFFER_MAX_BYTES || "2000000",
 );
-export const READY_FILE = "/tmp/run-design.ready";
+/**
+ * Runner markers, entity-scoped by the launcher (`_sandbox_runtime/daemonPaths.ts`
+ * owns the naming; it is passed in rather than recomputed here so there is one
+ * definition). The legacy shared paths remain as the fallback for a runner
+ * launched by a pre-Phase-3 deployment.
+ */
+export const PID_FILE = process.env.RUNNER_PID_FILE || "/tmp/run-design.pid";
+export const READY_FILE =
+  process.env.RUNNER_READY_FILE || "/tmp/run-design.ready";
+export const DONE_FILE = process.env.RUNNER_DONE_FILE || "/tmp/run-design.done";
+/** Written into the ready file so the launcher can tell its own runner from a predecessor's. */
+export const LAUNCH_ID = process.env.RUNNER_LAUNCH_ID || "";
 export const RAW_LOG_FILE = "/tmp/run-design.raw.jsonl";
-export const DONE_FILE = "/tmp/run-design.done";
 export const CLAUDE_BASE_CONFIG_DIR =
   process.env.CLAUDE_BASE_CONFIG_DIR || "/home/eva/.claude";
 export const CLAUDE_RUNTIME_CONFIG_DIR =
@@ -177,8 +141,7 @@ export const CODEX_RUNTIME_HOME_DIR =
   process.env.CODEX_RUNTIME_HOME_DIR || "/tmp/codex-home";
 export const CODEX_PERSIST_DIR =
   process.env.CODEX_PERSIST_DIR || "/home/eva/.codex-persist";
-export const CODEX_BIN_PATH =
-  process.env.CODEX_BIN_PATH || "/tmp/codex-cli/bin/codex";
+const CODEX_BIN_PATH = process.env.CODEX_BIN_PATH || "/tmp/codex-cli/bin/codex";
 const CODEX_STATE_FILE = "session-state.json";
 export const CODEX_LOCAL_STATE_FILE =
   CODEX_RUNTIME_HOME_DIR + "/" + CODEX_STATE_FILE;
@@ -197,10 +160,6 @@ export const OPENCODE_PERSIST_DIR =
   process.env.OPENCODE_PERSIST_DIR || "/home/eva/.opencode-persist";
 const OPENCODE_BIN_PATH =
   process.env.EVA_OPENCODE_BIN_PATH || "/tmp/opencode-cli/bin/opencode";
-/** Loopback port for the Eva-managed `opencode serve` process. */
-export const OPENCODE_SERVER_PORT = Number(
-  process.env.OPENCODE_SERVER_PORT || "4096",
-);
 const OPENCODE_STATE_FILE = "session-state.json";
 export const OPENCODE_LOCAL_STATE_FILE =
   OPENCODE_RUNTIME_HOME_DIR + "/" + OPENCODE_STATE_FILE;
@@ -224,11 +183,8 @@ export const CURSOR_LOCAL_STATE_FILE =
   CURSOR_RUNTIME_HOME_DIR + "/" + CURSOR_STATE_FILE;
 export const CURSOR_PERSIST_STATE_FILE =
   CURSOR_PERSIST_DIR + "/" + CURSOR_STATE_FILE;
-/** State root for the Cursor SDK's SQLite agent store (`index.db` plus a
- * per-agent `store.db`) — on the persist volume so conversation state
- * (agents/runs/checkpoints) survives sandbox stop/resume. Sandboxes that ran
- * the earlier JSONL store may still hold its `*.ndjson` files here; they are
- * ignored. */
+/** Cursor SDK JSONL agent store — on the persist volume so conversation state
+ * (agents/runs/checkpoints) survives sandbox stop/resume. */
 export const CURSOR_SDK_STORE_DIR = CURSOR_PERSIST_DIR + "/sdk";
 const CLAUDE_SESSION_PROJECT_DIR = WORK_DIR.replace(/\//g, "-");
 export const CLAUDE_LOCAL_PROJECT_DIR =
@@ -257,15 +213,6 @@ process.env.GH_NO_UPDATE_NOTIFIER = "1";
 
 export const REPO_ID = process.env.REPO_ID;
 
-/**
- * The connected provider account whose credentials this run authenticated as.
- * Set by the launcher only when an account override actually took effect, so an
- * empty value means the run used the sandbox's shared team credential — which is
- * exactly the attribution a usage-limit reading needs (plan limits are per
- * account, and two accounts' readings must not overwrite each other).
- */
-export const PROVIDER_ACCOUNT_ID = process.env.PROVIDER_ACCOUNT_ID || "";
-
 // --- Reasoning / thinking effort ---
 // `AI_REASONING_EFFORT` is the abstract level from the traits menu, sent only
 // when the user picks a non-default level. Mapped per provider below:
@@ -274,7 +221,6 @@ export const PROVIDER_ACCOUNT_ID = process.env.PROVIDER_ACCOUNT_ID || "";
 const REASONING_EFFORT = process.env.AI_REASONING_EFFORT || "";
 const AI_THINKING_ENABLED = process.env.AI_THINKING_ENABLED || "";
 const AI_CONTEXT_1M = process.env.AI_CONTEXT_1M || "";
-const AI_FAST_MODE = process.env.AI_FAST_MODE || "";
 
 const CLAUDE_EFFORT_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
@@ -284,27 +230,17 @@ export const claudeEffort =
     : "";
 
 const CODEX_REASONING_EFFORT: Record<string, string> = {
-  // GPT-5.6 Sol/Terra/Luna: none through `max`. GPT-6 Astra accepts
-  // low through `max` — the picker never offers "off" for it.
+  // GPT-5.5 uses none/low/medium/high/xhigh; "minimal" kept for older CLIs.
   off: "none",
   low: "low",
   medium: "medium",
   high: "high",
   xhigh: "xhigh",
-  max: "max",
+  max: "xhigh",
 };
 
 export const codexReasoningEffort =
   PROVIDER === "codex" ? (CODEX_REASONING_EFFORT[REASONING_EFFORT] ?? "") : "";
-export const codexFastMode = PROVIDER === "codex" && AI_FAST_MODE === "1";
-export const cursorFastMode = PROVIDER === "cursor" && AI_FAST_MODE === "1";
-export const cursorUse1mContext =
-  PROVIDER === "cursor" && AI_CONTEXT_1M === "1";
-
-/** User turned thinking off (traits toggle or Claude effort "off"). */
-export const claudeThinkingDisabled =
-  AI_THINKING_ENABLED === "0" ||
-  (PROVIDER === "claude" && REASONING_EFFORT === "off");
 
 function buildSettingsJson(): string {
   const settings: {
@@ -313,15 +249,18 @@ function buildSettingsJson(): string {
   } = {
     attribution: { commit: "", pr: "" },
   };
-  if (claudeThinkingDisabled) {
+  const thinkingDisabled =
+    AI_THINKING_ENABLED === "0" ||
+    (PROVIDER === "claude" && REASONING_EFFORT === "off");
+  if (thinkingDisabled) {
     settings.alwaysThinkingEnabled = false;
   }
   return JSON.stringify(settings);
 }
 
 export const settingsJson = buildSettingsJson();
-/** True when Eva MCP auth was supplied at callback startup. */
-export const hasMcpConfig = hasEvaMcpConfig;
+/** True when the sandbox MCP config file is present (used for startup logging). */
+export const hasMcpConfig = existsSync("/tmp/eva-mcp.json");
 const claudeModelBase = MODEL.startsWith("claude:")
   ? MODEL.slice("claude:".length)
   : MODEL;
@@ -335,13 +274,12 @@ export const normalizedCodexModel = MODEL.startsWith("codex:")
 export const normalizedOpencodeModel = MODEL.startsWith("opencode:")
   ? MODEL.slice("opencode:".length)
   : MODEL;
-// Legacy Eva cursor model ids baked a reasoning level into the slug (the
-// retired grok-4.5-low, gpt-5.5-low). The SDK rejects those: its model list
-// carries base ids only, with reasoning exposed as a per-model parameter.
-// Split here; the runner discovers the parameter id at runtime and degrades
-// to the base id when the model has none (resolveCursorModelSelection).
-// xhigh before high: "grok-4.6-xhigh".endsWith("-high") is also true.
-const CURSOR_REASONING_LEVELS = ["xhigh", "medium", "low", "high"];
+// Eva's cursor model ids bake a reasoning level into the slug (grok-4.5-low,
+// gpt-5.5-low). The SDK rejects those: its model list carries base ids only
+// (grok-4.5, gpt-5.5), with reasoning exposed as a per-model parameter. Split
+// here; the runner discovers the parameter id at runtime and degrades to the
+// base id when the model has none (resolveCursorModelSelection).
+const CURSOR_REASONING_LEVELS = ["low", "medium", "high"];
 
 export function splitCursorModel(raw: string): { base: string; level: string } {
   // Legacy CLI-era slugs: cursor-grok-4.5-* → grok-4.5-*.
@@ -363,16 +301,15 @@ const cursorModelRaw = MODEL.startsWith("cursor:")
 const cursorModelParts = splitCursorModel(cursorModelRaw);
 export const normalizedCursorModel = cursorModelParts.base;
 
-// Abstract traits-menu level → cursor reasoning level. Grok 4.6 accepts
-// xhigh; max still clamps to high (no Cursor model exposes max). Off sends
-// the bare model. Falls back to the legacy id suffix for pre-migration
-// AI_MODEL values that carried the level in the slug.
+// Abstract traits-menu level → cursor reasoning level (xhigh/max clamp to
+// high; off sends the bare model). Falls back to the legacy id suffix for
+// pre-migration AI_MODEL values that carried the level in the slug.
 const CURSOR_REASONING_EFFORT: Record<string, string> = {
   off: "",
   low: "low",
   medium: "medium",
   high: "high",
-  xhigh: "xhigh",
+  xhigh: "high",
   max: "high",
 };
 
@@ -380,14 +317,26 @@ export const cursorReasoningLevel =
   PROVIDER === "cursor" && REASONING_EFFORT in CURSOR_REASONING_EFFORT
     ? CURSOR_REASONING_EFFORT[REASONING_EFFORT]
     : cursorModelParts.level;
-/**
- * Resolved `opencode` executable. Unquoted: it is spawned directly (no shell)
- * by the server manager, which is the only remaining caller now that turns run
- * through the SDK rather than `opencode run`.
- */
-export const opencodeCommand = existsSync(OPENCODE_BIN_PATH)
-  ? OPENCODE_BIN_PATH
+const codexCommand = existsSync(CODEX_BIN_PATH)
+  ? JSON.stringify(CODEX_BIN_PATH)
+  : "codex";
+const opencodeCommand = existsSync(OPENCODE_BIN_PATH)
+  ? JSON.stringify(OPENCODE_BIN_PATH)
   : "opencode";
+export const codexPromptCmd = SYSTEM_PROMPT
+  ? "(printf %s\\n\\n " +
+    JSON.stringify(SYSTEM_PROMPT) +
+    "; cat /tmp/design-prompt.txt)"
+  : "cat /tmp/design-prompt.txt";
+export const opencodePromptCmd = codexPromptCmd;
+export const codexExecBaseCmd =
+  codexCommand +
+  " exec --skip-git-repo-check --full-auto --json --model " +
+  JSON.stringify(normalizedCodexModel);
+export const opencodeExecBaseCmd =
+  opencodeCommand +
+  " run --format json --model " +
+  JSON.stringify(normalizedOpencodeModel);
 export const TOOL_STEP_TYPES = new Set([
   "read",
   "search_files",
@@ -404,9 +353,21 @@ export const TOOL_STEP_TYPES = new Set([
   "todos",
 ]);
 
-// Pricing lives in @eva/shared so the web Usage page and this bundle read
-// one table. Re-exported to keep `computeCodexCostUsd` imports unchanged.
-export { CODEX_PRICING_PER_MILLION } from "@eva/shared/modelPricing";
+export const CODEX_PRICING_PER_MILLION: Record<
+  string,
+  { input: number; cached: number; output: number }
+> = {
+  // OpenAI API list prices (per 1M tokens).
+  "gpt-5.5": { input: 5.0, cached: 0.5, output: 30.0 },
+  // Legacy — kept so in-flight sandboxes still cost-account correctly.
+  "gpt-5.5-pro": { input: 30.0, cached: 30.0, output: 180.0 },
+
+  "gpt-5.4": { input: 1.25, cached: 0.125, output: 10.0 },
+  "gpt-5.4-mini": { input: 0.25, cached: 0.025, output: 2.0 },
+  "gpt-5.3-codex": { input: 1.25, cached: 0.125, output: 10.0 },
+  "gpt-5.2-codex": { input: 1.25, cached: 0.125, output: 10.0 },
+  "gpt-5-codex": { input: 1.25, cached: 0.125, output: 10.0 },
+};
 
 export const completedLabels: Record<string, string> = {
   "Preparing Claude session...": "Prepared Claude session",
@@ -414,7 +375,7 @@ export const completedLabels: Record<string, string> = {
   "Preparing Opencode session...": "Prepared Opencode session",
   "Preparing Cursor session...": "Prepared Cursor session",
   "Starting Claude CLI...": "Started Claude CLI",
-  "Starting Codex SDK...": "Started Codex SDK",
+  "Starting Codex CLI...": "Started Codex CLI",
   "Starting Opencode CLI...": "Started Opencode CLI",
   "Starting Cursor CLI...": "Started Cursor CLI",
   "Restoring Claude session...": "Restored Claude session",

@@ -1,16 +1,7 @@
 import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { dirname } from "path";
-import type {
-  CanUseTool,
-  Options,
-  Query,
-  SDKUserMessage,
-  query,
-} from "@anthropic-ai/claude-agent-sdk";
 import {
   ALLOWED_TOOLS,
-  BLOCKING_QUESTIONS_ENABLED,
   CLAIM_MUTATION,
   CLAUDE_RUNTIME_CONFIG_DIR,
   ENTITY_ID_FIELD,
@@ -19,39 +10,38 @@ import {
   NO_OUTPUT_TIMEOUT_MS,
   SYSTEM_PROMPT,
   WORK_DIR,
-  WORKSPACE_ROOT,
   claudeEffort,
-  claudeThinkingDisabled,
   normalizedClaudeModel,
   settingsJson,
 } from "../config.js";
-import { evaMcpServers } from "../evaMcp.js";
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
-import { emitParsedStreamLine } from "../parse/streamRouter.js";
+import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
 import { updateThinkingStep } from "../parse/canonical.js";
 import {
   appendToRawLogFile,
-  recordSdkAttemptFailure,
-  recordSdkRetry,
+  appendToRawOutput,
   trimBufferHead,
 } from "../runtime/buffers.js";
+import { resetAttemptState } from "../runtime/cliAttempt.js";
 import { buildCanUseTool } from "../runtime/pendingQuestion.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
-import {
-  startClaudeUsageReport,
-  type ClaudeUsageResponseLike,
-} from "../runtime/usageLimits.js";
-import type {
-  JsonObject,
-  ProviderAttemptResult,
-  SessionMode,
-} from "../types.js";
-import { log, tryParseJson } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
-import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
+import { callbackState as S } from "../runtime/state.js";
+import type { CliAttemptResult, SessionMode } from "../types.js";
+import { log } from "../utils.js";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
-const SDK_VERSION = "0.3.258";
+const SDK_VERSION = "0.3.201";
+const MCP_CONFIG_PATH = "/tmp/eva-mcp.json";
+
+/**
+ * The subset of the Agent SDK `query()` surface this runner uses. The SDK is
+ * dynamically imported from the sandbox's global npm root (it is installed in
+ * the base Image alongside the claude CLI), so these local types stand in for
+ * the SDK's own — kept intentionally narrow.
+ */
+type SdkQueryHandle = AsyncIterable<Record<string, JsonLike>> & {
+  interrupt?: () => Promise<void>;
+  stopTask?: (taskId: string) => Promise<void>;
+};
 
 export type JsonLike =
   | string
@@ -61,153 +51,83 @@ export type JsonLike =
   | JsonLike[]
   | { [key: string]: JsonLike };
 
-/** Official SDK types are erased from the standalone callback bundle. */
-export type SdkCanUseTool = CanUseTool;
-export type SdkOptions = Options;
-export type SdkUserMessage = SDKUserMessage;
-export type SdkQuery = Query;
-export type SdkModule = { query: typeof query };
+/** Result the SDK expects from `canUseTool` (matches the Agent SDK's PermissionResult). */
+type SdkPermissionResult =
+  | { behavior: "allow"; updatedInput: Record<string, JsonLike> }
+  | { behavior: "deny"; message: string };
 
-/**
- * Reads the plan-usage data behind `/usage` off a live query handle.
- *
- * The method name is explicitly marked experimental by the SDK, so a version
- * that renames or drops it must degrade rather than throw — the caller wraps
- * this in `captureClaudeUsage`, which swallows the rest.
- */
-export async function readSdkPlanUsage(
-  handle: SdkQuery,
-): Promise<ClaudeUsageResponseLike | null> {
-  if (
-    typeof handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET !==
-    "function"
-  ) {
-    log("usage limits: this SDK query handle exposes no usage method");
-    return null;
-  }
-  if (typeof handle.initializationResult === "function") {
-    try {
-      await handle.initializationResult();
-    } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
-      log("usage limits: initialization wait failed — " + messageText);
-    }
-  }
-  return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
-}
+/** The `canUseTool` permission callback passed to `query()`. */
+export type SdkCanUseTool = (
+  toolName: string,
+  input: Record<string, JsonLike>,
+  options: { signal: AbortSignal; toolUseID?: string },
+) => Promise<SdkPermissionResult>;
 
-/** Memoized: the warm daemon resolves pins repeatedly and `npm root -g` spawns a process. */
-let cachedGlobalNpmRoots: string[] | null = null;
+export type SdkOptions = {
+  cwd: string;
+  model: string;
+  pathToClaudeCodeExecutable: string;
+  systemPrompt:
+    | { type: "preset"; preset: "claude_code"; append?: string }
+    | string;
+  permissionMode: string;
+  allowDangerouslySkipPermissions: boolean;
+  allowedTools?: string[];
+  env: Record<string, string | undefined>;
+  sessionId?: string;
+  resume?: string;
+  extraArgs?: Record<string, string>;
+  includePartialMessages?: boolean;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  /** Per-tool permission gate. Set only when blocking questions are enabled. */
+  canUseTool?: SdkCanUseTool;
+};
 
-/**
- * Every directory a globally installed package may live in, preferred first.
- *
- * The seed installs the agent toolchain with `sudo npm install -g` (see
- * snapshotActions.ts), which lands in node's own prefix —
- * `/vercel/runtimes/node24/lib/node_modules` on a Vercel sandbox. This callback
- * runs as the unprivileged sandbox user, whose npm config points `npm root -g`
- * at a per-user prefix (`~/.global/npm/lib/node_modules`) holding only pnpm, so
- * probing `npm root -g` alone never saw the seeded toolchain: every fresh
- * sandbox npm-installed the Agent SDK again (~4.6s on the daemon boot critical
- * path) and reported the pinned global `claude` as version "unknown".
- *
- * Deriving the first root from `process.execPath` (node is `<prefix>/bin/node`)
- * is independent of whichever user's npm config is in effect. The `npm root -g`
- * answer stays as a second candidate for images that install elsewhere.
- */
-function globalNpmRoots(): string[] {
-  if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
-  const roots: string[] = [
-    dirname(dirname(process.execPath)) + "/lib/node_modules",
-  ];
-  try {
-    const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
-    if (npmRoot) roots.push(npmRoot);
-  } catch {
-    // No npm on PATH, or a broken npm config — the node-derived root still holds.
-  }
-  cachedGlobalNpmRoots = roots.filter(
-    (root, index) => roots.indexOf(root) === index,
-  );
-  return cachedGlobalNpmRoots;
+export type SdkUserMessage = {
+  type: "user";
+  message: { role: "user"; content: string };
+  parent_tool_use_id: string | null;
+  session_id: string;
+};
+
+export type SdkModule = {
+  query: (args: {
+    prompt: string | AsyncIterable<SdkUserMessage>;
+    options: SdkOptions;
+  }) => SdkQueryHandle;
+};
+
+/** Resolves the sandbox's global npm root once (e.g. /usr/lib/node_modules). */
+export function globalNpmRoot(): string {
+  return execSync("npm root -g", { encoding: "utf8" }).trim();
 }
 
 /** User-writable fallback install location (persists in home across resumes). */
 const SDK_LOCAL_PREFIX = "/home/eva/.eva-agent-sdk";
 
-/** Version recorded in `packageRoot`'s manifest, or null when unreadable. */
-function installedPackageVersion(packageRoot: string): string | null {
-  try {
-    const manifest: JsonLike = JSON.parse(
-      readFileSync(packageRoot + "/package.json", "utf8"),
-    );
-    if (
-      typeof manifest !== "object" ||
-      manifest === null ||
-      Array.isArray(manifest)
-    ) {
-      return null;
-    }
-    const version = manifest.version;
-    return typeof version === "string" ? version : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Absolute entry path for an agent SDK pinned to `version`, preferring a global
- * install from the seed (see `globalNpmRoots` for why more than one root is
- * searched) and falling back to a one-time user-local prefix install under the
- * eva home (the callback runs as an unprivileged user, so a global `npm i -g`
- * fails with EACCES on the root-owned npm root).
- *
- * Every root is version-checked rather than merely tested for existence. The
- * seed guard in snapshotActions only asserts the package directory is present,
- * so a snapshot built before a pin moved keeps serving the old version forever.
- * That drift fails quietly instead of loudly: the stream parsers match one
- * SDK's event names exactly, so an unexpected version yields zero canonical
- * events and the turn reports no activity at all while still returning its
- * final answer.
+ * Imports the Agent SDK, preferring the base Image's global install. Older
+ * snapshots lack it, and the callback runs as the unprivileged `eva` user (a
+ * global `npm i -g` fails with EACCES on the root-owned npm root), so the
+ * fallback is a one-time user-local prefix install under the eva home.
  */
-export function resolvePinnedSdkEntry(pin: {
-  packageName: string;
-  version: string;
-  entryRelPath: string;
-}): string {
-  const localRoot = SDK_LOCAL_PREFIX + "/node_modules/" + pin.packageName;
-  // First root holding the exact pin wins; a drifted root is only reported once
-  // the search has failed everywhere, so a stale copy in one root stays quiet
-  // while another root serves the pin.
-  let driftedVersion: string | null = null;
-  for (const root of globalNpmRoots()) {
-    const globalRoot = root + "/" + pin.packageName;
-    const globalVersion = installedPackageVersion(globalRoot);
-    if (globalVersion === pin.version) return globalRoot + pin.entryRelPath;
-    if (globalVersion !== null && driftedVersion === null) {
-      driftedVersion = globalVersion;
-    }
+export async function loadSdk(): Promise<SdkModule> {
+  const globalEntry = globalNpmRoot() + "/" + SDK_PACKAGE + "/sdk.mjs";
+  const localEntry =
+    SDK_LOCAL_PREFIX + "/node_modules/" + SDK_PACKAGE + "/sdk.mjs";
+  if (existsSync(globalEntry)) {
+    const mod: SdkModule = await import(globalEntry);
+    return mod;
   }
-  if (driftedVersion !== null) {
+  if (!existsSync(localEntry)) {
     log(
-      "sdk version drift: global " +
-        pin.packageName +
-        " is " +
-        driftedVersion +
-        ", need " +
-        pin.version +
-        "; falling back to the pinned user-local copy",
-    );
-  }
-  if (installedPackageVersion(localRoot) !== pin.version) {
-    log(
-      "installing " +
-        pin.packageName +
+      "claude-agent-sdk not found in sandbox; installing " +
+        SDK_PACKAGE +
         "@" +
-        pin.version +
+        SDK_VERSION +
         " to " +
-        SDK_LOCAL_PREFIX,
+        SDK_LOCAL_PREFIX +
+        " (one-time)",
     );
     execSync(
       "mkdir -p " +
@@ -215,113 +135,29 @@ export function resolvePinnedSdkEntry(pin: {
         " && npm install --prefix " +
         SDK_LOCAL_PREFIX +
         " " +
-        pin.packageName +
+        SDK_PACKAGE +
         "@" +
-        pin.version,
+        SDK_VERSION,
       { encoding: "utf8", timeout: 180_000 },
     );
   }
-  return localRoot + pin.entryRelPath;
-}
-
-/**
- * Narrows a serialized SDK message back into the JsonObject every parser
- * downstream takes.
- *
- * The SDK's message types are not structurally JSON — `SDKAssistantMessage`
- * carries an `@anthropic-ai/sdk` interface, so the union has no index
- * signature — while `claudeParseLine` and the daemon's helpers read arbitrary
- * keys off a JsonObject. Both callers already serialize each message for the
- * raw log, so the round trip is the boundary rather than extra work.
- */
-export function sdkMessageJson(serialized: string): JsonObject | null {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
-
-/** Imports the Agent SDK version this callback's parsers were written for. */
-export async function loadSdk(): Promise<SdkModule> {
-  const mod: SdkModule = await import(
-    resolvePinnedSdkEntry({
-      packageName: SDK_PACKAGE,
-      version: SDK_VERSION,
-      entryRelPath: "/sdk.mjs",
-    })
-  );
+  const mod: SdkModule = await import(localEntry);
   return mod;
 }
 
-const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
-
 /**
- * Version of the globally installed CLI package, from the first candidate root
- * that carries it at all (see `globalNpmRoots`), or null when no root has it.
- */
-function globalClaudeCliVersion(): string | null {
-  for (const root of globalNpmRoots()) {
-    const version = installedPackageVersion(root + "/" + CLAUDE_CODE_PACKAGE);
-    if (version !== null) return version;
-  }
-  return null;
-}
-
-/**
- * Locates the claude CLI binary the SDK should drive.
- *
- * The image's global install wins only while it is at the pinned version
- * (CLAUDE_CLI_PINNED_VERSION, set by launch.ts from claudeCliVersion.ts).
- * Otherwise the CLAUDE_BIN_PATH fallback that launch.ts provisions at the pin
- * is used. Models are gated on the CLI's own version, so preferring the global
- * unconditionally left snapshots seeded with an older CLI failing every turn
- * ("does not support this model", or a process that exits before its first
- * message and reads as "ended without a reply"). Both roots are checked by
- * manifest, like resolvePinnedSdkEntry, so a stale fallback never wins either.
- *
- * The global check reads the manifest from every candidate root rather than
- * `npm root -g` alone, because the seed's `sudo npm install -g` writes to node's
- * prefix while this process runs as an unprivileged user with a per-user npm
- * prefix — every fresh sandbox used to log the seeded, correctly pinned CLI as
- * "cli version drift: global claude is unknown".
+ * Locates the claude CLI binary the SDK should drive: the image's global
+ * install when it is on PATH, else the CLAUDE_BIN_PATH fallback install —
+ * launch.ts provisions one under a /tmp prefix (not on PATH) when the
+ * global is missing.
  */
 function claudeExecutablePath(): string {
-  const pinned = process.env.CLAUDE_CLI_PINNED_VERSION || null;
-  const fallback = process.env.CLAUDE_BIN_PATH || "";
-  let globalBin = "";
   try {
-    globalBin = execSync("command -v claude", { encoding: "utf8" }).trim();
+    return execSync("command -v claude", { encoding: "utf8" }).trim();
   } catch {
-    globalBin = "";
+    const fallback = process.env.CLAUDE_BIN_PATH || "";
+    return fallback && existsSync(fallback) ? fallback : "claude";
   }
-  if (globalBin) {
-    const globalVersion = globalClaudeCliVersion();
-    if (pinned === null || globalVersion === pinned) return globalBin;
-    log(
-      "cli version drift: global claude is " +
-        (globalVersion ?? "unknown") +
-        ", need " +
-        pinned +
-        "; preferring the pinned fallback install",
-    );
-  }
-  if (fallback && existsSync(fallback)) {
-    // `<prefix>/bin/claude` → `<prefix>/lib/node_modules/<package>`.
-    const fallbackRoot =
-      dirname(dirname(fallback)) + "/lib/node_modules/" + CLAUDE_CODE_PACKAGE;
-    const fallbackVersion = installedPackageVersion(fallbackRoot);
-    if (pinned === null || fallbackVersion === pinned) return fallback;
-    log(
-      "cli version drift: fallback claude is " +
-        (fallbackVersion ?? "unknown") +
-        ", need " +
-        pinned +
-        "; no pinned binary available",
-    );
-    if (!globalBin) return fallback;
-  }
-  return globalBin || "claude";
 }
 
 function readPromptText(): string {
@@ -333,6 +169,9 @@ export function buildSdkOptions(sessionMode: SessionMode): SdkOptions {
   // allowed tools, MCP, permissions, session resume). Formerly mirrored
   // Claude CLI flags; those builders are gone.
   const extraArgs: Record<string, string> = { settings: settingsJson };
+  if (existsSync(MCP_CONFIG_PATH)) {
+    extraArgs["mcp-config"] = MCP_CONFIG_PATH;
+  }
   return buildSdkOptionsFromParts(sessionMode, extraArgs);
 }
 
@@ -349,15 +188,23 @@ function buildSdkOptionsFromParts(
       ? { allowedTools: ALLOWED_TOOLS.split(",") }
       : { allowedTools: [] };
 
-  // Blocking questions need `canUseTool`, which the SDK ignores under
-  // `bypassPermissions`. When enabled we switch to `default` mode and let the
-  // gate auto-allow every tool except AskUserQuestion (which waits for the user).
-  // Otherwise keep the original bypass behaviour (no per-tool gating).
-  const permissionOption: Pick<
-    SdkOptions,
-    "permissionMode" | "allowDangerouslySkipPermissions" | "canUseTool"
-  > =
-    tools === "agent" && BLOCKING_QUESTIONS_ENABLED
+  // Every agent turn runs `default` mode behind `canUseTool`, which allows all
+  // tools — AskUserQuestion excepted, and only on the surfaces that wire the
+  // answering UI (`buildCanUseTool` owns that call).
+  //
+  // Not `bypassPermissions`: that mode auto-allows built-in tools but leaves MCP
+  // tools gated, since an external MCP server is a trust boundary the bypass
+  // deliberately does not cross. `canUseTool` is consulted for MCP calls, so it
+  // is the only path that reaches them. This used to be keyed off
+  // BLOCKING_QUESTIONS_ENABLED (sessions only), which left task and project
+  // chats unable to call any `mcp__eva__*` tool at all — read-only ones included
+  // — even though their prompts instruct them to.
+  const permissionOption: {
+    permissionMode: string;
+    allowDangerouslySkipPermissions: boolean;
+    canUseTool?: SdkCanUseTool;
+  } =
+    tools === "agent"
       ? {
           permissionMode: "default",
           allowDangerouslySkipPermissions: false,
@@ -392,7 +239,7 @@ function buildSdkOptionsFromParts(
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
 
-  const effortOption: Pick<SdkOptions, "effort"> =
+  const effortOption: { effort?: "low" | "medium" | "high" | "xhigh" | "max" } =
     claudeEffort === "low" ||
     claudeEffort === "medium" ||
     claudeEffort === "high" ||
@@ -401,22 +248,8 @@ function buildSdkOptionsFromParts(
       ? { effort: claudeEffort }
       : {};
 
-  // Current models (Fable 5, Opus 5/4.8/4.7, Sonnet 5) default thinking
-  // display to "omitted": the API still thinks, but `thinking_delta` events
-  // stream empty text, so claudeParseLine's reasoning step never fills and
-  // the UI shows a long pause where Cursor/Codex show reasoning. Ask for
-  // API-side summaries explicitly. Thinking-off keeps the settings.json
-  // `alwaysThinkingEnabled: false` path — Fable 5 rejects an explicit
-  // `{ type: "disabled" }` with a 400, so never send that here.
-  const thinkingOption: Pick<SdkOptions, "thinking"> = claudeThinkingDisabled
-    ? {}
-    : { thinking: { type: "adaptive", display: "summarized" } };
-
   return {
     cwd: WORK_DIR,
-    // Multi-repo sessions only: lets Claude read/edit linked repo clones
-    // under the workspace root without moving cwd off the primary repo.
-    ...(WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {}),
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
     systemPrompt: SYSTEM_PROMPT
@@ -443,11 +276,7 @@ function buildSdkOptionsFromParts(
       ? { resume: sessionMode.sessionId }
       : {}),
     extraArgs,
-    ...(Object.keys(evaMcpServers).length > 0
-      ? { mcpServers: evaMcpServers }
-      : {}),
     ...effortOption,
-    ...thinkingOption,
   };
 }
 
@@ -462,7 +291,7 @@ function buildSdkOptionsFromParts(
  */
 export async function runClaudeSdkAttempt(
   sessionMode: SessionMode,
-): Promise<ProviderAttemptResult> {
+): Promise<CliAttemptResult> {
   resetAttemptState();
   S.activeAttemptStartedAt = Date.now();
   const startupStep = buildClaudeStartupStep();
@@ -481,9 +310,7 @@ export async function runClaudeSdkAttempt(
   let timedOutForMaxRuntime = false;
   let sawResult = false;
   let resultIsError = false;
-  let resultErrorMessage = "";
   let queryErrorMessage = "";
-  let sawZeroWorkTaskNotification = false;
 
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
@@ -514,14 +341,6 @@ export async function runClaudeSdkAttempt(
       void interrupt();
       return;
     }
-    // The SDK emits nothing between a tool_use and its tool_result, so a
-    // long-running tool (Bash allows 10min; subagent Task calls longer) is
-    // indistinguishable from a hang by message silence alone: while a tool is
-    // in flight only the hard runtime cap
-    // applies, and the silence clock restarts once the tool result lands.
-    if (S.inFlightToolUses > 0) {
-      lastMessageAt = now;
-    }
     // Idle only counts before the result event; after it the turn is done.
     if (!sawResult && now - lastMessageAt > NO_OUTPUT_TIMEOUT_MS * 5) {
       timedOutForNoOutput = true;
@@ -534,26 +353,13 @@ export async function runClaudeSdkAttempt(
     for await (const message of q) {
       lastMessageAt = Date.now();
       const line = JSON.stringify(message) + "\n";
-      const json = sdkMessageJson(line);
-      if (json !== null && isZeroWorkTaskNotificationResult(json)) {
-        sawZeroWorkTaskNotification = true;
-        log("runClaudeSdkAttempt: ignored zero-work task notification result");
-        continue;
-      }
-      emitParsedStreamLine(line);
+      appendToRawLogFile(line);
       attemptOutput = trimBufferHead(attemptOutput + line);
+      appendToRawOutput(line);
+      processRealtimeStdoutChunk(line);
       if (message.type === "result") {
         sawResult = true;
         resultIsError = message.is_error === true;
-        if (resultIsError) {
-          // Only the "success" subtype carries `result` — it holds the error
-          // text when a turn ended on an API error. The error subtypes report
-          // through `errors` instead.
-          resultErrorMessage =
-            message.subtype === "success"
-              ? message.result
-              : message.errors.join("\n");
-        }
       }
       if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
@@ -562,17 +368,6 @@ export async function runClaudeSdkAttempt(
   try {
     try {
       await consumeQuery();
-      if (sawZeroWorkTaskNotification && !sawResult) {
-        log(
-          "runClaudeSdkAttempt: retrying prompt after zero-work task notification",
-        );
-        sawZeroWorkTaskNotification = false;
-        q = sdk.query({
-          prompt: readPromptText(),
-          options: buildSdkOptions(effectiveMode),
-        });
-        await consumeQuery();
-      }
     } catch (error) {
       const messageText =
         error instanceof Error ? error.message : String(error);
@@ -588,7 +383,7 @@ export async function runClaudeSdkAttempt(
         log(
           "runClaudeSdkAttempt: resume target missing — retrying as a new session with the same id",
         );
-        recordSdkRetry(messageText);
+        appendToRawLogFile("[sdk-retry] " + messageText + "\n");
         sawResult = false;
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
@@ -605,19 +400,11 @@ export async function runClaudeSdkAttempt(
     const messageText = error instanceof Error ? error.message : String(error);
     queryErrorMessage = messageText;
     log("runClaudeSdkAttempt: query failed — " + messageText);
-    recordSdkAttemptFailure(messageText);
+    appendToRawLogFile("[sdk-error] " + messageText + "\n");
+    S.stderrOutput = trimBufferHead(S.stderrOutput + messageText + "\n");
   } finally {
     clearInterval(healthTimer);
   }
-
-  // Plan usage-limit reading, taken while the query handle is still alive. The
-  // stream's `rate_limit_event`s already populated whichever window they named;
-  // this fills in the rest. Reporting is fire-and-forget — the turn's outcome is
-  // already decided below and must not depend on it.
-  startClaudeUsageReport({
-    readUsage: () => readSdkPlanUsage(q),
-    error: resultErrorMessage || queryErrorMessage || undefined,
-  });
 
   const code =
     sawResult &&
@@ -644,10 +431,16 @@ export async function runClaudeSdkAttempt(
       (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") +
       ")",
   );
-  return buildStandardSdkAttemptResult({
+  return {
     code,
+    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
-  });
+    timedOutForFirstEvent: false,
+    timedOutForFirstAssistant: false,
+    timedOutAfterFirstText: false,
+    timedOutForZombie: false,
+    toolStallErrorMessage: "",
+  };
 }

@@ -1,184 +1,49 @@
 "use node";
 
 export const CALLBACK_SCRIPT = `// callback-src/index.ts
-import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
+import {
+  existsSync as existsSync9,
+  mkdirSync as mkdirSync8,
+  readdirSync as readdirSync4,
+  unlinkSync as unlinkSync3,
+  writeFileSync as writeFileSync11
+} from "fs";
 
 // callback-src/config.ts
 import { existsSync } from "fs";
-
-// callback-src/evaMcp.ts
-function buildEvaMcpServers({
-  auth,
-  baseUrl
-}) {
-  if (!auth || !baseUrl) return {};
-  return {
-    eva: {
-      type: "http",
-      url: \`\${baseUrl}/mcp\`,
-      headers: { Authorization: \`Bearer \${auth}\` }
-    }
-  };
-}
-function consumeEvaMcpEnvironment(env) {
-  const auth = env.EVA_MCP_AUTH;
-  const baseUrl = env.EVA_MCP_BASE_URL;
-  const servers = buildEvaMcpServers({ auth, baseUrl });
-  delete env.EVA_MCP_AUTH;
-  delete env.EVA_MCP_BASE_URL;
-  return {
-    servers,
-    workerHandoffEnv: auth && baseUrl ? { EVA_MCP_AUTH: auth, EVA_MCP_BASE_URL: baseUrl } : {}
-  };
-}
-var consumed = consumeEvaMcpEnvironment(process.env);
-var evaMcpServers = consumed.servers;
-var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
-var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
-
-// callback-src/linkedRepos.ts
-function isLinkedRepo(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  return typeof value.owner === "string" && typeof value.name === "string" && typeof value.path === "string" && typeof value.branchName === "string" && typeof value.baseBranch === "string";
-}
-function parseLinkedReposEnv(raw) {
-  if (!raw) return [];
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    console.error(
-      "EVA_LINKED_REPOS: invalid JSON \\u2014 ignoring, running single-repo"
-    );
-    return [];
-  }
-  if (!Array.isArray(parsed)) {
-    console.error(
-      "EVA_LINKED_REPOS: unexpected shape \\u2014 ignoring, running single-repo"
-    );
-    return [];
-  }
-  const repos = [];
-  for (const entry of parsed) {
-    if (!isLinkedRepo(entry)) {
-      console.error(
-        "EVA_LINKED_REPOS: unexpected shape \\u2014 ignoring, running single-repo"
-      );
-      return [];
-    }
-    repos.push(entry);
-  }
-  return repos;
-}
-function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
-  return useRoot && workspaceRoot ? workspaceRoot : workDir;
-}
-
-// ../shared/src/modelPricing.ts
-var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-09-01";
-function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
-  return {
-    inputPerMillion,
-    cacheReadPerMillion,
-    cacheWritePerMillion,
-    outputPerMillion,
-    source: ANTHROPIC_PRICING_URL,
-    asOf: ANTHROPIC_PRICING_AS_OF
-  };
-}
-var CLAUDE_PRICING_PER_MILLION = {
-  "claude-fable-5-1": anthropicRow(10, 0.25, 12.5, 50),
-  "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
-  "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
-  "claude-mythos-5": anthropicRow(10, 1, 12.5, 50),
-  "claude-opus-5": anthropicRow(5, 0.5, 6.25, 25),
-  "claude-opus-4-8": anthropicRow(5, 0.5, 6.25, 25),
-  "claude-opus-4-7": anthropicRow(5, 0.5, 6.25, 25),
-  "claude-opus-4-6": anthropicRow(5, 0.5, 6.25, 25),
-  "claude-opus-4-5": anthropicRow(5, 0.5, 6.25, 25),
-  "claude-sonnet-5": anthropicRow(2, 0.2, 2.5, 10),
-  "claude-sonnet-4-6": anthropicRow(3, 0.3, 3.75, 15),
-  "claude-sonnet-4-5": anthropicRow(3, 0.3, 3.75, 15),
-  "claude-haiku-4-5": anthropicRow(1, 0.1, 1.25, 5)
-};
-var CODEX_PRICING_PER_MILLION = {
-  // OpenAI API list prices (per 1M tokens).
-  // GPT-6 Astra — third-party report of the OpenAI pricing page, read
-  // 2026-09-11; verify against https://developers.openai.com/api/docs/pricing.
-  "gpt-6-astra": { input: 10, cached: 1, output: 50 },
-  "gpt-5.6-sol": { input: 5, cached: 0.5, output: 30 },
-  "gpt-5.6-terra": { input: 2, cached: 0.2, output: 12 },
-  "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
-  // Legacy — kept so in-flight sandboxes still cost-account correctly.
-  "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
-  "gpt-5.5-pro": { input: 30, cached: 30, output: 180 },
-  "gpt-5.4": { input: 1.25, cached: 0.125, output: 10 },
-  "gpt-5.4-mini": { input: 0.25, cached: 0.025, output: 2 },
-  "gpt-5.3-codex": { input: 1.25, cached: 0.125, output: 10 },
-  "gpt-5.2-codex": { input: 1.25, cached: 0.125, output: 10 },
-  "gpt-5-codex": { input: 1.25, cached: 0.125, output: 10 }
-};
-var CLAUDE_KEYS_BY_LENGTH = Object.keys(CLAUDE_PRICING_PER_MILLION).sort(
-  (a, b) => b.length - a.length
-);
-
-// callback-src/config.ts
 var CONVEX_URL = process.env.CONVEX_URL;
 var CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || CONVEX_URL;
 var CONVEX_TOKEN = process.env.CONVEX_TOKEN;
 var STREAMING_HMAC = process.env.STREAMING_HMAC || "";
-var HARNESS_CATALOG_TOKEN = process.env.HARNESS_CATALOG_TOKEN || "";
-var HARNESS_CATALOG_SANDBOX_ID = process.env.HARNESS_CATALOG_SANDBOX_ID || "";
 var ENTITY_ID = process.env.ENTITY_ID;
 var STREAMING_ENTITY_ID = process.env.STREAMING_ENTITY_ID || ENTITY_ID;
 var RUN_ID = process.env.RUN_ID || null;
 var TURN_ID = process.env.TURN_ID || null;
-var parsedTurnLeaseGeneration = Number(process.env.TURN_LEASE_GENERATION);
-var TURN_LEASE_GENERATION = Number.isSafeInteger(parsedTurnLeaseGeneration) && parsedTurnLeaseGeneration > 0 ? parsedTurnLeaseGeneration : null;
 var ENTITY_ID_FIELD = process.env.ENTITY_ID_FIELD;
+var TASK_PROOF_CAPTURE_ENABLED = process.env.TASK_PROOF_CAPTURE_ENABLED !== "false";
 var ROOT_DIRECTORY = process.env.ROOT_DIRECTORY || "";
 var COMPLETION_MUTATION = process.env.COMPLETION_MUTATION;
 var CLAIM_MUTATION = process.env.CLAIM_MUTATION;
 var OPEN_SYNTHETIC_TURN_MUTATION = process.env.OPEN_SYNTHETIC_TURN_MUTATION;
 var COMPLETE_SYNTHETIC_TURN_MUTATION = process.env.COMPLETE_SYNTHETIC_TURN_MUTATION;
 var UPDATE_BACKGROUND_AGENTS_MUTATION = process.env.UPDATE_BACKGROUND_AGENTS_MUTATION;
+function isProofCompletionMutation(mutation = COMPLETION_MUTATION) {
+  return (mutation ?? "").includes("handleProofCompletion");
+}
 var REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
-var NO_WRITES = process.env.EVA_NO_WRITES === "1";
 var BLOCKING_QUESTIONS_ENABLED = process.env.ENTITY_ID_FIELD === "sessionId";
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
-var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-var CURSOR_TURN_WORKER_LIFECYCLE = process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
-var CURSOR_TURN_WORKER_TURN_ID = process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
-var parsedCursorWorkerLeaseGeneration = Number(
-  process.env.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION
-);
-var CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
-  parsedCursorWorkerLeaseGeneration
-) ? parsedCursorWorkerLeaseGeneration : 0;
-var IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 var SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
 var WORK_DIR = existsSync("/tmp/repo") ? "/tmp/repo" : existsSync("/workspace/repo") ? "/workspace/repo" : "/tmp/repo";
-var WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
-var LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
-var REPO_CHECKOUT_DIRS = [
-  WORK_DIR,
-  ...LINKED_REPOS.map((repo) => repo.path)
-];
-var LINKED_REPOS_CWD_ROOT = process.env.EVA_LINKED_REPOS_CWD_ROOT === "1";
-var AGENT_CWD = resolveAgentCwd(
-  WORK_DIR,
-  WORKSPACE_ROOT,
-  LINKED_REPOS_CWD_ROOT
-);
 var NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000"
+);
+var STREAM_SILENCE_TIMEOUT_MS = Number(
+  process.env.CLAUDE_STREAM_SILENCE_TIMEOUT_MS || String(10 * 60 * 1e3)
 );
 var FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000"
@@ -219,9 +84,11 @@ var HEARTBEAT_ABSOLUTE_MAX_FAILURES = Number(
 var OUTPUT_BUFFER_MAX_BYTES = Number(
   process.env.CALLBACK_OUTPUT_BUFFER_MAX_BYTES || "2000000"
 );
-var READY_FILE = "/tmp/run-design.ready";
+var PID_FILE = process.env.RUNNER_PID_FILE || "/tmp/run-design.pid";
+var READY_FILE = process.env.RUNNER_READY_FILE || "/tmp/run-design.ready";
+var DONE_FILE = process.env.RUNNER_DONE_FILE || "/tmp/run-design.done";
+var LAUNCH_ID = process.env.RUNNER_LAUNCH_ID || "";
 var RAW_LOG_FILE = "/tmp/run-design.raw.jsonl";
-var DONE_FILE = "/tmp/run-design.done";
 var CLAUDE_BASE_CONFIG_DIR = process.env.CLAUDE_BASE_CONFIG_DIR || "/home/eva/.claude";
 var CLAUDE_RUNTIME_CONFIG_DIR = process.env.CLAUDE_RUNTIME_CONFIG_DIR || "/tmp/claude-config";
 var CLAUDE_PERSIST_DIR = process.env.CLAUDE_PERSIST_DIR || "/home/eva/.claude-persist";
@@ -240,9 +107,6 @@ var CODEX_CONFIG_TOML_BASE64 = process.env.CODEX_CONFIG_TOML_BASE64 || "";
 var OPENCODE_RUNTIME_HOME_DIR = process.env.OPENCODE_RUNTIME_HOME_DIR || "/tmp/opencode-home";
 var OPENCODE_PERSIST_DIR = process.env.OPENCODE_PERSIST_DIR || "/home/eva/.opencode-persist";
 var OPENCODE_BIN_PATH = process.env.EVA_OPENCODE_BIN_PATH || "/tmp/opencode-cli/bin/opencode";
-var OPENCODE_SERVER_PORT = Number(
-  process.env.OPENCODE_SERVER_PORT || "4096"
-);
 var OPENCODE_STATE_FILE = "session-state.json";
 var OPENCODE_LOCAL_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/" + OPENCODE_STATE_FILE;
 var OPENCODE_PERSIST_STATE_FILE = OPENCODE_PERSIST_DIR + "/" + OPENCODE_STATE_FILE;
@@ -279,44 +143,38 @@ if (GH_TOKEN) {
 process.env.GH_PROMPT_DISABLED = "1";
 process.env.GH_NO_UPDATE_NOTIFIER = "1";
 var REPO_ID = process.env.REPO_ID;
-var PROVIDER_ACCOUNT_ID = process.env.PROVIDER_ACCOUNT_ID || "";
 var REASONING_EFFORT = process.env.AI_REASONING_EFFORT || "";
 var AI_THINKING_ENABLED = process.env.AI_THINKING_ENABLED || "";
 var AI_CONTEXT_1M = process.env.AI_CONTEXT_1M || "";
-var AI_FAST_MODE = process.env.AI_FAST_MODE || "";
 var CLAUDE_EFFORT_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh", "max"]);
 var claudeEffort = PROVIDER === "claude" && CLAUDE_EFFORT_LEVELS.has(REASONING_EFFORT) ? REASONING_EFFORT : "";
 var CODEX_REASONING_EFFORT = {
-  // GPT-5.6 Sol/Terra/Luna: none through \`max\`. GPT-6 Astra accepts
-  // low through \`max\` — the picker never offers "off" for it.
+  // GPT-5.5 uses none/low/medium/high/xhigh; "minimal" kept for older CLIs.
   off: "none",
   low: "low",
   medium: "medium",
   high: "high",
   xhigh: "xhigh",
-  max: "max"
+  max: "xhigh"
 };
 var codexReasoningEffort = PROVIDER === "codex" ? CODEX_REASONING_EFFORT[REASONING_EFFORT] ?? "" : "";
-var codexFastMode = PROVIDER === "codex" && AI_FAST_MODE === "1";
-var cursorFastMode = PROVIDER === "cursor" && AI_FAST_MODE === "1";
-var cursorUse1mContext = PROVIDER === "cursor" && AI_CONTEXT_1M === "1";
-var claudeThinkingDisabled = AI_THINKING_ENABLED === "0" || PROVIDER === "claude" && REASONING_EFFORT === "off";
 function buildSettingsJson() {
   const settings = {
     attribution: { commit: "", pr: "" }
   };
-  if (claudeThinkingDisabled) {
+  const thinkingDisabled = AI_THINKING_ENABLED === "0" || PROVIDER === "claude" && REASONING_EFFORT === "off";
+  if (thinkingDisabled) {
     settings.alwaysThinkingEnabled = false;
   }
   return JSON.stringify(settings);
 }
 var settingsJson = buildSettingsJson();
-var hasMcpConfig = hasEvaMcpConfig;
+var hasMcpConfig = existsSync("/tmp/eva-mcp.json");
 var claudeModelBase = MODEL.startsWith("claude:") ? MODEL.slice("claude:".length) : MODEL;
 var normalizedClaudeModel = PROVIDER === "claude" && AI_CONTEXT_1M === "1" ? \`\${claudeModelBase}[1m]\` : claudeModelBase;
 var normalizedCodexModel = MODEL.startsWith("codex:") ? MODEL.slice("codex:".length) : MODEL;
 var normalizedOpencodeModel = MODEL.startsWith("opencode:") ? MODEL.slice("opencode:".length) : MODEL;
-var CURSOR_REASONING_LEVELS = ["xhigh", "medium", "low", "high"];
+var CURSOR_REASONING_LEVELS = ["low", "medium", "high"];
 function splitCursorModel(raw) {
   const unprefixed = raw.startsWith("cursor-grok-") ? raw.slice("cursor-".length) : raw;
   for (const level of CURSOR_REASONING_LEVELS) {
@@ -335,11 +193,16 @@ var CURSOR_REASONING_EFFORT = {
   low: "low",
   medium: "medium",
   high: "high",
-  xhigh: "xhigh",
+  xhigh: "high",
   max: "high"
 };
 var cursorReasoningLevel = PROVIDER === "cursor" && REASONING_EFFORT in CURSOR_REASONING_EFFORT ? CURSOR_REASONING_EFFORT[REASONING_EFFORT] : cursorModelParts.level;
-var opencodeCommand = existsSync(OPENCODE_BIN_PATH) ? OPENCODE_BIN_PATH : "opencode";
+var codexCommand = existsSync(CODEX_BIN_PATH) ? JSON.stringify(CODEX_BIN_PATH) : "codex";
+var opencodeCommand = existsSync(OPENCODE_BIN_PATH) ? JSON.stringify(OPENCODE_BIN_PATH) : "opencode";
+var codexPromptCmd = SYSTEM_PROMPT ? "(printf %s\\\\n\\\\n " + JSON.stringify(SYSTEM_PROMPT) + "; cat /tmp/design-prompt.txt)" : "cat /tmp/design-prompt.txt";
+var opencodePromptCmd = codexPromptCmd;
+var codexExecBaseCmd = codexCommand + " exec --skip-git-repo-check --full-auto --json --model " + JSON.stringify(normalizedCodexModel);
+var opencodeExecBaseCmd = opencodeCommand + " run --format json --model " + JSON.stringify(normalizedOpencodeModel);
 var TOOL_STEP_TYPES = /* @__PURE__ */ new Set([
   "read",
   "search_files",
@@ -355,13 +218,24 @@ var TOOL_STEP_TYPES = /* @__PURE__ */ new Set([
   "question",
   "todos"
 ]);
+var CODEX_PRICING_PER_MILLION = {
+  // OpenAI API list prices (per 1M tokens).
+  "gpt-5.5": { input: 5, cached: 0.5, output: 30 },
+  // Legacy — kept so in-flight sandboxes still cost-account correctly.
+  "gpt-5.5-pro": { input: 30, cached: 30, output: 180 },
+  "gpt-5.4": { input: 1.25, cached: 0.125, output: 10 },
+  "gpt-5.4-mini": { input: 0.25, cached: 0.025, output: 2 },
+  "gpt-5.3-codex": { input: 1.25, cached: 0.125, output: 10 },
+  "gpt-5.2-codex": { input: 1.25, cached: 0.125, output: 10 },
+  "gpt-5-codex": { input: 1.25, cached: 0.125, output: 10 }
+};
 var completedLabels = {
   "Preparing Claude session...": "Prepared Claude session",
   "Preparing Codex session...": "Prepared Codex session",
   "Preparing Opencode session...": "Prepared Opencode session",
   "Preparing Cursor session...": "Prepared Cursor session",
   "Starting Claude CLI...": "Started Claude CLI",
-  "Starting Codex SDK...": "Started Codex SDK",
+  "Starting Codex CLI...": "Started Codex CLI",
   "Starting Opencode CLI...": "Started Opencode CLI",
   "Starting Cursor CLI...": "Started Cursor CLI",
   "Restoring Claude session...": "Restored Claude session",
@@ -388,8 +262,7 @@ var completedLabels = {
 };
 
 // callback-src/providers/claudeSdkDaemon.ts
-import { readdirSync as readdirSync3 } from "fs";
-import { homedir } from "os";
+import { unlinkSync as unlinkSync2, writeFileSync as writeFileSync9, readFileSync as readFileSync6 } from "fs";
 
 // callback-src/providers/daemonPaths.ts
 var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
@@ -425,36 +298,6 @@ import {
   writeFileSync
 } from "fs";
 
-// callback-src/parse/questionInput.ts
-function parseQuestionOptions(value) {
-  if (!Array.isArray(value)) return [];
-  const options = [];
-  for (const raw of value) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-    if (typeof raw.label !== "string" || !raw.label) continue;
-    options.push({
-      label: raw.label,
-      description: typeof raw.description === "string" && raw.description ? raw.description : void 0
-    });
-  }
-  return options;
-}
-function parseQuestionInput(input) {
-  if (!Array.isArray(input.questions)) return void 0;
-  const questions = [];
-  for (const raw of input.questions) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-    if (typeof raw.question !== "string" || !raw.question) continue;
-    questions.push({
-      question: raw.question,
-      header: typeof raw.header === "string" && raw.header ? raw.header : void 0,
-      multiSelect: raw.multiSelect === true ? true : void 0,
-      options: parseQuestionOptions(raw.options)
-    });
-  }
-  return questions.length > 0 ? questions : void 0;
-}
-
 // callback-src/runtime/state.ts
 function parsePriorStep(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -469,12 +312,12 @@ function parsePriorStep(value) {
     return null;
   }
   const detail = value.detail;
-  const path3 = value.path;
+  const path = value.path;
   const step = {
     type,
     label,
     detail: typeof detail === "string" ? detail : void 0,
-    path: typeof path3 === "string" ? path3 : void 0,
+    path: typeof path === "string" ? path : void 0,
     status: "complete"
   };
   if (typeof value.toolUseId === "string" && value.toolUseId.trim()) {
@@ -538,28 +381,10 @@ function parsePriorStep(value) {
       step.todos = todos;
     }
   }
-  if (Array.isArray(value.questions)) {
-    const questions = parseQuestionInput({ questions: value.questions });
-    if (questions) {
-      step.questions = questions;
-    }
-  }
-  if (value.answers && typeof value.answers === "object" && !Array.isArray(value.answers)) {
-    const answers = {};
-    for (const [question, answer] of Object.entries(value.answers)) {
-      if (typeof answer === "string") {
-        answers[question] = answer;
-      }
-    }
-    if (Object.keys(answers).length > 0) {
-      step.answers = answers;
-    }
-  }
   return step;
 }
 var callbackState = {
   accumulatedSteps: [],
-  transientThinkingStep: null,
   pendingQuestionData: "",
   lastStepType: "",
   rawOutput: "",
@@ -587,6 +412,7 @@ var callbackState = {
   currentStreamedContent: "",
   streamedAssistantTextThisMessage: false,
   pendingParagraphBreak: false,
+  activeAttemptChild: null,
   fatalHeartbeatErrorMessage: "",
   consecutiveHeartbeatFailures: 0,
   heartbeatFailureStreakStartedAt: 0,
@@ -595,11 +421,7 @@ var callbackState = {
   cursorKnownToolIds: /* @__PURE__ */ new Set(),
   cursorTerminalToolIds: /* @__PURE__ */ new Set(),
   todoState: [],
-  questionAnswers: /* @__PURE__ */ new Map(),
   awaitingQuestionAnswer: false,
-  usageLimitSnapshot: null,
-  lastReportedUsageLimits: "",
-  lastReportedUsageLimitsAt: 0,
   doneFileWritten: false,
   flushInProgress: false,
   pingInProgress: false,
@@ -645,37 +467,6 @@ function setRawLogStreamFailed(value) {
 function assignRawLogStream(stream) {
   callbackState.rawLogStream = stream;
 }
-function resetDaemonTurnStreamingState() {
-  callbackState.accumulatedSteps.length = 0;
-  callbackState.currentStreamedContent = "";
-  callbackState.streamedAssistantTextThisMessage = false;
-  callbackState.pendingParagraphBreak = false;
-  callbackState.resultEventSeen = false;
-  callbackState.rawOutput = "";
-  callbackState.lastProcessed = 0;
-  callbackState.realtimeOutputBuffer = "";
-  callbackState.inFlightToolUses = 0;
-  callbackState.pendingQuestionData = "";
-  callbackState.todoState.length = 0;
-  callbackState.lastStepType = "thinking";
-}
-function resetAttemptState() {
-  callbackState.transientThinkingStep = null;
-  callbackState.realtimeOutputBuffer = "";
-  callbackState.resultEventSeen = false;
-  callbackState.waitingForFirstAssistantEvent = false;
-  callbackState.claudeInitAt = 0;
-  callbackState.currentStreamedContent = "";
-  callbackState.firstAssistantEventAt = 0;
-  callbackState.firstTextBlockAt = 0;
-  callbackState.fatalHeartbeatErrorMessage = "";
-  callbackState.heartbeatFailureStreakStartedAt = 0;
-  callbackState.inFlightToolUses = 0;
-  callbackState.codexToolItemIds.clear();
-  callbackState.cursorKnownToolIds.clear();
-  callbackState.cursorTerminalToolIds.clear();
-  callbackState.questionAnswers.clear();
-}
 
 // callback-src/utils.ts
 function narrowJsonValue(value) {
@@ -712,9 +503,6 @@ function log(msg) {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
   } catch {
   }
-}
-function asJsonObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 function tryParseJson(text) {
   try {
@@ -763,8 +551,8 @@ function runTimedBashSync(script, label) {
   }
   return true;
 }
-function readGitHeadSha(dir = WORK_DIR) {
-  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
+function readGitHeadSha() {
+  const result = spawnSync("git", ["-C", WORK_DIR, "rev-parse", "HEAD"], {
     encoding: "utf8",
     timeout: CLAUDE_SYNC_TIMEOUT_MS
   });
@@ -852,97 +640,66 @@ function elapsedAttemptMs() {
 }
 
 // callback-src/runtime/turnLease.ts
-var turnOwnership = TURN_ID !== null && TURN_LEASE_GENERATION !== null ? {
-  status: "owned",
-  owner: "provider",
-  turnLease: { turnId: TURN_ID, leaseGeneration: TURN_LEASE_GENERATION }
-} : { status: "idle" };
+var TERMINAL_REASONS = [
+  "unknown_turn",
+  "closed",
+  "superseded",
+  "timeout",
+  "cancelled"
+];
+var currentTurnId = TURN_ID;
 var terminalReason = null;
-function getTurnOwnership() {
-  return turnOwnership;
+function getCurrentTurnId() {
+  return currentTurnId;
 }
-function beginTurnOwnership(owner, turnLease) {
-  turnOwnership = { status: "owned", owner, turnLease };
+function setCurrentTurnId(turnId) {
+  if (currentTurnId === turnId) return;
+  currentTurnId = turnId;
   terminalReason = null;
-}
-function endTurnOwnership() {
-  turnOwnership = { status: "idle" };
-  terminalReason = null;
-}
-function releaseTurnLeaseForCompletion() {
-  endTurnOwnership();
-}
-function getCurrentTurnLease() {
-  return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
-}
-function canSendTurnHeartbeat(input) {
-  return input.claimMutation === void 0 || input.ownership.status === "owned";
-}
-function appendCurrentTurnLease(args) {
-  const identity = getCurrentTurnLease();
-  if (identity === null) return;
-  args.turnId = identity.turnId;
-  args.leaseGeneration = identity.leaseGeneration;
 }
 function getLeaseTerminalReason() {
   return terminalReason;
 }
-function isSameTurnLease(a, b) {
-  if (a === null || b === null) return a === b;
-  return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
+function isTerminalReason(value) {
+  return TERMINAL_REASONS.some((reason) => reason === value);
 }
-function decideTurnLeaseExit(input) {
-  if (input.terminalReason === null) return { action: "continue" };
-  if (input.exitScheduled) return { action: "wait" };
-  return { action: "exit", reason: input.terminalReason };
-}
-function parseTerminalReason(value) {
-  if (value === "unknown_turn" || value === "closed" || value === "superseded" || value === "timeout" || value === "cancelled") {
-    return value;
+function parseLeaseTerminalReason(body) {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return null;
   }
-  return null;
+  const lease = body.lease;
+  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
+    return null;
+  }
+  if (lease.status !== "terminal") return null;
+  const reason = lease.reason;
+  if (typeof reason !== "string" || !isTerminalReason(reason)) {
+    return "closed";
+  }
+  return reason;
 }
-function noteHeartbeatResponse(response, sentUnder) {
+function noteHeartbeatResponse(body) {
   if (terminalReason !== null) return true;
   let parsed;
-  if (typeof response === "string") {
+  if (typeof body === "string") {
     try {
-      parsed = JSON.parse(response);
+      parsed = JSON.parse(body);
     } catch {
       return false;
     }
   } else {
-    parsed = response;
+    parsed = body;
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return false;
-  }
-  const responseValue = parsed.value;
-  const payload = typeof responseValue === "object" && responseValue !== null && !Array.isArray(responseValue) ? responseValue : parsed;
-  const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
-    return false;
-  }
-  if (lease.status !== "terminal") return false;
-  const reason = parseTerminalReason(lease.reason) ?? "closed";
-  const current = getCurrentTurnLease();
-  if (!isSameTurnLease(sentUnder, current)) {
-    log(
-      "stale turn lease verdict ignored (" + reason + ") sentUnder=" + String(sentUnder?.turnId) + " current=" + String(current?.turnId)
-    );
-    return false;
-  }
+  const reason = parseLeaseTerminalReason(parsed);
+  if (reason === null) return false;
   terminalReason = reason;
-  log("turn lease terminal (" + reason + ") turnId=" + String(current?.turnId));
+  log(
+    "turn lease terminal (" + reason + ") for turnId=" + String(currentTurnId) + " \\u2014 this runner no longer owns the turn"
+  );
   return true;
 }
 
 // callback-src/http/convexClient.ts
-function appendTurnLease(body, identity) {
-  if (identity === null) return;
-  body.set("turnId", identity.turnId);
-  body.set("leaseGeneration", String(identity.leaseGeneration));
-}
 async function fetchWithTimeout(url, options, timeoutMs = CALLBACK_HTTP_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -957,47 +714,7 @@ function buildRetryDelayMs(attempt) {
   const jitter = Math.floor(Math.random() * 500);
   return exponential + jitter;
 }
-async function withRetries(label, maxRetries, run, shouldRetry = () => true) {
-  let attempt = 0;
-  while (true) {
-    try {
-      return await run();
-    } catch (e) {
-      const error = e instanceof Error ? e : new Error(String(e));
-      attempt++;
-      if (attempt > maxRetries || !shouldRetry(error)) throw e;
-      const delayMs = buildRetryDelayMs(attempt);
-      log(
-        label + " attempt " + attempt + " failed, retrying in " + delayMs + "ms: " + String(e)
-      );
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
-  }
-}
-var HttpResponseError = class extends Error {
-  status;
-  constructor(label, status, body) {
-    super(label + " failed: " + status + " " + body);
-    this.name = "HttpResponseError";
-    this.status = status;
-  }
-};
-function shouldRetryHttpError(error) {
-  return !(error instanceof HttpResponseError) || error.status >= 500;
-}
-async function postSignedForm(url, body, label) {
-  const res = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new HttpResponseError(label, res.status, text);
-  }
-  return res.text();
-}
-async function callConvex(type, path3, args) {
+async function callConvex(type, path, args) {
   const endpoint = type === "mutation" ? "/api/mutation" : "/api/action";
   const headers = {
     "Content-Type": "application/json"
@@ -1006,133 +723,129 @@ async function callConvex(type, path3, args) {
   const res = await fetchWithTimeout(CONVEX_URL + endpoint, {
     method: "POST",
     headers,
-    body: JSON.stringify({ path: path3, args, format: "json" })
+    body: JSON.stringify({ path, args, format: "json" })
   });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(
-      "Convex " + type + " " + path3 + " failed: " + res.status + " " + text
+      "Convex " + type + " " + path + " failed: " + res.status + " " + text
     );
   }
   return await readResponseJson(res) ?? null;
 }
-async function callConvexWithRetry(type, path3, args, maxRetries = CALLBACK_HTTP_MAX_RETRIES) {
-  return await withRetries(
-    "callConvex(" + type + ")",
-    maxRetries,
-    () => callConvex(type, path3, args)
-  );
-}
-async function callHarnessSkillCatalogReport(provider, cliVersion, skills) {
-  if (!CONVEX_SITE_URL || !HARNESS_CATALOG_TOKEN || !HARNESS_CATALOG_SANDBOX_ID || !REPO_ID) {
-    return null;
+async function callConvexWithRetry(type, path, args, maxRetries = CALLBACK_HTTP_MAX_RETRIES) {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await callConvex(type, path, args);
+    } catch (e) {
+      attempt++;
+      if (attempt > maxRetries) throw e;
+      const delayMs = buildRetryDelayMs(attempt);
+      console.error(
+        "callConvex(" + type + ") attempt " + attempt + " failed, retrying in " + delayMs + "ms:",
+        String(e)
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
   }
-  const url = CONVEX_SITE_URL + "/api/harness-skills/report";
-  const body = new URLSearchParams();
-  body.set("provider", provider);
-  body.set("cliVersion", cliVersion);
-  body.set("skills", JSON.stringify(skills));
-  body.set("token", HARNESS_CATALOG_TOKEN);
-  body.set("sandboxId", HARNESS_CATALOG_SANDBOX_ID);
-  body.set("repoId", REPO_ID);
-  return await withRetries(
-    "harness skill catalog report",
-    CALLBACK_HTTP_MAX_RETRIES,
-    () => postSignedForm(url, body, "Harness skill catalog report"),
-    shouldRetryHttpError
-  );
+}
+async function postStreamingHeartbeat(siteUrl, body, label) {
+  const turnId = getCurrentTurnId();
+  if (turnId) body.set("turnId", turnId);
+  const res = await fetchWithTimeout(siteUrl + "/api/streaming/heartbeat", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body
+  });
+  if (!res.ok) {
+    const text2 = await res.text();
+    throw new Error(label + " failed: " + res.status + " " + text2);
+  }
+  const text = await res.text();
+  noteHeartbeatResponse(text);
+  return text;
 }
 async function callStreamingHeartbeatTouchOnce(entityId) {
-  const identity = getCurrentTurnLease();
-  if (CONVEX_SITE_URL && STREAMING_HMAC) {
-    const body = new URLSearchParams();
-    body.set("entityId", entityId);
-    body.set("hmac", STREAMING_HMAC);
-    body.set("touchOnly", "1");
-    appendTurnLease(body, identity);
-    const response2 = await postSignedForm(
-      CONVEX_SITE_URL + "/api/streaming/heartbeat",
-      body,
-      "Streaming heartbeat touch"
+  if (!CONVEX_SITE_URL || !STREAMING_HMAC) {
+    throw new Error(
+      "Streaming heartbeat touch needs CONVEX_SITE_URL and the streaming HMAC"
     );
-    noteHeartbeatResponse(response2, identity);
-    return response2;
   }
-  const response = identity === null ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
-    entityId,
-    touchOnly: true
-  }) : await callConvex("mutation", "turns:heartbeatFromCallback", {
-    entityId,
-    touchOnly: true,
-    turnId: identity.turnId,
-    leaseGeneration: identity.leaseGeneration
-  });
-  noteHeartbeatResponse(response, identity);
-  return response;
+  const body = new URLSearchParams();
+  body.set("entityId", entityId);
+  body.set("hmac", STREAMING_HMAC);
+  body.set("touchOnly", "1");
+  return await postStreamingHeartbeat(
+    CONVEX_SITE_URL,
+    body,
+    "Streaming heartbeat touch"
+  );
 }
 async function callStreamingHeartbeatOnce(entityId, currentActivity, currentContent, pendingQuestion) {
-  const identity = getCurrentTurnLease();
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
     body.set("hmac", STREAMING_HMAC);
     body.set("currentActivity", currentActivity);
     body.set("currentContent", currentContent || "");
-    appendTurnLease(body, identity);
     if (pendingQuestion) {
       body.set("pendingQuestion", pendingQuestion);
     }
-    const response2 = await postSignedForm(
-      CONVEX_SITE_URL + "/api/streaming/heartbeat",
+    return await postStreamingHeartbeat(
+      CONVEX_SITE_URL,
       body,
       "Streaming heartbeat"
     );
-    noteHeartbeatResponse(response2, identity);
-    return response2;
   }
   const args = {
     entityId,
-    touchOnly: false,
     currentActivity,
     currentContent
   };
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const path3 = identity === null ? "turns:legacyHeartbeatFromCallback" : "turns:heartbeatFromCallback";
-  if (identity !== null) {
-    args.turnId = identity.turnId;
-    args.leaseGeneration = identity.leaseGeneration;
-  }
-  const response = await callConvex("mutation", path3, args);
-  noteHeartbeatResponse(response, identity);
-  return response;
+  return await callConvex("mutation", "streaming:set", args);
 }
 async function callStreamingHeartbeat(entityId, currentActivity, currentContent, pendingQuestion) {
-  return await withRetries(
-    "streaming heartbeat",
-    STREAMING_HEARTBEAT_MAX_RETRIES,
-    () => callStreamingHeartbeatOnce(
-      entityId,
-      currentActivity,
-      currentContent,
-      pendingQuestion
-    )
-  );
-}
-function unwrapConvexMutationPayload(result) {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
-    return null;
+  let attempt = 0;
+  while (true) {
+    try {
+      return await callStreamingHeartbeatOnce(
+        entityId,
+        currentActivity,
+        currentContent,
+        pendingQuestion
+      );
+    } catch (e) {
+      attempt++;
+      if (attempt > STREAMING_HEARTBEAT_MAX_RETRIES) throw e;
+      const delayMs = buildRetryDelayMs(attempt);
+      console.error(
+        "streaming heartbeat attempt " + attempt + " failed, retrying in " + delayMs + "ms:",
+        String(e)
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
   }
-  const inner = result.value;
-  return typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
 }
 async function callStreamingHeartbeatTouch(entityId) {
-  return await withRetries(
-    "streaming heartbeat touch",
-    STREAMING_HEARTBEAT_MAX_RETRIES,
-    () => callStreamingHeartbeatTouchOnce(entityId)
-  );
+  let attempt = 0;
+  while (true) {
+    try {
+      return await callStreamingHeartbeatTouchOnce(entityId);
+    } catch (e) {
+      attempt++;
+      if (attempt > STREAMING_HEARTBEAT_MAX_RETRIES) throw e;
+      const delayMs = buildRetryDelayMs(attempt);
+      console.error(
+        "streaming heartbeat touch attempt " + attempt + " failed, retrying in " + delayMs + "ms:",
+        String(e)
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
 }
 
 // callback-src/parse/stepBudget.ts
@@ -1143,9 +856,6 @@ var STEP_FIELD_CAPS = {
   editsMax: 4,
   filesMax: 10,
   contentPreview: 1e3,
-  /** Reasoning prose per burst; head-capped so one turn's thinking cannot
-   * dominate the payload. Prose rides \`detail\` (see applyReasoningSnapshot). */
-  reasoning: 6e3,
   /** Soft ceiling for the whole steps JSON payload (under Convex 1 MiB). */
   jsonBytes: 600 * 1024
 };
@@ -1296,7 +1006,6 @@ function probeToolCompleteResult(source) {
     }
   };
   pushText(obj.aggregated_output);
-  pushText(obj.aggregatedOutput);
   pushText(obj.output);
   pushText(obj.stdout);
   pushText(obj.stderr);
@@ -1325,14 +1034,14 @@ function probeToolCompleteResult(source) {
   };
 }
 function extractFilePaths(obj) {
-  const paths2 = [];
+  const paths = [];
   const seen = /* @__PURE__ */ new Set();
-  const add = (path3) => {
-    const trimmed = path3.trim();
+  const add = (path) => {
+    const trimmed = path.trim();
     if (!trimmed || seen.has(trimmed)) return;
-    if (paths2.length >= STEP_FIELD_CAPS.filesMax) return;
+    if (paths.length >= STEP_FIELD_CAPS.filesMax) return;
     seen.add(trimmed);
-    paths2.push(trimmed);
+    paths.push(trimmed);
   };
   if (Array.isArray(obj.files)) {
     for (const item of obj.files) {
@@ -1348,7 +1057,7 @@ function extractFilePaths(obj) {
       if (typeof change.file_path === "string") add(change.file_path);
     }
   }
-  return paths2;
+  return paths;
 }
 function probeCodexItemResult(item, failed) {
   const probed = probeToolCompleteResult(item);
@@ -1392,7 +1101,7 @@ function opencodeToolToStep(part) {
   const stateObj = part.state && typeof part.state === "object" && !Array.isArray(part.state) ? part.state : null;
   const input = stateObj && "input" in stateObj && stateObj.input && typeof stateObj.input === "object" && !Array.isArray(stateObj.input) ? stateObj.input : {};
   const rawPath = typeof input.filePath === "string" ? input.filePath : typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : "";
-  const path3 = rawPath ? shortenPath(rawPath) : "";
+  const path = rawPath ? shortenPath(rawPath) : "";
   const toolUseId = pickToolCallId(part) ?? (typeof part.callID === "string" && part.callID.trim() ? part.callID.trim() : void 0);
   let step;
   switch (tool) {
@@ -1400,7 +1109,7 @@ function opencodeToolToStep(part) {
       step = {
         type: "read",
         label: "Reading file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         status: "active"
       };
@@ -1426,7 +1135,7 @@ function opencodeToolToStep(part) {
       step = {
         type: "write",
         label: "Creating file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         contentPreview: content ? capContentPreview(content) : void 0,
         status: "active"
@@ -1437,7 +1146,7 @@ function opencodeToolToStep(part) {
       step = {
         type: "edit",
         label: "Editing file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         edits: extractClaudeEdits(input),
         status: "active"
@@ -1514,7 +1223,7 @@ function cursorSdkToolToStep(name, args) {
     "relativePath",
     "relative_path"
   ]);
-  const path3 = rawPath ? shortenPath(rawPath) : "";
+  const path = rawPath ? shortenPath(rawPath) : "";
   const command = pickString(["command", "cmd"]);
   const query = pickString([
     "query",
@@ -1528,7 +1237,7 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "read",
         label: "Reading file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         status: "active"
       };
@@ -1542,7 +1251,7 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "write",
         label: "Creating file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         contentPreview: fileText ? capContentPreview(fileText) : void 0,
         status: "active"
@@ -1552,7 +1261,7 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "edit",
         label: "Editing file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         edits: extractClaudeEdits(args),
         status: "active"
@@ -1561,7 +1270,7 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "edit",
         label: "Deleting file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         status: "active"
       };
@@ -1569,14 +1278,14 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "search_files",
         label: "Searching files...",
-        detail: query || path3 || void 0,
+        detail: query || path || void 0,
         status: "active"
       };
     case "ls":
       return {
         type: "search_files",
         label: "Searching files...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         status: "active"
       };
     case "grep":
@@ -1584,7 +1293,7 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "search_code",
         label: "Searching code...",
-        detail: query || path3 || void 0,
+        detail: query || path || void 0,
         status: "active"
       };
     case "shell":
@@ -1625,7 +1334,7 @@ function cursorSdkToolToStep(name, args) {
     return {
       type: "read",
       label: "Reading file...",
-      detail: path3 || void 0,
+      detail: path || void 0,
       path: rawPath || void 0,
       status: "active"
     };
@@ -1634,7 +1343,7 @@ function cursorSdkToolToStep(name, args) {
     return {
       type: "write",
       label: "Creating file...",
-      detail: path3 || void 0,
+      detail: path || void 0,
       path: rawPath || void 0,
       status: "active"
     };
@@ -1643,7 +1352,7 @@ function cursorSdkToolToStep(name, args) {
     return {
       type: "edit",
       label: "Editing file...",
-      detail: path3 || void 0,
+      detail: path || void 0,
       path: rawPath || void 0,
       status: "active",
       edits: extractClaudeEdits(args)
@@ -1653,7 +1362,7 @@ function cursorSdkToolToStep(name, args) {
     return {
       type: "edit",
       label: "Deleting file...",
-      detail: path3 || void 0,
+      detail: path || void 0,
       path: rawPath || void 0,
       status: "active"
     };
@@ -1662,7 +1371,7 @@ function cursorSdkToolToStep(name, args) {
     return {
       type: "search_files",
       label: "Searching files...",
-      detail: query || path3 || void 0,
+      detail: query || path || void 0,
       status: "active"
     };
   }
@@ -1670,7 +1379,7 @@ function cursorSdkToolToStep(name, args) {
     return {
       type: tool.includes("file") ? "search_files" : "search_code",
       label: tool.includes("file") ? "Searching files..." : "Searching code...",
-      detail: query || path3 || void 0,
+      detail: query || path || void 0,
       status: "active"
     };
   }
@@ -1724,13 +1433,13 @@ function cursorSdkToolToStep(name, args) {
 }
 function toolCallToStep(name, input) {
   const rawPath = typeof input.file_path === "string" ? String(input.file_path) : "";
-  const path3 = rawPath ? shortenPath(rawPath) : "";
+  const path = rawPath ? shortenPath(rawPath) : "";
   switch (name) {
     case "Read":
       return {
         type: "read",
         label: "Reading file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         status: "active"
       };
@@ -1753,7 +1462,7 @@ function toolCallToStep(name, input) {
       return {
         type: "write",
         label: "Creating file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         contentPreview: content ? capContentPreview(content) : void 0,
         status: "active"
@@ -1764,7 +1473,7 @@ function toolCallToStep(name, input) {
       return {
         type: "edit",
         label: "Editing file...",
-        detail: path3 || void 0,
+        detail: path || void 0,
         path: rawPath || void 0,
         edits,
         status: "active"
@@ -1832,16 +1541,12 @@ function toolCallToStep(name, input) {
       return { type: "tool", label: "Updating tasks...", status: "active" };
     case "TodoRead":
       return { type: "tool", label: "Reading tasks...", status: "active" };
-    case "AskUserQuestion": {
-      const questions = parseQuestionInput(input);
+    case "AskUserQuestion":
       return {
         type: "question",
         label: "Asking a question...",
-        detail: questions ? questions[0].question : void 0,
-        questions,
         status: "active"
       };
-    }
     default:
       return {
         type: "tool",
@@ -1874,7 +1579,7 @@ function getCodexThreadId(event) {
   return "";
 }
 function getCodexAgentMessageText(item) {
-  if (item.type !== "agent_message" && item.type !== "agentMessage") {
+  if (item.type !== "agent_message") {
     return "";
   }
   if (typeof item.text === "string" && item.text) {
@@ -1932,7 +1637,7 @@ function codexItemToStep(item) {
       status: "active"
     });
   }
-  if (normalizedType === "mcp_tool_call" || normalizedType === "mcptoolcall") {
+  if (normalizedType === "mcp_tool_call") {
     if (normalizedDescription.includes("fetch_file")) {
       return withId({
         type: "read",
@@ -2016,7 +1721,7 @@ function codexItemToStep(item) {
       status: "active"
     });
   }
-  if (normalizedType.includes("agent") || normalizedType === "collabtoolcall") {
+  if (normalizedType.includes("agent")) {
     return withId({
       type: "subtask",
       label: "Running agent...",
@@ -2032,8 +1737,9 @@ function codexItemToStep(item) {
   });
 }
 
-// callback-src/runtime/sandboxMedia.ts
-function mediaCandidateRoots(workDir, rootDirectory) {
+// callback-src/runtime/proofMedia.ts
+var PROOF_NO_MEDIA_MESSAGE = "Eva decided not to capture.";
+function proofMediaCandidateRoots(workDir, rootDirectory) {
   const roots = [workDir];
   const trimmed = rootDirectory?.trim() ?? "";
   if (trimmed.length > 0 && trimmed !== "." && !trimmed.startsWith("/") && !trimmed.includes("..")) {
@@ -2044,443 +1750,536 @@ function mediaCandidateRoots(workDir, rootDirectory) {
   }
   return roots;
 }
-function mediaSearchDirs(workDir, rootDirectory) {
-  const roots = mediaCandidateRoots(workDir, rootDirectory);
+function proofMediaSearchDirs(workDir, rootDirectory) {
+  const roots = proofMediaCandidateRoots(workDir, rootDirectory);
   return {
     recordings: roots.map((root) => \`\${root}/recordings\`),
     screenshots: roots.map((root) => \`\${root}/screenshots\`)
   };
 }
 
-// callback-src/providers/claimPendingTurnParse.ts
-function readStopTaskToolUseIds(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) {
-    return [];
-  }
-  const field = payload.stopTaskToolUseIds;
-  if (!Array.isArray(field)) {
-    return [];
-  }
-  return field.filter((id) => typeof id === "string");
-}
-function readCancelRequested(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return false;
-  return payload.cancelRequested === true;
-}
-function readUsageRefreshRequested(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return false;
-  return payload.usageRefreshRequested === true;
-}
-function readTurnLeaseIdentity(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return null;
-  const turnId = payload.turnId;
-  const leaseGeneration = payload.leaseGeneration;
-  if (typeof turnId !== "string" || typeof leaseGeneration !== "number" || !Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
+// callback-src/runtime/completion.ts
+import {
+  existsSync as existsSync3,
+  readFileSync as readFileSync2,
+  readdirSync as readdirSync2,
+  unlinkSync,
+  writeFileSync as writeFileSync2
+} from "fs";
+import { createHash } from "crypto";
+function parseJsonObject(line) {
+  const parsed = tryParseJson(line);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
   }
-  return { turnId, leaseGeneration };
+  return parsed;
 }
-
-// callback-src/runtime/turnCheckpoint.ts
-import { spawnSync as spawnSync2 } from "child_process";
-var turnStartSha = "";
-var turnStartShas = [];
-function readAllRepoShas() {
-  const shas = [];
-  for (const path3 of REPO_CHECKOUT_DIRS) {
-    const sha = readGitHeadSha(path3);
-    if (sha === "") continue;
-    shas.push({ path: path3, sha });
-  }
-  return shas;
-}
-function beginTurnCheckpoint() {
-  turnStartSha = readGitHeadSha();
-  turnStartShas = readAllRepoShas();
-}
-function resetTurnCheckpoint() {
-  turnStartSha = "";
-  turnStartShas = [];
-}
-function currentBranch() {
-  const result = spawnSync2(
-    "git",
-    ["-C", WORK_DIR, "rev-parse", "--abbrev-ref", "HEAD"],
-    { encoding: "utf8", timeout: 2e4 }
-  );
-  return result.status === 0 ? (result.stdout || "").trim() : "";
-}
-var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
-  "sessionId",
-  "taskId",
-  "projectId"
-]);
-function appendTurnCheckpoint(args) {
-  if (ENTITY_ID_FIELD === void 0 || !CHECKPOINTED_ENTITY_ID_FIELDS.has(ENTITY_ID_FIELD)) {
-    return;
-  }
-  if (RUN_ID || turnStartSha === "") return;
-  if (!currentBranch().startsWith("eva/")) return;
-  const afterSha = readGitHeadSha();
-  if (afterSha === "") return;
-  args.beforeSha = turnStartSha;
-  args.afterSha = afterSha;
-  args.beforeShas = turnStartShas;
-  args.afterShas = readAllRepoShas();
-}
-
-// callback-src/providers/claimedTurnLifecycle.ts
-function readClaimedTurn(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload || typeof payload.prompt !== "string") return null;
-  const lifecycle = payload.turnLifecycle;
-  if (lifecycle !== void 0 && lifecycle !== "legacy" && lifecycle !== "durable") {
-    throw new Error("Claimed turn returned an invalid lifecycle discriminator");
-  }
-  const attachmentUrls = Array.isArray(payload.attachmentUrls) ? payload.attachmentUrls.filter(
-    (url) => typeof url === "string"
-  ) : [];
-  const interactionMode = "default";
-  const turnLease = readTurnLeaseIdentity(result);
-  if (lifecycle === "durable" && turnLease === null) {
-    throw new Error("Durable claimed turn did not include a lease identity");
-  }
-  if (lifecycle === "legacy" && turnLease !== null) {
-    throw new Error("Legacy claimed turn unexpectedly included a lease identity");
-  }
-  if (turnLease !== null) {
-    return {
-      lifecycle: "durable",
-      prompt: payload.prompt,
-      attachmentUrls,
-      interactionMode,
-      turnLease
+function writeDoneFile(status, extras) {
+  if (callbackState.doneFileWritten) return;
+  callbackState.doneFileWritten = true;
+  try {
+    const payload = {
+      endedAt: Date.now(),
+      startedAt: SCRIPT_STARTED_AT,
+      durationMs: Date.now() - SCRIPT_STARTED_AT,
+      status,
+      provider: PROVIDER,
+      entityId: ENTITY_ID || null,
+      runId: RUN_ID || null,
+      resultEventSeen: callbackState.resultEventSeen,
+      accumulatedStepCount: callbackState.accumulatedSteps.length,
+      parsedStreamEventCount: callbackState.parsedStreamEventCount,
+      rawLogBytesWritten: callbackState.rawLogBytesWritten,
+      ...extras
     };
-  }
-  return {
-    lifecycle: "legacy",
-    prompt: payload.prompt,
-    attachmentUrls,
-    interactionMode,
-    turnLease: null
-  };
-}
-function startClaimedTurn(turn) {
-  if (claimedTurnLifecycleStatus() === "active") {
-    throw new Error("Cannot start a claimed turn while another claim is active");
-  }
-  beginTurnOwnership("claim", turn.turnLease);
-  beginTurnCheckpoint();
-}
-function appendClaimedTurnCompletion(args) {
-  const ownership = getTurnOwnership();
-  if (ownership.status !== "owned" || ownership.owner !== "claim") {
-    throw new Error("Cannot complete a claimed turn before it starts");
-  }
-  if (ownership.turnLease !== null) {
-    args.turnId = ownership.turnLease.turnId;
-    args.leaseGeneration = ownership.turnLease.leaseGeneration;
+    writeFileSync2(DONE_FILE, JSON.stringify(payload));
+  } catch (err) {
+    console.error(
+      "Failed to write done file: " + String(err instanceof Error ? err.message : err)
+    );
   }
 }
-function finishClaimedTurn() {
-  endTurnOwnership();
-  resetTurnCheckpoint();
+function computeCodexCostUsd(model, inputTokens, cachedInputTokens, outputTokens) {
+  const pricing = CODEX_PRICING_PER_MILLION[model];
+  if (!pricing) return 0;
+  const nonCachedInput = Math.max(0, inputTokens - cachedInputTokens);
+  return nonCachedInput * pricing.input / 1e6 + cachedInputTokens * pricing.cached / 1e6 + outputTokens * pricing.output / 1e6;
 }
-function claimedTurnLifecycleStatus() {
-  const ownership = getTurnOwnership();
-  return ownership.status === "owned" && ownership.owner === "claim" ? "active" : "idle";
-}
-function shouldParkClaimedTurn(input) {
-  if (!input.hasActiveRealTurn || input.isCancellationInFlight) return true;
-  if (input.isFinalizing) return true;
-  return input.claimedLeaseTurnId !== null && input.claimedLeaseTurnId !== input.currentLeaseTurnId;
-}
-
-// callback-src/runtime/daemonProcess.ts
-import { readFileSync as readFileSync2, unlinkSync, writeFileSync as writeFileSync2 } from "fs";
-var CALLBACK_FINGERPRINT_PATH = "/tmp/eva-callback-fp";
-var DAEMON_CLAIM_POLL_TIMING = {
-  idleExitMs: 45 * 60 * 1e3,
-  fencePollIntervalMs: 5e3,
-  fastPollIntervalMs: 50,
-  idlePollIntervalMs: 1e3,
-  fastPollWindowMs: 3e4
-};
-function selectClaimPollIntervalMs(params) {
-  const now = params.now ?? Date.now();
-  const recentlyActive = now - params.lastIdleActivityAtMs < DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
-  return params.busy || recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-}
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+function buildClaudeShapedResult(args) {
+  return JSON.stringify({
+    type: "result",
+    provider: args.provider,
+    total_cost_usd: args.totalCostUsd,
+    duration_ms: args.durationMs,
+    usage: {
+      input_tokens: args.inputTokens,
+      output_tokens: args.outputTokens,
+      cache_read_input_tokens: args.cacheReadInputTokens,
+      cache_creation_input_tokens: args.cacheCreationInputTokens
+    },
+    modelUsage: args.model ? { [args.model]: {} } : {}
   });
 }
-function pidAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+function extractResultEvent(output) {
+  if (PROVIDER === "cursor") {
+    let resultText = "";
+    let isError = false;
+    let sawResult = false;
+    let durationMs = 0;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
+    const assistantParts = [];
+    const readTokenField = (usage, key) => {
+      const value = usage[key];
+      return typeof value === "number" && Number.isFinite(value) ? value : 0;
+    };
+    for (const line of output.split("\\n")) {
+      const clean = line.trim();
+      if (!clean) continue;
+      try {
+        const parsed = parseJsonObject(clean);
+        if (!parsed) continue;
+        if (parsed.type === "result") {
+          sawResult = true;
+          isError = Boolean(parsed.is_error);
+          if (typeof parsed.duration_ms === "number")
+            durationMs = parsed.duration_ms;
+          if (typeof parsed.result === "string") {
+            resultText = parsed.result;
+          } else if (parsed.result !== void 0) {
+            resultText = JSON.stringify(parsed.result);
+          }
+          if (parsed.usage && typeof parsed.usage === "object" && !Array.isArray(parsed.usage)) {
+            inputTokens = readTokenField(parsed.usage, "input_tokens");
+            outputTokens = readTokenField(parsed.usage, "output_tokens");
+            cacheReadTokens = readTokenField(
+              parsed.usage,
+              "cache_read_input_tokens"
+            );
+            cacheWriteTokens = readTokenField(
+              parsed.usage,
+              "cache_creation_input_tokens"
+            );
+          }
+          continue;
+        }
+        if (parsed.type === "assistant" && parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) && Array.isArray(parsed.message.content)) {
+          for (const block of parsed.message.content) {
+            if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
+              assistantParts.push(block.text);
+            }
+          }
+        }
+      } catch {
+      }
+    }
+    if (sawResult) {
+      return {
+        result: resultText || assistantParts.join(""),
+        isError,
+        rawResultEvent: buildClaudeShapedResult({
+          provider: "cursor",
+          totalCostUsd: 0,
+          durationMs: durationMs || attemptElapsedMs(),
+          inputTokens,
+          outputTokens,
+          cacheReadInputTokens: cacheReadTokens,
+          cacheCreationInputTokens: cacheWriteTokens,
+          model: normalizedCursorModel
+        })
+      };
+    }
+    if (assistantParts.length > 0) {
+      return {
+        result: assistantParts.join(""),
+        isError: false,
+        rawResultEvent: ""
+      };
+    }
+    return null;
   }
-}
-function writeOomScoreAdj(target2, score) {
-  if (target2 !== "self" && !target2) return;
-  const path3 = target2 === "self" ? "/proc/self/oom_score_adj" : \`/proc/\${target2}/oom_score_adj\`;
-  try {
-    writeFileSync2(path3, score);
-  } catch {
+  if (PROVIDER === "opencode") {
+    let finalMessageId = "";
+    let sawStopStep = false;
+    let errorLine = "";
+    let errorMessage = "";
+    const textByMessageId = /* @__PURE__ */ new Map();
+    let totalCostUsd = 0;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let reasoningTokens = 0;
+    let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
+    let stepModel = "";
+    for (const line of output.split("\\n")) {
+      const clean = line.trim();
+      if (!clean) continue;
+      try {
+        const parsed = parseJsonObject(clean);
+        if (!parsed) continue;
+        if (parsed.type === "step_finish" && parsed.part) {
+          const part = typeof parsed.part === "object" && !Array.isArray(parsed.part) ? parsed.part : null;
+          if (part && typeof part.cost === "number") totalCostUsd += part.cost;
+          const t = part && part.tokens;
+          if (t && typeof t === "object" && !Array.isArray(t)) {
+            if (typeof t.input === "number") inputTokens = t.input;
+            if (typeof t.output === "number") outputTokens += t.output;
+            if (typeof t.reasoning === "number") reasoningTokens += t.reasoning;
+            if (t.cache && typeof t.cache === "object" && !Array.isArray(t.cache)) {
+              if (typeof t.cache.read === "number")
+                cacheReadTokens = t.cache.read;
+              if (typeof t.cache.write === "number")
+                cacheWriteTokens += t.cache.write;
+            }
+          }
+          if (part && typeof part.modelID === "string" && part.modelID) {
+            stepModel = part.modelID;
+          }
+          if (part && part.reason === "stop" && typeof part.messageID === "string" && part.messageID) {
+            finalMessageId = part.messageID;
+            sawStopStep = true;
+          }
+          continue;
+        }
+        if (parsed.type === "text" && parsed.part && typeof parsed.part === "object" && !Array.isArray(parsed.part) && typeof parsed.part.messageID === "string" && parsed.part.messageID && typeof parsed.part.text === "string") {
+          const existing = textByMessageId.get(parsed.part.messageID) || "";
+          textByMessageId.set(
+            parsed.part.messageID,
+            existing + parsed.part.text
+          );
+          continue;
+        }
+        if (parsed.type === "error") {
+          errorLine = clean;
+          const err = parsed.error && typeof parsed.error === "object" && !Array.isArray(parsed.error) ? parsed.error : null;
+          if (err && err.data && typeof err.data === "object" && !Array.isArray(err.data) && typeof err.data.message === "string") {
+            errorMessage = err.data.message;
+          } else if (err && typeof err.name === "string") {
+            errorMessage = err.name;
+          } else {
+            errorMessage = "Opencode error";
+          }
+        }
+      } catch {
+      }
+    }
+    if (sawStopStep) {
+      return {
+        result: textByMessageId.get(finalMessageId) || "",
+        isError: false,
+        rawResultEvent: buildClaudeShapedResult({
+          provider: "opencode",
+          totalCostUsd,
+          durationMs: attemptElapsedMs(),
+          inputTokens,
+          outputTokens: outputTokens + reasoningTokens,
+          cacheReadInputTokens: cacheReadTokens,
+          cacheCreationInputTokens: cacheWriteTokens,
+          model: stepModel || normalizedOpencodeModel
+        })
+      };
+    }
+    if (errorMessage) {
+      return { result: errorMessage, isError: true, rawResultEvent: errorLine };
+    }
+    return null;
   }
-}
-function callbackBundleWentStale(expectedFingerprint) {
-  if (!expectedFingerprint) return false;
-  try {
-    return readFileSync2(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
-  } catch {
-    return false;
+  if (PROVIDER === "codex") {
+    let finalText = "";
+    let lastInputTokens = 0;
+    let lastCachedInputTokens = 0;
+    let lastOutputTokens = 0;
+    for (const line of output.split("\\n")) {
+      const clean = line.trim();
+      if (!clean) continue;
+      try {
+        const parsed = parseJsonObject(clean);
+        if (!parsed) continue;
+        if (parsed.type === "item.completed" && parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item) && parsed.item.type === "agent_message") {
+          const messageText = getCodexAgentMessageText(parsed.item);
+          if (messageText) finalText = messageText;
+          continue;
+        }
+        if (parsed.type === "token_count" && parsed.info) {
+          const info = typeof parsed.info === "object" && !Array.isArray(parsed.info) ? parsed.info : null;
+          const total = info && info.total_token_usage;
+          if (total && typeof total === "object" && !Array.isArray(total)) {
+            if (typeof total.input_tokens === "number")
+              lastInputTokens = total.input_tokens;
+            if (typeof total.cached_input_tokens === "number")
+              lastCachedInputTokens = total.cached_input_tokens;
+            if (typeof total.output_tokens === "number")
+              lastOutputTokens = total.output_tokens;
+          }
+        }
+      } catch {
+      }
+    }
+    if (!finalText) return null;
+    const nonCachedInput = Math.max(0, lastInputTokens - lastCachedInputTokens);
+    return {
+      result: finalText,
+      isError: false,
+      rawResultEvent: buildClaudeShapedResult({
+        provider: "codex",
+        totalCostUsd: computeCodexCostUsd(
+          normalizedCodexModel,
+          lastInputTokens,
+          lastCachedInputTokens,
+          lastOutputTokens
+        ),
+        durationMs: attemptElapsedMs(),
+        inputTokens: nonCachedInput,
+        outputTokens: lastOutputTokens,
+        cacheReadInputTokens: lastCachedInputTokens,
+        cacheCreationInputTokens: 0,
+        model: normalizedCodexModel
+      })
+    };
   }
-}
-function readPidFromFile(pidPath) {
-  try {
-    return Number(readFileSync2(pidPath, "utf8").trim());
-  } catch {
-    return Number.NaN;
-  }
-}
-function buildEntityMutationArgs(entityIdField, entityId, fields) {
-  return {
-    [entityIdField ?? "sessionId"]: entityId ?? "",
-    ...fields
-  };
-}
-function claimDaemonPidfileBoot(params) {
-  const currentPid = params.currentPid ?? process.pid;
-  const rivalPid = readPidFromFile(params.paths.pid);
-  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && pidAlive(rivalPid)) {
-    return { status: "rival_alive", rivalPid };
-  }
-  writeFileSync2(params.paths.pid, String(currentPid));
-  writeFileSync2(params.paths.entity, params.entityId);
-  writeFileSync2(params.paths.opts, params.optsSig);
-  return { status: "claimed" };
-}
-function cleanOwnedDaemonMarkers(params) {
-  const currentPid = params.currentPid ?? process.pid;
-  if (readPidFromFile(params.paths.pid) !== currentPid) return;
-  const legacy = params.includeLegacySessionPaths ? resolveLegacySessionDaemonPaths() : null;
-  const targets = [
-    params.paths.pid,
-    params.paths.entity,
-    params.paths.opts,
-    ...legacy ? [legacy.pid, legacy.entity, legacy.opts] : []
-  ];
-  for (const path3 of targets) {
+  let resultEvent = null;
+  for (const line of output.split("\\n")) {
+    const clean = line.trim();
+    if (!clean) continue;
     try {
-      unlinkSync(path3);
+      const parsed = parseJsonObject(clean);
+      if (!parsed) continue;
+      if (parsed.type === "result") {
+        const r = parsed.result ?? "";
+        const withProvider = JSON.stringify({ ...parsed, provider: "claude" });
+        resultEvent = {
+          result: typeof r === "string" ? r : JSON.stringify(r),
+          isError: Boolean(parsed.is_error),
+          rawResultEvent: withProvider
+        };
+      }
     } catch {
     }
   }
+  return resultEvent;
 }
-function startDaemonDepositionFence(params) {
-  let deposedLogged = false;
-  const timer = setInterval(() => {
-    const owner = params.readOwnerPid();
-    if (owner === process.pid) {
-      deposedLogged = false;
-      return;
-    }
-    const ownerLabel = Number.isNaN(owner) ? "none" : String(owner);
-    if (params.hasActiveWork()) {
-      if (!deposedLogged) {
-        deposedLogged = true;
-        params.log(
-          \`\${params.logPrefix}: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting after active turn\`
-        );
+function buildErrorMessage(code, fatalHeartbeatError, toolStallError, timedOutForMaxRuntime, timedOutForNoOutput, timedOutForFirstEvent, timedOutForFirstAssistant, timedOutAfterFirstText, timedOutForZombie) {
+  const cliName = PROVIDER === "codex" ? "Codex CLI" : PROVIDER === "opencode" ? "Opencode CLI" : PROVIDER === "cursor" ? "Cursor CLI" : "Claude CLI";
+  if (fatalHeartbeatError) return fatalHeartbeatError;
+  if (toolStallError) return toolStallError;
+  if (timedOutForZombie) {
+    return cliName + " terminated because the CLI process entered zombie state (likely a grandchild held stdio open after the CLI exited)";
+  }
+  if (timedOutForMaxRuntime) {
+    return cliName + " terminated after max runtime of " + MAX_TOTAL_RUNTIME_MS + "ms";
+  }
+  if (timedOutForFirstEvent) {
+    return cliName + " produced no parseable stream-json events within " + FIRST_EVENT_TIMEOUT_MS + "ms";
+  }
+  if (timedOutForFirstAssistant) {
+    return cliName + " initialized but produced no assistant response within " + FIRST_ASSISTANT_EVENT_TIMEOUT_MS + "ms \\u2014 likely MCP initialization or API congestion";
+  }
+  if (timedOutAfterFirstText) {
+    return cliName + " stalled after first text block for " + POST_TEXT_STALL_TIMEOUT_MS + "ms";
+  }
+  if (timedOutForNoOutput) {
+    return cliName + " terminated after no stdout for " + NO_OUTPUT_TIMEOUT_MS + "ms";
+  }
+  if (code === 137 || code === 143) {
+    return cliName + (code === 137 ? " was killed before it finished \\u2014 the sandbox ran out of memory." : " was stopped before it finished \\u2014 the run was interrupted.") + " This usually means the sandbox was stopped or a new message cancelled the run, so nothing was completed. Send the request again on a running sandbox.";
+  }
+  return cliName + " exited with code " + code;
+}
+function appendDiagnosticTail(message) {
+  const details = [];
+  const stdoutTail = callbackState.rawOutput.slice(-1500).trim();
+  const stderrTail = callbackState.stderrOutput.slice(-1500).trim();
+  if (stdoutTail) details.push("stdout tail:\\n" + stdoutTail);
+  if (stderrTail) details.push("stderr tail:\\n" + stderrTail);
+  if (details.length === 0) {
+    details.push(
+      "(stdout and stderr were empty \\u2014 the agent likely failed before emitting any events, e.g. invalid model or auth)"
+    );
+  }
+  return message + "\\n\\n" + details.join("\\n\\n");
+}
+async function uploadMediaFile(filePath, mimeType) {
+  const urlRes = await callConvexWithRetry(
+    "mutation",
+    "screenshots:generateUploadUrl",
+    {},
+    3
+  );
+  const urlValue = urlRes && typeof urlRes === "object" && !Array.isArray(urlRes) && urlRes.value && typeof urlRes.value === "string" ? urlRes.value : "";
+  if (!urlValue) throw new Error("Missing upload URL");
+  const fileData = readFileSync2(filePath);
+  const uploadRes = await fetchWithTimeout(
+    urlValue,
+    {
+      method: "POST",
+      headers: { "Content-Type": mimeType },
+      body: fileData
+    },
+    3e4
+  );
+  if (!uploadRes.ok) {
+    throw new Error("Upload failed: " + uploadRes.status);
+  }
+  const uploadJson = await readResponseJson(uploadRes);
+  if (uploadJson && typeof uploadJson === "object" && !Array.isArray(uploadJson) && typeof uploadJson.storageId === "string") {
+    return uploadJson.storageId;
+  }
+  throw new Error("Missing storageId in upload response");
+}
+async function persistTaskProofIfNeeded(uploaded) {
+  if (uploaded.length > 0) {
+    if (ENTITY_ID_FIELD === "taskId" && RUN_ID) {
+      for (const item of uploaded) {
+        const saveArgs = {
+          taskId: ENTITY_ID ?? "",
+          storageId: item.storageId,
+          fileName: item.fileName
+        };
+        if (RUN_ID) saveArgs.runId = RUN_ID;
+        await callConvexWithRetry("mutation", "taskProof:save", saveArgs, 3);
       }
       return;
     }
-    params.log(
-      \`\${params.logPrefix}: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting\`
+    const mediaArgs = {
+      parentId: ENTITY_ID ?? "",
+      mediaStorageIds: uploaded.map((item) => item.storageId)
+    };
+    await callConvexWithRetry(
+      "action",
+      "screenshots:attachMedia",
+      mediaArgs,
+      3
     );
-    params.onDeposedIdle();
-  }, params.pollIntervalMs);
-  timer.unref?.();
-  return {
-    stop: () => {
-      clearInterval(timer);
-    }
-  };
+    return;
+  }
+  if (ENTITY_ID_FIELD === "taskId") {
+    if (!TASK_PROOF_CAPTURE_ENABLED) return;
+    if (!RUN_ID) return;
+    const messageArgs = {
+      taskId: ENTITY_ID ?? "",
+      message: PROOF_NO_MEDIA_MESSAGE,
+      runId: RUN_ID
+    };
+    await callConvexWithRetry(
+      "mutation",
+      "taskProof:saveMessage",
+      messageArgs,
+      3
+    );
+  }
 }
-
-// callback-src/runtime/gitExec.ts
-import { spawnSync as spawnSync3 } from "child_process";
-var GIT_STEP_TIMEOUT_MS = 2e4;
-function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
-  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
-  });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
-
-// callback-src/runtime/turnPersist.ts
-var PUSH_TIMEOUT_MS = 6e4;
-var COMMIT_ADD_ARGS = [
-  "add",
-  "-A",
-  "--",
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md"
-];
-function localBranchRewroteOwnHistory(branch, remoteRef) {
-  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
-  const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
-  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
-  return reflog.out.split("\\n").map((line) => line.trim()).includes(remoteTip.out);
-}
-function isMissingRemoteRef(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
-}
-function isNonFastForwardPush(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
-}
-function synchronizeForPush(branch) {
-  const remoteRef = \`refs/remotes/origin/\${branch}\`;
-  const fetch2 = git(
-    [
-      "fetch",
-      "--no-tags",
-      "origin",
-      \`+refs/heads/\${branch}:\${remoteRef}\`
-    ],
-    PUSH_TIMEOUT_MS
+async function deliverCompletionWithMedia(completionArgs) {
+  const uploadFirst = isProofCompletionMutation(COMPLETION_MUTATION);
+  if (uploadFirst) {
+    await uploadAndAttachSandboxMedia();
+  }
+  await callConvexWithRetry(
+    "mutation",
+    COMPLETION_MUTATION ?? "",
+    completionArgs
   );
-  if (!fetch2.ok) {
-    if (isMissingRemoteRef(fetch2.out)) {
-      git(["update-ref", "-d", remoteRef]);
-      return { status: "ready", remoteExists: false };
-    }
-    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
-    return { status: "failed" };
+  if (!uploadFirst) {
+    await uploadAndAttachSandboxMedia();
   }
-  const divergence = git([
-    "rev-list",
-    "--left-right",
-    "--count",
-    \`\${remoteRef}...refs/heads/\${branch}\`
-  ]);
-  if (!divergence.ok) {
-    log(
-      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^0\\s+\\d+\$/.test(divergence.out)) {
-    return { status: "ready", remoteExists: true };
-  }
-  if (/^[1-9]\\d*\\s+0\$/.test(divergence.out)) {
-    const fastForward = git(["merge", "--ff-only", remoteRef]);
-    if (fastForward.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    log(
-      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.out)) {
-    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
-      log(
-        \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
-      );
-      return { status: "failed" };
-    }
-    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
-    if (merge.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    git(["merge", "--abort"]);
-    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
-  return { status: "failed" };
 }
-function tipAlreadyPublished(exclusion) {
-  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
-  return unpushed.ok && unpushed.out === "0";
-}
-function persistTurnWork() {
-  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
-  const startedAt = Date.now();
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch.ok || !branch.out.startsWith("eva/")) {
-    if (branch.ok && branch.out) {
-      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
+async function uploadAndAttachSandboxMedia() {
+  if (RUN_ID && !TASK_PROOF_CAPTURE_ENABLED) return;
+  const uploaded = [];
+  const seenDigests = /* @__PURE__ */ new Set();
+  const isDuplicate = (filePath) => {
+    const digest = createHash("sha256").update(readFileSync2(filePath)).digest("hex");
+    if (seenDigests.has(digest)) return true;
+    seenDigests.add(digest);
+    return false;
+  };
+  const { recordings, screenshots } = proofMediaSearchDirs(
+    WORK_DIR,
+    ROOT_DIRECTORY
+  );
+  for (const recDir of recordings) {
+    if (!existsSync3(recDir)) continue;
+    for (const file of readdirSync2(recDir)) {
+      if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
+      const fp = recDir + "/" + file;
+      const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
+      try {
+        if (!isDuplicate(fp)) {
+          const storageId = await uploadMediaFile(fp, mimeType);
+          uploaded.push({ storageId, fileName: file });
+        }
+      } catch {
+      }
+      try {
+        unlinkSync(fp);
+      } catch {
+      }
     }
-    return;
   }
-  const dirty = git(["status", "--porcelain"]);
-  if (dirty.ok && dirty.out.length > 0) {
-    git(COMMIT_ADD_ARGS);
-    const staged = git(["diff", "--cached", "--quiet"]);
-    if (!staged.ok) {
-      const commit = git([
-        "commit",
-        "-m",
-        "task: checkpoint uncommitted work at turn end"
-      ]);
-      log(
-        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
-      );
+  const mimeMap = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp"
+  };
+  for (const ssDir of screenshots) {
+    if (!existsSync3(ssDir)) continue;
+    for (const file of readdirSync2(ssDir)) {
+      if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
+      const fp = ssDir + "/" + file;
+      const ext = file.split(".").pop()?.toLowerCase() ?? "png";
+      const mimeType = mimeMap[ext] || "image/png";
+      try {
+        if (!isDuplicate(fp)) {
+          const storageId = await uploadMediaFile(fp, mimeType);
+          uploaded.push({ storageId, fileName: file });
+        }
+      } catch {
+      }
+      try {
+        unlinkSync(fp);
+      } catch {
+      }
     }
   }
-  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
-  const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const sync = synchronizeForPush(branch.out);
-    if (sync.status === "failed") return;
-    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
-    if (tipAlreadyPublished(exclusion)) return;
-    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
-    if (push.ok) {
-      log(
-        \`persistTurnWork: push ok branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-      );
-      return;
-    }
-    if (attempt < 2 && isNonFastForwardPush(push.out)) {
-      log(
-        \`persistTurnWork: remote moved during push; refetching branch=\${branch.out}\`
-      );
-      continue;
-    }
-    log(
-      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
+  try {
+    await persistTaskProofIfNeeded(uploaded);
+  } catch (e) {
+    console.error("Failed to persist task proof:", e);
+    const proofError = e instanceof Error ? e.message : String(e);
+    await saveProofFailureMessageIfNeeded(
+      "Proof capture failed after completion: " + proofError
     );
-    return;
   }
+}
+async function saveProofFailureMessageIfNeeded(message) {
+  if (ENTITY_ID_FIELD !== "taskId") return;
+  if (!TASK_PROOF_CAPTURE_ENABLED) return;
+  if (!RUN_ID) return;
+  try {
+    const failureArgs = {
+      taskId: ENTITY_ID ?? "",
+      message
+    };
+    if (RUN_ID) failureArgs.runId = RUN_ID;
+    await callConvexWithRetry(
+      "mutation",
+      "taskProof:saveMessage",
+      failureArgs,
+      2
+    );
+  } catch (error) {
+    console.error("Failed to record proof persistence error:", error);
+  }
+}
+function hasToolActivity() {
+  return callbackState.accumulatedSteps.some((step) => TOOL_STEP_TYPES.has(step.type));
 }
 
 // callback-src/session/claudeSession.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "fs";
 function buildClaudeStartupStep() {
   if (callbackState.waitingForFirstAssistantEvent && callbackState.claudeInitAt > 0) {
     const elapsedSeconds = Math.max(
@@ -2504,7 +2303,7 @@ function buildClaudeStartupStep() {
   };
 }
 function readClaudeSessionState() {
-  if (!existsSync3(CLAUDE_LOCAL_STATE_FILE)) {
+  if (!existsSync4(CLAUDE_LOCAL_STATE_FILE)) {
     return null;
   }
   const parsed = tryParseJson(readFileSync3(CLAUDE_LOCAL_STATE_FILE, "utf8"));
@@ -2588,7 +2387,7 @@ function hydratePersistedClaudeState() {
 function ensureClaudeWorkspaceTrust() {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  const parsed = existsSync3(configPath) ? tryParseJson(readFileSync3(configPath, "utf8")) : null;
+  const parsed = existsSync4(configPath) ? tryParseJson(readFileSync3(configPath, "utf8")) : null;
   const config = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? { ...parsed } : {};
   const rawProjects = config.projects;
   const projects = rawProjects && typeof rawProjects === "object" && !Array.isArray(rawProjects) ? { ...rawProjects } : {};
@@ -2606,7 +2405,7 @@ function resolveClaudeSessionMode() {
   }
   const persistedState = readClaudeSessionState();
   if (persistedState) {
-    if (existsSync3(
+    if (existsSync4(
       buildClaudeTranscriptPath(
         CLAUDE_LOCAL_PROJECT_DIR,
         persistedState.resumeSessionId
@@ -2619,7 +2418,7 @@ function resolveClaudeSessionMode() {
     );
     return { mode: "session", sessionId: configuredSessionId };
   }
-  if (existsSync3(
+  if (existsSync4(
     buildClaudeTranscriptPath(CLAUDE_LOCAL_PROJECT_DIR, configuredSessionId)
   )) {
     return { mode: "resume", sessionId: configuredSessionId };
@@ -2797,313 +2596,6 @@ async function flushBackgroundShellQueue() {
   }
 }
 
-// callback-src/runtime/usageLimits.ts
-var REPORT_MUTATION = "usageLimits:report";
-var NOTE_REFRESH_MUTATION = "usageLimits:noteRefreshAttempt";
-var REPORT_MAX_RETRIES = 1;
-var USAGE_LOOKUP_TIMEOUT_MS = 5e3;
-var FORCE_USAGE_LOOKUP_TIMEOUT_MS = 2e4;
-var USAGE_REPORT_EXIT_GRACE_MS = 7e3;
-var USAGE_REPORT_REFRESH_MS = 6 * 60 * 60 * 1e3;
-var pendingClaudeUsageReport = null;
-var CLAUDE_WINDOW_LABELS = {
-  five_hour: "5h",
-  seven_day: "Weekly (all models)",
-  seven_day_oauth_apps: "Weekly (apps)",
-  seven_day_opus: "Weekly (Opus)",
-  seven_day_sonnet: "Weekly (Sonnet)",
-  seven_day_overage_included: "Weekly (overage included)",
-  overage: "Extra usage"
-};
-function readFiniteNumber(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
-}
-function readNonEmptyString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
-function readStatus(value) {
-  return value === "allowed" || value === "allowed_warning" || value === "rejected" ? value : void 0;
-}
-function readIsoMs(value) {
-  const text = readNonEmptyString(value);
-  if (!text) return void 0;
-  const ms = Date.parse(text);
-  return Number.isFinite(ms) ? ms : void 0;
-}
-function buildWindow(key, label, utilization, resetsAt) {
-  return {
-    key,
-    label,
-    ...utilization === void 0 ? {} : { utilization },
-    ...resetsAt === void 0 ? {} : { resetsAt }
-  };
-}
-function mergeWindow(snapshot, window) {
-  const windows = snapshot.windows ?? [];
-  const index = windows.findIndex((existing) => existing.key === window.key);
-  if (index >= 0) {
-    windows[index] = window;
-  } else {
-    windows.push(window);
-  }
-  snapshot.windows = windows;
-}
-function ensureSnapshot() {
-  const existing = callbackState.usageLimitSnapshot;
-  if (existing) return existing;
-  const created = { completeness: "partial" };
-  callbackState.usageLimitSnapshot = created;
-  return created;
-}
-function normalizeWindowKey(key) {
-  if (key === "seven_day_oi") return "model_scoped:Fable";
-  return key;
-}
-function labelForWindowKey(key) {
-  if (CLAUDE_WINDOW_LABELS[key]) return CLAUDE_WINDOW_LABELS[key];
-  if (key.startsWith("model_scoped:")) {
-    return \`Weekly (\${key.slice("model_scoped:".length)})\`;
-  }
-  return key;
-}
-function mergeClaudeRateLimitEvent(event) {
-  const info = event.rate_limit_info;
-  if (typeof info !== "object" || info === null || Array.isArray(info)) return;
-  const status = readStatus(info.status);
-  const rawKey = readNonEmptyString(info.rateLimitType);
-  if (!status && !rawKey) return;
-  const snapshot = ensureSnapshot();
-  snapshot.completeness = "partial";
-  if (status) snapshot.status = status;
-  if (!rawKey) return;
-  const key = normalizeWindowKey(rawKey);
-  const resetsAtSeconds = readFiniteNumber(info.resetsAt);
-  mergeWindow(
-    snapshot,
-    buildWindow(
-      key,
-      labelForWindowKey(key),
-      readFiniteNumber(info.utilization),
-      resetsAtSeconds === void 0 ? void 0 : Math.round(resetsAtSeconds * 1e3)
-    )
-  );
-}
-function pushUsageWindow(windows, key, entry, label) {
-  if (!entry) return;
-  const utilization = readFiniteNumber(entry.utilization);
-  const resetsAt = readIsoMs(entry.resets_at);
-  if (utilization === void 0 && resetsAt === void 0) return;
-  windows.push(
-    buildWindow(
-      key,
-      label ?? CLAUDE_WINDOW_LABELS[key] ?? key,
-      utilization,
-      resetsAt
-    )
-  );
-}
-function readClaudeUsageWindows(response) {
-  const limits = response?.rate_limits;
-  if (!limits) return [];
-  const windows = [];
-  pushUsageWindow(windows, "five_hour", limits.five_hour);
-  pushUsageWindow(windows, "seven_day", limits.seven_day);
-  pushUsageWindow(windows, "seven_day_opus", limits.seven_day_opus);
-  pushUsageWindow(windows, "seven_day_sonnet", limits.seven_day_sonnet);
-  pushUsageWindow(windows, "seven_day_oauth_apps", limits.seven_day_oauth_apps);
-  pushUsageWindow(
-    windows,
-    "seven_day_overage_included",
-    limits.seven_day_overage_included
-  );
-  for (const entry of limits.model_scoped ?? []) {
-    const name = readNonEmptyString(entry.display_name);
-    if (!name) continue;
-    pushUsageWindow(windows, "model_scoped:" + name, entry, \`Weekly (\${name})\`);
-  }
-  pushUsageWindow(windows, "overage", limits.overage);
-  return windows;
-}
-function unwrapUsagePayload(response) {
-  const nested = response.value;
-  if (nested !== null && nested !== void 0 && (nested.rate_limits_available !== void 0 || nested.rate_limits !== void 0 || nested.subscription_type !== void 0)) {
-    return nested;
-  }
-  return response;
-}
-function usageAvailability(payload) {
-  if (payload.rate_limits_available === true) return true;
-  if (payload.rate_limits_available === false) return false;
-  if (payload.rate_limits !== void 0 && payload.rate_limits !== null) {
-    return true;
-  }
-  return null;
-}
-function noteDaemonRefresh(captured, available, detail) {
-  void callConvexWithRetry(
-    "mutation",
-    NOTE_REFRESH_MUTATION,
-    {
-      captured,
-      detail,
-      ...available === null ? {} : { available }
-    },
-    REPORT_MAX_RETRIES
-  ).catch(() => {
-  });
-}
-async function captureClaudeUsage(readUsage, recordAttempt = false) {
-  let timer;
-  const lookupTimeoutMs = recordAttempt ? FORCE_USAGE_LOOKUP_TIMEOUT_MS : USAGE_LOOKUP_TIMEOUT_MS;
-  try {
-    const response = await Promise.race([
-      readUsage(),
-      new Promise((resolve) => {
-        timer = setTimeout(() => resolve("timeout"), lookupTimeoutMs);
-      })
-    ]);
-    if (response === "timeout") {
-      log("usage limits: claude usage lookup timed out");
-      if (recordAttempt) noteDaemonRefresh(false, null, "timeout");
-      return false;
-    }
-    if (!response) {
-      if (recordAttempt) noteDaemonRefresh(false, null, "null-response");
-      return false;
-    }
-    const payload = unwrapUsagePayload(response);
-    const available = usageAvailability(payload);
-    if (available === null) {
-      log("usage limits: claude usage response omitted availability");
-      if (recordAttempt) noteDaemonRefresh(false, null, "omitted-availability");
-      return false;
-    }
-    if (available === false) {
-      log(
-        "usage limits: claude plan usage unavailable \\u2014 preserving prior reading"
-      );
-      if (!callbackState.usageLimitSnapshot) {
-        callbackState.usageLimitSnapshot = { completeness: "refused" };
-      }
-      if (recordAttempt) {
-        noteDaemonRefresh(false, false, "rate-limits-unavailable");
-      }
-      return false;
-    }
-    const snapshot = { completeness: "complete" };
-    const subscriptionType = readNonEmptyString(payload.subscription_type);
-    if (subscriptionType) snapshot.subscriptionType = subscriptionType;
-    snapshot.windows = readClaudeUsageWindows(payload);
-    callbackState.usageLimitSnapshot = snapshot;
-    if (recordAttempt) {
-      noteDaemonRefresh(true, true, subscriptionType ?? "complete");
-    }
-    return true;
-  } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
-    log("usage limits: claude usage lookup failed \\u2014 " + messageText);
-    if (recordAttempt) {
-      noteDaemonRefresh(false, null, "error:" + messageText.slice(0, 120));
-    }
-    return false;
-  } finally {
-    if (timer !== void 0) clearTimeout(timer);
-  }
-}
-function captureClaudeUsageLimitError(error) {
-  if (!error) return;
-  const message = error.toLowerCase();
-  if (!message.includes("out of extra usage") && !message.includes("rate limit") && !message.includes("usage limit") && !message.includes("session limit") && !message.includes("spend limit") && !message.includes("token limit exceeded")) {
-    return;
-  }
-  const snapshot = ensureSnapshot();
-  snapshot.status = "rejected";
-}
-function windowToJson(window) {
-  return {
-    key: window.key,
-    label: window.label,
-    ...window.utilization === void 0 ? {} : { utilization: window.utilization },
-    ...window.resetsAt === void 0 ? {} : { resetsAt: window.resetsAt }
-  };
-}
-function buildUsageLimitReportArgs(repoId, provider, providerAccountId, snapshot) {
-  return {
-    repoId,
-    provider,
-    // Stored on the row so the UI can say why a reading has no windows. The
-    // server also reads it for merge-vs-replace, and still accepts the older
-    // \`snapshotComplete\` boolean from callback bundles baked before this.
-    completeness: snapshot.completeness,
-    ...providerAccountId ? { providerAccountId } : {},
-    ...snapshot.subscriptionType === void 0 ? {} : { subscriptionType: snapshot.subscriptionType },
-    ...snapshot.status === void 0 ? {} : { status: snapshot.status },
-    ...snapshot.windows === void 0 ? {} : { windows: snapshot.windows.map(windowToJson) }
-  };
-}
-async function reportUsageLimits(provider, force = false) {
-  const snapshot = callbackState.usageLimitSnapshot;
-  if (!snapshot) return;
-  if (!REPO_ID) {
-    log("usage limits: no REPO_ID in the environment \\u2014 not reporting");
-    return;
-  }
-  const args = buildUsageLimitReportArgs(
-    REPO_ID,
-    provider,
-    PROVIDER_ACCOUNT_ID,
-    snapshot
-  );
-  const fingerprint = JSON.stringify(args);
-  const capturedAt = Date.now();
-  if (!force && fingerprint === callbackState.lastReportedUsageLimits && capturedAt - callbackState.lastReportedUsageLimitsAt < USAGE_REPORT_REFRESH_MS) {
-    return;
-  }
-  callbackState.lastReportedUsageLimits = fingerprint;
-  try {
-    await callConvexWithRetry(
-      "mutation",
-      REPORT_MUTATION,
-      { ...args, capturedAt },
-      REPORT_MAX_RETRIES
-    );
-    callbackState.lastReportedUsageLimitsAt = capturedAt;
-  } catch (error) {
-    callbackState.lastReportedUsageLimits = "";
-    callbackState.lastReportedUsageLimitsAt = 0;
-    const messageText = error instanceof Error ? error.message : String(error);
-    log("usage limits: report failed \\u2014 " + messageText);
-  }
-}
-async function captureAndReportClaudeUsage(input) {
-  const captured = await captureClaudeUsage(
-    input.readUsage,
-    input.force === true
-  );
-  captureClaudeUsageLimitError(input.error);
-  if (input.force === true && !captured) return;
-  await reportUsageLimits("claude", input.force === true);
-}
-function startClaudeUsageReport(input) {
-  const report = captureAndReportClaudeUsage(input);
-  pendingClaudeUsageReport = report;
-  void report.finally(() => {
-    if (pendingClaudeUsageReport === report) pendingClaudeUsageReport = null;
-  });
-}
-async function waitForPendingClaudeUsageReport() {
-  const pending = pendingClaudeUsageReport;
-  if (!pending) return;
-  let timer;
-  await Promise.race([
-    pending,
-    new Promise((resolve) => {
-      timer = setTimeout(resolve, USAGE_REPORT_EXIT_GRACE_MS);
-    })
-  ]);
-  if (timer !== void 0) clearTimeout(timer);
-}
-
 // callback-src/parse/sdkTaxonomy.ts
 var loggedUnknownKinds = /* @__PURE__ */ new Set();
 var knownBackgroundTaskIds = /* @__PURE__ */ new Set();
@@ -3269,11 +2761,7 @@ function parseClaudeSdkTaxonomy(event) {
   if (messageType !== "system" && messageType !== "tool_progress" && messageType !== "tool_use_summary" && messageType !== "auth_status" && messageType !== "rate_limit_event") {
     return [];
   }
-  if (messageType === "rate_limit_event") {
-    mergeClaudeRateLimitEvent(event);
-    return [];
-  }
-  if (messageType === "auth_status") {
+  if (messageType === "auth_status" || messageType === "rate_limit_event") {
     return [];
   }
   if (messageType === "tool_progress") {
@@ -3392,23 +2880,14 @@ function completeStatusOnNonStatusMessage(event) {
 }
 
 // callback-src/providers/claude.ts
-function claudeToolCompleteResult(resultText, isError, toolUseId) {
-  let answers;
-  if (toolUseId !== void 0) {
-    const stored = callbackState.questionAnswers.get(toolUseId);
-    if (stored) {
-      answers = stored;
-      callbackState.questionAnswers.delete(toolUseId);
-    }
-  }
+function claudeToolCompleteResult(resultText, isError) {
   const output = buildStepOutput(resultText);
-  if (!output && !isError && !answers) {
+  if (!output && !isError) {
     return void 0;
   }
   return {
     output,
-    isError: isError ? true : void 0,
-    answers
+    isError: isError ? true : void 0
   };
 }
 function extractToolResultText(content) {
@@ -3502,7 +2981,7 @@ function claudeParseLine(event) {
     if (toolUseId) {
       trackClaudeToolResult(toolUseId, resultText, isError);
     }
-    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+    const result = claudeToolCompleteResult(resultText, isError);
     events.push(
       result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
     );
@@ -3518,7 +2997,7 @@ function claudeParseLine(event) {
         const resultText = block.content !== void 0 ? extractToolResultText(block.content) : "";
         const isError = block.is_error === true;
         trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+        const result = claudeToolCompleteResult(resultText, isError);
         events.push(
           result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
         );
@@ -3546,7 +3025,7 @@ function claudeParseLine(event) {
         });
         continue;
       }
-      if (block.name === "TodoRead" || block.name === "TaskGet" || block.name === "TaskList" || block.name === "ExitPlanMode") {
+      if (block.name === "TodoRead" || block.name === "TaskGet" || block.name === "TaskList") {
         continue;
       }
       const step = toolCallToStep(block.name, input);
@@ -3627,10 +3106,10 @@ var claudeAdapter = {
 import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync5 } from "fs";
 
 // callback-src/session/createSessionStore.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync4 } from "fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync4 } from "fs";
 function createSessionStore(config) {
   const readSessionState = () => {
-    const statePath = existsSync4(config.localStateFile) ? config.localStateFile : existsSync4(config.persistStateFile) ? config.persistStateFile : "";
+    const statePath = existsSync5(config.localStateFile) ? config.localStateFile : existsSync5(config.persistStateFile) ? config.persistStateFile : "";
     if (!statePath) {
       return null;
     }
@@ -3730,25 +3209,11 @@ function writeCodexFileIfConfigured(fileName, rawValue, encodedValue) {
   mkdirSync4(CODEX_RUNTIME_HOME_DIR, { recursive: true });
   writeFileSync5(CODEX_RUNTIME_HOME_DIR + "/" + fileName, value);
 }
-function codexMcpServerSections(servers) {
-  return Object.entries(servers).flatMap(([name, server]) => {
-    const headers = Object.entries(server.headers).map(
-      ([header, value]) => \`\${JSON.stringify(header)} = \${JSON.stringify(value)}\`
-    ).join(", ");
-    return [
-      "",
-      \`[mcp_servers.\${JSON.stringify(name)}]\`,
-      \`url = \${JSON.stringify(server.url)}\`,
-      \`http_headers = { \${headers} }\`
-    ];
-  });
-}
-function buildCodexRuntimeConfig(rawValue, encodedValue, fastMode = codexFastMode, mcpServers = evaMcpServers) {
+function buildCodexRuntimeConfig(rawValue, encodedValue) {
   const configuredValue = rawValue || (encodedValue ? decodeBase64(encodedValue) : "");
   const preservedLines = configuredValue ? configuredValue.split(/\\r?\\n/).filter((line) => {
     const trimmed = line.trim().toLowerCase();
-    return !trimmed.startsWith("sandbox_mode") && !trimmed.startsWith("approval_policy") && // Eva owns the Fast toggle; account config must not silently opt in.
-    !trimmed.startsWith("service_tier") && // Drop any configured reasoning effort; the session lever wins when set.
+    return !trimmed.startsWith("sandbox_mode") && !trimmed.startsWith("approval_policy") && // Drop any configured reasoning effort; the session lever wins when set.
     !(codexReasoningEffort && trimmed.startsWith("model_reasoning_effort"));
   }) : [];
   const normalizedPreservedLines = preservedLines.filter((line) => line.trim());
@@ -3759,13 +3224,9 @@ function buildCodexRuntimeConfig(rawValue, encodedValue, fastMode = codexFastMod
   if (codexReasoningEffort) {
     runtimeLines.push(\`model_reasoning_effort = "\${codexReasoningEffort}"\`);
   }
-  if (fastMode) {
-    runtimeLines.push('service_tier = "fast"');
-  }
   if (normalizedPreservedLines.length > 0) {
     runtimeLines.push(...normalizedPreservedLines);
   }
-  runtimeLines.push(...codexMcpServerSections(mcpServers));
   return runtimeLines.join("\\n") + "\\n";
 }
 function hydratePersistedCodexState() {
@@ -3810,7 +3271,7 @@ function codexParseLine(event) {
     events.push({ kind: "set_codex_thread", threadId });
     events.push({
       kind: "update_thinking",
-      label: "Starting Codex SDK...",
+      label: "Starting Codex CLI...",
       detail: "Restoring saved context..."
     });
     return events;
@@ -3818,21 +3279,9 @@ function codexParseLine(event) {
   if (event.type === "turn.started") {
     events.push({
       kind: "update_thinking",
-      label: "Starting Codex SDK...",
+      label: "Starting Codex CLI...",
       detail: "Codex is reasoning..."
     });
-    return events;
-  }
-  if (event.type === "item.agent_message.delta" && typeof event.delta === "string" && event.delta) {
-    events.push({ kind: "stream_text_delta", text: event.delta });
-    return events;
-  }
-  if (event.type === "item.reasoning.delta" && typeof event.delta === "string" && event.delta) {
-    events.push({ kind: "update_reasoning", text: event.delta });
-    return events;
-  }
-  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && (event.item.type === "agent_message" || event.item.type === "agentMessage")) {
-    events.push({ kind: "mark_message_start" });
     return events;
   }
   if ((event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && event.item.type === "reasoning") {
@@ -3841,7 +3290,7 @@ function codexParseLine(event) {
     }
     return events;
   }
-  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message" && event.item.type !== "agentMessage") {
+  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message") {
     const step = codexItemToStep(event.item);
     const trackingId = step.type !== "thinking" && typeof event.item.id === "string" ? event.item.id : void 0;
     events.push(
@@ -3849,14 +3298,14 @@ function codexParseLine(event) {
     );
     return events;
   }
-  if (event.type === "item.completed" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && (event.item.type === "agent_message" || event.item.type === "agentMessage")) {
+  if (event.type === "item.completed" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && event.item.type === "agent_message") {
     const messageText = getCodexAgentMessageText(event.item);
-    if (messageText && !callbackState.streamedAssistantTextThisMessage) {
+    if (messageText) {
       events.push({ kind: "append_text", text: messageText });
     }
     return events;
   }
-  if ((event.type === "item.completed" || event.type === "item.failed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message" && event.item.type !== "agentMessage") {
+  if ((event.type === "item.completed" || event.type === "item.failed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message") {
     const result = probeCodexItemResult(
       event.item,
       event.type === "item.failed"
@@ -3882,6 +3331,19 @@ function codexParseLine(event) {
   }
   return events;
 }
+function inspectCodexStdout(text) {
+  for (const line of text.split("\\n")) {
+    const clean = line.trim();
+    if (!clean) continue;
+    try {
+      const parsed = tryParseJson(clean);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.type === "item.completed" && parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item) && parsed.item.type === "agent_message" && getCodexAgentMessageText(parsed.item) && callbackState.firstTextBlockAt === 0) {
+        callbackState.firstTextBlockAt = Date.now();
+      }
+    } catch {
+    }
+  }
+}
 function onStreamLine2(parsed) {
   const threadId = getCodexThreadId(parsed);
   if (parsed.type === "thread.started" && threadId) {
@@ -3899,7 +3361,8 @@ var codexAdapter = {
   parseLine: codexParseLine,
   onStreamLine(_line, parsed) {
     return onStreamLine2(parsed);
-  }
+  },
+  onStdoutText: inspectCodexStdout
 };
 
 // callback-src/session/cursorSession.ts
@@ -4021,43 +3484,13 @@ function cursorToolCallEvents(event) {
   }
   return [];
 }
-function cursorCompactionEventPhase(type) {
-  if (type === "summary-started" || type === "summary_started") {
-    return "started";
-  }
-  if (type === "summary-completed" || type === "summary_completed") {
-    return "completed";
-  }
-  return null;
-}
-var SILENT_EVENT_TYPES = /* @__PURE__ */ new Set([
-  "user",
-  "status",
-  "request",
-  "task",
-  "usage"
-]);
-var reportedSilentTypes = /* @__PURE__ */ new Set();
 function cursorParseLine(event) {
-  const events = cursorEventToCanonical(event);
-  if (events.length === 0) {
-    const type = typeof event.type === "string" ? event.type : "(untyped)";
-    if (!SILENT_EVENT_TYPES.has(type) && !reportedSilentTypes.has(type)) {
-      reportedSilentTypes.add(type);
-      log(
-        "cursor stream event '" + type + "' produced no activity steps; parser and SDK may disagree on its shape"
-      );
-    }
-  }
-  return events;
-}
-function cursorEventToCanonical(event) {
   const events = [];
   if (event.type === "system") {
     events.push({
       kind: "update_thinking",
-      label: "Cursor agent ready",
-      detail: "Model context initialized."
+      label: "Starting Cursor agent...",
+      detail: "Cursor agent initializing..."
     });
     return events;
   }
@@ -4066,7 +3499,7 @@ function cursorEventToCanonical(event) {
     const contentBlocks = message && Array.isArray(message.content) ? message.content : [];
     for (const block of contentBlocks) {
       if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string" && block.text) {
-        events.push({ kind: "stream_text_delta", text: block.text });
+        events.push({ kind: "append_text", text: block.text });
       }
     }
     return events;
@@ -4081,25 +3514,6 @@ function cursorEventToCanonical(event) {
   if (event.type === "result") {
     events.push({ kind: "mark_last_complete" });
     return events;
-  }
-  if (typeof event.type === "string") {
-    const compactionPhase = cursorCompactionEventPhase(event.type);
-    if (compactionPhase === "started") {
-      events.push({
-        kind: "update_thinking",
-        label: "Compacting context...",
-        detail: "Cursor is summarizing the conversation in place."
-      });
-      return events;
-    }
-    if (compactionPhase === "completed") {
-      events.push({
-        kind: "update_thinking",
-        label: "Context compacted",
-        detail: "The agent continues with its history summarized in place."
-      });
-      return events;
-    }
   }
   return events;
 }
@@ -4297,9 +3711,6 @@ function mergeToolResult(step, result) {
   if (result.durationMs !== void 0) {
     step.durationMs = result.durationMs;
   }
-  if (result.answers) {
-    step.answers = result.answers;
-  }
 }
 function markStepComplete(step) {
   step.status = "complete";
@@ -4309,9 +3720,9 @@ function markStepComplete(step) {
     step.label = "Used " + step.label.slice(6, -3);
   }
   if (step.durationMs === void 0) {
-    const started2 = stepStartedAt.get(step);
-    if (started2 !== void 0) {
-      step.durationMs = Date.now() - started2;
+    const started = stepStartedAt.get(step);
+    if (started !== void 0) {
+      step.durationMs = Date.now() - started;
     }
   }
 }
@@ -4358,45 +3769,10 @@ function applyTodosSnapshot(todos) {
   });
   callbackState.lastStepType = "tool";
 }
-function appendReasoningDetail(step, next) {
-  const current = step.detail ?? "";
-  const merged = next.startsWith(current) ? next : current + next;
-  step.detail = headCap(merged, STEP_FIELD_CAPS.reasoning).text;
-}
-function applyReasoningSnapshot(text) {
-  const next = String(text);
-  if (!next) return;
-  const last = callbackState.accumulatedSteps[callbackState.accumulatedSteps.length - 1];
-  if (last && last.type === "reasoning" && last.status === "active") {
-    appendReasoningDetail(last, next);
-    callbackState.lastStepType = "thinking";
-    return;
-  }
-  markLastComplete();
-  const step = {
-    type: "reasoning",
-    label: "Thinking...",
-    status: "active",
-    detail: headCap(next, STEP_FIELD_CAPS.reasoning).text
-  };
-  callbackState.accumulatedSteps.push(step);
-  stepStartedAt.set(step, Date.now());
-  callbackState.lastStepType = "thinking";
-}
-function pushNoticeStep2(label, detail) {
-  pushProgressStep({ type: "notice", label, detail, status: "complete" });
-}
 function updateThinkingStep(label, detail) {
-  callbackState.transientThinkingStep = {
-    type: "thinking",
-    label,
-    detail,
-    status: "active"
-  };
+  void label;
+  void detail;
   callbackState.lastStepType = "thinking";
-}
-function clearThinkingStep() {
-  callbackState.transientThinkingStep = null;
 }
 function shouldRecordProgressStep(step) {
   return step.type !== "thinking" && step.type !== "reasoning" && step.type !== "response";
@@ -4429,7 +3805,6 @@ function applyCanonicalEvents(events) {
         updateThinkingStep(ev.label, ev.detail);
         break;
       case "push_step":
-        clearThinkingStep();
         pushProgressStep(ev.step);
         if (shouldRecordProgressStep(ev.step)) {
           if (ev.trackingId) callbackState.codexToolItemIds.add(ev.trackingId);
@@ -4437,7 +3812,6 @@ function applyCanonicalEvents(events) {
         }
         break;
       case "complete_tool":
-        clearThinkingStep();
         completeToolStep(ev.trackingId, ev.result);
         if (ev.trackingId !== void 0) {
           callbackState.codexToolItemIds.delete(ev.trackingId);
@@ -4447,15 +3821,12 @@ function applyCanonicalEvents(events) {
         }
         break;
       case "mark_last_complete":
-        clearThinkingStep();
         markLastComplete();
         break;
       case "append_text":
-        clearThinkingStep();
         appendStreamedContent(ev.text, true);
         break;
       case "stream_text_delta":
-        clearThinkingStep();
         appendStreamedContent(ev.text, callbackState.pendingParagraphBreak);
         callbackState.pendingParagraphBreak = false;
         callbackState.streamedAssistantTextThisMessage = true;
@@ -4468,22 +3839,18 @@ function applyCanonicalEvents(events) {
         callbackState.pendingParagraphBreak = true;
         break;
       case "update_reasoning":
-        clearThinkingStep();
-        applyReasoningSnapshot(ev.text);
+        callbackState.lastStepType = "thinking";
         break;
       case "set_pending_question":
-        clearThinkingStep();
         callbackState.pendingQuestionData = ev.data;
         break;
       case "set_todos":
-        clearThinkingStep();
         applyTodosSnapshot(ev.todos);
         break;
       case "set_codex_thread":
         callbackState.activeCodexThreadId = ev.threadId;
         break;
       case "mark_first_assistant":
-        clearThinkingStep();
         callbackState.waitingForFirstAssistantEvent = false;
         break;
     }
@@ -4523,30 +3890,40 @@ function appendStreamedContent(text, isBlockBoundary = false) {
 
 // callback-src/runtime/heartbeats.ts
 import { writeFileSync as writeFileSync7 } from "fs";
-import { freemem, loadavg } from "os";
 
-// callback-src/runtime/eventLoopStall.ts
-var EVENT_LOOP_STALL_LOG_MS = 3e4;
-function measureTickStallMs(input) {
-  const lateBy = input.now - input.previousTickAt - input.intervalMs;
-  return lateBy > input.toleranceMs ? lateBy : 0;
+// callback-src/runtime/processControl.ts
+import { spawnSync as spawnSync2 } from "child_process";
+function terminateAttemptProcess(child) {
+  try {
+    child.kill("SIGTERM");
+  } catch {
+  }
+  setTimeout(() => {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+    }
+  }, 2e3);
+}
+function isChildZombie(pid) {
+  if (!pid) return false;
+  try {
+    const result = spawnSync2("ps", ["-p", String(pid), "-o", "state="], {
+      timeout: 2e3,
+      encoding: "utf8"
+    });
+    if (result.error || result.status !== 0) return false;
+    return (result.stdout || "").trim() === "Z";
+  } catch {
+    return false;
+  }
 }
 
 // callback-src/runtime/heartbeats.ts
 var flushInterval = null;
 var heartbeatInterval = null;
-var activeFlush = null;
-var flushRequested = false;
-function ownsHeartbeatLease() {
-  return canSendTurnHeartbeat({
-    claimMutation: CLAIM_MUTATION,
-    ownership: getTurnOwnership()
-  });
-}
 function buildStreamingPayload() {
-  return serializeSteps(
-    callbackState.transientThinkingStep ? [...callbackState.accumulatedSteps, callbackState.transientThinkingStep] : callbackState.accumulatedSteps
-  );
+  return serializeSteps(callbackState.accumulatedSteps);
 }
 function markHeartbeatSuccess(payload) {
   callbackState.lastSentPayload = payload;
@@ -4566,11 +3943,12 @@ function noteHeartbeatFailure(error) {
   if (callbackState.consecutiveHeartbeatFailures === 1) {
     callbackState.heartbeatFailureStreakStartedAt = Date.now();
   }
-  log(
-    "Heartbeat failed (consecutive: " + callbackState.consecutiveHeartbeatFailures + "): " + message
+  console.error(
+    "Heartbeat failed (consecutive: " + callbackState.consecutiveHeartbeatFailures + "):",
+    message
   );
   if (callbackState.consecutiveHeartbeatFailures === 2 || callbackState.consecutiveHeartbeatFailures === 4) {
-    log(
+    console.error(
       "[streaming-heartbeat] degraded: " + callbackState.consecutiveHeartbeatFailures + " consecutive post-retry failures (burstFatal>=" + HEARTBEAT_FATAL_BURST + " or slowFatal>=" + HEARTBEAT_FATAL_SLOW_COUNT + " over " + HEARTBEAT_FATAL_SLOW_WINDOW_MS + "ms)"
     );
   }
@@ -4584,10 +3962,12 @@ function noteHeartbeatFailure(error) {
   if (burstFatal || slowFatal || absoluteFatal) {
     callbackState.fatalHeartbeatErrorMessage = "Lost streaming heartbeat after " + String(callbackState.consecutiveHeartbeatFailures) + " consecutive failures: " + message;
     log(callbackState.fatalHeartbeatErrorMessage);
+    if (callbackState.activeAttemptChild) {
+      terminateAttemptProcess(callbackState.activeAttemptChild);
+    }
   }
 }
 async function sendStreamingHeartbeatUpdate(payload) {
-  if (!ownsHeartbeatLease()) return true;
   try {
     await callStreamingHeartbeat(
       STREAMING_ENTITY_ID ?? "",
@@ -4602,66 +3982,48 @@ async function sendStreamingHeartbeatUpdate(payload) {
     return false;
   }
 }
-async function flushStreamingPass() {
-  if (!ownsHeartbeatLease()) {
+async function flushStreaming() {
+  if (callbackState.flushInProgress) return;
+  if (callbackState.rawOutput.length <= callbackState.lastProcessed) {
     void flushBackgroundShellQueue();
     return;
   }
-  let hasNew = false;
-  if (callbackState.rawOutput.length > callbackState.lastProcessed) {
-    const pending = callbackState.rawOutput.slice(callbackState.lastProcessed);
-    const lastNewline = pending.lastIndexOf("\\n");
-    if (lastNewline >= 0) {
-      callbackState.lastProcessed += lastNewline + 1;
-      for (const line of pending.slice(0, lastNewline).split("\\n")) {
-        const clean = line.trim();
-        if (!clean) continue;
-        if (parseStreamEvent(clean)) {
-          hasNew = true;
-          callbackState.parsedStreamEventCount++;
-        }
-      }
-    }
-  }
-  const payload = buildStreamingPayload();
-  const contentChanged = callbackState.currentStreamedContent !== callbackState.lastSentContent;
-  const activityChanged = payload !== callbackState.lastSentPayload;
-  if (hasNew || contentChanged || activityChanged) {
-    await sendStreamingHeartbeatUpdate(payload);
-  } else if (callbackState.inFlightToolUses > 0 && Date.now() - callbackState.lastStreamingSentAt > 15e3) {
-    const entityId = STREAMING_ENTITY_ID ?? "";
-    if (entityId) {
-      await callStreamingHeartbeatTouch(entityId);
-      callbackState.lastStreamingSentAt = Date.now();
-    }
-  }
-  void flushBackgroundShellQueue();
-}
-async function drainRequestedFlushes() {
   callbackState.flushInProgress = true;
   try {
-    do {
-      flushRequested = false;
-      await flushStreamingPass();
-    } while (flushRequested);
+    const pending = callbackState.rawOutput.slice(callbackState.lastProcessed);
+    const lastNewline = pending.lastIndexOf("\\n");
+    if (lastNewline === -1) return;
+    callbackState.lastProcessed += lastNewline + 1;
+    let hasNew = false;
+    for (const line of pending.slice(0, lastNewline).split("\\n")) {
+      const clean = line.trim();
+      if (!clean) continue;
+      if (parseStreamEvent(clean)) {
+        hasNew = true;
+        callbackState.parsedStreamEventCount++;
+      }
+    }
+    const contentChanged = callbackState.currentStreamedContent !== callbackState.lastSentContent;
+    if (hasNew || contentChanged) {
+      const payload = buildStreamingPayload();
+      if (payload === callbackState.lastSentPayload && !contentChanged) {
+        return;
+      }
+      await sendStreamingHeartbeatUpdate(payload);
+    } else if (callbackState.inFlightToolUses > 0 && Date.now() - callbackState.lastStreamingSentAt > 15e3) {
+      const entityId = STREAMING_ENTITY_ID ?? "";
+      if (entityId) {
+        await callStreamingHeartbeatTouch(entityId);
+        callbackState.lastStreamingSentAt = Date.now();
+      }
+    }
   } finally {
     callbackState.flushInProgress = false;
+    void flushBackgroundShellQueue();
   }
-}
-function flushStreaming() {
-  flushRequested = true;
-  if (activeFlush) return activeFlush;
-  const flush = drainRequestedFlushes();
-  activeFlush = flush;
-  const clearActiveFlush = () => {
-    if (activeFlush === flush) activeFlush = null;
-  };
-  void flush.then(clearActiveFlush, clearActiveFlush);
-  return flush;
 }
 var PING_STUCK_MS = 45e3;
 async function heartbeatPing() {
-  if (!ownsHeartbeatLease()) return;
   if (callbackState.pingInProgress && callbackState.pingStartedAt > 0 && Date.now() - callbackState.pingStartedAt < PING_STUCK_MS) {
     return;
   }
@@ -4681,10 +4043,6 @@ async function heartbeatPing() {
       await sendStreamingHeartbeatUpdate(buildStreamingPayload());
       return;
     }
-    if (callbackState.transientThinkingStep) {
-      await sendStreamingHeartbeatUpdate(buildStreamingPayload());
-      return;
-    }
     const entityId = STREAMING_ENTITY_ID ?? "";
     if (!entityId) return;
     await callStreamingHeartbeatTouch(entityId);
@@ -4699,10 +4057,6 @@ async function heartbeatPing() {
   }
 }
 async function initialHeartbeat() {
-  if (!ownsHeartbeatLease()) {
-    log("initialHeartbeat skipped: daemon is waiting to claim a turn");
-    return;
-  }
   const startedAt = Date.now();
   let attempt = 0;
   while (attempt <= 1) {
@@ -4726,32 +4080,30 @@ async function initialHeartbeat() {
     }
   }
 }
-var HEARTBEAT_TICK_MS = 1e4;
-var lastHeartbeatTickAt = 0;
-function logEventLoopStall(now) {
-  const stalledMs = measureTickStallMs({
-    previousTickAt: lastHeartbeatTickAt,
-    now,
-    intervalMs: HEARTBEAT_TICK_MS,
-    toleranceMs: EVENT_LOOP_STALL_LOG_MS
-  });
-  lastHeartbeatTickAt = now;
-  if (stalledMs === 0) return;
-  const mb = (bytes) => String(Math.round(bytes / 1024 / 1024));
-  const memory = process.memoryUsage();
-  log(
-    "event loop stalled for " + stalledMs + "ms (rss=" + mb(memory.rss) + "MB heapUsed=" + mb(memory.heapUsed) + "MB freemem=" + mb(freemem()) + "MB loadavg=" + loadavg().map((n) => n.toFixed(2)).join(",") + ")"
-  );
+function enforceTurnLease() {
+  const reason = getLeaseTerminalReason();
+  if (reason === null) return false;
+  if (leaseExitScheduled) return true;
+  leaseExitScheduled = true;
+  log("exiting: turn lease terminal (" + reason + ")");
+  if (callbackState.activeAttemptChild) {
+    terminateAttemptProcess(callbackState.activeAttemptChild);
+  }
+  if (flushInterval) clearInterval(flushInterval);
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  callbackState.streamingLoopsStopped = true;
+  setTimeout(() => process.exit(0), LEASE_EXIT_GRACE_MS).unref();
+  return true;
 }
+var LEASE_EXIT_GRACE_MS = 500;
+var leaseExitScheduled = false;
 function startStreamingLoops() {
   flushInterval = setInterval(() => {
     void flushStreaming().then(enforceTurnLease);
   }, 150);
-  lastHeartbeatTickAt = Date.now();
   heartbeatInterval = setInterval(() => {
-    logEventLoopStall(Date.now());
     void heartbeatPing().then(enforceTurnLease);
-  }, HEARTBEAT_TICK_MS);
+  }, 1e4);
 }
 async function stopStreamingLoops() {
   if (callbackState.streamingLoopsStopped) return;
@@ -4759,29 +4111,6 @@ async function stopStreamingLoops() {
   if (flushInterval) clearInterval(flushInterval);
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   await flushStreaming();
-}
-var LEASE_EXIT_GRACE_MS = 500;
-var leaseExitScheduled = false;
-function enforceTurnLease() {
-  const decision = decideTurnLeaseExit({
-    terminalReason: getLeaseTerminalReason(),
-    exitScheduled: leaseExitScheduled
-  });
-  if (decision.action === "continue") return false;
-  if (decision.action === "wait") return true;
-  leaseExitScheduled = true;
-  log("exiting: turn lease terminal (" + decision.reason + ")");
-  if (flushInterval) clearInterval(flushInterval);
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
-  callbackState.streamingLoopsStopped = true;
-  if (decision.reason !== "superseded") {
-    log(
-      "persisting turn work before lease-terminal exit (" + decision.reason + ")"
-    );
-    persistTurnWork();
-  }
-  setTimeout(() => process.exit(0), LEASE_EXIT_GRACE_MS).unref();
-  return true;
 }
 async function setFinalizingState() {
   markLastComplete();
@@ -4796,7 +4125,7 @@ async function runPreflightHeartbeat() {
   try {
     await initialHeartbeat();
     try {
-      writeFileSync7(READY_FILE, String(Date.now()));
+      writeFileSync7(READY_FILE, LAUNCH_ID || String(Date.now()));
       log(
         "ready file written after " + String(Date.now() - SCRIPT_STARTED_AT) + "ms"
       );
@@ -4809,477 +4138,39 @@ async function runPreflightHeartbeat() {
   }
 }
 
-// callback-src/runtime/completion.ts
-import {
-  existsSync as existsSync5,
-  mkdirSync as mkdirSync6,
-  readFileSync as readFileSync5,
-  readdirSync as readdirSync2,
-  renameSync,
-  writeFileSync as writeFileSync8
-} from "fs";
-import { createHash } from "crypto";
-function parseJsonObject(line) {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
-function writeDoneFile(status, extras) {
-  if (callbackState.doneFileWritten) return;
-  callbackState.doneFileWritten = true;
-  try {
-    const payload = {
-      endedAt: Date.now(),
-      startedAt: SCRIPT_STARTED_AT,
-      durationMs: Date.now() - SCRIPT_STARTED_AT,
-      status,
-      provider: PROVIDER,
-      entityId: ENTITY_ID || null,
-      runId: RUN_ID || null,
-      resultEventSeen: callbackState.resultEventSeen,
-      accumulatedStepCount: callbackState.accumulatedSteps.length,
-      parsedStreamEventCount: callbackState.parsedStreamEventCount,
-      rawLogBytesWritten: callbackState.rawLogBytesWritten,
-      ...extras
-    };
-    writeFileSync8(DONE_FILE, JSON.stringify(payload));
-  } catch (err) {
-    console.error(
-      "Failed to write done file: " + String(err instanceof Error ? err.message : err)
-    );
-  }
-}
-function computeCodexCostUsd(model, inputTokens, cachedInputTokens, outputTokens) {
-  const pricing = CODEX_PRICING_PER_MILLION[model];
-  if (!pricing) return 0;
-  const nonCachedInput = Math.max(0, inputTokens - cachedInputTokens);
-  return nonCachedInput * pricing.input / 1e6 + cachedInputTokens * pricing.cached / 1e6 + outputTokens * pricing.output / 1e6;
-}
-function buildClaudeShapedResult(args) {
-  return JSON.stringify({
-    type: "result",
-    provider: args.provider,
-    total_cost_usd: args.totalCostUsd,
-    duration_ms: args.durationMs,
-    usage: {
-      input_tokens: args.inputTokens,
-      output_tokens: args.outputTokens,
-      cache_read_input_tokens: args.cacheReadInputTokens,
-      cache_creation_input_tokens: args.cacheCreationInputTokens
-    },
-    modelUsage: args.model ? { [args.model]: {} } : {}
-  });
-}
-function readSyntheticResult(output) {
-  const found = {
-    sawResult: false,
-    resultText: "",
-    isError: false,
-    durationMs: 0,
-    totalCostUsd: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    model: "",
-    assistantText: ""
-  };
-  const readNumberField2 = (source, key) => {
-    const value = source[key];
-    return typeof value === "number" && Number.isFinite(value) ? value : 0;
-  };
-  const assistantParts = [];
-  for (const line of output.split("\\n")) {
-    const clean = line.trim();
-    if (!clean) continue;
-    try {
-      const parsed = parseJsonObject(clean);
-      if (!parsed) continue;
-      if (parsed.type === "result") {
-        found.sawResult = true;
-        found.isError = Boolean(parsed.is_error);
-        found.durationMs = readNumberField2(parsed, "duration_ms");
-        found.totalCostUsd = readNumberField2(parsed, "total_cost_usd");
-        found.model = typeof parsed.model === "string" ? parsed.model : "";
-        if (typeof parsed.result === "string") {
-          found.resultText = parsed.result;
-        } else if (parsed.result !== void 0) {
-          found.resultText = JSON.stringify(parsed.result);
-        }
-        if (parsed.usage && typeof parsed.usage === "object" && !Array.isArray(parsed.usage)) {
-          found.inputTokens = readNumberField2(parsed.usage, "input_tokens");
-          found.outputTokens = readNumberField2(parsed.usage, "output_tokens");
-          found.cacheReadTokens = readNumberField2(
-            parsed.usage,
-            "cache_read_input_tokens"
-          );
-          found.cacheWriteTokens = readNumberField2(
-            parsed.usage,
-            "cache_creation_input_tokens"
-          );
-        }
-        continue;
-      }
-      if (parsed.type === "assistant" && parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) && Array.isArray(parsed.message.content)) {
-        for (const block of parsed.message.content) {
-          if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
-            assistantParts.push(block.text);
-          }
-        }
-      }
-    } catch {
-    }
-  }
-  found.assistantText = assistantParts.join("");
-  return found;
-}
-function extractResultEvent(output) {
-  if (PROVIDER === "cursor" || PROVIDER === "opencode") {
-    const found = readSyntheticResult(output);
-    if (found.sawResult) {
-      return {
-        result: found.resultText || found.assistantText,
-        isError: found.isError,
-        rawResultEvent: buildClaudeShapedResult({
-          provider: PROVIDER,
-          totalCostUsd: found.totalCostUsd,
-          durationMs: found.durationMs || attemptElapsedMs(),
-          inputTokens: found.inputTokens,
-          outputTokens: found.outputTokens,
-          cacheReadInputTokens: found.cacheReadTokens,
-          cacheCreationInputTokens: found.cacheWriteTokens,
-          // OpenCode reports the model the server actually served the turn
-          // with; Cursor's runner does not, so fall back to the configured id.
-          model: found.model || (PROVIDER === "opencode" ? normalizedOpencodeModel : normalizedCursorModel)
-        })
-      };
-    }
-    if (found.assistantText) {
-      return {
-        result: found.assistantText,
-        isError: false,
-        rawResultEvent: ""
-      };
-    }
-    return null;
-  }
-  if (PROVIDER === "codex") {
-    let finalText2 = "";
-    let lastInputTokens = 0;
-    let lastCachedInputTokens = 0;
-    let lastCacheWriteInputTokens = 0;
-    let lastOutputTokens = 0;
-    for (const line of output.split("\\n")) {
-      const clean = line.trim();
-      if (!clean) continue;
-      try {
-        const parsed = parseJsonObject(clean);
-        if (!parsed) continue;
-        if (parsed.type === "item.completed" && parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item) && parsed.item.type === "agent_message") {
-          const messageText = getCodexAgentMessageText(parsed.item);
-          if (messageText) finalText2 = messageText;
-          continue;
-        }
-        if (parsed.type === "turn.completed" && parsed.usage && typeof parsed.usage === "object" && !Array.isArray(parsed.usage)) {
-          const usage = parsed.usage;
-          if (typeof usage.input_tokens === "number") {
-            lastInputTokens = usage.input_tokens;
-          }
-          if (typeof usage.cached_input_tokens === "number") {
-            lastCachedInputTokens = usage.cached_input_tokens;
-          }
-          if (typeof usage.cache_write_input_tokens === "number") {
-            lastCacheWriteInputTokens = usage.cache_write_input_tokens;
-          }
-          if (typeof usage.output_tokens === "number") {
-            lastOutputTokens = usage.output_tokens;
-          }
-        }
-      } catch {
-      }
-    }
-    if (!finalText2) return null;
-    const nonCachedInput = Math.max(0, lastInputTokens - lastCachedInputTokens);
-    return {
-      result: finalText2,
-      isError: false,
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          lastInputTokens,
-          lastCachedInputTokens,
-          lastOutputTokens
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: nonCachedInput,
-        outputTokens: lastOutputTokens,
-        cacheReadInputTokens: lastCachedInputTokens,
-        cacheCreationInputTokens: lastCacheWriteInputTokens,
-        model: normalizedCodexModel
-      })
-    };
-  }
-  let resultEvent = null;
-  for (const line of output.split("\\n")) {
-    const clean = line.trim();
-    if (!clean) continue;
-    try {
-      const parsed = parseJsonObject(clean);
-      if (!parsed) continue;
-      if (parsed.type === "result") {
-        const r = parsed.result ?? "";
-        const withProvider = JSON.stringify({ ...parsed, provider: "claude" });
-        resultEvent = {
-          result: typeof r === "string" ? r : JSON.stringify(r),
-          isError: Boolean(parsed.is_error),
-          rawResultEvent: withProvider
-        };
-      }
-    } catch {
-    }
-  }
-  return resultEvent;
-}
-function buildErrorMessage(code, fatalHeartbeatError, toolStallError, timedOutForMaxRuntime, timedOutForNoOutput, timedOutForFirstEvent, timedOutForFirstAssistant, timedOutAfterFirstText, timedOutForZombie) {
-  const agentName = PROVIDER === "codex" ? "Codex SDK" : PROVIDER === "opencode" ? "Opencode SDK" : PROVIDER === "cursor" ? "Cursor SDK" : "Claude CLI";
-  if (fatalHeartbeatError) return fatalHeartbeatError;
-  if (toolStallError) return toolStallError;
-  if (timedOutForZombie) {
-    return agentName + " terminated because the agent process entered zombie state (likely a grandchild held stdio open after the agent exited)";
-  }
-  if (timedOutForMaxRuntime) {
-    return agentName + " terminated after max runtime of " + MAX_TOTAL_RUNTIME_MS + "ms";
-  }
-  if (timedOutForFirstEvent) {
-    return agentName + " produced no parseable stream-json events within " + FIRST_EVENT_TIMEOUT_MS + "ms";
-  }
-  if (timedOutForFirstAssistant) {
-    return agentName + " initialized but produced no assistant response within " + FIRST_ASSISTANT_EVENT_TIMEOUT_MS + "ms \\u2014 likely MCP initialization or API congestion";
-  }
-  if (timedOutAfterFirstText) {
-    return agentName + " stalled after first text block for " + POST_TEXT_STALL_TIMEOUT_MS + "ms";
-  }
-  if (timedOutForNoOutput) {
-    return agentName + " terminated after no stdout for " + NO_OUTPUT_TIMEOUT_MS + "ms";
-  }
-  if (code === 137 || code === 143) {
-    return agentName + (code === 137 ? " was killed before it finished \\u2014 the sandbox ran out of memory." : " was stopped before it finished \\u2014 the run was interrupted.") + " This usually means the sandbox was stopped or a new message cancelled the run, so nothing was completed. Send the request again on a running sandbox.";
-  }
-  return agentName + " exited with code " + code;
-}
-function providerAttemptWasInterrupted(attempt) {
-  return attempt.terminatedBySignal || attempt.code === 137 || attempt.code === 143;
-}
-function providerAttemptTimedOut(attempt) {
-  return attempt.timedOutAfterFirstText || attempt.timedOutForNoOutput || attempt.timedOutForMaxRuntime || attempt.timedOutForFirstEvent || attempt.timedOutForFirstAssistant || attempt.timedOutForZombie || Boolean(attempt.toolStallErrorMessage);
-}
-function resolveProviderAttemptOutcome(attempt, resultEvent) {
-  const agentWasInterrupted = providerAttemptWasInterrupted(attempt);
-  const attemptEndedDueToTimeout = providerAttemptTimedOut(attempt);
-  const runSucceededWithResult = resultEvent != null && !resultEvent.isError && !agentWasInterrupted;
-  if (resultEvent?.isError) {
-    return { success: false, error: resultEvent.result };
-  }
-  if (!runSucceededWithResult && attempt.code !== 0 || attemptEndedDueToTimeout && !runSucceededWithResult) {
-    return {
-      success: false,
-      error: appendDiagnosticTail(
-        buildErrorMessage(
-          attempt.code,
-          callbackState.fatalHeartbeatErrorMessage,
-          attempt.toolStallErrorMessage,
-          attempt.timedOutForMaxRuntime,
-          attempt.timedOutForNoOutput,
-          attempt.timedOutForFirstEvent,
-          attempt.timedOutForFirstAssistant,
-          attempt.timedOutAfterFirstText,
-          attempt.timedOutForZombie
-        )
-      )
-    };
-  }
-  return { success: runSucceededWithResult, error: null };
-}
-async function drainStreamingAndCompleteSteps() {
-  await flushStreaming();
-  for (const step of callbackState.accumulatedSteps) step.status = "complete";
-}
-async function reconcileStreamingAndPersist() {
-  if (await setFinalizingState()) return true;
-  persistTurnWork();
-  return false;
-}
-function buildTurnCompletionPayload(params) {
-  return buildEntityMutationArgs(
-    ENTITY_ID_FIELD ?? params.entityFieldFallback,
-    ENTITY_ID,
-    {
-      success: params.success,
-      result: params.result,
-      error: params.error,
-      activityLog: params.activityLog,
-      ...RUN_ID ? { runId: RUN_ID } : {},
-      ...params.resultEvent?.rawResultEvent ? { rawResultEvent: params.resultEvent.rawResultEvent } : {},
-      ...callbackState.pendingQuestionData ? { pendingQuestion: callbackState.pendingQuestionData } : {}
-    }
-  );
-}
-async function postClaimedTurnFailureCompletion(params) {
-  const completionArgs = buildEntityMutationArgs(
-    ENTITY_ID_FIELD,
-    ENTITY_ID,
-    {
-      success: false,
-      result: null,
-      error: params.error,
-      activityLog: params.activityLog,
-      ...RUN_ID ? { runId: RUN_ID } : {}
-    }
-  );
-  appendClaimedTurnCompletion(completionArgs);
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs
-  );
-}
-function appendDiagnosticTail(message) {
-  const details = [];
-  const stdoutTail = callbackState.rawOutput.slice(-1500).trim();
-  const stderrTail = callbackState.stderrOutput.slice(-1500).trim();
-  if (stdoutTail) details.push("stdout tail:\\n" + stdoutTail);
-  if (stderrTail) details.push("stderr tail:\\n" + stderrTail);
-  if (details.length === 0) {
-    details.push(
-      "(stdout and stderr were empty \\u2014 the agent likely failed before emitting any events, e.g. invalid model or auth)"
-    );
-  }
-  return message + "\\n\\n" + details.join("\\n\\n");
-}
-async function uploadMediaFile(filePath, mimeType) {
-  const urlRes = await callConvexWithRetry(
-    "mutation",
-    "screenshots:generateUploadUrl",
-    {},
-    3
-  );
-  const urlValue = urlRes && typeof urlRes === "object" && !Array.isArray(urlRes) && urlRes.value && typeof urlRes.value === "string" ? urlRes.value : "";
-  if (!urlValue) throw new Error("Missing upload URL");
-  const fileData = readFileSync5(filePath);
-  const uploadRes = await fetchWithTimeout(
-    urlValue,
-    {
-      method: "POST",
-      headers: { "Content-Type": mimeType },
-      body: fileData
-    },
-    3e4
-  );
-  if (!uploadRes.ok) {
-    throw new Error("Upload failed: " + uploadRes.status);
-  }
-  const uploadJson = await readResponseJson(uploadRes);
-  if (uploadJson && typeof uploadJson === "object" && !Array.isArray(uploadJson) && typeof uploadJson.storageId === "string") {
-    return uploadJson.storageId;
-  }
-  throw new Error("Missing storageId in upload response");
-}
-async function attachChatMediaIfAny(uploaded, target2) {
-  if (uploaded.length === 0) return;
-  const mediaArgs = {
-    parentId: ENTITY_ID ?? "",
-    mediaStorageIds: uploaded.map((item) => item.storageId)
-  };
-  if (target2.messageId) mediaArgs.messageId = target2.messageId;
-  await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
-}
-async function deliverCompletionWithMedia(completionArgs) {
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs
-  );
-  await uploadAndAttachSandboxMedia({});
-}
-function archivePostedFile(dir, file) {
-  const postedDir = dir + "/.posted";
-  mkdirSync6(postedDir, { recursive: true });
-  renameSync(dir + "/" + file, postedDir + "/" + file);
-}
-async function uploadAndAttachSandboxMedia(target2) {
-  if (RUN_ID) return;
-  const uploaded = [];
-  const seenDigests = /* @__PURE__ */ new Set();
-  const isDuplicate = (filePath) => {
-    const digest = createHash("sha256").update(readFileSync5(filePath)).digest("hex");
-    if (seenDigests.has(digest)) return true;
-    seenDigests.add(digest);
-    return false;
-  };
-  const { recordings, screenshots } = mediaSearchDirs(WORK_DIR, ROOT_DIRECTORY);
-  for (const recDir of recordings) {
-    if (!existsSync5(recDir)) continue;
-    for (const file of readdirSync2(recDir)) {
-      if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
-      const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
-      try {
-        if (!isDuplicate(fp)) {
-          const storageId = await uploadMediaFile(fp, mimeType);
-          uploaded.push({ storageId, fileName: file });
-        }
-        archivePostedFile(recDir, file);
-      } catch {
-      }
-    }
-  }
-  const mimeMap = {
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    gif: "image/gif",
-    webp: "image/webp"
-  };
-  for (const ssDir of screenshots) {
-    if (!existsSync5(ssDir)) continue;
-    for (const file of readdirSync2(ssDir)) {
-      if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
-      const ext = file.split(".").pop()?.toLowerCase() ?? "png";
-      const mimeType = mimeMap[ext] || "image/png";
-      try {
-        if (!isDuplicate(fp)) {
-          const storageId = await uploadMediaFile(fp, mimeType);
-          uploaded.push({ storageId, fileName: file });
-        }
-        archivePostedFile(ssDir, file);
-      } catch {
-      }
-    }
-  }
-  try {
-    await attachChatMediaIfAny(uploaded, target2);
-  } catch (e) {
-    console.error("Failed to attach sandbox media:", e);
-  }
-}
-function hasToolActivity() {
-  return callbackState.accumulatedSteps.some((step) => TOOL_STEP_TYPES.has(step.type));
-}
-
 // callback-src/providers/index.ts
 function getProviderAdapter(provider = PROVIDER) {
   if (provider === "codex") return codexAdapter;
   if (provider === "opencode") return opencodeAdapter;
   if (provider === "cursor") return cursorAdapter;
   return claudeAdapter;
+}
+
+// callback-src/parse/streamRouter.ts
+function processRealtimeStdoutChunk(text) {
+  callbackState.realtimeOutputBuffer += text;
+  while (true) {
+    const newlineIndex = callbackState.realtimeOutputBuffer.indexOf("\\n");
+    if (newlineIndex === -1) {
+      return;
+    }
+    const line = callbackState.realtimeOutputBuffer.slice(0, newlineIndex).trim();
+    callbackState.realtimeOutputBuffer = callbackState.realtimeOutputBuffer.slice(newlineIndex + 1);
+    if (!line) {
+      continue;
+    }
+    handleRealtimeStreamLine(line);
+  }
+}
+function handleRealtimeStreamLine(line) {
+  const parsed = tryParseJson(line);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return;
+  }
+  const result = getProviderAdapter(PROVIDER).onStreamLine(line, parsed);
+  if (result.needsHeartbeat) {
+    void sendStreamingHeartbeatUpdate(buildStreamingPayload());
+  }
 }
 
 // callback-src/runtime/buffers.ts
@@ -5294,14 +4185,6 @@ function appendToRawOutput(text) {
   if (trimAmount > 0) {
     shiftLastProcessed(trimAmount);
   }
-}
-function recordSdkRetry(detail) {
-  appendToRawLogFile("[sdk-retry] " + detail + "\\n");
-}
-function recordSdkAttemptFailure(message, extras) {
-  appendToRawLogFile("[sdk-error] " + message + "\\n");
-  const stderr = (extras?.stderrMessage ?? message) + "\\n" + (extras?.extraStderr ? extras.extraStderr + "\\n" : "");
-  callbackState.stderrOutput = trimBufferHead(callbackState.stderrOutput + stderr);
 }
 function appendToRawLogFile(text) {
   if (callbackState.rawLogStreamFailed || !text) return;
@@ -5328,46 +4211,201 @@ function appendToRawLogFile(text) {
   }
 }
 
-// callback-src/parse/streamRouter.ts
-function emitParsedStreamLine(line) {
-  appendToRawLogFile(line);
-  appendToRawOutput(line);
-  processRealtimeStdoutChunk(line);
-}
-function processRealtimeStdoutChunk(text) {
-  callbackState.realtimeOutputBuffer += text;
-  while (true) {
-    const newlineIndex = callbackState.realtimeOutputBuffer.indexOf("\\n");
-    if (newlineIndex === -1) {
-      return;
-    }
-    const line = callbackState.realtimeOutputBuffer.slice(0, newlineIndex).trim();
-    callbackState.realtimeOutputBuffer = callbackState.realtimeOutputBuffer.slice(newlineIndex + 1);
-    if (!line) {
-      continue;
-    }
-    handleRealtimeStreamLine(line);
-    void flushStreaming();
-  }
-}
-function handleRealtimeStreamLine(line) {
-  const parsed = tryParseJson(line);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return;
-  }
-  getProviderAdapter(PROVIDER).onStreamLine(line, parsed);
-}
-
 // callback-src/providers/claudeSdk.ts
 import { execSync } from "child_process";
-import { existsSync as existsSync6, readFileSync as readFileSync6 } from "fs";
-import { dirname } from "path";
+import { existsSync as existsSync6, readFileSync as readFileSync5 } from "fs";
+
+// callback-src/runtime/cliAttempt.ts
+import { spawn } from "child_process";
+import { writeFileSync as writeFileSync8 } from "fs";
+function evaluateAttemptHealth(input) {
+  const result = {
+    shouldTerminate: false,
+    timedOutForZombie: false,
+    timedOutForMaxRuntime: false,
+    timedOutForFirstEvent: false,
+    timedOutForFirstAssistant: false,
+    timedOutAfterFirstText: false,
+    timedOutForNoOutput: false,
+    toolStallErrorMessage: input.toolStallErrorMessage
+  };
+  if (callbackState.fatalHeartbeatErrorMessage) {
+    result.shouldTerminate = true;
+    return result;
+  }
+  if (isChildZombie(input.childPid)) {
+    if (callbackState.resultEventSeen) {
+      result.logMessage = input.processLabel + " detected zombie state for pid=" + String(input.childPid) + " after result event; terminating for cleanup";
+      result.shouldTerminate = true;
+      return result;
+    }
+    result.timedOutForZombie = true;
+    result.logMessage = input.processLabel + " detected zombie state for pid=" + String(input.childPid) + "; terminating";
+    result.shouldTerminate = true;
+    return result;
+  }
+  if (Date.now() - SCRIPT_STARTED_AT > MAX_TOTAL_RUNTIME_MS) {
+    result.timedOutForMaxRuntime = true;
+    result.shouldTerminate = true;
+    return result;
+  }
+  if (callbackState.parsedStreamEventCount === input.parsedEventsAtStart && Date.now() - input.attemptStartedAt > FIRST_EVENT_TIMEOUT_MS) {
+    result.timedOutForFirstEvent = true;
+    result.shouldTerminate = true;
+    return result;
+  }
+  if (callbackState.waitingForFirstAssistantEvent && callbackState.claudeInitAt > 0 && Date.now() - callbackState.claudeInitAt > FIRST_ASSISTANT_EVENT_TIMEOUT_MS) {
+    result.timedOutForFirstAssistant = true;
+    result.logMessage = input.processLabel + " stalled waiting for first assistant event for " + String(Date.now() - callbackState.claudeInitAt) + "ms after init; terminating process";
+    result.shouldTerminate = true;
+    return result;
+  }
+  if (callbackState.inFlightToolUses > 0 || callbackState.resultEventSeen) {
+    return result;
+  }
+  const silenceMs = Date.now() - input.lastStdoutAt;
+  if (silenceMs > STREAM_SILENCE_TIMEOUT_MS) {
+    result.timedOutForNoOutput = true;
+    if (callbackState.firstTextBlockAt > 0) {
+      result.timedOutAfterFirstText = true;
+    }
+    result.logMessage = input.processLabel + " stream silent for " + String(silenceMs) + "ms with no tool in flight; terminating process";
+    result.shouldTerminate = true;
+  }
+  return result;
+}
+function resetAttemptState() {
+  callbackState.realtimeOutputBuffer = "";
+  callbackState.resultEventSeen = false;
+  callbackState.waitingForFirstAssistantEvent = false;
+  callbackState.claudeInitAt = 0;
+  callbackState.currentStreamedContent = "";
+  callbackState.firstAssistantEventAt = 0;
+  callbackState.firstTextBlockAt = 0;
+  callbackState.fatalHeartbeatErrorMessage = "";
+  callbackState.heartbeatFailureStreakStartedAt = 0;
+  callbackState.inFlightToolUses = 0;
+  callbackState.codexToolItemIds.clear();
+  callbackState.cursorKnownToolIds.clear();
+  callbackState.cursorTerminalToolIds.clear();
+}
+async function runCliAttempt(options) {
+  resetAttemptState();
+  callbackState.activeAttemptStartedAt = Date.now();
+  updateThinkingStep(options.startupStep.label, options.startupStep.detail);
+  if (options.onStart) {
+    options.onStart();
+  }
+  return await new Promise((resolve, reject) => {
+    const child = spawn(
+      "bash",
+      ["-c", "cd " + WORK_DIR + " && " + options.cmd],
+      {
+        env: options.env,
+        stdio: ["pipe", "pipe", "pipe"]
+      }
+    );
+    callbackState.activeAttemptChild = child;
+    if (child.pid) {
+      try {
+        writeFileSync8("/proc/" + String(child.pid) + "/oom_score_adj", "300");
+      } catch {
+      }
+    }
+    log(
+      options.processLabel + " process spawned after " + String(elapsedAttemptMs()) + "ms pid=" + String(child.pid || "unknown")
+    );
+    let attemptOutput = "";
+    const attemptStartedAt = Date.now();
+    const parsedEventsAtStart = callbackState.parsedStreamEventCount;
+    let lastStdoutAt = Date.now();
+    let timedOutForNoOutput = false;
+    let timedOutForMaxRuntime = false;
+    let timedOutForFirstEvent = false;
+    let timedOutForFirstAssistant = false;
+    let timedOutAfterFirstText = false;
+    let timedOutForZombie = false;
+    let toolStallErrorMessage = "";
+    const noOutputTimer = setInterval(() => {
+      const health = evaluateAttemptHealth({
+        childPid: child.pid,
+        parsedEventsAtStart,
+        attemptStartedAt,
+        lastStdoutAt,
+        processLabel: options.processLabel,
+        toolStallErrorMessage
+      });
+      toolStallErrorMessage = health.toolStallErrorMessage;
+      if (health.logMessage) {
+        log(health.logMessage);
+      }
+      if (!health.shouldTerminate) {
+        return;
+      }
+      timedOutForZombie = health.timedOutForZombie;
+      timedOutForMaxRuntime = health.timedOutForMaxRuntime;
+      timedOutForFirstEvent = health.timedOutForFirstEvent;
+      timedOutForFirstAssistant = health.timedOutForFirstAssistant;
+      timedOutAfterFirstText = health.timedOutAfterFirstText;
+      timedOutForNoOutput = health.timedOutForNoOutput;
+      terminateAttemptProcess(child);
+    }, NO_OUTPUT_CHECK_INTERVAL_MS);
+    child.stdout.on("data", (chunk) => {
+      const text = chunk.toString();
+      appendToRawLogFile(text);
+      attemptOutput = trimBufferHead(attemptOutput + text);
+      appendToRawOutput(text);
+      lastStdoutAt = Date.now();
+      processRealtimeStdoutChunk(text);
+      if (options.onStdoutText) {
+        options.onStdoutText(text);
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      appendToRawLogFile(
+        "[stderr] " + text + (text.endsWith("\\n") ? "" : "\\n")
+      );
+      callbackState.stderrOutput = trimBufferHead(callbackState.stderrOutput + text);
+    });
+    child.on("close", (code, signal) => {
+      clearInterval(noOutputTimer);
+      callbackState.activeAttemptChild = null;
+      const terminatedBySignal = signal !== null;
+      log(
+        options.attemptLabel + " finished in " + elapsedAttemptMs() + "ms (code=" + code + ", signal=" + (signal ?? "none") + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", timedOutForFirstEvent=" + timedOutForFirstEvent + ", timedOutForFirstAssistant=" + timedOutForFirstAssistant + ", timedOutAfterFirstText=" + timedOutAfterFirstText + ", timedOutForZombie=" + timedOutForZombie + ", toolStallError=" + (toolStallErrorMessage || "none") + ", outputBytes=" + attemptOutput.length + ", stderrBytes=" + callbackState.stderrOutput.length + ")"
+      );
+      resolve({
+        code: code ?? 1,
+        terminatedBySignal,
+        output: attemptOutput,
+        timedOutForNoOutput,
+        timedOutForMaxRuntime,
+        timedOutForFirstEvent,
+        timedOutForFirstAssistant,
+        timedOutAfterFirstText,
+        timedOutForZombie,
+        toolStallErrorMessage
+      });
+    });
+    child.on("error", (err) => {
+      clearInterval(noOutputTimer);
+      reject(err);
+    });
+  });
+}
 
 // callback-src/runtime/pendingQuestion.ts
 var POLL_INTERVAL_MS = 300;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 function readClaimedAnswer(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return null;
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return null;
+  }
+  const inner = result.value;
+  const payload = typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
   const answer = payload.answer;
   return typeof answer === "string" ? answer : null;
 }
@@ -5409,7 +4447,7 @@ function buildCanUseTool() {
         updatedInput: { ...input, run_in_background: false }
       };
     }
-    if (toolName !== "AskUserQuestion") {
+    if (toolName !== "AskUserQuestion" || !BLOCKING_QUESTIONS_ENABLED) {
       return { behavior: "allow", updatedInput: input };
     }
     const toolUseId = typeof options.toolUseID === "string" && options.toolUseID ? options.toolUseID : "";
@@ -5421,182 +4459,65 @@ function buildCanUseTool() {
       if (answerJson === null) {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      const answers = parseAnswers(answerJson);
-      if (toolUseId) {
-        const stringAnswers = {};
-        for (const [question, answer] of Object.entries(answers)) {
-          if (typeof answer === "string") {
-            stringAnswers[question] = answer;
-          }
-        }
-        callbackState.questionAnswers.set(toolUseId, stringAnswers);
-      }
-      return { behavior: "allow", updatedInput: { ...input, answers } };
+      return {
+        behavior: "allow",
+        updatedInput: { ...input, answers: parseAnswers(answerJson) }
+      };
     } finally {
       callbackState.awaitingQuestionAnswer = false;
     }
   };
 }
 
-// callback-src/providers/attemptResult.ts
-function buildStandardSdkAttemptResult(params) {
-  return {
-    code: params.code,
-    terminatedBySignal: false,
-    output: params.output,
-    timedOutForNoOutput: params.timedOutForNoOutput,
-    timedOutForMaxRuntime: params.timedOutForMaxRuntime,
-    timedOutForFirstEvent: false,
-    timedOutForFirstAssistant: false,
-    timedOutAfterFirstText: false,
-    timedOutForZombie: false,
-    toolStallErrorMessage: ""
-  };
-}
-
-// callback-src/providers/claudeResult.ts
-function isZeroWorkTaskNotificationResult(message) {
-  const origin = message.origin;
-  return message.type === "result" && message.subtype === "success" && message.is_error !== true && message.num_turns === 0 && typeof message.result === "string" && message.result.trim() === "" && typeof origin === "object" && origin !== null && !Array.isArray(origin) && origin.kind === "task-notification";
-}
-
 // callback-src/providers/claudeSdk.ts
 var SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
-var SDK_VERSION = "0.3.258";
-async function readSdkPlanUsage(handle) {
-  if (typeof handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET !== "function") {
-    log("usage limits: this SDK query handle exposes no usage method");
-    return null;
-  }
-  if (typeof handle.initializationResult === "function") {
-    try {
-      await handle.initializationResult();
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      log("usage limits: initialization wait failed \\u2014 " + messageText);
-    }
-  }
-  return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
-}
-var cachedGlobalNpmRoots = null;
-function globalNpmRoots() {
-  if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
-  const roots = [
-    dirname(dirname(process.execPath)) + "/lib/node_modules"
-  ];
-  try {
-    const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
-    if (npmRoot) roots.push(npmRoot);
-  } catch {
-  }
-  cachedGlobalNpmRoots = roots.filter(
-    (root, index) => roots.indexOf(root) === index
-  );
-  return cachedGlobalNpmRoots;
+var SDK_VERSION = "0.3.201";
+var MCP_CONFIG_PATH = "/tmp/eva-mcp.json";
+function globalNpmRoot() {
+  return execSync("npm root -g", { encoding: "utf8" }).trim();
 }
 var SDK_LOCAL_PREFIX = "/home/eva/.eva-agent-sdk";
-function installedPackageVersion(packageRoot) {
-  try {
-    const manifest = JSON.parse(
-      readFileSync6(packageRoot + "/package.json", "utf8")
-    );
-    if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
-      return null;
-    }
-    const version = manifest.version;
-    return typeof version === "string" ? version : null;
-  } catch {
-    return null;
+async function loadSdk() {
+  const globalEntry = globalNpmRoot() + "/" + SDK_PACKAGE + "/sdk.mjs";
+  const localEntry = SDK_LOCAL_PREFIX + "/node_modules/" + SDK_PACKAGE + "/sdk.mjs";
+  if (existsSync6(globalEntry)) {
+    const mod2 = await import(globalEntry);
+    return mod2;
   }
-}
-function resolvePinnedSdkEntry(pin) {
-  const localRoot = SDK_LOCAL_PREFIX + "/node_modules/" + pin.packageName;
-  let driftedVersion = null;
-  for (const root of globalNpmRoots()) {
-    const globalRoot = root + "/" + pin.packageName;
-    const globalVersion = installedPackageVersion(globalRoot);
-    if (globalVersion === pin.version) return globalRoot + pin.entryRelPath;
-    if (globalVersion !== null && driftedVersion === null) {
-      driftedVersion = globalVersion;
-    }
-  }
-  if (driftedVersion !== null) {
+  if (!existsSync6(localEntry)) {
     log(
-      "sdk version drift: global " + pin.packageName + " is " + driftedVersion + ", need " + pin.version + "; falling back to the pinned user-local copy"
-    );
-  }
-  if (installedPackageVersion(localRoot) !== pin.version) {
-    log(
-      "installing " + pin.packageName + "@" + pin.version + " to " + SDK_LOCAL_PREFIX
+      "claude-agent-sdk not found in sandbox; installing " + SDK_PACKAGE + "@" + SDK_VERSION + " to " + SDK_LOCAL_PREFIX + " (one-time)"
     );
     execSync(
-      "mkdir -p " + SDK_LOCAL_PREFIX + " && npm install --prefix " + SDK_LOCAL_PREFIX + " " + pin.packageName + "@" + pin.version,
+      "mkdir -p " + SDK_LOCAL_PREFIX + " && npm install --prefix " + SDK_LOCAL_PREFIX + " " + SDK_PACKAGE + "@" + SDK_VERSION,
       { encoding: "utf8", timeout: 18e4 }
     );
   }
-  return localRoot + pin.entryRelPath;
-}
-function sdkMessageJson(serialized) {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
-async function loadSdk() {
-  const mod = await import(resolvePinnedSdkEntry({
-    packageName: SDK_PACKAGE,
-    version: SDK_VERSION,
-    entryRelPath: "/sdk.mjs"
-  }));
+  const mod = await import(localEntry);
   return mod;
 }
-var CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
-function globalClaudeCliVersion() {
-  for (const root of globalNpmRoots()) {
-    const version = installedPackageVersion(root + "/" + CLAUDE_CODE_PACKAGE);
-    if (version !== null) return version;
-  }
-  return null;
-}
 function claudeExecutablePath() {
-  const pinned = process.env.CLAUDE_CLI_PINNED_VERSION || null;
-  const fallback = process.env.CLAUDE_BIN_PATH || "";
-  let globalBin = "";
   try {
-    globalBin = execSync("command -v claude", { encoding: "utf8" }).trim();
+    return execSync("command -v claude", { encoding: "utf8" }).trim();
   } catch {
-    globalBin = "";
+    const fallback = process.env.CLAUDE_BIN_PATH || "";
+    return fallback && existsSync6(fallback) ? fallback : "claude";
   }
-  if (globalBin) {
-    const globalVersion = globalClaudeCliVersion();
-    if (pinned === null || globalVersion === pinned) return globalBin;
-    log(
-      "cli version drift: global claude is " + (globalVersion ?? "unknown") + ", need " + pinned + "; preferring the pinned fallback install"
-    );
-  }
-  if (fallback && existsSync6(fallback)) {
-    const fallbackRoot = dirname(dirname(fallback)) + "/lib/node_modules/" + CLAUDE_CODE_PACKAGE;
-    const fallbackVersion = installedPackageVersion(fallbackRoot);
-    if (pinned === null || fallbackVersion === pinned) return fallback;
-    log(
-      "cli version drift: fallback claude is " + (fallbackVersion ?? "unknown") + ", need " + pinned + "; no pinned binary available"
-    );
-    if (!globalBin) return fallback;
-  }
-  return globalBin || "claude";
 }
 function readPromptText() {
-  return readFileSync6("/tmp/design-prompt.txt", "utf8");
+  return readFileSync5("/tmp/design-prompt.txt", "utf8");
 }
 function buildSdkOptions(sessionMode) {
   const extraArgs = { settings: settingsJson };
+  if (existsSync6(MCP_CONFIG_PATH)) {
+    extraArgs["mcp-config"] = MCP_CONFIG_PATH;
+  }
   return buildSdkOptionsFromParts(sessionMode, extraArgs);
 }
 var EVA_SDK_SYSTEM_APPEND = "You are running inside Eva, a platform that runs coding agents in remote sandboxes against GitHub repos. Treat the workspace as the active repo checkout.";
 function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   const allowedToolsOption = tools === "agent" && ALLOWED_TOOLS ? { allowedTools: ALLOWED_TOOLS.split(",") } : { allowedTools: [] };
-  const permissionOption = tools === "agent" && BLOCKING_QUESTIONS_ENABLED ? {
+  const permissionOption = tools === "agent" ? {
     permissionMode: "default",
     allowDangerouslySkipPermissions: false,
     canUseTool: buildCanUseTool()
@@ -5619,12 +4540,8 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};
-  const thinkingOption = claudeThinkingDisabled ? {} : { thinking: { type: "adaptive", display: "summarized" } };
   return {
     cwd: WORK_DIR,
-    // Multi-repo sessions only: lets Claude read/edit linked repo clones
-    // under the workspace root without moving cwd off the primary repo.
-    ...WORKSPACE_ROOT ? { additionalDirectories: [WORKSPACE_ROOT] } : {},
     model: normalizedClaudeModel,
     pathToClaudeCodeExecutable: claudeExecutablePath(),
     systemPrompt: SYSTEM_PROMPT ? {
@@ -5647,9 +4564,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     ...sessionMode.mode === "session" && sessionMode.sessionId ? { sessionId: sessionMode.sessionId } : {},
     ...sessionMode.mode === "resume" && sessionMode.sessionId ? { resume: sessionMode.sessionId } : {},
     extraArgs,
-    ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
-    ...effortOption,
-    ...thinkingOption
+    ...effortOption
   };
 }
 async function runClaudeSdkAttempt(sessionMode) {
@@ -5666,9 +4581,7 @@ async function runClaudeSdkAttempt(sessionMode) {
   let timedOutForMaxRuntime = false;
   let sawResult = false;
   let resultIsError = false;
-  let resultErrorMessage = "";
   let queryErrorMessage = "";
-  let sawZeroWorkTaskNotification = false;
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
   let q = sdk.query({
@@ -5694,9 +4607,6 @@ async function runClaudeSdkAttempt(sessionMode) {
       void interrupt();
       return;
     }
-    if (callbackState.inFlightToolUses > 0) {
-      lastMessageAt = now;
-    }
     if (!sawResult && now - lastMessageAt > NO_OUTPUT_TIMEOUT_MS * 5) {
       timedOutForNoOutput = true;
       log("runClaudeSdkAttempt: no SDK messages \\u2014 interrupting");
@@ -5707,20 +4617,13 @@ async function runClaudeSdkAttempt(sessionMode) {
     for await (const message of q) {
       lastMessageAt = Date.now();
       const line = JSON.stringify(message) + "\\n";
-      const json = sdkMessageJson(line);
-      if (json !== null && isZeroWorkTaskNotificationResult(json)) {
-        sawZeroWorkTaskNotification = true;
-        log("runClaudeSdkAttempt: ignored zero-work task notification result");
-        continue;
-      }
-      emitParsedStreamLine(line);
+      appendToRawLogFile(line);
       attemptOutput = trimBufferHead(attemptOutput + line);
+      appendToRawOutput(line);
+      processRealtimeStdoutChunk(line);
       if (message.type === "result") {
         sawResult = true;
         resultIsError = message.is_error === true;
-        if (resultIsError) {
-          resultErrorMessage = message.subtype === "success" ? message.result : message.errors.join("\\n");
-        }
       }
       if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
@@ -5728,24 +4631,13 @@ async function runClaudeSdkAttempt(sessionMode) {
   try {
     try {
       await consumeQuery();
-      if (sawZeroWorkTaskNotification && !sawResult) {
-        log(
-          "runClaudeSdkAttempt: retrying prompt after zero-work task notification"
-        );
-        sawZeroWorkTaskNotification = false;
-        q = sdk.query({
-          prompt: readPromptText(),
-          options: buildSdkOptions(effectiveMode)
-        });
-        await consumeQuery();
-      }
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error);
       if (effectiveMode.mode === "resume" && effectiveMode.sessionId && messageText.includes("No conversation found with session ID")) {
         log(
           "runClaudeSdkAttempt: resume target missing \\u2014 retrying as a new session with the same id"
         );
-        recordSdkRetry(messageText);
+        appendToRawLogFile("[sdk-retry] " + messageText + "\\n");
         sawResult = false;
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
@@ -5762,294 +4654,171 @@ async function runClaudeSdkAttempt(sessionMode) {
     const messageText = error instanceof Error ? error.message : String(error);
     queryErrorMessage = messageText;
     log("runClaudeSdkAttempt: query failed \\u2014 " + messageText);
-    recordSdkAttemptFailure(messageText);
+    appendToRawLogFile("[sdk-error] " + messageText + "\\n");
+    callbackState.stderrOutput = trimBufferHead(callbackState.stderrOutput + messageText + "\\n");
   } finally {
     clearInterval(healthTimer);
   }
-  startClaudeUsageReport({
-    readUsage: () => readSdkPlanUsage(q),
-    error: resultErrorMessage || queryErrorMessage || void 0
-  });
   const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
   log(
     "runClaudeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") + ")"
   );
-  return buildStandardSdkAttemptResult({
+  return {
     code,
+    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
+    timedOutForMaxRuntime,
+    timedOutForFirstEvent: false,
+    timedOutForFirstAssistant: false,
+    timedOutAfterFirstText: false,
+    timedOutForZombie: false,
+    toolStallErrorMessage: ""
+  };
 }
 
-// callback-src/runtime/turnAttachments.ts
-import { writeFileSync as writeFileSync9 } from "fs";
-function attachmentExtensionForMimeType(mimeType) {
-  const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-  switch (type) {
-    case "image/jpeg":
-      return ".jpg";
-    case "image/gif":
-      return ".gif";
-    case "image/webp":
-      return ".webp";
-    case "image/svg+xml":
-      return ".svg";
-    case "image/png":
-      return ".png";
-    case "text/html":
-      return ".html";
-    case "text/markdown":
-      return ".md";
-    case "text/plain":
-      return ".txt";
-    default:
-      return type.startsWith("image/") ? ".png" : ".bin";
-  }
+// callback-src/runtime/turnPersist.ts
+import { spawnSync as spawnSync3 } from "child_process";
+var GIT_STEP_TIMEOUT_MS = 2e4;
+var PUSH_TIMEOUT_MS = 6e4;
+var COMMIT_ADD_ARGS = [
+  "add",
+  "-A",
+  "--",
+  ":!*.png",
+  ":!*.jpg",
+  ":!*.jpeg",
+  ":!*.gif",
+  ":!*.webp",
+  ":!*.webm",
+  ":!*.mp4",
+  ":!*.mov",
+  ":!screenshots/",
+  ":!recordings/"
+];
+function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
+  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  const out = ((result.stdout || "") + (result.stderr || "")).trim();
+  return { ok: result.status === 0, out };
 }
-async function materializeTurnAttachments(turn) {
-  if (turn.attachmentUrls.length === 0) return;
-  const paths2 = [];
-  for (let index = 0; index < turn.attachmentUrls.length; index++) {
-    const url = turn.attachmentUrls[index];
-    if (!url) continue;
-    try {
-      const response = await fetchWithTimeout(url, { method: "GET" });
-      if (!response.ok) {
-        log(\`daemon: attachment download failed status=\${response.status}\`);
-        continue;
-      }
-      const path3 = \`/tmp/eva-attachment-\${index}\${attachmentExtensionForMimeType(
-        response.headers.get("content-type") ?? ""
-      )}\`;
-      writeFileSync9(path3, new Uint8Array(await response.arrayBuffer()));
-      paths2.push(path3);
-    } catch (error) {
+function persistTurnWork() {
+  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  const startedAt = Date.now();
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch.ok || !branch.out.startsWith("eva/")) {
+    if (branch.ok && branch.out) {
+      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
+    }
+    return;
+  }
+  const dirty = git(["status", "--porcelain"]);
+  if (dirty.ok && dirty.out.length > 0) {
+    git(COMMIT_ADD_ARGS);
+    const staged = git(["diff", "--cached", "--quiet"]);
+    if (!staged.ok) {
+      const commit = git([
+        "commit",
+        "-m",
+        "task: checkpoint uncommitted work at turn end"
+      ]);
       log(
-        \`daemon: attachment download error \${error instanceof Error ? error.message : String(error)}\`
+        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
       );
     }
   }
-  if (paths2.length === 0) return;
-  turn.prompt += "\\n\\n---\\nThe user attached the following file(s). Read them with your file-reading tool before responding:\\n" + paths2.map((path3) => \`- \${path3}\`).join("\\n");
+  const unpushed = git([
+    "rev-list",
+    "--count",
+    "HEAD",
+    "--not",
+    "--remotes=origin"
+  ]);
+  if (unpushed.ok && unpushed.out === "0") return;
+  const push = git(["push", "origin", "HEAD"], PUSH_TIMEOUT_MS);
+  log(
+    \`persistTurnWork: push \${push.ok ? "ok" : "failed: " + push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
+  );
 }
 
-// callback-src/providers/githubToken.ts
-function tokenFromActionResponse(data) {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    return null;
+// callback-src/providers/claimPendingTurnParse.ts
+function readStopTaskToolUseIds(result) {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return [];
   }
-  const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
+  const inner = result.value;
+  const payload = typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
+  const field = payload.stopTaskToolUseIds;
+  if (!Array.isArray(field)) {
+    return [];
   }
-  return typeof value.token === "string" ? value.token : null;
+  return field.filter((id) => typeof id === "string");
 }
-async function fetchInstallationToken(params) {
-  try {
-    const fetchFn = params.fetchFn ?? fetchWithTimeout;
-    const response = await fetchFn(params.convexUrl + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + params.convexToken
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: params.repoId },
-        format: "json"
-      })
-    });
-    if (!response.ok) return { token: null };
-    const token = tokenFromActionResponse(await readResponseJson(response));
-    return token ? { token } : { token: null };
-  } catch {
-    return { token: null };
+function readCancelRequested(result) {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return false;
   }
+  const inner = result.value;
+  const payload = typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
+  return payload.cancelRequested === true;
 }
-function applyGithubTokenToEnv(env, token) {
-  env.GITHUB_TOKEN = token;
-  env.GH_TOKEN = token;
-}
-async function ensureGithubToken(params) {
-  const convexUrl = params.convexUrl;
-  const convexToken = params.convexToken;
-  const repoId = params.repoId;
-  if (!convexUrl || !convexToken || !repoId) {
-    return { refreshed: false };
-  }
-  const result = await fetchInstallationToken({
-    convexUrl,
-    convexToken,
-    repoId,
-    fetchFn: params.fetchFn
-  });
-  if (result.token === null) return { refreshed: false };
-  applyGithubTokenToEnv(params.env ?? process.env, result.token);
-  return { refreshed: true };
-}
-async function refreshDaemonGithubTokenFromEnv() {
-  return ensureGithubToken({
-    convexUrl: CONVEX_URL,
-    convexToken: CONVEX_TOKEN,
-    repoId: REPO_ID
-  });
-}
-
-// callback-src/runtime/daemonSupervisor.ts
-var DaemonSupervisor = class {
-  active = { phase: "idle" };
-  pendingClaimValue = null;
-  shutdown = "active";
-  get phase() {
-    return this.active.phase;
-  }
-  get currentTurn() {
-    switch (this.active.phase) {
-      case "running":
-      case "starting":
-      case "cancelling":
-      case "finalizing":
-        return this.active.turn;
-      case "idle":
-      case "opening_synthetic":
-        return null;
-    }
-  }
-  get pendingClaim() {
-    return this.pendingClaimValue;
-  }
-  get isStopping() {
-    return this.shutdown === "stopping";
-  }
-  get isCancellationInFlight() {
-    return this.active.phase === "cancelling";
-  }
-  get hasWork() {
-    return this.active.phase !== "idle" || this.pendingClaimValue !== null;
-  }
-  beginSyntheticOpen() {
-    if (this.active.phase !== "idle") return false;
-    this.active = { phase: "opening_synthetic" };
-    return true;
-  }
-  abandonSyntheticOpen() {
-    if (this.active.phase === "opening_synthetic") {
-      this.active = { phase: "idle" };
-    }
-  }
-  parkClaim(claim) {
-    if (this.pendingClaimValue !== null) return false;
-    this.pendingClaimValue = claim;
-    return true;
-  }
-  takeClaim() {
-    const claim = this.pendingClaimValue;
-    this.pendingClaimValue = null;
-    return claim;
-  }
-  startTurn(turn) {
-    if (this.active.phase !== "idle" && this.active.phase !== "opening_synthetic") {
-      return false;
-    }
-    this.active = { phase: "running", turn };
-    return true;
-  }
-  beginStarting(turn) {
-    if (this.active.phase !== "idle") return false;
-    this.active = { phase: "starting", turn };
-    return true;
-  }
-  markRunning(turn) {
-    if (this.active.phase !== "starting") return false;
-    this.active = { phase: "running", turn };
-    return true;
-  }
-  beginCancellation() {
-    if (this.active.phase !== "running") return false;
-    this.active = { phase: "cancelling", turn: this.active.turn };
-    return true;
-  }
-  beginFinalizing() {
-    if (this.active.phase !== "running") return false;
-    this.active = { phase: "finalizing", turn: this.active.turn };
-    return true;
-  }
-  settleTurn() {
-    if (this.active.phase !== "opening_synthetic") {
-      this.active = { phase: "idle" };
-    }
-  }
-  noticeRefresh() {
-    if (this.shutdown === "active") this.shutdown = "refresh_pending";
-  }
-  stop() {
-    this.shutdown = "stopping";
-  }
-  decideRefresh(input) {
-    if (this.shutdown === "stopping") return { action: "exit" };
-    if (this.shutdown !== "refresh_pending") return { action: "continue" };
-    if (input.watchedTurnActive) {
-      return { action: "defer", blocker: "watched turn" };
-    }
-    if (this.active.phase === "opening_synthetic") {
-      return { action: "defer", blocker: "synthetic turn opening" };
-    }
-    if (this.active.phase !== "idle") {
-      return { action: "defer", blocker: this.active.phase };
-    }
-    if (this.pendingClaimValue !== null) {
-      return { action: "defer", blocker: "claimed turn" };
-    }
-    if (input.backgroundAgentCount > 0) {
-      return { action: "defer", blocker: "background agent" };
-    }
-    if (input.sdkMessagePending) {
-      return { action: "defer", blocker: "queued SDK message" };
-    }
-    return { action: "exit" };
-  }
-};
 
 // callback-src/providers/claudeSdkDaemon.ts
+function sleep2(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 function readDaemonPidFile() {
-  return readPidFromFile(DAEMON_PID_FILE);
+  try {
+    return Number(readFileSync6(DAEMON_PID_FILE, "utf8").trim());
+  } catch {
+    return Number.NaN;
+  }
 }
 var daemonPaths = resolveDaemonPaths();
 var DAEMON_PID_FILE = daemonPaths.pid;
-var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-var FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
-var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
+var DAEMON_ENTITY_FILE = daemonPaths.entity;
+var DAEMON_OPTS_FILE = daemonPaths.opts;
+var IDLE_EXIT_MS = 45 * 60 * 1e3;
+var FENCE_POLL_INTERVAL_MS = 5e3;
+var PROMPT_POLL_INTERVAL_MS = 50;
 var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
 var turnActive = false;
 var turnStartedAtMs = 0;
 var lastMessageAtMs = 0;
-var supervisor = new DaemonSupervisor();
-var callbackRefreshDeferralLogged = false;
+var daemonTurn = null;
+var pendingClaimedTurn = null;
+var daemonExiting = false;
+var openingSyntheticTurn = false;
 var lastIdleActivityAtMs = Date.now();
 var agentTurnOutput = "";
 var agentTurnStartedAt = 0;
 var sawFirstMessageThisTurn = { value: false };
 var sawAssistantThisTurn = { value: false };
+var turnCancelInFlight = false;
 var turnCancelRequestedAtMs = 0;
 var recognisedSubagentToolUseIds = /* @__PURE__ */ new Set();
 var settledSubagentToolUseIds = /* @__PURE__ */ new Set();
 var unsettledBackgroundAgents = /* @__PURE__ */ new Map();
 var pendingAgentStops = /* @__PURE__ */ new Set();
 var currentAgentRunner = null;
-var usageRefreshInFlight = false;
 function entityMutationArgs(fields) {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-function cleanOwnedMarkers() {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
+  return {
+    [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+    ...fields
+  };
 }
 function beginWatchedTurn() {
   turnActive = true;
@@ -6062,33 +4831,49 @@ function noteWatchedMessage() {
 function endWatchedTurn() {
   turnActive = false;
 }
+function currentTurnArgs() {
+  const turnId = getCurrentTurnId();
+  return turnId ? { turnId } : {};
+}
 async function failTurnAndExit(error) {
   log("daemon: failing turn \\u2014 " + error);
-  persistTurnWork();
   try {
-    await postClaimedTurnFailureCompletion({
+    await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", {
+      [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+      success: false,
+      result: null,
       error,
-      activityLog: serializeSteps(callbackState.accumulatedSteps)
+      activityLog: serializeSteps(callbackState.accumulatedSteps),
+      ...RUN_ID ? { runId: RUN_ID } : {},
+      ...currentTurnArgs()
     });
   } catch {
   }
-  cleanOwnedMarkers();
+  if (readDaemonPidFile() === process.pid) {
+    try {
+      unlinkSync2(DAEMON_PID_FILE);
+    } catch {
+    }
+  }
   await stopStreamingLoops();
   process.exit(1);
 }
 async function exitWithoutCompletion(reason) {
   log("daemon: exiting without completion \\u2014 " + reason);
-  persistTurnWork();
-  cleanOwnedMarkers();
+  if (readDaemonPidFile() === process.pid) {
+    try {
+      unlinkSync2(DAEMON_PID_FILE);
+    } catch {
+    }
+  }
   await stopStreamingLoops();
 }
 function startTurnWatchdog() {
   const timer = setInterval(() => {
     const now = Date.now();
-    if (supervisor.isCancellationInFlight) {
+    if (turnCancelInFlight) {
       if (now - turnCancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS) {
         log("daemon: cancelled turn did not settle in time \\u2014 exiting");
-        persistTurnWork();
         process.exit(1);
       }
       return;
@@ -6099,12 +4884,9 @@ function startTurnWatchdog() {
       lastMessageAtMs = now;
       return;
     }
-    if (callbackState.inFlightToolUses > 0) {
-      lastMessageAtMs = now;
-    }
     if (now - turnStartedAtMs > MAX_TOTAL_RUNTIME_MS) {
       turnActive = false;
-      if (supervisor.currentTurn?.kind === "synthetic") {
+      if (daemonTurn?.kind === "synthetic") {
         void failSyntheticTurn(
           "The assistant exceeded the maximum turn runtime."
         );
@@ -6115,7 +4897,7 @@ function startTurnWatchdog() {
       }
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {
       turnActive = false;
-      if (supervisor.currentTurn?.kind === "synthetic") {
+      if (daemonTurn?.kind === "synthetic") {
         void failSyntheticTurn(
           "The assistant stopped responding. Please try again."
         );
@@ -6162,48 +4944,136 @@ function createPromptStream() {
   };
   return { push, iterable };
 }
-async function refreshGithubToken() {
-  await refreshDaemonGithubTokenFromEnv();
+async function ensureGithubToken() {
+  if (!REPO_ID || !CONVEX_URL || !CONVEX_TOKEN) return;
+  try {
+    const res = await fetchWithTimeout(CONVEX_URL + "/api/action", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + CONVEX_TOKEN
+      },
+      body: JSON.stringify({
+        path: "github:getInstallationTokenAction",
+        args: { repoId: REPO_ID },
+        format: "json"
+      })
+    });
+    if (!res.ok) return;
+    const data = await readResponseJson(res);
+    const token = readGithubToken(data);
+    if (token) {
+      process.env.GITHUB_TOKEN = token;
+      process.env.GH_TOKEN = token;
+    }
+  } catch {
+  }
+}
+function readGithubToken(data) {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return null;
+  }
+  const value = data.value;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const payload = value;
+  return typeof payload.token === "string" ? payload.token : null;
 }
 function resetTurnState() {
-  resetDaemonTurnStreamingState();
+  callbackState.accumulatedSteps.length = 0;
+  callbackState.currentStreamedContent = "";
+  callbackState.streamedAssistantTextThisMessage = false;
+  callbackState.resultEventSeen = false;
+  callbackState.rawOutput = "";
+  callbackState.lastProcessed = 0;
+  callbackState.inFlightToolUses = 0;
+  callbackState.pendingQuestionData = "";
+  callbackState.todoState.length = 0;
   callbackState.awaitingQuestionAnswer = false;
+  callbackState.lastStepType = "thinking";
+  setCurrentTurnId(null);
 }
-async function finalizeTurn(output, readUsage) {
-  await drainStreamingAndCompleteSteps();
+async function finalizeTurn(output) {
+  await flushStreaming();
   const resultEvent = extractResultEvent(output);
+  for (const step of callbackState.accumulatedSteps) step.status = "complete";
   const activityLog = serializeSteps(callbackState.accumulatedSteps);
   const success = resultEvent ? !resultEvent.isError : false;
-  const completionArgs = buildTurnCompletionPayload({
+  const completionArgs = {
+    [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
     success,
     result: resultEvent?.result ?? callbackState.rawOutput,
     error: resultEvent?.isError ? resultEvent.result : null,
-    activityLog,
-    resultEvent
-  });
-  appendClaimedTurnCompletion(completionArgs);
-  if (await reconcileStreamingAndPersist()) return;
+    activityLog
+  };
+  if (RUN_ID) completionArgs.runId = RUN_ID;
+  if (resultEvent?.rawResultEvent) {
+    completionArgs.rawResultEvent = resultEvent.rawResultEvent;
+  }
+  if (callbackState.pendingQuestionData) {
+    completionArgs.pendingQuestion = callbackState.pendingQuestionData;
+  }
+  if (await setFinalizingState()) return false;
+  Object.assign(completionArgs, currentTurnArgs());
+  persistTurnWork();
   const completionSentAt = Date.now();
   await deliverCompletionWithMedia(completionArgs);
-  finishClaimedTurn();
+  setCurrentTurnId(null);
   log(
     "daemon: turn finalized success=" + success + " steps=" + activityLog.length + " (completion mutation " + (Date.now() - completionSentAt) + "ms)"
   );
   const bookkeepingAt = Date.now();
   syncClaudeStateToPersist("daemon-turn");
-  void captureAndReportClaudeUsage({
-    readUsage,
-    error: resultEvent?.isError ? resultEvent.result : void 0
-  });
   log(
     "daemon: post-turn bookkeeping took " + (Date.now() - bookkeepingAt) + "ms"
   );
+  return true;
 }
-function readSyntheticTurnMessageId(result) {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return null;
+function readClaimedPrompt(result) {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return null;
+  }
+  const inner = result.value;
+  const payload = typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
+  const prompt = payload.prompt;
+  return typeof prompt === "string" ? prompt : null;
+}
+function readClaimedAttachmentUrls(payload) {
+  const field = payload.attachmentUrls;
+  if (!Array.isArray(field)) {
+    return [];
+  }
+  return field.filter((url) => typeof url === "string");
+}
+function readClaimedTurn(result) {
+  const prompt = readClaimedPrompt(result);
+  if (prompt === null) {
+    return null;
+  }
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return { prompt, attachmentUrls: [], turnId: null };
+  }
+  const inner = result.value;
+  const payload = typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
+  return {
+    prompt,
+    attachmentUrls: readClaimedAttachmentUrls(payload),
+    turnId: typeof payload.turnId === "string" ? payload.turnId : null
+  };
+}
+function readOpenedSyntheticTurn(result) {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return null;
+  }
+  const inner = result.value;
+  const payload = typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
   const messageId = payload.messageId;
-  return typeof messageId === "string" ? messageId : null;
+  if (typeof messageId !== "string") return null;
+  return {
+    messageId,
+    turnId: typeof payload.turnId === "string" ? payload.turnId : null
+  };
 }
 function readParentToolUseId(message) {
   const parentField = message.parent_tool_use_id;
@@ -6319,87 +5189,6 @@ async function syncBackgroundAgentsToConvex(agents) {
   } catch {
   }
 }
-var harnessCatalogReportStarted = false;
-var CATALOG_MAX_COMMANDS = 100;
-var CATALOG_MAX_NAME_LENGTH = 100;
-var CATALOG_MAX_DESCRIPTION_LENGTH = 2e3;
-var CATALOG_MAX_ARGUMENT_HINT_LENGTH = 400;
-function collectLocalCommandNames() {
-  const names = /* @__PURE__ */ new Set();
-  for (const root of [WORK_DIR, homedir()]) {
-    try {
-      for (const entry of readdirSync3(root + "/.claude/skills", {
-        withFileTypes: true
-      })) {
-        if (entry.isDirectory()) names.add(entry.name);
-      }
-    } catch {
-    }
-    try {
-      for (const entry of readdirSync3(root + "/.claude/commands", {
-        withFileTypes: true
-      })) {
-        if (entry.isFile() && entry.name.endsWith(".md")) {
-          names.add(entry.name.slice(0, -".md".length));
-        }
-      }
-    } catch {
-    }
-  }
-  return names;
-}
-function catalogDescription(description) {
-  const firstLine = description.split("\\n").map((line) => line.trim()).find((line) => line.length > 0);
-  return (firstLine ?? "").slice(0, CATALOG_MAX_DESCRIPTION_LENGTH);
-}
-async function reportHarnessSkillCatalog(cliVersion, query) {
-  try {
-    if (!HARNESS_CATALOG_TOKEN) return;
-    if (typeof query.initializationResult !== "function") {
-      log("daemon: initializationResult unavailable \\u2014 skipping skill report");
-      return;
-    }
-    const init = await query.initializationResult();
-    const localNames = collectLocalCommandNames();
-    const commands = [];
-    for (const command of init.commands) {
-      if (localNames.has(command.name)) continue;
-      if (command.name.length === 0) continue;
-      if (command.name.length > CATALOG_MAX_NAME_LENGTH) continue;
-      const argumentHint = (command.argumentHint ?? "").slice(
-        0,
-        CATALOG_MAX_ARGUMENT_HINT_LENGTH
-      );
-      commands.push({
-        name: command.name,
-        description: catalogDescription(command.description),
-        ...argumentHint ? { argumentHint } : {}
-      });
-    }
-    if (commands.length === 0) return;
-    if (commands.length > CATALOG_MAX_COMMANDS) {
-      log(
-        "daemon: harness skill report truncated from " + commands.length + " to " + CATALOG_MAX_COMMANDS + " commands"
-      );
-      commands.length = CATALOG_MAX_COMMANDS;
-    }
-    await callHarnessSkillCatalogReport("claude", cliVersion, commands);
-    log(
-      "daemon: reported " + commands.length + " built-in skills from CLI " + cliVersion
-    );
-  } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
-    log("daemon: harness skill report failed \\u2014 " + messageText);
-  }
-}
-function noteHarnessInitMessage(message, query) {
-  if (harnessCatalogReportStarted) return;
-  if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField2(message, "claude_code_version");
-  if (!cliVersion) return;
-  harnessCatalogReportStarted = true;
-  void reportHarnessSkillCatalog(cliVersion, query);
-}
 function findAgentByTaskId(taskId) {
   for (const entry of unsettledBackgroundAgents.values()) {
     if (entry.taskId === taskId) {
@@ -6497,63 +5286,55 @@ function handleSystemTaskMessage(message) {
   }
 }
 async function failSyntheticTurn(error) {
-  const turn = supervisor.currentTurn;
-  if (turn?.kind !== "synthetic") {
+  if (daemonTurn?.kind !== "synthetic") {
     return;
   }
   log("daemon: failing synthetic turn \\u2014 " + error);
-  const messageId = turn.messageId;
-  persistTurnWork();
+  const messageId = daemonTurn.messageId;
   try {
-    await drainStreamingAndCompleteSteps();
-    const turnLease = getCurrentTurnLease();
-    const completionArgs = entityMutationArgs({
-      messageId,
-      success: false,
-      result: null,
-      error,
-      activityLog: serializeSteps(callbackState.accumulatedSteps),
-      ...turnLease
-    });
-    appendTurnCheckpoint(completionArgs);
-    releaseTurnLeaseForCompletion();
+    await flushStreaming();
+    for (const step of callbackState.accumulatedSteps) {
+      step.status = "complete";
+    }
     await callConvexWithRetry(
       "mutation",
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
-      completionArgs
+      entityMutationArgs({
+        messageId,
+        success: false,
+        result: null,
+        error,
+        activityLog: serializeSteps(callbackState.accumulatedSteps),
+        ...currentTurnArgs()
+      })
     );
   } catch {
   }
   endWatchedTurn();
   resetTurnState();
-  endTurnOwnership();
-  supervisor.settleTurn();
+  daemonTurn = null;
   agentTurnOutput = "";
 }
 async function ensureSyntheticTurn() {
-  if (!supervisor.beginSyntheticOpen()) return;
+  if (daemonTurn !== null || openingSyntheticTurn) {
+    return;
+  }
+  openingSyntheticTurn = true;
   try {
     const result = await callConvexWithRetry(
       "mutation",
       OPEN_SYNTHETIC_TURN_MUTATION ?? "",
-      // This daemon's own model, so the server stamps the synthetic reply's
-      // provider checkpoint from what actually ran the turn — the sticky
-      // composer pick can move to another provider while this turn is open.
-      entityMutationArgs({ model: MODEL })
+      entityMutationArgs({})
     );
-    const messageId = readSyntheticTurnMessageId(result);
-    if (messageId === null) {
+    const opened = readOpenedSyntheticTurn(result);
+    if (opened === null) {
       log("daemon: openSyntheticTurn returned no messageId");
       return;
     }
+    const { messageId } = opened;
     resetTurnState();
-    beginTurnOwnership("provider", readTurnLeaseIdentity(result));
-    beginTurnCheckpoint();
-    if (!supervisor.startTurn({ kind: "synthetic", messageId })) {
-      log("daemon: synthetic turn opened after lifecycle moved; ignoring");
-      endTurnOwnership();
-      return;
-    }
+    daemonTurn = { kind: "synthetic", messageId };
+    setCurrentTurnId(opened.turnId);
     agentTurnStartedAt = Date.now();
     sawFirstMessageThisTurn = { value: false };
     sawAssistantThisTurn = { value: false };
@@ -6561,18 +5342,19 @@ async function ensureSyntheticTurn() {
     beginWatchedTurn();
     log("daemon: synthetic turn opened messageId=" + messageId);
   } finally {
-    supervisor.abandonSyntheticOpen();
+    openingSyntheticTurn = false;
   }
 }
 async function finalizeSyntheticTurn(output) {
-  const turn = supervisor.currentTurn;
-  if (turn?.kind !== "synthetic") {
-    return;
+  if (daemonTurn?.kind !== "synthetic") {
+    return false;
   }
-  supervisor.beginFinalizing();
-  const messageId = turn.messageId;
-  await drainStreamingAndCompleteSteps();
+  const messageId = daemonTurn.messageId;
+  await flushStreaming();
   const resultEvent = extractResultEvent(output);
+  for (const step of callbackState.accumulatedSteps) {
+    step.status = "complete";
+  }
   const activityLog = serializeSteps(callbackState.accumulatedSteps);
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = entityMutationArgs({
@@ -6585,51 +5367,43 @@ async function finalizeSyntheticTurn(output) {
   if (callbackState.pendingQuestionData) {
     completionArgs.pendingQuestion = callbackState.pendingQuestionData;
   }
-  const turnLease = getCurrentTurnLease();
-  if (turnLease) {
-    completionArgs.turnId = turnLease.turnId;
-    completionArgs.leaseGeneration = turnLease.leaseGeneration;
-  }
-  persistTurnWork();
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
+  if (await setFinalizingState()) return false;
+  Object.assign(completionArgs, currentTurnArgs());
   await callConvexWithRetry(
     "mutation",
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
     completionArgs
   );
-  await uploadAndAttachSandboxMedia({ messageId });
   syncClaudeStateToPersist("daemon-synthetic-turn");
   endWatchedTurn();
   resetTurnState();
-  endTurnOwnership();
-  supervisor.settleTurn();
+  daemonTurn = null;
   agentTurnOutput = "";
   log("daemon: synthetic turn finalized success=" + success);
+  return true;
 }
-async function startRealAgentTurn(turn, agentRunner) {
+function startRealAgentTurn(turn, agentRunner) {
   resetTurnState();
-  if (!supervisor.startTurn({ kind: "real" })) {
-    log("daemon: claimed turn could not enter running state");
-    return;
-  }
-  startClaimedTurn(turn);
+  daemonTurn = { kind: "real" };
+  setCurrentTurnId(turn.turnId);
   agentTurnStartedAt = Date.now();
   sawFirstMessageThisTurn = { value: false };
   sawAssistantThisTurn = { value: false };
   beginWatchedTurn();
-  await agentRunner.setPermissionMode("default");
   agentRunner.push(turn.prompt);
   callbackState.activeAttemptStartedAt = agentTurnStartedAt;
   agentTurnOutput = "";
-  log("daemon: real turn started");
+  log("daemon: real turn started turnId=" + String(turn.turnId));
 }
 function handleCancelRequested(agentRunner) {
-  if (supervisor.currentTurn === null) {
+  if (daemonTurn === null) {
     log("daemon: cancelRequested with no active turn \\u2014 ignored");
     return;
   }
-  if (!supervisor.beginCancellation()) return;
+  if (turnCancelInFlight) {
+    return;
+  }
+  turnCancelInFlight = true;
   turnCancelRequestedAtMs = Date.now();
   endWatchedTurn();
   log("daemon: cancel requested \\u2014 interrupting in-flight turn");
@@ -6640,36 +5414,17 @@ function handleCancelRequested(agentRunner) {
 }
 function startClaimWatcher(agentRunner) {
   void (async () => {
-    while (!supervisor.isStopping) {
+    while (!daemonExiting) {
       if (callbackScriptWentStaleOnDisk()) {
-        supervisor.noticeRefresh();
-      }
-      const refreshDecision = supervisor.decideRefresh({
-        watchedTurnActive: turnActive,
-        backgroundAgentCount: unsettledBackgroundAgents.size,
-        sdkMessagePending: agentRunner.hasPending()
-      });
-      if (refreshDecision.action === "defer") {
-        if (!callbackRefreshDeferralLogged) {
-          log(
-            "daemon: callback script updated on disk \\u2014 deferring respawn until active work settles (" + refreshDecision.blocker + ")"
-          );
-          callbackRefreshDeferralLogged = true;
-        }
-        await sleep(PROMPT_POLL_INTERVAL_MS);
-        continue;
-      }
-      if (refreshDecision.action === "exit") {
         log("daemon: callback script updated on disk \\u2014 exiting for respawn");
-        supervisor.stop();
-        process.exit(0);
+        daemonExiting = true;
+        return;
       }
-      const acceptTurn = supervisor.phase === "idle" && supervisor.pendingClaim === null;
       try {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION ?? "",
-          entityMutationArgs({ model: MODEL, acceptTurn })
+          entityMutationArgs({ model: MODEL })
         );
         const stopIds = readStopTaskToolUseIds(claimed);
         for (const toolUseId of stopIds) {
@@ -6679,33 +5434,16 @@ function startClaimWatcher(agentRunner) {
         if (readCancelRequested(claimed)) {
           handleCancelRequested(agentRunner);
         }
-        if (readUsageRefreshRequested(claimed) && !usageRefreshInFlight) {
-          usageRefreshInFlight = true;
-          log("daemon: usage refresh requested \\u2014 reading SDK plan usage");
-          const report = captureAndReportClaudeUsage({
-            readUsage: agentRunner.readUsage,
-            force: true
-          });
-          void report.finally(() => {
-            usageRefreshInFlight = false;
-          });
-        }
         const turn = readClaimedTurn(claimed);
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
-          const currentTurn = supervisor.currentTurn;
-          const currentLease = getCurrentTurnLease();
-          if (shouldParkClaimedTurn({
-            hasActiveRealTurn: currentTurn?.kind === "real",
-            isCancellationInFlight: supervisor.isCancellationInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: turn.turnLease?.turnId ?? null
-          })) {
-            if (!supervisor.parkClaim(turn)) {
-              log("daemon: duplicate claimed turn ignored");
-            }
+          if (daemonTurn === null) {
+            pendingClaimedTurn = turn;
+          } else if (daemonTurn.kind === "synthetic") {
+            pendingClaimedTurn = turn;
+          } else if (turnCancelInFlight) {
+            pendingClaimedTurn = turn;
           } else {
             log(
               "daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
@@ -6714,40 +5452,34 @@ function startClaimWatcher(agentRunner) {
         }
       } catch {
       }
-      const turnInFlight = supervisor.hasWork;
-      await sleep(
-        selectClaimPollIntervalMs({
-          busy: turnInFlight,
-          lastIdleActivityAtMs
-        })
-      );
+      await sleep2(PROMPT_POLL_INTERVAL_MS);
     }
   })();
 }
 async function runDaemonMessagePump(agentRunner) {
-  while (!supervisor.isStopping) {
-    if (supervisor.currentTurn === null && supervisor.pendingClaim !== null) {
-      const turn = supervisor.takeClaim();
-      if (turn === null) continue;
-      await startRealAgentTurn(turn, agentRunner);
+  while (!daemonExiting) {
+    if (daemonTurn === null && pendingClaimedTurn !== null) {
+      const turn = pendingClaimedTurn;
+      pendingClaimedTurn = null;
+      startRealAgentTurn(turn, agentRunner);
       continue;
     }
-    if (!supervisor.hasWork && unsettledBackgroundAgents.size === 0 && Date.now() - lastIdleActivityAtMs > IDLE_EXIT_MS) {
+    if (daemonTurn === null && pendingClaimedTurn === null && unsettledBackgroundAgents.size === 0 && Date.now() - lastIdleActivityAtMs > IDLE_EXIT_MS) {
       log("daemon: idle timeout \\u2014 exiting");
       return;
     }
-    if (supervisor.currentTurn === null && !agentRunner.hasPending()) {
-      await sleep(PROMPT_POLL_INTERVAL_MS);
+    if (daemonTurn === null && !agentRunner.hasPending()) {
+      await sleep2(PROMPT_POLL_INTERVAL_MS);
       continue;
     }
     const message = await agentRunner.waitMessage();
     if (message === null) {
-      if (supervisor.isCancellationInFlight) {
+      if (turnCancelInFlight) {
         await exitWithoutCompletion("pump ended while a cancel was settling");
         return;
       }
       if (turnActive) {
-        if (supervisor.currentTurn?.kind === "synthetic") {
+        if (daemonTurn?.kind === "synthetic") {
           await failSyntheticTurn(
             "The assistant ended without a reply. Please try again."
           );
@@ -6768,27 +5500,21 @@ async function runDaemonMessagePump(agentRunner) {
     recogniseSubagentToolUses(message);
     handleSystemTaskMessage(message);
     handleBackgroundTasksChanged(message);
-    if (supervisor.isCancellationInFlight) {
+    if (turnCancelInFlight) {
       if (message.type !== "result") {
         continue;
       }
       resetTurnState();
-      finishClaimedTurn();
-      supervisor.settleTurn();
+      daemonTurn = null;
       agentTurnOutput = "";
+      turnCancelInFlight = false;
       continue;
     }
-    if (message.type === "result" && supervisor.currentTurn === null) {
+    if (message.type === "result" && daemonTurn === null) {
       log("daemon: result with no live turn \\u2014 ignored");
       continue;
     }
-    if (isZeroWorkTaskNotificationResult(message)) {
-      log(
-        "daemon: zero-work task notification result ignored; active turn preserved"
-      );
-      continue;
-    }
-    if (supervisor.currentTurn === null) {
+    if (daemonTurn === null) {
       if (!shouldMintSyntheticTurn(message)) {
         const messageType = typeof message.type === "string" ? message.type : "?";
         log(
@@ -6797,7 +5523,7 @@ async function runDaemonMessagePump(agentRunner) {
         continue;
       }
       await ensureSyntheticTurn();
-      if (supervisor.currentTurn === null) {
+      if (daemonTurn === null) {
         continue;
       }
       agentTurnOutput = "";
@@ -6819,20 +5545,24 @@ async function runDaemonMessagePump(agentRunner) {
     log(
       "daemon[timing]: result message +" + (resultAt - agentTurnStartedAt) + "ms after turn start"
     );
-    if (supervisor.currentTurn?.kind === "synthetic") {
-      await finalizeSyntheticTurn(agentTurnOutput);
+    let completionAccepted;
+    if (daemonTurn?.kind === "synthetic") {
+      completionAccepted = await finalizeSyntheticTurn(agentTurnOutput);
     } else {
-      supervisor.beginFinalizing();
-      await finalizeTurn(agentTurnOutput, agentRunner.readUsage);
+      completionAccepted = await finalizeTurn(agentTurnOutput);
       log(
         "daemon[timing]: finalizeTurn took " + (Date.now() - resultAt) + "ms"
       );
-      supervisor.settleTurn();
+      daemonTurn = null;
     }
-    if (supervisor.pendingClaim !== null && supervisor.currentTurn === null) {
-      const parked = supervisor.takeClaim();
-      if (parked === null) continue;
-      await startRealAgentTurn(parked, agentRunner);
+    if (!completionAccepted) {
+      daemonExiting = true;
+      return;
+    }
+    if (pendingClaimedTurn !== null && daemonTurn === null) {
+      const parked = pendingClaimedTurn;
+      pendingClaimedTurn = null;
+      startRealAgentTurn(parked, agentRunner);
     }
   }
 }
@@ -6851,8 +5581,10 @@ function handleDaemonMessage(message, output, turnStartedAt, sawFirstMessageThis
     );
   }
   const line = JSON.stringify(message) + "\\n";
-  emitParsedStreamLine(line);
+  appendToRawLogFile(line);
   const nextOutput = trimBufferHead(output + line);
+  appendToRawOutput(line);
+  processRealtimeStdoutChunk(line);
   const isResult = message.type === "result";
   return { output: nextOutput, isResult };
 }
@@ -6871,10 +5603,10 @@ function createWarmAgentRunner(sdk, options) {
   void (async () => {
     try {
       for await (const raw of query) {
-        const message = sdkMessageJson(JSON.stringify(raw));
-        if (message === null) continue;
-        noteHarnessInitMessage(message, query);
-        pending.push(message);
+        if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+          continue;
+        }
+        pending.push(raw);
         wakeWaiters();
       }
     } catch (error) {
@@ -6916,33 +5648,73 @@ function createWarmAgentRunner(sdk, options) {
     }
     log("daemon: interrupt unavailable on SDK query handle");
   };
-  const setPermissionMode = async (mode) => {
-    if (typeof query.setPermissionMode !== "function") {
-      log("daemon: setPermissionMode unavailable on SDK query handle");
-      return;
-    }
-    try {
-      await query.setPermissionMode(mode === "plan" ? "plan" : "default");
-      log("daemon: permission mode set to " + mode);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      log("daemon: setPermissionMode failed \\u2014 " + message);
-    }
-  };
-  const readUsage = () => readSdkPlanUsage(query);
-  return {
-    push,
-    waitMessage,
-    drainPending,
-    hasPending,
-    stopTask,
-    interrupt,
-    readUsage,
-    setPermissionMode
-  };
+  return { push, waitMessage, drainPending, hasPending, stopTask, interrupt };
 }
 function callbackScriptWentStaleOnDisk() {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
+  if (!CALLBACK_SCRIPT_FP) return false;
+  try {
+    const onDisk = readFileSync6("/tmp/eva-callback-fp", "utf8").trim();
+    return onDisk !== CALLBACK_SCRIPT_FP;
+  } catch {
+    return false;
+  }
+}
+function attachmentExtensionForMimeType(mimeType) {
+  const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  switch (type) {
+    case "image/jpeg":
+      return ".jpg";
+    case "image/gif":
+      return ".gif";
+    case "image/webp":
+      return ".webp";
+    case "image/svg+xml":
+      return ".svg";
+    case "image/png":
+      return ".png";
+    case "text/html":
+      return ".html";
+    case "text/markdown":
+      return ".md";
+    case "text/plain":
+      return ".txt";
+    default:
+      if (type.startsWith("image/")) return ".png";
+      return ".bin";
+  }
+}
+async function materializeTurnAttachments(turn) {
+  if (turn.attachmentUrls.length === 0) return;
+  const paths = [];
+  for (let index = 0; index < turn.attachmentUrls.length; index++) {
+    const url = turn.attachmentUrls[index];
+    if (!url) continue;
+    try {
+      const res = await fetchWithTimeout(url, { method: "GET" });
+      if (!res.ok) {
+        log(\`daemon: attachment download failed status=\${res.status}\`);
+        continue;
+      }
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const extension = attachmentExtensionForMimeType(
+        res.headers.get("content-type") ?? ""
+      );
+      const path = \`/tmp/eva-attachment-\${index}\${extension}\`;
+      writeFileSync9(path, bytes);
+      paths.push(path);
+    } catch (error) {
+      log(
+        \`daemon: attachment download error \${error instanceof Error ? error.message : String(error)}\`
+      );
+    }
+  }
+  if (paths.length === 0) return;
+  const list = paths.map((p) => \`- \${p}\`).join("\\n");
+  turn.prompt += \`
+
+---
+The user attached the following file(s). Read them with your file-reading tool before responding:
+\${list}\`;
 }
 async function runSdkDaemon() {
   if (!CLAIM_MUTATION) {
@@ -6955,34 +5727,43 @@ async function runSdkDaemon() {
     );
     process.exit(1);
   }
-  const bootClaim = claimDaemonPidfileBoot({
-    paths: daemonPaths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG
-  });
-  if (bootClaim.status === "rival_alive") {
+  const rivalPid = readDaemonPidFile();
+  if (!Number.isNaN(rivalPid) && rivalPid !== process.pid && pidAlive(rivalPid)) {
     log(
-      \`daemon: rival daemon pid=\${bootClaim.rivalPid} already owns \${DAEMON_PID_FILE} \\u2014 exiting\`
+      \`daemon: rival daemon pid=\${rivalPid} already owns \${DAEMON_PID_FILE} \\u2014 exiting\`
     );
     process.exit(0);
   }
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile,
-    hasActiveWork: () => supervisor.hasWork,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS,
-    log,
-    logPrefix: "daemon",
-    onDeposedIdle: () => {
-      process.exit(0);
+  writeFileSync9(DAEMON_PID_FILE, String(process.pid));
+  writeFileSync9(DAEMON_ENTITY_FILE, ENTITY_ID ?? "");
+  writeFileSync9(DAEMON_OPTS_FILE, DAEMON_OPTS_SIG);
+  let deposedLogged = false;
+  setInterval(() => {
+    const owner = readDaemonPidFile();
+    if (owner === process.pid) {
+      deposedLogged = false;
+      return;
     }
-  });
+    const ownerLabel = Number.isNaN(owner) ? "none" : String(owner);
+    if (turnActive) {
+      if (!deposedLogged) {
+        deposedLogged = true;
+        log(
+          \`daemon: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting after active turn\`
+        );
+      }
+      return;
+    }
+    log(\`daemon: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting\`);
+    process.exit(0);
+  }, FENCE_POLL_INTERVAL_MS);
   const preflightOk2 = await runPreflightHeartbeat();
   if (!preflightOk2) {
     log("daemon: preflight failed");
     process.exit(1);
   }
   startStreamingLoops();
-  await refreshGithubToken();
+  await ensureGithubToken();
   const sessionMode = prepareClaudeSessionState();
   const options = buildSdkOptions(sessionMode);
   const sdk = await loadSdk();
@@ -6999,1688 +5780,54 @@ async function runSdkDaemon() {
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
     log("daemon: query failed \\u2014 " + messageText);
-    persistTurnWork();
     try {
-      const completionArgs = {
+      await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", {
         [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
         success: false,
         result: null,
         error: "Agent SDK daemon failed: " + messageText,
         activityLog: serializeSteps(callbackState.accumulatedSteps),
-        ...getCurrentTurnLease()
-      };
-      appendTurnCheckpoint(completionArgs);
-      releaseTurnLeaseForCompletion();
-      await callConvexWithRetry(
-        "mutation",
-        COMPLETION_MUTATION ?? "",
-        completionArgs
-      );
+        ...currentTurnArgs()
+      });
     } catch {
     }
   } finally {
-    cleanOwnedMarkers();
-    await stopStreamingLoops();
-  }
-  process.exit(0);
-}
-
-// callback-src/providers/codexAppServerClient.ts
-import { spawn } from "child_process";
-import { existsSync as existsSync7 } from "fs";
-import { createInterface } from "readline";
-function responseErrorMessage(message) {
-  const error = asJsonObject(message.error);
-  return typeof error.message === "string" ? error.message : "Codex App Server request failed";
-}
-var CodexAppServerClient = class {
-  child = null;
-  nextId = 1;
-  pending = /* @__PURE__ */ new Map();
-  notifications = [];
-  terminalError = null;
-  start() {
-    const command = existsSync7(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex";
-    this.child = spawn(command, ["app-server"], {
-      cwd: WORK_DIR,
-      env: { ...process.env, CODEX_HOME: CODEX_RUNTIME_HOME_DIR },
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    const stdout = createInterface({ input: this.child.stdout });
-    stdout.on("line", (line) => this.handleLine(line));
-    this.child.stderr.on("data", (chunk) => {
-      const text = chunk.toString("utf8").trim();
-      if (text) log("codex app-server stderr: " + text);
-    });
-    this.child.on("error", (error) => this.fail(error));
-    this.child.on("exit", (code, signal) => {
-      this.fail(
-        new Error(
-          "Codex App Server exited (code=" + String(code) + ", signal=" + String(signal ?? "none") + ")"
-        )
-      );
-    });
-  }
-  async initialize() {
-    await this.request("initialize", {
-      clientInfo: { name: "eva", title: "Eva", version: "1.0.0" }
-    });
-    this.notify("initialized", {});
-  }
-  request(method, params) {
-    if (this.terminalError) return Promise.reject(this.terminalError);
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error("Codex App Server request timed out: " + method));
-      }, 9e4);
-      this.pending.set(id, { resolve, reject, timeout });
-      this.write({ id, method, params });
-    });
-  }
-  notify(method, params) {
-    this.write({ method, params });
-  }
-  drainNotifications() {
-    const drained = this.notifications;
-    this.notifications = [];
-    return drained;
-  }
-  hasNotifications() {
-    return this.notifications.length > 0;
-  }
-  getError() {
-    return this.terminalError;
-  }
-  stop() {
-    this.child?.kill("SIGTERM");
-  }
-  write(message) {
-    if (!this.child || !this.child.stdin.writable) {
-      throw this.terminalError ?? new Error("Codex App Server is not running");
-    }
-    this.child.stdin.write(JSON.stringify(message) + "\\n");
-  }
-  handleLine(line) {
-    const parsed = tryParseJson(line);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-    const message = parsed;
-    if (typeof message.id === "number" && typeof message.method !== "string") {
-      const pending = this.pending.get(message.id);
-      if (!pending) return;
-      this.pending.delete(message.id);
-      clearTimeout(pending.timeout);
-      if (message.error !== void 0) {
-        pending.reject(new Error(responseErrorMessage(message)));
-      } else {
-        pending.resolve(message.result ?? null);
-      }
-      return;
-    }
-    if (typeof message.method !== "string") return;
-    if (typeof message.id === "number") {
-      this.write({
-        id: message.id,
-        error: {
-          code: -32601,
-          message: "Eva does not handle App Server requests: " + message.method
-        }
-      });
-      return;
-    }
-    this.notifications.push({
-      method: message.method,
-      params: asJsonObject(message.params)
-    });
-  }
-  fail(error) {
-    if (this.terminalError) return;
-    this.terminalError = error;
-    for (const request of this.pending.values()) {
-      clearTimeout(request.timeout);
-      request.reject(error);
-    }
-    this.pending.clear();
-  }
-};
-
-// callback-src/providers/codexAppServerDaemon.ts
-var IDLE_EXIT_MS2 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-var POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var FENCE_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
-var NO_EVENT_TIMEOUT_MS = 5 * 60 * 1e3;
-var paths = resolveDaemonPaths();
-var supervisor2 = new DaemonSupervisor();
-var activeTurnStartedAt = 0;
-var lastEventAt = 0;
-var lastIdleActivityAt = Date.now();
-var finalText = "";
-var exitWithError = false;
-var threadTotalUsage = null;
-var turnStartUsage = null;
-function stringField(value, field) {
-  const object = asJsonObject(value);
-  return typeof object[field] === "string" ? object[field] : "";
-}
-function nestedId(value, field) {
-  return stringField(asJsonObject(value)[field], "id");
-}
-function entityArgs(fields) {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-function readOwnerPid() {
-  return readPidFromFile(paths.pid);
-}
-function callbackWentStale() {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
-function resetTurnState2() {
-  resetDaemonTurnStreamingState();
-  callbackState.codexToolItemIds.clear();
-  activeTurnStartedAt = 0;
-  finalText = "";
-}
-function emitEvent(event) {
-  emitParsedStreamLine(JSON.stringify(event) + "\\n");
-}
-function normalizeAppServerNotification(notification) {
-  const { method, params } = notification;
-  if (method === "turn/started") return { type: "turn.started" };
-  if (method === "turn/completed") return { type: "turn.completed" };
-  if (method === "item/started") {
-    return { type: "item.started", item: asJsonObject(params.item) };
-  }
-  if (method === "item/completed") {
-    return { type: "item.completed", item: asJsonObject(params.item) };
-  }
-  if (method === "item/agentMessage/delta" && typeof params.delta === "string") {
-    return { type: "item.agent_message.delta", delta: params.delta };
-  }
-  if (method === "item/reasoning/textDelta" && typeof params.delta === "string") {
-    return { type: "item.reasoning.delta", delta: params.delta };
-  }
-  if (method === "item/reasoning/summaryTextDelta" && typeof params.delta === "string") {
-    return { type: "item.reasoning.delta", delta: params.delta };
-  }
-  return null;
-}
-function readTokenCount(source, key) {
-  const value = source ? source[key] : 0;
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-function computeTurnUsageDelta(start, end) {
-  if (!end) return null;
-  const delta = (key) => Math.max(0, readTokenCount(end, key) - readTokenCount(start, key));
-  return {
-    inputTokens: delta("inputTokens"),
-    cachedInputTokens: delta("cachedInputTokens"),
-    cacheWriteInputTokens: delta("cacheWriteInputTokens"),
-    outputTokens: delta("outputTokens")
-  };
-}
-function turnError(params) {
-  const turn = asJsonObject(params.turn);
-  const error = asJsonObject(turn.error);
-  return typeof error.message === "string" ? error.message : null;
-}
-async function finalizeTurn2(success, error) {
-  await drainStreamingAndCompleteSteps();
-  const result = finalText || callbackState.currentStreamedContent || callbackState.rawOutput;
-  if (await reconcileStreamingAndPersist()) return;
-  const usage = computeTurnUsageDelta(turnStartUsage, threadTotalUsage);
-  const completionArgs = {
-    [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
-    success,
-    result,
-    error,
-    activityLog: serializeSteps(callbackState.accumulatedSteps),
-    ...RUN_ID ? { runId: RUN_ID } : {},
-    ...usage ? {
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          usage.inputTokens,
-          usage.cachedInputTokens,
-          usage.outputTokens
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: Math.max(
-          0,
-          usage.inputTokens - usage.cachedInputTokens
-        ),
-        outputTokens: usage.outputTokens,
-        cacheReadInputTokens: usage.cachedInputTokens,
-        cacheCreationInputTokens: usage.cacheWriteInputTokens,
-        model: normalizedCodexModel
-      })
-    } : {}
-  };
-  appendClaimedTurnCompletion(completionArgs);
-  await deliverCompletionWithMedia(completionArgs);
-  finishClaimedTurn();
-  syncCodexStateToPersist();
-  log("codex daemon: turn finalized success=" + success);
-}
-async function failActiveTurn(error) {
-  if (supervisor2.currentTurn === null && activeTurnStartedAt === 0) return;
-  supervisor2.beginFinalizing();
-  try {
-    await finalizeTurn2(false, error);
-  } catch {
-  }
-  exitWithError = true;
-  supervisor2.stop();
-}
-function processNotification(notification) {
-  lastEventAt = Date.now();
-  if (notification.method === "thread/tokenUsage/updated") {
-    const total = asJsonObject(
-      asJsonObject(notification.params.tokenUsage).total
-    );
-    if (Object.keys(total).length > 0) threadTotalUsage = total;
-  }
-  const event = normalizeAppServerNotification(notification);
-  if (event) emitEvent(event);
-  if (notification.method === "item/completed") {
-    const item = asJsonObject(notification.params.item);
-    const text = getCodexAgentMessageText(item);
-    if (text) finalText = text;
-  }
-  if (notification.method !== "turn/completed") return null;
-  const turn = asJsonObject(notification.params.turn);
-  const status = typeof turn.status === "string" ? turn.status : "failed";
-  lastIdleActivityAt = Date.now();
-  if (supervisor2.isCancellationInFlight || status === "interrupted") {
-    finishClaimedTurn();
-    resetTurnState2();
-    supervisor2.settleTurn();
-    return null;
-  }
-  supervisor2.beginFinalizing();
-  return finalizeTurn2(
-    status === "completed",
-    turnError(notification.params)
-  ).then(() => {
-    resetTurnState2();
-    supervisor2.settleTurn();
-  });
-}
-async function refreshGithubToken2() {
-  await refreshDaemonGithubTokenFromEnv();
-}
-async function establishThread(client, sessionMode) {
-  if (sessionMode.sessionId) {
-    try {
-      const resumed = await client.request("thread/resume", {
-        threadId: sessionMode.sessionId
-      });
-      const resumedId = nestedId(resumed, "thread") || sessionMode.sessionId;
-      log("codex daemon: resumed thread " + resumedId);
-      return resumedId;
-    } catch (error) {
-      log(
-        "codex daemon: resume failed, starting fresh: " + (error instanceof Error ? error.message : String(error))
-      );
-    }
-  }
-  const started2 = await client.request("thread/start", {
-    model: normalizedCodexModel,
-    cwd: WORK_DIR,
-    approvalPolicy: "never",
-    serviceName: "eva"
-  });
-  const threadId = nestedId(started2, "thread");
-  if (!threadId) throw new Error("Codex App Server did not return a thread id");
-  return threadId;
-}
-async function startTurn(client, turn) {
-  resetTurnState2();
-  if (!supervisor2.beginStarting({ providerTurnId: "" })) {
-    throw new Error("Codex daemon could not enter starting state");
-  }
-  startClaimedTurn(turn);
-  await materializeTurnAttachments(turn);
-  const text = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + turn.prompt : turn.prompt;
-  activeTurnStartedAt = Date.now();
-  lastEventAt = activeTurnStartedAt;
-  turnStartUsage = threadTotalUsage;
-  const result = await client.request("turn/start", {
-    threadId: callbackState.activeCodexThreadId,
-    input: [{ type: "text", text }],
-    cwd: WORK_DIR,
-    model: normalizedCodexModel,
-    approvalPolicy: "never",
-    sandboxPolicy: { type: "externalSandbox", networkAccess: "enabled" },
-    ...codexReasoningEffort ? { effort: codexReasoningEffort } : {}
-  });
-  const providerTurnId = nestedId(result, "turn");
-  if (!providerTurnId)
-    throw new Error("Codex App Server did not return a turn id");
-  if (!supervisor2.markRunning({ providerTurnId })) {
-    throw new Error("Codex daemon could not enter running state");
-  }
-  lastIdleActivityAt = activeTurnStartedAt;
-  callbackState.activeAttemptStartedAt = activeTurnStartedAt;
-  log("codex daemon: turn started " + providerTurnId);
-}
-function cleanMarkers() {
-  cleanOwnedDaemonMarkers({
-    paths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
-}
-async function runCodexAppServerDaemon() {
-  if (!CLAIM_MUTATION)
-    throw new Error("CLAIM_MUTATION is required for Codex App Server mode");
-  const bootClaim = claimDaemonPidfileBoot({
-    paths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG
-  });
-  if (bootClaim.status === "rival_alive") {
-    log("codex daemon: live rival already owns entity; exiting");
-    process.exit(0);
-  }
-  const fence = setInterval(() => {
-    if (readOwnerPid() !== process.pid && !supervisor2.hasWork) {
-      exitWithError = true;
-      supervisor2.stop();
-    }
-  }, FENCE_POLL_INTERVAL_MS2);
-  fence.unref?.();
-  const preflightOk2 = await runPreflightHeartbeat();
-  if (!preflightOk2) process.exit(1);
-  startStreamingLoops();
-  await refreshGithubToken2();
-  const client = new CodexAppServerClient();
-  try {
-    const sessionMode = prepareCodexSessionState();
-    client.start();
-    await client.initialize();
-    callbackState.activeCodexThreadId = await establishThread(client, sessionMode);
-    writeCodexSessionState();
-    syncCodexStateToPersist();
-    emitEvent({ type: "thread.started", thread_id: callbackState.activeCodexThreadId });
-    log("codex daemon: app-server ready thread=" + callbackState.activeCodexThreadId);
-    while (!supervisor2.isStopping) {
-      if (callbackWentStale()) supervisor2.noticeRefresh();
-      const refreshDecision = supervisor2.decideRefresh({
-        watchedTurnActive: supervisor2.currentTurn !== null,
-        backgroundAgentCount: 0,
-        sdkMessagePending: client.hasNotifications()
-      });
-      if (refreshDecision.action === "exit") break;
-      const terminalError = client.getError();
-      if (terminalError) throw terminalError;
-      for (const notification of client.drainNotifications()) {
-        const completion = processNotification(notification);
-        if (completion) await completion;
-      }
-      const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
-      const claimed = await callConvexWithRetry(
-        "mutation",
-        CLAIM_MUTATION,
-        entityArgs({ model: MODEL, acceptTurn })
-      );
-      const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
-      if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
-        void client.request("turn/interrupt", {
-          threadId: callbackState.activeCodexThreadId,
-          turnId: providerTurnId
-        }).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          log("codex daemon: interrupt failed \\u2014 " + message);
-        });
-      }
-      const claimedTurn = readClaimedTurn(claimed);
-      if (claimedTurn) {
-        const currentLease = getCurrentTurnLease();
-        if (shouldParkClaimedTurn({
-          hasActiveRealTurn: supervisor2.currentTurn !== null,
-          isCancellationInFlight: supervisor2.isCancellationInFlight,
-          isFinalizing: false,
-          currentLeaseTurnId: currentLease?.turnId ?? null,
-          claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null
-        })) {
-          if (!supervisor2.parkClaim(claimedTurn)) {
-            log("codex daemon: duplicate claimed turn ignored");
-          }
-        } else {
-          log(
-            "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-          );
-        }
-      }
-      if (supervisor2.currentTurn === null && supervisor2.pendingClaim !== null) {
-        const next = supervisor2.takeClaim();
-        if (next === null) continue;
-        await startTurn(client, next);
-      }
-      const now = Date.now();
-      if (supervisor2.currentTurn !== null && now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS) {
-        await failActiveTurn(
-          "The assistant exceeded the maximum turn runtime."
-        );
-      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_EVENT_TIMEOUT_MS) {
-        await failActiveTurn(
-          "The assistant stopped responding. Please try again."
-        );
-      } else if (!supervisor2.hasWork && now - lastIdleActivityAt > IDLE_EXIT_MS2) {
-        break;
-      }
-      await sleep(POLL_INTERVAL_MS2);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    log("codex daemon failed: " + message);
-    await failActiveTurn("Codex App Server failed: " + message);
-  } finally {
-    client.stop();
-    cleanMarkers();
-    await stopStreamingLoops();
-  }
-  process.exit(exitWithError ? 1 : 0);
-}
-
-// callback-src/providers/cursorSdkDaemon.ts
-import { spawn as spawn2 } from "child_process";
-import { readFileSync as readFileSync8, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
-
-// callback-src/providers/callbackRefresh.ts
-function decideCallbackRefresh(state) {
-  if (!state.refreshPending) return { action: "poll" };
-  if (state.watchedTurnActive) {
-    return { action: "defer", blocker: "watched-turn" };
-  }
-  if (state.daemonTurnActive) {
-    return { action: "defer", blocker: "daemon-turn" };
-  }
-  if (state.claimedTurnPending) {
-    return { action: "defer", blocker: "claimed-turn" };
-  }
-  if (state.cancellationInFlight) {
-    return { action: "defer", blocker: "cancellation" };
-  }
-  if (state.backgroundAgentCount > 0) {
-    return { action: "defer", blocker: "background-agent" };
-  }
-  if (state.sdkMessagePending) {
-    return { action: "defer", blocker: "sdk-message" };
-  }
-  if (state.syntheticTurnOpening) {
-    return { action: "defer", blocker: "synthetic-turn-opening" };
-  }
-  return { action: "exit" };
-}
-
-// callback-src/providers/cursorSdk.ts
-import { mkdirSync as mkdirSync7, readFileSync as readFileSync7 } from "fs";
-var SDK_PACKAGE2 = "@cursor/sdk";
-var SDK_VERSION2 = "1.0.28";
-var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
-var SDK_SQLITE_ENTRY_RELPATH = "/dist/esm/sqlite.js";
-var CURSOR_AGENT_SETUP_TIMEOUT_MS = 3e4;
-var CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV = "CURSOR_SDK_LOCAL_MODEL_CATALOG_JSON";
-var CURSOR_SEND_START_TIMEOUT_MS = 6e4;
-var CURSOR_FIRST_VISIBLE_EVENT_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
-var CURSOR_POST_EVENT_SILENCE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
-var CURSOR_RESULT_SETTLE_TIMEOUT_MS = 3e4;
-var CursorPhaseTimeoutError = class extends Error {
-  constructor(phase, timeoutMs) {
-    super(
-      "Cursor stalled while " + phase + " for " + Math.round(timeoutMs / 1e3) + " seconds."
-    );
-    this.phase = phase;
-    this.timeoutMs = timeoutMs;
-    this.name = "CursorPhaseTimeoutError";
-  }
-};
-async function waitForCursorPhase(args) {
-  let timer = null;
-  const deadline = new Promise((_resolve, reject) => {
-    timer = setTimeout(() => {
+    if (readDaemonPidFile() === process.pid) {
       try {
-        args.onTimeout?.();
-      } catch {
-      }
-      reject(new CursorPhaseTimeoutError(args.phase, args.timeoutMs));
-    }, args.timeoutMs);
-  });
-  try {
-    return await Promise.race([args.task, deadline]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-function shouldRetryStalledCursorResume(error) {
-  return error instanceof CursorPhaseTimeoutError && (error.phase === "starting the model run" || error.phase === "waiting for the first model event");
-}
-function shouldRetryStalledCursorCreate(error) {
-  return error instanceof CursorPhaseTimeoutError && error.phase === "creating a fresh agent";
-}
-function canReplaceCursorAgent(error) {
-  return isAgentNotFound(error);
-}
-function cursorEventHasVisibleActivity(type) {
-  return type === "thinking" || type === "assistant" || type === "tool_call";
-}
-function cursorEventWaitTimeoutMs(args) {
-  if (args.toolInFlight || args.compactionInFlight) return MAX_TOTAL_RUNTIME_MS;
-  if (args.sawVisibleActivity) return CURSOR_POST_EVENT_SILENCE_TIMEOUT_MS;
-  return Math.max(
-    1,
-    args.lastEventAt + CURSOR_FIRST_VISIBLE_EVENT_TIMEOUT_MS - args.now
-  );
-}
-function cursorModeParams(model, fastMode, use1mContext) {
-  const params = [];
-  if (model === "grok-4.7" || model === "grok-4.6" || model === "grok-4.5" || model === "composer-2.5") {
-    params.push({ id: "fast", value: fastMode ? "true" : "false" });
-  }
-  if (use1mContext) {
-    params.push({ id: "context", value: "1m" });
-  }
-  return params;
-}
-function filterModeParamsByModel(candidates, model, opted) {
-  if (!model) {
-    return candidates.filter(
-      (param) => param.id === "fast" ? opted.fastMode : opted.use1mContext
-    );
-  }
-  const definitions = Array.isArray(model.parameters) ? model.parameters : [];
-  return candidates.filter(
-    (param) => definitions.some((definition) => {
-      if (!definition || definition.id !== param.id) return false;
-      const values = Array.isArray(definition.values) ? definition.values : [];
-      return values.length === 0 || values.some((entry) => entry && entry.value === param.value);
-    })
-  );
-}
-var CURSOR_WRITE_TOOLS = [
-  "edit",
-  "delete",
-  "applyAgentDiff"
-];
-var loadedSdk = null;
-var loadedSdkSqlite = null;
-async function loadCursorSdk() {
-  if (loadedSdk) return loadedSdk;
-  const mod = await import(resolvePinnedSdkEntry({
-    packageName: SDK_PACKAGE2,
-    version: SDK_VERSION2,
-    entryRelPath: SDK_ENTRY_RELPATH
-  }));
-  loadedSdk = mod;
-  return mod;
-}
-async function loadCursorSdkSqlite() {
-  if (loadedSdkSqlite) return loadedSdkSqlite;
-  const mod = await import(resolvePinnedSdkEntry({
-    packageName: SDK_PACKAGE2,
-    version: SDK_VERSION2,
-    entryRelPath: SDK_SQLITE_ENTRY_RELPATH
-  }));
-  loadedSdkSqlite = mod;
-  return mod;
-}
-function readPromptText2() {
-  return readFileSync7("/tmp/design-prompt.txt", "utf8");
-}
-function cursorModelCatalogJson(models) {
-  if (models.length === 0) return null;
-  const valid = models.every(
-    (entry) => entry !== null && typeof entry === "object" && typeof entry.id === "string"
-  );
-  if (!valid) return null;
-  return JSON.stringify(
-    models.map(
-      (entry) => Array.isArray(entry.aliases) ? { id: entry.id, aliases: entry.aliases } : { id: entry.id }
-    )
-  );
-}
-async function resolveCursorModelSelection(sdk) {
-  const base = normalizedCursorModel;
-  const level = cursorReasoningLevel;
-  const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
-  const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
-  if (candidates.length === 0 && !level) {
-    return { id: base };
-  }
-  let model;
-  let listUnavailable = false;
-  try {
-    const list = sdk.Cursor?.models?.list;
-    if (list) {
-      const models = await waitForCursorPhase({
-        task: list(),
-        phase: "fetching the model list",
-        timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS
-      });
-      if (Array.isArray(models)) {
-        const catalog = cursorModelCatalogJson(models);
-        if (catalog) process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog;
-      }
-      model = Array.isArray(models) ? models.find(
-        (entry) => entry && typeof entry === "object" && entry.id === base
-      ) : void 0;
-      if (!model) {
-        log(
-          "resolveCursorModelSelection: model " + base + " not in Cursor.models.list \\u2014 keeping opted-in params only"
-        );
-      }
-    } else {
-      listUnavailable = true;
-    }
-  } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
-    listUnavailable = true;
-    log(
-      "resolveCursorModelSelection: model list failed \\u2014 keeping opted-in params only (" + messageText + ")"
-    );
-  }
-  const params = filterModeParamsByModel(candidates, model, opted);
-  if (params.length < candidates.length && model) {
-    log(
-      "resolveCursorModelSelection: " + base + " does not declare " + candidates.filter((candidate) => !params.some((p) => p.id === candidate.id)).map((candidate) => candidate.id).join(", ") + " \\u2014 dropped"
-    );
-  }
-  if (!level || listUnavailable || !model) {
-    return params.length > 0 ? { id: base, params } : { id: base };
-  }
-  for (const definition of model.parameters ?? []) {
-    if (!definition || typeof definition.id !== "string") continue;
-    const values = Array.isArray(definition.values) ? definition.values : [];
-    if (values.some((entry) => entry && entry.value === level)) {
-      log(
-        "resolveCursorModelSelection: " + base + " reasoning level " + level + " via parameter " + definition.id
-      );
-      params.push({ id: definition.id, value: level });
-      return { id: base, params };
-    }
-  }
-  for (const variant of model.variants ?? []) {
-    const variantParams = Array.isArray(variant?.params) ? variant.params : [];
-    if (variantParams.some((param) => param && param.value === level)) {
-      log(
-        "resolveCursorModelSelection: " + base + " reasoning level " + level + " via variant params"
-      );
-      const remainingVariantParams = variantParams.filter(
-        (variantParam) => !params.some((param) => param.id === variantParam.id)
-      );
-      return { id: base, params: [...params, ...remainingVariantParams] };
-    }
-  }
-  log(
-    "resolveCursorModelSelection: " + base + " exposes no parameter accepting '" + level + "' \\u2014 sending base id"
-  );
-  return params.length > 0 ? { id: base, params } : { id: base };
-}
-function errorCode(error) {
-  const withCode = error;
-  return typeof withCode.code === "string" ? withCode.code : "";
-}
-function isAgentNotFound(error) {
-  return errorCode(error) === "agent_not_found" || error.message.includes("agent_not_found");
-}
-var RESOURCE_EXHAUSTED_RETRY_DELAYS_MS = [15e3, 3e4];
-function isResourceExhaustedMessage(text) {
-  return text.includes("resource_exhausted");
-}
-var RESOURCE_EXHAUSTED_CHAT_MESSAGE = "Cursor rejected the request: rate limit or usage quota exhausted (resource_exhausted). No tokens were used. Wait a minute and try again, or switch to a different model.";
-var EMPTY_CURSOR_COST_SNAPSHOT = {
-  totalRawCents: null,
-  entries: []
-};
-function readCursorCostSnapshot(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return EMPTY_CURSOR_COST_SNAPSHOT;
-  }
-  const runs = Array.isArray(value.runs) ? value.runs : [];
-  const entries = [];
-  for (const run of runs) {
-    if (!run || typeof run !== "object" || Array.isArray(run)) continue;
-    if (typeof run.runId !== "string" || !run.runId) continue;
-    entries.push({ runId: run.runId, rawCents: readRawCents(run.cost) });
-  }
-  return { totalRawCents: readRawCents(value.cost), entries };
-}
-function readRawCents(cost) {
-  if (!cost || typeof cost !== "object" || Array.isArray(cost)) return null;
-  const raw = cost.rawCostCents;
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
-}
-function sumKnownRawCents(entries) {
-  return entries.reduce((total, entry) => total + (entry.rawCents ?? 0), 0);
-}
-function attributeCursorTurnRawCents(before, after) {
-  const knownRunIds = new Set(before.entries.map((entry) => entry.runId));
-  let attributed = 0;
-  let attributable = false;
-  for (const entry of after.entries) {
-    if (entry.rawCents === null || knownRunIds.has(entry.runId)) continue;
-    attributed += entry.rawCents;
-    attributable = true;
-  }
-  if (after.totalRawCents !== null) {
-    const remainderAfter = after.totalRawCents - sumKnownRawCents(after.entries);
-    const remainderBefore = before.totalRawCents === null ? 0 : before.totalRawCents - sumKnownRawCents(before.entries);
-    if (remainderAfter - remainderBefore > 0) {
-      attributed += remainderAfter - remainderBefore;
-      attributable = true;
-    }
-  }
-  return attributable ? attributed : null;
-}
-var COST_LOOKUP_RETRY_DELAYS_MS = [2e3, 2e3];
-async function resolveCursorTurnCostUsd(deps) {
-  if (!deps.before) return void 0;
-  const delays = deps.retryDelaysMs ?? COST_LOOKUP_RETRY_DELAYS_MS;
-  for (let attempt = 0; ; attempt++) {
-    const after = await deps.fetchAfter();
-    const rawCents = after ? attributeCursorTurnRawCents(deps.before, after) : null;
-    if (rawCents !== null) {
-      return Math.round(rawCents / 100 * 1e6) / 1e6;
-    }
-    const delayMs = delays[attempt];
-    if (delayMs === void 0) return void 0;
-    await deps.sleep(delayMs);
-  }
-}
-var ZERO_USAGE = {
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheWriteTokens: 0
-};
-function readNum(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-async function runTurnWithResourceExhaustedRetries(deps) {
-  for (let attempt = 0; ; attempt++) {
-    const retryDelayMs = RESOURCE_EXHAUSTED_RETRY_DELAYS_MS[attempt];
-    let outcome;
-    try {
-      outcome = await deps.runTurn();
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      if (!isResourceExhaustedMessage(messageText) || retryDelayMs === void 0 || deps.aborted()) {
-        throw error;
-      }
-      outcome = {
-        isError: true,
-        resultText: messageText,
-        durationMs: 0,
-        usage: ZERO_USAGE
-      };
-    }
-    if (!outcome.isError || !isResourceExhaustedMessage(outcome.resultText)) {
-      return outcome;
-    }
-    if (retryDelayMs === void 0 || deps.aborted()) {
-      return { ...outcome, resultText: RESOURCE_EXHAUSTED_CHAT_MESSAGE };
-    }
-    deps.onRetry(retryDelayMs, attempt);
-    await deps.sleep(retryDelayMs);
-  }
-}
-function readUsageTokens(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return {
-    inputTokens: readNum(value.inputTokens),
-    outputTokens: readNum(value.outputTokens),
-    cacheReadTokens: readNum(value.cacheReadTokens),
-    cacheWriteTokens: readNum(value.cacheWriteTokens)
-  };
-}
-async function runCursorSdkAttempt(sessionMode, overrides = {}) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupActivity = cursorAgentStartupActivity(sessionMode);
-  updateThinkingStep(startupActivity.label, startupActivity.detail);
-  log(
-    "runCursorSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
-  let attemptOutput = "";
-  let lastMessageAt = Date.now();
-  let compactionInFlight = false;
-  let timedOutForNoOutput = false;
-  let timedOutForMaxRuntime = false;
-  let sawResult = false;
-  let resultIsError = false;
-  let attemptErrorMessage = "";
-  let lastStreamUsage = null;
-  let activeRun = null;
-  let abortedByCaller = false;
-  const cancelRun = () => {
-    if (!activeRun) return;
-    activeRun.cancel().catch(() => {
-    });
-  };
-  overrides.onAbortHandle?.(() => {
-    abortedByCaller = true;
-    cancelRun();
-  });
-  const sdk = await loadCursorSdk();
-  const sqlite = await loadCursorSdkSqlite();
-  mkdirSync7(CURSOR_SDK_STORE_DIR, { recursive: true });
-  const store4 = await sqlite.SqliteLocalAgentStore.open({
-    // Same directory the agent runs in, so stored agents stay keyed to the
-    // workspace they were created against (AGENT_CWD is WORK_DIR unless a
-    // multi-repo session roots the harness at the workspace instead).
-    workspaceRef: AGENT_CWD,
-    stateRoot: CURSOR_SDK_STORE_DIR
-  });
-  const options = {
-    apiKey: (process.env.CURSOR_API_KEY || "").trim(),
-    model: await resolveCursorModelSelection(sdk),
-    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
-    // Cursor can edit outside cwd in a multi-repo session; if not, set
-    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
-    // rebuild needed.
-    local: { cwd: AGENT_CWD, store: store4 },
-    ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
-    ...NO_WRITES ? { disallowedTools: [...CURSOR_WRITE_TOOLS] } : {}
-  };
-  const persistAgentId = (agentId) => {
-    callbackState.activeCursorSessionId = agentId;
-    writeCursorSessionState();
-    syncCursorStateToPersist();
-  };
-  const createFreshAgent = async () => {
-    updateThinkingStep(
-      "Starting a fresh Cursor agent...",
-      "Creating a clean model context..."
-    );
-    const create = () => waitForCursorPhase({
-      task: sdk.Agent.create(options),
-      phase: "creating a fresh agent",
-      timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS
-    });
-    let created;
-    try {
-      created = await create();
-    } catch (error) {
-      if (!(error instanceof Error) || !shouldRetryStalledCursorCreate(error)) {
-        throw error;
-      }
-      log(
-        "runCursorSdkAttempt: fresh agent creation stalled \\u2014 retrying once (" + error.message + ")"
-      );
-      recordSdkRetry(error.message);
-      created = await create();
-    }
-    persistAgentId(created.agentId);
-    return created;
-  };
-  const resumeSavedAgent = async (savedSessionId) => {
-    updateThinkingStep(
-      "Restoring Cursor context...",
-      "Opening the saved agent..."
-    );
-    const resumed = await waitForCursorPhase({
-      task: sdk.Agent.resume(savedSessionId, options),
-      phase: "restoring saved context",
-      timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS
-    });
-    persistAgentId(resumed.agentId);
-    return resumed;
-  };
-  let resumedExistingAgent = false;
-  let agent;
-  if (sessionMode.mode === "resume" && sessionMode.sessionId) {
-    try {
-      agent = await resumeSavedAgent(sessionMode.sessionId);
-      resumedExistingAgent = true;
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      if (error instanceof Error && canReplaceCursorAgent(error)) {
-        log(
-          "runCursorSdkAttempt: saved agent gone \\u2014 starting a fresh agent (" + messageText + ")"
-        );
-        recordSdkRetry("resume failed: " + messageText);
-        agent = await createFreshAgent();
-      } else {
-        log(
-          "runCursorSdkAttempt: resume failed \\u2014 retrying the saved agent (" + messageText + ")"
-        );
-        recordSdkRetry("resume failed: " + messageText);
-        try {
-          agent = await resumeSavedAgent(sessionMode.sessionId);
-          resumedExistingAgent = true;
-        } catch (retryError) {
-          if (retryError instanceof Error && canReplaceCursorAgent(retryError)) {
-            const retryMessageText = retryError.message;
-            log(
-              "runCursorSdkAttempt: saved agent gone on retry \\u2014 starting a fresh agent (" + retryMessageText + ")"
-            );
-            recordSdkRetry("resume retry failed: " + retryMessageText);
-            agent = await createFreshAgent();
-          } else {
-            throw retryError;
+        unlinkSync2(DAEMON_PID_FILE);
+        unlinkSync2(DAEMON_ENTITY_FILE);
+        unlinkSync2(DAEMON_OPTS_FILE);
+        if (ENTITY_ID_FIELD === "sessionId") {
+          const legacy = resolveLegacySessionDaemonPaths();
+          try {
+            unlinkSync2(legacy.pid);
+          } catch {
           }
-        }
-      }
-    }
-  } else {
-    agent = await createFreshAgent();
-  }
-  const promptText = overrides.promptText ?? readPromptText2();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
-  const healthTimer = setInterval(() => {
-    const now = Date.now();
-    if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
-      timedOutForMaxRuntime = true;
-      log("runCursorSdkAttempt: max runtime exceeded \\u2014 cancelling run");
-      cancelRun();
-      return;
-    }
-    if (callbackState.inFlightToolUses > 0 || compactionInFlight) {
-      lastMessageAt = now;
-    }
-    if (!sawResult && now - lastMessageAt > CURSOR_POST_EVENT_SILENCE_TIMEOUT_MS) {
-      timedOutForNoOutput = true;
-      log("runCursorSdkAttempt: no SDK events \\u2014 cancelling run");
-      cancelRun();
-    }
-  }, NO_OUTPUT_CHECK_INTERVAL_MS);
-  const pushLine = (line) => {
-    emitParsedStreamLine(line);
-    attemptOutput = trimBufferHead(attemptOutput + line);
-  };
-  const readCostSnapshot = async (activeAgent) => {
-    try {
-      return readCursorCostSnapshot(await activeAgent.getUsage());
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      log(
-        "runCursorSdkAttempt: getUsage failed \\u2014 turn cost unavailable (" + messageText + ")"
-      );
-      return null;
-    }
-  };
-  const runTurn = async (activeAgent, agentIsFresh) => {
-    const costBefore = agentIsFresh ? Promise.resolve(EMPTY_CURSOR_COST_SNAPSHOT) : readCostSnapshot(activeAgent);
-    updateThinkingStep(
-      "Waiting for Cursor...",
-      "Starting the Grok model run..."
-    );
-    const run = await waitForCursorPhase({
-      task: activeAgent.send(combinedPrompt, {
-        local: { force: true }
-      }),
-      phase: "starting the model run",
-      timeoutMs: CURSOR_SEND_START_TIMEOUT_MS,
-      onTimeout: () => activeAgent.close()
-    });
-    activeRun = run;
-    if (abortedByCaller) cancelRun();
-    updateThinkingStep("Waiting for Grok...", "The model is thinking...");
-    const messages = run.stream()[Symbol.asyncIterator]();
-    let sawVisibleActivity = false;
-    lastMessageAt = Date.now();
-    compactionInFlight = false;
-    while (true) {
-      const phase = sawVisibleActivity ? "waiting for the next model event" : "waiting for the first model event";
-      const next = await waitForCursorPhase({
-        task: messages.next(),
-        phase,
-        timeoutMs: cursorEventWaitTimeoutMs({
-          sawVisibleActivity,
-          lastEventAt: lastMessageAt,
-          now: Date.now(),
-          toolInFlight: callbackState.inFlightToolUses > 0,
-          compactionInFlight
-        }),
-        onTimeout: () => {
-          timedOutForNoOutput = true;
-          cancelRun();
-        }
-      });
-      if (next.done) break;
-      const message = next.value;
-      if (cursorEventHasVisibleActivity(message.type)) {
-        sawVisibleActivity = true;
-      }
-      const compactionPhase = cursorCompactionEventPhase(message.type);
-      if (compactionPhase !== null) {
-        compactionInFlight = compactionPhase === "started";
-      }
-      lastMessageAt = Date.now();
-      pushLine(JSON.stringify(message) + "\\n");
-      if (message.type === "usage") {
-        lastStreamUsage = readUsageTokens(message.usage) ?? lastStreamUsage;
-      }
-      if (timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller)
-        break;
-    }
-    const result = await waitForCursorPhase({
-      task: run.wait(),
-      phase: "finishing the model run",
-      timeoutMs: CURSOR_RESULT_SETTLE_TIMEOUT_MS,
-      onTimeout: cancelRun
-    });
-    const costUsd = await resolveCursorTurnCostUsd({
-      before: await costBefore,
-      fetchAfter: () => readCostSnapshot(activeAgent),
-      sleep: (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs))
-    });
-    return {
-      isError: result.status !== "finished",
-      resultText: typeof result.result === "string" && result.result ? result.result : result.error && typeof result.error.message === "string" ? result.error.message : "",
-      durationMs: readNum(result.durationMs),
-      usage: readUsageTokens(result.usage) ?? lastStreamUsage ?? ZERO_USAGE,
-      ...costUsd === void 0 ? {} : { costUsd }
-    };
-  };
-  const emitTurnResult = (outcome) => {
-    const syntheticResult = {
-      type: "result",
-      is_error: outcome.isError,
-      result: outcome.resultText,
-      duration_ms: outcome.durationMs,
-      // Omitted when Cursor reported no cost; the parser then defaults to 0.
-      ...outcome.costUsd === void 0 ? {} : { total_cost_usd: outcome.costUsd },
-      usage: {
-        input_tokens: outcome.usage.inputTokens,
-        output_tokens: outcome.usage.outputTokens,
-        cache_read_input_tokens: outcome.usage.cacheReadTokens,
-        cache_creation_input_tokens: outcome.usage.cacheWriteTokens
-      }
-    };
-    pushLine(JSON.stringify(syntheticResult) + "\\n");
-    sawResult = true;
-    resultIsError = outcome.isError;
-  };
-  const runTurnWithRetries = async (activeAgent, agentIsFresh) => {
-    emitTurnResult(
-      await runTurnWithResourceExhaustedRetries({
-        runTurn: () => runTurn(activeAgent, agentIsFresh),
-        aborted: () => timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller,
-        onRetry: (retryDelayMs, attempt) => {
-          log(
-            "runCursorSdkAttempt: resource_exhausted \\u2014 retrying in " + retryDelayMs + "ms (attempt " + (attempt + 1) + " of " + (RESOURCE_EXHAUSTED_RETRY_DELAYS_MS.length + 1) + ")"
-          );
-          recordSdkRetry(
-            "resource_exhausted \\u2014 waiting " + retryDelayMs + "ms before retry"
-          );
-          updateThinkingStep(
-            "Cursor is rate-limited...",
-            "Retrying in " + Math.round(retryDelayMs / 1e3) + "s..."
-          );
-        },
-        sleep: (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs))
-      })
-    );
-  };
-  const resetForRecovery = (failedAgent) => {
-    try {
-      failedAgent.close();
-    } catch {
-    }
-    activeRun = null;
-    timedOutForNoOutput = false;
-    lastMessageAt = Date.now();
-    compactionInFlight = false;
-  };
-  try {
-    try {
-      await runTurnWithRetries(agent, !resumedExistingAgent);
-    } catch (error) {
-      if (!resumedExistingAgent || !(error instanceof Error)) {
-        throw error;
-      }
-      const savedSessionId = callbackState.activeCursorSessionId || sessionMode.sessionId;
-      if (canReplaceCursorAgent(error)) {
-        log(
-          "runCursorSdkAttempt: saved agent gone mid-run \\u2014 starting a fresh agent (" + error.message + ")"
-        );
-        recordSdkRetry(error.message);
-        resetForRecovery(agent);
-        pushNoticeStep2(
-          "Started a fresh Cursor agent",
-          "The saved agent could not be restored, so Eva recovered with a clean context."
-        );
-        agent = await createFreshAgent();
-        await runTurnWithRetries(agent, true);
-      } else if (shouldRetryStalledCursorResume(error) && savedSessionId) {
-        log(
-          "runCursorSdkAttempt: resumed agent run stalled \\u2014 retrying the same agent (" + error.message + ")"
-        );
-        recordSdkRetry(error.message);
-        resetForRecovery(agent);
-        pushNoticeStep2(
-          "Retrying the saved Cursor agent",
-          "The run stalled before any output, so Eva reopened the same agent to keep its context."
-        );
-        try {
-          agent = await resumeSavedAgent(savedSessionId);
-          await runTurnWithRetries(agent, false);
-        } catch (retryError) {
-          if (retryError instanceof Error && canReplaceCursorAgent(retryError)) {
-            log(
-              "runCursorSdkAttempt: saved agent gone on stall retry \\u2014 starting a fresh agent (" + retryError.message + ")"
-            );
-            recordSdkRetry(retryError.message);
-            resetForRecovery(agent);
-            pushNoticeStep2(
-              "Started a fresh Cursor agent",
-              "The saved agent could not be restored, so Eva recovered with a clean context."
-            );
-            agent = await createFreshAgent();
-            await runTurnWithRetries(agent, true);
-          } else {
-            throw retryError;
+          try {
+            unlinkSync2(legacy.entity);
+          } catch {
           }
-        }
-      } else {
-        throw error;
-      }
-    }
-  } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : String(error);
-    const messageText = isResourceExhaustedMessage(rawMessage) ? RESOURCE_EXHAUSTED_CHAT_MESSAGE : rawMessage;
-    attemptErrorMessage = messageText;
-    log("runCursorSdkAttempt: run failed \\u2014 " + rawMessage);
-    recordSdkAttemptFailure(rawMessage, { stderrMessage: messageText });
-  } finally {
-    clearInterval(healthTimer);
-    try {
-      agent.close();
-    } catch {
-    }
-    try {
-      await store4.dispose();
-    } catch {
-    }
-  }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCursorSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
-}
-function cursorAgentStartupActivity(sessionMode) {
-  return sessionMode.mode === "resume" ? {
-    label: "Resuming Cursor agent...",
-    detail: "Restoring saved context..."
-  } : {
-    label: "Creating Cursor agent...",
-    detail: "Creating a new model context..."
-  };
-}
-
-// callback-src/providers/cursorSdkDaemon.ts
-var IDLE_EXIT_MS3 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-var FENCE_POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
-var PROMPT_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
-var WATCHDOG_TICK_MS2 = 5e3;
-var TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1e3;
-var CANCEL_SETTLE_TIMEOUT_MS2 = 3e4;
-var CURSOR_TURN_WORKER_FILE_PREFIX = "/tmp/eva-cursor-turn-";
-var CURSOR_TURN_WORKER_HEAP_MB = 8192;
-var CURSOR_TURN_WORKER_OOM_SCORE = "300";
-var daemonPaths2 = resolveDaemonPaths();
-var daemonExiting = false;
-var callbackRefreshPending = false;
-var callbackRefreshDeferralLogged2 = false;
-var pendingClaimedTurn = null;
-var turnActive2 = false;
-var turnStartedAtMs2 = 0;
-var lastIdleActivityAtMs2 = Date.now();
-var cancelInFlight = false;
-var cancelRequestedAtMs = 0;
-var abortActiveTurn = null;
-function cursorTurnWorkerEntryPath() {
-  const entryPath = process.argv[1];
-  if (!entryPath) {
-    throw new Error(
-      "Cursor turn worker could not resolve the callback entrypoint"
-    );
-  }
-  return entryPath;
-}
-function readCursorTurnWorkerClaim() {
-  if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
-    throw new Error("Cursor turn worker prompt file is missing");
-  }
-  const prompt = readFileSync8(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
-  if (CURSOR_TURN_WORKER_LIFECYCLE === "legacy") {
-    return {
-      lifecycle: "legacy",
-      prompt,
-      attachmentUrls: [],
-      interactionMode: "default",
-      turnLease: null
-    };
-  }
-  if (CURSOR_TURN_WORKER_LIFECYCLE !== "durable" || !CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
-    throw new Error("Cursor turn worker received an invalid durable lease");
-  }
-  return {
-    lifecycle: "durable",
-    prompt,
-    attachmentUrls: [],
-    interactionMode: "default",
-    turnLease: {
-      turnId: CURSOR_TURN_WORKER_TURN_ID,
-      leaseGeneration: CURSOR_TURN_WORKER_LEASE_GENERATION
-    }
-  };
-}
-function cursorTurnWorkerFailureMessage(outcome) {
-  if (outcome.status === "spawn_error") {
-    return "Cursor turn worker could not start: " + outcome.message;
-  }
-  const exit = outcome.signal !== null ? \`signal \${outcome.signal}\` : \`exit code \${String(outcome.code)}\`;
-  const oom = outcome.signal === "SIGABRT" || outcome.code === 134;
-  return oom ? \`Cursor turn worker ran out of memory (\${exit}). The daemon remained healthy and is ready for the next message.\` : \`Cursor turn worker stopped unexpectedly (\${exit}). The daemon remained healthy and is ready for the next message.\`;
-}
-function waitForCursorTurnWorker(child) {
-  return new Promise((resolve) => {
-    child.once("error", (error) => {
-      resolve({ status: "spawn_error", message: error.message });
-    });
-    child.once("exit", (code, signal) => {
-      resolve({ status: "exited", code, signal });
-    });
-  });
-}
-function buildCursorTurnWorkerEnv(baseEnv, mcpHandoffEnv, turn, promptFile) {
-  const workerEnv = {
-    ...baseEnv,
-    ...mcpHandoffEnv,
-    EVA_CURSOR_TURN_WORKER_PROMPT_FILE: promptFile,
-    EVA_CURSOR_TURN_WORKER_LIFECYCLE: turn.lifecycle
-  };
-  if (turn.lifecycle === "durable") {
-    workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID = turn.turnLease.turnId;
-    workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION = String(
-      turn.turnLease.leaseGeneration
-    );
-  } else {
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID;
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION;
-  }
-  return workerEnv;
-}
-function spawnCursorTurnWorker(turn, promptFile) {
-  const workerEnv = buildCursorTurnWorkerEnv(
-    process.env,
-    evaMcpWorkerHandoffEnv,
-    turn,
-    promptFile
-  );
-  const child = spawn2(
-    process.execPath,
-    [
-      \`--max-old-space-size=\${CURSOR_TURN_WORKER_HEAP_MB}\`,
-      cursorTurnWorkerEntryPath()
-    ],
-    {
-      cwd: process.cwd(),
-      env: workerEnv,
-      stdio: "inherit"
-    }
-  );
-  if (child.pid !== void 0) {
-    writeOomScoreAdj(child.pid, CURSOR_TURN_WORKER_OOM_SCORE);
-  }
-  return child;
-}
-function readDaemonPidFile2() {
-  return readPidFromFile(daemonPaths2.pid);
-}
-function entityMutationArgs2(fields) {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-function callbackScriptWentStaleOnDisk2() {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
-function resetTurnState3() {
-  resetDaemonTurnStreamingState();
-}
-async function refreshGithubToken3() {
-  await refreshDaemonGithubTokenFromEnv();
-}
-function buildTurnCompletion(attempt) {
-  return resolveProviderAttemptOutcome(
-    attempt,
-    extractResultEvent(attempt.output)
-  );
-}
-async function finalizeTurn3(attempt) {
-  await drainStreamingAndCompleteSteps();
-  const resultEvent = extractResultEvent(attempt.output);
-  const { success, error } = buildTurnCompletion(attempt);
-  const completionArgs = buildTurnCompletionPayload({
-    success,
-    result: resultEvent?.result ?? callbackState.rawOutput,
-    error,
-    activityLog: serializeSteps(callbackState.accumulatedSteps),
-    resultEvent
-  });
-  appendClaimedTurnCompletion(completionArgs);
-  if (await reconcileStreamingAndPersist()) return;
-  await deliverCompletionWithMedia(completionArgs);
-  syncCursorStateToPersist();
-  log("cursor daemon: turn finalized success=" + success);
-}
-async function failTurnAndExit2(error) {
-  log("cursor daemon: failing turn \\u2014 " + error);
-  persistTurnWork();
-  try {
-    await postClaimedTurnFailureCompletion({ error, activityLog: null });
-  } catch {
-  }
-  cleanOwnedMarkers2();
-  await stopStreamingLoops();
-  process.exit(1);
-}
-function cleanOwnedMarkers2() {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths2,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
-}
-function startTurnWatchdog2() {
-  const timer = setInterval(() => {
-    const now = Date.now();
-    if (cancelInFlight) {
-      if (now - cancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS2) {
-        log("cursor daemon: cancelled turn did not settle in time \\u2014 exiting");
-        cleanOwnedMarkers2();
-        process.exit(1);
-      }
-      return;
-    }
-    if (!turnActive2) return;
-    if (now - turnStartedAtMs2 > TURN_HARD_TIMEOUT_MS) {
-      turnActive2 = false;
-      abortActiveTurn?.();
-      void failTurnAndExit2("The assistant exceeded the maximum turn runtime.");
-    }
-  }, WATCHDOG_TICK_MS2);
-  timer.unref?.();
-}
-function startClaimWatcher2() {
-  void (async () => {
-    while (!daemonExiting) {
-      if (callbackScriptWentStaleOnDisk2()) callbackRefreshPending = true;
-      const refreshDecision = decideCallbackRefresh({
-        refreshPending: callbackRefreshPending,
-        watchedTurnActive: turnActive2,
-        daemonTurnActive: false,
-        claimedTurnPending: pendingClaimedTurn !== null,
-        cancellationInFlight: cancelInFlight,
-        backgroundAgentCount: 0,
-        sdkMessagePending: false,
-        syntheticTurnOpening: false
-      });
-      if (refreshDecision.action === "defer") {
-        if (!callbackRefreshDeferralLogged2) {
-          callbackRefreshDeferralLogged2 = true;
-          log(
-            "cursor daemon: callback script updated on disk \\u2014 deferring respawn until active work settles (" + refreshDecision.blocker + ")"
-          );
-        }
-        await sleep(PROMPT_POLL_INTERVAL_MS2);
-        continue;
-      }
-      if (refreshDecision.action === "exit") {
-        log(
-          "cursor daemon: callback script updated on disk \\u2014 exiting for respawn"
-        );
-        daemonExiting = true;
-        return;
-      }
-      try {
-        const claimed = await callConvexWithRetry(
-          "mutation",
-          CLAIM_MUTATION ?? "",
-          entityMutationArgs2({
-            model: MODEL,
-            acceptTurn: !turnActive2 && pendingClaimedTurn === null && !cancelInFlight
-          })
-        );
-        if (readCancelRequested(claimed)) handleCancelRequested2();
-        const turn = readClaimedTurn(claimed);
-        if (turn !== null) {
-          await materializeTurnAttachments(turn);
-          lastIdleActivityAtMs2 = Date.now();
-          const currentLease = getCurrentTurnLease();
-          if (shouldParkClaimedTurn({
-            hasActiveRealTurn: turnActive2,
-            isCancellationInFlight: cancelInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: turn.turnLease?.turnId ?? null
-          })) {
-            if (pendingClaimedTurn === null) {
-              pendingClaimedTurn = turn;
-            } else {
-              log("cursor daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "cursor daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-            );
+          try {
+            unlinkSync2(legacy.opts);
+          } catch {
           }
         }
       } catch {
       }
-      const busy = turnActive2 || pendingClaimedTurn !== null || cancelInFlight;
-      await sleep(
-        selectClaimPollIntervalMs({
-          busy,
-          lastIdleActivityAtMs: lastIdleActivityAtMs2
-        })
-      );
     }
-  })();
-}
-function handleCancelRequested2() {
-  if (!turnActive2) {
-    log("cursor daemon: cancelRequested with no active turn \\u2014 ignored");
-    return;
-  }
-  if (cancelInFlight) return;
-  cancelInFlight = true;
-  cancelRequestedAtMs = Date.now();
-  log("cursor daemon: cancel requested \\u2014 cancelling the in-flight run");
-  abortActiveTurn?.();
-}
-async function executeClaimedTurn(turn) {
-  turnActive2 = true;
-  turnStartedAtMs2 = Date.now();
-  abortActiveTurn = null;
-  log("cursor turn worker: turn started");
-  try {
-    if (!process.env.CURSOR_API_KEY?.trim()) {
-      throw new Error(
-        "CURSOR_API_KEY is missing in the sandbox environment \\u2014 the Cursor SDK cannot authenticate"
-      );
-    }
-    const sessionMode = prepareCursorSessionState();
-    const attempt = await runCursorSdkAttempt(sessionMode, {
-      promptText: turn.prompt,
-      onAbortHandle: (abort) => {
-        abortActiveTurn = abort;
-        if (cancelInFlight) abort();
-      }
-    });
-    turnActive2 = false;
-    if (cancelInFlight) {
-      log("cursor daemon: cancelled turn settled \\u2014 no completion posted");
-      return;
-    }
-    await finalizeTurn3(attempt);
-  } catch (error) {
-    turnActive2 = false;
-    const message = error instanceof Error ? error.message : String(error);
-    log("cursor daemon: turn failed \\u2014 " + message);
-    if (cancelInFlight) return;
-    try {
-      await drainStreamingAndCompleteSteps();
-      if (await reconcileStreamingAndPersist()) return;
-      const completionArgs = buildTurnCompletionPayload({
-        success: false,
-        result: null,
-        error: appendDiagnosticTail(message),
-        activityLog: serializeSteps(callbackState.accumulatedSteps)
-      });
-      appendClaimedTurnCompletion(completionArgs);
-      await deliverCompletionWithMedia(completionArgs);
-    } catch {
-    }
-  } finally {
-    turnActive2 = false;
-    abortActiveTurn = null;
-    cancelInFlight = false;
-    lastIdleActivityAtMs2 = Date.now();
-  }
-}
-async function runCursorTurnWorker() {
-  const turn = readCursorTurnWorkerClaim();
-  resetTurnState3();
-  startClaimedTurn(turn);
-  try {
-    const preflightOk2 = await runPreflightHeartbeat();
-    if (!preflightOk2) {
-      throw new Error("Cursor turn worker preflight failed");
-    }
-    startStreamingLoops();
-    await refreshGithubToken3();
-    await executeClaimedTurn(turn);
-  } finally {
     await stopStreamingLoops();
-    finishClaimedTurn();
-  }
-}
-async function reportCursorTurnWorkerFailure(outcome) {
-  const error = cursorTurnWorkerFailureMessage(outcome);
-  log("cursor daemon: " + error);
-  persistTurnWork();
-  await postClaimedTurnFailureCompletion({ error, activityLog: null });
-}
-async function runClaimedTurn(turn) {
-  const promptFile = CURSOR_TURN_WORKER_FILE_PREFIX + String(process.pid) + "-" + String(Date.now()) + ".txt";
-  writeFileSync10(promptFile, turn.prompt);
-  startClaimedTurn(turn);
-  turnActive2 = true;
-  turnStartedAtMs2 = Date.now();
-  log("cursor daemon: starting isolated turn worker");
-  try {
-    const child = spawnCursorTurnWorker(turn, promptFile);
-    abortActiveTurn = () => {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill("SIGTERM");
-      }
-    };
-    const outcome = await waitForCursorTurnWorker(child);
-    turnActive2 = false;
-    if (cancelInFlight) {
-      log("cursor daemon: cancelled worker settled \\u2014 no completion posted");
-      return;
-    }
-    if (outcome.status === "exited" && outcome.code === 0 && outcome.signal === null) {
-      log("cursor daemon: isolated turn worker finished");
-      return;
-    }
-    try {
-      await reportCursorTurnWorkerFailure(outcome);
-    } catch (error) {
-      log(
-        "cursor daemon: worker failure completion could not be delivered \\u2014 " + (error instanceof Error ? error.message : String(error))
-      );
-    }
-  } finally {
-    turnActive2 = false;
-    abortActiveTurn = null;
-    cancelInFlight = false;
-    finishClaimedTurn();
-    lastIdleActivityAtMs2 = Date.now();
-    try {
-      unlinkSync2(promptFile);
-    } catch {
-    }
-  }
-}
-async function runCursorDaemon() {
-  if (!CLAIM_MUTATION) {
-    log("cursor daemon: CLAIM_MUTATION env is required in daemon mode");
-    process.exit(1);
-  }
-  const bootClaim = claimDaemonPidfileBoot({
-    paths: daemonPaths2,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG
-  });
-  if (bootClaim.status === "rival_alive") {
-    log(
-      \`cursor daemon: rival daemon pid=\${bootClaim.rivalPid} already owns \${daemonPaths2.pid} \\u2014 exiting\`
-    );
-    process.exit(0);
-  }
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile2,
-    hasActiveWork: () => turnActive2,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS3,
-    log,
-    logPrefix: "cursor daemon",
-    onDeposedIdle: () => {
-      process.exit(0);
-    }
-  });
-  const preflightOk2 = await runPreflightHeartbeat();
-  if (!preflightOk2) {
-    log("cursor daemon: preflight failed");
-    process.exit(1);
-  }
-  await refreshGithubToken3();
-  log(
-    "runCursorDaemon started (entityId=" + (ENTITY_ID ?? "none") + ", model=" + MODEL + ")"
-  );
-  startTurnWatchdog2();
-  startClaimWatcher2();
-  try {
-    while (!daemonExiting) {
-      if (pendingClaimedTurn !== null) {
-        const turn = pendingClaimedTurn;
-        pendingClaimedTurn = null;
-        await runClaimedTurn(turn);
-        continue;
-      }
-      if (Date.now() - lastIdleActivityAtMs2 > IDLE_EXIT_MS3) {
-        log("cursor daemon: idle timeout \\u2014 exiting");
-        break;
-      }
-      await sleep(PROMPT_POLL_INTERVAL_MS2);
-    }
-  } finally {
-    daemonExiting = true;
-    cleanOwnedMarkers2();
   }
   process.exit(0);
 }
 
 // callback-src/runtime/systemSkills.ts
 import {
-  existsSync as existsSync8,
-  mkdirSync as mkdirSync8,
-  readdirSync as readdirSync4,
-  readFileSync as readFileSync9,
+  existsSync as existsSync7,
+  mkdirSync as mkdirSync6,
+  readdirSync as readdirSync3,
+  readFileSync as readFileSync7,
   rmSync,
-  writeFileSync as writeFileSync11
+  writeFileSync as writeFileSync10
 } from "fs";
 var SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
 var SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
@@ -8739,27 +5886,27 @@ function skillsRoot() {
 }
 function isEvaStub(directoryName) {
   const skillFile = \`\${skillsRoot()}/\${directoryName}/SKILL.md\`;
-  if (!existsSync8(skillFile)) return false;
+  if (!existsSync7(skillFile)) return false;
   try {
-    return readFileSync9(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync7(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
 }
 function writeStub(skill) {
   const directory = \`\${skillsRoot()}/\${skill.name}\`;
-  if (existsSync8(\`\${directory}/SKILL.md\`) && !isEvaStub(skill.name)) {
+  if (existsSync7(\`\${directory}/SKILL.md\`) && !isEvaStub(skill.name)) {
     log(\`[system-skills] \${skill.name} exists in the repo \\u2014 leaving it alone\`);
     return false;
   }
-  mkdirSync8(directory, { recursive: true });
-  writeFileSync11(\`\${directory}/SKILL.md\`, skill.stub);
+  mkdirSync6(directory, { recursive: true });
+  writeFileSync10(\`\${directory}/SKILL.md\`, skill.stub);
   return true;
 }
 function pruneStaleStubs(keep) {
   const root = skillsRoot();
-  if (!existsSync8(root)) return;
-  for (const entry of readdirSync4(root, { withFileTypes: true })) {
+  if (!existsSync7(root)) return;
+  for (const entry of readdirSync3(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     if (keep.has(entry.name)) continue;
     if (!isEvaStub(entry.name)) continue;
@@ -8773,24 +5920,24 @@ function pruneStaleStubs(keep) {
 }
 function updateGitExclude(names) {
   const gitDir = \`\${WORK_DIR}/.git\`;
-  if (!existsSync8(gitDir)) return;
+  if (!existsSync7(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync8(excludeFile) ? readFileSync9(excludeFile, "utf8") : "";
+  const existing = existsSync7(excludeFile) ? readFileSync7(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
-  mkdirSync8(infoDir, { recursive: true });
-  writeFileSync11(excludeFile, next);
+  mkdirSync6(infoDir, { recursive: true });
+  writeFileSync10(excludeFile, next);
 }
 function materializeSystemSkills() {
   try {
-    if (!existsSync8(SYSTEM_SKILLS_STATE_FILE)) return;
-    if (!existsSync8(WORK_DIR)) {
+    if (!existsSync7(SYSTEM_SKILLS_STATE_FILE)) return;
+    if (!existsSync7(WORK_DIR)) {
       log("[system-skills] no checkout yet \\u2014 skipping");
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync9(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync7(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
@@ -8814,1363 +5961,308 @@ function materializeSystemSkills() {
   }
 }
 
-// callback-src/runtime/branchWatcher.ts
-import { statSync as statSync2, watch } from "fs";
-var GIT_TIMEOUT_MS = 5e3;
-var POLL_INTERVAL_MS3 = 15e3;
-var DEBOUNCE_MS = 300;
-function resolveBranchTarget(field, id) {
-  if (typeof id !== "string" || id.length === 0) return null;
-  if (field === "sessionId") return { kind: "session", sessionId: id };
-  if (field === "taskId") return { kind: "task", taskId: id };
-  if (field === "projectId") return { kind: "project", projectId: id };
-  return null;
-}
-function formatBranch(abbrevRef, shortSha) {
-  const ref = abbrevRef.trim();
-  if (ref.length === 0) return null;
-  if (ref !== "HEAD") return ref;
-  const sha = shortSha.trim();
-  return sha.length > 0 ? sha : null;
-}
-function decideBranchReport(input) {
-  if (input.current === null) return null;
-  if (input.current === input.lastReported) return null;
-  return input.current;
-}
-function readCurrentBranch() {
-  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
-  if (!abbrev.ok) return null;
-  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
-  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
-  return formatBranch(abbrev.out, short.ok ? short.out : "");
-}
-var target = null;
-var lastReported = null;
-var pollInterval = null;
-var debounceTimer = null;
-var headWatcher = null;
-var checkInFlight = false;
-var recheckQueued = false;
-var started = false;
-async function runCheckLoop() {
-  const activeTarget = target;
-  if (activeTarget === null) return;
-  if (checkInFlight) {
-    recheckQueued = true;
-    return;
+// callback-src/providers/cursorSdk.ts
+import { execSync as execSync2 } from "child_process";
+import { existsSync as existsSync8, mkdirSync as mkdirSync7, readFileSync as readFileSync8 } from "fs";
+var SDK_PACKAGE2 = "@cursor/sdk";
+var SDK_VERSION2 = "1.0.26";
+var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
+var MCP_CONFIG_PATH2 = "/tmp/eva-mcp.json";
+var SDK_LOCAL_PREFIX2 = "/home/eva/.eva-agent-sdk";
+async function loadCursorSdk() {
+  const globalEntry = globalNpmRoot() + "/" + SDK_PACKAGE2 + SDK_ENTRY_RELPATH;
+  const localEntry = SDK_LOCAL_PREFIX2 + "/node_modules/" + SDK_PACKAGE2 + SDK_ENTRY_RELPATH;
+  if (existsSync8(globalEntry)) {
+    const mod2 = await import(globalEntry);
+    return mod2;
   }
-  checkInFlight = true;
-  recheckQueued = false;
-  try {
-    let again = true;
-    while (again) {
-      again = false;
-      const branch = decideBranchReport({
-        current: readCurrentBranch(),
-        lastReported
-      });
-      if (branch !== null) {
-        try {
-          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
-            target: activeTarget,
-            branch
-          });
-          lastReported = branch;
-        } catch (error) {
-          log(
-            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
-          );
-        }
-      }
-      if (recheckQueued) {
-        recheckQueued = false;
-        again = true;
-      }
-    }
-  } finally {
-    checkInFlight = false;
-  }
-}
-function scheduleCheck() {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    debounceTimer = null;
-    void runCheckLoop();
-  }, DEBOUNCE_MS);
-  debounceTimer.unref();
-}
-function watchHeadIn(gitDir) {
-  try {
-    headWatcher = watch(gitDir, (_event, filename) => {
-      if (filename !== "HEAD") return;
-      scheduleCheck();
-    });
-    headWatcher.unref();
-  } catch (error) {
+  if (!existsSync8(localEntry)) {
     log(
-      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
+      "cursor sdk not found in sandbox; installing " + SDK_PACKAGE2 + "@" + SDK_VERSION2 + " to " + SDK_LOCAL_PREFIX2 + " (one-time)"
+    );
+    execSync2(
+      "mkdir -p " + SDK_LOCAL_PREFIX2 + " && npm install --prefix " + SDK_LOCAL_PREFIX2 + " " + SDK_PACKAGE2 + "@" + SDK_VERSION2,
+      { encoding: "utf8", timeout: 18e4 }
     );
   }
-}
-function startBranchWatcher() {
-  if (started) return;
-  started = true;
-  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
-  if (target === null) {
-    log(
-      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
-    );
-    return;
-  }
-  const gitDir = WORK_DIR + "/.git";
-  let gitDirIsDirectory = false;
-  try {
-    gitDirIsDirectory = statSync2(gitDir).isDirectory();
-  } catch {
-    gitDirIsDirectory = false;
-  }
-  if (gitDirIsDirectory) {
-    watchHeadIn(gitDir);
-  } else {
-    log("branchWatcher: " + gitDir + " is not a directory; polling only");
-  }
-  pollInterval = setInterval(() => {
-    void runCheckLoop();
-  }, POLL_INTERVAL_MS3);
-  pollInterval.unref();
-  void runCheckLoop();
-}
-
-// ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
-import { promises as fs } from "fs";
-import os from "os";
-import path from "path";
-import { spawn as spawn3 } from "child_process";
-import { statSync as statSync3 } from "fs";
-import path2 from "path";
-import readline from "readline";
-import { createRequire } from "module";
-async function createOutputSchemaFile(schema) {
-  if (schema === void 0) {
-    return { cleanup: async () => {
-    } };
-  }
-  if (!isJsonObject(schema)) {
-    throw new Error("outputSchema must be a plain JSON object");
-  }
-  const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
-  const schemaPath = path.join(schemaDir, "schema.json");
-  const cleanup = async () => {
-    try {
-      await fs.rm(schemaDir, { recursive: true, force: true });
-    } catch {
-    }
-  };
-  try {
-    await fs.writeFile(schemaPath, JSON.stringify(schema), "utf8");
-    return { schemaPath, cleanup };
-  } catch (error) {
-    await cleanup();
-    throw error;
-  }
-}
-function isJsonObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-var Thread = class {
-  _exec;
-  _options;
-  _id;
-  _threadOptions;
-  /** Returns the ID of the thread. Populated after the first turn starts. */
-  get id() {
-    return this._id;
-  }
-  /* @internal */
-  constructor(exec, options, threadOptions, id = null) {
-    this._exec = exec;
-    this._options = options;
-    this._id = id;
-    this._threadOptions = threadOptions;
-  }
-  /** Provides the input to the agent and streams events as they are produced during the turn. */
-  async runStreamed(input, turnOptions = {}) {
-    return { events: this.runStreamedInternal(input, turnOptions) };
-  }
-  async *runStreamedInternal(input, turnOptions = {}) {
-    const { schemaPath, cleanup } = await createOutputSchemaFile(turnOptions.outputSchema);
-    const options = this._threadOptions;
-    const { prompt, images } = normalizeInput(input);
-    const generator = this._exec.run({
-      input: prompt,
-      baseUrl: this._options.baseUrl,
-      apiKey: this._options.apiKey,
-      threadId: this._id,
-      images,
-      model: options?.model,
-      sandboxMode: options?.sandboxMode,
-      workingDirectory: options?.workingDirectory,
-      skipGitRepoCheck: options?.skipGitRepoCheck,
-      outputSchemaFile: schemaPath,
-      modelReasoningEffort: options?.modelReasoningEffort,
-      signal: turnOptions.signal,
-      networkAccessEnabled: options?.networkAccessEnabled,
-      webSearchMode: options?.webSearchMode,
-      webSearchEnabled: options?.webSearchEnabled,
-      approvalPolicy: options?.approvalPolicy,
-      additionalDirectories: options?.additionalDirectories
-    });
-    try {
-      for await (const item of generator) {
-        let parsed;
-        try {
-          parsed = JSON.parse(item);
-        } catch (error) {
-          throw new Error(\`Failed to parse item: \${item}\`, { cause: error });
-        }
-        if (parsed.type === "thread.started") {
-          this._id = parsed.thread_id;
-        } else if (parsed.type === "turn.completed") {
-          parsed.usage.cache_write_input_tokens ??= 0;
-        }
-        yield parsed;
-      }
-    } finally {
-      await cleanup();
-    }
-  }
-  /** Provides the input to the agent and returns the completed turn. */
-  async run(input, turnOptions = {}) {
-    const generator = this.runStreamedInternal(input, turnOptions);
-    const items = [];
-    let finalResponse = "";
-    let usage = null;
-    let turnFailure = null;
-    for await (const event of generator) {
-      if (event.type === "item.completed") {
-        if (event.item.type === "agent_message") {
-          finalResponse = event.item.text;
-        }
-        items.push(event.item);
-      } else if (event.type === "turn.completed") {
-        usage = event.usage;
-      } else if (event.type === "turn.failed") {
-        turnFailure = event.error;
-        break;
-      }
-    }
-    if (turnFailure) {
-      throw new Error(turnFailure.message);
-    }
-    return { items, finalResponse, usage };
-  }
-};
-function normalizeInput(input) {
-  if (typeof input === "string") {
-    return { prompt: input, images: [] };
-  }
-  const promptParts = [];
-  const images = [];
-  for (const item of input) {
-    if (item.type === "text") {
-      promptParts.push(item.text);
-    } else if (item.type === "local_image") {
-      images.push(item.path);
-    }
-  }
-  return { prompt: promptParts.join("\\n\\n"), images };
-}
-var INTERNAL_ORIGINATOR_ENV = "CODEX_INTERNAL_ORIGINATOR_OVERRIDE";
-var TYPESCRIPT_SDK_ORIGINATOR = "codex_sdk_ts";
-var CODEX_NPM_NAME = "@openai/codex";
-var PLATFORM_PACKAGE_BY_TARGET = {
-  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
-  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
-  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
-  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
-  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
-  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64"
-};
-var moduleRequire = createRequire(import.meta.url);
-var CodexExec = class {
-  executablePath;
-  pathDirs;
-  envOverride;
-  configOverrides;
-  constructor(executablePath = null, env, configOverrides) {
-    if (executablePath) {
-      this.executablePath = executablePath;
-      this.pathDirs = [];
-    } else {
-      const resolved = findCodexPath();
-      this.executablePath = resolved.executablePath;
-      this.pathDirs = resolved.pathDirs;
-    }
-    this.envOverride = env;
-    this.configOverrides = configOverrides;
-  }
-  async *run(args) {
-    const commandArgs = ["exec", "--experimental-json"];
-    if (this.configOverrides) {
-      for (const override of serializeConfigOverrides(this.configOverrides)) {
-        commandArgs.push("--config", override);
-      }
-    }
-    if (args.baseUrl) {
-      commandArgs.push(
-        "--config",
-        \`openai_base_url=\${toTomlValue(args.baseUrl, "openai_base_url")}\`
-      );
-    }
-    if (args.model) {
-      commandArgs.push("--model", args.model);
-    }
-    if (args.sandboxMode) {
-      commandArgs.push("--sandbox", args.sandboxMode);
-    }
-    if (args.workingDirectory) {
-      commandArgs.push("--cd", args.workingDirectory);
-    }
-    if (args.additionalDirectories?.length) {
-      for (const dir of args.additionalDirectories) {
-        commandArgs.push("--add-dir", dir);
-      }
-    }
-    if (args.skipGitRepoCheck) {
-      commandArgs.push("--skip-git-repo-check");
-    }
-    if (args.outputSchemaFile) {
-      commandArgs.push("--output-schema", args.outputSchemaFile);
-    }
-    if (args.modelReasoningEffort) {
-      commandArgs.push("--config", \`model_reasoning_effort="\${args.modelReasoningEffort}"\`);
-    }
-    if (args.networkAccessEnabled !== void 0) {
-      commandArgs.push(
-        "--config",
-        \`sandbox_workspace_write.network_access=\${args.networkAccessEnabled}\`
-      );
-    }
-    if (args.webSearchMode) {
-      commandArgs.push("--config", \`web_search="\${args.webSearchMode}"\`);
-    } else if (args.webSearchEnabled === true) {
-      commandArgs.push("--config", \`web_search="live"\`);
-    } else if (args.webSearchEnabled === false) {
-      commandArgs.push("--config", \`web_search="disabled"\`);
-    }
-    if (args.approvalPolicy) {
-      commandArgs.push("--config", \`approval_policy="\${args.approvalPolicy}"\`);
-    }
-    if (args.threadId) {
-      commandArgs.push("resume", args.threadId);
-    }
-    if (args.images?.length) {
-      for (const image of args.images) {
-        commandArgs.push("--image", image);
-      }
-    }
-    const env = {};
-    if (this.envOverride) {
-      Object.assign(env, this.envOverride);
-    } else {
-      for (const [key, value] of Object.entries(process.env)) {
-        if (value !== void 0) {
-          env[key] = value;
-        }
-      }
-    }
-    if (!env[INTERNAL_ORIGINATOR_ENV]) {
-      env[INTERNAL_ORIGINATOR_ENV] = TYPESCRIPT_SDK_ORIGINATOR;
-    }
-    if (args.apiKey) {
-      env.CODEX_API_KEY = args.apiKey;
-    }
-    if (this.pathDirs.length > 0) {
-      prependPathDirs(env, this.pathDirs);
-    }
-    const child = spawn3(this.executablePath, commandArgs, {
-      env,
-      signal: args.signal
-    });
-    let spawnError = null;
-    child.once("error", (err) => spawnError = err);
-    if (!child.stdin) {
-      child.kill();
-      throw new Error("Child process has no stdin");
-    }
-    child.stdin.write(args.input);
-    child.stdin.end();
-    if (!child.stdout) {
-      child.kill();
-      throw new Error("Child process has no stdout");
-    }
-    const stderrChunks = [];
-    if (child.stderr) {
-      child.stderr.on("data", (data) => {
-        stderrChunks.push(data);
-      });
-    }
-    const exitPromise = new Promise(
-      (resolve) => {
-        child.once("exit", (code, signal) => {
-          resolve({ code, signal });
-        });
-      }
-    );
-    const rl = readline.createInterface({
-      input: child.stdout,
-      crlfDelay: Infinity
-    });
-    try {
-      for await (const line of rl) {
-        yield line;
-      }
-      if (spawnError) throw spawnError;
-      const { code, signal } = await exitPromise;
-      if (code !== 0 || signal) {
-        const stderrBuffer = Buffer.concat(stderrChunks);
-        const detail = signal ? \`signal \${signal}\` : \`code \${code ?? 1}\`;
-        throw new Error(\`Codex Exec exited with \${detail}: \${stderrBuffer.toString("utf8")}\`);
-      }
-    } finally {
-      rl.close();
-      child.removeAllListeners();
-      try {
-        if (!child.killed) child.kill();
-      } catch {
-      }
-    }
-  }
-};
-function serializeConfigOverrides(configOverrides) {
-  const overrides = [];
-  flattenConfigOverrides(configOverrides, "", overrides);
-  return overrides;
-}
-function flattenConfigOverrides(value, prefix, overrides) {
-  if (!isPlainObject(value)) {
-    if (prefix) {
-      overrides.push(\`\${prefix}=\${toTomlValue(value, prefix)}\`);
-      return;
-    } else {
-      throw new Error("Codex config overrides must be a plain object");
-    }
-  }
-  const entries = Object.entries(value);
-  if (!prefix && entries.length === 0) {
-    return;
-  }
-  if (prefix && entries.length === 0) {
-    overrides.push(\`\${prefix}={}\`);
-    return;
-  }
-  for (const [key, child] of entries) {
-    if (!key) {
-      throw new Error("Codex config override keys must be non-empty strings");
-    }
-    if (child === void 0) {
-      continue;
-    }
-    const path3 = prefix ? \`\${prefix}.\${key}\` : key;
-    if (isPlainObject(child)) {
-      flattenConfigOverrides(child, path3, overrides);
-    } else {
-      overrides.push(\`\${path3}=\${toTomlValue(child, path3)}\`);
-    }
-  }
-}
-function toTomlValue(value, path3) {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  } else if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new Error(\`Codex config override at \${path3} must be a finite number\`);
-    }
-    return \`\${value}\`;
-  } else if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  } else if (Array.isArray(value)) {
-    const rendered = value.map((item, index) => toTomlValue(item, \`\${path3}[\${index}]\`));
-    return \`[\${rendered.join(", ")}]\`;
-  } else if (isPlainObject(value)) {
-    const parts = [];
-    for (const [key, child] of Object.entries(value)) {
-      if (!key) {
-        throw new Error("Codex config override keys must be non-empty strings");
-      }
-      if (child === void 0) {
-        continue;
-      }
-      parts.push(\`\${formatTomlKey(key)} = \${toTomlValue(child, \`\${path3}.\${key}\`)}\`);
-    }
-    return \`{\${parts.join(", ")}}\`;
-  } else if (value === null) {
-    throw new Error(\`Codex config override at \${path3} cannot be null\`);
-  } else {
-    const typeName = typeof value;
-    throw new Error(\`Unsupported Codex config override value at \${path3}: \${typeName}\`);
-  }
-}
-var TOML_BARE_KEY = /^[A-Za-z0-9_-]+\$/;
-function formatTomlKey(key) {
-  return TOML_BARE_KEY.test(key) ? key : JSON.stringify(key);
-}
-function isPlainObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function findCodexPath() {
-  const { platform, arch } = process;
-  let targetTriple = null;
-  switch (platform) {
-    case "linux":
-    case "android":
-      switch (arch) {
-        case "x64":
-          targetTriple = "x86_64-unknown-linux-musl";
-          break;
-        case "arm64":
-          targetTriple = "aarch64-unknown-linux-musl";
-          break;
-        default:
-          break;
-      }
-      break;
-    case "darwin":
-      switch (arch) {
-        case "x64":
-          targetTriple = "x86_64-apple-darwin";
-          break;
-        case "arm64":
-          targetTriple = "aarch64-apple-darwin";
-          break;
-        default:
-          break;
-      }
-      break;
-    case "win32":
-      switch (arch) {
-        case "x64":
-          targetTriple = "x86_64-pc-windows-msvc";
-          break;
-        case "arm64":
-          targetTriple = "aarch64-pc-windows-msvc";
-          break;
-        default:
-          break;
-      }
-      break;
-    default:
-      break;
-  }
-  if (!targetTriple) {
-    throw new Error(\`Unsupported platform: \${platform} (\${arch})\`);
-  }
-  const platformPackage = PLATFORM_PACKAGE_BY_TARGET[targetTriple];
-  if (!platformPackage) {
-    throw new Error(\`Unsupported target triple: \${targetTriple}\`);
-  }
-  let vendorRoot;
-  try {
-    const codexPackageJsonPath = moduleRequire.resolve(\`\${CODEX_NPM_NAME}/package.json\`);
-    const codexRequire = createRequire(codexPackageJsonPath);
-    const platformPackageJsonPath = codexRequire.resolve(\`\${platformPackage}/package.json\`);
-    vendorRoot = path2.join(path2.dirname(platformPackageJsonPath), "vendor");
-  } catch {
-    throw new Error(
-      \`Unable to locate Codex CLI binaries. Ensure \${CODEX_NPM_NAME} is installed with optional dependencies.\`
-    );
-  }
-  const codexBinaryName = process.platform === "win32" ? "codex.exe" : "codex";
-  const nativePackage = resolveNativePackage(vendorRoot, targetTriple, codexBinaryName);
-  if (!nativePackage) {
-    throw new Error(
-      \`Unable to locate Codex CLI binaries for \${targetTriple}. Ensure \${CODEX_NPM_NAME} is installed with optional dependencies.\`
-    );
-  }
-  return nativePackage;
-}
-function resolveNativePackage(vendorRoot, targetTriple, codexBinaryName) {
-  const packageRoot = path2.join(vendorRoot, targetTriple);
-  const packageBinaryPath = path2.join(packageRoot, "bin", codexBinaryName);
-  if (isFile(packageBinaryPath) && isFile(path2.join(packageRoot, "codex-package.json"))) {
-    return {
-      executablePath: packageBinaryPath,
-      pathDirs: existingDirs(path2.join(packageRoot, "codex-path"))
-    };
-  }
-  const legacyBinaryPath = path2.join(packageRoot, "codex", codexBinaryName);
-  if (isFile(legacyBinaryPath)) {
-    return {
-      executablePath: legacyBinaryPath,
-      pathDirs: existingDirs(path2.join(packageRoot, "path"))
-    };
-  }
-  return null;
-}
-function existingDirs(...dirs) {
-  return dirs.filter(isDirectory);
-}
-function prependPathDirs(env, pathDirs, platform = process.platform) {
-  const pathKey = pathEnvKey(env, platform);
-  if (platform === "win32") {
-    for (const key of Object.keys(env)) {
-      if (key.toLowerCase() === "path" && key !== pathKey) {
-        delete env[key];
-      }
-    }
-  }
-  const existingEntries = (env[pathKey] ?? "").split(path2.delimiter).filter((entry) => entry.length > 0 && !pathDirs.includes(entry));
-  env[pathKey] = [...pathDirs, ...existingEntries].join(path2.delimiter);
-}
-function pathEnvKey(env, platform) {
-  if (platform !== "win32") {
-    return "PATH";
-  }
-  const matchingKeys = Object.keys(env).filter((key) => key.toLowerCase() === "path");
-  return matchingKeys.includes("Path") ? "Path" : matchingKeys.at(-1) ?? "PATH";
-}
-function isFile(filePath) {
-  try {
-    return statSync3(filePath).isFile();
-  } catch {
-    return false;
-  }
-}
-function isDirectory(filePath) {
-  try {
-    return statSync3(filePath).isDirectory();
-  } catch {
-    return false;
-  }
-}
-var Codex = class {
-  exec;
-  options;
-  constructor(options = {}) {
-    const { codexPathOverride, env, config } = options;
-    this.exec = new CodexExec(codexPathOverride, env, config);
-    this.options = options;
-  }
-  /**
-   * Starts a new conversation with an agent.
-   * @returns A new thread instance.
-   */
-  startThread(options = {}) {
-    return new Thread(this.exec, this.options, options);
-  }
-  /**
-   * Resumes a conversation with an agent based on the thread id.
-   * Threads are persisted in ~/.codex/sessions.
-   *
-   * @param id The id of the thread to resume.
-   * @returns A new thread instance.
-   */
-  resumeThread(id, options = {}) {
-    return new Thread(this.exec, this.options, options, id);
-  }
-};
-
-// callback-src/providers/codexSdk.ts
-import { existsSync as existsSync9, readFileSync as readFileSync10 } from "fs";
-function readPromptText3() {
-  const prompt = readFileSync10("/tmp/design-prompt.txt", "utf8");
-  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
-}
-function codexEnvironment() {
-  const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== void 0) env[key] = value;
-  }
-  env.CODEX_HOME = CODEX_RUNTIME_HOME_DIR;
-  return env;
-}
-function buildCodexSdkThreadOptions() {
-  return {
-    model: normalizedCodexModel,
-    sandboxMode: NO_WRITES ? "read-only" : "danger-full-access",
-    workingDirectory: WORK_DIR,
-    skipGitRepoCheck: true,
-    approvalPolicy: "never"
-  };
-}
-function agentMessageDelta(event, priorTextByItem) {
-  if (event.type !== "item.updated" && event.type !== "item.completed" || event.item.type !== "agent_message") {
-    return "";
-  }
-  const previous = priorTextByItem.get(event.item.id) ?? "";
-  const current = event.item.text;
-  priorTextByItem.set(event.item.id, current);
-  if (!current || current === previous) return "";
-  return current.startsWith(previous) ? current.slice(previous.length) : current;
-}
-async function runCodexSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Codex SDK...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
-  );
-  log(
-    "runCodexSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
-  let attemptOutput = "";
-  let lastEventAt2 = Date.now();
-  let timedOutForNoOutput = false;
-  let timedOutForMaxRuntime = false;
-  let sawCompletedTurn = false;
-  let turnFailed = false;
-  let attemptErrorMessage = "";
-  const abortController = new AbortController();
-  const agentTextByItem = /* @__PURE__ */ new Map();
-  const codex = new Codex({
-    codexPathOverride: existsSync9(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex",
-    env: codexEnvironment()
-  });
-  const threadOptions = buildCodexSdkThreadOptions();
-  const thread = sessionMode.mode === "resume" && sessionMode.sessionId ? codex.resumeThread(sessionMode.sessionId, threadOptions) : codex.startThread(threadOptions);
-  const healthTimer = setInterval(() => {
-    const now = Date.now();
-    if (callbackState.fatalHeartbeatErrorMessage) {
-      attemptErrorMessage = callbackState.fatalHeartbeatErrorMessage;
-      abortController.abort();
-      return;
-    }
-    if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
-      timedOutForMaxRuntime = true;
-      log("runCodexSdkAttempt: max runtime exceeded \\u2014 aborting turn");
-      abortController.abort();
-      return;
-    }
-    if (callbackState.inFlightToolUses > 0) {
-      lastEventAt2 = now;
-    }
-    if (!sawCompletedTurn && now - lastEventAt2 > NO_OUTPUT_TIMEOUT_MS * 5) {
-      timedOutForNoOutput = true;
-      log("runCodexSdkAttempt: no SDK events \\u2014 aborting turn");
-      abortController.abort();
-    }
-  }, NO_OUTPUT_CHECK_INTERVAL_MS);
-  const emitLine = (line) => {
-    emitParsedStreamLine(line);
-    attemptOutput = trimBufferHead(attemptOutput + line);
-  };
-  try {
-    const streamed = await thread.runStreamed(readPromptText3(), {
-      signal: abortController.signal
-    });
-    for await (const event of streamed.events) {
-      lastEventAt2 = Date.now();
-      const delta = agentMessageDelta(event, agentTextByItem);
-      if (delta) {
-        emitLine(
-          JSON.stringify({ type: "item.agent_message.delta", delta }) + "\\n"
-        );
-        if (callbackState.firstTextBlockAt === 0) callbackState.firstTextBlockAt = Date.now();
-      }
-      emitLine(JSON.stringify(event) + "\\n");
-      if (event.type === "turn.completed") sawCompletedTurn = true;
-      if (event.type === "turn.failed") {
-        turnFailed = true;
-        attemptErrorMessage = event.error.message;
-      }
-      if (event.type === "error") {
-        turnFailed = true;
-        attemptErrorMessage = event.message;
-      }
-      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!abortController.signal.aborted || !attemptErrorMessage) {
-      attemptErrorMessage = message;
-    }
-    log("runCodexSdkAttempt: turn failed \\u2014 " + message);
-  } finally {
-    clearInterval(healthTimer);
-  }
-  if (attemptErrorMessage) {
-    recordSdkAttemptFailure(attemptErrorMessage);
-  }
-  const code = sawCompletedTurn && !turnFailed && !attemptErrorMessage && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCodexSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawCompletedTurn=" + sawCompletedTurn + ", turnFailed=" + turnFailed + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
-}
-
-// callback-src/providers/opencodeSdk.ts
-import { readFileSync as readFileSync12 } from "fs";
-
-// callback-src/providers/opencodeServer.ts
-import { spawn as spawn4 } from "child_process";
-import {
-  closeSync,
-  existsSync as existsSync10,
-  mkdirSync as mkdirSync9,
-  openSync,
-  readFileSync as readFileSync11,
-  rmSync as rmSync2,
-  statSync as statSync4,
-  writeFileSync as writeFileSync12
-} from "fs";
-var SERVER_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.json";
-var SERVER_LOCK_DIR = OPENCODE_RUNTIME_HOME_DIR + "/server.lock";
-var SERVER_LOG_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.log";
-var HEALTH_PROBE_TIMEOUT_MS = 3e3;
-var STARTUP_TIMEOUT_MS = 6e4;
-var HEALTH_POLL_INTERVAL_MS = 250;
-var LOCK_STALE_MS = 9e4;
-var LOG_TAIL_BYTES = 4e3;
-var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
-function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
-  try {
-    const contents = readFileSync11(SERVER_LOG_FILE, "utf8");
-    return contents.length > maxBytes ? contents.slice(-maxBytes) : contents;
-  } catch {
-    return "";
-  }
-}
-async function probeHealth() {
-  try {
-    const response = await fetch(opencodeServerBaseUrl + "/config", {
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-function readRecordedPid() {
-  try {
-    const parsed = tryParseJson(readFileSync11(SERVER_STATE_FILE, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return 0;
-    }
-    return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
-  } catch {
-    return 0;
-  }
-}
-function killRecordedServer() {
-  const pid = readRecordedPid();
-  if (!pid) return;
-  let cmdline = "";
-  try {
-    cmdline = readFileSync11("/proc/" + String(pid) + "/cmdline", "utf8");
-  } catch {
-    return;
-  }
-  if (!cmdline.includes("opencode")) return;
-  try {
-    process.kill(pid, "SIGKILL");
-    log("opencode server pid=" + String(pid) + " was unhealthy \\u2014 killed");
-  } catch {
-  }
-}
-function spawnServer() {
-  const logFd = openSync(SERVER_LOG_FILE, "a");
-  try {
-    const child = spawn4(
-      opencodeCommand,
-      [
-        "serve",
-        "--hostname=127.0.0.1",
-        "--port=" + String(OPENCODE_SERVER_PORT)
-      ],
-      {
-        // Manual smoke test (tests/linkedReposHarness.manual.md) decides
-        // whether Opencode can edit outside cwd in a multi-repo session; if
-        // not, set EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace
-        // instead — no rebuild needed.
-        cwd: AGENT_CWD,
-        env: { ...process.env },
-        // Detached: the server must outlive this turn's callback process so the
-        // next turn reuses it instead of paying a cold start.
-        detached: true,
-        stdio: ["ignore", logFd, logFd]
-      }
-    );
-    child.unref();
-    const pid = child.pid ?? 0;
-    writeOomScoreAdj(pid, "300");
-    writeFileSync12(
-      SERVER_STATE_FILE,
-      JSON.stringify({ pid, port: OPENCODE_SERVER_PORT })
-    );
-    return pid;
-  } finally {
-    closeSync(logFd);
-  }
-}
-async function waitForHealth(pid) {
-  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    if (await probeHealth()) return;
-    if (pid && !pidAlive(pid)) {
-      throw new Error(
-        "opencode serve exited during startup. Server log tail:\\n" + readOpencodeServerLogTail()
-      );
-    }
-    await sleep(HEALTH_POLL_INTERVAL_MS);
-  }
-  throw new Error(
-    "opencode serve did not become healthy on " + opencodeServerBaseUrl + " within " + String(STARTUP_TIMEOUT_MS) + "ms. Server log tail:\\n" + readOpencodeServerLogTail()
-  );
-}
-function acquireStartupLock() {
-  try {
-    mkdirSync9(SERVER_LOCK_DIR);
-    return true;
-  } catch {
-    try {
-      const ageMs = Date.now() - statSync4(SERVER_LOCK_DIR).mtimeMs;
-      if (ageMs > LOCK_STALE_MS) {
-        rmSync2(SERVER_LOCK_DIR, { recursive: true, force: true });
-        mkdirSync9(SERVER_LOCK_DIR);
-        log("opencode server startup lock was stale \\u2014 reclaimed");
-        return true;
-      }
-    } catch {
-    }
-    return false;
-  }
-}
-function releaseStartupLock() {
-  try {
-    rmSync2(SERVER_LOCK_DIR, { recursive: true, force: true });
-  } catch {
-  }
-}
-async function ensureOpencodeServer() {
-  mkdirSync9(OPENCODE_RUNTIME_HOME_DIR, { recursive: true });
-  if (await probeHealth()) return opencodeServerBaseUrl;
-  if (!acquireStartupLock()) {
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      await sleep(HEALTH_POLL_INTERVAL_MS);
-      if (await probeHealth()) return opencodeServerBaseUrl;
-      if (!existsSync10(SERVER_LOCK_DIR)) break;
-    }
-    if (await probeHealth()) return opencodeServerBaseUrl;
-    releaseStartupLock();
-    if (!acquireStartupLock()) {
-      throw new Error(
-        "could not acquire the opencode server startup lock. Server log tail:\\n" + readOpencodeServerLogTail()
-      );
-    }
-  }
-  try {
-    if (await probeHealth()) return opencodeServerBaseUrl;
-    killRecordedServer();
-    const startedAt = Date.now();
-    const pid = spawnServer();
-    await waitForHealth(pid);
-    log(
-      "opencode serve ready on " + opencodeServerBaseUrl + " (pid=" + String(pid) + ", " + String(Date.now() - startedAt) + "ms)"
-    );
-    return opencodeServerBaseUrl;
-  } finally {
-    releaseStartupLock();
-  }
-}
-
-// callback-src/providers/opencodeSdk.ts
-var SDK_PACKAGE3 = "@opencode-ai/sdk";
-var SDK_VERSION3 = "1.18.16";
-var SDK_ENTRY_RELPATH2 = "/dist/client.js";
-var IDLE_PROBE_AFTER_MS = 6e4;
-var IDLE_PROBE_INTERVAL_MS = 15e3;
-var IDLE_PROBE_STREAK = 2;
-async function loadOpencodeSdk() {
-  const mod = await import(resolvePinnedSdkEntry({
-    packageName: SDK_PACKAGE3,
-    version: SDK_VERSION3,
-    entryRelPath: SDK_ENTRY_RELPATH2
-  }));
+  const mod = await import(localEntry);
   return mod;
 }
-function readPromptText4() {
-  return readFileSync12("/tmp/design-prompt.txt", "utf8");
-}
-function splitOpencodeModel(raw) {
-  const separator = raw.indexOf("/");
-  if (separator <= 0 || separator === raw.length - 1) {
-    return { providerID: "", modelID: raw };
+function parseCursorSdkMcpServers(raw) {
+  const servers = {};
+  const parsed = tryParseJson(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.mcpServers || typeof parsed.mcpServers !== "object" || Array.isArray(parsed.mcpServers)) {
+    return servers;
   }
-  return {
-    providerID: raw.slice(0, separator),
-    modelID: raw.slice(separator + 1)
-  };
-}
-function createPartEmitState() {
-  return { emittedTextLength: /* @__PURE__ */ new Map(), emittedToolStatus: /* @__PURE__ */ new Map() };
-}
-function opencodePartToCliLine(part, state) {
-  if (part.type === "text" || part.type === "reasoning") {
-    const emitted = state.emittedTextLength.get(part.id) ?? 0;
-    if (part.text.length <= emitted) return null;
-    const delta = part.text.slice(emitted);
-    state.emittedTextLength.set(part.id, part.text.length);
-    return JSON.stringify({
-      type: part.type,
-      part: { ...part, text: delta },
-      sessionID: part.sessionID
-    });
+  for (const [name, server] of Object.entries(parsed.mcpServers)) {
+    if (!server || typeof server !== "object" || Array.isArray(server) || typeof server.url !== "string" || !server.url.trim()) {
+      continue;
+    }
+    const entry = { type: "http", url: server.url };
+    if (server.headers && typeof server.headers === "object" && !Array.isArray(server.headers)) {
+      const headers = {};
+      for (const [headerName, headerValue] of Object.entries(server.headers)) {
+        if (typeof headerValue === "string") {
+          headers[headerName] = headerValue;
+        }
+      }
+      if (Object.keys(headers).length > 0) entry.headers = headers;
+    }
+    servers[name] = entry;
   }
-  if (part.type === "tool") {
-    if (state.emittedToolStatus.get(part.id) === part.state.status) return null;
-    state.emittedToolStatus.set(part.id, part.state.status);
-    return JSON.stringify({
-      type: "tool_use",
-      part,
-      sessionID: part.sessionID
-    });
+  return servers;
+}
+function readCursorSdkMcpServers() {
+  if (!existsSync8(MCP_CONFIG_PATH2)) return {};
+  try {
+    return parseCursorSdkMcpServers(readFileSync8(MCP_CONFIG_PATH2, "utf8"));
+  } catch {
+    return {};
   }
-  if (part.type === "step-start" || part.type === "step-finish") {
-    return JSON.stringify({
-      type: part.type === "step-start" ? "step_start" : "step_finish",
-      part,
-      sessionID: part.sessionID
-    });
+}
+function readPromptText2() {
+  return readFileSync8("/tmp/design-prompt.txt", "utf8");
+}
+async function resolveCursorModelSelection(sdk) {
+  const base = normalizedCursorModel;
+  const level = cursorReasoningLevel;
+  if (!level) return { id: base };
+  try {
+    const list = sdk.Cursor?.models?.list;
+    if (!list) return { id: base };
+    const models = await list();
+    const model = Array.isArray(models) ? models.find(
+      (entry) => entry && typeof entry === "object" && entry.id === base
+    ) : void 0;
+    if (!model) {
+      log(
+        "resolveCursorModelSelection: model " + base + " not in Cursor.models.list \\u2014 sending base id"
+      );
+      return { id: base };
+    }
+    for (const definition of model.parameters ?? []) {
+      if (!definition || typeof definition.id !== "string") continue;
+      const values = Array.isArray(definition.values) ? definition.values : [];
+      if (values.some((entry) => entry && entry.value === level)) {
+        log(
+          "resolveCursorModelSelection: " + base + " reasoning level " + level + " via parameter " + definition.id
+        );
+        return { id: base, params: [{ id: definition.id, value: level }] };
+      }
+    }
+    for (const variant of model.variants ?? []) {
+      const params = Array.isArray(variant?.params) ? variant.params : [];
+      if (params.some((param) => param && param.value === level)) {
+        log(
+          "resolveCursorModelSelection: " + base + " reasoning level " + level + " via variant params"
+        );
+        return { id: base, params };
+      }
+    }
+    log(
+      "resolveCursorModelSelection: " + base + " exposes no parameter accepting '" + level + "' \\u2014 sending base id"
+    );
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    log(
+      "resolveCursorModelSelection: model list failed \\u2014 sending base id (" + messageText + ")"
+    );
   }
-  return null;
+  return { id: base };
 }
-function opencodeEventSessionId(event) {
-  const properties = event.properties;
-  if (!properties) return "";
-  return properties.part?.sessionID ?? properties.info?.sessionID ?? properties.sessionID ?? "";
+function errorCode(error) {
+  const withCode = error;
+  return typeof withCode.code === "string" ? withCode.code : "";
 }
-function opencodeErrorMessage(error) {
-  if (!error) return "";
-  return error.data?.message || error.name || "Opencode error";
+function isAgentNotFound(error) {
+  return errorCode(error) === "agent_not_found" || error.message.includes("agent_not_found");
 }
-var ZERO_USAGE2 = {
-  costUsd: 0,
+var ZERO_USAGE = {
   inputTokens: 0,
   outputTokens: 0,
   cacheReadTokens: 0,
-  cacheWriteTokens: 0,
-  model: ""
+  cacheWriteTokens: 0
 };
-function readTurnUsage(info) {
+function readNum(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+function readUsageTokens(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const usage = value;
   return {
-    costUsd: info.cost,
-    inputTokens: info.tokens.input,
-    outputTokens: info.tokens.output + info.tokens.reasoning,
-    cacheReadTokens: info.tokens.cache.read,
-    cacheWriteTokens: info.tokens.cache.write,
-    model: info.modelID
+    inputTokens: readNum(usage.inputTokens),
+    outputTokens: readNum(usage.outputTokens),
+    cacheReadTokens: readNum(usage.cacheReadTokens),
+    cacheWriteTokens: readNum(usage.cacheWriteTokens)
   };
 }
-function readMessageText(parts) {
-  let text = "";
-  for (const part of parts) {
-    if (part.type === "text") text += part.text;
-  }
-  return text;
-}
-function resultFailure(result) {
-  return opencodeErrorMessage(result.error) || (result.response ? "HTTP " + String(result.response.status) : "no data");
-}
-async function ensureEvaMcpServers(client, servers = evaMcpServers) {
-  const configured = Object.entries(servers);
-  if (configured.length === 0) return;
-  try {
-    const status = await client.mcp.status();
-    if (!status.data) {
-      log("opencode mcp.status failed: " + resultFailure(status));
-      return;
-    }
-    for (const [name, server] of configured) {
-      if (status.data[name]) continue;
-      const added = await client.mcp.add({
-        body: {
-          name,
-          config: {
-            type: "remote",
-            url: server.url,
-            headers: server.headers,
-            enabled: true
-          }
-        }
-      });
-      log(
-        added.data ? "opencode mcp server " + name + " registered (" + (added.data[name]?.status ?? "unknown") + ")" : "opencode mcp.add " + name + " failed: " + resultFailure(added)
-      );
-    }
-  } catch (error) {
-    log(
-      "opencode mcp registration failed: " + (error instanceof Error ? error.message : String(error))
-    );
-  }
-}
-function requireData(result, what) {
-  if (result.data === void 0) {
-    throw new Error("opencode " + what + " failed: " + resultFailure(result));
-  }
-  return result.data;
-}
-async function runOpencodeSdkAttempt(sessionMode) {
+async function runCursorSdkAttempt(sessionMode) {
   resetAttemptState();
   callbackState.activeAttemptStartedAt = Date.now();
   updateThinkingStep(
-    "Starting Opencode agent...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
+    "Starting Cursor agent...",
+    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Cursor agent..."
   );
   log(
-    "runOpencodeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+    "runCursorSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
   );
   let attemptOutput = "";
-  let lastEventAt2 = Date.now();
-  let watchdogClock = Date.now();
+  let lastMessageAt = Date.now();
   let timedOutForNoOutput = false;
   let timedOutForMaxRuntime = false;
   let sawResult = false;
   let resultIsError = false;
   let attemptErrorMessage = "";
-  const sdk = await loadOpencodeSdk();
-  const baseUrl = await ensureOpencodeServer();
-  const client = sdk.createOpencodeClient({
-    baseUrl,
-    // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
-    // Opencode can edit outside cwd in a multi-repo session; if not, set
-    // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
-    // rebuild needed.
-    directory: AGENT_CWD
-  });
-  await ensureEvaMcpServers(client);
-  const persistSessionId = (sessionId2) => {
-    callbackState.activeOpencodeSessionId = sessionId2;
-    writeOpencodeSessionState();
-    syncOpencodeStateToPersist();
+  let lastStreamUsage = null;
+  let activeRun = null;
+  const sdk = await loadCursorSdk();
+  mkdirSync7(CURSOR_SDK_STORE_DIR, { recursive: true });
+  const store4 = new sdk.JsonlLocalAgentStore(CURSOR_SDK_STORE_DIR);
+  const mcpServers = readCursorSdkMcpServers();
+  const options = {
+    apiKey: (process.env.CURSOR_API_KEY || "").trim(),
+    model: await resolveCursorModelSelection(sdk),
+    local: { cwd: WORK_DIR, store: store4 },
+    ...Object.keys(mcpServers).length > 0 ? { mcpServers } : {}
   };
-  const createFreshSession = async () => {
-    const created = requireData(
-      await client.session.create(),
-      "session.create"
-    );
-    if (created.version !== SDK_VERSION3) {
-      log(
-        "opencode server version " + created.version + " differs from the SDK pin " + SDK_VERSION3
-      );
-    }
-    persistSessionId(created.id);
-    return created.id;
+  const persistAgentId = (agentId) => {
+    callbackState.activeCursorSessionId = agentId;
+    writeCursorSessionState();
+    syncCursorStateToPersist();
   };
-  let sessionId = "";
+  const createFreshAgent = async () => {
+    const created = await sdk.Agent.create(options);
+    persistAgentId(created.agentId);
+    return created;
+  };
+  let resumedExistingAgent = false;
+  let agent;
   if (sessionMode.mode === "resume" && sessionMode.sessionId) {
-    const existing = await client.session.get({
-      path: { id: sessionMode.sessionId }
-    });
-    if (existing.data) {
-      sessionId = existing.data.id;
-      persistSessionId(sessionId);
-    } else {
+    try {
+      agent = await sdk.Agent.resume(sessionMode.sessionId, options);
+      resumedExistingAgent = true;
+      persistAgentId(agent.agentId);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error);
       log(
-        "runOpencodeSdkAttempt: session " + sessionMode.sessionId + " unknown to the server \\u2014 starting a fresh session"
+        "runCursorSdkAttempt: resume failed \\u2014 starting a fresh agent (" + messageText + ")"
       );
-      recordSdkRetry("resume session not found: " + sessionMode.sessionId);
-      sessionId = await createFreshSession();
+      appendToRawLogFile("[sdk-retry] resume failed: " + messageText + "\\n");
+      agent = await createFreshAgent();
     }
   } else {
-    sessionId = await createFreshSession();
+    agent = await createFreshAgent();
   }
-  const promptText = readPromptText4();
+  const promptText = readPromptText2();
   const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
-  const model = splitOpencodeModel(normalizedOpencodeModel);
-  const emitState = createPartEmitState();
-  const streamAbort = new AbortController();
-  let terminalReached = false;
-  let resolveTerminal = () => {
-  };
-  const terminal = new Promise((resolve) => {
-    resolveTerminal = resolve;
-  });
-  const markTerminal = () => {
-    if (terminalReached) return;
-    terminalReached = true;
-    resolveTerminal();
-  };
-  let assistantMessageId = "";
-  let usage = ZERO_USAGE2;
-  let turnErrorMessage = "";
-  let sawSessionEvent = false;
-  let idleProbeStreak = 0;
-  let idleProbeInFlight = false;
-  let lastIdleProbeAt = 0;
-  const pushLine = (line) => {
-    emitParsedStreamLine(line);
-    attemptOutput = trimBufferHead(attemptOutput + line);
-  };
-  const emitPart = (part) => {
-    const line = opencodePartToCliLine(part, emitState);
-    if (line) pushLine(line + "\\n");
-  };
-  const abortTurn = () => {
-    client.session.abort({ path: { id: sessionId } }).catch(() => {
+  const cancelRun = () => {
+    if (!activeRun) return;
+    activeRun.cancel().catch(() => {
     });
-    markTerminal();
-  };
-  const probeSessionIdle = async () => {
-    if (idleProbeInFlight || terminalReached || !sawSessionEvent) return;
-    idleProbeInFlight = true;
-    lastIdleProbeAt = Date.now();
-    try {
-      const status = await client.session.status();
-      if (!status.data) return;
-      const sessionStatus = status.data[sessionId];
-      const idle = !sessionStatus || sessionStatus.type === "idle";
-      idleProbeStreak = idle ? idleProbeStreak + 1 : 0;
-      if (idleProbeStreak >= IDLE_PROBE_STREAK) {
-        log(
-          "runOpencodeSdkAttempt: server reports the session idle after an event gap \\u2014 finishing turn"
-        );
-        appendToRawLogFile(
-          "[sdk-recover] session idle detected by status poll\\n"
-        );
-        markTerminal();
-      }
-    } catch {
-    } finally {
-      idleProbeInFlight = false;
-    }
   };
   const healthTimer = setInterval(() => {
     const now = Date.now();
-    if (terminalReached) return;
-    if (callbackState.fatalHeartbeatErrorMessage) {
-      attemptErrorMessage = callbackState.fatalHeartbeatErrorMessage;
-      abortTurn();
-      return;
-    }
     if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
       timedOutForMaxRuntime = true;
-      log("runOpencodeSdkAttempt: max runtime exceeded \\u2014 aborting turn");
-      abortTurn();
+      log("runCursorSdkAttempt: max runtime exceeded \\u2014 cancelling run");
+      cancelRun();
       return;
     }
-    if (callbackState.inFlightToolUses > 0) {
-      watchdogClock = now;
-    }
-    if (now - lastEventAt2 > IDLE_PROBE_AFTER_MS && now - lastIdleProbeAt > IDLE_PROBE_INTERVAL_MS) {
-      void probeSessionIdle();
-    }
-    if (now - watchdogClock > NO_OUTPUT_TIMEOUT_MS * 5) {
+    if (!sawResult && now - lastMessageAt > NO_OUTPUT_TIMEOUT_MS * 5) {
       timedOutForNoOutput = true;
-      log("runOpencodeSdkAttempt: no SDK events \\u2014 aborting turn");
-      abortTurn();
+      log("runCursorSdkAttempt: no SDK events \\u2014 cancelling run");
+      cancelRun();
     }
   }, NO_OUTPUT_CHECK_INTERVAL_MS);
-  const consumeEvents = async (stream) => {
-    for await (const event of stream) {
-      if (terminalReached) break;
-      if (opencodeEventSessionId(event) !== sessionId) continue;
-      lastEventAt2 = Date.now();
-      watchdogClock = lastEventAt2;
-      sawSessionEvent = true;
-      idleProbeStreak = 0;
-      const part = event.properties?.part;
-      if (event.type === "message.part.updated" && part) {
-        emitPart(part);
-        continue;
+  const pushLine = (line) => {
+    appendToRawLogFile(line);
+    attemptOutput = trimBufferHead(attemptOutput + line);
+    appendToRawOutput(line);
+    processRealtimeStdoutChunk(line);
+  };
+  const runTurn = async (activeAgent) => {
+    const run = await activeAgent.send(combinedPrompt, {
+      local: { force: true }
+    });
+    activeRun = run;
+    for await (const message of run.stream()) {
+      lastMessageAt = Date.now();
+      pushLine(JSON.stringify(message) + "\\n");
+      if (message.type === "usage") {
+        lastStreamUsage = readUsageTokens(message.usage) ?? lastStreamUsage;
       }
-      const info = event.properties?.info;
-      if (event.type === "message.updated" && info?.role === "assistant") {
-        assistantMessageId = info.id;
-        usage = readTurnUsage(info);
-        if (info.error) turnErrorMessage = opencodeErrorMessage(info.error);
-        continue;
-      }
-      if (event.type === "session.error") {
-        turnErrorMessage = opencodeErrorMessage(event.properties?.error);
-        continue;
-      }
-      if (event.type === "session.idle") {
-        markTerminal();
-        break;
-      }
+      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
+    const result = await run.wait();
+    const usage = readUsageTokens(result.usage) ?? lastStreamUsage ?? ZERO_USAGE;
+    const isError = result.status !== "finished";
+    const resultText = typeof result.result === "string" && result.result ? result.result : result.error && typeof result.error.message === "string" ? result.error.message : "";
+    const syntheticResult = {
+      type: "result",
+      is_error: isError,
+      result: resultText,
+      duration_ms: readNum(result.durationMs),
+      usage: {
+        input_tokens: usage.inputTokens,
+        output_tokens: usage.outputTokens,
+        cache_read_input_tokens: usage.cacheReadTokens,
+        cache_creation_input_tokens: usage.cacheWriteTokens
+      }
+    };
+    pushLine(JSON.stringify(syntheticResult) + "\\n");
+    sawResult = true;
+    resultIsError = isError;
   };
   try {
-    const events = await client.event.subscribe({ signal: streamAbort.signal });
-    const consumed2 = consumeEvents(events.stream);
-    consumed2.catch(() => {
-    });
-    const accepted = await client.session.promptAsync({
-      path: { id: sessionId },
-      body: {
-        ...model.providerID ? { model } : {},
-        parts: [{ type: "text", text: combinedPrompt }]
-      }
-    });
-    if (accepted.error || accepted.response?.ok === false) {
-      throw new Error(
-        "opencode session.promptAsync failed: " + resultFailure(accepted)
-      );
-    }
-    lastEventAt2 = Date.now();
-    watchdogClock = lastEventAt2;
-    await Promise.race([terminal, consumed2]);
-    markTerminal();
-    const finalMessage = assistantMessageId ? await client.session.message({
-      path: { id: sessionId, messageID: assistantMessageId }
-    }) : null;
-    let resultText = "";
-    const finalData = finalMessage?.data;
-    if (finalData && finalData.info.role === "assistant") {
-      for (const part of finalData.parts) emitPart(part);
-      usage = readTurnUsage(finalData.info);
-      if (finalData.info.error) {
-        turnErrorMessage = opencodeErrorMessage(finalData.info.error);
-      }
-      resultText = readMessageText(finalData.parts);
-    }
-    resultIsError = Boolean(turnErrorMessage);
-    pushLine(
-      JSON.stringify({
-        type: "result",
-        is_error: resultIsError,
-        result: resultText || turnErrorMessage,
-        duration_ms: Date.now() - callbackState.activeAttemptStartedAt,
-        total_cost_usd: usage.costUsd,
-        model: usage.model || normalizedOpencodeModel,
-        usage: {
-          input_tokens: usage.inputTokens,
-          output_tokens: usage.outputTokens,
-          cache_read_input_tokens: usage.cacheReadTokens,
-          cache_creation_input_tokens: usage.cacheWriteTokens
+    try {
+      await runTurn(agent);
+    } catch (error) {
+      if (resumedExistingAgent && error instanceof Error && isAgentNotFound(error)) {
+        log(
+          "runCursorSdkAttempt: resumed agent unusable \\u2014 retrying as a fresh agent"
+        );
+        appendToRawLogFile("[sdk-retry] " + error.message + "\\n");
+        sawResult = false;
+        resultIsError = false;
+        try {
+          agent.close();
+        } catch {
         }
-      }) + "\\n"
-    );
-    sawResult = true;
+        agent = await createFreshAgent();
+        await runTurn(agent);
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
     attemptErrorMessage = messageText;
-    log("runOpencodeSdkAttempt: turn failed \\u2014 " + messageText);
-    recordSdkAttemptFailure(messageText, {
-      extraStderr: readOpencodeServerLogTail(1e3)
-    });
+    log("runCursorSdkAttempt: run failed \\u2014 " + messageText);
+    appendToRawLogFile("[sdk-error] " + messageText + "\\n");
+    callbackState.stderrOutput = trimBufferHead(callbackState.stderrOutput + messageText + "\\n");
   } finally {
     clearInterval(healthTimer);
-    markTerminal();
-    streamAbort.abort();
+    try {
+      agent.close();
+    } catch {
+    }
   }
   const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
   log(
-    "runOpencodeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") + ")"
+    "runCursorSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") + ")"
   );
-  return buildStandardSdkAttemptResult({
+  return {
     code,
+    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
+    timedOutForMaxRuntime,
+    timedOutForFirstEvent: false,
+    timedOutForFirstAssistant: false,
+    timedOutAfterFirstText: false,
+    timedOutForZombie: false,
+    toolStallErrorMessage: ""
+  };
 }
 
 // callback-src/providers/attempts.ts
@@ -10199,10 +6291,33 @@ async function runClaudeAttempt(sessionMode) {
   return await runClaudeSdkAttempt(sessionMode);
 }
 async function runCodexAttempt(sessionMode) {
-  return await runCodexSdkAttempt(sessionMode);
+  const sessionArg = sessionMode.mode === "resume" && sessionMode.sessionId ? " resume " + JSON.stringify(sessionMode.sessionId) : "";
+  const cmd = codexPromptCmd + " | " + codexExecBaseCmd + sessionArg + " -";
+  return await runCliAttempt({
+    cmd,
+    env: { ...process.env, CODEX_HOME: CODEX_RUNTIME_HOME_DIR },
+    processLabel: "codex",
+    attemptLabel: "runCodexAttempt",
+    startupStep: {
+      label: "Starting Codex CLI...",
+      detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Launching Codex process..."
+    },
+    onStdoutText: codexAdapter.onStdoutText
+  });
 }
 async function runOpencodeAttempt(sessionMode) {
-  return await runOpencodeSdkAttempt(sessionMode);
+  const sessionArg = sessionMode.mode === "resume" && sessionMode.sessionId ? " -s " + JSON.stringify(sessionMode.sessionId) : "";
+  const cmd = opencodePromptCmd + " | " + opencodeExecBaseCmd + sessionArg;
+  return await runCliAttempt({
+    cmd,
+    env: { ...process.env },
+    processLabel: "opencode",
+    attemptLabel: "runOpencodeAttempt",
+    startupStep: {
+      label: "Starting Opencode CLI...",
+      detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Launching Opencode process..."
+    }
+  });
 }
 async function runCursorAttempt(sessionMode) {
   if (!process.env.CURSOR_API_KEY?.trim()) {
@@ -10220,17 +6335,6 @@ async function runProviderAttempt(sessionMode) {
 }
 
 // callback-src/index.ts
-if (IS_CURSOR_TURN_WORKER) {
-  try {
-    await runCursorTurnWorker();
-    process.exit(0);
-  } catch (error) {
-    log(
-      "cursor turn worker failed: " + (error instanceof Error ? error.message : String(error))
-    );
-    process.exit(1);
-  }
-}
 process.on("exit", (code) => {
   writeDoneFile("unexpected-exit", {
     exitCode: typeof code === "number" ? code : null
@@ -10244,20 +6348,18 @@ try {
   unlinkSync3(READY_FILE);
 } catch {
 }
-writeOomScoreAdj("self", "-600");
+try {
+  writeFileSync11(PID_FILE, String(process.pid));
+} catch {
+}
+try {
+  writeFileSync11("/proc/self/oom_score_adj", "-600");
+} catch {
+}
 callbackState.lastStepType = "thinking";
 materializeSystemSkills();
-startBranchWatcher();
-if (CLAIM_MUTATION) {
-  if (PROVIDER === "claude") {
-    await runSdkDaemon();
-  }
-  if (PROVIDER === "codex") {
-    await runCodexAppServerDaemon();
-  }
-  if (PROVIDER === "cursor") {
-    await runCursorDaemon();
-  }
+if (PROVIDER === "claude" && CLAIM_MUTATION) {
+  await runSdkDaemon();
 }
 var preflightOk = await runPreflightHeartbeat();
 if (!preflightOk) {
@@ -10266,21 +6368,48 @@ if (!preflightOk) {
 }
 startStreamingLoops();
 for (const d of [WORK_DIR + "/screenshots", WORK_DIR + "/recordings"]) {
+  if (existsSync9(d)) {
+    for (const f of readdirSync4(d)) {
+      try {
+        unlinkSync3(d + "/" + f);
+      } catch {
+      }
+    }
+  } else {
+    try {
+      mkdirSync8(d, { recursive: true });
+    } catch {
+    }
+  }
+}
+if (REPO_ID && CONVEX_URL && CONVEX_TOKEN) {
   try {
-    mkdirSync10(d, { recursive: true });
+    const res = await fetchWithTimeout(CONVEX_URL + "/api/action", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + CONVEX_TOKEN
+      },
+      body: JSON.stringify({
+        path: "github:getInstallationTokenAction",
+        args: { repoId: REPO_ID },
+        format: "json"
+      })
+    });
+    if (res.ok) {
+      const data = await readResponseJson(res);
+      if (data && typeof data === "object" && !Array.isArray(data) && data.value && typeof data.value === "object" && !Array.isArray(data.value) && typeof data.value.token === "string") {
+        process.env.GITHUB_TOKEN = data.value.token;
+        process.env.GH_TOKEN = data.value.token;
+      }
+    }
   } catch {
   }
 }
-await ensureGithubToken({
-  convexUrl: CONVEX_URL,
-  convexToken: CONVEX_TOKEN,
-  repoId: REPO_ID
-});
 log(
   "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasMcpConfig ? "yes" : "no")
 );
 try {
-  beginTurnCheckpoint();
   const taskCommitBaselineHead = REQUIRE_TASK_COMMIT ? readGitHeadSha() : "";
   if (REQUIRE_TASK_COMMIT) {
     log(
@@ -10312,23 +6441,30 @@ try {
   } else {
     log("skipping post-attempt sync because result-event sync already ran");
   }
-  if (await setFinalizingState()) process.exit(0);
-  const finalAttempt = {
-    code: finalCode,
-    terminatedBySignal: finalTerminatedBySignal,
-    output: firstAttempt.output,
-    timedOutForNoOutput: finalTimedOutForNoOutput,
-    timedOutForMaxRuntime: finalTimedOutForMaxRuntime,
-    timedOutForFirstEvent: finalTimedOutForFirstEvent,
-    timedOutForFirstAssistant: finalTimedOutForFirstAssistant,
-    timedOutAfterFirstText: finalTimedOutAfterFirstText,
-    timedOutForZombie: finalTimedOutForZombie,
-    toolStallErrorMessage: finalToolStallErrorMessage
-  };
-  const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt);
-  const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
-  const { success: runSucceededWithResult, error: resolvedError } = resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
-  let errorValue = resolvedError;
+  if (await setFinalizingState()) {
+    process.exit(0);
+  }
+  const agentWasInterrupted = finalTerminatedBySignal || finalCode === 137 || finalCode === 143;
+  const attemptEndedDueToTimeout = finalTimedOutAfterFirstText || finalTimedOutForNoOutput || finalTimedOutForMaxRuntime || finalTimedOutForFirstEvent || finalTimedOutForFirstAssistant || finalTimedOutForZombie || Boolean(finalToolStallErrorMessage);
+  const runSucceededWithResult = finalResultEvent != null && !finalResultEvent.isError && !agentWasInterrupted;
+  let errorValue = null;
+  if (finalResultEvent?.isError) {
+    errorValue = finalResultEvent.result;
+  } else if (!runSucceededWithResult && finalCode !== 0 || attemptEndedDueToTimeout && !runSucceededWithResult) {
+    errorValue = appendDiagnosticTail(
+      buildErrorMessage(
+        finalCode,
+        callbackState.fatalHeartbeatErrorMessage,
+        finalToolStallErrorMessage,
+        finalTimedOutForMaxRuntime,
+        finalTimedOutForNoOutput,
+        finalTimedOutForFirstEvent,
+        finalTimedOutForFirstAssistant,
+        finalTimedOutAfterFirstText,
+        finalTimedOutForZombie
+      )
+    );
+  }
   const finalResultText = (finalResultEvent?.result ?? "").trim();
   if (finalResultText) {
     let lastIdx = callbackState.accumulatedSteps.length - 1;
@@ -10362,22 +6498,27 @@ try {
   log(
     "completion: success=" + completionSuccess + " code=" + finalCode + " hasResult=" + Boolean(finalResultEvent) + " error=" + (errorValue ? errorValue.slice(0, 200) : "none") + " steps=" + callbackState.accumulatedSteps.length
   );
-  const completionArgs = buildTurnCompletionPayload({
+  const completionArgs = {
+    [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",
     success: completionSuccess,
     result: finalResultEvent?.result ?? callbackState.rawOutput,
     error: errorValue,
-    activityLog,
-    resultEvent: finalResultEvent,
-    entityFieldFallback: "entityId"
-  });
-  appendCurrentTurnLease(completionArgs);
+    activityLog
+  };
+  if (RUN_ID) completionArgs.runId = RUN_ID;
+  const turnId = getCurrentTurnId();
+  if (turnId) completionArgs.turnId = turnId;
+  if (finalResultEvent?.rawResultEvent) {
+    completionArgs.rawResultEvent = finalResultEvent.rawResultEvent;
+  }
+  if (callbackState.pendingQuestionData) {
+    completionArgs.pendingQuestion = callbackState.pendingQuestionData;
+  }
   persistTurnWork();
   try {
     await deliverCompletionWithMedia(completionArgs);
-    endTurnOwnership();
     syncProviderStateToPersist("completion");
     await stopStreamingLoops();
-    await waitForPendingClaudeUsageReport();
     writeDoneFile(completionSuccess ? "success" : "error", {
       exitCode: finalCode,
       error: errorValue
@@ -10394,7 +6535,6 @@ try {
     process.exit(1);
   }
 } catch (err) {
-  persistTurnWork();
   syncProviderStateToPersist("fatal-error");
   await stopStreamingLoops();
   writeDoneFile("fatal-error", {
@@ -10405,13 +6545,13 @@ try {
     success: false,
     result: null,
     error: appendDiagnosticTail(
-      err instanceof Error ? err.message : "Failed to run " + (PROVIDER === "codex" ? "Codex SDK" : PROVIDER === "opencode" ? "Opencode CLI" : PROVIDER === "cursor" ? "Cursor CLI" : "Claude CLI")
+      err instanceof Error ? err.message : "Failed to run " + (PROVIDER === "codex" ? "Codex" : PROVIDER === "opencode" ? "Opencode" : PROVIDER === "cursor" ? "Cursor" : "Claude") + " CLI"
     ),
     activityLog: serializeSteps(callbackState.accumulatedSteps)
   };
   if (RUN_ID) errorArgs.runId = RUN_ID;
-  appendCurrentTurnLease(errorArgs);
-  appendTurnCheckpoint(errorArgs);
+  const turnId = getCurrentTurnId();
+  if (turnId) errorArgs.turnId = turnId;
   try {
     await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", errorArgs);
   } catch {
