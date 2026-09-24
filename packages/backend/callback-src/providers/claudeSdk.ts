@@ -10,7 +10,6 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   ALLOWED_TOOLS,
-  BLOCKING_QUESTIONS_ENABLED,
   CLAIM_MUTATION,
   CLAUDE_RUNTIME_CONFIG_DIR,
   ENTITY_ID_FIELD,
@@ -349,15 +348,22 @@ function buildSdkOptionsFromParts(
       ? { allowedTools: ALLOWED_TOOLS.split(",") }
       : { allowedTools: [] };
 
-  // Blocking questions need `canUseTool`, which the SDK ignores under
-  // `bypassPermissions`. When enabled we switch to `default` mode and let the
-  // gate auto-allow every tool except AskUserQuestion (which waits for the user).
-  // Otherwise keep the original bypass behaviour (no per-tool gating).
+  // Every agent turn runs `default` mode behind `canUseTool`, which allows all
+  // tools — AskUserQuestion excepted, and only on the surfaces that wire the
+  // answering UI (`buildCanUseTool` owns that call).
+  //
+  // Not `bypassPermissions`: that mode auto-allows built-in tools but leaves MCP
+  // tools gated, since an external MCP server is a trust boundary the bypass
+  // deliberately does not cross. `canUseTool` is consulted for MCP calls, so it
+  // is the only path that reaches them. This used to be keyed off
+  // BLOCKING_QUESTIONS_ENABLED (sessions only), which left task and project
+  // chats unable to call any `mcp__eva__*` tool at all — read-only ones included
+  // — even though their prompts instruct them to.
   const permissionOption: Pick<
     SdkOptions,
     "permissionMode" | "allowDangerouslySkipPermissions" | "canUseTool"
   > =
-    tools === "agent" && BLOCKING_QUESTIONS_ENABLED
+    tools === "agent"
       ? {
           permissionMode: "default",
           allowDangerouslySkipPermissions: false,
