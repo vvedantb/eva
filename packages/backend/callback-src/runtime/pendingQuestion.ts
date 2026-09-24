@@ -1,4 +1,8 @@
-import { CLAIM_MUTATION, ENTITY_ID } from "../config.js";
+import {
+  BLOCKING_QUESTIONS_ENABLED,
+  CLAIM_MUTATION,
+  ENTITY_ID,
+} from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { callbackState as S } from "./state.js";
 import type { JsonValue } from "../types.js";
@@ -100,7 +104,11 @@ export function buildCanUseTool(): SdkCanUseTool {
         updatedInput: { ...input, run_in_background: false },
       };
     }
-    if (toolName !== "AskUserQuestion") {
+    // Only sessions wire the answering UI. Everywhere else AskUserQuestion
+    // stays fire-and-forget metadata (providers/claude.ts surfaces it after the
+    // turn), so the gate allows it through rather than blocking on an answer
+    // no one can give.
+    if (toolName !== "AskUserQuestion" || !BLOCKING_QUESTIONS_ENABLED) {
       return { behavior: "allow", updatedInput: input };
     }
     const toolUseId =
