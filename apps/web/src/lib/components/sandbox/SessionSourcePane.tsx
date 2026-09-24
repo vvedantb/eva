@@ -1,7 +1,7 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { Skeleton, cn } from "@eva/ui";
+import { CenteredSpinner, cn } from "@eva/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
   forwardRef,
@@ -53,27 +53,7 @@ export function SessionSourcePane({
       </div>
       <div className="scrollbar scroll-fade min-h-0 flex-1 overflow-y-auto bg-muted/40">
         {loading ? (
-          <div
-            className="flex flex-col gap-1.5 p-2"
-            aria-busy="true"
-            aria-label="Loading"
-          >
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "flex items-start gap-2.5 rounded-surface bg-card p-2.5",
-                  CARD_SHADOW,
-                )}
-              >
-                <Skeleton className="size-9 shrink-0 rounded-md" />
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <Skeleton className="h-3.5 w-2/3" />
-                  <Skeleton className="mt-1.5 h-3 w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <CenteredSpinner label="Loading" />
         ) : (
           children
         )}

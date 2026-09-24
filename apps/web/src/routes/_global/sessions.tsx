@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Card, CardContent, Skeleton } from "@eva/ui";
+import { Card, CardContent, CenteredSpinner } from "@eva/ui";
 import { IconBrandGithub, IconTerminal2 } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
@@ -39,15 +39,7 @@ function SessionsCodebasePicker() {
           Select a codebase
         </h1>
         {repos === undefined ? (
-          <div
-            className="space-y-2"
-            aria-busy="true"
-            aria-label="Loading codebases"
-          >
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[68px] border border-border" />
-            ))}
-          </div>
+          <CenteredSpinner label="Loading codebases" />
         ) : repos.length === 0 ? (
           <EmptyState
             icon={<IconTerminal2 size={28} />}

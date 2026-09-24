@@ -8,7 +8,7 @@ import {
 } from "@eva/ui";
 import {
   ChatEmptyState,
-  ChatTranscriptSkeleton,
+  ChatTranscriptLoading,
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
@@ -246,7 +246,7 @@ export function ChatBody({
   //
   // Deferring "the transcript has rows" rather than mount — a chat whose
   // messages arrive after mount would otherwise have spent its deferred pass
-  // on the loading skeleton and then commit the whole backlog in the render
+  // on the loading spinner and then commit the whole backlog in the render
   // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
 
@@ -464,7 +464,7 @@ export function ChatBody({
           {displayMessages.length === 0 ? (
             (emptyStateOverride ??
             (isLoadingMessages ? (
-              <ChatTranscriptSkeleton />
+              <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}
