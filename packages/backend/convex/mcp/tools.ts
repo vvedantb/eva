@@ -1455,8 +1455,8 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   tools.push(...fleetTools(credentials, ctx));
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Entity tools — list_entities, start_sandbox, stop_sandbox and
-  // cancel_queued_message. Same audience and same authz as send_chat_message:
+  // Entity tools — list_entities, start_sandbox, stop_sandbox,
+  // get_preview_url and cancel_queued_message. Same audience and same authz as send_chat_message:
   // every caller gets them, and each one resolves its target through the
   // shared repo-access check above.
   // ─────────────────────────────────────────────────────────────────────────────

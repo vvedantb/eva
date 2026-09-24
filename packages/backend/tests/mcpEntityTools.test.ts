@@ -644,6 +644,7 @@ describe("the new tools reach every MCP caller and write no review state", () =>
       '"start_sandbox"',
       '"stop_sandbox"',
       '"cancel_queued_message"',
+      '"get_preview_url"',
     ]) {
       expect(entityTools).toContain(name);
     }
@@ -652,10 +653,14 @@ describe("the new tools reach every MCP caller and write no review state", () =>
   test("every entity tool resolves its target through the shared access check", () => {
     const entityRef = convexSource("mcp/entityRef.ts");
     expect(entityRef).toContain("assertUserRepoAccess(target.repoId");
-    // Four tools, four resolutions: three by entity ref, one by repo ref.
+    // Five tools, five resolutions: four by entity ref, one by repo ref.
     expect(
       (entityTools.match(/resolveEntityTarget\(ref, userId\)/g) ?? []).length,
     ).toBe(3);
+    // get_preview_url falls back to the chat the token names, then resolves
+    // that through the very same check rather than trusting the claim.
+    expect(entityTools).toContain("const chatRef = withSelfDefault(ref)");
+    expect(entityTools).toContain("resolveEntityTarget(chatRef, userId)");
     expect(entityTools).toContain("assertUserRepoAccess(ref.repoId, userId)");
   });
 
@@ -752,5 +757,92 @@ describe("a sandbox token reaches chats in every repo its user can, but credenti
       "async function resolveRepoByName(",
     );
     expect(postgres).toContain("await assertRepoAccess(ref.repoId, userId)");
+  });
+});
+
+/**
+ * 2026-09-24: asked "give me the link then?", a session answered that no link
+ * existed and offered to merge the PR — its own sandbox was serving the work
+ * the whole time. `get_preview_url` closes that gap, so what it needs to
+ * answer has to travel with the resolved chat.
+ */
+describe("get_preview_url can find the running app behind a chat", () => {
+  async function resolve(
+    f: Awaited<ReturnType<typeof fixture>>,
+    kind: "session" | "task" | "project",
+    id: string,
+  ) {
+    return f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
+      userId: f.ownerUserId,
+      kind,
+      id,
+    });
+  }
+
+  test("a resolved chat carries its sandbox, its VM state and its dev port", async () => {
+    const f = await fixture();
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch(f.repoId, { devPort: 3000 });
+      await ctx.db.patch(f.sessionId, {
+        sandboxId: "sbx_session",
+        devPort: 5173,
+      });
+      await ctx.db.patch(f.taskId, { sandboxId: "sbx_task" });
+    });
+
+    // A session's own status is its sandbox's, and its port beats the repo's.
+    const session = await resolve(f, "session", f.sessionId);
+    expect(session?.sandboxStatus).toBe("active");
+    expect(session?.sandboxId).toBe("sbx_session");
+    expect(session?.devPort).toBe(5173);
+
+    // A task parks the reviewer-facing VM state in its own field, and has no
+    // port of its own — the repo default answers for it.
+    const task = await resolve(f, "task", f.taskId);
+    expect(task?.sandboxStatus).toBe("active");
+    expect(task?.sandboxId).toBe("sbx_task");
+    expect(task?.devPort).toBe(3000);
+
+    // A project that never started one reports closed rather than nothing.
+    const project = await resolve(f, "project", f.projectId);
+    expect(project?.sandboxStatus).toBe("closed");
+    expect(project?.sandboxId).toBeUndefined();
+  });
+
+  test("a stopped sandbox is reported, never guessed at", () => {
+    const entityTools = convexSource("mcp/entityTools.ts");
+    const tool = entityTools.slice(
+      entityTools.indexOf('name: "get_preview_url"'),
+      entityTools.indexOf('name: "cancel_queued_message"'),
+    );
+    // No sandbox and no active VM both short-circuit before any provider call.
+    expect(tool).toContain('target.sandboxStatus !== "active"');
+    expect(tool).toContain("Call start_sandbox and try again");
+    // The five-minute bearer grant must not be pasted into a chat message.
+    expect(tool).toContain("shareablePreviewUrl(preview.url, path)");
+    expect(entityTools).toContain(
+      "url.searchParams.delete(PREVIEW_GRANT_PARAM)",
+    );
+  });
+
+  test("every surface points at its own Preview tab", () => {
+    const entityRef = convexSource("mcp/entityRef.ts");
+    const previewPath = entityRef.slice(
+      entityRef.indexOf("export function entityPreviewPath("),
+      entityRef.indexOf("/** The identity every entity tool echoes back"),
+    );
+    // Sessions hang their sandbox tabs off the chat route; the other two nest
+    // theirs under /sandbox (see the web app's route files).
+    expect(previewPath).toContain("`${base}/preview`");
+    expect(previewPath).toContain("`${base}/sandbox/preview`");
+  });
+
+  test("the agent is told the link exists before it is asked for one", () => {
+    const prompts = readFileSync(
+      join(testsDir, "../convex/_sessions/prompts.ts"),
+      "utf8",
+    );
+    expect(prompts).toContain("get_preview_url");
+    expect(prompts).toContain("Never reply that no link exists");
   });
 });

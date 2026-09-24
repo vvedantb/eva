@@ -28,6 +28,7 @@ export {
   watchConvexReadiness,
   runStopCommands,
   getPreviewUrl,
+  previewUrlForAuthorizedSandbox,
   prepareSandbox,
   createOrResumeSandbox,
   fetchBaseBranch,

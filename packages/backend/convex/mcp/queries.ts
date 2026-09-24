@@ -290,6 +290,12 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: v.string(),
       repoName: v.string(),
       repoRootDirectory: v.optional(v.string()),
+      /** Preview VM state, `"closed"` when the entity has never started one. */
+      sandboxStatus: v.string(),
+      /** The VM itself, absent until the entity has had one. */
+      sandboxId: v.optional(v.string()),
+      /** Port the app dev server listens on, entity setting before repo default. */
+      devPort: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -322,6 +328,16 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       repoRootDirectory: repo.rootDirectory,
+      // A session's own status IS its sandbox's; the other two park the
+      // reviewer-facing VM state in their own field (see list_entities).
+      sandboxStatus:
+        hit.kind === "session"
+          ? hit.doc.status
+          : hit.kind === "task"
+            ? (hit.doc.reviewTaskSandboxStatus ?? "closed")
+            : (hit.doc.reviewProjectSandboxStatus ?? "closed"),
+      sandboxId: doc.sandboxId,
+      devPort: doc.devPort ?? repo.devPort,
     };
   },
 });
@@ -373,12 +389,7 @@ const listedEntityValidator = v.object({
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
 
-const SESSION_STATUSES = [
-  "active",
-  "starting",
-  "stopping",
-  "closed",
-] as const;
+const SESSION_STATUSES = ["active", "starting", "stopping", "closed"] as const;
 
 const TASK_STATUSES = [
   "draft",
@@ -405,15 +416,21 @@ const PROJECT_PHASES = [
  * per-status index can be used without an assertion. A status that belongs to
  * another kind simply matches nothing there, which is the honest answer.
  */
-function asSessionStatus(status: string): (typeof SESSION_STATUSES)[number] | undefined {
+function asSessionStatus(
+  status: string,
+): (typeof SESSION_STATUSES)[number] | undefined {
   return SESSION_STATUSES.find((candidate) => candidate === status);
 }
 
-function asTaskStatus(status: string): (typeof TASK_STATUSES)[number] | undefined {
+function asTaskStatus(
+  status: string,
+): (typeof TASK_STATUSES)[number] | undefined {
   return TASK_STATUSES.find((candidate) => candidate === status);
 }
 
-function asProjectPhase(status: string): (typeof PROJECT_PHASES)[number] | undefined {
+function asProjectPhase(
+  status: string,
+): (typeof PROJECT_PHASES)[number] | undefined {
   return PROJECT_PHASES.find((candidate) => candidate === status);
 }
 
@@ -422,7 +439,11 @@ function asProjectPhase(status: string): (typeof PROJECT_PHASES)[number] | undef
  * repo. Returns at most `limit`, and never less than one, so every repo the
  * caller can reach contributes something.
  */
-function rowsPerScan(limit: number, repoCount: number, kindCount: number): number {
+function rowsPerScan(
+  limit: number,
+  repoCount: number,
+  kindCount: number,
+): number {
   const scans = Math.max(repoCount * kindCount, 1);
   return Math.max(1, Math.min(limit, Math.floor(ENTITY_SCAN_BUDGET / scans)));
 }
@@ -573,7 +594,10 @@ export const listEntitiesForUser = internalQuery({
     const userId = ctx.db.normalizeId("users", args.userId);
     if (!userId) return { entities: [], truncated: false };
 
-    const limit = Math.min(Math.max(Math.trunc(args.limit), 1), MAX_ENTITY_PAGE);
+    const limit = Math.min(
+      Math.max(Math.trunc(args.limit), 1),
+      MAX_ENTITY_PAGE,
+    );
     const kinds = kindsToSearch(args.kind);
     const repoIds = args.repoIds
       .map((rawRepoId) => ctx.db.normalizeId("githubRepos", rawRepoId))

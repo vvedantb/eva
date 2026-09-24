@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
 import { canonicalPrUrl } from "./sessionRef";
@@ -102,10 +103,14 @@ export interface EntityTarget {
   status: string;
   prUrl?: string;
   branchName?: string;
-  repoId: string;
+  repoId: Id<"githubRepos">;
   repoOwner: string;
   repoName: string;
   repoRootDirectory?: string;
+  /** Preview VM state, `"closed"` when the entity has never started one. */
+  sandboxStatus: string;
+  sandboxId?: string;
+  devPort?: number;
 }
 
 /** Everything needed to name one entity's place in Eva's url structure. */
@@ -126,6 +131,20 @@ export function entityPath(location: EntityLocation): string | undefined {
     rootDirectory: location.repoRootDirectory,
   });
   return `${basePath}/${ENTITY_PATH_SEGMENT[location.kind]}/${location.numId}`;
+}
+
+/**
+ * The Preview tab under that path. A session puts its sandbox tabs directly on
+ * the chat route; a quick task and a project nest theirs under `/sandbox`.
+ */
+export function entityPreviewPath(
+  location: EntityLocation,
+): string | undefined {
+  const base = entityPath(location);
+  if (base === undefined) return undefined;
+  return location.kind === "session"
+    ? `${base}/preview`
+    : `${base}/sandbox/preview`;
 }
 
 /** The identity every entity tool echoes back, so replies are comparable. */

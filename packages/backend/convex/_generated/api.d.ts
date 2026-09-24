@@ -215,6 +215,7 @@ import type * as _sandbox_runtime_linkedRepoBranch from "../_sandbox_runtime/lin
 import type * as _sandbox_runtime_linkedRepos from "../_sandbox_runtime/linkedRepos.js";
 import type * as _sandbox_runtime_linkedReposEnv from "../_sandbox_runtime/linkedReposEnv.js";
 import type * as _sandbox_runtime_prepareSandboxSteps from "../_sandbox_runtime/prepareSandboxSteps.js";
+import type * as _sandbox_runtime_previewPoll from "../_sandbox_runtime/previewPoll.js";
 import type * as _sandbox_runtime_previewProxy from "../_sandbox_runtime/previewProxy.js";
 import type * as _sandbox_runtime_previewRecovery from "../_sandbox_runtime/previewRecovery.js";
 import type * as _sandbox_runtime_resumeSandboxSteps from "../_sandbox_runtime/resumeSandboxSteps.js";
@@ -667,6 +668,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/linkedRepos": typeof _sandbox_runtime_linkedRepos;
   "_sandbox_runtime/linkedReposEnv": typeof _sandbox_runtime_linkedReposEnv;
   "_sandbox_runtime/prepareSandboxSteps": typeof _sandbox_runtime_prepareSandboxSteps;
+  "_sandbox_runtime/previewPoll": typeof _sandbox_runtime_previewPoll;
   "_sandbox_runtime/previewProxy": typeof _sandbox_runtime_previewProxy;
   "_sandbox_runtime/previewRecovery": typeof _sandbox_runtime_previewRecovery;
   "_sandbox_runtime/resumeSandboxSteps": typeof _sandbox_runtime_resumeSandboxSteps;

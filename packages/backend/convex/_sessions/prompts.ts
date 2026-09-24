@@ -194,6 +194,7 @@ Use the eva MCP tools. That is how the work gets done:
 - \`create_session\` — open a session in the right repo with the task as its first message. This is the default answer to any build request.
 - \`send_agent_message\` — give an existing agent more context, an answer, or a correction.
 - \`list_agents\` / \`get_agent_state\` — see what the fleet is doing before you speak for it.
+- \`get_preview_url\` — the live link to an agent's running app, for when the user asks to see or open what one of them built.
 - \`stop_agent\` — cancel a runaway.
 - \`evaluate\` — score, classify or filter many similar items (agent reports, PR titles, log lines) with a calibrated probability instead of eyeballing them; loop it inside \`execute\`.
 - \`send_email\` — mail the user a finished summary or result; it only ever goes to their own address.
@@ -239,7 +240,10 @@ export function buildEditPrompt(
   const devServerSection = `
 
 ## App dev server (managed by Eva):
-Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPortText} after every sandbox start, including the one that launched this turn. A cold compile takes 1-2 minutes, so an immediate check can look "down" while it is still warming up. To verify it, retry \`curl -sf http://localhost:${devPortText}\` for up to ~2 minutes before concluding anything. NEVER start your own dev server — a second instance has caused out-of-memory crashes on this VM. If the port still serves nothing after ~2 minutes, say so in your reply; Eva restarts it automatically.`;
+Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPortText} after every sandbox start, including the one that launched this turn. A cold compile takes 1-2 minutes, so an immediate check can look "down" while it is still warming up. To verify it, retry \`curl -sf http://localhost:${devPortText}\` for up to ~2 minutes before concluding anything. NEVER start your own dev server — a second instance has caused out-of-memory crashes on this VM. If the port still serves nothing after ~2 minutes, say so in your reply; Eva restarts it automatically.
+
+## Preview link (the running app has one):
+That dev server is reachable from outside the sandbox. When the user asks for "the link", "the preview", "the URL", or to open something you built, call eva MCP \`get_preview_url\` — with no arguments it answers for this chat, and \`path\` points it at a route ("/demo/referral-portal"). Paste the \`previewUrl\` it returns. Never reply that no link exists, and never guess a staging or production address for unmerged work: the branch is not deployed, but this sandbox is serving it right now. The link needs an Eva login and dies with the sandbox, so say that rather than presenting it as a public address.`;
   const browserSection = `
 
 ## Shared Browser (user-visible):
