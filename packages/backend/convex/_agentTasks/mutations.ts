@@ -410,23 +410,6 @@ export const updateStatus = authMutation({
           transition,
         );
       }
-
-      // Write the reviewer-facing description here rather than at the end of
-      // every run: this is the moment the work is offered for review, so the
-      // diff is final and it costs one model call per review instead of one
-      // per run (mirrors a session's "Send for review"). Scheduled, not
-      // awaited, and best-effort — a stopped sandbox just logs and leaves the
-      // static PR body in place.
-      if (enteringCodeReview && prUrl && repo && task.sandboxId) {
-        await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
-          installationId: repo.installationId,
-          repoOwner: repo.owner,
-          repoName: repo.name,
-          prUrl,
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-        });
-      }
     }
 
     if (

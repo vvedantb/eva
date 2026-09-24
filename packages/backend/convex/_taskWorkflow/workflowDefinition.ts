@@ -52,6 +52,9 @@ export const taskExecutionWorkflow = workflow.define({
     let finalError: string | null = null;
     let runCompletionRecorded = false;
     let runFinalized = false;
+    let sandboxStopped = false;
+    let preserveSandboxOnFailure = false;
+    let keepTaskSandboxActiveAfterRun = false;
 
     try {
       await step.runMutation(internal.taskWorkflow.updateRunToRunning, {
@@ -68,6 +71,7 @@ export const taskExecutionWorkflow = workflow.define({
         branchName: args.branchName,
         mode: args.mode,
       });
+      keepTaskSandboxActiveAfterRun = data.keepTaskSandboxActiveAfterRun;
       // Reuse the persisted sandbox for project tasks (project.sandboxId) or
       // for quick tasks on follow-up runs (task.sandboxId — set after the first
       // run completes). Quick-task sandboxes are persistent (stop/pause, not
@@ -173,6 +177,7 @@ export const taskExecutionWorkflow = workflow.define({
           );
           pushedCommits = pushResult.pushed;
         } catch (error) {
+          preserveSandboxOnFailure = true;
           finalSuccess = false;
           finalError = formatDelayedPublishFailureError("task", error);
           console.error(
@@ -328,13 +333,10 @@ export const taskExecutionWorkflow = workflow.define({
       });
       runFinalized = true;
 
-      // Project tasks only. A quick task lands in business_review here, so its
-      // diff is not final yet — its description is written when the reviewer
-      // moves the task to code_review (`agentTasks.updateStatus`), the same
-      // point a session writes one on "Send for review". Project tasks share
-      // one PR across many tasks and never make that transition, so they keep
-      // writing it per run. Best-effort: the static body stays if this fails.
-      if (args.projectId && completionPrUrl && sandboxId) {
+      // Diff-derived PR description runs on the same sandbox, so it must go
+      // before the quick-task sandbox stop below. Best-effort: the static body
+      // is already in place and stays if this fails.
+      if (completionPrUrl && sandboxId) {
         try {
           await step.runAction(internal.github.generatePrDescription, {
             installationId: args.installationId,
@@ -368,6 +370,25 @@ export const taskExecutionWorkflow = workflow.define({
             retryError,
           );
         }
+      }
+
+      // Stop (don't delete) quick-task sandboxes that were not already open in
+      // the reviewer UI. If a change-request reused an active preview sandbox,
+      // keep it active so "View Sandbox" continues pointing at a live sandbox.
+      if (
+        !args.projectId &&
+        sandboxId &&
+        !preserveSandboxOnFailure &&
+        !keepTaskSandboxActiveAfterRun
+      ) {
+        await step.runAction(internal.sandbox.stopSandbox, {
+          sandboxId,
+          repoId: args.repoId,
+        });
+        await step.runMutation(internal.taskWorkflow.markTaskSandboxStopped, {
+          taskId: args.taskId,
+        });
+        sandboxStopped = true;
       }
     } catch (error) {
       const workflowError =
@@ -430,18 +451,25 @@ export const taskExecutionWorkflow = workflow.define({
           );
         }
       }
-    } finally {
-      // A quick-task sandbox is left running after its run so the reviewer can
-      // chat, preview and open a terminal without waiting for a cold resume.
-      // Recording it as active is what points the reviewer UI at the live
-      // sandbox — and what lets the idle auto-stop sweep reap it later. Both
-      // exits come through here so a failed run keeps its sandbox too.
-      if (!args.projectId && sandboxId) {
-        await step.runMutation(internal.taskWorkflow.markTaskSandboxActive, {
-          taskId: args.taskId,
-          sandboxId,
-        });
+
+      if (
+        !args.projectId &&
+        sandboxId &&
+        !sandboxStopped &&
+        !preserveSandboxOnFailure &&
+        !keepTaskSandboxActiveAfterRun
+      ) {
+        try {
+          await step.runAction(internal.sandbox.stopSandbox, {
+            sandboxId,
+            repoId: args.repoId,
+          });
+          await step.runMutation(internal.taskWorkflow.markTaskSandboxStopped, {
+            taskId: args.taskId,
+          });
+        } catch {}
       }
+    } finally {
       await step.runMutation(internal.taskWorkflow.clearActiveWorkflow, {
         taskId: args.taskId,
       });
