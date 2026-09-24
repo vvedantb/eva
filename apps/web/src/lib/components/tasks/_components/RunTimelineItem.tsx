@@ -19,9 +19,10 @@ import {
   formatModelDisplayLabel,
   findModelOption,
   motionFast,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconLoader2, IconPlayerStop } from "@tabler/icons-react";
+import { IconPlayerStop } from "@tabler/icons-react";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import dayjs, { formatExactDateTime } from "@eva/shared/dates";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -236,7 +237,7 @@ export function RunTimelineItem({
                       disabled={isStopping}
                     >
                       {isStopping ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconPlayerStop size={14} />
                       )}

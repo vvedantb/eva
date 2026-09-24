@@ -14,12 +14,11 @@ import {
   IconCircle,
   IconCircleCheck,
   IconGitBranch,
-  IconLoader,
   IconSearch,
   IconTerminal2,
 } from "@tabler/icons-react";
 import { cn } from "../utils/cn";
-import { Spinner } from "../ui/spinner";
+import { CircleSpinner, Spinner } from "../ui/spinner";
 import { CrossfadeIconSlot } from "../ui/crossfade-icon";
 import { motionFast, motionStagger } from "../utils/motion";
 import { m } from "motion/react";
@@ -174,7 +173,7 @@ function TodoStatusIcon({ status }: { status: TodoItem["status"] }) {
       {status === "completed" ? (
         <IconCircleCheck className="size-3.5 text-primary" />
       ) : status === "in_progress" ? (
-        <IconLoader className="size-3.5 animate-spin text-primary" />
+        <CircleSpinner size="sm" className="size-3.5" />
       ) : (
         <IconCircle className="size-3.5 text-muted-foreground" />
       )}

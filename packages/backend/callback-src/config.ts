@@ -57,9 +57,11 @@ export const NO_WRITES = process.env.EVA_NO_WRITES === "1";
  * Human-in-the-loop AskUserQuestion. The Agent SDK exposes the `canUseTool`
  * pause needed to block a turn on an answer, and only sessions currently wire the
  * answering UI — so this is gated to session runs. Elsewhere AskUserQuestion
- * stays the old fire-and-forget metadata (surfaced after the turn). When enabled
- * the SDK drops `bypassPermissions` for a `canUseTool` gate that auto-allows every
- * tool except AskUserQuestion (which waits for the user's answer via Convex).
+ * stays the old fire-and-forget metadata (surfaced after the turn).
+ *
+ * Scope is only that question behaviour. Every agent turn installs `canUseTool`
+ * regardless (see `providers/claudeSdk.ts`) — it is what grants MCP tools, which
+ * `bypassPermissions` does not. Do not fold the two concerns back together.
  */
 export const BLOCKING_QUESTIONS_ENABLED =
   process.env.ENTITY_ID_FIELD === "sessionId";

@@ -19,12 +19,12 @@ import {
   DialogFooter,
   CenteredSpinner,
   toast,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconDots,
   IconEyeOff,
   IconPlus,
-  IconRefresh,
   IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
@@ -158,10 +158,7 @@ export function ReposClient() {
                       )
                     }
                   >
-                    <IconRefresh
-                      size={16}
-                      className={syncing ? "animate-spin" : ""}
-                    />
+                    <RefreshSpinIcon busy={syncing} />
                     {syncing ? "Syncing..." : "Sync Repos"}
                     <ConfirmSkipHint />
                   </DropdownMenuItem>
@@ -195,10 +192,7 @@ export function ReposClient() {
                         handleSync();
                       }}
                     >
-                      <IconRefresh
-                        size={16}
-                        className={syncing ? "animate-spin" : ""}
-                      />
+                      <RefreshSpinIcon busy={syncing} />
                       Sync
                     </Button>
                   </DialogFooter>

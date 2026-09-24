@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
-import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import {
+  Button,
+  cn,
+  RefreshSpinIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@eva/ui";
 import {
   IconFoldDown,
   IconFoldUp,
   IconFolder,
   IconLayoutSidebar,
   IconLayoutSidebarRight,
-  IconRefresh,
   IconSearch,
 } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
@@ -225,9 +231,7 @@ export function SandboxFileTree({
               disabled={isRefreshing}
               aria-label="Refresh file list"
             >
-              <IconRefresh
-                className={cn("size-3.5", isRefreshing && "animate-spin")}
-              />
+              <RefreshSpinIcon busy={isRefreshing} className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent className="text-xs">Refresh</TooltipContent>

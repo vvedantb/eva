@@ -87,6 +87,23 @@ export function decodeRepoParam(repoParam: string): {
 /**
  * Browser slash URL → router internal `--` URL.
  * `/owner/repo/app/…` → `/owner/repo--app/…`
+ *
+ * When you need it, and when you do not — `repoUrlRouterContract.test.ts` pins
+ * both, because the answer differs by call site and guessing has cost two bugs:
+ *
+ * - `<Link to>` / `router.buildLocation`: **required**. These never cross the
+ *   history boundary where `main.tsx`'s `rewrite.input` runs, so a display-form
+ *   target matches no route. The href still renders correctly and a click still
+ *   works, but active styling and `defaultPreload: "intent"` silently stop.
+ * - `navigate({ to })`: **redundant**. A real navigation commits through
+ *   history, so the rewrite already converts it. Harmless (the function is
+ *   idempotent) and kept for uniformity — but a missing one here is not a bug,
+ *   so do not reach for it to explain a broken redirect. PR #802 did exactly
+ *   that; the real cause was an unrelated nuqs URL write.
+ *
+ * Anything user-visible — `<a href>`, `window.location`, copy-link buttons —
+ * wants {@link repoHref} or {@link toDisplayRepoHref} instead. `repo--app` must
+ * never reach the address bar.
  */
 export function toInternalRepoHref(href: string): string {
   const { pathname, suffix } = splitHref(href);
