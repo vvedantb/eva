@@ -6,7 +6,7 @@ import { useNavigate, useLocation } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import { decodeRepoParam, toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { FunctionReturnType } from "convex/server";
-import { Skeleton } from "@eva/ui";
+import { CenteredSpinner } from "@eva/ui";
 import { RepoNotFound } from "@/lib/components/RepoNotFound";
 
 type Repo = NonNullable<
@@ -161,14 +161,7 @@ export function RepoGate({ children }: { children: React.ReactNode }) {
   // does not re-centre as the real content lands.
   if (loadState.status === "pending") {
     return (
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-3 p-3"
-        aria-busy="true"
-        aria-label="Loading codebase"
-      >
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="min-h-0 flex-1" />
-      </div>
+      <CenteredSpinner label="Loading codebase" />
     );
   }
 

@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Skeleton,
+  CenteredSpinner,
   motionFast,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -150,15 +150,10 @@ export function GlobalSessionsSidebar({
               transition={motionFast}
             >
               {orderedRepos === undefined ? (
-                <div
-                  className="min-h-48 space-y-2 px-3"
-                  aria-busy="true"
-                  aria-label="Loading sessions"
-                >
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-9" />
-                  ))}
-                </div>
+                <CenteredSpinner
+                  label="Loading sessions"
+                  className="min-h-48"
+                />
               ) : orderedRepos.length === 0 ? (
                 <div className="px-3 py-8 text-center">
                   <p className="text-sm font-medium text-foreground">

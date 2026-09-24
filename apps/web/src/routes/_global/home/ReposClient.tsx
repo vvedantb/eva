@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Skeleton,
+  CenteredSpinner,
   toast,
 } from "@eva/ui";
 import {
@@ -235,18 +235,7 @@ export function ReposClient() {
       }
     >
       {repos === undefined || appSlug === undefined ? (
-        <div
-          className="min-h-112 space-y-6"
-          aria-busy="true"
-          aria-label="Loading repositories"
-        >
-          <Skeleton className="ml-4 h-8 w-40" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-28 border border-border" />
-            ))}
-          </div>
-        </div>
+        <CenteredSpinner label="Loading repositories" className="min-h-112" />
       ) : repos.length === 0 ? (
         <EmptyOnboarding connectUrl={buildConnectUrl(appSlug)} />
       ) : (

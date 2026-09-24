@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Skeleton,
+  CenteredSpinner,
   Spinner,
 } from "@eva/ui";
 import { GlobalAutomationGroup } from "@/lib/components/sidebar/_components/GlobalAutomationGroup";
@@ -164,15 +164,7 @@ export function GlobalAutomationsSidebar({
     <>
       <div className="flex-1 space-y-3 px-0 pb-1">
         {orderedRepos === undefined ? (
-          <div
-            className="min-h-48 space-y-2 px-3"
-            aria-busy="true"
-            aria-label="Loading automations"
-          >
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-9" />
-            ))}
-          </div>
+          <CenteredSpinner label="Loading automations" className="min-h-48" />
         ) : orderedRepos.length === 0 ? (
           <div className="px-3 py-8 text-center">
             <p className="text-sm font-medium text-foreground">No apps yet</p>

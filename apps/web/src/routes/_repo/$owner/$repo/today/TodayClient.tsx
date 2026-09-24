@@ -4,6 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, DAILY_STANDUP_KEY } from "@eva/backend";
 import {
+  CenteredSpinner,
   cn,
   STREAMDOWN_TABLE_RADIUS_CLASS,
   motionBase,
@@ -18,7 +19,6 @@ import { IconSunrise } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
-import { TimelineEntriesSkeleton } from "@/lib/components/ui/TimelineEntriesSkeleton";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
@@ -63,7 +63,7 @@ export function TodayClient() {
   return (
     <PageWrapper title="Today" comfortable>
       {entries === undefined ? (
-        <TimelineEntriesSkeleton aria-label="Loading standups" />
+        <CenteredSpinner label="Loading standups" />
       ) : entries.length === 0 ? (
         enabled === false ? (
           <EmptyState

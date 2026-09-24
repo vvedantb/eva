@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DialogBody,
+  CenteredSpinner,
   toast,
   motionFast,
 } from "@eva/ui";
@@ -55,7 +56,6 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
-import { ProjectDetailSkeleton } from "./_components/ProjectsSkeletons";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 import {
@@ -298,7 +298,7 @@ export function ProjectDetailClient({
   };
 
   if (project === undefined) {
-    return <ProjectDetailSkeleton />;
+    return <CenteredSpinner label="Loading project" />;
   }
 
   if (project === null) {

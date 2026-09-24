@@ -23,32 +23,6 @@
   @apply ui-surface p-5 md:p-6;
 }
 
-@utility ui-skeleton {
-  /* Highlight sweep for loading placeholders. Transform on ::after so the
-   * band runs on the compositor while the page is busy fetching — the same
-   * reason <Shimmer/> left rAF. Overflow clips the band to the caller's
-   * radius; the fill stays `bg-muted` on the element itself.
-   *
-   * Stops sit at 20/50/80% so the sheen is a band, not a full-card wash.
-   * Light muted is already near white, so the peak has to be almost opaque
-   * to lift at all; dark uses a much thinner white. */
-  position: relative;
-  overflow: hidden;
-  &::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: linear-gradient(
-      90deg,
-      rgb(255 255 255 / 0) 20%,
-      light-dark(rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.22)) 50%,
-      rgb(255 255 255 / 0) 80%
-    );
-    animation: skeleton-shimmer 2s linear infinite;
-    pointer-events: none;
-  }
-}
-
 @utility t-modal {
   /* transitions.dev — modal open / close. The dialog is always centered, so
    * .t-modal owns the centering transform (translate -50%) plus scale/fade. */
@@ -980,8 +954,8 @@
   /*
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
-   * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.ui-skeleton`
-   * / `.shimmer-*` (loading UI), `.beam*` (composer beam), LoadingState WAAPI
+   * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
+   * (loading UI), `.beam*` (composer beam), LoadingState WAAPI
    * (sessions sidebar Drive loader).
    */
   html[data-page-motion="off"] .animate-in,
@@ -1945,18 +1919,6 @@ html[data-blur-pid] [data-pii] {
   }
 }
 
-/* <Skeleton/> — the highlight band. Percentages are of the pseudo, so
- * -100% → 100% walks it fully off one edge and fully off the other; the
- * jump back is invisible because both ends are clipped. */
-@keyframes skeleton-shimmer {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
 /*
  * Infinite animations pause when the tab is in the background, a parked
  * subtree is `aria-hidden` (cached session shell, minimized Ave), or the
@@ -1973,7 +1935,6 @@ html[data-page-hidden] .beam::before,
 html[data-page-hidden] .shimmer-band,
 html[data-page-hidden] .shimmer-copy,
 html[data-page-hidden] .shimmer-text,
-html[data-page-hidden] .ui-skeleton::after,
 html[data-page-hidden] .animate-spin,
 html[data-page-hidden] .animate-pulse,
 html[data-page-hidden] .animate-bounce,
@@ -1983,7 +1944,6 @@ html[data-page-hidden] .landing-pulse-dot,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-band,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-copy,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-text,
-[aria-hidden="true"]:not([data-anim-chrome]) .ui-skeleton::after,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-spin,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-pulse,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-bounce,
@@ -1993,7 +1953,6 @@ html[data-page-hidden] .landing-pulse-dot,
 [data-anim-offscreen] .shimmer-band,
 [data-anim-offscreen] .shimmer-copy,
 [data-anim-offscreen] .shimmer-text,
-[data-anim-offscreen] .ui-skeleton::after,
 [data-anim-offscreen].shimmer-overlay .shimmer-band,
 [data-anim-offscreen].shimmer-overlay .shimmer-copy,
 [data-anim-offscreen] .animate-spin,

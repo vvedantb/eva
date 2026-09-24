@@ -6,6 +6,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import {
   Button,
+  CenteredSpinner,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -56,12 +57,7 @@ import {
 import { ProjectsChangePhaseDialog } from "./_components/ProjectsChangePhaseDialog";
 import { useProjectsSelection } from "./_components/useProjectsSelection";
 import { useProjectDelete } from "./_components/useProjectDelete";
-import {
-  ProjectsListSkeleton,
-  ProjectsTimelineSkeleton,
-} from "./_components/ProjectsSkeletons";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
-import { KanbanBoardSkeleton } from "@/lib/components/kanban/KanbanBoardSkeleton";
 import {
   useProjectFilters,
   SORT_FIELDS,
@@ -374,20 +370,7 @@ export function ProjectsClient() {
             />
           )}
           {projects === undefined ? (
-            view === "kanban" ? (
-              <KanbanBoardSkeleton
-                columns={
-                  visiblePhases.size > 0
-                    ? visiblePhases.size
-                    : PROJECT_PHASES.length
-                }
-                aria-label="Loading projects"
-              />
-            ) : view === "timeline" ? (
-              <ProjectsTimelineSkeleton />
-            ) : (
-              <ProjectsListSkeleton />
-            )
+            <CenteredSpinner label="Loading projects" />
           ) : projects.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <EmptyState

@@ -1,6 +1,6 @@
 "use client";
 
-import { Skeleton } from "@eva/ui";
+import { CenteredSpinner } from "@eva/ui";
 import { IconInbox } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
@@ -39,7 +39,7 @@ interface InboxListPaneProps {
 }
 
 /**
- * The scrolling body of the inbox's left pane: loading skeleton, per-filter
+ * The scrolling body of the inbox's left pane: loading spinner, per-filter
  * empty state, or the grouped list. Split out so `InboxClient` stays queries,
  * state and layout.
  */
@@ -59,16 +59,7 @@ export function InboxListPane({
 }: InboxListPaneProps) {
   if (notifications === undefined) {
     return (
-      <div
-        className="space-y-2 p-4"
-        aria-busy="true"
-        aria-label="Loading inbox"
-      >
-        <Skeleton className="h-4 w-24" />
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-14" />
-        ))}
-      </div>
+      <CenteredSpinner label="Loading inbox" />
     );
   }
 

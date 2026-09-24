@@ -1,4 +1,5 @@
 import { useMutation } from "convex/react";
+import { CenteredSpinner } from "@eva/ui";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
@@ -6,7 +7,6 @@ import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
-import { SessionDetailSkeleton } from "./_components/SessionDetailSkeleton";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
@@ -208,7 +208,7 @@ export function SessionDetailClient({
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   if (session === undefined) {
-    return <SessionDetailSkeleton />;
+    return <CenteredSpinner label="Loading session" />;
   }
 
   if (session === null) {
