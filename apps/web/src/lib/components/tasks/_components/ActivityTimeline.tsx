@@ -303,12 +303,15 @@ export function ActivityTimeline({
                   )
                   .join("-")}`}
                 index={segmentIndex}
-                className="relative flex flex-col gap-4"
+                // Indented by the comment card's own row padding (14px) so rail
+                // avatars sit in the same column as avatars inside the cards.
+                className="relative flex flex-col gap-4 pl-3.5"
               >
-                {/* Rail only through non-comment events in this contiguous block. */}
+                {/* Rail only through non-comment events in this contiguous block.
+                    22px = 14px indent + half of the 16px avatar slot. */}
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute bottom-2 left-2 top-2 w-px -translate-x-1/2 bg-border"
+                  className="pointer-events-none absolute bottom-2 left-[22px] top-2 w-px -translate-x-1/2 bg-border"
                 />
                 {segment.items.map((item) => renderTimelineItem(item))}
               </ListEnter>
