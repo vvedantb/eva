@@ -416,6 +416,7 @@ export const ChatMessage = memo(function ChatMessage({
                       {message.activityLog && (
                         <ActivityLogDisplay
                           activityLog={message.activityLog}
+                          messageId={message._id}
                           name="Eva"
                           icon={EVA_ICON}
                           startedAt={message.timestamp}

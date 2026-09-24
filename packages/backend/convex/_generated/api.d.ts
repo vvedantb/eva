@@ -126,6 +126,7 @@ import type * as _mentions_resolveMessageTokens from "../_mentions/resolveMessag
 import type * as _mentions_resolveSkillMentions from "../_mentions/resolveSkillMentions.js";
 import type * as _mentions_routingUrgency from "../_mentions/routingUrgency.js";
 import type * as _mentions_skillToken from "../_mentions/skillToken.js";
+import type * as _messages_activityLog from "../_messages/activityLog.js";
 import type * as _messages_media from "../_messages/media.js";
 import type * as _messages_preview from "../_messages/preview.js";
 import type * as _migrations_backfillArchivedFromPrState from "../_migrations/backfillArchivedFromPrState.js";
@@ -577,6 +578,7 @@ declare const fullApi: ApiFromModules<{
   "_mentions/resolveSkillMentions": typeof _mentions_resolveSkillMentions;
   "_mentions/routingUrgency": typeof _mentions_routingUrgency;
   "_mentions/skillToken": typeof _mentions_skillToken;
+  "_messages/activityLog": typeof _messages_activityLog;
   "_messages/media": typeof _messages_media;
   "_messages/preview": typeof _messages_preview;
   "_migrations/backfillArchivedFromPrState": typeof _migrations_backfillArchivedFromPrState;
