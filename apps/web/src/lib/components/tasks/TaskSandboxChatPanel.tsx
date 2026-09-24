@@ -103,6 +103,15 @@ export function TaskSandboxChatPanel({
       ? { taskId }
       : "skip",
   );
+  // Screenshots and recordings the run left behind, uploaded by the sandbox as
+  // it finished. Only resolved when the run says it has some, so a text-only
+  // run costs no extra query.
+  const firstRunMedia = useQuery(
+    api.agentRuns.getMedia,
+    firstRun && (firstRun.mediaStorageIds?.length ?? 0) > 0
+      ? { id: firstRun._id }
+      : "skip",
+  );
   const firstRunTurn =
     task &&
     firstRun &&
@@ -114,6 +123,7 @@ export function TaskSandboxChatPanel({
           ...(taskAttachments !== undefined
             ? { attachments: taskAttachments }
             : {}),
+          ...(firstRunMedia !== undefined ? { media: firstRunMedia } : {}),
         })
       : [];
 

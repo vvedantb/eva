@@ -115,6 +115,7 @@ export function buildFirstRunChatTurn({
   run,
   activityLog,
   attachments,
+  media,
 }: {
   task: Pick<
     Doc<"agentTasks">,
@@ -128,6 +129,12 @@ export function buildFirstRunChatTurn({
   activityLog: string | null;
   /** Task attachments resolved to URLs, shown on the prompt bubble. */
   attachments?: { url: string | null; contentType: string | null }[];
+  /**
+   * Screenshots and recordings the run captured, resolved to URLs. They ride
+   * the assistant reply exactly like a chat turn's media — the run is the only
+   * place they are stored, since this turn has no `messages` row.
+   */
+  media?: { url: string | null; contentType: string | null }[];
 }): ChatBodyMessage[] {
   const startedAt = run.startedAt ?? run._creationTime;
   return [
@@ -155,6 +162,7 @@ export function buildFirstRunChatTurn({
       parentId: task._id,
       role: "assistant",
       timestamp: startedAt,
+      ...(media && media.length > 0 ? { media } : {}),
       ...firstRunAssistantContent({
         status: run.status,
         ...(run.resultSummary !== undefined
