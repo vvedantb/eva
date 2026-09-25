@@ -69,9 +69,7 @@ const sdkVersions = [
 
 test("provider SDK dependencies match the callback loader versions", () => {
   for (const sdk of sdkVersions) {
-    expect(backendPackage).toContain(
-      `"${sdk.packageName}": "${sdk.version}"`,
-    );
+    expect(backendPackage).toContain(`"${sdk.packageName}": "${sdk.version}"`);
     expect(sdk.loader).toContain(`const SDK_PACKAGE = "${sdk.packageName}"`);
     expect(sdk.loader).toContain(`const SDK_VERSION = "${sdk.version}"`);
   }
@@ -104,11 +102,12 @@ test("new snapshots preinstall both provider SDKs at the loader versions", () =>
   }
 });
 
-test("sandboxes pin the Claude Code CLI to the agent SDK's own build", () => {
-  // The SDK spawns the globally installed `claude` binary and new models are
-  // gated on that binary's version, so an unpinned CLI leaves an old snapshot
-  // failing every turn with "does not support this model". Agent SDK 0.3.X
-  // ships CLI 2.1.X, hence the shared patch component.
+test("the CLI floor is never older than the agent SDK's own build", () => {
+  // Sandboxes run the registry's latest CLI, resolved per launch. This constant
+  // is the floor a failed lookup falls back to, and what the snapshot seed bakes
+  // — so it must still satisfy the SDK, which spawns the binary and whose models
+  // are gated on its version. Agent SDK 0.3.X ships CLI 2.1.X, hence the shared
+  // patch component.
   const pinned = /CLAUDE_CODE_VERSION = "([^"]+)"/.exec(claudeCliVersionModule);
   const cliVersion = pinned?.[1];
   expect(cliVersion).toMatch(/^2\.1\.\d+$/);
@@ -116,7 +115,7 @@ test("sandboxes pin the Claude Code CLI to the agent SDK's own build", () => {
     CLAUDE_AGENT_SDK_PIN.split(".").at(2),
   );
 
-  // One source of truth: the seed and the launch-time fallback both import it.
+  // One source of truth: the seed and the launch-time resolver both import it.
   expect(snapshotActions).toContain(
     'import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion"',
   );
@@ -124,29 +123,46 @@ test("sandboxes pin the Claude Code CLI to the agent SDK's own build", () => {
     'import { CLAUDE_CODE_VERSION } from "./claudeCliVersion"',
   );
 
-  // Version-pinned install plus a version-pinned "already installed" guard, so
-  // a snapshot seeded with an older CLI reseeds instead of serving it forever.
+  // The seed stays version-pinned, guard included: an image resolves `@latest`
+  // once and then freezes it, so a floating seed is what leaves an old snapshot
+  // serving a CLI too old for the model (2.1.246, changelog 2026-09-02).
   expect(snapshotActions).toContain(
     'globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)',
   );
   expect(snapshotActions).toContain(
     "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}",
   );
-  expect(launchRuntime).toContain(
-    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}",
-  );
-  // No unpinned install survives anywhere.
+  // No unpinned install survives anywhere. The launch install interpolates the
+  // version resolved for *this* launch — never a bare package or a literal
+  // `@latest`, which would leave the guards below nothing to compare against.
+  expect(launchRuntime).toContain("@anthropic-ai/claude-code@${version}");
   expect(snapshotActions).not.toMatch(/@anthropic-ai\/claude-code(?![@"])/);
   expect(launchRuntime).not.toMatch(/@anthropic-ai\/claude-code(?![@"])/);
+  expect(launchRuntime).not.toContain("claude-code@latest");
+});
 
+test("the launch-resolved CLI version reaches both the install and the callback", () => {
   // Launch-time provisioning is version-aware, not existence-only: a live
-  // sandbox whose global CLI predates the pin gets the pinned build under the
-  // fallback prefix, and the callback prefers that over the drifted global
-  // (session 62, 2026-09-02: a 14 Aug snapshot's 2.1.232 failed every Fable
-  // 5.1 turn while the guard only fired when `claude` was missing).
+  // sandbox whose global CLI predates this launch's version gets that build
+  // under the fallback prefix, and the callback prefers it over the drifted
+  // global (session 62, 2026-09-02: a 14 Aug snapshot's 2.1.232 failed every
+  // Fable 5.1 turn while the guard only fired when `claude` was missing).
   expect(launchRuntime).toContain("cli_version()");
+
+  // One resolver call feeds the install and the env var, so the callback can
+  // never be told to expect a version this launch did not install.
   expect(launchRuntime).toContain(
-    'CLAUDE_CLI_PINNED_VERSION=${quote([CLAUDE_CODE_VERSION])}',
+    "export async function resolveClaudeCliVersion()",
+  );
+  expect(launchRuntime).toContain("await resolveClaudeCliVersion()");
+  expect(launchRuntime).toContain(
+    "CLAUDE_CLI_PINNED_VERSION=${quote([claudeCliVersion])}",
+  );
+
+  // The lookup must never fail a launch, and must never move the floor down.
+  expect(launchRuntime).toContain("let resolved = CLAUDE_CODE_VERSION;");
+  expect(launchRuntime).toContain(
+    "isNewerVersion(parsed.data.version, resolved)",
   );
   expect(claudeLoader).toContain("process.env.CLAUDE_CLI_PINNED_VERSION");
   expect(claudeLoader).toContain(

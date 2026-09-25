@@ -18,6 +18,7 @@ import { writeSandboxFile } from "../_sandbox_runtime/sandboxFiles";
 import {
   CLAUDE_FALLBACK_BIN_PATH,
   ensureClaudeCliAvailable,
+  resolveClaudeCliVersion,
 } from "../_sandbox_runtime/launch";
 import { fetchPullRequestDiff } from "./prRecapService";
 import {
@@ -110,7 +111,9 @@ export const generatePrDescription = internalAction({
           await ensureSandboxRunning(sandbox, { resumeAfterStop: true });
         }
         await Promise.all([
-          ensureClaudeCliAvailable(sandbox),
+          resolveClaudeCliVersion().then((version) =>
+            ensureClaudeCliAvailable(sandbox, version),
+          ),
           writeSandboxFile(sandbox, PROMPT_PATH, prompt),
         ]);
         // Prompt goes in on stdin: it carries the whole diff, which is far past

@@ -2,6 +2,7 @@
 
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
+import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
 import { execHandle, requireEnv } from "./helpers";
@@ -151,10 +152,80 @@ function resolveConvexSiteUrl(convexCloudUrl: string): string {
  * critical path) despite already having it. Mirrors `globalNpmRoots()` in
  * callback-src/providers/claudeSdk.ts.
  */
+const CLAUDE_REGISTRY_LATEST_URL = `https://registry.npmjs.org/${CLAUDE_CODE_PACKAGE}/latest`;
+const CLAUDE_REGISTRY_TIMEOUT_MS = 4_000;
+/** Long enough that a burst of launches shares one lookup, short enough that a
+ * CLI release reaches sandboxes within the hour it lands. */
+const CLAUDE_VERSION_CACHE_TTL_MS = 15 * 60 * 1000;
+
+const registryLatestSchema = z.object({ version: z.string() });
+
+let cachedClaudeCliVersion: { version: string; resolvedAt: number } | null =
+  null;
+
+/** Numeric compare of two `x.y.z` strings. Anything non-numeric loses. */
+function isNewerVersion(candidate: string, floor: string): boolean {
+  const candidateParts = candidate.split(".");
+  const floorParts = floor.split(".");
+  for (let index = 0; index < 3; index += 1) {
+    const left = Number(candidateParts[index] ?? "0");
+    const right = Number(floorParts[index] ?? "0");
+    if (Number.isNaN(left) || Number.isNaN(right)) return false;
+    if (left !== right) return left > right;
+  }
+  return false;
+}
+
+/**
+ * The CLI version this launch installs: the registry's latest, or
+ * CLAUDE_CODE_VERSION when that is newer or the lookup fails.
+ *
+ * Resolved here rather than by handing `@latest` to npm inside the sandbox, so
+ * one concrete version reaches both the install command and
+ * `CLAUDE_CLI_PINNED_VERSION`. The callback's `claudeExecutablePath()` compares
+ * the installed CLI against that env var to tell a drifted global `claude` from
+ * the one this launch provisioned; `@latest` leaves nothing to compare, which
+ * degrades that check to "is claude installed?" — the exact guard whose absence
+ * left snapshots serving 2.1.246 forever.
+ *
+ * Never throws. A registry outage must not fail a launch; it means the sandbox
+ * runs the floor until the next lookup succeeds.
+ */
+export async function resolveClaudeCliVersion(): Promise<string> {
+  const now = Date.now();
+  if (
+    cachedClaudeCliVersion !== null &&
+    now - cachedClaudeCliVersion.resolvedAt < CLAUDE_VERSION_CACHE_TTL_MS
+  ) {
+    return cachedClaudeCliVersion.version;
+  }
+  let resolved = CLAUDE_CODE_VERSION;
+  try {
+    const response = await fetch(CLAUDE_REGISTRY_LATEST_URL, {
+      signal: AbortSignal.timeout(CLAUDE_REGISTRY_TIMEOUT_MS),
+    });
+    if (response.ok) {
+      const parsed = registryLatestSchema.safeParse(await response.json());
+      if (parsed.success && isNewerVersion(parsed.data.version, resolved)) {
+        resolved = parsed.data.version;
+      }
+    }
+  } catch (error) {
+    console.log(
+      `[sandbox][claudeCli] registry lookup failed, using floor ${CLAUDE_CODE_VERSION}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  cachedClaudeCliVersion = { version: resolved, resolvedAt: now };
+  return resolved;
+}
+
 export async function ensureClaudeCliAvailable(
   sandbox: SandboxHandle,
+  version: string,
 ): Promise<void> {
-  const pinned = quote([CLAUDE_CODE_VERSION]);
+  const pinned = quote([version]);
   await execHandle(
     sandbox,
     [
@@ -162,7 +233,7 @@ export async function ensureClaudeCliAvailable(
       // node lives at `<prefix>/bin/node`, so its global modules are at
       // `<prefix>/lib/node_modules` whatever the calling user's npm config says.
       `node_root="$(dirname "$(dirname "$(command -v node)")")/lib/node_modules"`,
-      `if [ "$(cli_version "$node_root/${CLAUDE_CODE_PACKAGE}")" != ${pinned} ] && [ "$(cli_version "$(npm root -g)/${CLAUDE_CODE_PACKAGE}")" != ${pinned} ] && [ "$(cli_version ${quote([CLAUDE_FALLBACK_PACKAGE_ROOT])})" != ${pinned} ]; then npm install -g --prefix ${quote([CLAUDE_FALLBACK_INSTALL_DIR])} @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}; fi`,
+      `if [ "$(cli_version "$node_root/${CLAUDE_CODE_PACKAGE}")" != ${pinned} ] && [ "$(cli_version "$(npm root -g)/${CLAUDE_CODE_PACKAGE}")" != ${pinned} ] && [ "$(cli_version ${quote([CLAUDE_FALLBACK_PACKAGE_ROOT])})" != ${pinned} ]; then npm install -g --prefix ${quote([CLAUDE_FALLBACK_INSTALL_DIR])} @anthropic-ai/claude-code@${version}; fi`,
     ].join("; "),
     CLAUDE_INSTALL_TIMEOUT_SECONDS,
   );
@@ -199,10 +270,11 @@ async function ensureOpencodeCliAvailable(
 function ensureProviderCliAvailable(
   sandbox: SandboxHandle,
   provider: AIProvider,
+  claudeCliVersion: string,
 ): Promise<void> {
   switch (provider) {
     case "claude":
-      return ensureClaudeCliAvailable(sandbox);
+      return ensureClaudeCliAvailable(sandbox, claudeCliVersion);
     case "codex":
       return ensureCodexRuntimeAvailable(sandbox);
     case "opencode":
@@ -339,8 +411,15 @@ export async function launchScript(
   );
   const normalizedModel = normalizeAIModel(opts.model);
   const provider = getAIModelProvider(normalizedModel);
+  // One lookup feeds both the install and CLAUDE_CLI_PINNED_VERSION below, so
+  // the callback can never be told to expect a version this launch did not
+  // install. Cached for 15 minutes, and only reached for Claude launches.
+  const claudeCliVersion =
+    provider === "claude"
+      ? await resolveClaudeCliVersion()
+      : CLAUDE_CODE_VERSION;
   const providerPrep = Promise.all([
-    ensureProviderCliAvailable(sandbox, provider),
+    ensureProviderCliAvailable(sandbox, provider, claudeCliVersion),
     ensureEvaToolingAvailable(sandbox),
     ensureSharedPnpmStore(sandbox),
   ]);
@@ -404,8 +483,9 @@ export async function launchScript(
     `CODEX_PERSIST_DIR=${quote([CODEX_PERSIST_VOLUME_MOUNT_PATH])}`,
     `CODEX_BIN_PATH=${quote([CODEX_FALLBACK_BIN_PATH])}`,
     `CLAUDE_BIN_PATH=${quote([CLAUDE_FALLBACK_BIN_PATH])}`,
-    // Lets the callback tell a drifted global `claude` from the pinned one.
-    `CLAUDE_CLI_PINNED_VERSION=${quote([CLAUDE_CODE_VERSION])}`,
+    // Lets the callback tell a drifted global `claude` from the one this launch
+    // provisioned. Resolved per launch, not the compiled floor.
+    `CLAUDE_CLI_PINNED_VERSION=${quote([claudeCliVersion])}`,
     `OPENCODE_RUNTIME_HOME_DIR=${quote([OPENCODE_RUNTIME_HOME_DIR])}`,
     `OPENCODE_PERSIST_DIR=${quote([OPENCODE_PERSIST_VOLUME_MOUNT_PATH])}`,
     `EVA_OPENCODE_BIN_PATH=${quote([OPENCODE_FALLBACK_BIN_PATH])}`,
