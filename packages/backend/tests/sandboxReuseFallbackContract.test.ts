@@ -54,7 +54,7 @@ describe("seeded dump restore does not wipe a populated public schema", () => {
   test("resume skips truncate when public already has tables", () => {
     const body = functionBody(
       devServer,
-      "export async function restoreSeededRuntimeState(",
+      "async function restoreSeededSupabaseDump(",
     );
     const skipAt = body.indexOf(
       "public schema already has tables; skipping seeded dump restore",
@@ -63,6 +63,21 @@ describe("seeded dump restore does not wipe a populated public schema", () => {
     expect(skipAt, "the populated-schema skip moved").toBeGreaterThan(-1);
     expect(truncateAt, "the truncate moved").toBeGreaterThan(-1);
     expect(skipAt).toBeLessThan(truncateAt);
+  });
+
+  /**
+   * carepulse-ts session 87: `supabase start` exited 127 inside the restore,
+   * startSessionServices threw before resolving the dev command, and the
+   * Preview Console never got a dev server on start or resume.
+   */
+  test("a failed dump restore never blocks the dev server launch", () => {
+    const body = functionBody(
+      devServer,
+      "export async function restoreSeededRuntimeState(",
+    );
+    const tryAt = body.indexOf("try {\n    await restoreSeededSupabaseDump(");
+    expect(tryAt, "the dump restore is no longer guarded").toBeGreaterThan(-1);
+    expect(body.slice(tryAt)).toContain("} catch (error) {");
   });
 });
 
