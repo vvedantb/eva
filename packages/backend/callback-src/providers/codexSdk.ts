@@ -1,5 +1,5 @@
 import { Codex, type ThreadEvent, type ThreadOptions } from "@openai/codex-sdk";
-import { existsSync, readFileSync } from "fs";
+import { readFileSync } from "fs";
 import {
   CODEX_BIN_PATH,
   CODEX_RUNTIME_HOME_DIR,
@@ -22,6 +22,28 @@ import { callbackState as S, resetAttemptState } from "../runtime/state.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
 import { log } from "../utils.js";
 import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { resolvePinnedCliBinary } from "./claudeSdk.js";
+
+const CODEX_CLI_PACKAGE = "@openai/codex";
+
+/**
+ * Locates the codex binary the SDK (and the App Server client) should drive.
+ *
+ * Same shape as `claudeExecutablePath`: launch.ts floats the CLI to the
+ * registry's latest and reports what it installed in CODEX_CLI_PINNED_VERSION,
+ * so a sandbox whose global `codex` predates that launch must lose to the
+ * fallback prefix. This used to test only whether the fallback path existed,
+ * which is the same existence-only check that left Claude snapshots driving
+ * CLI 2.1.246 against a model it could not run.
+ */
+export function codexExecutablePath(): string {
+  return resolvePinnedCliBinary({
+    packageName: CODEX_CLI_PACKAGE,
+    binName: "codex",
+    pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
+    fallbackBinPath: CODEX_BIN_PATH,
+  });
+}
 
 function readPromptText(): string {
   const prompt = readFileSync("/tmp/design-prompt.txt", "utf8");
@@ -116,7 +138,7 @@ export async function runCodexSdkAttempt(
   const agentTextByItem = new Map<string, string>();
 
   const codex = new Codex({
-    codexPathOverride: existsSync(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex",
+    codexPathOverride: codexExecutablePath(),
     env: codexEnvironment(),
   });
   const threadOptions = buildCodexSdkThreadOptions();

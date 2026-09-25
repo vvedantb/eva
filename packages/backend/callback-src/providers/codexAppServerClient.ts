@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import { existsSync } from "fs";
 import { createInterface } from "readline";
-import { CODEX_BIN_PATH, CODEX_RUNTIME_HOME_DIR, WORK_DIR } from "../config.js";
+import { CODEX_RUNTIME_HOME_DIR, WORK_DIR } from "../config.js";
+import { codexExecutablePath } from "./codexSdk.js";
 import type { JsonObject, JsonValue } from "../types.js";
 import { asJsonObject, log, tryParseJson } from "../utils.js";
 
@@ -31,7 +31,7 @@ export class CodexAppServerClient {
   private terminalError: Error | null = null;
 
   start(): void {
-    const command = existsSync(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex";
+    const command = codexExecutablePath();
     this.child = spawn(command, ["app-server"], {
       cwd: WORK_DIR,
       env: { ...process.env, CODEX_HOME: CODEX_RUNTIME_HOME_DIR },
