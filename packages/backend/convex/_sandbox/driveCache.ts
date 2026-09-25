@@ -172,9 +172,11 @@ export type DriveCacheRole =
  * Drive name for a repo's cache. Names are unique per Vercel project, and
  * `repoId` is a stable Convex id, so this is the natural key. Prefixed so the
  * drives are identifiable in the Vercel dashboard alongside non-eva drives.
+ * Cannot collide with {@link TOOLCHAIN_DRIVE_NAME}: Convex ids are 32-char
+ * base32 strings, never the word "toolchain".
  */
 export function driveCacheName(repoId: string): string {
-  return `eva-cache-${repoId}`;
+  return `eva-${repoId}`;
 }
 
 /**
