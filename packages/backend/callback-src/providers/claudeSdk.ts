@@ -256,71 +256,98 @@ export async function loadSdk(): Promise<SdkModule> {
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
 
 /**
- * Version of the globally installed CLI package, from the first candidate root
+ * Version of a globally installed CLI package, from the first candidate root
  * that carries it at all (see `globalNpmRoots`), or null when no root has it.
  */
-function globalClaudeCliVersion(): string | null {
+function globalCliVersion(packageName: string): string | null {
   for (const root of globalNpmRoots()) {
-    const version = installedPackageVersion(root + "/" + CLAUDE_CODE_PACKAGE);
+    const version = installedPackageVersion(root + "/" + packageName);
     if (version !== null) return version;
   }
   return null;
 }
 
 /**
- * Locates the claude CLI binary the SDK should drive.
+ * Locates the CLI binary a provider SDK should drive.
  *
- * The image's global install wins only while it is at the pinned version
- * (CLAUDE_CLI_PINNED_VERSION, set by launch.ts from claudeCliVersion.ts).
- * Otherwise the CLAUDE_BIN_PATH fallback that launch.ts provisions at the pin
- * is used. Models are gated on the CLI's own version, so preferring the global
- * unconditionally left snapshots seeded with an older CLI failing every turn
- * ("does not support this model", or a process that exits before its first
- * message and reads as "ended without a reply"). Both roots are checked by
- * manifest, like resolvePinnedSdkEntry, so a stale fallback never wins either.
+ * The image's global install wins only while it is at the version this launch
+ * provisioned (`<PROVIDER>_CLI_PINNED_VERSION`, set by launch.ts). Otherwise the
+ * `<PROVIDER>_BIN_PATH` fallback that launch.ts installs is used. Models are
+ * gated on the CLI's own version, so preferring the global unconditionally left
+ * snapshots seeded with an older CLI failing every turn ("does not support this
+ * model", or a process that exits before its first message and reads as "ended
+ * without a reply"). Both roots are checked by manifest, like
+ * resolvePinnedSdkEntry, so a stale fallback never wins either.
  *
  * The global check reads the manifest from every candidate root rather than
  * `npm root -g` alone, because the seed's `sudo npm install -g` writes to node's
  * prefix while this process runs as an unprivileged user with a per-user npm
  * prefix — every fresh sandbox used to log the seeded, correctly pinned CLI as
  * "cli version drift: global claude is unknown".
+ *
+ * Shared by the Claude and Codex loaders: both are an SDK compiled into this
+ * bundle spawning a separately installed binary, and both float that binary to
+ * the registry's latest, so both need the same drift check.
  */
-function claudeExecutablePath(): string {
-  const pinned = process.env.CLAUDE_CLI_PINNED_VERSION || null;
-  const fallback = process.env.CLAUDE_BIN_PATH || "";
+export function resolvePinnedCliBinary(cli: {
+  packageName: string;
+  binName: string;
+  pinnedVersion: string | null;
+  fallbackBinPath: string;
+}): string {
+  const pinned = cli.pinnedVersion;
   let globalBin = "";
   try {
-    globalBin = execSync("command -v claude", { encoding: "utf8" }).trim();
+    globalBin = execSync("command -v " + cli.binName, {
+      encoding: "utf8",
+    }).trim();
   } catch {
     globalBin = "";
   }
   if (globalBin) {
-    const globalVersion = globalClaudeCliVersion();
+    const globalVersion = globalCliVersion(cli.packageName);
     if (pinned === null || globalVersion === pinned) return globalBin;
     log(
-      "cli version drift: global claude is " +
+      "cli version drift: global " +
+        cli.binName +
+        " is " +
         (globalVersion ?? "unknown") +
         ", need " +
         pinned +
         "; preferring the pinned fallback install",
     );
   }
-  if (fallback && existsSync(fallback)) {
-    // `<prefix>/bin/claude` → `<prefix>/lib/node_modules/<package>`.
+  if (cli.fallbackBinPath && existsSync(cli.fallbackBinPath)) {
+    // `<prefix>/bin/<bin>` → `<prefix>/lib/node_modules/<package>`.
     const fallbackRoot =
-      dirname(dirname(fallback)) + "/lib/node_modules/" + CLAUDE_CODE_PACKAGE;
+      dirname(dirname(cli.fallbackBinPath)) +
+      "/lib/node_modules/" +
+      cli.packageName;
     const fallbackVersion = installedPackageVersion(fallbackRoot);
-    if (pinned === null || fallbackVersion === pinned) return fallback;
+    if (pinned === null || fallbackVersion === pinned) {
+      return cli.fallbackBinPath;
+    }
     log(
-      "cli version drift: fallback claude is " +
+      "cli version drift: fallback " +
+        cli.binName +
+        " is " +
         (fallbackVersion ?? "unknown") +
         ", need " +
         pinned +
         "; no pinned binary available",
     );
-    if (!globalBin) return fallback;
+    if (!globalBin) return cli.fallbackBinPath;
   }
-  return globalBin || "claude";
+  return globalBin || cli.binName;
+}
+
+function claudeExecutablePath(): string {
+  return resolvePinnedCliBinary({
+    packageName: CLAUDE_CODE_PACKAGE,
+    binName: "claude",
+    pinnedVersion: process.env.CLAUDE_CLI_PINNED_VERSION || null,
+    fallbackBinPath: process.env.CLAUDE_BIN_PATH || "",
+  });
 }
 
 function readPromptText(): string {

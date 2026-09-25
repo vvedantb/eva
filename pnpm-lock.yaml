@@ -558,7 +558,7 @@ importers:
         specifier: ^8.1.2
         version: 8.2.0
       '@openai/codex-sdk':
-        specifier: ^0.146.0
+        specifier: 0.146.0
         version: 0.146.0
       '@sendgrid/mail':
         specifier: ^8.1.6
