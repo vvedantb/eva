@@ -81,7 +81,14 @@ describe("daemon marker files are only removed by their owner", () => {
       rivalAt,
       "claiming the pidfile before probing lets two daemons own one entity",
     ).toBeLessThan(writeAt);
-    expect(claim.slice(rivalAt, writeAt)).toContain("pidAlive(rivalPid)");
+    // Identity, not mere liveness: a pidfile that survived a stop/resume names
+    // a pid the reboot re-issued, and `pidAlive` alone made the fresh daemon
+    // exit as a loser to a rival that does not exist (session 238).
+    expect(claim.slice(rivalAt, writeAt)).toContain("isRival(rivalPid)");
+    expect(
+      claim,
+      "the rival predicate must default to the argv identity check, not pidAlive",
+    ).toContain("params.isRival ?? isCallbackRunnerPid");
     expect(daemonSource).toContain("claimDaemonPidfileBoot(");
   });
 });

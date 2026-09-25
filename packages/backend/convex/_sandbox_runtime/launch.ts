@@ -11,7 +11,7 @@ import {
 } from "../_env/publicConvexUrls";
 import { writeSandboxFile } from "./sandboxFiles";
 import { streamingHeartbeatHmacMessage } from "./callbackAuth";
-import { entityDaemonPaths } from "./daemonPaths";
+import { DAEMON_PID_LIVE_FN, entityDaemonPaths } from "./daemonPaths";
 import { CLAUDE_CODE_VERSION } from "./claudeCliVersion";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { CALLBACK_SCRIPT } from "./callbackScript";
@@ -602,8 +602,8 @@ async function waitForRunnerReady(
         const incumbent = (
           await execHandle(
             sandbox,
-            `pid=$(cat ${quote([fence.daemonPaths.pid])} 2>/dev/null || true); ` +
-              `if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then echo norunner; ` +
+            `${DAEMON_PID_LIVE_FN}; ` +
+              `if ! eva_pid_live ${quote([fence.daemonPaths.pid])}; then echo norunner; ` +
               `elif [ "$(cat ${quote([fence.daemonPaths.opts])} 2>/dev/null)" = ${quote([fence.expectedDaemonOptsSig])} ]; then echo match; ` +
               `else echo optsmismatch; fi`,
             5,

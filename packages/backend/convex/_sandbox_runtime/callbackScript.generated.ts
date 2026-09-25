@@ -2228,6 +2228,16 @@ function pidAlive(pid) {
     return false;
   }
 }
+function isCallbackRunnerPid(pid) {
+  if (!pidAlive(pid)) return false;
+  try {
+    return readFileSync2(\`/proc/\${pid}/cmdline\`, "utf8").includes(
+      "run-design.mjs"
+    );
+  } catch {
+    return true;
+  }
+}
 function writeOomScoreAdj(target2, score) {
   if (target2 !== "self" && !target2) return;
   const path3 = target2 === "self" ? "/proc/self/oom_score_adj" : \`/proc/\${target2}/oom_score_adj\`;
@@ -2259,8 +2269,9 @@ function buildEntityMutationArgs(entityIdField, entityId, fields) {
 }
 function claimDaemonPidfileBoot(params) {
   const currentPid = params.currentPid ?? process.pid;
+  const isRival = params.isRival ?? isCallbackRunnerPid;
   const rivalPid = readPidFromFile(params.paths.pid);
-  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && pidAlive(rivalPid)) {
+  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
     return { status: "rival_alive", rivalPid };
   }
   writeFileSync2(params.paths.pid, String(currentPid));
