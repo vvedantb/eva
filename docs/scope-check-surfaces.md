@@ -6,11 +6,38 @@ Every claim below is cited `path:line` against the code. Where the code and this
 
 ## What exists today
 
-After an assistant turn finishes, Eva fetches the diff between the turn's `beforeSha` and `afterSha` and asks TypeSafe Jev whether it contains changes the prompt did not ask for. The verdict lands on the assistant `messages` row as the optional `scopeCheck` field (`_validators/tableFields.ts:967`, shape at `_validators/shapes.ts:145`), and the chat renders a chip from it.
+After an assistant turn finishes, Eva fetches the diff between the turn's `beforeSha` and `afterSha` and asks TypeSafe Jev whether it contains changes the prompt did not ask for, what a user would see change, and whether the reply mentioned it. The verdict lands on the assistant `messages` row as the optional `scopeCheck` field (`_validators/tableFields.ts:967`, shape at `_validators/shapes.ts:145`), and the chat renders a chip from it.
 
-Flow: `scheduleScopeCheck` (`_scopeCheck/mutations.ts:31`) → `scopeCheck.ts:43` `evaluateTurn` (`"use node"` action) → `_scopeCheck/queries.ts:45` `getTurnContext` for shas, repo and prompt → `_github/prDiff.ts:314` `fetchCompareDiff` (called at `scopeCheck.ts:55`) → `_scopeCheck/hunks.ts:159` `splitDiffIntoHunks`, dropping lockfiles and generated output (`hunks.ts:91` `isIgnoredFile`) → one requested/necessary Jev pair per hunk (`_scopeCheck/verdict.ts:37`) plus one whole-diff headline question (`verdict.ts:61`) → `verdict.ts:129` `summariseScopeCheck` → `_scopeCheck/mutations.ts:13` `setScopeCheck`.
+Flow: `scheduleScopeCheck` (`_scopeCheck/mutations.ts:31`) → `scopeCheck.ts` `evaluateTurn` (`"use node"` action) → `_scopeCheck/queries.ts` `getTurnContext` for shas, repo, prompt and reply → `_github/prDiff.ts:314` `fetchCompareDiff` → `_scopeCheck/hunks.ts:159` `splitDiffIntoHunks`, dropping lockfiles and generated output (`hunks.ts:91` `isIgnoredFile`) → one Jev call per hunk carrying requested/necessary (`_scopeCheck/verdict.ts`) **and** the `kind` choice (`_scopeCheck/describe.ts`) → one whole-diff headline question → one mention question per *flagged* hunk, against the reply → `summariseScopeCheck` → `_scopeCheck/mutations.ts:13` `setScopeCheck`.
 
-Every failure path leaves `scopeCheck` absent and the chip simply does not render (`scopeCheck.ts:8-10`, `_scopeCheck/mutations.ts:27-29`).
+### Three questions, three jobs
+
+| Question | Asked of | Answers |
+|---|---|---|
+| `requested` / `necessary` | every judged hunk | Is this in scope? Both must lean negative to flag (`FLAG_THRESHOLD`). |
+| `kind` | every judged hunk, same call | What does a user see change? One of nine kinds (`CHANGE_KIND_LABELS`), stored as `changeKindValidator`. |
+| `mentioned` | flagged hunks only | Did the reply tell the user? Below `MENTION_THRESHOLD` the chip says "not mentioned". |
+
+`describe.ts` is pure: `changeDetail` diffs the hunk's `+`/`-` sides for icon components, colour literals and quoted copy to produce `Icon changed (IconAward → IconTrophy)`; `humaniseSurface` turns a path into a screen name. Both are best-effort — `summary`, `surface`, `kind` and `mentioned` are all optional on the stored hunk, and the chip falls back to the file path and `@@` header, which is also what rows written before this pass carry.
+
+**Why `mentioned` exists.** The motivating miss (carepulse-ts, trophy icon, PR #1889) was not caught by scope alone: the change was unrequested *and* unreported. An unrequested change the reply names is a decision a reviewer can accept or reject; an unnamed one reaches production unseen. An absent `mentioned` means the question went unanswered — never "the reply stayed silent".
+
+Every failure path leaves `scopeCheck` absent and the chip simply does not render (`scopeCheck.ts:8-10`, `_scopeCheck/mutations.ts`).
+
+## Where the verdict goes
+
+Two surfaces, and the second is the one that matters for production.
+
+**The chat chip.** `ChatMessage` renders `message.scopeCheck` (see UI, below).
+
+**The pull request.** `_github/prScopeSection.ts` builds a "Changes nobody asked for" block between `<!-- eva-scope-check -->` markers; `_github/prScopeCheck.ts` `publishScopeSection` reads the PR's commits, asks `_scopeCheck/queries.ts` `flaggedForShas` for every verdict recorded against those shas, and patches the body. Two triggers:
+
+- `setScopeCheck` (`_scopeCheck/mutations.ts`) schedules a publish whenever a verdict with flagged hunks lands and the chat has a PR. A quick task's PR lives on its newest `agentRuns` row, not on the task.
+- The `pull_request` webhook (`http.ts`) schedules `publishScopeSectionForPr` on `opened`/`reopened`, which resolves the repo by owner/name. This is the path for a PR Eva did not open.
+
+The lookup is keyed on `messages.afterSha` (index `by_after_sha`) rather than on the chat, so a PR that re-lands Eva's commits still carries the warning. Both blocks share `prBodyBlocks.ts`, so rewriting the reviewer description never disturbs the scope block and vice versa. An empty verdict removes the block rather than writing a reassuring heading — its presence is the signal.
+
+> **Known gap: a squashed extract.** Sha-keying only matches commits that survive intact. `git merge --squash` (or a rebase, or a hand-copied branch) mints new shas, and the original incident reached production exactly that way — a person copied Eva's files onto a clean branch and opened PR #1889. That PR would still show nothing. Closing it means matching on file paths instead of shas, which trades exactness for noise; decide that deliberately rather than by accident.
 
 All three chat surfaces now judge. Quick-task **runs** do not.
 
@@ -42,7 +69,7 @@ Two halves, both required. Stamping without persistence writes shas nobody reads
 - **Arg shape.** `turnCheckpointArgs` (`_validators/shapes.ts:27`) is spread into every sandbox-facing completion receiver, and into `workflowCompleteValidator` (`:46`), which all three complete events use (`agentTaskChatWorkflow.ts:273`, `projectChatWorkflow.ts:270`, `_sessions/workflow.ts:69`).
 - **Scheduling.** `writeAssistantTurnResult` calls `scheduleScopeCheck` unconditionally (`_chat/chatResult.ts:120`), and all three surfaces reach it through `applyChatTurnResult` (`chatResult.ts:136`). Once the shas are in `extraPatch`, scheduling is automatic. `scheduleScopeCheck` no-ops when either sha is absent or they are equal (`_scopeCheck/mutations.ts:36-38`).
 - **Repo resolution.** `resolveRepoId` (`_scopeCheck/queries.ts:18`) normalises `messages.parentId` against `sessions`, `projects` and `agentTasks`. Wrinkle: `agentTaskFields.repoId` is optional (`_validators/tableFields.ts:288`), so `queries.ts:32-35` returns null and a repo-less task yields no verdict. Correct, silent, not a bug.
-- **UI.** `ChatMessage` renders the chip at `apps/web/src/lib/components/chat/ChatMessage.tsx:458` from `message.scopeCheck` alone. All three surfaces reach it through the shared `ChatBody` (`ChatBody.tsx:397`), which quick-task chat mounts at `tasks/TaskSandboxChatPanel.tsx:335` and project chat at `projects/ProjectSandboxChatPanel.tsx:294`. Both thread `onViewDiff` (`:411` / `:357`); the chip degrades to non-clickable rows without it (`_components/ScopeCheckChip.tsx:112`). Caveat: the chip is gated on `showChangedFiles`, which `ChatBody.tsx:401` derives from `!simpleView` — a user preference (`lib/hooks/useSimpleView.ts:7`), not a surface distinction.
+- **UI.** `ChatMessage` renders the chip at `apps/web/src/lib/components/chat/ChatMessage.tsx:458` from `message.scopeCheck` alone. All three surfaces reach it through the shared `ChatBody` (`ChatBody.tsx:397`), which quick-task chat mounts at `tasks/TaskSandboxChatPanel.tsx:335` and project chat at `projects/ProjectSandboxChatPanel.tsx:294`. Both thread `onViewDiff` (`:411` / `:357`); the chip degrades to non-clickable rows without it (`_components/ScopeCheckChip.tsx:112`). The chip itself is not gated on `showChangedFiles` — simple view (`lib/hooks/useSimpleView.ts:7`) hides the changed-files card but keeps the verdict, since a reader on the simplified UI is the one least likely to go looking for it. Only the hover card's per-hunk links are gated, because simple view bounces away from the diff tab.
 
 ## Adding a further surface
 
@@ -61,13 +88,13 @@ Order matters: persistence first, gate second, rebuild third. Steps 1-2 are safe
 - `pnpm --filter @eva/backend test`. The tests that pin this behaviour:
   - `callback-src/tests/turnCheckpoint.test.ts:118` asserts task and project chat turns **are** stamped (it previously asserted the opposite), and `:137` asserts `docId`/`reportId`/`automationRunId` are still skipped. `:152` still covers the `eva/` branch condition.
   - `tests/turnCheckpointCompletionContract.test.ts:62-69` pins the four `args.<name> =` assignments; `:82-102` pins that every sandbox-facing completion receiver spreads `turnCheckpointArgs` and does not redeclare `beforeSha:`.
-  - `tests/scopeCheckHunks.test.ts`, `tests/scopeCheckVerdict.test.ts`. Web: `apps/web/src/lib/components/chat/_components/scopeCheckSummary.test.ts`.
+  - `tests/scopeCheckHunks.test.ts`, `tests/scopeCheckVerdict.test.ts`, `tests/scopeCheckDescribe.test.ts`, `tests/prScopeSection.test.ts` (including that the two PR blocks do not clobber each other), `callback-src/tests/blockingQuestionsGate.test.ts`. Web: `apps/web/src/lib/components/chat/_components/scopeCheckSummary.test.ts`.
 - **In a real chat:** open a quick task's sandbox chat, ask for one small change, and add an obviously unrelated edit to the prompt. The turn completes, then a few seconds later a chip appears under the reply. Confirm `beforeSha`/`afterSha` landed on the assistant `messages` row first — no shas means the sandbox is running an old bundle.
 - **Force a check on one message:** `cd packages/backend && npx convex run scopeCheck:evaluateTurn '{"messageId":"…","attempt":1}'` (add `--prod` for production). This is how the feature was validated originally. `getTurnContext` returns null when `scopeCheck` is already set (`_scopeCheck/queries.ts:60`), so a re-run is a no-op unless the field is cleared first — and also returns null when either sha is missing (`:63`), the shas are equal (`:64`), the repo does not resolve (`:67`), or no non-system user message precedes the reply (`:69-81`).
 
 ## Risks and rollback
 
-- **Cost.** One Jev call per judged hunk plus one headline call per turn. Hunks are capped at `MAX_JUDGED_HUNKS = 60` (`_scopeCheck/verdict.ts:17`), run six at a time (`:19`), each clipped to 3,000 characters (`hunks.ts:57`); the headline diff is clipped to 30,000 characters (`verdict.ts:30`) and the prompt to 8,000 (`:32`). Worst case is 61 calls per turn. Three surfaces now judge rather than one, so watch the `eva-scope-check` tag (`scopeCheck.ts:36`) — task and project chat traffic is the bulk of the increase.
+- **Cost.** One Jev call per judged hunk (carrying three questions), one headline call, and one mention call per flagged hunk. Hunks are capped at `MAX_JUDGED_HUNKS = 60` (`_scopeCheck/verdict.ts`), run six at a time, each clipped to 3,000 characters (`hunks.ts:57`); the headline diff is clipped to 30,000 characters and the prompt to 8,000. Flagged hunks are capped at `MAX_FLAGGED_HUNKS = 20` and the reply at `MAX_REPLY_CHARS = 4,000` (`describe.ts`). Worst case is 81 calls per turn, but the mention pass scales with what the chip will show — normally 0–3 — not with the diff. Three surfaces now judge rather than one, so watch the `eva-scope-check` tag (`scopeCheck.ts:36`) — task and project chat traffic is the bulk of the increase.
 - **Latency, not blocking.** Judging is scheduled, never inline (`_scopeCheck/mutations.ts:25-30`), and retries up to three times at 30 s when GitHub has not caught up with the push (`scopeCheck.ts:39-41`, `:62-72`).
 - **Rollback is slower than it used to be.** Turning a surface off means re-tightening `CHECKPOINTED_ENTITY_ID_FIELDS` (`turnCheckpoint.ts:63`) **and** rebuilding the bundle — not a Convex-only revert. Running sandboxes keep their bundle until they restart, so the change lands gradually rather than at deploy. To stop verdicts immediately, revert the Convex side instead: drop `extraPatch` from `saveResult`, which takes effect on the next deploy.
 - **Failing open.** Everything downstream tolerates missing shas: no shas means no scheduling, and `scopeCheck` stays absent. No migration, no cleanup — existing verdicts remain valid and keep rendering.
@@ -83,5 +110,5 @@ So a run has no turn diff to judge. Covering runs would mean judging the **PR di
 
 ## Open questions
 
-- **Calibration.** `FLAG_THRESHOLD = 0.5` (`verdict.ts:23`) and the UI's `SCOPE_REVIEW_THRESHOLD` / `SCOPE_FLAGGED_THRESHOLD` (`apps/web/src/lib/components/chat/_components/scopeCheckSummary.ts:13-15`) were set on session traffic and have not been re-tuned. Task and project chat prompts are shorter and more mechanical, so the same threshold may flag more routine turns. Now that those surfaces are live, check the false-positive rate on real traffic before trusting the chip's number there.
+- **Calibration.** `FLAG_THRESHOLD = 0.5`, `MENTION_THRESHOLD = 0.5` (`verdict.ts`) and the UI's `SCOPE_REVIEW_THRESHOLD` / `SCOPE_FLAGGED_THRESHOLD` (`apps/web/src/lib/components/chat/_components/scopeCheckSummary.ts:13-15`) were set on session traffic and have not been re-tuned. Task and project chat prompts are shorter and more mechanical, so the same threshold may flag more routine turns. Now that those surfaces are live, check the false-positive rate on real traffic before trusting the chip's number there. `MENTION_THRESHOLD` is newer still and untuned: a reply that gestures at a change without naming it is the judgement call to watch.
 - **Task runs.** See above — decide whether the PR-diff-versus-description question is worth building at all.

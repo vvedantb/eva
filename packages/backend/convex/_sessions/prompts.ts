@@ -6,6 +6,7 @@ import {
   buildSystemPromptBlock,
   CHAT_UI_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
+  VISUAL_CHANGE_INSTRUCTION,
 } from "../prompts";
 import type { LinkedRepoPromptRow } from "../prompts";
 import { stripMentionTokens } from "../_mentions/resolveDocMentions";
@@ -194,6 +195,7 @@ Use the eva MCP tools. That is how the work gets done:
 - \`create_session\` — open a session in the right repo with the task as its first message. This is the default answer to any build request.
 - \`send_agent_message\` — give an existing agent more context, an answer, or a correction.
 - \`list_agents\` / \`get_agent_state\` — see what the fleet is doing before you speak for it.
+- \`get_preview_url\` — the live link to an agent's running app, for when the user asks to see or open what one of them built.
 - \`stop_agent\` — cancel a runaway.
 - \`evaluate\` — score, classify or filter many similar items (agent reports, PR titles, log lines) with a calibrated probability instead of eyeballing them; loop it inside \`execute\`.
 - \`send_email\` — mail the user a finished summary or result; it only ever goes to their own address.
@@ -239,7 +241,10 @@ export function buildEditPrompt(
   const devServerSection = `
 
 ## App dev server (managed by Eva):
-Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPortText} after every sandbox start, including the one that launched this turn. A cold compile takes 1-2 minutes, so an immediate check can look "down" while it is still warming up. To verify it, retry \`curl -sf http://localhost:${devPortText}\` for up to ~2 minutes before concluding anything. NEVER start your own dev server — a second instance has caused out-of-memory crashes on this VM. If the port still serves nothing after ~2 minutes, say so in your reply; Eva restarts it automatically.`;
+Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPortText} after every sandbox start, including the one that launched this turn. A cold compile takes 1-2 minutes, so an immediate check can look "down" while it is still warming up. To verify it, retry \`curl -sf http://localhost:${devPortText}\` for up to ~2 minutes before concluding anything. NEVER start your own dev server — a second instance has caused out-of-memory crashes on this VM. If the port still serves nothing after ~2 minutes, say so in your reply; Eva restarts it automatically.
+
+## Preview link (the running app has one):
+That dev server is reachable from outside the sandbox. When the user asks for "the link", "the preview", "the URL", or to open something you built, call eva MCP \`get_preview_url\` — with no arguments it answers for this chat, and \`path\` points it at a route ("/demo/referral-portal"). Paste the \`previewUrl\` it returns. Never reply that no link exists, and never guess a staging or production address for unmerged work: the branch is not deployed, but this sandbox is serving it right now. The link needs an Eva login and dies with the sandbox, so say that rather than presenting it as a public address.`;
   const browserSection = `
 
 ## Shared Browser (user-visible):
@@ -265,7 +270,7 @@ When the user asks for a recording, walkthrough video, or screenshot:
 Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
 - If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
-- Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh branch: \`git fetch origin && git checkout --no-track -b eva/dup-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/eva/dup-<short-slug>:refs/heads/eva/dup-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Base on "${baseBranch}" unless the user names a different base branch. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
+- Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh branch: \`git fetch origin && git checkout --no-track -b eva/dup-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/eva/dup-<short-slug>:refs/heads/eva/dup-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
 - Questions only: answer without unnecessary edits. No build/lint/test unless asked.
-- Never commit images/video or \`plan.md\`. Minimal changes.${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
+- Never commit images/video or \`plan.md\`. Minimal changes.${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
 }

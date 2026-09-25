@@ -11,7 +11,10 @@ import {
   chatNeedsOtherUserDirectory,
   otherUserIdsInChat,
   readableSendError,
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
   stripErrorPrefix,
+  turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
 
@@ -251,6 +254,72 @@ describe("stripErrorPrefix", () => {
 });
 
 /**
+ * Reported bug: "Usage limit reached wrong provider name" (fix 64e95e7e). The
+ * notice was hard-coded to "Claude usage limit reached", so a chat running on
+ * Cursor or Codex blamed a provider it never used — and the recovery it
+ * suggests (switch account, wait for the reset) is per provider, so the user
+ * was sent to the wrong account list.
+ */
+describe("turnErrorTitle", () => {
+  const rateLimited = (turnModel?: string, messageModel?: string) =>
+    turnErrorTitle({
+      errorType: "rate_limit",
+      turnModel,
+      messageModel,
+    });
+
+  test.each([
+    ["claude:opus", "Claude usage limit reached"],
+    ["cursor:composer-2.5", "Cursor usage limit reached"],
+    ["codex:gpt-5.6", "GPT usage limit reached"],
+    ["opencode:openai/gpt-5.2", "Opencode usage limit reached"],
+  ])("%s reports its own provider", (model, expected) => {
+    expect(rateLimited(model)).toBe(expected);
+  });
+
+  test("falls back to the assistant row's own stamp", () => {
+    // Retry paths render a failure with no user turn above it to read.
+    expect(rateLimited(undefined, "cursor:composer-2.5")).toBe(
+      "Cursor usage limit reached",
+    );
+  });
+
+  test("the turn's stamp wins over the row's", () => {
+    // The row is stamped when the reply lands; the turn's stamp is what the
+    // run was actually sent on, so it is the one that ran out.
+    expect(rateLimited("cursor:composer-2.5", "claude:opus")).toBe(
+      "Cursor usage limit reached",
+    );
+  });
+
+  test("an unstamped legacy turn names no provider", () => {
+    expect(rateLimited()).toBe("Usage limit reached");
+  });
+
+  test("every other failure is still framed as one", () => {
+    // Only "rate_limit" used to get a notice, so any other failed turn
+    // rendered as markdown and read like Eva answering "Error: …".
+    expect(
+      turnErrorTitle({
+        errorType: "generic",
+        turnModel: "claude:opus",
+        messageModel: undefined,
+      }),
+    ).toBe("This turn failed");
+  });
+
+  test("a turn that did not fail gets no notice", () => {
+    expect(
+      turnErrorTitle({
+        errorType: undefined,
+        turnModel: "claude:opus",
+        messageModel: undefined,
+      }),
+    ).toBeNull();
+  });
+});
+
+/**
  * A send that throws no longer writes an `Error:` turn into the transcript; it
  * raises a toast with "Restore draft" instead, and this is the toast's body.
  * The three send paths (session, task, project) all read it, so a Convex
@@ -339,4 +408,59 @@ test("ChatBody looks up other senders, not the whole user table", () => {
   );
   expect(chatBody).toContain("api.users.getMany");
   expect(chatBody).not.toContain("api.users.listAll");
+});
+
+/**
+ * The bug this covers: quick task chat locked its composer whenever the
+ * sandbox was not marked active, and a quick task's first run only marks it
+ * active once the run winds down. So the whole time there was something to
+ * queue behind, there was no way to type it — while sessions queued fine.
+ */
+describe("sandboxComposerState", () => {
+  test("a running turn takes a follow-up even before the sandbox is active", () => {
+    const state = sandboxComposerState({
+      isSandboxActive: false,
+      isSwitchingAccount: false,
+      isExecuting: true,
+    });
+    expect(state.isInputDisabled).toBe(false);
+    expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.activePlaceholder);
+  });
+
+  test("an idle chat with no sandbox still says to wake Eva", () => {
+    const state = sandboxComposerState({
+      isSandboxActive: false,
+      isSwitchingAccount: false,
+      isExecuting: false,
+    });
+    expect(state.isInputDisabled).toBe(true);
+    expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.asleepPlaceholder);
+    expect(state.disabledReason).toBe(SANDBOX_CHAT_COPY.asleepDisabledReason);
+  });
+
+  test("an account swap blocks the composer even mid-turn", () => {
+    const state = sandboxComposerState({
+      isSandboxActive: true,
+      isSwitchingAccount: true,
+      isExecuting: true,
+    });
+    expect(state.isInputDisabled).toBe(true);
+    expect(state.disabledReason).toBe(
+      SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
+    );
+  });
+
+  test("an awake, idle chat is open for a normal send", () => {
+    expect(
+      sandboxComposerState({
+        isSandboxActive: true,
+        isSwitchingAccount: false,
+        isExecuting: false,
+      }),
+    ).toEqual({
+      isInputDisabled: false,
+      placeholder: SANDBOX_CHAT_COPY.activePlaceholder,
+      disabledReason: SANDBOX_CHAT_COPY.asleepDisabledReason,
+    });
+  });
 });

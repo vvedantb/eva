@@ -76,6 +76,23 @@ describe("a working agent marks the card without moving it", () => {
     expect(cardSource).toContain("showAgentPulse ? (");
   });
 
+  /**
+   * The grid and the sandbox dot were two independent siblings, so a live turn
+   * on an awake sandbox drew both — one mark saying "working" beside one saying
+   * "awake", for a single fact. The grid wins, exactly as it does on the
+   * session rows and the sandbox surface tabs.
+   */
+  it("the grid replaces the sandbox dot rather than joining it", () => {
+    expect(
+      cardSource,
+      "the dot must be the else branch of the grid, not a sibling",
+    ).toContain(") : sandboxStatus ? (");
+    expect(
+      cardSource,
+      "a standalone dot branch renders both marks at once again",
+    ).not.toContain("{sandboxStatus ? (");
+  });
+
   it("the beam and the grid are the only things these drive", () => {
     expect(cardSource.indexOf("<BorderBeam"), "the beam moved").toBeGreaterThan(
       -1,

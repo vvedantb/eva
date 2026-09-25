@@ -98,17 +98,19 @@ export function useTaskDetail(
   );
   const createTaskPrAction = useAction(api.taskWorkflowActions.createTaskPr);
 
-  const [baseBranch, setBaseBranch] = useState(FALLBACK_GIT_BASE_BRANCH);
-  const derivedBaseBranch =
+  /**
+   * Read straight off the task row — never mirrored into local state. A mirror
+   * had to be re-seeded whenever the row changed, and any render that seeded it
+   * before `task` arrived took the repo default instead: that is how the
+   * Properties column showed `staging` for a task whose own base branch is
+   * `main`, until a reload happened to seed it in the right order. The picker
+   * writes through `updateTask`, whose optimistic update patches this same
+   * query, so the value still changes the instant it is picked.
+   */
+  const baseBranch =
     task?.baseBranch?.trim() ||
     repoForTask?.defaultBaseBranch?.trim() ||
     FALLBACK_GIT_BASE_BRANCH;
-  const [prevDerivedBaseBranch, setPrevDerivedBaseBranch] =
-    useState(derivedBaseBranch);
-  if (derivedBaseBranch !== prevDerivedBaseBranch) {
-    setPrevDerivedBaseBranch(derivedBaseBranch);
-    setBaseBranch(derivedBaseBranch);
-  }
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
   const [isSandboxStarting, setIsSandboxStarting] = useState(false);
   const [isSandboxStopping, setIsSandboxStopping] = useState(false);
@@ -364,7 +366,6 @@ export function useTaskDetail(
     activeTab,
     setActiveTab,
     baseBranch,
-    setBaseBranch,
     executionError,
     setExecutionError,
     showStopConfirm,

@@ -10,6 +10,8 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
+import { isSandboxGoneError } from "./sandboxErrors";
+import { DAEMON_PID_LIVE_FN } from "./daemonPaths";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -25,14 +27,22 @@ const STOP_SANDBOX_BUDGET_MS = 480_000;
 const REFRESH_BUDGET_MS = 30_000;
 /** Bound on the pre-stop swap release (script exec timeout is 120s). */
 const SWAP_RELEASE_BUDGET_MS = 150_000;
+/**
+ * `eva_pid_live` rather than a bare `kill -0`: /tmp/run-design.pid survives a
+ * stop/resume, and the reboot re-issues pids from 1, so an unguarded check
+ * reports a long-dead runner alive and the watchdog grants grace forever
+ * (see DAEMON_PID_LIVE_FN in daemonPaths.ts).
+ */
 const CALLBACK_LIVENESS_COMMAND = [
-  "test -f /tmp/run-design.pid",
-  "test ! -f /tmp/run-design.done",
-  'pid="$(cat /tmp/run-design.pid)"',
-  'kill -0 "$pid" 2>/dev/null',
-  'state="$(ps -p "$pid" -o stat= 2>/dev/null | tr -d " ")"',
-  'case "$state" in Z*) exit 1 ;; *) exit 0 ;; esac',
-].join(" && ");
+  DAEMON_PID_LIVE_FN,
+  [
+    "test ! -f /tmp/run-design.done",
+    "eva_pid_live /tmp/run-design.pid",
+    'pid="$(cat /tmp/run-design.pid)"',
+    'state="$(ps -p "$pid" -o stat= 2>/dev/null | tr -d " ")"',
+    'case "$state" in Z*) exit 1 ;; *) exit 0 ;; esac',
+  ].join(" && "),
+].join("; ");
 /** Agent still running even if callback PID bookkeeping is stale. Cursor and
  * OpenCode drive their turns from inside the callback (run-design.mjs) since
  * the SDK migrations, so the callback process itself counts as agent liveness;
@@ -239,10 +249,21 @@ export const stopSandbox = internalAction({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // Already gone / already idle — treat as success so finalize can close.
+      //
+      // The structured verdict comes first. The provider's own 404 carries no
+      // prose at all — the SDK message is the bare status line ("Status code
+      // 404 is not ok") — so the regex below never matched it and every Stop
+      // click failed, finalize reverted the entity to "active", and the user
+      // could never stop a sandbox Vercel had already dropped (prod, 23 Sep
+      // 2026: quick task 107, gray-precise-lungfish-2cEbcB, nine failed stops).
+      // A sandbox record the provider no longer has cannot be running, so this
+      // is the one case where closing without a confirmed stop is honest.
       const benign =
-        /already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
+        isSandboxGoneError(error) ||
+        (/already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
           message,
-        ) && !/did not reach a terminal stopped state/i.test(message);
+        ) &&
+          !/did not reach a terminal stopped state/i.test(message));
       if (benign) {
         console.log(
           `[sandbox] stopSandbox ignored benign error for ${args.sandboxId}: ${message}`,

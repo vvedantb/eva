@@ -43,12 +43,16 @@ export function MarkdownEditor({
     },
   });
 
+  /* eslint-disable no-effect/no-pass-data-to-parent --
+     Hands the parent a getter, not data: the TipTap instance is created here
+     and only exists after mount, so the parent cannot own it. */
   useEffect(() => {
     onEditorReady(() => {
       if (!editor) return null;
       return getMarkdownFromEditor(editor);
     });
   }, [editor, onEditorReady]);
+  /* eslint-enable no-effect/no-pass-data-to-parent */
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

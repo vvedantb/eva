@@ -82,6 +82,9 @@ export function NewSessionComposer() {
   // because setProviderAccountId writes to localStorage, which dispatches a
   // sync event — doing that during render triggers React's
   // event-handler-in-render error.
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-chain-state-updates --
+     See the comment above: setProviderAccountId writes localStorage and
+     dispatches a sync event, which React forbids during render. */
   useEffect(() => {
     if (accountsReady && !accountDefaulted) {
       const storedResolvesToOwn = accounts.some(
@@ -100,6 +103,7 @@ export function NewSessionComposer() {
     providerAccountId,
     setProviderAccountId,
   ]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-chain-state-updates */
 
   const handleSend = async (
     content: string,
@@ -137,7 +141,12 @@ export function NewSessionComposer() {
         ...linkedCodebases,
       });
       clearDraft();
-      codebases.clear();
+      // The codebases selection is query-string state, and this navigation
+      // already drops it. Clearing it here queued a nuqs URL write instead:
+      // nuqs flushes on a later tick, through an adapter that navigates to the
+      // pathname captured when it rendered — the composer's own. That flush
+      // landed after this navigation and replaced the new session's URL with
+      // the composer again, so hitting send looked like it did nothing.
       await navigate({
         to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
       });

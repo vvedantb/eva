@@ -23,32 +23,6 @@
   @apply ui-surface p-5 md:p-6;
 }
 
-@utility ui-skeleton {
-  /* Highlight sweep for loading placeholders. Transform on ::after so the
-   * band runs on the compositor while the page is busy fetching — the same
-   * reason <Shimmer/> left rAF. Overflow clips the band to the caller's
-   * radius; the fill stays `bg-muted` on the element itself.
-   *
-   * Stops sit at 20/50/80% so the sheen is a band, not a full-card wash.
-   * Light muted is already near white, so the peak has to be almost opaque
-   * to lift at all; dark uses a much thinner white. */
-  position: relative;
-  overflow: hidden;
-  &::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: linear-gradient(
-      90deg,
-      rgb(255 255 255 / 0) 20%,
-      light-dark(rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.22)) 50%,
-      rgb(255 255 255 / 0) 80%
-    );
-    animation: skeleton-shimmer 2s linear infinite;
-    pointer-events: none;
-  }
-}
-
 @utility t-modal {
   /* transitions.dev — modal open / close. The dialog is always centered, so
    * .t-modal owns the centering transform (translate -50%) plus scale/fade. */
@@ -613,6 +587,14 @@
     --chart-5: 6 182 212;
     --warning-bg: 255 247 237;
     --success-bg: 240 253 244;
+    /* Tinted-chip text. `--warning` / `--destructive` are the brightest point
+     * of their hue, so setting them as text on their own light tint measures
+     * ~2:1 — a colour reserved for fills and icons. These are the darkened
+     * partners that clear WCAG AA on the matching `-bg`; designTokens.test.ts
+     * holds the 4.5:1 floor for both pairs. */
+    --warning-strong: 146 88 6;
+    --destructive-bg: 254 242 242;
+    --destructive-strong: 185 28 28;
     --status-progress: 161 98 7;
     --status-progress-bg: 254 240 138;
     --status-progress-subtle: 255 251 235;
@@ -721,6 +703,9 @@
     --chart-5: 6 182 212;
     --warning-bg: 47 35 20;
     --success-bg: 18 44 30;
+    --warning-strong: 252 211 77;
+    --destructive-bg: 60 24 26;
+    --destructive-strong: 252 165 165;
     --status-progress: 250 204 21;
     --status-progress-bg: 71 50 12;
     --status-progress-subtle: 44 35 17;
@@ -969,8 +954,8 @@
   /*
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
-   * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.ui-skeleton`
-   * / `.shimmer-*` (loading UI), `.beam*` (composer beam), LoadingState WAAPI
+   * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
+   * (loading UI), `.beam*` (composer beam), LoadingState WAAPI
    * (sessions sidebar Drive loader).
    */
   html[data-page-motion="off"] .animate-in,
@@ -1934,18 +1919,6 @@ html[data-blur-pid] [data-pii] {
   }
 }
 
-/* <Skeleton/> — the highlight band. Percentages are of the pseudo, so
- * -100% → 100% walks it fully off one edge and fully off the other; the
- * jump back is invisible because both ends are clipped. */
-@keyframes skeleton-shimmer {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
 /*
  * Infinite animations pause when the tab is in the background, a parked
  * subtree is `aria-hidden` (cached session shell, minimized Ave), or the
@@ -1962,7 +1935,6 @@ html[data-page-hidden] .beam::before,
 html[data-page-hidden] .shimmer-band,
 html[data-page-hidden] .shimmer-copy,
 html[data-page-hidden] .shimmer-text,
-html[data-page-hidden] .ui-skeleton::after,
 html[data-page-hidden] .animate-spin,
 html[data-page-hidden] .animate-pulse,
 html[data-page-hidden] .animate-bounce,
@@ -1972,7 +1944,6 @@ html[data-page-hidden] .landing-pulse-dot,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-band,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-copy,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-text,
-[aria-hidden="true"]:not([data-anim-chrome]) .ui-skeleton::after,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-spin,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-pulse,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-bounce,
@@ -1982,7 +1953,6 @@ html[data-page-hidden] .landing-pulse-dot,
 [data-anim-offscreen] .shimmer-band,
 [data-anim-offscreen] .shimmer-copy,
 [data-anim-offscreen] .shimmer-text,
-[data-anim-offscreen] .ui-skeleton::after,
 [data-anim-offscreen].shimmer-overlay .shimmer-band,
 [data-anim-offscreen].shimmer-overlay .shimmer-copy,
 [data-anim-offscreen] .animate-spin,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import type { Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, Spinner, motionBase, motionStagger } from "@eva/ui";
+import { Accordion, Spinner, motionBase, motionStagger, toast } from "@eva/ui";
 import { m } from "motion/react";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
@@ -57,9 +57,6 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
     false,
   );
   const review = usePendingReviewComments();
-  const [pinnedIgnoreWhitespace, setPinnedIgnoreWhitespace] = useState<
-    boolean | null
-  >(null);
 
   const [fileFilter, setFileFilter] = useState("");
   // Controlled accordion open set — independent of Viewed so a viewed file can
@@ -91,21 +88,21 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
   // A drafted review comment is anchored by its position in a walk of the patch
   // it was drawn on (see `reviewComments.ts`), and ignore-whitespace rewrites
   // that patch. Flipping the toggle underneath one would silently move it to
-  // another line or drop it, so the setting is pinned to whatever was on screen
-  // when the first comment was drafted, and released once the review is empty
-  // again. Pending comments start empty on mount, so a toggle left on in
-  // localStorage still takes effect on the next PR.
+  // another line or drop it, so the toggle is refused while a review is pending.
+  // Refusing in the handler, rather than pinning a copy of the setting in state,
+  // keeps the diff derived from props alone.
   const hasPendingComments = (review?.comments.length ?? 0) > 0;
-  if (hasPendingComments && pinnedIgnoreWhitespace === null) {
-    setPinnedIgnoreWhitespace(ignoreWhitespace);
-  }
-  if (!hasPendingComments && pinnedIgnoreWhitespace !== null) {
-    setPinnedIgnoreWhitespace(null);
-  }
-  const effectiveIgnoreWhitespace = pinnedIgnoreWhitespace ?? ignoreWhitespace;
-  const ignoreWhitespacePinned = effectiveIgnoreWhitespace !== ignoreWhitespace;
+  const handleIgnoreWhitespaceChange = (next: boolean) => {
+    if (hasPendingComments) {
+      toast.info(
+        "Submit or delete pending review comments first — they are pinned to the lines on screen.",
+      );
+      return;
+    }
+    setIgnoreWhitespace(next);
+  };
 
-  const fileEntries = effectiveIgnoreWhitespace
+  const fileEntries = ignoreWhitespace
     ? applyIgnoreWhitespace(rawEntries)
     : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
@@ -237,16 +234,6 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
               Diff is large and has been truncated.
             </p>
           ) : null}
-          {/* The press was recorded for next time, but the diff on screen has
-              to stay put — say so rather than looking broken. */}
-          {ignoreWhitespacePinned ? (
-            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Whitespace changes stay{" "}
-              {effectiveIgnoreWhitespace ? "hidden" : "shown"} while you have
-              pending review comments, so they keep pointing at the right lines.
-              Submit or delete them to change it.
-            </p>
-          ) : null}
           <Accordion
             type="multiple"
             value={openPaths}
@@ -299,8 +286,8 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
         onDiffViewChange={setDiffView}
         wrapLines={wrapLines}
         onWrapLinesChange={setWrapLines}
-        ignoreWhitespace={effectiveIgnoreWhitespace}
-        onIgnoreWhitespaceChange={setIgnoreWhitespace}
+        ignoreWhitespace={ignoreWhitespace}
+        onIgnoreWhitespaceChange={handleIgnoreWhitespaceChange}
         allExpanded={
           visiblePaths.length > 0 &&
           visiblePaths.every((path) => openPaths.includes(path))

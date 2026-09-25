@@ -19,8 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DialogBody,
+  CenteredSpinner,
   toast,
   motionFast,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -58,14 +60,12 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
-import { ProjectDetailSkeleton } from "./_components/ProjectsSkeletons";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 import {
   IconHammer,
   IconPlayerStop,
   IconTerminal2,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -301,7 +301,7 @@ export function ProjectDetailClient({
   };
 
   if (project === undefined) {
-    return <ProjectDetailSkeleton />;
+    return <CenteredSpinner label="Loading project" />;
   }
 
   if (project === null) {
@@ -487,7 +487,7 @@ export function ProjectDetailClient({
                       disabled={isResolvingConflicts}
                     >
                       {isResolvingConflicts ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconHammer size={14} />
                       )}
@@ -511,7 +511,7 @@ export function ProjectDetailClient({
                       disabled={isRetryingStartupCommands}
                     >
                       {isRetryingStartupCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconRefresh size={14} />
                       )}
@@ -525,7 +525,7 @@ export function ProjectDetailClient({
                       disabled={isRunningBackgroundCommands}
                     >
                       {isRunningBackgroundCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconServerBolt size={14} />
                       )}
@@ -594,11 +594,7 @@ export function ProjectDetailClient({
                     disabled={isStoppingBuild}
                   >
                     {isStoppingBuild ? (
-                      <IconLoader2
-                        size={16}
-                        className="animate-spin"
-                        aria-hidden
-                      />
+                      <CircleSpinner size="sm" aria-hidden />
                     ) : (
                       <IconPlayerStop size={16} aria-hidden />
                     )}

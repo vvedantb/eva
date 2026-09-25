@@ -71,10 +71,14 @@ function CachedSessionShellInner({
   const urlSandboxTab = useSessionRouteSandboxTab();
   const [sandboxTab, setSandboxTab] = useState(urlSandboxTab);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     Cached shells stay mounted while hidden: only the one on the live route may
+     follow the URL, so this cannot just mirror the prop during render. */
   useEffect(() => {
     if (!isActiveRoute) return;
     setSandboxTab(urlSandboxTab);
   }, [isActiveRoute, urlSandboxTab]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
   // `basePath`. `navigate({ to })` matches the route tree before the

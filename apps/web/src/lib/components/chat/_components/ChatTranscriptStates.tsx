@@ -1,4 +1,4 @@
-import { Button, ConversationEmptyState, Skeleton } from "@eva/ui";
+import { Button, CenteredSpinner, ConversationEmptyState } from "@eva/ui";
 
 /**
  * What a chat shows instead of turns: the empty state, and the placeholder for
@@ -12,20 +12,8 @@ import { Button, ConversationEmptyState, Skeleton } from "@eva/ui";
  * first page lands, and the panels collapse that into `[]` — without this the
  * empty state flashes on every open of a chat that has plenty of messages.
  */
-export function ChatTranscriptSkeleton() {
-  return (
-    <div
-      aria-busy="true"
-      aria-label="Loading conversation"
-      className="flex w-full flex-col gap-3 py-2"
-    >
-      {/* Shaped like the transcript it stands in for: a short user bubble on
-          the right, then two assistant lines. */}
-      <Skeleton className="h-8 w-2/5 self-end rounded-surface" />
-      <Skeleton className="h-4 w-4/5" />
-      <Skeleton className="h-4 w-3/5" />
-    </div>
-  );
+export function ChatTranscriptLoading() {
+  return <CenteredSpinner label="Loading conversation" />;
 }
 
 /**

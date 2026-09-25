@@ -7,6 +7,7 @@ import {
   DialogFooter,
   Button,
   Input,
+  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -57,7 +58,6 @@ import {
   IconInfoCircle,
   IconMicrophone,
   IconPlayerStop,
-  IconLoader2,
 } from "@tabler/icons-react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
@@ -84,7 +84,10 @@ import {
   draftsAfterRemove,
   visibleDrafts,
 } from "./_utils/draftVisibility";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
 import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -322,7 +325,7 @@ export function QuickTaskModal({
       const attachmentStorageIds = await attachments.upload();
       const taskAttachmentIds = undefinedIfEmpty(attachmentStorageIds);
       if (activeDraftId) {
-        await withMutationToast(
+        await catchMutationError(
           activateDraft({
             id: activeDraftId,
             title: title.trim(),
@@ -335,12 +338,11 @@ export function QuickTaskModal({
             assignedTo,
             attachmentStorageIds: taskAttachmentIds,
           }),
-          "Task created",
           "Couldn't create task",
           "task-create",
         );
       } else {
-        await withMutationToast(
+        await catchMutationError(
           createQuickTask({
             repoId: repo._id,
             title: title.trim(),
@@ -355,7 +357,6 @@ export function QuickTaskModal({
             priority,
             attachmentStorageIds: taskAttachmentIds,
           }),
-          "Task created",
           "Couldn't create task",
           "task-create",
         );
@@ -532,7 +533,7 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (

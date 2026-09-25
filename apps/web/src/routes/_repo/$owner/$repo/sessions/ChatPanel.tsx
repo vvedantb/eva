@@ -5,10 +5,14 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
-import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
+import {
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
+} from "@/lib/components/chat/chatBodyUtils";
 import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -220,7 +224,9 @@ export function ChatPanel({
         fastMode: displayTraits.fastMode,
         providerAccountId: accountId,
       });
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Couldn't fork this chat";
@@ -376,6 +382,7 @@ export function ChatPanel({
       <StreamingActivityDisplay
         activity={startupStreamingActivity}
         thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
+        isSandboxStartup
       />
     </div>
   );
@@ -385,6 +392,7 @@ export function ChatPanel({
       <StreamingActivityDisplay
         activity={startupStreamingActivity}
         thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
+        isSandboxStartup
       />
     </div>
   ) : null;
@@ -448,11 +456,11 @@ export function ChatPanel({
         ""
       : SANDBOX_CHAT_COPY.asleepDescription;
 
-  const placeholder = !isSandboxActive
-    ? SANDBOX_CHAT_COPY.asleepPlaceholder
-    : isSwitchingAccount
-      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-      : SANDBOX_CHAT_COPY.activePlaceholder;
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+  });
 
   const readOnlyMessage = getSessionReadOnlyMessage({
     isArchived,
@@ -479,16 +487,12 @@ export function ChatPanel({
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
-        isInputDisabled={!isSandboxActive || isSwitchingAccount}
+        isInputDisabled={composer.isInputDisabled}
         isArchived={isReadOnly}
-        placeholder={placeholder}
+        placeholder={composer.placeholder}
         emptyStateTitle={emptyStateTitle}
         emptyStateDescription={emptyStateDescription}
-        disabledReason={
-          isSwitchingAccount
-            ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-            : SANDBOX_CHAT_COPY.asleepDisabledReason
-        }
+        disabledReason={composer.disabledReason}
         onStartSandbox={
           !isSandboxActive && !isSandboxToggling && !isReadOnly
             ? () => onSandboxToggle("start")

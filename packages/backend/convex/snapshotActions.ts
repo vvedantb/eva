@@ -31,6 +31,7 @@ import {
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
   isConvexBackendCommand,
+  CONVEX_FUNCTIONS_READY_ATTEMPTS,
   CONVEX_FUNCTIONS_READY_LOG_LINE,
   CONVEX_LOCAL_BACKEND_HEALTH_URL,
 } from "./_sandbox_runtime/convexLocalBackend";
@@ -40,6 +41,7 @@ import {
   resolveSwapConfig,
 } from "./_sandbox_runtime/swap";
 import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
+import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
 
@@ -89,7 +91,7 @@ const OPENCODE_VERSION = "1.18.16";
 // (SDK_VERSION): the callback's stream parsers match one SDK release's message
 // shapes exactly. Bump CLAUDE_CODE_VERSION (_sandbox_runtime/claudeCliVersion)
 // alongside the agent SDK — 0.3.X ships the CLI it spawns, 2.1.X.
-const CLAUDE_AGENT_SDK_VERSION = "0.3.258";
+const CLAUDE_AGENT_SDK_VERSION = "0.3.282";
 const CURSOR_SDK_VERSION = "1.0.28";
 
 /**
@@ -392,7 +394,7 @@ export const launchSeedRun = internalAction({
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
-      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@0.146.0 agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
+      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
       `command -v code-server >/dev/null 2>&1 || { github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm && sudo rpm -Uvh /tmp/code-server.rpm && rm -f /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
       'command -v websockify >/dev/null 2>&1 || python3 -m pip install --user --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1 || { echo "SEEDRUN-FAILED:websockify"; exit 1; }',
@@ -523,14 +525,15 @@ export const launchSeedRun = internalAction({
         `echo ${cb64} | base64 -d > /tmp/bg-cmd-${i}.sh && chmod +x /tmp/bg-cmd-${i}.sh && setsid nohup bash -l /tmp/bg-cmd-${i}.sh </dev/null > /tmp/bg-${i}.log 2>&1 & echo $! > /tmp/bg-${i}.pid`,
       );
     });
-    // Native Convex readiness gate: seed commands (`npx convex env set`,
-    // `npx convex import`) need a *running backend* — not a completed push.
-    // Gating on the functions-ready line deadlocks every repo whose
-    // auth.config.ts reads a deployment env var: the daemon's first push fails
-    // for the missing value, and the seed commands that would set it run after
-    // this gate. So the fatal wait is on the backend health endpoint, and the
-    // push happens after the seed commands instead (convex-push stage below).
-    // Detached script — a plain bash
+    // Native Convex readiness gate, in two parts. The *fatal* wait is on the
+    // backend health endpoint: seed commands (`npx convex env set`, `npx
+    // convex import`) need a running backend, and making a completed push
+    // mandatory deadlocks every repo whose auth.config.ts reads a deployment
+    // env var — the daemon's first push fails for the missing value, and the
+    // seed commands that would set it run after this gate. So the push happens
+    // after the seed commands instead (convex-push stage below). The second,
+    // non-fatal wait gives a push that *is* going to succeed the chance to
+    // land before the seeds touch the data. Detached script — a plain bash
     // wait has no exec ceiling here. 900s covers cold binary plants; a daemon
     // that exits early ends the wait instead of burning the full window.
     (backgroundCommands ?? []).forEach((command, i) => {
@@ -544,7 +547,25 @@ export const launchSeedRun = internalAction({
         "  sleep 5",
         "done",
         `${backendUp} || { echo "SEEDRUN-FAILED:convex-ready-${i}"; tail -n 60 /tmp/bg-${i}.log 2>/dev/null; exit 1; }`,
-        `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
+        // A live backend is necessary but not sufficient. The daemon's first
+        // push applies schema.ts and backfills its indexes, and `npx convex
+        // import` aborts the whole restore with "Could not complete import
+        // because schema changed" when that lands mid-import (observed
+        // 2026-09-21 on cost-model-ts: import got through every table, then
+        // died on the daemon's push finishing 8s in). So wait for the push
+        // too — but bounded and non-fatal, because the repos this gate was
+        // loosened for never finish that first push: their auth.config.ts
+        // reads an env var only the seed commands set, and their push is
+        // retried after the seeds instead (convex-push stage below). Repos
+        // that push cleanly break out in seconds; the cap is only ever paid
+        // by a repo that was going to skip the push anyway.
+        `echo "SEEDRUN-STAGE:convex-functions-ready-${i}"`,
+        `for s in $(seq 1 ${CONVEX_FUNCTIONS_READY_ATTEMPTS}); do`,
+        `  grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && break`,
+        `  if [ -f /tmp/bg-${i}.pid ] && ! kill -0 "$(cat /tmp/bg-${i}.pid)" 2>/dev/null; then echo "convex-ready-${i}: daemon exited"; break; fi`,
+        "  sleep 5",
+        "done",
+        `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && echo "convex-ready-${i}: functions pushed; safe to import" || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
       );
     });
     // ---- seed (post-daemon) ----
@@ -641,7 +662,7 @@ export const fetchSeedDiagnostics = internalAction({
           // repo pin, else its Last Known Good, else (DEFAULT_TO_LATEST) npm
           // `latest`. The pnpm 12 incident was invisible without these lines.
           'echo "== toolchain =="',
-          "( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo \"pnpm $(pnpm --version 2>&1 | tail -n 1)\"; grep -o '\"packageManager\": *\"[^\"]*\"' package.json 2>/dev/null || echo 'packageManager: (none)'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d ' \\n') )",
+          '( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo "pnpm $(pnpm --version 2>&1 | tail -n 1)"; grep -o \'"packageManager": *"[^"]*"\' package.json 2>/dev/null || echo \'packageManager: (none)\'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d \' \\n\') )',
           // Install warnings pnpm prints and then forgets (ignored build
           // scripts, peer/engine warnings). Written by the install stage.
           'echo "== install log (warnings) =="',

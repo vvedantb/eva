@@ -8,7 +8,7 @@ import {
 } from "@eva/ui";
 import {
   ChatEmptyState,
-  ChatTranscriptSkeleton,
+  ChatTranscriptLoading,
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
@@ -44,7 +44,7 @@ import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesE
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
-import { useState, type ReactNode } from "react";
+import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -336,6 +336,27 @@ function ChatBodyInner({
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
 
+  // Opening a long chat used to commit every settled turn in one blocking
+  // render — ~1s of locked main thread on a heavy transcript. Only the last
+  // turn is ever in the viewport (ChatLastTurn pads it to `100cqh`), so the
+  // backlog above it renders one pass later, at transition priority.
+  //
+  // Deferring "the transcript has rows" rather than mount — a chat whose
+  // messages arrive after mount would otherwise have spent its deferred pass
+  // on the loading spinner and then commit the whole backlog in the render
+  // that first has data.
+  const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+
+  // Streamed prose and the tool timeline arrive in the same Convex patch, but
+  // they cost wildly different amounts to render: the prose grows by a few
+  // characters, while the activity payload is a JSON blob capped at 600 KB
+  // that fans out into the timeline, the composer's todo badge, the sub-agent
+  // row and the question cards. Deferring the activity splits them across two
+  // passes — the text the user is reading commits at full priority, and the
+  // timeline re-renders at transition priority, where React can abandon a long
+  // render when the next token lands instead of holding the frame.
+  const deferredStreamingActivity = useDeferredValue(streamingActivity);
+
   const lastMessage = displayMessages[displayMessages.length - 1];
   // The oldest unfinished Working bubble owns the session-scoped streaming
   // row — turns run FIFO, so a newer queued placeholder must not steal a
@@ -499,7 +520,16 @@ function ChatBodyInner({
           />
         ));
 
-  const renderMessage = (message: ChatBodyMessage) => {
+  /**
+   * `isBacklog` marks a row the chat opened already scrolled past, which skips
+   * its enter animation: nothing arrived, and 80 simultaneous enter animations
+   * is the most expensive part of committing a long transcript.
+   *
+   * (`content-visibility: auto` on these rows was tried and reverted — no
+   * intrinsic-size estimate fits a chat turn, so the scroll height grew from
+   * 19k to 36k px as the user scrolled up through them.)
+   */
+  const renderMessage = (message: ChatBodyMessage, isBacklog = false) => {
     const isStreamingTarget = message._id === streamingTargetId;
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const senderFirstName =
@@ -515,6 +545,7 @@ function ChatBodyInner({
       <div key={message._id} className="flex flex-col gap-3">
         <ChatMessage
           message={message}
+          animateIn={!isBacklog}
           repoBasePath={repoBasePath}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
@@ -528,7 +559,9 @@ function ChatBodyInner({
           turnModel={precedingUser?.model}
           turnReasoningLevel={precedingUser?.reasoningLevel}
           turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
-          streamingActivity={isStreamingTarget ? streamingActivity : undefined}
+          streamingActivity={
+            isStreamingTarget ? deferredStreamingActivity : undefined
+          }
           streamingContent={isStreamingTarget ? streamingContent : undefined}
           onOpenFile={onOpenFile}
           onViewDiff={onViewDiff}
@@ -565,7 +598,7 @@ function ChatBodyInner({
           {displayMessages.length === 0 ? (
             (emptyStateOverride ??
             (isLoadingMessages ? (
-              <ChatTranscriptSkeleton />
+              <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}
@@ -581,21 +614,29 @@ function ChatBodyInner({
               />
             )))
           ) : lastUserMessageIndex < 0 ? (
-            displayMessages.map(renderMessage)
+            displayMessages.map((message) => renderMessage(message))
           ) : (
             <>
-              {displayMessages
-                .slice(0, lastUserMessageIndex)
-                .map(renderMessage)}
+              {backlogReady
+                ? displayMessages
+                    .slice(0, lastUserMessageIndex)
+                    .map((message) => renderMessage(message, true))
+                : null}
               <ChatLastTurn>
-                {displayMessages.slice(lastUserMessageIndex).map(renderMessage)}
+                {displayMessages
+                  .slice(lastUserMessageIndex)
+                  .map((message) => renderMessage(message))}
               </ChatLastTurn>
             </>
           )}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
-        <ChatJumpRail messages={jumpRailMessages} />
+        {/* Mounted with the backlog: the rail resolves its ticks by querying
+            `[data-message-id]` from an effect keyed on the (memoised) tick
+            array, so binding it before those rows exist would observe nothing
+            and never retry. */}
+        {backlogReady ? <ChatJumpRail messages={jumpRailMessages} /> : null}
         {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
       {isArchived ? null : (
@@ -655,7 +696,7 @@ function ChatBodyInner({
                     {preInputContent}
                   </>
                 }
-                streamingActivity={streamingActivity}
+                streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}
                 draft={draft}

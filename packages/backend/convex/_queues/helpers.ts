@@ -572,7 +572,12 @@ const taskChatQueueConfig: ChatQueueConfig<
   ChatQueuePrepared
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
-  hasActiveWorkflow: (task) => task.activeChatWorkflowId !== undefined,
+  // `activeWorkflowId` counts too: the task's own run owns the sandbox, and a
+  // follow-up may now be queued while that first run is still going. Starting
+  // a chat turn on top of it would have two agents in one sandbox.
+  hasActiveWorkflow: (task) =>
+    task.activeChatWorkflowId !== undefined ||
+    task.activeWorkflowId !== undefined,
   backgroundAgents: (task) => task.backgroundAgents,
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,

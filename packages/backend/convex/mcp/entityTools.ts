@@ -5,9 +5,12 @@ import {
   ENTITY_KINDS,
   entityAccess,
   entityPath,
+  entityPreviewPath,
   entityRefArgs,
   entitySummary,
   repoRefArgs,
+  type EntityLocation,
+  type EntityRef,
 } from "./entityRef";
 import {
   errorResult,
@@ -17,10 +20,58 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
+
+/** Port the Preview pane falls back to when nothing recorded a dev port. */
+const DEFAULT_PREVIEW_PORT = 3000;
+
+/**
+ * Turns a live preview URL into one that is safe to hand a person: the grant
+ * param is a five-minute bearer token, so it must never be persisted or shared
+ * (same rule the web app's "open in new tab" follows). Without it the proxy
+ * bounces the opener through Eva sign-in and back.
+ *
+ * `path` replaces the route while keeping any query the proxy put there.
+ */
+function shareablePreviewUrl(rawUrl: string, path?: string): string {
+  const url = new URL(rawUrl);
+  url.searchParams.delete(PREVIEW_GRANT_PARAM);
+  if (path !== undefined && path.trim().length > 0) {
+    const trimmed = path.trim();
+    const target = new URL(
+      trimmed.startsWith("/") ? trimmed : `/${trimmed}`,
+      url.origin,
+    );
+    url.pathname = target.pathname;
+    url.hash = target.hash;
+    for (const [key, value] of target.searchParams) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
+}
+
+/**
+ * The permanent Eva page for a chat's Preview tab, for a caller who would
+ * rather open it in Eva than hit the sandbox directly. Omitted rather than
+ * thrown when the chat has no number yet or the deployment has no web app
+ * configured — a missing second link must not cost the caller the first one.
+ */
+function evaPreviewUrl(location: EntityLocation): { evaUrl?: string } {
+  const previewPath = entityPreviewPath(location);
+  if (previewPath === undefined) return {};
+  try {
+    return { evaUrl: `${getEvaBaseUrl()}${previewPath}` };
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Tools that inspect and operate the chats a caller already has: what exists,
- * whether its preview VM is up, and what is still waiting in its queue.
+ * whether its preview VM is up, where that VM is serving the app, and what is
+ * still waiting in its queue.
  *
  * Deliberately absent: anything that patches a session, task or project's
  * status or review state. Those stay a person's call, so an agent can drive a
@@ -31,7 +82,7 @@ export function entityTools(
   ctx: ActionCtx,
 ): EvaTool[] {
   const tools: EvaTool[] = [];
-  const { clerkUserId } = credentials;
+  const { clerkUserId, entityId, entityKind } = credentials;
   // Chat tools use the per-user check only: every chat the user can open in
   // Eva is reachable, whichever repo minted the token (see entityAccess).
   const { assertUserRepoAccess, resolveRepoRef, resolveEntityTarget } =
@@ -179,6 +230,104 @@ If a turn is in flight this is REJECTED rather than killing that turn: wait for 
           ...entitySummary(target),
           sandboxStatus: result.sandboxStatus,
           stopped: result.stopRequested,
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // get_preview_url
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * An agent asked "what is my preview link?" has no id for itself, and used to
+   * answer that no link existed. Naming no chat therefore means "the one I am
+   * running in", which the sandbox token already states.
+   */
+  const withSelfDefault = (ref: EntityRef): EntityRef => {
+    const named =
+      ref.id !== undefined ||
+      ref.prUrl !== undefined ||
+      ref.numId !== undefined;
+    if (named || entityId === undefined || entityKind === undefined) return ref;
+    return { ...ref, id: entityId, kind: entityKind };
+  };
+
+  tools.push(
+    defineTool({
+      name: "get_preview_url",
+      description: `The live web address of a chat's running app — the same thing the Preview tab shows. Call this whenever the user asks for "the link", "the preview", "the URL" or wants to open what you just built; do not tell them no link exists until this has said so.
+
+Name no chat and it answers for the one you are running in. "path" points the link at a route you built, e.g. "/demo/referral-portal".
+
+The returned "previewUrl" is served straight from the sandbox, so it only works while that sandbox is running, and opening it requires an Eva login — it is for the user and their team, not a public address. "evaUrl" is the permanent Eva page holding the same preview. When the sandbox is not running there is no previewUrl: "sandboxStatus" says so, and start_sandbox brings it up. A "ready" of false means the VM is up but the dev server is still compiling — wait and call again.`,
+      mutating: false,
+      input: {
+        ...entityRefArgs,
+        path: z
+          .string()
+          .optional()
+          .describe(
+            'Route to open, e.g. "/demo/referral-portal". Defaults to the app root.',
+          ),
+      },
+      handler: async ({ path, ...ref }) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const chatRef = withSelfDefault(ref);
+        const resolved = await resolveEntityTarget(chatRef, userId);
+        if ("isError" in resolved) return resolved;
+        const { target } = resolved;
+
+        const summary = {
+          ...entitySummary(target),
+          sandboxStatus: target.sandboxStatus,
+          ...evaPreviewUrl(target),
+        };
+
+        if (
+          target.sandboxId === undefined ||
+          target.sandboxStatus !== "active"
+        ) {
+          return textResult({
+            ...summary,
+            previewUrl: null,
+            ready: false,
+            note: `This ${target.kind}'s sandbox is "${target.sandboxStatus}", so nothing is being served. Call start_sandbox and try again.`,
+          });
+        }
+
+        const preview = await ctx.runAction(
+          internal.sandbox.previewUrlForAuthorizedSandbox,
+          {
+            clerkUserId,
+            sandboxId: target.sandboxId,
+            repoId: target.repoId,
+            port: target.devPort ?? DEFAULT_PREVIEW_PORT,
+            checkReady: true,
+          },
+        );
+
+        // An unreachable dev server comes back as an empty url, not an error.
+        if (preview.url.length === 0) {
+          return textResult({
+            ...summary,
+            previewUrl: null,
+            ready: false,
+            port: preview.port,
+            note: "The sandbox is not serving anything on the app port yet. Eva restarts the dev server automatically; wait a minute and call again.",
+          });
+        }
+
+        return textResult({
+          ...summary,
+          previewUrl: shareablePreviewUrl(preview.url, path),
+          port: preview.port,
+          ready: preview.ready,
+          ...(preview.ready
+            ? {}
+            : {
+                note: "The dev server has not answered yet (a cold compile takes 1-2 minutes). The link is right; it may need a retry.",
+              }),
         });
       },
     }),

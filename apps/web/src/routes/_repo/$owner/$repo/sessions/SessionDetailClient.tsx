@@ -1,4 +1,5 @@
 import { useMutation } from "convex/react";
+import { CenteredSpinner } from "@eva/ui";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
@@ -6,7 +7,6 @@ import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
-import { SessionDetailSkeleton } from "./_components/SessionDetailSkeleton";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
@@ -95,6 +95,9 @@ export function SessionDetailClient({
   // state…), and a burst of prewarms can race the server's alive-check into
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
   const sessionPrState = session?.prState;
+  /* eslint-disable no-effect/no-event-handler --
+     Prewarms the sandbox daemon for the session the route landed on; the
+     trigger is navigation plus server-side status, not a click. */
   useEffect(() => {
     // A hidden cached shell must not resume a VM the user is not looking at.
     if (!isRouteActive) return;
@@ -112,10 +115,14 @@ export function SessionDetailClient({
     sessionPrState,
     prewarmDaemon,
   ]);
+  /* eslint-enable no-effect/no-event-handler */
 
   // Recover sandboxes left running after a PR merge/close (webhook may have
   // only patched prState before auto-stop existed, or the stop raced).
   const prAutoStopKey = useRef<string | null>(null);
+  /* eslint-disable no-effect/no-event-handler --
+     The PR closing is a GitHub webhook landing in Convex, so the teardown has
+     to follow the live query. The key ref keeps it to one call per state. */
   useEffect(() => {
     if (session === null || session === undefined) return;
     if (!isSessionPrReadOnly(session.prState)) {
@@ -130,6 +137,7 @@ export function SessionDetailClient({
     prAutoStopKey.current = key;
     void stopSandboxMutation({ sessionId });
   }, [session, sessionId, stopSandboxMutation]);
+  /* eslint-enable no-effect/no-event-handler */
   const isSandboxStarting = session?.status === "starting";
   // `stopping` is a transient backend state set synchronously by `stopSandbox`,
   // cleared once the Vercel sandbox's stop call completes. Showing the spinner
@@ -189,6 +197,9 @@ export function SessionDetailClient({
     session === null || session === undefined
       ? undefined
       : session.agentBrowsingAt;
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     The agent taking the browser happens inside the sandbox and arrives as a
+     live query change; there is no local event to switch the tab from. */
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
@@ -197,9 +208,10 @@ export function SessionDetailClient({
     onSandboxTabChange("browser");
     setExpandRightSignal((n) => n + 1);
   }, [agentBrowsingAt, onSandboxTabChange, isRouteActive, chatOnly]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   if (session === undefined) {
-    return <SessionDetailSkeleton />;
+    return <CenteredSpinner label="Loading session" />;
   }
 
   if (session === null) {

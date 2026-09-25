@@ -74,6 +74,7 @@ import type * as _github_authErrors from "../_github/authErrors.js";
 import type * as _github_deploymentSnapshot from "../_github/deploymentSnapshot.js";
 import type * as _github_evaPrOwnership from "../_github/evaPrOwnership.js";
 import type * as _github_helpers from "../_github/helpers.js";
+import type * as _github_prBodyBlocks from "../_github/prBodyBlocks.js";
 import type * as _github_prComments from "../_github/prComments.js";
 import type * as _github_prDescription from "../_github/prDescription.js";
 import type * as _github_prDescriptionPrompt from "../_github/prDescriptionPrompt.js";
@@ -86,6 +87,8 @@ import type * as _github_prMeta from "../_github/prMeta.js";
 import type * as _github_prOverview from "../_github/prOverview.js";
 import type * as _github_prRecapService from "../_github/prRecapService.js";
 import type * as _github_prReview from "../_github/prReview.js";
+import type * as _github_prScopeCheck from "../_github/prScopeCheck.js";
+import type * as _github_prScopeSection from "../_github/prScopeSection.js";
 import type * as _github_prTitleSync from "../_github/prTitleSync.js";
 import type * as _github_prUrl from "../_github/prUrl.js";
 import type * as _github_pullRequestDraftState from "../_github/pullRequestDraftState.js";
@@ -126,6 +129,7 @@ import type * as _mentions_resolveMessageTokens from "../_mentions/resolveMessag
 import type * as _mentions_resolveSkillMentions from "../_mentions/resolveSkillMentions.js";
 import type * as _mentions_routingUrgency from "../_mentions/routingUrgency.js";
 import type * as _mentions_skillToken from "../_mentions/skillToken.js";
+import type * as _messages_activityLog from "../_messages/activityLog.js";
 import type * as _messages_media from "../_messages/media.js";
 import type * as _messages_preview from "../_messages/preview.js";
 import type * as _migrations_backfillArchivedFromPrState from "../_migrations/backfillArchivedFromPrState.js";
@@ -193,6 +197,7 @@ import type * as _sandbox_runtime_callbackAuth from "../_sandbox_runtime/callbac
 import type * as _sandbox_runtime_callbackScript from "../_sandbox_runtime/callbackScript.js";
 import type * as _sandbox_runtime_callbackScriptFingerprint from "../_sandbox_runtime/callbackScriptFingerprint.js";
 import type * as _sandbox_runtime_claudeCliVersion from "../_sandbox_runtime/claudeCliVersion.js";
+import type * as _sandbox_runtime_codexCliVersion from "../_sandbox_runtime/codexCliVersion.js";
 import type * as _sandbox_runtime_convexLocalBackend from "../_sandbox_runtime/convexLocalBackend.js";
 import type * as _sandbox_runtime_daemonEntitySnapshot from "../_sandbox_runtime/daemonEntitySnapshot.js";
 import type * as _sandbox_runtime_daemonPaths from "../_sandbox_runtime/daemonPaths.js";
@@ -214,6 +219,7 @@ import type * as _sandbox_runtime_linkedRepoBranch from "../_sandbox_runtime/lin
 import type * as _sandbox_runtime_linkedRepos from "../_sandbox_runtime/linkedRepos.js";
 import type * as _sandbox_runtime_linkedReposEnv from "../_sandbox_runtime/linkedReposEnv.js";
 import type * as _sandbox_runtime_prepareSandboxSteps from "../_sandbox_runtime/prepareSandboxSteps.js";
+import type * as _sandbox_runtime_previewPoll from "../_sandbox_runtime/previewPoll.js";
 import type * as _sandbox_runtime_previewProxy from "../_sandbox_runtime/previewProxy.js";
 import type * as _sandbox_runtime_previewRecovery from "../_sandbox_runtime/previewRecovery.js";
 import type * as _sandbox_runtime_resumeSandboxSteps from "../_sandbox_runtime/resumeSandboxSteps.js";
@@ -228,6 +234,7 @@ import type * as _sandbox_runtime_turnRevert from "../_sandbox_runtime/turnRever
 import type * as _sandbox_runtime_typecheckCommand from "../_sandbox_runtime/typecheckCommand.js";
 import type * as _sandbox_runtime_vercelAppPorts from "../_sandbox_runtime/vercelAppPorts.js";
 import type * as _sandbox_runtime_workspaceLayout from "../_sandbox_runtime/workspaceLayout.js";
+import type * as _scopeCheck_describe from "../_scopeCheck/describe.js";
 import type * as _scopeCheck_hunks from "../_scopeCheck/hunks.js";
 import type * as _scopeCheck_mutations from "../_scopeCheck/mutations.js";
 import type * as _scopeCheck_queries from "../_scopeCheck/queries.js";
@@ -377,6 +384,7 @@ import type * as pendingQuestions from "../pendingQuestions.js";
 import type * as prBody from "../prBody.js";
 import type * as prRecapWorkflow from "../prRecapWorkflow.js";
 import type * as presence from "../presence.js";
+import type * as presentations from "../presentations.js";
 import type * as previewGrant from "../previewGrant.js";
 import type * as previewGrantConfig from "../previewGrantConfig.js";
 import type * as projectChatWorkflow from "../projectChatWorkflow.js";
@@ -524,6 +532,7 @@ declare const fullApi: ApiFromModules<{
   "_github/deploymentSnapshot": typeof _github_deploymentSnapshot;
   "_github/evaPrOwnership": typeof _github_evaPrOwnership;
   "_github/helpers": typeof _github_helpers;
+  "_github/prBodyBlocks": typeof _github_prBodyBlocks;
   "_github/prComments": typeof _github_prComments;
   "_github/prDescription": typeof _github_prDescription;
   "_github/prDescriptionPrompt": typeof _github_prDescriptionPrompt;
@@ -536,6 +545,8 @@ declare const fullApi: ApiFromModules<{
   "_github/prOverview": typeof _github_prOverview;
   "_github/prRecapService": typeof _github_prRecapService;
   "_github/prReview": typeof _github_prReview;
+  "_github/prScopeCheck": typeof _github_prScopeCheck;
+  "_github/prScopeSection": typeof _github_prScopeSection;
   "_github/prTitleSync": typeof _github_prTitleSync;
   "_github/prUrl": typeof _github_prUrl;
   "_github/pullRequestDraftState": typeof _github_pullRequestDraftState;
@@ -576,6 +587,7 @@ declare const fullApi: ApiFromModules<{
   "_mentions/resolveSkillMentions": typeof _mentions_resolveSkillMentions;
   "_mentions/routingUrgency": typeof _mentions_routingUrgency;
   "_mentions/skillToken": typeof _mentions_skillToken;
+  "_messages/activityLog": typeof _messages_activityLog;
   "_messages/media": typeof _messages_media;
   "_messages/preview": typeof _messages_preview;
   "_migrations/backfillArchivedFromPrState": typeof _migrations_backfillArchivedFromPrState;
@@ -643,6 +655,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/callbackScript": typeof _sandbox_runtime_callbackScript;
   "_sandbox_runtime/callbackScriptFingerprint": typeof _sandbox_runtime_callbackScriptFingerprint;
   "_sandbox_runtime/claudeCliVersion": typeof _sandbox_runtime_claudeCliVersion;
+  "_sandbox_runtime/codexCliVersion": typeof _sandbox_runtime_codexCliVersion;
   "_sandbox_runtime/convexLocalBackend": typeof _sandbox_runtime_convexLocalBackend;
   "_sandbox_runtime/daemonEntitySnapshot": typeof _sandbox_runtime_daemonEntitySnapshot;
   "_sandbox_runtime/daemonPaths": typeof _sandbox_runtime_daemonPaths;
@@ -664,6 +677,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/linkedRepos": typeof _sandbox_runtime_linkedRepos;
   "_sandbox_runtime/linkedReposEnv": typeof _sandbox_runtime_linkedReposEnv;
   "_sandbox_runtime/prepareSandboxSteps": typeof _sandbox_runtime_prepareSandboxSteps;
+  "_sandbox_runtime/previewPoll": typeof _sandbox_runtime_previewPoll;
   "_sandbox_runtime/previewProxy": typeof _sandbox_runtime_previewProxy;
   "_sandbox_runtime/previewRecovery": typeof _sandbox_runtime_previewRecovery;
   "_sandbox_runtime/resumeSandboxSteps": typeof _sandbox_runtime_resumeSandboxSteps;
@@ -678,6 +692,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/typecheckCommand": typeof _sandbox_runtime_typecheckCommand;
   "_sandbox_runtime/vercelAppPorts": typeof _sandbox_runtime_vercelAppPorts;
   "_sandbox_runtime/workspaceLayout": typeof _sandbox_runtime_workspaceLayout;
+  "_scopeCheck/describe": typeof _scopeCheck_describe;
   "_scopeCheck/hunks": typeof _scopeCheck_hunks;
   "_scopeCheck/mutations": typeof _scopeCheck_mutations;
   "_scopeCheck/queries": typeof _scopeCheck_queries;
@@ -827,6 +842,7 @@ declare const fullApi: ApiFromModules<{
   prBody: typeof prBody;
   prRecapWorkflow: typeof prRecapWorkflow;
   presence: typeof presence;
+  presentations: typeof presentations;
   previewGrant: typeof previewGrant;
   previewGrantConfig: typeof previewGrantConfig;
   projectChatWorkflow: typeof projectChatWorkflow;

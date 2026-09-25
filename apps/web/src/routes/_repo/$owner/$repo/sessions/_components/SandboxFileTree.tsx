@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
-import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import {
+  Button,
+  cn,
+  RefreshSpinIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@eva/ui";
 import {
   IconFoldDown,
   IconFoldUp,
   IconFolder,
   IconLayoutSidebar,
   IconLayoutSidebarRight,
-  IconRefresh,
   IconSearch,
 } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
@@ -95,6 +101,9 @@ export function SandboxFileTree({
 
   // Keep highlight + scroll in sync when `?file=` changes while mounted
   // (chat chip). Re-setting the same path is a nuqs no-op — no loop.
+  /* eslint-disable no-effect/no-event-handler --
+     Drives the tree library imperatively (select + scroll) when `?file=`
+     changes, including from a chat chip in another subtree. */
   useEffect(() => {
     if (!selectedPath) return;
     const item = model.getItem(selectedPath);
@@ -104,6 +113,7 @@ export function SandboxFileTree({
     }
     model.scrollToPath(selectedPath, { offset: "nearest" });
   }, [selectedPath, model]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const setAllExpanded = (next: boolean) => {
     for (const directoryPath of collectDirectoryPaths(paths)) {
@@ -221,9 +231,7 @@ export function SandboxFileTree({
               disabled={isRefreshing}
               aria-label="Refresh file list"
             >
-              <IconRefresh
-                className={cn("size-3.5", isRefreshing && "animate-spin")}
-              />
+              <RefreshSpinIcon busy={isRefreshing} className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent className="text-xs">Refresh</TooltipContent>

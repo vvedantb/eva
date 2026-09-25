@@ -91,7 +91,8 @@ ${buildSummarySection(uiTask)}
 - Prefix shell commands with timeouts: \`timeout 180 npm install\`, \`timeout 30 gh ...\`
 - For gh: \`GH_PROMPT_DISABLED=1 timeout 30 gh ...\`
 - Do NOT pipe long-running validation commands through \`tail\`; redirect output to a log file, wait for the command to exit, then tail the log.
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}`;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`
+- If this task asks for screenshots or a recording, write them to \`/tmp/repo/screenshots/\` (stills) or \`/tmp/repo/recordings/\` (video) using absolute paths, and leave them there when you finish — Eva uploads whatever is in those two folders and posts it into the task chat. Never paste a URL instead, and never commit them.${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}`;
 }
 
 /** Builds a prompt for resolving merge conflicts against the base branch. */

@@ -1,5 +1,5 @@
 import { getAIModelProvider, type Doc } from "@eva/backend";
-import type { ActivityStep } from "@eva/ui";
+import { getProviderLabel, type ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
@@ -221,6 +221,34 @@ export function stripErrorPrefix(content: string): string {
 }
 
 /**
+ * The heading a failed turn is announced with, or null when the turn is not a
+ * failure. Both failure classes are failures rather than replies: as markdown
+ * they read as Eva answering "Error: …" in body copy.
+ *
+ * A usage limit belongs to whichever provider ran the turn, so the title reads
+ * that turn's model stamp instead of naming Claude — a Cursor turn used to be
+ * reported as a Claude limit. An unstamped legacy turn names no provider
+ * rather than guessing one.
+ */
+export function turnErrorTitle({
+  errorType,
+  turnModel,
+  messageModel,
+}: {
+  errorType: ChatBodyMessage["errorType"];
+  /** Stamp of the user turn this answers — what the run was actually sent on. */
+  turnModel: string | undefined;
+  /** The assistant row's own stamp, for a failure with no user turn above it. */
+  messageModel: string | undefined;
+}): string | null {
+  if (errorType === "generic") return "This turn failed";
+  if (errorType !== "rate_limit") return null;
+  const model = turnModel ?? messageModel;
+  if (model === undefined) return "Usage limit reached";
+  return `${getProviderLabel(getAIModelProvider(model))} usage limit reached`;
+}
+
+/**
  * One wording for the sandbox across every chat panel (session, quick task,
  * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
  * so the transcript and the composer speak about Eva too rather than about a
@@ -234,12 +262,6 @@ export const SANDBOX_CHAT_COPY = {
   asleepPlaceholder: "Wake Eva up to send a message…",
   /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
-  /**
-   * A quick task's first run owns the sandbox until it finishes, so the chat
-   * shows that turn live but cannot take a follow-up yet.
-   */
-  firstRunDisabledReason:
-    "Eva is running this task — you can reply when it finishes",
   wakeAction: "Wake up Eva",
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
@@ -247,6 +269,41 @@ export const SANDBOX_CHAT_COPY = {
   activeDescription:
     "Type / for skills, @ to mention, or drop files to attach.",
 } as const;
+
+/**
+ * Whether a sandbox chat composer accepts input, and the copy that goes with
+ * it. One rule for all three surfaces: a running turn always takes a follow-up,
+ * because that send is queued rather than handed to the sandbox. Sessions got
+ * that for free — their sandbox is active whenever a turn runs — while a quick
+ * task's first run owns the sandbox before it is marked active, which locked
+ * the composer and made queueing impossible there.
+ */
+export function sandboxComposerState({
+  isSandboxActive,
+  isSwitchingAccount,
+  isExecuting,
+}: {
+  isSandboxActive: boolean;
+  isSwitchingAccount: boolean;
+  isExecuting: boolean;
+}): {
+  isInputDisabled: boolean;
+  placeholder: string;
+  disabledReason: string;
+} {
+  const isAsleep = !isSandboxActive && !isExecuting;
+  return {
+    isInputDisabled: isAsleep || isSwitchingAccount,
+    placeholder: isAsleep
+      ? SANDBOX_CHAT_COPY.asleepPlaceholder
+      : isSwitchingAccount
+        ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+        : SANDBOX_CHAT_COPY.activePlaceholder,
+    disabledReason: isSwitchingAccount
+      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+      : SANDBOX_CHAT_COPY.asleepDisabledReason,
+  };
+}
 
 /**
  * The failure a send threw, as the user should read it. Convex wraps a server

@@ -24,8 +24,7 @@ import {
   type BackgroundAgentEntry,
   type Id,
 } from "@eva/backend";
-import { VideoPreview } from "@/lib/components/MediaPreview";
-import { ImageGalleryPreview } from "@/lib/components/MediaGallery";
+import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
 import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
@@ -51,8 +50,10 @@ import {
   collectQuestionSteps,
   getAssistantTurnState,
   stripErrorPrefix,
+  turnErrorTitle as getTurnErrorTitle,
 } from "@/lib/components/chat/chatBodyUtils";
 import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ChatUiPanelTabs } from "@/lib/components/chat/generativeUi/ChatUiPanelTabs";
 import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
@@ -102,6 +103,12 @@ function MessageModelIcon({
 
 interface ChatMessageProps {
   message: ChatBodyMessage;
+  /**
+   * False for rows the user has already scrolled past — the transcript backlog
+   * mounts a whole chat at once, and 80 simultaneous enter animations is both
+   * wrong (nothing arrived) and the most expensive part of that commit.
+   */
+  animateIn?: boolean;
   repoBasePath: string;
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
@@ -157,15 +164,18 @@ interface ChatMessageProps {
     attachmentStorageIds?: Id<"_storage">[];
   };
   /**
-   * Rendered inside the turn, directly above the meta row (provider mark, copy,
-   * time) so agent-composed panels read as part of the reply rather than as a
-   * detached card below its footer.
+   * Agent-composed panels (`render_ui`) for this turn. On a settled assistant
+   * reply they take the prose's slot behind a UI / Text tab strip, so only one
+   * of the two renderings is on screen. Otherwise (user turn, still streaming,
+   * failed turn, no prose) they render directly above the meta row so a panel
+   * is never dropped.
    */
   belowContent?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
   message,
+  animateIn = true,
   repoBasePath,
   isLatestAssistantTurn,
   showChangedFiles = true,
@@ -243,19 +253,7 @@ export const ChatMessage = memo(function ChatMessage({
       ? "via MCP"
       : undefined;
 
-  // Videos render as inline players; images collapse into one Twitter-style
-  // grid + lightbox so a screenshot-heavy turn is not a long vertical stack.
   const mediaEntries = message.media ?? [];
-  const videoMedia = mediaEntries.flatMap((entry) =>
-    entry.url && entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
-  const imageMedia = mediaEntries.flatMap((entry) =>
-    entry.url && !entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
 
   // Only surfaces with an Agents tab get the doorway to it.
   const agentSpawn = !onOpenAgentsTab
@@ -271,15 +269,25 @@ export const ChatMessage = memo(function ChatMessage({
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
 
-  // Both failure classes are failures, not replies: as markdown they read as
-  // Eva answering "Error: …" in body copy. Only "rate_limit" used to get the
-  // notice, so every other failed turn looked like an answer.
-  const turnErrorTitle =
-    message.errorType === "rate_limit"
-      ? "Claude usage limit reached"
-      : message.errorType === "generic"
-        ? "This turn failed"
-        : null;
+  const turnErrorTitle = getTurnErrorTitle({
+    errorType: message.errorType,
+    turnModel,
+    messageModel: message.model,
+  });
+  // A panel and the prose that introduced it are two renderings of one answer,
+  // so the panel takes the slot and the prose moves behind a tab. Needs real
+  // prose to switch to, and a failed turn shows its error notice instead.
+  const panelTabs =
+    belowContent !== undefined &&
+    turnErrorTitle === null &&
+    message.content.trim().length > 0;
+  /* wrap-anywhere: without it a long unbreakable token is silently clipped by
+     MessageContent's overflow-hidden. */
+  const turnProse = (
+    <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+      {message.content}
+    </MessageResponse>
+  );
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
@@ -302,7 +310,7 @@ export const ChatMessage = memo(function ChatMessage({
       >
         <m.div
           data-message-id={message._id}
-          initial={{ opacity: 0, y: 10 }}
+          initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={motionFast}
           className={
@@ -421,6 +429,7 @@ export const ChatMessage = memo(function ChatMessage({
                       {message.activityLog && (
                         <ActivityLogDisplay
                           activityLog={message.activityLog}
+                          messageId={message._id}
                           name="Eva"
                           icon={EVA_ICON}
                           startedAt={message.timestamp}
@@ -447,8 +456,6 @@ export const ChatMessage = memo(function ChatMessage({
                             />
                           </m.div>
                         ) : (
-                          /* wrap-anywhere: without it a long unbreakable token is
-                          silently clipped by MessageContent's overflow-hidden. */
                           <m.div
                             key="turn-content"
                             data-assistant-cite-source={message._id}
@@ -457,9 +464,14 @@ export const ChatMessage = memo(function ChatMessage({
                             exit={{ opacity: 0 }}
                             transition={motionFast}
                           >
-                            <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                              {message.content}
-                            </MessageResponse>
+                            {panelTabs ? (
+                              <ChatUiPanelTabs
+                                panel={belowContent}
+                                text={turnProse}
+                              />
+                            ) : (
+                              turnProse
+                            )}
                           </m.div>
                         )}
                       </AnimatePresence>
@@ -478,34 +490,31 @@ export const ChatMessage = memo(function ChatMessage({
                           onViewDiff={onViewDiff}
                         />
                       ) : null}
-                      {videoMedia.map((entry, index) => (
-                        // Capped to the same width `ImageGalleryPreview` uses, so
-                        // a video and a screenshot in the same reply line up
-                        // instead of the video spanning the whole pane.
-                        <VideoPreview
-                          key={index}
-                          url={entry.url}
-                          className="max-w-lg"
-                        />
-                      ))}
-                      {imageMedia.length > 0 ? (
-                        <ImageGalleryPreview images={imageMedia} />
-                      ) : null}
+                      <AgentMedia entries={mediaEntries} />
                     </>
                   )}
                 </MessageContent>
                 {/* Sits above `belowContent` so agent-composed panels keep
                     their promised slot directly over the meta row, and so the
-                    chip stays next to the changed-files card it judges. */}
-                {showChangedFiles && message.scopeCheck ? (
+                    chip stays next to the changed-files card it judges.
+                    Deliberately not gated on `showChangedFiles`: the verdict is
+                    a safety signal, and simple view hiding it is exactly the
+                    reader who needs it. The hover card's per-hunk rows only
+                    link out when the diff surface exists — simple view bounces
+                    away from that tab, so they degrade to plain rows there. */}
+                {message.scopeCheck ? (
                   <div className="mt-1">
                     <ScopeCheckChip
                       check={message.scopeCheck}
-                      onViewDiff={onViewDiff}
+                      {...(showChangedFiles && onViewDiff
+                        ? { onViewDiff }
+                        : {})}
                     />
                   </div>
                 ) : null}
-                {belowContent ? (
+                {/* Only the panels the tab strip did not claim — a still-
+                    streaming or failed turn has no prose to trade places with. */}
+                {belowContent && !panelTabs ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}
                 {turnModel || copyPlain || rowActions.length > 0 ? (

@@ -99,6 +99,10 @@ export const Reasoning = memo(
       }
     }, [isStreaming, setDuration]);
 
+    /* eslint-disable no-effect/no-event-handler --
+       "Streaming started" and "streaming stopped" are transitions of a prop fed
+       by the agent stream, not clicks: there is no handler in this tree to open
+       or close the panel from. The close is also delayed by a timer. */
     // Auto-open when streaming starts (unless explicitly closed)
     useEffect(() => {
       if (isStreaming && !isOpen && !isExplicitlyClosed) {
@@ -122,6 +126,7 @@ export const Reasoning = memo(
         return () => clearTimeout(timer);
       }
     }, [isStreaming, isOpen, setIsOpen, hasAutoClosed]);
+    /* eslint-enable no-effect/no-event-handler */
 
     const handleOpenChange = useCallback(
       (newOpen: boolean) => {
