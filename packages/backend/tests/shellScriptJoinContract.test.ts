@@ -42,10 +42,8 @@ describe("shell scripts with blocks are joined with newlines", () => {
    */
   test("the seeded-runtime restore keeps its newline join", () => {
     const source = readSource("_sandbox_runtime/devServer.ts");
-    const startAt = source.indexOf(
-      "export async function restoreSeededRuntimeState(",
-    );
-    expect(startAt, "restoreSeededRuntimeState moved").toBeGreaterThan(-1);
+    const startAt = source.indexOf("async function restoreSeededSupabaseDump(");
+    expect(startAt, "restoreSeededSupabaseDump moved").toBeGreaterThan(-1);
     const body = source.slice(
       startAt,
       source.indexOf("\nexport ", startAt + 1),

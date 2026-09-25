@@ -216,6 +216,22 @@ export async function restoreSeededRuntimeState(
     );
     return;
   }
+  // Non-fatal: every caller runs this before the dev server resolves, so a
+  // throw here (e.g. a repo whose `supabase` CLI never installed, exit 127)
+  // left the Preview Console with no dev server at all. Background/startup
+  // commands still own Supabase and surface their own failures.
+  try {
+    await restoreSeededSupabaseDump(sandbox);
+  } catch (error) {
+    console.warn(
+      `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+async function restoreSeededSupabaseDump(
+  sandbox: SandboxHandle,
+): Promise<void> {
   await execHandle(
     sandbox,
     [
