@@ -413,13 +413,17 @@ export async function launchScript(
   const provider = getAIModelProvider(normalizedModel);
   // One lookup feeds both the install and CLAUDE_CLI_PINNED_VERSION below, so
   // the callback can never be told to expect a version this launch did not
-  // install. Cached for 15 minutes, and only reached for Claude launches.
-  const claudeCliVersion =
+  // install. Held as a promise, not awaited here: the registry round trip
+  // (~130ms cold, cached 15 minutes) then overlaps the uploads and the rest of
+  // the prep instead of delaying them. Only reached for Claude launches.
+  const claudeCliVersionPromise =
     provider === "claude"
-      ? await resolveClaudeCliVersion()
-      : CLAUDE_CODE_VERSION;
+      ? resolveClaudeCliVersion()
+      : Promise.resolve(CLAUDE_CODE_VERSION);
   const providerPrep = Promise.all([
-    ensureProviderCliAvailable(sandbox, provider, claudeCliVersion),
+    claudeCliVersionPromise.then((version) =>
+      ensureProviderCliAvailable(sandbox, provider, version),
+    ),
     ensureEvaToolingAvailable(sandbox),
     ensureSharedPnpmStore(sandbox),
   ]);
@@ -459,6 +463,8 @@ export async function launchScript(
 
   await Promise.all([providerPrep, ...uploadTasks]);
 
+  // Settled long before here — `providerPrep` above already awaited it.
+  const claudeCliVersion = await claudeCliVersionPromise;
   const convexUrl = publicConvexUrl();
   const streamingEntityId = opts.extraEnvVars?.STREAMING_ENTITY_ID ?? entityId;
   const streamingHmac = computeScopedHmac(

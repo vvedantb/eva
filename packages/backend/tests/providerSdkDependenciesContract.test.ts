@@ -154,7 +154,10 @@ test("the launch-resolved CLI version reaches both the install and the callback"
   expect(launchRuntime).toContain(
     "export async function resolveClaudeCliVersion()",
   );
-  expect(launchRuntime).toContain("await resolveClaudeCliVersion()");
+  // Kept off the critical path: the lookup starts as a promise that overlaps
+  // the uploads, rather than an await that stalls every other prep task.
+  expect(launchRuntime).toContain("? resolveClaudeCliVersion()");
+  expect(launchRuntime).toContain("await claudeCliVersionPromise");
   expect(launchRuntime).toContain(
     "CLAUDE_CLI_PINNED_VERSION=${quote([claudeCliVersion])}",
   );
