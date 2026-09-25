@@ -28,6 +28,34 @@ function shellQuote(value: string): string {
   return JSON.stringify(value);
 }
 
+/** The runner every daemon pidfile points at; its argv is the identity proof. */
+export const CALLBACK_RUNNER_PATH = "/tmp/run-design.mjs";
+
+/**
+ * Defines `eva_pid_live <pidfile>`: true only when the pidfile names a LIVE
+ * CALLBACK RUNNER, not merely a live pid.
+ *
+ * `kill -0` alone is unsound here because every marker under /tmp outlives a
+ * Vercel stop/resume while the VM itself reboots and pid allocation restarts
+ * from 1. The startup workflow then hands the daemon's recorded pid to one of
+ * the services it spawns, and the dead daemon reads back as warm forever:
+ * session 238 recorded pid 1172 before the stop, and the resume allocated
+ * 974-1189 to vite, the Convex backend and the executor. `prewarmEntityDaemon`
+ * logged "already warm" 20+ times over 45 minutes, nothing ever claimed a turn,
+ * and three prompts died as "Turn stalled".
+ *
+ * `/proc/<pid>/cmdline` settles it — both the runner pidfile (`$!` of
+ * `nohup flock … node /tmp/run-design.mjs`) and the daemon pidfile (the node
+ * process's own pid) name {@link CALLBACK_RUNNER_PATH} in their argv, and a
+ * recycled pid never does. An unreadable procfs degrades to the old `kill -0`
+ * verdict rather than guessing.
+ */
+export const DAEMON_PID_LIVE_FN =
+  `eva_pid_live() { p="$(cat "$1" 2>/dev/null)"; [ -n "$p" ] || return 1; ` +
+  `kill -0 "$p" 2>/dev/null || return 1; ` +
+  `[ -r "/proc/$p/cmdline" ] || return 0; ` +
+  `tr '\\0' '\\n' < "/proc/$p/cmdline" | grep -q 'run-design[.]mjs'; }`;
+
 /** Shell snippet that prints alive | optsmismatch | stale | cold. */
 export function buildDaemonAliveCheckCmd(
   entityIdField: string,
@@ -47,7 +75,7 @@ export function buildDaemonAliveCheckCmd(
     const pid = shellQuote(paths.pid);
     const entity = shellQuote(paths.entity);
     return (
-      `[ -f ${pid} ] && kill -0 "$(cat ${pid})" 2>/dev/null && ` +
+      `eva_pid_live ${pid} && ` +
       `[ "$(cat ${entity} 2>/dev/null)" = ${entityIdLit} ]`
     );
   }
@@ -58,10 +86,11 @@ export function buildDaemonAliveCheckCmd(
   }
 
   const scoped = entityDaemonPaths(entityIdField, entityId);
-  if (entityIdField === "sessionId") {
-    return `${branch(scoped)}; ${branch(LEGACY_SESSION_DAEMON_PATHS).replace(/^if /, "elif ")}; else echo cold; fi`;
-  }
-  return `${branch(scoped)}; else echo cold; fi`;
+  const check =
+    entityIdField === "sessionId"
+      ? `${branch(scoped)}; ${branch(LEGACY_SESSION_DAEMON_PATHS).replace(/^if /, "elif ")}; else echo cold; fi`
+      : `${branch(scoped)}; else echo cold; fi`;
+  return `${DAEMON_PID_LIVE_FN}; ${check}`;
 }
 
 /**
@@ -87,14 +116,20 @@ export function buildDaemonAliveCheckCmd(
  * it cannot match this command's own `bash -lc` wrapper. Callers allow a 10s
  * exec timeout; at most two pidfiles are reaped, so the worst case is ~6s of
  * waiting.
+ *
+ * `reap` goes through `eva_pid_live`, so a pidfile the reboot's pid allocation
+ * re-issued to something else is unlinked rather than signalled. Without that
+ * guard this SIGKILLs an innocent process tree — on a resumed sandbox the
+ * likely victims are vite and the Convex backend (see {@link DAEMON_PID_LIVE_FN}).
  */
 export function buildKillEntityDaemonCmd(
   entityIdField: string,
   entityId: string,
 ): string {
   const parts = [
+    DAEMON_PID_LIVE_FN,
     `kill_tree() { kids="$(pgrep -P "$1" 2>/dev/null)"; kill -"$2" "$1" 2>/dev/null || true; for c in $kids; do kill_tree "$c" "$2"; done; }`,
-    `reap() { pid="$(cat "$1" 2>/dev/null)"; [ -n "$pid" ] || return 0; kill -0 "$pid" 2>/dev/null || return 0; kill_tree "$pid" TERM; for i in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done; kill_tree "$pid" KILL; }`,
+    `reap() { eva_pid_live "$1" || return 0; pid="$(cat "$1" 2>/dev/null)"; kill_tree "$pid" TERM; for i in $(seq 1 15); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.2; done; kill_tree "$pid" KILL; }`,
   ];
 
   function reapParts(paths: DaemonPaths): string[] {
