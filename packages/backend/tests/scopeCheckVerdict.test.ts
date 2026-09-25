@@ -7,8 +7,11 @@ import {
   MAX_FLAGGED_HUNKS,
   MAX_OVERALL_DIFF_CHARS,
   MAX_PROMPT_CHARS,
+  MENTION_THRESHOLD,
   OVERALL_QUESTION,
+  hunkKey,
   isFlagged,
+  selectFlagged,
   summariseScopeCheck,
   type JudgedHunk,
 } from "../convex/_scopeCheck/verdict";
@@ -25,6 +28,27 @@ function hunk(
 function diffHunk(file: string, header: string, body: string): DiffHunk {
   return { file, header, body };
 }
+
+describe("selectFlagged", () => {
+  it("is the same set, order and cap the verdict stores", () => {
+    const judged = [
+      hunk(0.4, 0.2, "src/b.ts"),
+      hunk(0.95, 0.9, "src/ok.ts"),
+      hunk(0.05, 0.1, "src/a.ts"),
+    ];
+    expect(selectFlagged(judged).map((entry) => entry.file)).toEqual([
+      "src/a.ts",
+      "src/b.ts",
+    ]);
+    expect(
+      selectFlagged(
+        Array.from({ length: MAX_FLAGGED_HUNKS + 3 }, (_, index) =>
+          hunk(index / 1000, 0.1, `src/${index}.ts`),
+        ),
+      ),
+    ).toHaveLength(MAX_FLAGGED_HUNKS);
+  });
+});
 
 describe("questions", () => {
   it("asks the two per-hunk questions as booleans", () => {
@@ -128,6 +152,39 @@ describe("summariseScopeCheck", () => {
       totalHunks: 2,
     });
     expect(verdict.unrequestedProbability).toBeCloseTo(0.75, 10);
+  });
+
+  it("carries the labels and the mention answer onto the flagged rows", () => {
+    const flagged: JudgedHunk = {
+      ...hunk(0.05, 0.1, "src/AwardedPanel.tsx"),
+      kind: "icon",
+      summary: "Icon changed (IconAward → IconTrophy)",
+      surface: "Awarded panel",
+    };
+    const verdict = summariseScopeCheck({
+      ...base,
+      unrequestedProbability: 0.9,
+      judged: [flagged, hunk(0.9, 0.9, "src/ok.ts")],
+      mentioned: new Map([[hunkKey(flagged), 0.04]]),
+    });
+    expect(verdict.flagged[0]).toMatchObject({
+      kind: "icon",
+      summary: "Icon changed (IconAward → IconTrophy)",
+      surface: "Awarded panel",
+      mentioned: 0.04,
+    });
+    expect(verdict.flagged[0].mentioned).toBeLessThan(MENTION_THRESHOLD);
+  });
+
+  it("leaves mentioned absent when that call never answered", () => {
+    const verdict = summariseScopeCheck({
+      ...base,
+      unrequestedProbability: 0.9,
+      judged: [hunk(0.05, 0.1)],
+    });
+    // Absent must not read as "the reply stayed silent" — nobody asked.
+    expect(verdict.flagged[0].mentioned).toBeUndefined();
+    expect("mentioned" in verdict.flagged[0]).toBe(false);
   });
 
   it("falls back to zero when nothing was judged", () => {

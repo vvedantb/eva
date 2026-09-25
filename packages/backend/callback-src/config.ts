@@ -54,17 +54,37 @@ export const ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
  */
 export const NO_WRITES = process.env.EVA_NO_WRITES === "1";
 /**
+ * Surfaces whose chat panel renders a blocking question and writes the answer
+ * back: session `ChatPanel.tsx`, `TaskSandboxChatPanel.tsx` and
+ * `ProjectSandboxChatPanel.tsx` all query `pendingQuestions.getActive` on the
+ * entity id and call `pendingQuestions.answer`, and all three clear their rows
+ * when the sandbox stops. Anything else has nobody to answer.
+ */
+const QUESTION_ANSWERING_ENTITY_FIELDS = new Set([
+  "sessionId",
+  "taskId",
+  "projectId",
+]);
+/**
  * Human-in-the-loop AskUserQuestion. The Agent SDK exposes the `canUseTool`
- * pause needed to block a turn on an answer, and only sessions currently wire the
- * answering UI — so this is gated to session runs. Elsewhere AskUserQuestion
- * stays the old fire-and-forget metadata (surfaced after the turn).
+ * pause needed to block a turn on an answer. Elsewhere AskUserQuestion stays
+ * the old fire-and-forget metadata (surfaced after the turn).
  *
  * Scope is only that question behaviour. Every agent turn installs `canUseTool`
  * regardless (see `providers/claudeSdk.ts`) — it is what grants MCP tools, which
  * `bypassPermissions` does not. Do not fold the two concerns back together.
+ *
+ * Never on a run (`RUN_ID`). A run is autonomous — a quick task's first
+ * execution, an automation, a batch — so a blocking question would wait for an
+ * answer nobody is there to give, and the pause suspends the turn watchdog, so
+ * the turn would hang until someone stopped the sandbox. Runs must pick a
+ * sensible default and report the choice instead (see the prompt's
+ * "Visual decisions" block).
  */
 export const BLOCKING_QUESTIONS_ENABLED =
-  process.env.ENTITY_ID_FIELD === "sessionId";
+  RUN_ID === null &&
+  ENTITY_ID_FIELD !== undefined &&
+  QUESTION_ANSWERING_ENTITY_FIELDS.has(ENTITY_ID_FIELD);
 /** Fingerprint of the callback bundle this daemon was started with; exit when disk fp differs. */
 export const CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 /**
