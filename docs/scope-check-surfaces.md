@@ -22,7 +22,22 @@ Flow: `scheduleScopeCheck` (`_scopeCheck/mutations.ts:31`) → `scopeCheck.ts` `
 
 **Why `mentioned` exists.** The motivating miss (carepulse-ts, trophy icon, PR #1889) was not caught by scope alone: the change was unrequested *and* unreported. An unrequested change the reply names is a decision a reviewer can accept or reject; an unnamed one reaches production unseen. An absent `mentioned` means the question went unanswered — never "the reply stayed silent".
 
-Every failure path leaves `scopeCheck` absent and the chip simply does not render (`scopeCheck.ts:8-10`, `_scopeCheck/mutations.ts:27-29`).
+Every failure path leaves `scopeCheck` absent and the chip simply does not render (`scopeCheck.ts:8-10`, `_scopeCheck/mutations.ts`).
+
+## Where the verdict goes
+
+Two surfaces, and the second is the one that matters for production.
+
+**The chat chip.** `ChatMessage` renders `message.scopeCheck` (see UI, below).
+
+**The pull request.** `_github/prScopeSection.ts` builds a "Changes nobody asked for" block between `<!-- eva-scope-check -->` markers; `_github/prScopeCheck.ts` `publishScopeSection` reads the PR's commits, asks `_scopeCheck/queries.ts` `flaggedForShas` for every verdict recorded against those shas, and patches the body. Two triggers:
+
+- `setScopeCheck` (`_scopeCheck/mutations.ts`) schedules a publish whenever a verdict with flagged hunks lands and the chat has a PR. A quick task's PR lives on its newest `agentRuns` row, not on the task.
+- The `pull_request` webhook (`http.ts`) schedules `publishScopeSectionForPr` on `opened`/`reopened`, which resolves the repo by owner/name. This is the path for a PR Eva did not open.
+
+The lookup is keyed on `messages.afterSha` (index `by_after_sha`) rather than on the chat, so a PR that re-lands Eva's commits still carries the warning. Both blocks share `prBodyBlocks.ts`, so rewriting the reviewer description never disturbs the scope block and vice versa. An empty verdict removes the block rather than writing a reassuring heading — its presence is the signal.
+
+> **Known gap: a squashed extract.** Sha-keying only matches commits that survive intact. `git merge --squash` (or a rebase, or a hand-copied branch) mints new shas, and the original incident reached production exactly that way — a person copied Eva's files onto a clean branch and opened PR #1889. That PR would still show nothing. Closing it means matching on file paths instead of shas, which trades exactness for noise; decide that deliberately rather than by accident.
 
 All three chat surfaces now judge. Quick-task **runs** do not.
 
@@ -73,7 +88,7 @@ Order matters: persistence first, gate second, rebuild third. Steps 1-2 are safe
 - `pnpm --filter @eva/backend test`. The tests that pin this behaviour:
   - `callback-src/tests/turnCheckpoint.test.ts:118` asserts task and project chat turns **are** stamped (it previously asserted the opposite), and `:137` asserts `docId`/`reportId`/`automationRunId` are still skipped. `:152` still covers the `eva/` branch condition.
   - `tests/turnCheckpointCompletionContract.test.ts:62-69` pins the four `args.<name> =` assignments; `:82-102` pins that every sandbox-facing completion receiver spreads `turnCheckpointArgs` and does not redeclare `beforeSha:`.
-  - `tests/scopeCheckHunks.test.ts`, `tests/scopeCheckVerdict.test.ts`, `tests/scopeCheckDescribe.test.ts`. Web: `apps/web/src/lib/components/chat/_components/scopeCheckSummary.test.ts`.
+  - `tests/scopeCheckHunks.test.ts`, `tests/scopeCheckVerdict.test.ts`, `tests/scopeCheckDescribe.test.ts`, `tests/prScopeSection.test.ts` (including that the two PR blocks do not clobber each other), `callback-src/tests/blockingQuestionsGate.test.ts`. Web: `apps/web/src/lib/components/chat/_components/scopeCheckSummary.test.ts`.
 - **In a real chat:** open a quick task's sandbox chat, ask for one small change, and add an obviously unrelated edit to the prompt. The turn completes, then a few seconds later a chip appears under the reply. Confirm `beforeSha`/`afterSha` landed on the assistant `messages` row first — no shas means the sandbox is running an old bundle.
 - **Force a check on one message:** `cd packages/backend && npx convex run scopeCheck:evaluateTurn '{"messageId":"…","attempt":1}'` (add `--prod` for production). This is how the feature was validated originally. `getTurnContext` returns null when `scopeCheck` is already set (`_scopeCheck/queries.ts:60`), so a re-run is a no-op unless the field is cleared first — and also returns null when either sha is missing (`:63`), the shas are equal (`:64`), the repo does not resolve (`:67`), or no non-system user message precedes the reply (`:69-81`).
 

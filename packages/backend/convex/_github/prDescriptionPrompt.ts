@@ -1,3 +1,5 @@
+import { stripBlock, upsertBlockAboveFooter } from "./prBodyBlocks";
+
 /** Markers that delimit the generated block inside a PR body. Everything
  * outside them (Task / Change Requests / Summary sections and the Eva footer)
  * is owned by `prBody.ts`; everything inside is rewritten on every push. */
@@ -7,8 +9,6 @@ export const PR_DESCRIPTION_END = "<!-- /eva-pr-description -->";
 /** Longest generated block we will accept — anything beyond this is a wall of
  * prose, which is exactly what the visual format exists to avoid. */
 const MAX_DESCRIPTION_CHARS = 6_000;
-
-const FOOTER_SEPARATOR = "\n---\n";
 
 /**
  * Builds the prompt for the reviewer-facing PR description. The output is
@@ -84,12 +84,7 @@ export function cleanPrDescription(raw: string): string {
 /** Returns the body with the generated block removed, so the static sections
  * can be handed back to the model as intent without the previous answer. */
 export function stripPrDescription(body: string): string {
-  const start = body.indexOf(PR_DESCRIPTION_START);
-  const end = body.indexOf(PR_DESCRIPTION_END);
-  if (start === -1 || end === -1 || end < start) return body;
-  const before = body.slice(0, start).trimEnd();
-  const after = body.slice(end + PR_DESCRIPTION_END.length).trimStart();
-  return after.length > 0 ? `${before}\n\n${after}` : before;
+  return stripBlock(body, PR_DESCRIPTION_START, PR_DESCRIPTION_END);
 }
 
 /**
@@ -98,26 +93,10 @@ export function stripPrDescription(body: string): string {
  * the static sections stay on top and the footer stays last.
  */
 export function insertPrDescription(body: string, description: string): string {
-  const block = `${PR_DESCRIPTION_START}\n${description.trim()}\n${PR_DESCRIPTION_END}`;
-  const stripped = stripPrDescription(body);
-  const footerAt = findFooterStart(stripped);
-  if (footerAt === -1) {
-    return stripped.trim().length > 0
-      ? `${stripped.trimEnd()}\n\n${block}`
-      : block;
-  }
-  const head = stripped.slice(0, footerAt).trimEnd();
-  const footer = stripped.slice(footerAt);
-  return head.length > 0
-    ? `${head}\n\n${block}\n${footer}`
-    : `${block}\n${footer}`;
-}
-
-/** Index of the `---` line that opens the Eva footer, or -1. The rule is the
- * last line that is exactly `---`, which may be the very first line when the
- * body has no static sections. */
-function findFooterStart(body: string): number {
-  const at = body.lastIndexOf(FOOTER_SEPARATOR);
-  if (at !== -1) return at + 1;
-  return body.startsWith(FOOTER_SEPARATOR.slice(1)) ? 0 : -1;
+  return upsertBlockAboveFooter(
+    body,
+    PR_DESCRIPTION_START,
+    PR_DESCRIPTION_END,
+    description,
+  );
 }

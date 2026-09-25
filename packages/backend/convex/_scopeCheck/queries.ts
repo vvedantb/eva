@@ -7,34 +7,60 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { MENTION_THRESHOLD } from "./verdict";
 
 /** Enough history to reach the user message behind a long agent turn. */
 const RECENT_MESSAGE_LIMIT = 60;
 
+/** The repo a chat belongs to, and the PR it has opened (if any). */
+export type ChatOwner = {
+  repoId: Id<"githubRepos"> | null;
+  prUrl: string | null;
+};
+
 /**
- * The repo a chat's diff lives in. `messages.parentId` spans three tables, so
- * normalizeId is the only way to tell which one an id belongs to.
+ * The repo a chat's diff lives in, and the PR that chat opened. Exported so the
+ * mutation that stores a verdict can publish it to that PR without repeating
+ * the lookup. `messages.parentId` spans three tables, so normalizeId is the
+ * only way to tell which one an id belongs to.
  */
-async function resolveRepoId(
+export async function resolveChatOwner(
   ctx: QueryCtx,
   parentId: Doc<"messages">["parentId"],
-): Promise<Id<"githubRepos"> | null> {
+): Promise<ChatOwner> {
+  const empty: ChatOwner = { repoId: null, prUrl: null };
   const sessionId = ctx.db.normalizeId("sessions", parentId);
   if (sessionId !== null) {
     const session = await ctx.db.get(sessionId);
-    return session ? session.repoId : null;
+    if (!session) return empty;
+    return { repoId: session.repoId, prUrl: session.prUrl ?? null };
   }
   const projectId = ctx.db.normalizeId("projects", parentId);
   if (projectId !== null) {
     const project = await ctx.db.get(projectId);
-    return project ? project.repoId : null;
+    if (!project) return empty;
+    return { repoId: project.repoId, prUrl: project.prUrl ?? null };
   }
   const taskId = ctx.db.normalizeId("agentTasks", parentId);
   if (taskId !== null) {
     const task = await ctx.db.get(taskId);
-    return task?.repoId ?? null;
+    if (!task) return empty;
+    // A quick task has no `prUrl` of its own: the PR belongs to the run that
+    // opened it, so take the newest run that has one (as `updateTitle` does).
+    const runs = await ctx.db
+      .query("agentRuns")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .collect();
+    const prUrl = runs
+      .toSorted(
+        (left, right) =>
+          (right.startedAt ?? right._creationTime) -
+          (left.startedAt ?? left._creationTime),
+      )
+      .find((run) => run.prUrl)?.prUrl;
+    return { repoId: task.repoId ?? null, prUrl: prUrl ?? null };
   }
-  return null;
+  return empty;
 }
 
 /**
@@ -67,7 +93,7 @@ export const getTurnContext = internalQuery({
     if (beforeSha === undefined || afterSha === undefined) return null;
     if (beforeSha === afterSha) return null;
 
-    const repoId = await resolveRepoId(ctx, message.parentId);
+    const { repoId } = await resolveChatOwner(ctx, message.parentId);
     if (repoId === null) return null;
 
     const recent = await ctx.db
@@ -91,5 +117,66 @@ export const getTurnContext = internalQuery({
       prompt: prompt.content,
       reply: message.content,
     };
+  },
+});
+
+/** Shas per call; a PR with more commits than this is read in several passes. */
+export const MAX_SHAS_PER_LOOKUP = 100;
+
+/**
+ * Every flagged change recorded against the given commits, reduced to what the
+ * PR section shows.
+ *
+ * Keyed on the commit rather than on the chat: a PR that re-lands a turn's
+ * commits on a fresh branch carries the same warning as the session that wrote
+ * them, which is exactly the case the chip missed.
+ *
+ * Deduped by file and hunk header — a later turn that re-touched the same lines
+ * supersedes the earlier verdict, and only the newest is shown.
+ */
+export const flaggedForShas = internalQuery({
+  args: { shas: v.array(v.string()) },
+  returns: v.array(
+    v.object({
+      summary: v.string(),
+      surface: v.string(),
+      file: v.string(),
+      unreported: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const latest = new Map<
+      string,
+      { summary: string; surface: string; file: string; unreported: boolean }
+    >();
+    // Read every sha at once, then fold in commit order: `Promise.all` keeps
+    // the input order, so a later commit still supersedes an earlier one.
+    const perSha = await Promise.all(
+      args.shas.slice(0, MAX_SHAS_PER_LOOKUP).map((sha) =>
+        ctx.db
+          .query("messages")
+          .withIndex("by_after_sha", (q) => q.eq("afterSha", sha))
+          .collect(),
+      ),
+    );
+    for (const messages of perSha) {
+      for (const message of messages) {
+        const check = message.scopeCheck;
+        if (check === undefined) continue;
+        for (const hunk of check.flagged) {
+          latest.set(`${hunk.file} ${hunk.header}`, {
+            // Rows judged before the plain-English pass have neither; the file
+            // path is still better than dropping the warning entirely.
+            summary: hunk.summary ?? "Change the prompt did not ask for",
+            surface: hunk.surface ?? hunk.file,
+            file: hunk.file,
+            unreported:
+              hunk.mentioned !== undefined &&
+              hunk.mentioned < MENTION_THRESHOLD,
+          });
+        }
+      }
+    }
+    return [...latest.values()];
   },
 });

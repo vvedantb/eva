@@ -8,8 +8,16 @@ import { internalMutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { scopeCheckValidator } from "../_validators/shapes";
+import { resolveChatOwner } from "./queries";
 
-/** Stores the verdict. A message deleted mid-flight is not an error. */
+/**
+ * Stores the verdict, then publishes it to the chat's PR when there is one and
+ * something was flagged. A message deleted mid-flight is not an error.
+ *
+ * Publishing from here rather than from the PR flow means the section lands as
+ * soon as a verdict exists, however long after the push that is — the check is
+ * background work that retries for up to 90 seconds waiting for GitHub.
+ */
 export const setScopeCheck = internalMutation({
   args: { messageId: v.id("messages"), scopeCheck: scopeCheckValidator },
   returns: v.null(),
@@ -17,6 +25,14 @@ export const setScopeCheck = internalMutation({
     const message = await ctx.db.get(args.messageId);
     if (!message) return null;
     await ctx.db.patch(args.messageId, { scopeCheck: args.scopeCheck });
+
+    if (args.scopeCheck.flagged.length === 0) return null;
+    const { repoId, prUrl } = await resolveChatOwner(ctx, message.parentId);
+    if (repoId === null || prUrl === null) return null;
+    await ctx.scheduler.runAfter(0, internal.github.publishScopeSection, {
+      repoId,
+      prUrl,
+    });
     return null;
   },
 });

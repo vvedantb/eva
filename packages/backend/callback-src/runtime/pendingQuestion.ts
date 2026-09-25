@@ -99,8 +99,9 @@ export function buildCanUseTool(): SdkCanUseTool {
         updatedInput: { ...input, run_in_background: false },
       };
     }
-    // Only sessions wire the answering UI. Everywhere else AskUserQuestion
-    // stays fire-and-forget metadata (providers/claude.ts surfaces it after the
+    // Only the three chat surfaces wire the answering UI, and never a run —
+    // see `BLOCKING_QUESTIONS_ENABLED`. Everywhere else AskUserQuestion stays
+    // fire-and-forget metadata (providers/claude.ts surfaces it after the
     // turn), so the gate allows it through rather than blocking on an answer
     // no one can give.
     if (toolName !== "AskUserQuestion" || !BLOCKING_QUESTIONS_ENABLED) {
