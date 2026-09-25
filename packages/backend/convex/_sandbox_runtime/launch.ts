@@ -131,27 +131,6 @@ function resolveConvexSiteUrl(convexCloudUrl: string): string {
   );
 }
 
-/**
- * Makes the pinned Claude CLI available on the sandbox.
- *
- * Version-checked, not existence-checked: models are gated on the CLI's own
- * version, and a sandbox seeded before the pin moved keeps its stale global
- * `claude` for life (only a reseed upgrades the global). Session 62 on a 14 Aug
- * snapshot failed every Fable 5.1 turn with "Claude Code 2.1.232 does not
- * support this model" because the old guard only installed when `claude` was
- * missing. When neither the global nor the fallback prefix holds the pin, the
- * pin is installed under the fallback prefix (user-writable; the global npm
- * root is root-owned), and the callback prefers it over a drifted global —
- * see `claudeExecutablePath` in callback-src/providers/claudeSdk.ts.
- *
- * Three roots are probed, because the seed installs with `sudo npm install -g`
- * into node's own prefix (`/vercel/runtimes/node24/lib/node_modules`) while this
- * command runs as the unprivileged sandbox user, whose `npm root -g` is a
- * per-user prefix holding only pnpm. Testing `npm root -g` alone missed the
- * seeded CLI, so every fresh sandbox reinstalled the pin (~2.5s on the launch
- * critical path) despite already having it. Mirrors `globalNpmRoots()` in
- * callback-src/providers/claudeSdk.ts.
- */
 const CLAUDE_REGISTRY_LATEST_URL = `https://registry.npmjs.org/${CLAUDE_CODE_PACKAGE}/latest`;
 const CLAUDE_REGISTRY_TIMEOUT_MS = 4_000;
 /** Long enough that a burst of launches shares one lookup, short enough that a
@@ -221,6 +200,27 @@ export async function resolveClaudeCliVersion(): Promise<string> {
   return resolved;
 }
 
+/**
+ * Makes the resolved Claude CLI available on the sandbox.
+ *
+ * Version-checked, not existence-checked: models are gated on the CLI's own
+ * version, and a sandbox seeded before the pin moved keeps its stale global
+ * `claude` for life (only a reseed upgrades the global). Session 62 on a 14 Aug
+ * snapshot failed every Fable 5.1 turn with "Claude Code 2.1.232 does not
+ * support this model" because the old guard only installed when `claude` was
+ * missing. When neither the global nor the fallback prefix holds the pin, the
+ * pin is installed under the fallback prefix (user-writable; the global npm
+ * root is root-owned), and the callback prefers it over a drifted global —
+ * see `claudeExecutablePath` in callback-src/providers/claudeSdk.ts.
+ *
+ * Three roots are probed, because the seed installs with `sudo npm install -g`
+ * into node's own prefix (`/vercel/runtimes/node24/lib/node_modules`) while this
+ * command runs as the unprivileged sandbox user, whose `npm root -g` is a
+ * per-user prefix holding only pnpm. Testing `npm root -g` alone missed the
+ * seeded CLI, so every fresh sandbox reinstalled the pin (~2.5s on the launch
+ * critical path) despite already having it. Mirrors `globalNpmRoots()` in
+ * callback-src/providers/claudeSdk.ts.
+ */
 export async function ensureClaudeCliAvailable(
   sandbox: SandboxHandle,
   version: string,
