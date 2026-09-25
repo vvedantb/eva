@@ -50,7 +50,7 @@ import { buildStandardSdkAttemptResult } from "./attemptResult.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
-const SDK_VERSION = "0.3.258";
+const SDK_VERSION = "0.3.282";
 
 export type JsonLike =
   | string

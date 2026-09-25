@@ -27,7 +27,7 @@
   "description": "",
   "dependencies": {
     "@ai-sdk/gateway": "^4.0.85",
-    "@anthropic-ai/claude-agent-sdk": "0.3.258",
+    "@anthropic-ai/claude-agent-sdk": "0.3.282",
     "@clerk/backend": "^2.33.3",
     "@convex-dev/action-cache": "^0.3.1",
     "@convex-dev/crons": "^0.2.0",

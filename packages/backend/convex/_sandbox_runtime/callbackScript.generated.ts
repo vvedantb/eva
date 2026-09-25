@@ -5490,7 +5490,7 @@ function isZeroWorkTaskNotificationResult(message) {
 
 // callback-src/providers/claudeSdk.ts
 var SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
-var SDK_VERSION = "0.3.258";
+var SDK_VERSION = "0.3.282";
 async function readSdkPlanUsage(handle) {
   if (typeof handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET !== "function") {
     log("usage limits: this SDK query handle exposes no usage method");

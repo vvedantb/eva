@@ -7,4 +7,4 @@
  * global `claude` binary, and models are gated on the CLI's own version, so an
  * older CLI fails every turn with "does not support this model".
  */
-export const CLAUDE_CODE_VERSION = "2.1.258";
+export const CLAUDE_CODE_VERSION = "2.1.282";

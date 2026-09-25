@@ -50,7 +50,7 @@ const callbackBundle = readFileSync(
   "utf8",
 );
 
-const CLAUDE_AGENT_SDK_PIN = "0.3.258";
+const CLAUDE_AGENT_SDK_PIN = "0.3.282";
 
 const sdkVersions = [
   {

@@ -90,7 +90,7 @@ const OPENCODE_VERSION = "1.18.16";
 // (SDK_VERSION): the callback's stream parsers match one SDK release's message
 // shapes exactly. Bump CLAUDE_CODE_VERSION (_sandbox_runtime/claudeCliVersion)
 // alongside the agent SDK — 0.3.X ships the CLI it spawns, 2.1.X.
-const CLAUDE_AGENT_SDK_VERSION = "0.3.258";
+const CLAUDE_AGENT_SDK_VERSION = "0.3.282";
 const CURSOR_SDK_VERSION = "1.0.28";
 
 /**
