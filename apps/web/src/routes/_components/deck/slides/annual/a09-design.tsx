@@ -1,10 +1,7 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
-import { CountUp } from "../../_components/CountUp";
 import {
-  Accent,
   Body,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -14,8 +11,19 @@ import {
 } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
+import {
+  DUR,
+  EASE,
+  GridBackdrop,
+  LEAVE,
+  MaskedText,
+  STAGGER,
+  Sheen,
+  cueTransition,
+} from "../../_components/motion";
 import type { AnnualPhase } from "../_parts/AnnualPhasePipeline";
 import { AnnualPhasePipeline } from "../_parts/AnnualPhasePipeline";
+import { MoA3AccentRoll } from "../_parts/MoA3AccentRoll";
 
 /**
  * The rail earns the strongest move on the deck: as the light runs through the
@@ -49,8 +57,25 @@ const OPTIONS: readonly { text: string; rejected: boolean }[] = [
 /** 33 hundredths, shown as seconds: the count reads 0.00s up to 0.33s. */
 const seconds = (n: number) => (n / 100).toFixed(2);
 
+/** A hairline struck through a rejected option once it has landed. */
+function Strike({ on, delay }: { on: boolean; delay: number }) {
+  return (
+    <m.span
+      aria-hidden
+      className="pointer-events-none absolute inset-x-5 top-1/2 h-px origin-left bg-white/45"
+      initial={{ scaleX: 0 }}
+      animate={{ scaleX: on ? 1 : 0 }}
+      transition={cueTransition(on, delay, {
+        duration: DUR.slow,
+        ease: EASE.inOut,
+      })}
+    />
+  );
+}
+
 export function AnnualDesign() {
   const step = useDeckStep();
+  const shelved = step >= 3;
 
   return (
     <Shell className="py-12">
@@ -62,60 +87,81 @@ export function AnnualDesign() {
         </Body>
       </Reveal>
 
-      <Camera shots={DESIGN_SHOTS} className="mt-16">
-        <AnnualPhasePipeline phases={PHASES} active={step >= 1} />
-      </Camera>
+      <div className="relative isolate mt-16">
+        {/* Graph paper under the plan: it drifts, the plan holds still. */}
+        <m.div
+          aria-hidden
+          className="pointer-events-none absolute -inset-x-24 -inset-y-16 -z-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: step >= 1 ? 1 : 0 }}
+          transition={{ duration: DUR.hero, ease: EASE.out }}
+        >
+          <GridBackdrop variant="dots" cell={28} period={9} />
+        </m.div>
+        <Camera shots={DESIGN_SHOTS}>
+          <AnnualPhasePipeline phases={PHASES} active={step >= 1} />
+        </Camera>
+      </div>
 
-      <Reveal step={2} className="mt-16">
-        <div className="flex items-baseline justify-center gap-4">
-          <span className="text-xl text-white/55">
-            A 6GB workspace restores in
-          </span>
+      <div className="mt-16 flex items-baseline justify-center gap-4">
+        <MaskedText step={2} className="text-xl text-white/55">
+          A 6GB workspace restores in
+        </MaskedText>
+        <Sheen step={2} delay={1.2} className="-my-2 rounded-lg py-2">
           <span className="text-5xl leading-none font-semibold tracking-[-0.02em]">
-            <Accent>
-              <CountUp
-                value={33}
-                step={2}
-                duration={1.2}
-                delay={0.2}
-                format={seconds}
-                suffix="s"
-              />
-            </Accent>
+            <MoA3AccentRoll
+              value={33}
+              step={2}
+              duration={1.3}
+              delay={0.25}
+              format={seconds}
+              suffix="s"
+            />
           </span>
-        </div>
-      </Reveal>
+        </Sheen>
+      </div>
 
       <div className="mt-16 flex justify-center gap-4">
-        {OPTIONS.map((option, index) => (
-          <m.div
-            key={option.text}
-            initial={{ opacity: 0, y: 14, scale: 0.92 }}
-            animate={
-              step >= 3
-                ? { opacity: option.rejected ? 0.6 : 1, y: 0, scale: 1 }
-                : { opacity: 0, y: 14, scale: 0.92 }
-            }
-            transition={
-              step >= 3
-                ? {
-                    type: "spring",
-                    bounce: 0,
-                    duration: 0.55,
-                    delay: index * 0.12,
-                  }
-                : { duration: 0.2, ease: EASE_OUT }
-            }
-            className={cn(
-              "rounded-full px-6 py-3 text-[15px]",
-              option.rejected
-                ? "bg-white/[0.04] text-white/90"
-                : "bg-white/[0.08] text-white",
-            )}
-          >
-            {option.text}
-          </m.div>
-        ))}
+        {OPTIONS.map((option, index) => {
+          const delay = index * STAGGER.block;
+          return (
+            <m.div
+              key={option.text}
+              initial={{ opacity: 0, y: 18, scale: 0.94 }}
+              animate={
+                shelved
+                  ? {
+                      opacity: option.rejected ? [0, 1, 0.6] : 1,
+                      y: 0,
+                      scale: option.rejected ? [0.94, 1, 0.97] : 1,
+                    }
+                  : { opacity: 0, y: 18, scale: 0.94 }
+              }
+              transition={
+                shelved
+                  ? {
+                      duration: option.rejected ? 1.4 : DUR.slow,
+                      ease: EASE.expo,
+                      times: option.rejected ? [0, 0.4, 1] : undefined,
+                      delay,
+                      y: { duration: DUR.slow, ease: EASE.expo, delay },
+                    }
+                  : LEAVE
+              }
+              className={cn(
+                "relative rounded-full px-6 py-3 text-[15px]",
+                option.rejected
+                  ? "bg-white/[0.04] text-white/90"
+                  : "bg-white/[0.08] text-white",
+              )}
+            >
+              {option.text}
+              {option.rejected ? (
+                <Strike on={shelved} delay={delay + 0.45} />
+              ) : null}
+            </m.div>
+          );
+        })}
       </div>
 
       <Footnote>

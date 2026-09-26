@@ -1,9 +1,6 @@
 import { m } from "motion/react";
-import { CountUp } from "../../_components/CountUp";
 import {
   Accent,
-  BRAND,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -11,6 +8,15 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  BRAND_GRADIENT,
+  CountRoll,
+  DUR,
+  EASE,
+  MaskedText,
+  Sheen,
+  cueTransition,
+} from "../../_components/motion";
 
 interface Provider {
   name: string;
@@ -57,6 +63,56 @@ const MODEL_COUNT = PROVIDERS.reduce(
   0,
 );
 
+/** Where each column's first model sits in the catalogue, for the step 1 wave. */
+const FIRST_INDEX = PROVIDERS.map((_, index) =>
+  PROVIDERS.slice(0, index).reduce(
+    (total, provider) => total + provider.models.length,
+    0,
+  ),
+);
+
+/** One light passes down the whole catalogue as it gathers into one count. */
+const WAVE_GAP = 0.035;
+
+function ModelChip({
+  model,
+  delay,
+  wave,
+}: {
+  model: string;
+  delay: number;
+  wave: number;
+}) {
+  const gathered = useDeckStep() >= 1;
+
+  return (
+    <m.div
+      className="relative overflow-hidden rounded-[10px] bg-white/[0.06] px-3 py-1 text-[13px] text-white/75"
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: DUR.slow, ease: EASE.expo, delay }}
+    >
+      <m.span
+        aria-hidden
+        className="absolute inset-0 bg-white/[0.12]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: gathered ? [0, 1, 0] : 0 }}
+        transition={
+          gathered
+            ? {
+                duration: 0.7,
+                times: [0, 0.3, 1],
+                ease: "easeOut",
+                delay: wave,
+              }
+            : { duration: 0 }
+        }
+      />
+      <span className="relative">{model}</span>
+    </m.div>
+  );
+}
+
 function ProviderColumn({
   provider,
   index,
@@ -64,42 +120,44 @@ function ProviderColumn({
   provider: Provider;
   index: number;
 }) {
-  const base = 0.25 + index * 0.12;
+  const base = 0.3 + index * 0.1;
+  const first = FIRST_INDEX[index] ?? 0;
 
   return (
     <div>
       <m.div
         className="h-[3px] origin-left rounded-full"
-        style={{
-          background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
-        }}
+        style={{ background: BRAND_GRADIENT }}
         initial={{ scaleX: 0 }}
         animate={{ scaleX: 1 }}
-        transition={{ duration: 0.6, ease: EASE_OUT, delay: base }}
+        transition={{ duration: DUR.hero, ease: EASE.expo, delay: base }}
       />
 
-      <div className="mt-4 rounded-[18px] bg-white/[0.035] p-2">
-        <div className="px-2 pt-1 pb-2.5 text-sm font-medium text-white/80">
+      {/* On the last step a light crosses each supplier in turn: the work moving on. */}
+      <Sheen
+        step={2}
+        delay={0.35 + index * 0.14}
+        className="mt-4 rounded-[18px] bg-white/[0.035] p-2"
+      >
+        <m.div
+          className="px-2 pt-1 pb-2.5 text-sm font-medium text-white/80"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DUR.base, delay: base + 0.1 }}
+        >
           {provider.name}
-        </div>
+        </m.div>
         <div className="flex flex-col gap-1.5">
           {provider.models.map((model, modelIndex) => (
-            <m.div
+            <ModelChip
               key={model}
-              className="rounded-[10px] bg-white/[0.06] px-3 py-1 text-[13px] text-white/75"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{
-                duration: 0.45,
-                ease: EASE_OUT,
-                delay: base + 0.2 + modelIndex * 0.06,
-              }}
-            >
-              {model}
-            </m.div>
+              model={model}
+              delay={base + 0.2 + modelIndex * 0.05}
+              wave={0.1 + (first + modelIndex) * WAVE_GAP}
+            />
           ))}
         </div>
-      </div>
+      </Sheen>
     </div>
   );
 }
@@ -126,27 +184,28 @@ export function AnnualProviders() {
 
       <m.div
         className="mt-9 flex items-baseline justify-center gap-4"
-        initial={{ opacity: 0, y: 14 }}
-        animate={step >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
-        transition={
-          step >= 1
-            ? { type: "spring", bounce: 0, duration: 0.6 }
-            : { duration: 0.25, ease: EASE_OUT }
-        }
+        initial={{ opacity: 0, y: 18 }}
+        animate={step >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+        transition={cueTransition(step >= 1, 0.35)}
       >
         <span className="text-6xl leading-none font-semibold tracking-[-0.02em] tabular-nums">
           <Accent>
-            <CountUp value={MODEL_COUNT} step={1} duration={1.3} delay={0.15} />
+            <CountRoll
+              value={MODEL_COUNT}
+              step={1}
+              duration={1.4}
+              delay={0.45}
+            />
           </Accent>
         </span>
         <span className="text-xl text-white/55">models, one picker</span>
       </m.div>
 
-      <Reveal step={2} className="mt-8 text-center">
-        <p className="text-3xl text-white/85">
+      <p className="mt-8 text-center text-3xl text-white/85">
+        <MaskedText step={2}>
           If one supplier stalls, <Accent>the work moves</Accent>.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>Model catalogue at 16 September 2026.</Footnote>
     </Shell>

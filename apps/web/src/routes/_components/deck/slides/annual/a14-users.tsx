@@ -1,8 +1,13 @@
-import { IconArrowRight } from "@tabler/icons-react";
+import type { Icon } from "@tabler/icons-react";
+import {
+  IconChevronRight,
+  IconDeviceMobile,
+  IconKeyboard,
+  IconRouteOff,
+} from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -10,6 +15,12 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  BRAND_GRADIENT,
+  DUR,
+  EASE,
+  MaskedText,
+} from "../../_components/motion";
 
 interface Change {
   before: string;
@@ -24,15 +35,16 @@ const CHANGES: Change[] = [
   { before: "Written for engineers", after: "Written in plain language" },
 ];
 
-const CHIPS = [
-  "Usable on a phone",
-  "Shortcuts made visible",
-  "Dead-end pages removed",
+const CHIPS: readonly { icon: Icon; label: string }[] = [
+  { icon: IconDeviceMobile, label: "Usable on a phone" },
+  { icon: IconKeyboard, label: "Shortcuts made visible" },
+  { icon: IconRouteOff, label: "Dead-end pages removed" },
 ];
 
-/** The before phrases land first, then each is struck out in turn. */
-const STRIKE_START = 0.7;
-const STRIKE_GAP = 0.18;
+/** The before phrases rise first, then each is struck out and replaced in turn. */
+const ROW_GAP = 0.1;
+const STRIKE_START = 0.75;
+const STRIKE_GAP = 0.2;
 
 function ChangeRow({ before, after, index }: Change & { index: number }) {
   const strike = STRIKE_START + index * STRIKE_GAP;
@@ -40,37 +52,64 @@ function ChangeRow({ before, after, index }: Change & { index: number }) {
   return (
     <div className="flex items-center gap-7">
       <m.div
-        className="w-[420px] shrink-0 text-2xl leading-snug text-white/45"
-        initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
-        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-        transition={{ duration: 0.5, ease: EASE_OUT, delay: index * 0.1 }}
+        className="w-[420px] shrink-0 text-2xl leading-snug text-white"
+        initial={{ opacity: 0.45 }}
+        animate={{ opacity: 0.32 }}
+        transition={{ duration: DUR.slow, ease: EASE.out, delay: strike + 0.3 }}
       >
         <span className="relative inline-block">
-          {before}
+          <MaskedText delay={index * ROW_GAP} duration={DUR.slow}>
+            {before}
+          </MaskedText>
           <m.span
             aria-hidden
-            className="absolute top-1/2 left-0 h-[2px] w-full origin-left rounded-full bg-white/40"
+            className="absolute top-1/2 -left-1 h-[2px] w-[calc(100%+8px)] origin-left rounded-full bg-white/70"
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
-            transition={{ duration: 0.45, ease: EASE_OUT, delay: strike }}
+            transition={{ duration: 0.45, ease: EASE.inOut, delay: strike }}
           />
         </span>
       </m.div>
 
-      <m.div
-        className="flex items-center gap-4"
-        initial={{ opacity: 0, y: 16, filter: "blur(6px)" }}
-        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-        transition={{
-          type: "spring",
-          bounce: 0,
-          duration: 0.6,
-          delay: strike + 0.14,
-        }}
-      >
-        <IconArrowRight size={20} className="text-[#3B7DD8]" aria-hidden />
-        <span className="text-2xl leading-snug text-white/95">{after}</span>
-      </m.div>
+      <div className="flex items-center gap-4">
+        {/* The arrow draws itself from the struck phrase towards its replacement. */}
+        <span className="relative flex h-5 w-7 items-center">
+          <m.span
+            aria-hidden
+            className="h-[1.5px] w-full origin-left rounded-full"
+            style={{ background: BRAND_GRADIENT }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{
+              duration: DUR.base,
+              ease: EASE.out,
+              delay: strike + 0.2,
+            }}
+          />
+          <m.span
+            className="absolute -right-2 flex"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+              duration: DUR.base,
+              ease: EASE.out,
+              delay: strike + 0.35,
+            }}
+          >
+            <IconChevronRight
+              size={18}
+              stroke={2}
+              className="text-[#3B7DD8]"
+              aria-hidden
+            />
+          </m.span>
+        </span>
+        <span className="text-2xl leading-snug text-white/95">
+          <MaskedText delay={strike + 0.3} duration={DUR.slow}>
+            {after}
+          </MaskedText>
+        </span>
+      </div>
     </div>
   );
 }
@@ -98,33 +137,59 @@ export function AnnualUsers() {
       </div>
 
       <div className="mt-12 flex gap-3">
-        {CHIPS.map((chip, index) => (
-          <m.div
-            key={chip}
-            initial={false}
-            animate={
-              chipsIn
-                ? { opacity: 1, y: 0, scale: 1 }
-                : { opacity: 0, y: 14, scale: 0.96 }
-            }
-            transition={{
-              type: "spring",
-              bounce: 0,
-              duration: 0.5,
-              delay: chipsIn ? index * 0.09 : 0,
-            }}
-            className="rounded-full bg-white/[0.07] px-5 py-2.5 text-sm text-white/80"
-          >
-            {chip}
-          </m.div>
-        ))}
+        {CHIPS.map((chip, index) => {
+          const at = index * 0.1;
+          return (
+            <m.div
+              key={chip.label}
+              initial={false}
+              animate={
+                chipsIn
+                  ? { opacity: 1, y: 0, scale: 1 }
+                  : { opacity: 0, y: 16, scale: 0.94 }
+              }
+              transition={
+                chipsIn
+                  ? { duration: DUR.slow, ease: EASE.expo, delay: at }
+                  : { duration: DUR.fast }
+              }
+              className="flex items-center gap-2.5 rounded-full bg-white/[0.07] py-2.5 pr-5 pl-4 text-sm text-white/80"
+            >
+              <m.span
+                className="flex"
+                initial={false}
+                animate={
+                  chipsIn
+                    ? { opacity: 1, scale: 1, rotate: 0 }
+                    : { opacity: 0, scale: 0.4, rotate: -20 }
+                }
+                transition={
+                  chipsIn
+                    ? { duration: DUR.base, ease: EASE.expo, delay: at + 0.2 }
+                    : { duration: DUR.fast }
+                }
+              >
+                <chip.icon
+                  size={16}
+                  stroke={1.8}
+                  className="text-[#3B7DD8]"
+                  aria-hidden
+                />
+              </m.span>
+              {chip.label}
+            </m.div>
+          );
+        })}
       </div>
 
-      <Reveal step={2} className="mt-10">
-        <p className="text-center text-3xl font-medium text-white/90">
-          Not cleverer. <Accent>Usable.</Accent>
-        </p>
-      </Reveal>
+      <p className="mt-10 text-center text-3xl font-medium text-white/90">
+        <MaskedText step={2} delay={0.1}>
+          Not cleverer.
+        </MaskedText>{" "}
+        <MaskedText step={2} delay={0.55} duration={1.1}>
+          <Accent>Usable.</Accent>
+        </MaskedText>
+      </p>
 
       <Footnote>
         Simple Mode from 14 August 2026; mobile audits August and September

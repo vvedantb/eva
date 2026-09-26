@@ -1,8 +1,6 @@
-import { IconCheck, IconSearch } from "@tabler/icons-react";
+import { IconCheck, IconFileCode } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
-import type { Transition } from "motion/react";
 import {
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -10,7 +8,18 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-import { FriChip, FriTyped, FriWindow } from "../_parts/FriMock";
+import { CountUp } from "../../_components/CountUp";
+import {
+  DUR,
+  DrawPath,
+  EASE,
+  LEAVE,
+  SETTLE,
+  Sheen,
+  cueTransition,
+} from "../../_components/motion";
+import { FriWindow } from "../_parts/FriMock";
+import { MoF3SearchOverlay } from "../_parts/MoF3SearchOverlay";
 
 interface FileRow {
   name: string;
@@ -25,91 +34,101 @@ const FILES: readonly FileRow[] = [
   { name: "Tests", added: 96, removed: 0 },
 ];
 
-/** What the search reaches, named in the room's words. */
-const RESULTS: readonly { title: string; kind: string }[] = [
-  { title: "Referral portal", kind: "Codebase" },
-  { title: "Decline reasons", kind: "Project" },
-  { title: "Export audit trail", kind: "Document" },
-  { title: "Zuza — admin pages", kind: "Session" },
-];
+/** Five diff blocks per file, the way a reviewer reads the size of a change. */
+const BLOCKS = 5;
+const blocksFor = ({ added, removed }: FileRow) => {
+  const total = added + removed;
+  const plus = Math.round((added / total) * BLOCKS);
+  return Array.from({ length: BLOCKS }, (_, index) =>
+    index < plus ? "bg-[#3B7DD8]" : "bg-white/25",
+  );
+};
 
-const SETTLE: Transition = { type: "spring", bounce: 0, duration: 0.55 };
+/** The comment thread runs up the gutter from the avatar to the first file. */
+const THREAD = "M40 247 H22 Q12 247 12 237 V48 Q12 38 22 38 H26";
+function FileLine({ file, index }: { file: FileRow; index: number }) {
+  const commented = useDeckStep() >= 1 && index === 0;
+  const delay = 0.45 + index * 0.1;
+  return (
+    <m.div
+      className="relative flex items-center gap-4 rounded-[12px] bg-white/[0.04] px-4 py-3"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR.slow, ease: EASE.expo, delay }}
+    >
+      <m.span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-[#8B3FB8]/70"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: commented ? 1 : 0 }}
+        transition={cueTransition(commented, 1.0, { duration: DUR.base })}
+      />
+      <IconFileCode size={15} aria-hidden className="text-white/35" />
+      <span className="flex-1 truncate text-[13px] text-white/70">
+        {file.name}
+      </span>
+      <span className="text-[12px] text-[#3B7DD8] tabular-nums">
+        <CountUp
+          value={file.added}
+          prefix="+"
+          delay={delay + 0.2}
+          duration={1}
+        />
+      </span>
+      <span className="w-10 text-right text-[12px] text-white/40 tabular-nums">
+        −{file.removed}
+      </span>
+      <span className="flex gap-[3px]" aria-hidden>
+        {blocksFor(file).map((tone, block) => (
+          <m.span
+            key={block}
+            className={`size-2 rounded-[2px] ${tone}`}
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{
+              duration: DUR.base,
+              ease: EASE.out,
+              delay: delay + 0.35 + block * 0.05,
+            }}
+          />
+        ))}
+      </span>
+    </m.div>
+  );
+}
 
 function CommentCard() {
   const landed = useDeckStep() >= 1;
 
   return (
     <m.div
-      className="absolute right-6 bottom-4 left-6 flex items-center gap-3 rounded-[16px] bg-white/[0.1] px-4 py-3 ring-1 ring-white/10"
+      className="absolute right-6 bottom-4 left-6 rounded-[16px] bg-white/[0.1] ring-1 ring-white/10"
       initial={{ opacity: 0, y: 18, scale: 0.95 }}
       animate={{
         opacity: landed ? 1 : 0,
         y: landed ? 0 : 18,
         scale: landed ? 1 : 0.95,
       }}
-      transition={landed ? SETTLE : { duration: 0.25, ease: EASE_OUT }}
+      transition={landed ? SETTLE : LEAVE}
     >
-      <span
-        aria-hidden
-        className="size-7 shrink-0 rounded-full bg-gradient-to-br from-[#8B3FB8] to-[#3B7DD8]"
-      />
-      <span className="text-[13px] leading-snug text-white/85">
-        Rename this to decline reason
-      </span>
-    </m.div>
-  );
-}
-
-function SearchOverlay() {
-  return (
-    <m.div
-      className="absolute inset-0 flex items-start justify-center rounded-[20px] bg-black/60 pt-10"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.2, ease: EASE_OUT } }}
-      transition={{ duration: 0.3, ease: EASE_OUT }}
-    >
-      <m.div
-        className="w-[520px] overflow-hidden rounded-[20px] bg-[#16161a] p-4 ring-1 ring-white/15"
-        initial={{ opacity: 0, y: 22, scale: 0.94 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{
-          opacity: 0,
-          scale: 0.97,
-          transition: { duration: 0.2, ease: EASE_OUT },
-        }}
-        transition={SETTLE}
-      >
-        <div className="flex items-center gap-3 rounded-[12px] bg-white/[0.06] px-3 py-2.5">
-          <IconSearch size={16} className="text-white/40" />
-          <span className="flex-1 text-[14px] text-white/85">
-            <FriTyped text="decline" delay={0.35} duration={0.6} />
+      <Sheen step={1} delay={0.5} className="rounded-[16px]">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span
+            aria-hidden
+            className="size-7 shrink-0 rounded-full bg-gradient-to-br from-[#8B3FB8] to-[#3B7DD8]"
+          />
+          <span className="text-[13px] leading-snug text-white/85">
+            Rename this to decline reason
           </span>
-          <FriChip>Cmd K</FriChip>
         </div>
-        <div className="mt-2 flex flex-col">
-          {RESULTS.map((result, index) => (
-            <m.div
-              key={result.title}
-              className="flex items-center gap-3 rounded-[12px] px-3 py-2.5"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...SETTLE, delay: 0.25 + index * 0.08 }}
-            >
-              <span className="flex-1 truncate text-[13px] text-white/75">
-                {result.title}
-              </span>
-              <FriChip>{result.kind}</FriChip>
-            </m.div>
-          ))}
-        </div>
-      </m.div>
+      </Sheen>
     </m.div>
   );
 }
 
 export function FridayReviews() {
-  const searching = useDeckStep() >= 2;
+  const step = useDeckStep();
+  const searching = step >= 2;
 
   return (
     <Shell className="py-14">
@@ -119,38 +138,45 @@ export function FridayReviews() {
       </Reveal>
 
       <Reveal delay={0.1} className="relative mt-10 mx-auto w-[900px]">
-        <FriWindow
-          label="A bundle of changes · referral portal"
-          className="h-[330px] w-full"
-          bodyClassName="relative flex flex-col gap-2 px-6 py-4"
-          trailing={
-            <span className="flex items-center gap-1.5 rounded-full bg-[#3B7DD8]/20 px-2.5 py-1 text-[11px] text-white/80">
-              <IconCheck size={12} />
-              Ready
-            </span>
+        {/* Behind the search the review recedes a touch, so the palette reads as in front. */}
+        <m.div
+          initial={false}
+          animate={{ scale: searching ? 0.975 : 1 }}
+          transition={
+            searching ? { duration: DUR.slow, ease: EASE.expo } : LEAVE
           }
         >
-          {FILES.map((file) => (
-            <div
-              key={file.name}
-              className="flex items-center gap-4 rounded-[12px] bg-white/[0.04] px-4 py-3"
-            >
-              <span className="flex-1 truncate text-[13px] text-white/70">
-                {file.name}
+          <FriWindow
+            label="A bundle of changes · referral portal"
+            className="h-[330px] w-full"
+            bodyClassName="relative flex flex-col gap-2 px-6 py-4"
+            trailing={
+              <span className="flex items-center gap-1.5 rounded-full bg-[#3B7DD8]/20 px-2.5 py-1 text-[11px] text-white/80">
+                <IconCheck size={12} />
+                Ready
               </span>
-              <span className="text-[12px] text-[#3B7DD8] tabular-nums">
-                +{file.added}
-              </span>
-              <span className="w-10 text-right text-[12px] text-white/40 tabular-nums">
-                −{file.removed}
-              </span>
-            </div>
-          ))}
-          <CommentCard />
-        </FriWindow>
+            }
+          >
+            {FILES.map((file, index) => (
+              <FileLine key={file.name} file={file} index={index} />
+            ))}
+            <DrawPath
+              d={THREAD}
+              width={60}
+              height={260}
+              step={1}
+              delay={0.35}
+              duration={0.8}
+              strokeWidth={1.5}
+              dot
+              className="pointer-events-none absolute top-0 left-0"
+            />
+            <CommentCard />
+          </FriWindow>
+        </m.div>
 
         <AnimatePresence>
-          {searching ? <SearchOverlay key="search" /> : null}
+          {searching ? <MoF3SearchOverlay key="search" /> : null}
         </AnimatePresence>
       </Reveal>
 

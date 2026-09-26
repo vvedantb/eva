@@ -2,8 +2,6 @@ import { m } from "motion/react";
 import { AnnCCountDown } from "../_parts/AnnCCountDown";
 import {
   Accent,
-  BRAND,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -11,6 +9,15 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  BRAND_GRADIENT,
+  DUR,
+  EASE,
+  STAGGER,
+  Sheen,
+  Spotlight,
+  cueTransition,
+} from "../../_components/motion";
 
 interface Drop {
   label: string;
@@ -52,24 +59,47 @@ const DROPS: readonly Drop[] = [
 
 const TRACK_W = 380;
 const DURATION = 1.3;
-const GRADIENT = `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`;
+const ROW_H = 104;
+const BLEED = 260;
+const HEAD_GLOW =
+  "radial-gradient(circle, #fff 0 16%, rgba(59,125,216,0.5) 34%, transparent 70%)";
+/** The light sits behind whichever figure is falling. */
+const LIGHT = [
+  null,
+  ...DROPS.map((_, index) => ({
+    x: BLEED + 930,
+    y: BLEED + index * ROW_H + ROW_H / 2,
+    size: 340,
+  })),
+];
 
 function DropRow({ drop, index }: { drop: Drop; index: number }) {
-  const fallen = useDeckStep() >= index + 1;
+  const step = useDeckStep();
+  const fallen = step >= index + 1;
+  const current = step === index + 1;
+  // At rest every row is lit; once the build starts, the falling row leads.
+  const opacity = step === 0 || current ? 1 : fallen ? 0.7 : 0.45;
   // A floor keeps a bar that falls to zero from vanishing entirely.
-  const width = Math.max(TRACK_W * (drop.after / drop.before), 6);
+  const share = Math.max(drop.after / drop.before, 6 / TRACK_W);
+  const fall = fallen
+    ? { duration: DURATION, ease: EASE.expo, delay: 0.15 }
+    : { duration: DUR.base, ease: EASE.out };
 
   return (
     <m.div
-      className="flex h-[104px] items-center gap-8"
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        type: "spring",
-        bounce: 0,
-        duration: 0.55,
-        delay: 0.3 + index * 0.12,
-      }}
+      className="flex items-center gap-8"
+      style={{ height: ROW_H }}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity, y: 0 }}
+      transition={
+        step === 0
+          ? {
+              duration: DUR.hero,
+              ease: EASE.expo,
+              delay: 0.3 + index * STAGGER.block,
+            }
+          : { duration: DUR.slow, ease: EASE.out }
+      }
     >
       <div className="w-[270px] shrink-0 text-lg text-white/60">
         {drop.label}
@@ -82,35 +112,70 @@ function DropRow({ drop, index }: { drop: Drop; index: number }) {
       >
         <div className="absolute inset-0 rounded-full bg-white/15" />
         <m.div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{ background: GRADIENT }}
+          className="absolute inset-0 origin-left rounded-full"
+          style={{ background: BRAND_GRADIENT }}
           initial={false}
-          animate={{ width: fallen ? width : TRACK_W }}
+          animate={{ scaleX: fallen ? share : 1 }}
+          transition={fall}
+        />
+        <m.span
+          className="absolute top-1/2 left-0 -mt-4 -ml-4 size-8 rounded-full"
+          style={{ background: HEAD_GLOW }}
+          initial={false}
+          animate={{
+            x: fallen ? TRACK_W * share : TRACK_W,
+            opacity: current ? [0, 1, 1, 0] : 0,
+          }}
           transition={{
-            duration: fallen ? DURATION : 0.4,
-            ease: EASE_OUT,
-            delay: fallen ? 0.15 : 0,
+            x: fall,
+            opacity: current
+              ? {
+                  duration: DURATION + 0.3,
+                  times: [0, 0.1, 0.7, 1],
+                  delay: 0.15,
+                }
+              : { duration: DUR.fast },
           }}
         />
       </div>
 
       <div className="flex flex-1 items-baseline justify-end gap-3">
         <span className="w-[76px] shrink-0 text-right text-base whitespace-nowrap tabular-nums text-white/35">
-          {drop.beforeText} →
-        </span>
-        <span className="w-[140px] shrink-0 text-right text-5xl leading-none font-semibold tabular-nums">
-          <Accent>
-            <AnnCCountDown
-              from={drop.before}
-              to={drop.after}
-              decimals={drop.decimals}
-              fromText={drop.beforeText}
-              step={index + 1}
-              duration={DURATION}
-              delay={0.15}
+          <span className="relative">
+            {drop.beforeText}
+            {/* The old figure is struck through once the new one has landed. */}
+            <m.span
+              aria-hidden
+              className="absolute inset-x-[-3px] top-1/2 h-px origin-left bg-white/45"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: fallen ? 1 : 0 }}
+              transition={cueTransition(fallen, 0.15 + DURATION * 0.8, {
+                duration: DUR.slow,
+                ease: EASE.inOut,
+              })}
             />
-          </Accent>
+          </span>{" "}
+          →
         </span>
+        <Sheen
+          step={index + 1}
+          delay={0.15 + DURATION}
+          className="-my-2 w-[140px] shrink-0 rounded-lg py-2 text-right"
+        >
+          <span className="text-5xl leading-none font-semibold tabular-nums">
+            <Accent>
+              <AnnCCountDown
+                from={drop.before}
+                to={drop.after}
+                decimals={drop.decimals}
+                fromText={drop.beforeText}
+                step={index + 1}
+                duration={DURATION}
+                delay={0.15}
+              />
+            </Accent>
+          </span>
+        </Sheen>
         <span className="w-[86px] shrink-0 text-base text-white/45">
           {drop.unit}
         </span>
@@ -127,7 +192,13 @@ export function AnnualFrontendPerf() {
         <Title size="md">Three waits, measured and cut.</Title>
       </Reveal>
 
-      <div className="mt-16">
+      <div className="relative isolate mt-16">
+        <div
+          className="pointer-events-none absolute isolate -z-10"
+          style={{ inset: -BLEED }}
+        >
+          <Spotlight shots={LIGHT} />
+        </div>
         {DROPS.map((drop, index) => (
           <DropRow key={drop.label} drop={drop} index={index} />
         ))}

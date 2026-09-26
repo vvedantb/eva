@@ -4,14 +4,23 @@ import {
   Accent,
   BRAND,
   Body,
-  EASE_OUT,
   Footnote,
   Kicker,
   Shell,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  DUR,
+  DrawPath,
+  EASE,
+  MaskedText,
+  Pulse,
+  Spotlight,
+  cueTransition,
+} from "../../_components/motion";
 import { Fri2Panel } from "../_parts/Fri2Panel";
+import { MOF2_TIMELINE_DOT_Y, MoF2Timeline } from "../_parts/MoF2Timeline";
 
 /**
  * A stand-in for the real thing: plain English, no file names, no jargon. It is
@@ -23,40 +32,23 @@ const SUMMARY =
 const WORDS = SUMMARY.split(" ");
 
 /** Fast enough to read as typing, slow enough that the last word still lands. */
-const WORD_STAGGER = 0.035;
+const WORD_STAGGER = 0.032;
+const WRITE_AT = 0.2;
+const WRITTEN = WRITE_AT + WORDS.length * WORD_STAGGER + 0.2;
 
-const DAYS: readonly string[] = ["Today", "Yesterday"];
+const PANEL_W = 560;
+const GAP = 64;
 
-function TimelineEntry({ shown, delay }: { shown: boolean; delay: number }) {
-  return (
-    <m.div
-      className="flex gap-3 rounded-[14px] bg-white/[0.05] p-3.5"
-      initial={{ opacity: 0, y: 22 }}
-      animate={shown ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 }}
-      transition={{ type: "spring", bounce: 0, duration: 0.6, delay }}
-    >
-      <span
-        aria-hidden
-        className="mt-1 size-2 shrink-0 rounded-full"
-        style={{ backgroundColor: BRAND.blue }}
-      />
-      <div className="flex-1">
-        <div className="text-xs tabular-nums text-white/55">08:00</div>
-        <div className="mt-2.5 space-y-2">
-          <span className="block h-1.5 w-full rounded-full bg-white/15" />
-          <span className="block h-1.5 w-[86%] rounded-full bg-white/12" />
-          <span className="block h-1.5 w-[92%] rounded-full bg-white/12" />
-          <span className="block h-1.5 w-[64%] rounded-full bg-white/10" />
-        </div>
-      </div>
-    </m.div>
-  );
-}
+/** Morning light behind the panel while it writes, easing off for the feed. */
+const GLOW = [
+  null,
+  { x: PANEL_W / 2, y: 140, size: 620 },
+  { x: PANEL_W / 2, y: 140, size: 460 },
+];
 
 export function FridayStandup() {
   const step = useDeckStep();
   const writing = step >= 1;
-  const timeline = step >= 2;
 
   return (
     <Shell className="py-12">
@@ -70,73 +62,105 @@ export function FridayStandup() {
         A summary, <Accent>every morning</Accent>.
       </Title>
       <Body className="mt-4 max-w-3xl">
-        About 150 words on what happened yesterday.
+        <MaskedText delay={0.4} duration={0.8}>
+          About 150 words on what happened yesterday.
+        </MaskedText>
       </Body>
 
-      <div className="mt-8 flex items-start gap-14">
-        <Fri2Panel
-          className="w-[560px]"
-          header={
-            <>
-              <span className="tabular-nums">08:00 UTC</span>
-              <span className="text-white/25">·</span>
-              <span>Weekdays</span>
-            </>
-          }
-          bodyClassName="min-h-[216px] p-6"
+      <div
+        className="relative isolate mt-10 flex items-start"
+        style={{ gap: GAP }}
+      >
+        <Spotlight shots={GLOW} className="-inset-20 overflow-visible" />
+        <m.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.45 }}
         >
-          <p className="text-[17px] leading-relaxed text-pretty text-white/85">
-            {WORDS.map((word, index) => (
-              <m.span
-                // Words repeat, so the index is part of the identity.
-                key={`${word}-${index}`}
-                className="inline-block"
-                style={{ marginRight: "0.26em" }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: writing ? 1 : 0 }}
-                transition={{
-                  duration: 0.18,
-                  ease: EASE_OUT,
-                  delay: writing ? index * WORD_STAGGER : 0,
-                }}
-              >
-                {word}
-              </m.span>
-            ))}
+          <Fri2Panel
+            className="w-[560px]"
+            header={
+              <>
+                <Pulse color={BRAND.blue} size={6} reach={2.4} delay={1} />
+                <span className="ml-1 tabular-nums">08:00 UTC</span>
+                <span className="text-white/25">·</span>
+                <span>Weekdays</span>
+              </>
+            }
+            bodyClassName="relative min-h-[216px] p-6"
+          >
             <m.span
               aria-hidden
-              className="inline-block h-[17px] w-[2px] translate-y-[3px] bg-white/70"
-              animate={{ opacity: [1, 1, 0, 0] }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            />
-          </p>
-        </Fri2Panel>
-
-        <div className="w-[320px]">
-          {DAYS.map((day, index) => (
-            <div key={day} className={index > 0 ? "mt-4" : undefined}>
-              <m.div
-                className="mb-2.5 text-sm font-medium text-white/85"
-                initial={{ opacity: 0, y: 22 }}
+              className="absolute inset-0 flex items-center justify-center text-white/[0.12]"
+              initial={{ opacity: 0, y: 14 }}
+              animate={writing ? { opacity: 0, y: -10 } : { opacity: 1, y: 0 }}
+              transition={cueTransition(!writing, 0.8, {
+                duration: DUR.hero,
+                ease: EASE.expo,
+              })}
+            >
+              <IconSunrise size={64} stroke={1.2} />
+            </m.span>
+            <p className="relative text-[17px] leading-relaxed text-pretty text-white/85">
+              {WORDS.map((word, index) => (
+                <m.span
+                  // Words repeat, so the index is part of the identity.
+                  key={`${word}-${index}`}
+                  className="inline-block"
+                  style={{ marginRight: "0.26em" }}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={
+                    writing ? { opacity: 1, y: 0 } : { opacity: 0, y: 5 }
+                  }
+                  transition={cueTransition(
+                    writing,
+                    WRITE_AT + index * WORD_STAGGER,
+                    { duration: DUR.base, ease: EASE.out },
+                  )}
+                >
+                  {word}
+                </m.span>
+              ))}
+              <m.span
+                aria-hidden
+                className="inline-block h-[17px] w-[2px] translate-y-[3px] bg-white/70"
+                initial={{ opacity: 0 }}
                 animate={
-                  timeline ? { opacity: 1, y: 0 } : { opacity: 0, y: 22 }
+                  writing ? { opacity: [0, 1, 1, 0, 0] } : { opacity: 0 }
                 }
-                transition={{
-                  type: "spring",
-                  bounce: 0,
-                  duration: 0.6,
-                  delay: timeline ? index * 0.14 : 0,
-                }}
-              >
-                {day}
-              </m.div>
-              <TimelineEntry
-                shown={timeline}
-                delay={timeline ? index * 0.14 + 0.07 : 0}
+                transition={
+                  writing
+                    ? {
+                        duration: 1,
+                        times: [0, 0.01, 0.5, 0.5, 1],
+                        ease: "linear",
+                        repeat: Infinity,
+                        delay: WRITTEN,
+                      }
+                    : { duration: 0 }
+                }
               />
-            </div>
-          ))}
+            </p>
+          </Fri2Panel>
+        </m.div>
+
+        {/* The summary feeds the timeline: a light runs from the panel to today. */}
+        <div
+          className="absolute"
+          style={{ left: PANEL_W + 6, top: MOF2_TIMELINE_DOT_Y - 1 }}
+        >
+          <DrawPath
+            d={`M0 1 L${GAP - 8} 1`}
+            width={GAP - 8}
+            height={2}
+            step={2}
+            duration={0.4}
+            strokeWidth={1.5}
+            dot
+          />
         </div>
+
+        <MoF2Timeline />
       </div>
 
       <Footnote>

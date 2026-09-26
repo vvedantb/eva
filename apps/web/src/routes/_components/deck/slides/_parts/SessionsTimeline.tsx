@@ -1,8 +1,10 @@
 import { m } from "motion/react";
-import { BRAND, EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { BRAND, useDeckStep } from "../../_components/DeckPrimitives";
+import { DUR, EASE, LEAVE, Spotlight } from "../../_components/motion";
+import { LEAD, MoF1Milestone } from "./MoF1SessionsMilestone";
+import type { Run } from "./MoF1SessionsMilestone";
 import {
   BOX_H,
-  CARD_W,
   LINE_Y,
   MONTHS,
   TRACK_W,
@@ -10,80 +12,78 @@ import {
 } from "./sessionsTimelineLayout";
 import type { Placed } from "./sessionsTimelineLayout";
 
-function Milestone({ item }: { item: Placed }) {
-  const active = useDeckStep() >= item.step;
-  const stem = item.stem;
-  const delay = item.order * 0.1;
+const START = 16;
+const END = TRACK_W - START;
+const STEPS = 3;
+/** Time runs at an even pace, so each light-up lands as the head passes. */
+const PACE = 560;
+/** The glow's box overhangs the timeline by this much, so its edge never shows. */
+const GLOW_BLEED = 96;
 
+/** Where the lit part of the axis runs on each step: to that month's last milestone. */
+function runs(placed: readonly Placed[]): Run[] {
+  const out: Run[] = [];
+  let from = START;
+  for (let step = 1; step <= STEPS; step += 1) {
+    const xs = placed.filter((item) => item.step === step).map((i) => i.x);
+    const to = Math.max(from, ...xs) + 14;
+    out.push({ from, to, duration: Math.max(0.55, (to - from) / PACE) });
+    from = to;
+  }
+  return out;
+}
+
+function MonthLabel({ index }: { index: number }) {
+  const step = useDeckStep();
+  const month = MONTHS[index];
+  if (!month) return null;
+  const tone = step === index + 1 ? 0.9 : step > index + 1 ? 0.5 : 0.35;
   return (
-    <div className="absolute" style={{ left: item.x, top: LINE_Y }}>
-      <m.div
-        aria-hidden
-        className="absolute w-px bg-white/15"
-        style={{ height: stem, top: item.above ? -stem : 0 }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: active ? 1 : 0 }}
-        transition={{
-          duration: 0.4,
-          ease: EASE_OUT,
-          delay: active ? delay : 0,
-        }}
-      />
-
-      <m.div
-        aria-hidden
-        className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_18px_rgba(139,63,184,0.6)]"
-        style={{
-          background: `linear-gradient(135deg, ${BRAND.purple}, ${BRAND.blue})`,
-        }}
-        initial={{ scale: 0 }}
-        animate={{ scale: active ? 1 : 0 }}
-        transition={{
-          type: "spring",
-          bounce: 0.25,
-          duration: 0.6,
-          delay: active ? delay : 0,
-        }}
-      />
-
-      <m.div
-        className="absolute -translate-x-1/2 text-center"
-        style={
-          item.above
-            ? { width: CARD_W, left: 0, bottom: stem }
-            : { width: CARD_W, left: 0, top: stem }
-        }
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: active ? 1 : 0, y: active ? 0 : 10 }}
-        transition={{
-          duration: 0.45,
-          ease: EASE_OUT,
-          delay: active ? delay + 0.08 : 0,
-        }}
-      >
-        <div className="text-sm leading-snug font-medium text-balance text-white/90">
-          {item.label}
-        </div>
-        <div className="mt-1 text-xs text-white/45">{item.date}</div>
-      </m.div>
-    </div>
+    <m.div
+      className="absolute top-0 -translate-x-1/2 text-xs tracking-[0.2em] text-white uppercase"
+      style={{ left: month.centre * TRACK_W }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: tone, y: 0 }}
+      transition={{
+        duration: DUR.slow,
+        ease: EASE.out,
+        delay: step === 0 ? 0.6 + index * 0.12 : 0,
+      }}
+    >
+      {month.name}
+    </m.div>
   );
 }
 
 export function SessionsTimeline() {
+  const step = useDeckStep();
   const placed = place();
+  const lit = runs(placed);
+  const current = lit[Math.min(step, STEPS) - 1];
+  const head = current?.to ?? START;
+  const length = END - START;
 
   return (
-    <div className="relative" style={{ width: TRACK_W, height: BOX_H }}>
+    <div className="relative isolate" style={{ width: TRACK_W, height: BOX_H }}>
+      <Spotlight
+        shots={[
+          null,
+          ...lit.map((run) => ({
+            x: (run.from + run.to) / 2 + GLOW_BLEED,
+            y: LINE_Y + GLOW_BLEED,
+            size: Math.min(600, Math.max(440, (run.to - run.from) * 1.3)),
+          })),
+        ]}
+        className="-inset-24"
+      />
       <svg
         aria-hidden
         width={TRACK_W}
         height={BOX_H}
-        className="absolute inset-0"
+        className="absolute inset-0 overflow-visible"
       >
         <defs>
-          {/* userSpaceOnUse: a horizontal line has a zero-height bounding box,
-              which makes the default objectBoundingBox gradient degenerate. */}
+          {/* userSpaceOnUse: a horizontal line has a zero-height bounding box. */}
           <linearGradient
             id="sessions-timeline-line"
             gradientUnits="userSpaceOnUse"
@@ -92,43 +92,77 @@ export function SessionsTimeline() {
             y1={LINE_Y}
             y2={LINE_Y}
           >
-            <stop offset="0%" stopColor={BRAND.purple} stopOpacity="0.25" />
-            <stop offset="45%" stopColor={BRAND.purple} />
+            <stop offset="0%" stopColor={BRAND.purple} />
             <stop offset="100%" stopColor={BRAND.blue} />
           </linearGradient>
         </defs>
         <m.path
-          d={`M 16 ${LINE_Y} L ${TRACK_W - 16} ${LINE_Y}`}
-          stroke="url(#sessions-timeline-line)"
+          d={`M ${START} ${LINE_Y} L ${END} ${LINE_Y}`}
+          stroke="rgba(255,255,255,0.12)"
           strokeWidth={2}
           strokeLinecap="round"
           fill="none"
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
-          transition={{ duration: 1.4, ease: EASE_OUT, delay: 0.4 }}
+          transition={{ duration: 1.4, ease: EASE.inOut, delay: 0.4 }}
+        />
+        {/* Time passing: the lit axis runs forward to this month's last change. */}
+        <m.path
+          d={`M ${START} ${LINE_Y} L ${END} ${LINE_Y}`}
+          stroke="url(#sessions-timeline-line)"
+          strokeWidth={2}
+          strokeLinecap="round"
+          fill="none"
+          initial={{ pathLength: 0, opacity: 0 }}
+          animate={{
+            pathLength: (head - START) / length,
+            opacity: step > 0 ? 1 : 0,
+          }}
+          transition={
+            current
+              ? { duration: current.duration, ease: "linear", delay: LEAD }
+              : LEAVE
+          }
         />
       </svg>
+      <m.span
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-0 size-6 rounded-full"
+        style={{
+          top: LINE_Y - 12,
+          left: -12,
+          background:
+            "radial-gradient(circle closest-side, #fff 0 18%, rgba(130,170,255,0.55) 42%, transparent)",
+        }}
+        initial={{ x: START, opacity: 0 }}
+        animate={{
+          x: head,
+          opacity: current ? [0, 1, 1, 0] : 0,
+        }}
+        transition={
+          current
+            ? {
+                x: { duration: current.duration, ease: "linear", delay: LEAD },
+                opacity: {
+                  duration: current.duration + 0.35,
+                  times: [0, 0.1, 0.8, 1],
+                  delay: LEAD,
+                },
+              }
+            : LEAVE
+        }
+      />
 
       {MONTHS.map((month, index) => (
-        <m.div
-          key={month.name}
-          className="absolute top-0 -translate-x-1/2 text-xs tracking-[0.2em] text-white/40 uppercase"
-          style={{ left: month.centre * TRACK_W }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{
-            duration: 0.5,
-            ease: EASE_OUT,
-            delay: 0.6 + index * 0.12,
-          }}
-        >
-          {month.name}
-        </m.div>
+        <MonthLabel key={month.name} index={index} />
       ))}
 
-      {placed.map((item) => (
-        <Milestone key={item.label} item={item} />
-      ))}
+      {placed.map((item) => {
+        const run = lit[item.step - 1];
+        return run ? (
+          <MoF1Milestone key={item.label} item={item} run={run} />
+        ) : null;
+      })}
     </div>
   );
 }

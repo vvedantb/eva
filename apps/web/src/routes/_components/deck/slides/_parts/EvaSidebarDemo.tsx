@@ -1,5 +1,6 @@
 import { AnimatePresence, m } from "motion/react";
 import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { SETTLE, Sheen } from "../../_components/motion";
 import { EvaRail } from "./EvaSidebarRail";
 import {
   EvaNavRow,
@@ -89,9 +90,14 @@ function WindowTitle({ simple }: { simple: boolean }) {
             {simple ? "Eva · Simple Mode" : "Eva · carepulse-ts"}
           </span>
           {simple ? (
-            <span className="rounded-full bg-white/15 px-2 text-[10px] leading-4 text-white/80">
+            <m.span
+              className="rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-2 text-[10px] leading-4 text-white"
+              initial={{ opacity: 0, scale: 0.7 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ ...SETTLE, delay: 0.25 }}
+            >
               Simple Mode
-            </span>
+            </m.span>
           ) : null}
         </m.div>
       </AnimatePresence>
@@ -107,48 +113,52 @@ export function EvaSidebarDemo() {
   const simple = useDeckStep() >= SIMPLE_STEP;
 
   return (
-    <div
-      className="overflow-hidden rounded-2xl bg-white/[0.06]"
-      style={{ width: WINDOW_WIDTH, height: WINDOW_HEIGHT }}
+    <Sheen
+      step={SIMPLE_STEP}
+      delay={0.9}
+      duration={1.3}
+      className="rounded-2xl bg-white/[0.06]"
     >
-      <div
-        className="flex items-center gap-2 border-b border-white/[0.06] px-4"
-        style={{ height: TITLE_BAR }}
-      >
-        <span className="size-2 rounded-full bg-white/20" />
-        <span className="size-2 rounded-full bg-white/20" />
-        <span className="size-2 rounded-full bg-white/20" />
-        <div className="ml-3 flex-1">
-          <WindowTitle simple={simple} />
-        </div>
-      </div>
-
-      <div
-        className="overflow-hidden"
-        style={{ height: WINDOW_HEIGHT - TITLE_BAR }}
-      >
+      <div style={{ width: WINDOW_WIDTH, height: WINDOW_HEIGHT }}>
         <div
-          className="dark flex origin-top-left bg-background"
-          style={{
-            width: SURFACE_WIDTH,
-            height: SURFACE_HEIGHT,
-            transform: `scale(${SCALE})`,
-          }}
+          className="flex items-center gap-2 border-b border-white/[0.06] px-4"
+          style={{ height: TITLE_BAR }}
         >
-          <EvaRail simple={simple} />
-          <EvaNavPanel simple={simple} />
-          {/* The main area is off-frame: fade it out rather than show a mock. */}
+          <span className="size-2 rounded-full bg-white/20" />
+          <span className="size-2 rounded-full bg-white/20" />
+          <span className="size-2 rounded-full bg-white/20" />
+          <div className="ml-3 flex-1">
+            <WindowTitle simple={simple} />
+          </div>
+        </div>
+
+        <div
+          className="overflow-hidden"
+          style={{ height: WINDOW_HEIGHT - TITLE_BAR }}
+        >
           <div
-            className="flex-1 bg-background"
+            className="dark flex origin-top-left bg-background"
             style={{
-              maskImage:
-                "linear-gradient(to right, black 0%, transparent 100%)",
-              WebkitMaskImage:
-                "linear-gradient(to right, black 0%, transparent 100%)",
+              width: SURFACE_WIDTH,
+              height: SURFACE_HEIGHT,
+              transform: `scale(${SCALE})`,
             }}
-          />
+          >
+            <EvaRail simple={simple} />
+            <EvaNavPanel simple={simple} />
+            {/* The main area is off-frame: fade it out rather than show a mock. */}
+            <div
+              className="flex-1 bg-background"
+              style={{
+                maskImage:
+                  "linear-gradient(to right, black 0%, transparent 100%)",
+                WebkitMaskImage:
+                  "linear-gradient(to right, black 0%, transparent 100%)",
+              }}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </Sheen>
   );
 }

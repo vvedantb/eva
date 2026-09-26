@@ -5,12 +5,11 @@ import {
   IconMessageOff,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Camera, Layer } from "../../_components/DeckCamera";
+import { MoA4IncidentCard } from "../_parts/MoA4IncidentCard";
+import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
-  BRAND,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -18,6 +17,7 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import { DUR, EASE, MaskedText } from "../../_components/motion";
 
 /**
  * The camera leans towards whichever incident has just landed, left then
@@ -29,9 +29,6 @@ const PEOPLE_SHOTS: readonly CameraShot[] = [
   { rotateY: -6, translateZ: 20, x: -30 },
   { translateZ: -40, scale: 0.96 },
 ];
-
-/** How far each incident card stands off the rail joining them. */
-const CARD_DEPTH = 20;
 
 interface Incident {
   icon: Icon;
@@ -46,12 +43,11 @@ const INCIDENTS: readonly Incident[] = [
   { icon: IconHelpCircle, heading: "Broken after resume", date: "Aug" },
 ];
 
-/** The last incident to have landed. Earlier ones dim behind it. */
-const LAST_CARD = INCIDENTS.length - 1;
-
 export function AnnualPeople() {
   const step = useDeckStep();
-  const newest = Math.min(step, LAST_CARD);
+  const closing = step >= 3;
+  // Nobody is live once the closing line takes over.
+  const newest = closing ? -1 : step;
 
   return (
     <Shell className="py-14">
@@ -64,80 +60,41 @@ export function AnnualPeople() {
         <m.div
           className="flex origin-center items-stretch justify-center"
           style={{ transformStyle: "preserve-3d" }}
+          initial={false}
           animate={
-            step >= 3
-              ? { scale: 0.86, opacity: 0.25 }
-              : { scale: 1, opacity: 1 }
+            closing
+              ? { scale: 0.86, y: -12, opacity: 0.3 }
+              : { scale: 1, y: 0, opacity: 1 }
           }
-          transition={{ type: "spring", bounce: 0, duration: 0.7 }}
+          transition={{ duration: DUR.hero, ease: EASE.expo }}
         >
-          {INCIDENTS.map((incident, index) => {
-            const landed = step >= index;
-
-            return (
-              <div
-                key={incident.heading}
-                className="flex items-center"
-                style={{ transformStyle: "preserve-3d" }}
-              >
-                {index > 0 && (
-                  <Layer depth={0}>
-                    <m.div
-                      aria-hidden
-                      className="h-px w-[60px] origin-left rounded-full"
-                      style={{
-                        background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
-                      }}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: landed ? 1 : 0 }}
-                      transition={{
-                        duration: 0.5,
-                        ease: EASE_OUT,
-                        delay: 0.15,
-                      }}
-                    />
-                  </Layer>
-                )}
-
-                <Layer depth={CARD_DEPTH}>
-                  <m.div
-                    className="flex h-[180px] w-[300px] flex-col justify-between rounded-2xl bg-white/[0.05] p-6"
-                    initial={{ opacity: 0, y: 26, scale: 0.92 }}
-                    animate={{
-                      opacity: landed ? (index < newest ? 0.5 : 1) : 0,
-                      y: landed ? 0 : 26,
-                      scale: landed ? 1 : 0.92,
-                    }}
-                    transition={{ type: "spring", bounce: 0, duration: 0.6 }}
-                  >
-                    <incident.icon
-                      size={26}
-                      stroke={1.6}
-                      className="text-white/70"
-                      aria-hidden
-                    />
-                    <div className="text-xl leading-snug font-semibold text-white">
-                      {incident.heading}
-                    </div>
-                    <span className="self-start rounded-full bg-white/[0.08] px-3 py-1 text-xs text-white/55">
-                      {incident.date}
-                    </span>
-                  </m.div>
-                </Layer>
-              </div>
-            );
-          })}
+          {INCIDENTS.map((incident, index) => (
+            <MoA4IncidentCard
+              key={incident.heading}
+              icon={incident.icon}
+              heading={incident.heading}
+              date={incident.date}
+              index={index}
+              step={step}
+              newest={newest}
+            />
+          ))}
         </m.div>
       </Camera>
 
-      <Reveal step={3} className="mt-16 text-center">
+      <div className="mt-16 text-center">
         <p className="text-3xl text-white/90">
-          Every one of these came from <Accent>a colleague</Accent>, not a test.
+          <MaskedText step={3} delay={0.2}>
+            Every one of these came from <Accent>a colleague</Accent>, not a
+            test.
+          </MaskedText>
         </p>
-        <p className="mt-5 text-sm text-white/45">
-          Each fixed, pinned by a test, and written down.
-        </p>
-      </Reveal>
+        <Reveal step={3} delay={0.75} distance={10}>
+          <p className="mt-5 text-sm text-white/45">
+            Each fixed, pinned by a test, and written down.
+          </p>
+        </Reveal>
+      </div>
 
       <Footnote>
         Incidents from Eva&apos;s release notes, August and September 2026.

@@ -3,19 +3,30 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
   Shell,
+  Stagger,
+  StaggerItem,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  Connector,
+  DUR,
+  EASE,
+  MaskedText,
+  cueTransition,
+} from "../../_components/motion";
+import { MoA2AvatarRing } from "../_parts/MoA2AvatarRing";
 
 /** Three colleagues, left to right. The first shares, the second draws on it. */
 const PEOPLE = [0, 1, 2];
 
+const STAGE_W = 1088;
 const COLUMN_WIDTH = 300;
+/** Keep in step with the row's `gap-[90px]`. */
 const COLUMN_GAP = 90;
 /** Centre to centre, first colleague to second. */
 const SPAN = COLUMN_WIDTH + COLUMN_GAP;
@@ -24,23 +35,31 @@ const BADGE_W = 200;
 const BADGE_H = 56;
 /** Avatar, then the `mt-6` gap, then half a badge: the badge row's centre line. */
 const LINK_Y = AVATAR + 24 + BADGE_H / 2;
-/** The link runs badge edge to badge edge, left of centre. */
-const LINK_LEFT = -SPAN + BADGE_W / 2;
-const LINK_W = SPAN - BADGE_W;
+/** Badge centres of the sharer and the colleague who draws on it. */
+const SHARER_X = STAGE_W / 2 - SPAN;
+const TAKER_X = STAGE_W / 2;
+/** The link runs badge edge to badge edge, with a little air at each end. */
+const LINK_FROM = { x: SHARER_X + BADGE_W / 2 + 6, y: LINK_Y };
+const LINK_TO = { x: TAKER_X - BADGE_W / 2 - 6, y: LINK_Y };
+
+/** The static glow of the capacity packet: a painted gradient, no shadow. */
+const PACKET =
+  "radial-gradient(circle, #fff 0 24%, rgba(59,125,216,0.6) 40%, transparent 70%)";
 
 function Person({ index }: { index: number }) {
   const deckStep = useDeckStep();
   const attached = deckStep >= 1;
   /** The sharer lights first; the colleague lights as the link reaches them. */
   const linked = deckStep >= 2 && index < 2;
-  const delay = attached ? index * 0.1 : 0;
+  const at = index * 0.12;
 
   return (
     <div className="flex flex-col items-center" style={{ width: COLUMN_WIDTH }}>
       <div
-        className="flex items-center justify-center rounded-full bg-white/[0.07]"
+        className="relative flex items-center justify-center rounded-full bg-white/[0.07]"
         style={{ width: AVATAR, height: AVATAR }}
       >
+        <MoA2AvatarRing size={AVATAR} on={attached} delay={at} />
         <IconUser
           size={56}
           stroke={1.3}
@@ -50,33 +69,42 @@ function Person({ index }: { index: number }) {
       </div>
 
       <m.div
-        className="mt-6 flex items-center justify-center gap-3 rounded-[16px] bg-white/[0.07]"
+        className="relative mt-6 flex items-center justify-center gap-3 rounded-[16px] bg-white/[0.07]"
         style={{ width: BADGE_W, height: BADGE_H }}
-        initial={{ opacity: 0, y: -14, scale: 0.9 }}
+        initial={{ opacity: 0, y: -18, scale: 0.9 }}
         animate={
           attached
-            ? {
-                opacity: 1,
-                y: 0,
-                scale: 1,
-                boxShadow: linked
-                  ? `0 0 0 1.5px ${BRAND.blue}cc`
-                  : "0 0 0 1.5px rgba(255,255,255,0)",
-              }
-            : { opacity: 0, y: -14, scale: 0.9 }
+            ? { opacity: 1, y: 0, scale: 1 }
+            : { opacity: 0, y: -18, scale: 0.9 }
         }
-        transition={
-          attached
-            ? {
-                type: "spring",
-                bounce: 0,
-                duration: 0.55,
-                delay: linked ? index * 0.8 : delay,
-              }
-            : { duration: 0.25, ease: EASE_OUT }
-        }
+        transition={cueTransition(attached, 0.15 + at, {
+          duration: DUR.slow,
+          ease: EASE.expo,
+        })}
       >
-        <IconKey size={22} stroke={1.6} color={BRAND.blue} aria-hidden />
+        {/* The shared edge is a painted ring whose opacity moves. */}
+        <m.span
+          aria-hidden
+          className="absolute inset-0 rounded-[inherit] ring-[1.5px] ring-[#3B7DD8]/80"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: linked ? 1 : 0 }}
+          transition={cueTransition(linked, index === 0 ? 0.1 : 1.05, {
+            duration: DUR.base,
+            ease: EASE.out,
+          })}
+        />
+        {/* The key turns as it lands, like one going into a lock. */}
+        <m.span
+          className="flex"
+          initial={{ rotate: -40 }}
+          animate={{ rotate: attached ? 0 : -40 }}
+          transition={cueTransition(attached, 0.3 + at, {
+            duration: DUR.slow,
+            ease: EASE.expo,
+          })}
+        >
+          <IconKey size={22} stroke={1.6} color={BRAND.blue} aria-hidden />
+        </m.span>
         <span className="text-lg text-white/85">Own account</span>
       </m.div>
     </div>
@@ -94,79 +122,74 @@ export function AnnualAccounts() {
       </Reveal>
 
       <div className="flex flex-1 flex-col items-center justify-center pb-6">
-        <div className="relative h-[290px] w-full">
-          <div className="flex justify-center" style={{ gap: COLUMN_GAP }}>
+        <div className="relative h-[290px]" style={{ width: STAGE_W }}>
+          <Stagger
+            delayChildren={0.3}
+            staggerChildren={0.1}
+            className="flex justify-center gap-[90px]"
+          >
             {PEOPLE.map((person) => (
-              <Person key={person} index={person} />
+              <StaggerItem key={person}>
+                <Person index={person} />
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
 
-          {/* One straight link, badge to badge, so it plainly joins these two. */}
-          <m.div
-            className="absolute h-[3px] origin-left rounded-full"
-            style={{
-              top: LINK_Y - 1.5,
-              left: `calc(50% + ${LINK_LEFT}px)`,
-              width: LINK_W,
-              background: `linear-gradient(90deg, ${BRAND.blue}, ${BRAND.purple})`,
-            }}
-            initial={{ scaleX: 0, opacity: 0 }}
-            animate={
-              shared ? { scaleX: 1, opacity: 1 } : { scaleX: 0, opacity: 0 }
-            }
-            transition={{
-              duration: shared ? 0.7 : 0.25,
-              ease: EASE_OUT,
-              delay: shared ? 0.15 : 0,
-            }}
-            aria-hidden
+          {/* One straight link, badge to badge, carrying capacity across. */}
+          <Connector
+            from={LINK_FROM}
+            to={LINK_TO}
+            step={2}
+            delay={0.15}
+            strokeWidth={3}
           />
 
-          {/* Capacity flowing from the sharer to the colleague. */}
-          <m.div
-            className="absolute size-[14px] rounded-full bg-white shadow-[0_0_14px_rgba(59,125,216,0.9)]"
-            style={{
-              top: LINK_Y - 7,
-              left: `calc(50% + ${LINK_LEFT - 7}px)`,
-            }}
-            initial={{ x: 0, opacity: 0 }}
+          <m.span
+            aria-hidden
+            className="pointer-events-none absolute top-0 left-0 size-5 rounded-full"
+            style={{ background: PACKET }}
+            initial={{ x: LINK_FROM.x - 10, y: LINK_Y - 10, opacity: 0 }}
             animate={
               shared
-                ? { x: LINK_W, opacity: [0, 1, 1, 0] }
-                : { x: 0, opacity: 0 }
+                ? { x: LINK_TO.x - 10, opacity: [0, 1, 1, 0] }
+                : { x: LINK_FROM.x - 10, opacity: 0 }
             }
-            transition={{
-              duration: shared ? 1.1 : 0.2,
-              ease: EASE_OUT,
-              delay: shared ? 0.3 : 0,
-              times: shared ? [0, 0.15, 0.8, 1] : undefined,
-            }}
-            aria-hidden
+            transition={
+              shared
+                ? {
+                    x: { duration: 0.9, ease: EASE.inOut, delay: 0.2 },
+                    opacity: {
+                      duration: 1,
+                      times: [0, 0.1, 0.85, 1],
+                      delay: 0.2,
+                    },
+                  }
+                : { duration: 0 }
+            }
           />
 
           <m.div
             className="absolute -translate-x-1/2 rounded-full bg-white/[0.1] px-5 py-2 text-base whitespace-nowrap text-white/90"
             style={{
               top: LINK_Y + BADGE_H / 2 + 22,
-              left: `calc(50% - ${SPAN / 2}px)`,
+              left: (SHARER_X + TAKER_X) / 2,
             }}
-            initial={{ opacity: 0, y: -8 }}
-            animate={shared ? { opacity: 1, y: 0 } : { opacity: 0, y: -8 }}
-            transition={
-              shared
-                ? { type: "spring", bounce: 0, duration: 0.5, delay: 0.85 }
-                : { duration: 0.25, ease: EASE_OUT }
-            }
+            initial={{ opacity: 0, y: -10 }}
+            animate={shared ? { opacity: 1, y: 0 } : { opacity: 0, y: -10 }}
+            transition={cueTransition(shared, 0.85, {
+              duration: DUR.slow,
+              ease: EASE.expo,
+            })}
           >
             Shared with the team
           </m.div>
         </div>
 
-        <Reveal step={2} delay={1.1} className="mt-10 text-center">
-          <p className="text-4xl text-balance text-white/85">
+        <p className="mt-10 text-center text-4xl text-balance text-white/85">
+          <MaskedText step={2} delay={1.15}>
             Capacity is <Accent>pooled</Accent>, not bought twice.
-          </p>
-        </Reveal>
+          </MaskedText>
+        </p>
       </div>
 
       <Footnote>

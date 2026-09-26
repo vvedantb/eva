@@ -1,31 +1,43 @@
+import type { Icon } from "@tabler/icons-react";
+import {
+  IconMessageCircle,
+  IconClockHour3,
+  IconGitPullRequest,
+  IconRocket,
+} from "@tabler/icons-react";
 import { m } from "motion/react";
-import type { Transition } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
   Shell,
+  Stagger,
+  StaggerItem,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-import { FriChip, FriLines, FriWindow } from "../_parts/FriMock";
+import { DUR, EASE, Morph, SETTLE } from "../../_components/motion";
+import { FriChip, FriWindow } from "../_parts/FriMock";
+import {
+  MoF2BrowserTab,
+  MoF2InboxDetail,
+  MoF2KeyHint,
+} from "../_parts/MoF2Inbox";
 
 interface Row {
   title: string;
   kind: string;
+  icon: Icon;
 }
 
 /** Newest first, the way the real list reads. */
 const ROWS: readonly Row[] = [
-  { title: "Referral export ready", kind: "Review" },
-  { title: "Overnight checks finished", kind: "Routine" },
-  { title: "Zuza replied", kind: "Session" },
-  { title: "Decline emails shipped", kind: "Task" },
+  { title: "Referral export ready", kind: "Review", icon: IconGitPullRequest },
+  { title: "Overnight checks finished", kind: "Routine", icon: IconClockHour3 },
+  { title: "Zuza replied", kind: "Session", icon: IconMessageCircle },
+  { title: "Decline emails shipped", kind: "Task", icon: IconRocket },
 ];
-
-const SETTLE: Transition = { type: "spring", bounce: 0, duration: 0.55 };
 
 function InboxRow({
   row,
@@ -43,18 +55,23 @@ function InboxRow({
           layoutId="fri-inbox-selection"
           className="absolute inset-0 rounded-[14px] bg-white/[0.09] ring-1 ring-white/10"
           transition={SETTLE}
-        />
+        >
+          <span
+            aria-hidden
+            className="absolute top-3 bottom-3 left-0 w-[3px] rounded-full bg-gradient-to-b from-[#8B3FB8] to-[#3B7DD8]"
+          />
+        </m.span>
       ) : null}
       <div className="relative flex items-center gap-3 px-3 py-2.5">
         <m.span
           aria-hidden
           className="size-2 shrink-0 rounded-full bg-[#3B7DD8]"
-          animate={{ opacity: selected ? 0.25 : 1 }}
-          transition={{ duration: 0.35, ease: EASE_OUT }}
+          animate={{ opacity: selected ? 0.2 : 1, scale: selected ? 0.7 : 1 }}
+          transition={{ duration: DUR.base, ease: EASE.out }}
         />
         <span
           className={cn(
-            "flex-1 truncate text-[13px]",
+            "flex-1 truncate text-[13px] transition-colors duration-300",
             selected ? "text-white" : "text-white/60",
           )}
         >
@@ -69,73 +86,9 @@ function InboxRow({
   );
 }
 
-function KeyHint({ label }: { label: string }) {
-  const shown = useDeckStep() >= 1;
-  return (
-    <m.span
-      className="flex h-6 min-w-6 items-center justify-center rounded-[8px] bg-white/[0.08] px-1.5 text-[11px] text-white/55"
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: shown ? 1 : 0, y: shown ? 0 : -6 }}
-      transition={{ ...SETTLE, delay: shown ? 0.2 : 0 }}
-    >
-      {label}
-    </m.span>
-  );
-}
-
-/** The tab that carries the unread count while the room is looking elsewhere. */
-function BrowserTab() {
-  const shown = useDeckStep() >= 2;
-
-  return (
-    <m.div
-      className="flex items-center gap-2.5 rounded-t-[14px] bg-white/[0.08] px-4 py-2"
-      initial={{ opacity: 0, y: 10, scale: 0.94 }}
-      animate={{
-        opacity: shown ? 1 : 0,
-        y: shown ? 0 : 10,
-        scale: shown ? 1 : 0.94,
-      }}
-      transition={shown ? SETTLE : { duration: 0.25, ease: EASE_OUT }}
-    >
-      <span
-        aria-hidden
-        className="size-3 rounded-full bg-gradient-to-br from-[#8B3FB8] to-[#3B7DD8]"
-      />
-      <span className="text-[12px] text-white/70">Eva</span>
-      <span className="relative flex size-5 items-center justify-center">
-        <m.span
-          aria-hidden
-          className="absolute inset-0 rounded-full ring-1 ring-[#3B7DD8]"
-          animate={
-            shown
-              ? { scale: [1, 2.2], opacity: [0.7, 0] }
-              : { scale: 1, opacity: 0 }
-          }
-          transition={{
-            duration: 1.4,
-            ease: EASE_OUT,
-            repeat: Infinity,
-            repeatDelay: 0.6,
-          }}
-        />
-        <m.span
-          className="relative flex size-5 items-center justify-center rounded-full bg-[#3B7DD8] text-[11px] font-semibold text-white tabular-nums"
-          initial={{ scale: 0.4 }}
-          animate={{ scale: shown ? 1 : 0.4 }}
-          transition={{ ...SETTLE, delay: shown ? 0.15 : 0 }}
-        >
-          3
-        </m.span>
-      </span>
-    </m.div>
-  );
-}
-
 export function FridayInbox() {
   const step = useDeckStep();
   const selected = step >= 1 ? 1 : 0;
-  const row = ROWS[selected] ?? ROWS[0];
 
   return (
     <Shell className="py-14">
@@ -145,44 +98,48 @@ export function FridayInbox() {
       </Reveal>
 
       <div className="mt-9 flex justify-end pr-10">
-        <BrowserTab />
+        <MoF2BrowserTab />
       </div>
 
-      <Reveal delay={0.15}>
+      <Reveal delay={0.2} distance={28}>
         <FriWindow
           label="Inbox"
-          className="h-[320px] w-full"
+          className="h-[340px] w-full"
           bodyClassName="flex gap-4 p-0"
           trailing={
             <>
-              <KeyHint label="↑" />
-              <KeyHint label="↓" />
+              <MoF2KeyHint label="↑" />
+              <MoF2KeyHint label="↓" pressed />
             </>
           }
         >
-          <div className="w-[380px] shrink-0 border-r border-white/[0.06] px-2 py-2">
+          <Stagger
+            delayChildren={0.45}
+            staggerChildren={0.07}
+            className="w-[380px] shrink-0 border-r border-white/[0.06] px-2 py-2"
+          >
             {ROWS.map((entry, index) => (
-              <InboxRow
-                key={entry.title}
-                row={entry}
-                index={index}
-                selected={index === selected}
+              <StaggerItem key={entry.title}>
+                <InboxRow
+                  row={entry}
+                  index={index}
+                  selected={index === selected}
+                />
+              </StaggerItem>
+            ))}
+          </Stagger>
+
+          <Morph
+            blur={false}
+            className="flex-1 p-6"
+            states={ROWS.slice(0, 2).map((row) => (
+              <MoF2InboxDetail
+                key={row.title}
+                title={row.title}
+                icon={row.icon}
               />
             ))}
-          </div>
-
-          <div className="flex-1 p-5">
-            <m.div
-              key={row?.title}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: EASE_OUT }}
-            >
-              <div className="text-lg font-medium text-white">{row?.title}</div>
-              <div className="mt-4 h-8 rounded-[12px] bg-white/[0.07]" />
-              <FriLines widths={[420, 360, 400, 300]} className="mt-4" />
-            </m.div>
-          </div>
+          />
         </FriWindow>
       </Reveal>
 

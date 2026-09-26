@@ -6,6 +6,7 @@ import {
   Shell,
   Title,
 } from "../../_components/DeckPrimitives";
+import { MaskedText } from "../../_components/motion";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { AnnADayStrip } from "../_parts/AnnADayStrip";
@@ -42,11 +43,11 @@ export function AnnualFirstWeek() {
         <AnnADayStrip days={DAYS} marks={MARKS} />
       </Camera>
 
-      <Reveal step={2} delay={0.35} className="mt-12">
-        <p className="text-3xl leading-snug text-balance text-white/85">
+      <p className="mt-12 text-3xl leading-snug text-balance text-white/85">
+        <MaskedText step={2} delay={0.7}>
           The product still rests on <Accent>these two ideas</Accent>.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>Dates from the project&rsquo;s own history.</Footnote>
     </Shell>

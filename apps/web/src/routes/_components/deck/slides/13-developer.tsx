@@ -11,7 +11,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -21,6 +20,17 @@ import {
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
+import {
+  DUR,
+  DrawPath,
+  EASE,
+  LEAVE,
+  MaskedText,
+  SETTLE,
+  Sheen,
+  cueTransition,
+} from "../_components/motion";
+import { MoF3Gardening } from "./_parts/MoF3Gardening";
 
 interface Archetype {
   name: string;
@@ -38,12 +48,23 @@ const ARCHETYPES: readonly Archetype[] = [
   { name: "Maintainer", icon: IconShieldCheck, gardener: true },
 ];
 
-const GARDENING: readonly string[] = [
-  "Lints that catch mistakes early",
-  "Types that say what is allowed",
-  "Checks on every change",
-  "Written rules the model reads",
-];
+const ROW_WIDTH = 1088;
+const CARD_WIDTH = 196;
+const CARD_GAP = 16;
+const cardCentre = (index: number) =>
+  index * (CARD_WIDTH + CARD_GAP) + CARD_WIDTH / 2;
+const SWEEPER = cardCentre(2);
+const MAINTAINER = cardCentre(4);
+const MIDDLE = (SWEEPER + MAINTAINER) / 2;
+
+/** The bracket draws in from both cards and meets under the label. */
+const BRACKET_H = 58;
+const BRACKET_LEFT = `M${SWEEPER} 0 V6 Q${SWEEPER} 14 ${SWEEPER + 8} 14 H${MIDDLE}`;
+const BRACKET_RIGHT = `M${MAINTAINER} 0 V6 Q${MAINTAINER} 14 ${MAINTAINER - 8} 14 H${MIDDLE}`;
+
+/** Soft light under a gardener card. A painted gradient, never a blur. */
+const CARD_GLOW =
+  "radial-gradient(closest-side, rgba(139,63,184,0.5), rgba(59,125,216,0.2) 60%, transparent)";
 
 function ArchetypeCard({ archetype }: { archetype: Archetype }) {
   const spotlit = useDeckStep() >= 1;
@@ -51,25 +72,31 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
   const dimmed = spotlit && !archetype.gardener;
 
   return (
-    <StaggerItem className="relative w-[196px]">
+    <StaggerItem className="relative">
       <m.div
         aria-hidden
-        className="pointer-events-none absolute -inset-2 rounded-3xl bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] blur-xl"
+        className="pointer-events-none absolute -inset-x-10 top-1/2 -bottom-14"
+        style={{ background: CARD_GLOW }}
         initial={{ opacity: 0 }}
-        animate={{ opacity: lit ? 0.35 : 0 }}
-        transition={{ duration: 0.5, ease: EASE_OUT }}
+        animate={{ opacity: lit ? 0.75 : 0 }}
+        transition={lit ? { duration: DUR.slow, delay: 0.15 } : LEAVE}
       />
       <m.div
         className="relative"
-        initial={{ opacity: 1, scale: 1 }}
-        animate={{ opacity: dimmed ? 0.35 : 1, scale: lit ? 1.04 : 1 }}
-        transition={{ duration: 0.5, ease: EASE_OUT }}
+        style={{ width: CARD_WIDTH }}
+        initial={false}
+        animate={{
+          opacity: dimmed ? 0.35 : 1,
+          scale: lit ? 1.05 : dimmed ? 0.97 : 1,
+          y: lit ? -8 : 0,
+        }}
+        transition={SETTLE}
       >
         <Card className="flex h-[124px] flex-col justify-between p-5">
           <archetype.icon
             size={26}
             stroke={1.6}
-            className="text-white/70"
+            className={lit ? "text-white" : "text-white/70"}
             aria-hidden
           />
           <div className="text-xl leading-none font-semibold text-white">
@@ -81,8 +108,47 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
   );
 }
 
+function GardenerBracket() {
+  const on = useDeckStep() >= 1;
+  return (
+    <div className="relative" style={{ height: BRACKET_H }}>
+      {[BRACKET_LEFT, BRACKET_RIGHT].map((d) => (
+        <DrawPath
+          key={d}
+          d={d}
+          width={ROW_WIDTH}
+          height={BRACKET_H}
+          step={1}
+          delay={0.2}
+          duration={0.7}
+          strokeWidth={1.5}
+          dot
+          className="absolute inset-0"
+        />
+      ))}
+      <m.div
+        className="absolute top-6"
+        style={{ left: MIDDLE, x: "-50%" }}
+        initial={{ opacity: 0, scale: 0.8, y: -6 }}
+        animate={
+          on
+            ? { opacity: 1, scale: 1, y: 0 }
+            : { opacity: 0, scale: 0.8, y: -6 }
+        }
+        transition={on ? { ...SETTLE, delay: 0.8 } : LEAVE}
+      >
+        <Sheen step={1} delay={1.1} className="rounded-full">
+          <div className="rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-1 text-sm font-medium whitespace-nowrap text-white">
+            The Gardener
+          </div>
+        </Sheen>
+      </m.div>
+    </div>
+  );
+}
+
 export function Slide13Developer() {
-  const step = useDeckStep();
+  const closing = useDeckStep() >= 3;
 
   return (
     <Shell className="py-12">
@@ -99,58 +165,36 @@ export function Slide13Developer() {
             <ArchetypeCard key={archetype.name} archetype={archetype} />
           ))}
         </Stagger>
-
-        {/* Bracket spans the Sweeper and Maintainer cards: 424px → 1044px. */}
-        <div className="relative h-[58px]">
-          <Reveal
-            step={1}
-            distance={8}
-            className="absolute top-3 left-[424px] flex w-[620px] flex-col items-center"
-          >
-            <div className="h-2 w-full rounded-t-lg border-x border-t border-white/15" />
-            <div className="mt-2 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-1 text-sm font-medium text-white">
-              The Gardener
-            </div>
-          </Reveal>
-        </div>
+        <GardenerBracket />
+        <MoF3Gardening from={MIDDLE} width={ROW_WIDTH} />
       </div>
 
-      <div className="mt-16 flex gap-3">
-        {GARDENING.map((item, index) => (
-          <m.div
-            key={item}
-            className="rounded-full bg-white/[0.07] px-5 py-2.5 text-base text-white/80"
-            initial={{ opacity: 0, y: 14, scale: 0.94 }}
-            animate={
-              step >= 2
-                ? { opacity: 1, y: 0, scale: 1 }
-                : { opacity: 0, y: 14, scale: 0.94 }
-            }
-            transition={{
-              type: "spring",
-              bounce: 0,
-              duration: 0.55,
-              delay: step >= 2 ? index * 0.08 : 0,
-            }}
-          >
-            {item}
-          </m.div>
-        ))}
-      </div>
-
-      <Reveal step={3} className="mt-14">
-        <p className="flex items-center gap-4 text-2xl text-pretty text-white/85">
+      <div className="mt-14 flex items-center gap-4 text-2xl text-pretty text-white/85">
+        {/* The seedling grows out of the soil line as the sentence rises. */}
+        <m.span
+          className="origin-bottom"
+          initial={{ opacity: 0, scale: 0.3, rotate: -18 }}
+          animate={
+            closing
+              ? { opacity: 1, scale: 1, rotate: 0 }
+              : { opacity: 0, scale: 0.3, rotate: -18 }
+          }
+          transition={cueTransition(closing, 0.05, {
+            duration: DUR.hero,
+            ease: EASE.expo,
+          })}
+        >
           <IconSeeding
             size={28}
             stroke={1.6}
             className="shrink-0 text-[#3B7DD8]"
             aria-hidden
           />
-          <span>
-            For CarePulse, that job is the <Accent>v3 migration</Accent>.
-          </span>
-        </p>
-      </Reveal>
+        </m.span>
+        <MaskedText step={3} delay={0.15}>
+          For CarePulse, that job is the <Accent>v3 migration</Accent>.
+        </MaskedText>
+      </div>
 
       <Footnote>
         Archetypes: Boris Cherny, X, 28 June 2026. Hand-written code remark:

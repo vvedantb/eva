@@ -7,6 +7,7 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import { MaskedText } from "../../_components/motion";
 import { AnnAShrinkBars } from "../_parts/AnnAShrinkBars";
 import type { AnnAShrinkRow } from "../_parts/AnnAShrinkBars";
 
@@ -30,11 +31,11 @@ export function AnnualLoad() {
 
       <AnnAShrinkBars rows={ROWS} active={step >= 1} className="mt-16" />
 
-      <Reveal step={2} delay={0.1} className="mt-16">
-        <p className="max-w-4xl text-3xl leading-snug text-balance text-white/85">
+      <p className="mt-16 max-w-4xl text-3xl leading-snug text-balance text-white/85">
+        <MaskedText step={2} delay={0.1}>
           Opening the app now downloads <Accent>a fifth as much</Accent>.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>Bundle optimisation, 31 March 2026.</Footnote>
     </Shell>

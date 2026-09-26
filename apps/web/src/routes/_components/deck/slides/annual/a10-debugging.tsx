@@ -1,10 +1,6 @@
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
-import { CountUp } from "../../_components/CountUp";
 import {
-  Accent,
-  BRAND,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -12,6 +8,14 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  DUR,
+  DrawPath,
+  EASE,
+  MaskedText,
+  Sheen,
+} from "../../_components/motion";
+import { MoA3DebugClosing, MoA3DebugPager } from "../_parts/MoA3DebugClose";
 
 interface Case {
   date: string;
@@ -42,19 +46,23 @@ const CASES: readonly Case[] = [
   },
 ];
 
-const GRADIENT = `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`;
 const LABEL = "text-xs uppercase tracking-[0.18em] text-white/35";
-const BIG_NUMBER = "text-5xl font-semibold tracking-[-0.02em]";
+const ENTER = { duration: DUR.hero, ease: EASE.expo };
+const EXIT = { duration: DUR.base, ease: EASE.in };
+const LINK_H = 32;
 
-/** The gradient thread that draws downwards between two lines of a case. */
+/** The thread that draws down between two lines of a case, a light riding its tip. */
 function CaseLink({ delay }: { delay: number }) {
   return (
-    <m.div
-      aria-hidden
-      className="h-8 w-px origin-top bg-gradient-to-b from-white/10 to-white/45"
-      initial={{ scaleY: 0 }}
-      animate={{ scaleY: 1 }}
-      transition={{ duration: 0.35, ease: EASE_OUT, delay }}
+    <DrawPath
+      d={`M1 0 L1 ${LINK_H}`}
+      width={2}
+      height={LINK_H}
+      delay={delay}
+      duration={0.4}
+      strokeWidth={1}
+      color="rgba(255,255,255,0.4)"
+      dot
     />
   );
 }
@@ -71,15 +79,22 @@ function CaseLine({
   delay: number;
 }) {
   return (
-    <m.div
-      className="text-center"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: EASE_OUT, delay }}
-    >
-      <div className={LABEL}>{label}</div>
-      <div className={cn("mt-2 leading-tight", textClass)}>{text}</div>
-    </m.div>
+    <div className="text-center">
+      <m.div
+        className={LABEL}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: DUR.base, ease: EASE.out, delay }}
+      >
+        {label}
+      </m.div>
+      <MaskedText
+        delay={delay + 0.08}
+        className={cn("mt-2 block leading-tight", textClass)}
+      >
+        {text}
+      </MaskedText>
+    </div>
   );
 }
 
@@ -87,62 +102,42 @@ function CaseView({ item }: { item: Case }) {
   return (
     <m.div
       className="absolute inset-0 flex flex-col items-center justify-center"
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -14 }}
-      transition={{ duration: 0.4, ease: EASE_OUT }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0, transition: ENTER }}
+      exit={{ opacity: 0, y: -10, transition: EXIT }}
     >
-      <span className="rounded-full bg-white/[0.07] px-4 py-1.5 text-xs tabular-nums text-white/55">
+      <m.span
+        className="rounded-full bg-white/[0.07] px-4 py-1.5 text-xs tabular-nums text-white/55"
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: DUR.slow, ease: EASE.expo, delay: 0.1 }}
+      >
         {item.date}
-      </span>
-      <CaseLink delay={0.15} />
+      </m.span>
+      <CaseLink delay={0.2} />
       <CaseLine
         label="Symptom"
         text={item.symptom}
         textClass="text-2xl text-white/60"
-        delay={0.3}
+        delay={0.5}
       />
-      <CaseLink delay={0.5} />
-      <CaseLine
-        label="Cause"
-        text={item.cause}
-        textClass="text-2xl font-medium text-white/95"
-        delay={0.65}
-      />
-      <CaseLink delay={0.85} />
+      <CaseLink delay={0.8} />
+      {/* The cause is the point of each case: it lands brightest and catches the light. */}
+      <Sheen delay={1.6} className="-mx-4 rounded-lg px-4">
+        <CaseLine
+          label="Cause"
+          text={item.cause}
+          textClass="text-2xl font-medium text-white/95"
+          delay={1.1}
+        />
+      </Sheen>
+      <CaseLink delay={1.45} />
       <CaseLine
         label="Fix"
         text={item.fix}
         textClass="text-xl text-white/70"
-        delay={1}
+        delay={1.75}
       />
-    </m.div>
-  );
-}
-
-function ClosingView() {
-  return (
-    <m.div
-      className="absolute inset-0 flex items-center justify-center"
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -14 }}
-      transition={{ duration: 0.4, ease: EASE_OUT }}
-    >
-      <p className="text-center text-3xl leading-snug text-white/75">
-        <span className={BIG_NUMBER}>
-          <Accent>
-            <CountUp value={65} step={3} duration={1.2} delay={0.3} />
-          </Accent>
-        </span>{" "}
-        restarts against{" "}
-        <span className={BIG_NUMBER}>
-          <Accent>
-            <CountUp value={146} step={3} duration={1.2} delay={0.3} />
-          </Accent>
-        </span>{" "}
-        launches — found by searching live traffic.
-      </p>
     </m.div>
   );
 }
@@ -159,34 +154,21 @@ export function AnnualDebugging() {
         <Title size="md">Symptom, cause, then a test.</Title>
       </Reveal>
 
-      <div className="relative mt-10 h-[320px] w-full">
+      <div className="relative mt-10 h-[340px] w-full">
         <AnimatePresence>
           {item ? (
             <CaseView key={item.date} item={item} />
           ) : (
-            <ClosingView key="closing" />
+            <MoA3DebugClosing key="closing" />
           )}
         </AnimatePresence>
       </div>
 
-      <m.div
-        className="mt-6 flex justify-center gap-2.5"
-        animate={{ opacity: item ? 1 : 0 }}
-        transition={{ duration: 0.3, ease: EASE_OUT }}
-      >
-        {CASES.map((entry, index) => (
-          <m.span
-            key={entry.date}
-            className="h-1.5 rounded-full"
-            style={{
-              background: index === step ? GRADIENT : "rgba(255,255,255,0.18)",
-            }}
-            initial={{ width: 8 }}
-            animate={{ width: index === step ? 26 : 8 }}
-            transition={{ type: "spring", bounce: 0, duration: 0.45 }}
-          />
-        ))}
-      </m.div>
+      <MoA3DebugPager
+        count={CASES.length}
+        step={step}
+        visible={item !== undefined}
+      />
 
       <Footnote>
         Written up in the project&apos;s release notes, August to September

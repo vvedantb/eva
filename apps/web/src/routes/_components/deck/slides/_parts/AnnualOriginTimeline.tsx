@@ -1,7 +1,9 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { Layer } from "../../_components/DeckCamera";
-import { BRAND, EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { useDeckStep } from "../../_components/DeckPrimitives";
+import { DUR, EASE, MaskedText, cueTransition } from "../../_components/motion";
+import { MoA1Dot, MoA1Rail } from "./MoA1Rail";
 
 /** Design size of the timeline box, matching the slide's content column. */
 const TRACK_W = 1088;
@@ -64,11 +66,21 @@ function gapFor(lane: number): number {
   return STEM_BASE + lane * (LABEL_H + LANE_GAP);
 }
 
+/** First day of each month from February, as days after 11 January. */
+const MONTH_STARTS = [21, 49, 80, 110, 141, 171, 202, 233];
+/** Where the lit run rests on each step: 11 Jan, 1 Feb, August, then the end. */
+const STOPS = [0, 21, 202, SPAN_DAYS].map((day) => xFor(day) / TRACK_W);
+/** The light travels first; each milestone lands as it arrives. */
+const LAND = 0.3;
+const ORDER_GAP = 0.25;
+/** The last milestone is still going on, so its dot keeps breathing. */
+const LIVE_LABEL = "Eva starts opening its own work";
+
 function MilestoneMark({ item }: { item: Milestone }) {
-  const active = useDeckStep() >= item.step;
+  const on = useDeckStep() >= item.step;
   const gap = gapFor(item.lane);
   const stem = gap + LABEL_H;
-  const delay = item.order * 0.1;
+  const delay = LAND + item.order * ORDER_GAP;
 
   return (
     <div
@@ -86,70 +98,62 @@ function MilestoneMark({ item }: { item: Milestone }) {
         <m.div
           aria-hidden
           className={cn(
-            "absolute w-px bg-white/20",
-            item.above ? "origin-bottom" : "origin-top",
+            "absolute w-px from-white/30 to-white/5",
+            item.above
+              ? "origin-bottom bg-gradient-to-t"
+              : "origin-top bg-gradient-to-b",
           )}
           style={{ height: stem, top: item.above ? -stem : 0 }}
-          initial={{ scaleY: 0, opacity: 0 }}
-          animate={
-            active ? { scaleY: 1, opacity: 1 } : { scaleY: 0, opacity: 0 }
-          }
-          transition={
-            active
-              ? { type: "spring", bounce: 0, duration: 0.6, delay }
-              : { duration: 0.25, ease: EASE_OUT }
-          }
+          initial={{ scaleY: 0 }}
+          animate={{ scaleY: on ? 1 : 0 }}
+          transition={cueTransition(on, delay + 0.1, {
+            duration: DUR.slow,
+            ease: EASE.expo,
+          })}
         />
 
-        <m.div
-          aria-hidden
-          className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_18px_rgba(139,63,184,0.6)]"
-          style={{
-            background: `linear-gradient(135deg, ${BRAND.purple}, ${BRAND.blue})`,
-          }}
-          initial={{ scale: 0 }}
-          animate={{ scale: active ? 1 : 0 }}
-          transition={
-            active
-              ? { type: "spring", bounce: 0, duration: 0.5, delay }
-              : { duration: 0.2, ease: EASE_OUT }
-          }
+        <MoA1Dot
+          step={item.step}
+          delay={delay}
+          liveStep={item.label === LIVE_LABEL ? item.step : undefined}
         />
 
-        <m.div
+        <div
           className={cn(
             "absolute whitespace-nowrap",
             item.anchor === "start" ? "left-0 pl-3" : "right-0 pr-3 text-right",
           )}
           style={item.above ? { bottom: gap } : { top: gap }}
-          initial={{ opacity: 0, y: item.above ? 10 : -10 }}
-          animate={
-            active
-              ? { opacity: 1, y: 0 }
-              : { opacity: 0, y: item.above ? 10 : -10 }
-          }
-          transition={
-            active
-              ? {
-                  type: "spring",
-                  bounce: 0,
-                  duration: 0.55,
-                  delay: delay + 0.1,
-                }
-              : { duration: 0.25, ease: EASE_OUT }
-          }
         >
           <div className="text-base leading-snug font-medium text-white/90">
-            {item.label}
+            <MaskedText step={item.step} delay={delay + 0.2} stagger={0.05}>
+              {item.label}
+            </MaskedText>
           </div>
-          <div className="mt-1 text-sm text-white/45">{item.date}</div>
-        </m.div>
+          <m.div
+            className="mt-1 text-sm text-white/45"
+            initial={{ opacity: 0, y: item.above ? 6 : -6 }}
+            animate={
+              on ? { opacity: 1, y: 0 } : { opacity: 0, y: item.above ? 6 : -6 }
+            }
+            transition={cueTransition(on, delay + 0.4, {
+              duration: DUR.base,
+              ease: EASE.out,
+            })}
+          >
+            {item.date}
+          </m.div>
+        </div>
       </Layer>
     </div>
   );
 }
 
-/** The five beats of Eva's first eight months, drawn along one axis. */
+/**
+ * The five beats of Eva's first eight months, drawn along one axis. The axis
+ * draws in with a tick per month; a run of brand light then walks it step by
+ * step, and each milestone lands as the light reaches it.
+ */
 export function AnnualOriginTimeline() {
   return (
     <div
@@ -161,39 +165,22 @@ export function AnnualOriginTimeline() {
       }}
     >
       <Layer depth={0}>
-        <svg
-          aria-hidden
-          width={TRACK_W}
-          height={BOX_H}
-          className="absolute inset-0"
-        >
-          <defs>
-            {/* userSpaceOnUse: a horizontal line has a zero-height bounding box,
-              so the default objectBoundingBox gradient collapses. */}
-            <linearGradient
-              id="annual-origin-line"
-              gradientUnits="userSpaceOnUse"
-              x1={0}
-              x2={TRACK_W}
-              y1={LINE_Y}
-              y2={LINE_Y}
-            >
-              <stop offset="0%" stopColor={BRAND.purple} stopOpacity="0.25" />
-              <stop offset="45%" stopColor={BRAND.purple} />
-              <stop offset="100%" stopColor={BRAND.blue} />
-            </linearGradient>
-          </defs>
-          <m.path
-            d={`M ${INSET} ${LINE_Y} L ${TRACK_W - INSET} ${LINE_Y}`}
-            stroke="url(#annual-origin-line)"
-            strokeWidth={2}
-            strokeLinecap="round"
-            fill="none"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1.4, ease: EASE_OUT, delay: 0.4 }}
+        <MoA1Rail width={TRACK_W} top={LINE_Y} stops={STOPS} delay={0.35} />
+        {MONTH_STARTS.map((day, index) => (
+          <m.span
+            key={day}
+            aria-hidden
+            className="absolute h-2 w-px -translate-x-1/2 -translate-y-1/2 bg-white/20"
+            style={{ left: xFor(day), top: LINE_Y }}
+            initial={{ opacity: 0, scaleY: 0 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            transition={{
+              duration: DUR.base,
+              ease: EASE.out,
+              delay: 0.6 + index * 0.06,
+            }}
           />
-        </svg>
+        ))}
       </Layer>
 
       {MILESTONES.map((item) => (

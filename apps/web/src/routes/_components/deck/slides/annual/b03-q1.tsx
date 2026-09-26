@@ -1,8 +1,6 @@
 import { m } from "motion/react";
-import { CountUp } from "../../_components/CountUp";
 import {
   Accent,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -10,8 +8,16 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  CountRoll,
+  DUR,
+  EASE,
+  MaskedText,
+  cueTransition,
+} from "../../_components/motion";
 import { AnnABarChart } from "../_parts/AnnABarChart";
 import type { AnnABar } from "../_parts/AnnABarChart";
+import { MoA1WriteDrop } from "../_parts/MoA1WriteDrop";
 
 /** Changes shipped in the first quarter, month by month. */
 const Q1: readonly AnnABar[] = [
@@ -22,6 +28,41 @@ const Q1: readonly AnnABar[] = [
 
 /** March is the column the chart exists to point at. */
 const MARCH = [2];
+
+/** Inset geometry. March is the tallest, so its top sits under the value row. */
+const COL_W = 104;
+const GAP = 26;
+const BAR_MAX = 180;
+const CHART_W = Q1.length * COL_W + (Q1.length - 1) * GAP;
+/** Value row (20px) plus its 8px gap: the top of March's column. */
+const MARCH_TOP = 28;
+
+/** A short leader from March's top out to its caption. */
+function MarchCallout() {
+  const on = useDeckStep() >= 2;
+  return (
+    <div
+      className="absolute flex items-center"
+      style={{ left: CHART_W + 10, top: MARCH_TOP - 10 }}
+    >
+      <m.span
+        aria-hidden
+        className="h-px w-8 origin-left bg-white/35"
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: on ? 1 : 0 }}
+        transition={cueTransition(on, 1.05, {
+          duration: DUR.base,
+          ease: EASE.expo,
+        })}
+      />
+      <span className="ml-3 text-sm whitespace-nowrap text-white/70">
+        <MaskedText step={2} delay={1.2} stagger={0.04}>
+          The biggest month of the year
+        </MaskedText>
+      </span>
+    </div>
+  );
+}
 
 export function AnnualQ1() {
   const step = useDeckStep();
@@ -36,66 +77,37 @@ export function AnnualQ1() {
       </Reveal>
 
       <div className="mt-12 flex items-end gap-24">
-        <Reveal step={1}>
-          <div className="text-8xl leading-none font-semibold tracking-[-0.02em]">
-            <Accent>
-              <CountUp value={1758} step={1} delay={0.15} />
-            </Accent>
-          </div>
-          <div className="mt-5 text-lg text-white/50">
-            changes shipped, January to March
-          </div>
-        </Reveal>
-
         <div>
-          <m.div
-            className="mb-3 text-sm text-white/70"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{
-              opacity: step >= 2 ? 1 : 0,
-              y: step >= 2 ? 0 : 8,
-            }}
-            transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.5 }}
-          >
-            The biggest month of the year
-          </m.div>
+          <Reveal step={1} distance={24}>
+            <div className="text-8xl leading-none font-semibold tracking-[-0.02em]">
+              <Accent>
+                <CountRoll value={1758} step={1} delay={0.05} duration={1.5} />
+              </Accent>
+            </div>
+          </Reveal>
+          <div className="mt-5 text-lg text-white/50">
+            <MaskedText step={1} delay={0.45} stagger={0.05}>
+              changes shipped, January to March
+            </MaskedText>
+          </div>
+        </div>
+
+        <div className="relative">
           <AnnABarChart
             bars={Q1}
-            colWidth={80}
-            gap={20}
-            barMax={150}
-            active={step >= 2}
+            colWidth={COL_W}
+            gap={GAP}
+            barMax={BAR_MAX}
+            step={2}
             focus={MARCH}
             focused={step >= 2}
+            sheenStep={2}
           />
+          <MarchCallout />
         </div>
       </div>
 
-      <Reveal step={3} className="mt-14">
-        <div className="flex items-baseline gap-7">
-          <span className="text-5xl leading-none tabular-nums text-white/30">
-            60&ndash;120
-          </span>
-          <span className="text-3xl text-white/25">&rarr;</span>
-          <m.span
-            className="text-6xl leading-none font-semibold text-white"
-            initial={{ opacity: 0, scale: 0.7 }}
-            animate={
-              step >= 3 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.7 }
-            }
-            transition={
-              step >= 3
-                ? { type: "spring", bounce: 0.2, duration: 0.6, delay: 0.35 }
-                : { duration: 0.2, ease: EASE_OUT }
-            }
-          >
-            2
-          </m.span>
-          <span className="ml-5 text-lg text-white/50">
-            writes during a run
-          </span>
-        </div>
-      </Reveal>
+      <MoA1WriteDrop step={3} className="mt-14" />
 
       <Footnote>
         Changes shipped January to March 2026. Live streaming moved to its own

@@ -18,7 +18,8 @@ import {
   SimpleModelLadder,
 } from "@eva/ui";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
-import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { useDeckStep } from "../../_components/DeckPrimitives";
+import { DUR, EASE, SETTLE, Sheen } from "../../_components/motion";
 
 const FABLE: AIModel = "claude:claude-fable-5-1";
 
@@ -29,7 +30,7 @@ const LADDER_STEPS = SIMPLE_VIEW_MODEL_LADDER.flatMap((id) =>
 );
 const FIRST_STEP = LADDER_STEPS[0]?.id ?? FABLE;
 
-const PANEL_TRANSITION = { duration: 0.5, ease: EASE_OUT };
+const PANEL_TRANSITION = { duration: DUR.slow, ease: EASE.expo };
 
 function Toggle({ simple }: { simple: boolean }) {
   return (
@@ -42,7 +43,7 @@ function Toggle({ simple }: { simple: boolean }) {
               <m.span
                 layoutId="model-picker-toggle-thumb"
                 className="absolute inset-0 rounded-full bg-white/[0.14]"
-                transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                transition={SETTLE}
               />
             ) : null}
             <span
@@ -204,13 +205,16 @@ export function RealModelPicker() {
               ref={ladderRef}
             >
               <div className="w-full rounded-lg bg-popover p-3 text-popover-foreground smooth-shadow-ring-lg">
-                <SimpleModelLadder
-                  value={model}
-                  steps={LADDER_STEPS}
-                  snappedId={snapToSimpleViewLadder(model)}
-                  onValueChange={setModel}
-                  onAdvanced={() => undefined}
-                />
+                {/* Inside the card, so the band cannot clip the card's own shadow. */}
+                <Sheen step={1} delay={0.35} className="-m-3 rounded-lg p-3">
+                  <SimpleModelLadder
+                    value={model}
+                    steps={LADDER_STEPS}
+                    snappedId={snapToSimpleViewLadder(model)}
+                    onValueChange={setModel}
+                    onAdvanced={() => undefined}
+                  />
+                </Sheen>
               </div>
               <LadderLabels selected={snapToSimpleViewLadder(model)} />
             </m.div>

@@ -7,6 +7,14 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  BRAND_GRADIENT,
+  CountRoll,
+  DUR,
+  EASE,
+  MaskedText,
+  cueTransition,
+} from "../../_components/motion";
 
 /** One per build step, in the order to do them. */
 const ACTIONS: readonly string[] = [
@@ -41,9 +49,47 @@ function BrandSweep() {
   );
 }
 
-export function FridayClose() {
+/** One action: the number rolls in, a short rule draws, then the words rise. */
+function Action({ action, index }: { action: string; index: number }) {
   const step = useDeckStep();
+  const at = index + 1;
+  const shown = step >= at;
+  const current = step === at;
 
+  return (
+    <m.div
+      className="flex items-baseline gap-6"
+      initial={false}
+      animate={{ opacity: shown && !current ? 0.5 : 1 }}
+      transition={{ duration: DUR.slow, ease: EASE.out }}
+    >
+      <span
+        className="relative w-10 text-2xl font-semibold"
+        style={{ color: BRAND.blue }}
+      >
+        <CountRoll value={at} step={at} duration={1.1} />
+        <m.span
+          aria-hidden
+          className="absolute -bottom-2 left-0 h-[2px] w-6 origin-left rounded-full"
+          style={{ background: BRAND_GRADIENT }}
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: shown ? 1 : 0 }}
+          transition={cueTransition(shown, 0.35, {
+            duration: DUR.slow,
+            ease: EASE.expo,
+          })}
+        />
+      </span>
+      <span className="text-5xl leading-tight font-semibold text-balance text-white">
+        <MaskedText step={at} delay={0.12}>
+          {action}
+        </MaskedText>
+      </span>
+    </m.div>
+  );
+}
+
+export function FridayClose() {
   return (
     <Shell className="relative justify-center overflow-hidden py-14">
       <BrandSweep />
@@ -53,49 +99,17 @@ export function FridayClose() {
         <Title size="md">Three things to try.</Title>
 
         <div className="mt-14 flex flex-col gap-7">
-          {ACTIONS.map((action, index) => {
-            const shown = step >= index + 1;
-            return (
-              <div key={action} className="flex items-baseline gap-6">
-                <m.span
-                  className="w-10 text-2xl font-semibold tabular-nums"
-                  style={{ color: BRAND.blue }}
-                  animate={{ opacity: shown ? 1 : 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  {index + 1}
-                </m.span>
-                <m.span
-                  className="text-5xl leading-tight font-semibold text-balance text-white"
-                  initial={{ opacity: 0, y: 26, filter: "blur(10px)" }}
-                  animate={
-                    shown
-                      ? { opacity: 1, y: 0, filter: "blur(0px)" }
-                      : { opacity: 0, y: 26, filter: "blur(10px)" }
-                  }
-                  transition={{ type: "spring", bounce: 0, duration: 0.7 }}
-                >
-                  {action}
-                </m.span>
-              </div>
-            );
-          })}
+          {ACTIONS.map((action, index) => (
+            <Action key={action} action={action} index={index} />
+          ))}
         </div>
 
-        <m.p
-          className="mt-16 max-w-4xl text-3xl leading-snug text-pretty text-white/85"
-          initial={{ opacity: 0, y: 18 }}
-          animate={step >= 3 ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
-          transition={{
-            type: "spring",
-            bounce: 0,
-            duration: 0.8,
-            delay: step >= 3 ? 0.75 : 0,
-          }}
-        >
-          You do not need to be technical.{" "}
-          <Accent>You need to know what you want.</Accent>
-        </m.p>
+        <p className="mt-16 max-w-4xl text-3xl leading-snug text-pretty text-white/85">
+          <MaskedText step={3} delay={0.85} stagger={0.06}>
+            You do not need to be technical.{" "}
+            <Accent>You need to know what you want.</Accent>
+          </MaskedText>
+        </p>
       </div>
     </Shell>
   );

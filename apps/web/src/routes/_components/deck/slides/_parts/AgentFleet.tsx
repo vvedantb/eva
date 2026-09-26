@@ -2,44 +2,63 @@ import { IconRobot } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { Layer } from "../../_components/DeckCamera";
-import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { useDeckStep } from "../../_components/DeckPrimitives";
+import { DUR, EASE, LEAVE, MaskedText, Sheen } from "../../_components/motion";
 import { EvaChatWindow } from "./EvaChatWindow";
 
 const TILES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 const LIT_STEP = 3;
-const TILE_STAGGER = 0.08;
+const TILE_STAGGER = 0.07;
+const WAVE_START = 0.35;
+
+/** The wave runs outward from the chat: column by column, then down each one. */
+const waveAt = (index: number) =>
+  WAVE_START + ((index % 3) * 2 + Math.floor(index / 3)) * TILE_STAGGER;
 
 function AgentTile({ index, lit }: { index: number; lit: boolean }) {
+  const at = waveAt(index);
   return (
     <m.div
-      className={cn(
-        "relative flex size-14 items-center justify-center rounded-xl",
+      className="relative flex size-14 items-center justify-center rounded-xl bg-white/[0.05]"
+      initial={false}
+      animate={lit ? { scale: [0.97, 1.08, 1] } : { scale: 0.97 }}
+      transition={
         lit
-          ? "bg-gradient-to-br from-[#8B3FB8]/40 to-[#3B7DD8]/40"
-          : "bg-white/[0.05]",
-      )}
-      animate={{ scale: lit ? 1 : 0.97 }}
-      transition={{
-        duration: 0.4,
-        ease: EASE_OUT,
-        delay: lit ? index * TILE_STAGGER : 0,
-      }}
+          ? {
+              duration: DUR.slow,
+              times: [0, 0.4, 1],
+              ease: EASE.out,
+              delay: at,
+            }
+          : LEAVE
+      }
     >
-      <IconRobot size={20} className={lit ? "text-white" : "text-white/50"} />
+      {/* The lit fill fades in over the resting tone rather than swapping classes. */}
+      <m.span
+        aria-hidden
+        className="absolute inset-0 rounded-[inherit] bg-gradient-to-br from-[#8B3FB8]/45 to-[#3B7DD8]/45"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: lit ? 1 : 0 }}
+        transition={lit ? { duration: DUR.base, delay: at } : LEAVE}
+      />
+      <IconRobot
+        size={20}
+        className={cn(
+          "relative transition-colors duration-500",
+          lit ? "text-white" : "text-white/50",
+        )}
+      />
       <m.span
         aria-hidden
         className="absolute top-1.5 right-1.5 size-2 rounded-full bg-emerald-400"
         initial={{ opacity: 0, scale: 0.4 }}
-        animate={{
-          opacity: lit ? 1 : 0,
-          scale: lit ? 1 : 0.4,
-        }}
-        transition={{
-          duration: 0.3,
-          ease: EASE_OUT,
-          delay: lit ? index * TILE_STAGGER + 0.1 : 0,
-        }}
+        animate={{ opacity: lit ? 1 : 0, scale: lit ? 1 : 0.4 }}
+        transition={
+          lit
+            ? { duration: DUR.base, ease: EASE.expo, delay: at + 0.15 }
+            : LEAVE
+        }
       />
     </m.div>
   );
@@ -65,19 +84,23 @@ export function AgentFleet() {
       </Layer>
 
       <Layer depth={-20}>
-        <div className="grid grid-cols-3 gap-3">
-          {TILES.map((index) => (
-            <AgentTile key={index} index={index} lit={lit} />
-          ))}
+        <Sheen step={LIT_STEP} delay={1.1} className="rounded-xl">
+          <div className="grid grid-cols-3 gap-3">
+            {TILES.map((index) => (
+              <AgentTile key={index} index={index} lit={lit} />
+            ))}
+          </div>
+        </Sheen>
+        <div className="mt-5 w-[200px] text-xs leading-snug text-white/50">
+          <MaskedText
+            step={LIT_STEP}
+            delay={0.9}
+            stagger={0.03}
+            duration={DUR.slow}
+          >
+            One person, many agents. Each in its own sandbox.
+          </MaskedText>
         </div>
-        <m.div
-          className="mt-5 w-[200px] text-xs leading-snug text-white/50"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: lit ? 1 : 0 }}
-          transition={{ duration: 0.5, ease: EASE_OUT, delay: lit ? 0.7 : 0 }}
-        >
-          One person, many agents. Each in its own sandbox.
-        </m.div>
       </Layer>
     </div>
   );

@@ -1,17 +1,27 @@
 import { m } from "motion/react";
-import { BRAND, EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { BRAND, useDeckStep } from "../../_components/DeckPrimitives";
+import { DUR, EASE, cueTransition } from "../../_components/motion";
 
-const WIDTH = 380;
+const WIDTH = 560;
 const HEIGHT = 30;
+const MID = HEIGHT / 2;
 
 /**
  * The old path: a line drawn by reading a terminal, so it wanders. The wobble
  * is deliberate and hand-written — a generated sine would read as decoration.
+ * The taut line has the same points at the same x, so one morphs into the other.
  */
-const RAGGED =
-  "M0 15 L38 8 L76 21 L114 10 L152 22 L190 11 L228 23 L266 9 L304 20 L342 12 L380 15";
+const WOBBLE = [15, 8, 21, 10, 22, 11, 23, 9, 20, 12, 15];
+const STEP_X = WIDTH / (WOBBLE.length - 1);
+const pathThrough = (ys: readonly number[]) =>
+  ys.map((y, i) => `${i === 0 ? "M" : "L"}${i * STEP_X} ${y}`).join(" ");
+const RAGGED = pathThrough(WOBBLE);
+const TAUT = pathThrough(WOBBLE.map(() => MID));
 
-const STRAIGHT = `M0 ${HEIGHT / 2} L${WIDTH} ${HEIGHT / 2}`;
+/** Seconds for the wire to pull taut. */
+const PULL = 0.9;
+/** Seconds for one reply to cross the finished line. */
+const TRIP = 1.5;
 
 interface AnnBConnectionProps {
   label: string;
@@ -23,8 +33,9 @@ interface AnnBConnectionProps {
 }
 
 /**
- * One provider's connection, shown converting from a ragged dotted line into a
- * solid brand-gradient one. Used three times on the "proper connections" slide.
+ * One provider's connection. On its step the wandering dotted line pulls
+ * taut into a brand-gradient wire, then replies keep travelling along it.
+ * Used three times on the "proper connections" slide.
  */
 export function AnnBConnection({
   label,
@@ -33,78 +44,110 @@ export function AnnBConnection({
   step,
 }: AnnBConnectionProps) {
   const converted = useDeckStep() >= step;
-  const delay = converted ? index * 0.24 : 0;
+  const delay = index * 0.2;
   const gradientId = `annb-connection-${index}`;
 
   return (
     <div className="flex h-[58px] items-center gap-8">
       <div className="w-[150px] shrink-0 text-lg text-white/85">{label}</div>
 
-      <svg
-        width={WIDTH}
-        height={HEIGHT}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="shrink-0 overflow-visible"
-        aria-hidden
+      <div
+        className="relative shrink-0"
+        style={{ width: WIDTH, height: HEIGHT }}
       >
-        <defs>
-          {/* User space, not the bounding box: a straight horizontal line has
-              zero height, and an object-bounding-box gradient collapses on it. */}
-          <linearGradient
-            id={gradientId}
-            gradientUnits="userSpaceOnUse"
-            x1={0}
-            y1={0}
-            x2={WIDTH}
-            y2={0}
-          >
-            <stop offset="0%" stopColor={BRAND.purple} />
-            <stop offset="100%" stopColor={BRAND.blue} />
-          </linearGradient>
-        </defs>
+        <svg
+          width={WIDTH}
+          height={HEIGHT}
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="absolute inset-0 overflow-visible"
+          aria-hidden
+        >
+          <defs>
+            {/* User space, not the bounding box: a straight horizontal line has
+                zero height, and an object-bounding-box gradient collapses on it. */}
+            <linearGradient
+              id={gradientId}
+              gradientUnits="userSpaceOnUse"
+              x1={0}
+              y1={0}
+              x2={WIDTH}
+              y2={0}
+            >
+              <stop offset="0%" stopColor={BRAND.purple} />
+              <stop offset="100%" stopColor={BRAND.blue} />
+            </linearGradient>
+          </defs>
 
-        <m.path
-          d={RAGGED}
-          fill="none"
-          stroke="rgba(255,255,255,0.32)"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeDasharray="2 7"
-          animate={{ opacity: converted ? 0 : 1 }}
-          transition={{
-            duration: converted ? 0.45 : 0.25,
-            ease: EASE_OUT,
-            delay,
-          }}
-        />
+          <m.path
+            fill="none"
+            stroke="rgba(255,255,255,0.32)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeDasharray="2 7"
+            initial={{ d: RAGGED, opacity: 1 }}
+            animate={
+              converted ? { d: TAUT, opacity: 0 } : { d: RAGGED, opacity: 1 }
+            }
+            transition={cueTransition(converted, delay, {
+              d: { duration: PULL, ease: EASE.expo, delay },
+              opacity: { duration: PULL * 0.8, ease: EASE.in, delay },
+            })}
+          />
 
-        <m.path
-          d={STRAIGHT}
-          fill="none"
-          stroke={`url(#${gradientId})`}
-          strokeWidth={3}
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={
-            converted
-              ? { pathLength: 1, opacity: 1 }
-              : { pathLength: 0, opacity: 0 }
-          }
-          transition={{
-            duration: converted ? 0.75 : 0.25,
-            ease: EASE_OUT,
-            delay: converted ? delay + 0.15 : 0,
-          }}
-        />
-      </svg>
+          <m.path
+            fill="none"
+            stroke={`url(#${gradientId})`}
+            strokeWidth={3}
+            strokeLinecap="round"
+            initial={{ d: RAGGED, pathLength: 0, opacity: 0 }}
+            animate={
+              converted
+                ? { d: TAUT, pathLength: 1, opacity: 1 }
+                : { d: RAGGED, pathLength: 0, opacity: 0 }
+            }
+            transition={cueTransition(converted, delay, {
+              d: { duration: PULL, ease: EASE.expo, delay },
+              pathLength: { duration: PULL, ease: EASE.inOut, delay },
+              opacity: { duration: DUR.fast, delay },
+            })}
+          />
+        </svg>
+
+        {/* A reply travelling the finished wire. One loop per connection. */}
+        {converted ? (
+          <m.span
+            aria-hidden
+            className="pointer-events-none absolute left-0 h-[3px] w-16 rounded-full"
+            style={{
+              top: MID - 1.5,
+              background:
+                "linear-gradient(90deg, transparent, rgba(255,255,255,0.95))",
+            }}
+            initial={{ x: -64, opacity: 0 }}
+            animate={{ x: [-64, WIDTH], opacity: [0, 1, 1, 0] }}
+            transition={{
+              duration: TRIP,
+              ease: EASE.inOut,
+              times: [0, 0.15, 0.85, 1],
+              repeat: Infinity,
+              repeatDelay: 1.2,
+              delay: delay + PULL + 0.2,
+            }}
+          />
+        ) : null}
+      </div>
 
       <m.div
         className="w-[130px] shrink-0 text-right text-sm tabular-nums"
+        initial={{ opacity: 0.35, color: "rgba(255,255,255,0.4)" }}
         animate={{
           opacity: converted ? 1 : 0.35,
           color: converted ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.4)",
         }}
-        transition={{ duration: 0.5, ease: EASE_OUT, delay: delay + 0.3 }}
+        transition={cueTransition(converted, delay + 0.45, {
+          duration: DUR.base,
+          ease: EASE.out,
+        })}
       >
         {date}
       </m.div>

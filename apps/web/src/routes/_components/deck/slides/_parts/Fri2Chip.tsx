@@ -2,6 +2,7 @@ import type { Icon } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { BRAND } from "../../_components/DeckPrimitives";
+import { DUR, EASE, SETTLE } from "../../_components/motion";
 
 /** Seconds between neighbouring chips when a row or column lights up. */
 export const FRI2_CHIP_STAGGER = 0.09;
@@ -13,22 +14,25 @@ interface Fri2ChipProps {
   lit: boolean;
   /** Position in the run, which sets the chip's share of the stagger. */
   index?: number;
+  /** Seconds after `lit` before this chip lights. Overrides the index stagger. */
+  delay?: number;
   className?: string;
 }
 
 /**
  * One labelled routine. Lighting a column of these in order is the Friday
  * deck's way of saying "and then this one, and then this one" without a
- * sentence on the slide.
+ * sentence on the slide. On slide entry the column fades up, dim, in order.
  */
 export function Fri2Chip({
   icon: ChipIcon,
   label,
   lit,
   index = 0,
+  delay,
   className,
 }: Fri2ChipProps) {
-  const delay = lit ? index * FRI2_CHIP_STAGGER : 0;
+  const at = lit ? (delay ?? index * FRI2_CHIP_STAGGER) : 0;
 
   return (
     <m.div
@@ -36,14 +40,23 @@ export function Fri2Chip({
         "relative flex h-11 items-center gap-3 overflow-hidden rounded-full px-4",
         className,
       )}
+      initial={{ opacity: 0, x: -14 }}
       animate={{
         backgroundColor: lit
           ? "rgba(255,255,255,0.09)"
           : "rgba(255,255,255,0.04)",
-        x: lit ? 0 : -10,
+        x: lit ? 0 : -8,
         opacity: lit ? 1 : 0.45,
       }}
-      transition={{ type: "spring", bounce: 0, duration: 0.55, delay }}
+      transition={
+        lit
+          ? { ...SETTLE, delay: at }
+          : {
+              duration: DUR.slow,
+              ease: EASE.out,
+              delay: 0.6 + index * FRI2_CHIP_STAGGER,
+            }
+      }
     >
       <m.span
         aria-hidden
@@ -51,14 +64,18 @@ export function Fri2Chip({
         style={{
           background: `linear-gradient(180deg, ${BRAND.purple}, ${BRAND.blue})`,
         }}
+        initial={{ scaleY: 0 }}
         animate={{ scaleY: lit ? 1 : 0 }}
-        transition={{ type: "spring", bounce: 0, duration: 0.5, delay }}
+        transition={{ ...SETTLE, delay: at }}
       />
       <ChipIcon
         size={18}
         stroke={1.6}
         aria-hidden
-        className={lit ? "text-white/85" : "text-white/40"}
+        className={cn(
+          "transition-colors duration-500",
+          lit ? "text-white/85" : "text-white/40",
+        )}
       />
       <span className="text-sm whitespace-nowrap text-white/85">{label}</span>
     </m.div>

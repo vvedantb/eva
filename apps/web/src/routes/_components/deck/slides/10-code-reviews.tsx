@@ -3,16 +3,24 @@ import { IconRobot, IconShieldLock } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  EASE_OUT,
+  BRAND,
   Footnote,
   Kicker,
   Reveal,
   Shell,
-  Stagger,
-  StaggerItem,
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
+import {
+  BRAND_GRADIENT,
+  DUR,
+  DrawPath,
+  EASE,
+  LEAVE,
+  MaskedText,
+  Spotlight,
+  cueTransition,
+} from "../_components/motion";
 
 /** The old way, one phrase a line. What each one meant lives in the notes. */
 const BEFORE: readonly string[] = [
@@ -35,7 +43,17 @@ const NOW: readonly Statement[] = [
 ];
 
 /** The strike draws left to right, one line after the next. */
-const STRIKE_STAGGER = 0.12;
+const STRIKE_STAGGER = 0.14;
+const STRIKE_DRAW = 0.5;
+const STRUCK_AT = STRIKE_STAGGER * 4 + STRIKE_DRAW;
+
+/** The light moves from the new arrangement to the closing line. */
+const LIGHT = [
+  null,
+  null,
+  { x: 880, y: 320, size: 520 },
+  { x: 500, y: 530, size: 640 },
+];
 
 function BeforeLine({
   text,
@@ -48,19 +66,23 @@ function BeforeLine({
 }) {
   return (
     <div className="relative w-fit">
-      <span className="text-[28px] leading-snug text-balance text-white/40">
+      <MaskedText
+        by="line"
+        delay={0.35 + index * 0.09}
+        className="text-[28px] leading-snug text-balance text-white/40"
+      >
         {text}
-      </span>
+      </MaskedText>
       <m.span
         aria-hidden
-        className="absolute inset-x-0 top-1/2 h-px origin-left rounded-full bg-white/50"
+        className="absolute inset-x-0 top-1/2 h-[2px] origin-left rounded-full"
+        style={{ background: BRAND_GRADIENT }}
         initial={{ scaleX: 0 }}
         animate={{ scaleX: struck ? 1 : 0 }}
-        transition={{
-          duration: struck ? 0.35 : 0.2,
-          ease: EASE_OUT,
-          delay: struck ? index * STRIKE_STAGGER : 0,
-        }}
+        transition={cueTransition(struck, index * STRIKE_STAGGER, {
+          duration: STRIKE_DRAW,
+          ease: EASE.inOut,
+        })}
       />
     </div>
   );
@@ -75,29 +97,35 @@ function NowStatement({
   index: number;
   visible: boolean;
 }) {
-  const shown = { opacity: 1, y: 0, filter: "blur(0px)" };
-  const hidden = { opacity: 0, y: 18, filter: "blur(8px)" };
-
+  const delay = 0.15 + index * 0.18;
   return (
-    <m.div
-      initial={hidden}
-      animate={visible ? shown : hidden}
-      transition={{
-        duration: visible ? 0.55 : 0.3,
-        ease: EASE_OUT,
-        delay: visible ? index * 0.1 : 0,
-      }}
-    >
-      <statement.icon
-        size={28}
-        stroke={1.6}
-        className="text-white/60"
-        aria-hidden
-      />
-      <div className="mt-4 text-4xl leading-tight font-semibold text-balance text-white">
-        {statement.text}
+    <div className="flex items-start gap-5">
+      <m.span
+        className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B3FB8]/35 to-[#3B7DD8]/35"
+        initial={{ opacity: 0, scale: 0.6, rotate: -8 }}
+        animate={
+          visible
+            ? { opacity: 1, scale: 1, rotate: 0 }
+            : { opacity: 0, scale: 0.6, rotate: -8 }
+        }
+        transition={cueTransition(visible, delay, {
+          duration: DUR.slow,
+          ease: EASE.expo,
+        })}
+      >
+        <statement.icon
+          size={24}
+          stroke={1.6}
+          className="text-white"
+          aria-hidden
+        />
+      </m.span>
+      <div className="pt-0.5 text-4xl leading-tight font-semibold text-balance text-white">
+        <MaskedText step={2} delay={delay + 0.08}>
+          {statement.text}
+        </MaskedText>
       </div>
-    </m.div>
+    </div>
   );
 }
 
@@ -106,36 +134,39 @@ export function Slide10CodeReviews() {
   const struck = step >= 1;
 
   return (
-    <Shell className="py-14">
+    <Shell className="isolate py-14">
+      <Spotlight shots={LIGHT} />
       <Reveal>
         <Kicker>What&apos;s next · Code reviews</Kicker>
         <Title size="md">Let the model find the bugs.</Title>
       </Reveal>
 
-      <div className="mt-14 grid grid-cols-[520px_1fr] gap-20">
+      <div className="mt-14 grid grid-cols-[460px_1fr] gap-12">
+        {/* Once every line is struck, the old lane recedes. */}
         <m.div
-          initial={{ opacity: 1 }}
-          animate={{ opacity: struck ? 0.3 : 1 }}
-          transition={{
-            duration: 0.5,
-            ease: EASE_OUT,
-            delay: struck ? 0.8 : 0,
+          className="flex origin-left flex-col gap-3.5"
+          initial={false}
+          animate={{
+            opacity: step >= 3 ? 0.2 : struck ? 0.35 : 1,
+            x: struck ? -12 : 0,
+            scale: struck ? 0.97 : 1,
           }}
+          transition={
+            struck
+              ? {
+                  duration: DUR.slow,
+                  ease: EASE.out,
+                  delay: step >= 3 ? 0 : STRUCK_AT,
+                }
+              : LEAVE
+          }
         >
-          <Stagger
-            delayChildren={0.35}
-            staggerChildren={0.09}
-            className="flex flex-col gap-3.5"
-          >
-            {BEFORE.map((line, index) => (
-              <StaggerItem key={line} className="w-fit">
-                <BeforeLine text={line} index={index} struck={struck} />
-              </StaggerItem>
-            ))}
-          </Stagger>
+          {BEFORE.map((line, index) => (
+            <BeforeLine key={line} text={line} index={index} struck={struck} />
+          ))}
         </m.div>
 
-        <div className="flex flex-col gap-11">
+        <div className="relative flex flex-col gap-11">
           {NOW.map((statement, index) => (
             <NowStatement
               key={statement.text}
@@ -144,15 +175,27 @@ export function Slide10CodeReviews() {
               visible={step >= 2}
             />
           ))}
+          {/* One rail joins the two halves: they are one arrangement. */}
+          <DrawPath
+            d="M24 54 L24 88"
+            width={48}
+            height={140}
+            step={2}
+            delay={0.35}
+            duration={0.6}
+            strokeWidth={1.5}
+            color={`${BRAND.blue}99`}
+            className="pointer-events-none absolute top-0 left-0"
+          />
         </div>
       </div>
 
-      <Reveal step={3} className="mt-14">
-        <p className="text-3xl text-pretty text-white/85">
+      <div className="mt-14 text-3xl text-pretty text-white/85">
+        <MaskedText step={3} delay={0.1} stagger={0.05}>
           The question is no longer <Accent>is this perfect</Accent>, it is{" "}
           <Accent>can we undo it</Accent>.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </div>
 
       <Footnote>
         The mechanics are the nightly routines and auto-merge, shown earlier.

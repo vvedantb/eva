@@ -1,4 +1,3 @@
-import { CountUp } from "../../_components/CountUp";
 import {
   Accent,
   Body,
@@ -8,6 +7,7 @@ import {
   Shell,
   Title,
 } from "../../_components/DeckPrimitives";
+import { CountRoll, MaskedText } from "../../_components/motion";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
 
@@ -33,7 +33,7 @@ export function AnnualQ2() {
 
         <Reveal delay={0.3} className="text-right">
           <div className="text-6xl leading-none font-semibold tabular-nums text-white">
-            <CountUp value={943} delay={0.4} />
+            <CountRoll value={943} delay={0.35} duration={1.4} />
           </div>
           <div className="mt-4 text-base text-white/50">
             changes shipped, April to June
@@ -41,13 +41,13 @@ export function AnnualQ2() {
         </Reveal>
       </div>
 
-      <Reveal delay={0.25}>
-        <Body className="max-w-3xl text-2xl">
+      <Body className="max-w-3xl text-2xl">
+        <MaskedText delay={0.35} stagger={0.05}>
           The quietest quarter went on <Accent>consolidation</Accent>.
-        </Body>
-      </Reveal>
+        </MaskedText>
+      </Body>
 
-      <AnnABeats beats={BEATS} firstStep={1} className="mt-36" />
+      <AnnABeats beats={BEATS} firstStep={1} className="mt-32" />
 
       <Footnote>
         Changes shipped April to June 2026. Documents 10 June 2026; roadmap and

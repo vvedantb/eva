@@ -1,105 +1,44 @@
-import type { ReactNode } from "react";
-import { CountUp } from "../../_components/CountUp";
+import { m } from "motion/react";
 import {
   Accent,
-  BRAND,
   Footnote,
   Kicker,
   Reveal,
   Shell,
-  Stagger,
-  StaggerItem,
   Title,
+  useDeckStep,
 } from "../../_components/DeckPrimitives";
+import { DUR, EASE, MaskedText, Sheen } from "../../_components/motion";
+import { MoA3AccentRoll } from "../_parts/MoA3AccentRoll";
+import { MOA3_TILES } from "../_parts/MoA3DesignTiles";
 
-const GRADIENT = `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`;
-
-interface Tile {
-  id: string;
-  node: ReactNode;
-}
+const COLUMNS = 6;
+const FIGURE = "text-6xl leading-none font-semibold";
 
 /**
- * The library in miniature: four colours, four surface tones and four of the
- * shapes every screen is built from. No labels — the point is that it is one
- * set, not twelve separate decisions.
+ * Where each tile starts before the set assembles: a small, fixed scatter so
+ * the pieces read as loose decisions that snap into one grid.
  */
-const TILES: readonly Tile[] = [
-  {
-    id: "purple",
-    node: (
-      <div
-        className="size-9 rounded-[10px]"
-        style={{ background: BRAND.purple }}
-      />
-    ),
-  },
-  {
-    id: "blue",
-    node: (
-      <div
-        className="size-9 rounded-[10px]"
-        style={{ background: BRAND.blue }}
-      />
-    ),
-  },
-  {
-    id: "gradient",
-    node: (
-      <div className="size-9 rounded-[10px]" style={{ background: GRADIENT }} />
-    ),
-  },
-  { id: "raised", node: <div className="size-9 rounded-[10px] bg-white/25" /> },
-  {
-    id: "button",
-    node: (
-      <div
-        className="h-7 w-[72px] rounded-full"
-        style={{ background: GRADIENT }}
-      />
-    ),
-  },
-  {
-    id: "field",
-    node: <div className="h-7 w-[72px] rounded-[8px] bg-white/12" />,
-  },
-  { id: "avatar", node: <div className="size-9 rounded-full bg-white/20" /> },
-  {
-    id: "badge",
-    node: <div className="h-5 w-[52px] rounded-full bg-white/15" />,
-  },
-  {
-    id: "toggle",
-    node: (
-      <div className="flex h-6 w-11 items-center rounded-full bg-white/15 px-1">
-        <div className="size-4 rounded-full bg-white/80" />
-      </div>
-    ),
-  },
-  {
-    id: "lines",
-    node: (
-      <div className="flex w-[76px] flex-col gap-2">
-        <div className="h-2 rounded-full bg-white/25" />
-        <div className="h-2 w-2/3 rounded-full bg-white/12" />
-      </div>
-    ),
-  },
-  {
-    id: "tone-low",
-    node: <div className="size-9 rounded-[10px] bg-white/[0.08]" />,
-  },
-  {
-    id: "tone-high",
-    node: (
-      <div className="size-9 rounded-[10px] border border-white/25 bg-white/[0.02]" />
-    ),
-  },
-];
+function scatter(index: number): { x: number; y: number; rotate: number } {
+  return {
+    x: (((index * 37) % 9) - 4) * 10,
+    y: (((index * 53) % 7) - 3) * 10 + 24,
+    rotate: (((index * 29) % 11) - 5) * 1.6,
+  };
+}
 
-const FIGURE = "text-6xl leading-none font-semibold tabular-nums";
+/** The set assembles from the middle out, so it reads as one move, not twelve. */
+function assembleDelay(index: number): number {
+  const column = index % COLUMNS;
+  const row = Math.floor(index / COLUMNS);
+  return 0.35 + (Math.abs(column - 2.5) + Math.abs(row - 0.5)) * 0.07;
+}
 
 export function AnnualDesignSystem() {
+  const step = useDeckStep();
+  // The figures take the stage on step 1; the set comes back lit for the close.
+  const dimmed = step === 1;
+
   return (
     <Shell className="py-12">
       <Reveal>
@@ -107,45 +46,77 @@ export function AnnualDesignSystem() {
         <Title size="md">One visual language.</Title>
       </Reveal>
 
-      <Stagger
-        delayChildren={0.35}
-        staggerChildren={0.055}
-        className="mt-9 grid grid-cols-6 gap-4"
-      >
-        {TILES.map((tile) => (
-          <StaggerItem
-            key={tile.id}
-            className="flex h-[72px] items-center justify-center rounded-[14px] bg-white/[0.05]"
-          >
-            {tile.node}
-          </StaggerItem>
-        ))}
-      </Stagger>
+      <div className="mt-9 grid grid-cols-6 gap-4">
+        {MOA3_TILES.map((tile, index) => {
+          const from = scatter(index);
+          const column = index % COLUMNS;
+          return (
+            <m.div
+              key={tile.id}
+              initial={{ opacity: 0, scale: 0.9, ...from }}
+              animate={{
+                opacity: dimmed ? 0.5 : 1,
+                scale: 1,
+                x: 0,
+                y: 0,
+                rotate: 0,
+              }}
+              transition={
+                step === 0
+                  ? {
+                      duration: DUR.hero + 0.2,
+                      ease: EASE.expo,
+                      delay: assembleDelay(index),
+                    }
+                  : { duration: DUR.slow, ease: EASE.out }
+              }
+            >
+              {/* Once assembled, and again on the close, light runs across the set. */}
+              <Sheen
+                step={2}
+                delay={0.5 + column * 0.06}
+                className="rounded-[14px]"
+              >
+                <Sheen delay={1.35 + column * 0.06} className="rounded-[14px]">
+                  <div className="flex h-[72px] items-center justify-center rounded-[14px] bg-white/[0.05]">
+                    {tile.node}
+                  </div>
+                </Sheen>
+              </Sheen>
+            </m.div>
+          );
+        })}
+      </div>
 
-      <Reveal step={1} className="mt-11 flex justify-center gap-28">
+      <Reveal
+        step={1}
+        distance={24}
+        className="mt-11 flex justify-center gap-28"
+      >
         <div className="text-center">
           <div className={FIGURE}>
-            <Accent>
-              <CountUp value={110} step={1} delay={0.3} duration={1.3} />
-            </Accent>
+            <MoA3AccentRoll value={110} step={1} delay={0.2} duration={1.3} />
           </div>
           <div className="mt-4 text-base text-white/50">shared components</div>
         </div>
         <div className="text-center">
           <div className={FIGURE}>
-            <Accent>
-              <CountUp value={18197} step={1} delay={0.3} duration={1.6} />
-            </Accent>
+            <MoA3AccentRoll
+              value={18197}
+              step={1}
+              delay={0.35}
+              duration={1.6}
+            />
           </div>
           <div className="mt-4 text-base text-white/50">lines behind them</div>
         </div>
       </Reveal>
 
-      <Reveal step={2} className="mt-11 text-center">
-        <p className="text-3xl text-white/85">
+      <div className="mt-11 text-center">
+        <MaskedText step={2} className="text-3xl text-white/85">
           Every new screen <Accent>starts consistent</Accent>.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </div>
 
       <Footnote>Measured 23 September 2026.</Footnote>
     </Shell>

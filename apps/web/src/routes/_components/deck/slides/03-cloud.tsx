@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { CountUp } from "../_components/CountUp";
+import { m } from "motion/react";
 import { Camera } from "../_components/DeckCamera";
 import type { CameraShot } from "../_components/DeckCamera";
 import {
   Body,
+  Card,
   Footnote,
   Kicker,
   Reveal,
@@ -12,6 +13,13 @@ import {
   StaggerItem,
   Title,
 } from "../_components/DeckPrimitives";
+import {
+  CountRoll,
+  DUR,
+  EASE,
+  LEAVE,
+  useMotionCue,
+} from "../_components/motion";
 import { CloudVisual } from "./_parts/cloud-visual";
 
 /**
@@ -25,19 +33,34 @@ const CLOUD_SHOTS: readonly CameraShot[] = [
 ];
 
 const NUMBER_CLASS =
-  "text-[32px] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap text-white tabular-nums";
+  "text-[32px] leading-[1.15] font-semibold tracking-[-0.03em] whitespace-nowrap text-white tabular-nums";
 
 /** The numbers carry the card; each label is four words at most. */
 function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
     <StaggerItem className="h-full">
-      <div className="flex h-[132px] flex-col justify-between rounded-[20px] bg-white/[0.05] p-4">
+      <Card className="flex h-[132px] flex-col justify-between rounded-[20px] p-4">
         <div className={NUMBER_CLASS}>{children}</div>
         <div className="text-sm leading-snug text-balance text-white/60">
           {label}
         </div>
-      </div>
+      </Card>
     </StaggerItem>
+  );
+}
+
+/** The arrow in "10 → 23" travels from the old figure to the new one. */
+function Towards() {
+  const { on, delay } = useMotionCue(undefined, 0.35);
+  return (
+    <m.span
+      className="mx-1 inline-block text-white/40"
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: on ? 1 : 0, x: on ? 0 : -10 }}
+      transition={on ? { duration: DUR.slow, ease: EASE.expo, delay } : LEAVE}
+    >
+      &rarr;
+    </m.span>
   );
 }
 
@@ -57,19 +80,19 @@ export function Slide03Cloud() {
           <Stagger
             step={2}
             delayChildren={0.1}
-            staggerChildren={0.1}
+            staggerChildren={0.12}
             className="mt-12 grid grid-cols-3 gap-3"
           >
             <Stat label="changes written by Eva">
-              <CountUp value={346} step={2} duration={1.2} delay={0.2} />
+              <CountRoll value={346} step={2} duration={1.3} delay={0.25} />
             </Stat>
             <Stat label="bundles Eva finished alone">
-              <CountUp value={33} step={2} duration={1.2} delay={0.3} />
+              <CountRoll value={33} step={2} duration={1.3} delay={0.37} />
             </Stat>
             <Stat label="August to early September">
-              <CountUp value={10} step={2} duration={1.2} delay={0.4} />
-              <span className="mx-1 text-white/40">&rarr;</span>
-              <CountUp value={23} step={2} duration={1.2} delay={0.5} />
+              <CountRoll value={10} step={2} duration={1.1} delay={0.45} />
+              <Towards />
+              <CountRoll value={23} step={2} duration={1.3} delay={0.75} />
             </Stat>
           </Stagger>
         </div>

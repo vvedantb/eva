@@ -1,12 +1,13 @@
-import { IconCheck, IconMinus } from "@tabler/icons-react";
+import { IconMinus } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { motionSpring } from "@eva/ui";
-import { CountUp } from "../../_components/CountUp";
+import {
+  MO_A4_TICK_GAP,
+  MoA4CapabilityCard,
+} from "../_parts/MoA4CapabilityCard";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
-  Card,
   Footnote,
   Kicker,
   Reveal,
@@ -14,6 +15,13 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  CountRoll,
+  DUR,
+  EASE,
+  MaskedText,
+  Sheen,
+} from "../../_components/motion";
 
 /** Reading order: left to right, three per row. */
 const CAPABILITIES = [
@@ -46,53 +54,10 @@ const FRAMEWORK_SHOTS: readonly CameraShot[] = [
   {},
 ];
 
-function CapabilityCard({
-  name,
-  index,
-  evidenced,
-}: {
-  name: string;
-  index: number;
-  evidenced: boolean;
-}) {
-  const delay = (evidenced ? 0 : 0.25) + index * 0.06;
+/** When the last tick has landed; the caption follows it. */
+const TICKS_DONE = 0.25 + CAPABILITIES.length * MO_A4_TICK_GAP;
 
-  return (
-    <m.div
-      initial={{ opacity: 0, y: 16, scale: 0.97 }}
-      animate={{ opacity: 1, y: evidenced ? -5 : 0, scale: 1 }}
-      transition={{ type: "spring", bounce: 0, duration: 0.55, delay }}
-    >
-      {/* Its own viewing distance, so the hover tilts the card about its own
-          centre rather than the grid's. */}
-      <m.div
-        style={{ transformPerspective: 900, transformStyle: "preserve-3d" }}
-        whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
-        transition={motionSpring}
-      >
-        <Card className="relative flex h-[68px] items-center p-5">
-          <span className="text-base leading-snug font-medium text-white">
-            {name}
-          </span>
-          <m.span
-            aria-hidden
-            className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
-            initial={false}
-            animate={{ scale: evidenced ? 1 : 0, opacity: evidenced ? 1 : 0 }}
-            transition={{
-              type: "spring",
-              bounce: 0,
-              duration: 0.5,
-              delay: evidenced ? index * 0.06 : 0,
-            }}
-          >
-            <IconCheck size={13} stroke={3} className="text-white" />
-          </m.span>
-        </Card>
-      </m.div>
-    </m.div>
-  );
-}
+const FIGURE_CLASS = "text-5xl leading-[1.3] font-semibold tracking-tight";
 
 export function AnnualFramework() {
   const step = useDeckStep();
@@ -107,73 +72,96 @@ export function AnnualFramework() {
       </Reveal>
 
       <Camera shots={FRAMEWORK_SHOTS} className="mt-7">
-        <div className="grid grid-cols-3 gap-3 [transform-style:preserve-3d]">
-          {CAPABILITIES.map((name, index) => (
-            <CapabilityCard
-              key={name}
-              name={name}
-              index={index}
-              evidenced={evidenced}
-            />
-          ))}
-        </div>
+        {/* One band of light follows the ticks across the board. */}
+        <Sheen
+          step={1}
+          delay={0.2}
+          duration={1.3}
+          className="-m-2 rounded-3xl p-2"
+        >
+          <div className="grid grid-cols-3 gap-3">
+            {CAPABILITIES.map((name, index) => (
+              <MoA4CapabilityCard
+                key={name}
+                name={name}
+                index={index}
+                evidenced={evidenced}
+              />
+            ))}
+          </div>
+        </Sheen>
       </Camera>
 
-      <Reveal step={1} className="mt-3">
-        <p className="text-sm text-white/45">
+      <p className="mt-3 text-sm text-white/45">
+        <MaskedText step={1} delay={TICKS_DONE} duration={DUR.slow}>
           Every one of these is a slide in this deck.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       {/* Grid, thin evidence and the closing line sit on one 40px rhythm, which
           leaves the closing line clear of the footnote. */}
       <div className="mt-10">
         <Reveal step={2}>
-          <div className="text-xs tracking-[0.18em] text-white/35 uppercase">
+          <Kicker className="mb-0 text-xs tracking-[0.18em] text-white/35">
             Thin evidence
-          </div>
+          </Kicker>
         </Reveal>
         <div className="mt-3 flex gap-3">
-          {THIN.map((gap, index) => (
-            <m.div
-              key={gap}
-              initial={false}
-              animate={
-                thinIn
-                  ? { opacity: 1, y: 0, scale: 1 }
-                  : { opacity: 0, y: 12, scale: 0.97 }
-              }
-              transition={{
-                type: "spring",
-                bounce: 0,
-                duration: 0.5,
-                delay: thinIn ? index * 0.08 : 0,
-              }}
-              className="flex items-center gap-2 rounded-full bg-white/[0.05] px-4 py-2 text-sm text-white/50"
-            >
-              <IconMinus size={15} stroke={2} aria-hidden />
-              {gap}
-            </m.div>
-          ))}
+          {THIN.map((gap, index) => {
+            const at = 0.2 + index * 0.1;
+            return (
+              <m.div
+                key={gap}
+                initial={false}
+                animate={
+                  thinIn
+                    ? { opacity: 1, y: 0, scale: 1 }
+                    : { opacity: 0, y: 14, scale: 0.96 }
+                }
+                transition={
+                  thinIn
+                    ? { duration: DUR.slow, ease: EASE.expo, delay: at }
+                    : { duration: DUR.fast }
+                }
+                className="flex items-center gap-2 rounded-full border border-dashed border-white/15 bg-white/[0.03] px-4 py-2 text-sm text-white/50"
+              >
+                <m.span
+                  className="flex"
+                  initial={false}
+                  animate={{ scaleX: thinIn ? 1 : 0 }}
+                  transition={
+                    thinIn
+                      ? { duration: DUR.base, ease: EASE.out, delay: at + 0.25 }
+                      : { duration: DUR.fast }
+                  }
+                >
+                  <IconMinus size={15} stroke={2} aria-hidden />
+                </m.span>
+                {gap}
+              </m.div>
+            );
+          })}
         </div>
       </div>
 
-      <Reveal step={3} className="mt-10">
-        <p className="text-center text-2xl text-white/85">
-          <span className="text-5xl leading-[1.3] font-semibold tracking-tight">
+      {/* Words and figures rise on transform-only masks: an opacity fade on an
+          ancestor would fight the odometer columns mid-roll. */}
+      <p className="mt-10 text-center text-2xl text-white/85">
+        <MaskedText step={3} stagger={0.05}>
+          <span className={FIGURE_CLASS}>
             <Accent>
-              <CountUp value={4732} step={3} />
+              <CountRoll value={4732} step={3} delay={0.1} />
             </Accent>
           </span>{" "}
           changes.{" "}
-          <span className="text-5xl leading-[1.3] font-semibold tracking-tight">
+          <span className={FIGURE_CLASS}>
             <Accent>
-              <CountUp value={1348} step={3} />
+              <CountRoll value={1348} step={3} delay={0.3} />
             </Accent>
           </span>{" "}
           sets of release notes. All written down at the time.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>
         Evidence from the repository and Eva&apos;s own records, 11 January to

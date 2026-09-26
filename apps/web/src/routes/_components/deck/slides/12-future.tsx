@@ -1,13 +1,16 @@
 import type { ReactNode } from "react";
 import { IconArrowBackUp, IconCloud, IconRobot } from "@tabler/icons-react";
-import { BlurWordsTitle } from "../_components/BlurWordsTitle";
+import { m } from "motion/react";
 import {
   Body,
   Footnote,
   Kicker,
   Reveal,
   Shell,
+  Title,
+  useDeckStep,
 } from "../_components/DeckPrimitives";
+import { DUR, EASE, LEAVE, Sheen, cueTransition } from "../_components/motion";
 import { Camera } from "../_components/DeckCamera";
 import type { CameraShot } from "../_components/DeckCamera";
 import { AgentFleet } from "./_parts/AgentFleet";
@@ -35,20 +38,67 @@ interface Shift {
 const SHIFTS: readonly Shift[] = [
   {
     step: 1,
-    icon: <IconRobot size={28} stroke={1.6} className="text-white/75" />,
+    icon: <IconRobot size={24} stroke={1.6} className="text-white" />,
     heading: "More automations",
   },
   {
     step: 2,
-    icon: <IconArrowBackUp size={28} stroke={1.6} className="text-white/75" />,
+    icon: <IconArrowBackUp size={24} stroke={1.6} className="text-white" />,
     heading: "Mistakes become cheap",
   },
   {
     step: 3,
-    icon: <IconCloud size={28} stroke={1.6} className="text-white/75" />,
+    icon: <IconCloud size={24} stroke={1.6} className="text-white" />,
     heading: "Everything in sandboxes, managed from chat",
   },
 ];
+
+/** A shift lands from the left; the one before it steps back. */
+function ShiftCard({ shift }: { shift: Shift }) {
+  const step = useDeckStep();
+  const shown = step >= shift.step;
+  const current = step === shift.step;
+
+  return (
+    <m.div
+      initial={{ opacity: 0, x: -40 }}
+      animate={
+        shown ? { opacity: current ? 1 : 0.55, x: 0 } : { opacity: 0, x: -40 }
+      }
+      transition={
+        shown
+          ? {
+              x: { duration: DUR.hero, ease: EASE.expo },
+              opacity: { duration: current ? DUR.base : DUR.slow },
+            }
+          : LEAVE
+      }
+    >
+      <Sheen step={shift.step} delay={0.45} className="rounded-[20px]">
+        <div className="flex h-[84px] items-center gap-5 rounded-[20px] bg-white/[0.05] px-6">
+          <m.div
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B3FB8]/35 to-[#3B7DD8]/35"
+            initial={{ scale: 0.5, rotate: -12, opacity: 0 }}
+            animate={
+              shown
+                ? { scale: 1, rotate: 0, opacity: 1 }
+                : { scale: 0.5, rotate: -12, opacity: 0 }
+            }
+            transition={cueTransition(shown, 0.18, {
+              duration: DUR.slow,
+              ease: EASE.expo,
+            })}
+          >
+            {shift.icon}
+          </m.div>
+          <div className="text-xl leading-tight font-semibold text-balance text-white">
+            {shift.heading}
+          </div>
+        </div>
+      </Sheen>
+    </m.div>
+  );
+}
 
 export function Slide12Future() {
   return (
@@ -57,8 +107,12 @@ export function Slide12Future() {
         <div>
           <Reveal>
             <Kicker>What&apos;s next · Direction</Kicker>
+            <Title size="lg" className="leading-[1.02] tracking-[-0.025em]">
+              Manage agents,
+              <br />
+              not tasks.
+            </Title>
           </Reveal>
-          <BlurWordsTitle size="lg" lines={["Manage agents,", "not tasks."]} />
           <Reveal delay={0.6}>
             <Body className="mt-5 text-lg">
               Three shifts, each already true inside Eva.
@@ -67,14 +121,7 @@ export function Slide12Future() {
 
           <div className="mt-10 flex w-[500px] flex-col gap-4">
             {SHIFTS.map((shift) => (
-              <Reveal key={shift.heading} step={shift.step} from="left">
-                <div className="flex h-[84px] items-center gap-5 rounded-[20px] bg-white/[0.05] px-6">
-                  <div className="shrink-0">{shift.icon}</div>
-                  <div className="text-xl leading-tight font-semibold text-balance text-white">
-                    {shift.heading}
-                  </div>
-                </div>
-              </Reveal>
+              <ShiftCard key={shift.heading} shift={shift} />
             ))}
           </div>
         </div>

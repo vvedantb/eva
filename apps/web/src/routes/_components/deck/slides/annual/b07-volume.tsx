@@ -1,4 +1,3 @@
-import { CountUp } from "../../_components/CountUp";
 import {
   Accent,
   Footnote,
@@ -8,8 +7,14 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-import { Camera } from "../../_components/DeckCamera";
+import { Camera, Layer } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
+import {
+  CountRoll,
+  GridBackdrop,
+  MaskedText,
+  Sheen,
+} from "../../_components/motion";
 import { AnnABarChart } from "../_parts/AnnABarChart";
 import type { AnnABar } from "../_parts/AnnABarChart";
 
@@ -51,35 +56,51 @@ export function AnnualVolume() {
           </Reveal>
         </div>
 
-        <Reveal step={2} delay={0.1} className="text-right">
-          <div className="text-7xl leading-none font-semibold tabular-nums">
-            <Accent>
-              <CountUp value={4732} step={2} delay={0.2} />
-            </Accent>
-          </div>
+        <div className="text-right">
+          <Reveal step={2} distance={24}>
+            <Sheen delay={0.9} className="-mx-2 px-2">
+              <div className="text-7xl leading-none font-semibold tabular-nums">
+                <Accent>
+                  <CountRoll value={4732} step={2} delay={0.1} duration={1.4} />
+                </Accent>
+              </div>
+            </Sheen>
+          </Reveal>
           <div className="mt-4 text-base text-white/50">
-            changes shipped in all
+            <MaskedText step={2} delay={0.45}>
+              changes shipped in all
+            </MaskedText>
           </div>
-        </Reveal>
+        </div>
       </div>
 
       <Camera shots={VOLUME_SHOTS} className="mt-10">
-        <AnnABarChart
-          bars={MONTHS}
-          colWidth={92}
-          gap={18}
-          barMax={230}
-          delay={0.3}
-          focus={PEAKS}
-          focused={step >= 1}
-        />
+        <div
+          className="relative isolate"
+          style={{ transformStyle: "preserve-3d" }}
+        >
+          <Layer depth={-60} className="absolute -inset-x-16 -inset-y-10">
+            <GridBackdrop variant="dots" cell={28} period={10} />
+          </Layer>
+          <AnnABarChart
+            bars={MONTHS}
+            colWidth={92}
+            gap={18}
+            barMax={230}
+            delay={0.3}
+            focus={PEAKS}
+            // The peaks hold the light for one step; the total relights the year.
+            focused={step === 1}
+            sheenStep={1}
+          />
+        </div>
       </Camera>
 
-      <Reveal step={1} delay={0.25} className="mt-7">
-        <p className="text-2xl leading-snug text-pretty text-white/85">
+      <p className="mt-7 text-2xl leading-snug text-pretty text-white/85">
+        <MaskedText step={1} delay={0.35}>
           March built the surface. July moved the work to the cloud.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>
         Changes shipped per calendar month. September is a part month.

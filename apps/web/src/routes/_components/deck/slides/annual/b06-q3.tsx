@@ -1,4 +1,3 @@
-import { CountUp } from "../../_components/CountUp";
 import {
   Footnote,
   Kicker,
@@ -6,6 +5,7 @@ import {
   Shell,
   Title,
 } from "../../_components/DeckPrimitives";
+import { CountRoll } from "../../_components/motion";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
 
@@ -31,7 +31,7 @@ export function AnnualQ3() {
 
         <Reveal delay={0.3} className="text-right">
           <div className="text-6xl leading-none font-semibold tabular-nums text-white">
-            <CountUp value={2031} delay={0.4} />
+            <CountRoll value={2031} delay={0.35} duration={1.4} />
           </div>
           <div className="mt-4 text-base text-white/50">
             changes shipped, July to September
@@ -39,7 +39,7 @@ export function AnnualQ3() {
         </Reveal>
       </div>
 
-      <AnnABeats beats={BEATS} firstStep={1} className="mt-44" />
+      <AnnABeats beats={BEATS} firstStep={1} liveLast className="mt-40" />
 
       <Footnote>
         Changes shipped July to September 2026. September runs to the 16th.

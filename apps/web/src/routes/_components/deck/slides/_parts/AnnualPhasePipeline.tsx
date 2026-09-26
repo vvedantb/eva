@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { m } from "motion/react";
 import { Layer } from "../../_components/DeckCamera";
 import { BRAND, EASE_OUT } from "../../_components/DeckPrimitives";
+import { DUR, EASE } from "../../_components/motion";
 
 export interface AnnualPhase {
   label: string;
@@ -43,25 +44,49 @@ function PhaseNode({
       style={{ transformStyle: "preserve-3d" }}
     >
       <Layer depth={NODE_DEPTH}>
-        <m.span
-          className="mx-auto flex size-11 items-center justify-center rounded-full text-base font-semibold tabular-nums text-white"
-          style={{ background: GRADIENT }}
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: active ? 1 : 0, scale: active ? 1 : 0.5 }}
-          transition={{
-            opacity: fade,
-            scale: active
-              ? { type: "spring", bounce: 0, duration: 0.5, delay }
-              : { duration: 0.2 },
-          }}
-        >
-          {index + 1}
-        </m.span>
+        <span className="relative mx-auto flex size-11">
+          {/* One ring leaves the node as the light reaches it. */}
+          <m.span
+            aria-hidden
+            className="absolute inset-0 rounded-full"
+            style={{ border: `1.5px solid ${BRAND.blue}` }}
+            initial={{ scale: 1, opacity: 0 }}
+            animate={
+              active
+                ? { scale: [1, 2.1], opacity: [0.8, 0] }
+                : { scale: 1, opacity: 0 }
+            }
+            transition={
+              active
+                ? { duration: 0.9, ease: EASE.out, delay: delay + 0.05 }
+                : { duration: 0 }
+            }
+          />
+          <m.span
+            className="relative flex size-11 items-center justify-center rounded-full text-base font-semibold tabular-nums text-white"
+            style={{ background: GRADIENT }}
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: active ? 1 : 0, scale: active ? 1 : 0.4 }}
+            transition={{
+              opacity: fade,
+              scale: active
+                ? { duration: DUR.slow, ease: EASE.expo, delay }
+                : { duration: DUR.fast },
+            }}
+          >
+            {index + 1}
+          </m.span>
+        </span>
       </Layer>
       <m.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: active ? 1 : 0 }}
-        transition={fade}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: active ? 1 : 0, y: active ? 0 : 8 }}
+        transition={{
+          ...fade,
+          y: active
+            ? { duration: DUR.slow, ease: EASE.expo, delay: delay + 0.08 }
+            : { duration: DUR.fast },
+        }}
       >
         {/* Fixed height so a two-line label does not push its date out of line. */}
         <div className="mt-4 flex h-9 items-start justify-center text-[15px] leading-tight font-medium text-white">

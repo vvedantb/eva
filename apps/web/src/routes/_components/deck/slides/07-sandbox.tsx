@@ -6,13 +6,13 @@ import {
   Body,
   Footnote,
   Kicker,
-  Reveal,
   Shell,
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
 import { Camera } from "../_components/DeckCamera";
 import type { CameraShot } from "../_components/DeckCamera";
+import { EASE, LEAVE, MaskedText, Sheen } from "../_components/motion";
 import { LinearCount, RaceLane } from "./_parts/BootRace";
 
 /**
@@ -79,31 +79,41 @@ export function Slide07Sandbox() {
           readout={
             <m.div
               className="flex items-center gap-2"
-              initial={{ opacity: 0, scale: 0.6 }}
+              initial={{ opacity: 0, x: -18, scale: 0.9 }}
               animate={
-                running ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.6 }
+                running
+                  ? { opacity: 1, x: 0, scale: 1 }
+                  : { opacity: 0, x: -18, scale: 0.9 }
               }
               transition={
                 running
-                  ? { type: "spring", bounce: 0.35, duration: 0.6, delay: 0.6 }
-                  : { duration: 0.2 }
+                  ? {
+                      duration: 0.8,
+                      ease: EASE.expo,
+                      delay: 0.45,
+                      opacity: { duration: 0.2, delay: 0.45 },
+                    }
+                  : LEAVE
               }
             >
               <IconBolt size={18} color={BRAND.blue} />
-              <span className="text-3xl font-semibold tracking-tight tabular-nums text-white">
-                &lt; 1 s
-              </span>
+              {/* The finish: one band of light across the winning time. */}
+              <Sheen step={1} delay={0.7} className="-mx-2 rounded-[8px] px-2">
+                <span className="text-3xl font-semibold tracking-tight tabular-nums text-white">
+                  &lt; 1 s
+                </span>
+              </Sheen>
             </m.div>
           }
         />
       </Camera>
 
-      <Reveal step={1} delay={4.2} className="mt-6">
-        <p className="max-w-4xl text-2xl leading-snug text-white/85">
+      <p className="mt-6 max-w-4xl text-2xl leading-snug text-white/85">
+        <MaskedText step={1} delay={4.2} stagger={0.035}>
           That is more than <Accent>40×</Accent> faster, and the same workspace
           underneath: terminal, live preview, desktop and snapshots.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>
         Timings from the product owner's measurements before and after the move.

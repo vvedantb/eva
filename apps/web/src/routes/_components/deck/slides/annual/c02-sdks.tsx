@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Body,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -9,6 +8,7 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import { DUR, EASE, cueTransition } from "../../_components/motion";
 import { AnnBConnection } from "../_parts/AnnBConnection";
 
 /** In the order the connections were rebuilt. */
@@ -43,17 +43,19 @@ export function AnnualSdks() {
         ))}
       </div>
 
+      {/* The old runner is struck through, then steps back out of the way. */}
       <m.div
         className="relative mt-16 flex h-[58px] w-fit items-center gap-8 rounded-[18px] bg-white/[0.04] px-6"
-        animate={{
-          opacity: removed ? 0.28 : 1,
-          filter: removed ? "blur(2px)" : "blur(0px)",
-        }}
-        transition={{
-          duration: removed ? 0.8 : 0.3,
-          ease: EASE_OUT,
-          delay: removed ? 0.55 : 0,
-        }}
+        initial={{ opacity: 1, scale: 1, y: 0 }}
+        animate={
+          removed
+            ? { opacity: 0.28, scale: 0.97, y: 6 }
+            : { opacity: 1, scale: 1, y: 0 }
+        }
+        transition={cueTransition(removed, 0.55, {
+          duration: DUR.slow,
+          ease: EASE.out,
+        })}
       >
         <span className="text-lg text-white/70">Old command-line runner</span>
         <span className="text-sm tabular-nums text-white/45">
@@ -64,10 +66,10 @@ export function AnnualSdks() {
           className="absolute inset-x-6 top-1/2 h-px origin-left bg-white/70"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: removed ? 1 : 0 }}
-          transition={{
-            duration: removed ? 0.5 : 0.2,
-            ease: EASE_OUT,
-          }}
+          transition={cueTransition(removed, 0, {
+            duration: DUR.slow,
+            ease: EASE.inOut,
+          })}
           aria-hidden
         />
       </m.div>

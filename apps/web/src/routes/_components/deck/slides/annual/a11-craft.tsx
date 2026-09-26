@@ -5,18 +5,31 @@ import {
   IconChartDots,
   IconRuler,
 } from "@tabler/icons-react";
-import { animate, m } from "motion/react";
+import { m } from "motion/react";
 import {
   Accent,
-  BRAND,
-  EASE_OUT,
+  Card,
   Footnote,
   Kicker,
   Reveal,
   Shell,
+  Stagger,
+  StaggerItem,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import {
+  BRAND_GRADIENT,
+  DUR,
+  EASE,
+  MaskedText,
+  STAGGER,
+} from "../../_components/motion";
+import { AnnCCountDown } from "../_parts/AnnCCountDown";
+
+/** A brand wash behind each habit icon, faint enough to stay a tone. */
+const HABIT_TINT =
+  "linear-gradient(135deg, rgba(139,63,184,0.35), rgba(59,125,216,0.35))";
 
 interface Result {
   label: string;
@@ -77,53 +90,33 @@ const HABITS: readonly { icon: Icon; label: string }[] = [
 ];
 
 const TRACK_W = 446;
-const BAR_DURATION = 1.2;
+const BAR_DURATION = 1.3;
+const HEAD_GLOW =
+  "radial-gradient(circle, #fff 0 16%, rgba(59,125,216,0.5) 34%, transparent 70%)";
 
-/** Counts a figure down from `before` to `after`, in step with its bar. */
-function CountDown({
-  before,
-  after,
-  decimals,
-  delay,
+function ResultRow({
+  result,
+  index,
+  settled,
 }: {
-  before: number;
-  after: number;
-  decimals: number;
-  delay: number;
+  result: Result;
+  index: number;
+  settled: boolean;
 }) {
-  return (
-    <span
-      className="tabular-nums text-white/90"
-      // `started` guards the one-shot count: React re-attaches an inline ref on
-      // every render, and a step press must not rewind the figure.
-      ref={(el) => {
-        if (!el || el.dataset.started === "true") return;
-        el.dataset.started = "true";
-        animate(before, after, {
-          duration: BAR_DURATION,
-          delay,
-          ease: EASE_OUT,
-          onUpdate: (v) => {
-            el.textContent = v.toFixed(decimals);
-          },
-        });
-      }}
-    >
-      {before.toFixed(decimals)}
-    </span>
-  );
-}
-
-function ResultRow({ result, index }: { result: Result; index: number }) {
-  const delay = 0.35 + index * 0.15;
-  const width = TRACK_W * (result.after / result.before);
+  const delay = 0.45 + index * STAGGER.block;
+  const share = result.after / result.before;
+  const fall = { duration: BAR_DURATION, ease: EASE.expo, delay: delay + 0.2 };
 
   return (
     <m.div
       className="flex h-[60px] items-center gap-6"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", bounce: 0, duration: 0.5, delay }}
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: settled ? 0.65 : 1, y: 0 }}
+      transition={
+        settled
+          ? { duration: DUR.slow, ease: EASE.out }
+          : { duration: DUR.hero, ease: EASE.expo, delay }
+      }
     >
       <div className="w-[260px] shrink-0 text-sm text-white/60">
         {result.label}
@@ -136,29 +129,47 @@ function ResultRow({ result, index }: { result: Result; index: number }) {
       >
         <div className="absolute inset-0 rounded-full bg-white/20" />
         <m.div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{
-            background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
+          className="absolute inset-0 origin-left rounded-full"
+          style={{ background: BRAND_GRADIENT }}
+          initial={{ scaleX: 1 }}
+          animate={{ scaleX: share }}
+          transition={fall}
+        />
+        {/* A lit edge rides the bar back to where the cost ended up. */}
+        <m.span
+          className="absolute top-1/2 left-0 -mt-3.5 -ml-3.5 size-7 rounded-full"
+          style={{ background: HEAD_GLOW }}
+          initial={{ x: TRACK_W, opacity: 0 }}
+          animate={{ x: TRACK_W * share, opacity: [0, 1, 1, 0] }}
+          transition={{
+            x: fall,
+            opacity: {
+              duration: BAR_DURATION + 0.3,
+              times: [0, 0.1, 0.7, 1],
+              delay: delay + 0.2,
+            },
           }}
-          initial={{ width: TRACK_W }}
-          animate={{ width }}
-          transition={{ duration: BAR_DURATION, delay, ease: EASE_OUT }}
         />
       </div>
 
       <div className="w-[190px] shrink-0 text-right text-sm tabular-nums text-white/45">
         {result.beforeText} →{" "}
-        <CountDown
-          before={result.before}
-          after={result.after}
+        <AnnCCountDown
+          from={result.before}
+          to={result.after}
           decimals={result.decimals}
-          delay={delay}
+          fromText={result.beforeText}
+          duration={BAR_DURATION}
+          delay={delay + 0.2}
+          className="text-white/90"
         />{" "}
         {result.unit}
       </div>
 
       <div className="w-[120px] shrink-0 text-right text-3xl font-semibold tabular-nums">
-        <Accent>{result.reduction}</Accent>
+        <MaskedText delay={delay + BAR_DURATION * 0.55}>
+          <Accent>{result.reduction}</Accent>
+        </MaskedText>
       </div>
     </m.div>
   );
@@ -176,44 +187,46 @@ export function AnnualCraft() {
 
       <div className="mt-10">
         {RESULTS.map((result, index) => (
-          <ResultRow key={result.label} result={result} index={index} />
+          <ResultRow
+            key={result.label}
+            result={result}
+            index={index}
+            settled={step >= 1}
+          />
         ))}
       </div>
 
-      <div className="mt-10 flex gap-4">
-        {HABITS.map((habit, index) => (
-          <m.div
-            key={habit.label}
-            className="flex h-[52px] flex-1 items-center gap-3 rounded-2xl bg-white/[0.05] px-4"
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
-            animate={
-              step >= 1
-                ? { opacity: 1, y: 0, scale: 1 }
-                : { opacity: 0, y: 16, scale: 0.96 }
-            }
-            transition={{
-              type: "spring",
-              bounce: 0,
-              duration: 0.55,
-              delay: step >= 1 ? index * 0.09 : 0,
-            }}
-          >
-            <habit.icon
-              size={20}
-              stroke={1.6}
-              className="shrink-0 text-white/55"
-              aria-hidden
-            />
-            <span className="text-sm text-white/85">{habit.label}</span>
-          </m.div>
+      <Stagger
+        step={1}
+        delayChildren={0.1}
+        staggerChildren={STAGGER.item}
+        className="mt-10 flex gap-4"
+      >
+        {HABITS.map((habit) => (
+          <StaggerItem key={habit.label} className="flex-1">
+            <Card className="flex h-[52px] items-center gap-3 px-4 py-0">
+              <span
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                style={{ background: HABIT_TINT }}
+              >
+                <habit.icon
+                  size={17}
+                  stroke={1.6}
+                  className="text-white/80"
+                  aria-hidden
+                />
+              </span>
+              <span className="text-sm text-white/85">{habit.label}</span>
+            </Card>
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
 
-      <Reveal step={2} className="mt-12 text-center">
-        <p className="text-3xl text-white/85">
+      <div className="mt-12 text-center">
+        <MaskedText step={2} className="text-3xl text-white/85">
           Page scores: set up, <Accent>not yet a habit</Accent>.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </div>
 
       <Footnote>
         Animation performance work, 5 September 2026. Medians of three runs.

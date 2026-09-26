@@ -1,6 +1,14 @@
 import type { ReactNode } from "react";
 import { animate, m } from "motion/react";
-import { BRAND, EASE_OUT } from "../../_components/DeckPrimitives";
+import type { Transition } from "motion/react";
+import { BRAND } from "../../_components/DeckPrimitives";
+import { BRAND_GRADIENT, DUR, EASE, LEAVE } from "../../_components/motion";
+
+/** Static radial glows for the light on each bar's tip; nothing filters. */
+const COMET_BRAND =
+  "radial-gradient(circle closest-side, #fff 0 18%, rgba(130,170,255,0.55) 40%, transparent)";
+const COMET_PLAIN =
+  "radial-gradient(circle closest-side, rgba(255,255,255,0.8) 0 14%, rgba(255,255,255,0.18) 40%, transparent)";
 
 interface RaceLaneProps {
   label: string;
@@ -22,18 +30,28 @@ export function RaceLane({
   readout,
   caption,
 }: RaceLaneProps) {
+  // Fill and comet share one tween, so the light always sits on the tip.
+  const travel: Transition = running
+    ? { duration, ease: brand ? EASE.expo : "linear" }
+    : { duration: DUR.fast, ease: EASE.out };
+
   return (
     <div className="relative flex h-[90px] items-center">
       {brand && (
+        // A painted flash, not a blur: only its opacity moves.
         <m.div
           aria-hidden
-          className="pointer-events-none absolute -inset-x-4 inset-y-1 rounded-2xl blur-xl"
+          className="pointer-events-none absolute -inset-x-6 -inset-y-2"
           style={{
-            background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
+            background: `radial-gradient(ellipse closest-side, ${BRAND.blue}55, ${BRAND.purple}22 55%, transparent)`,
           }}
           initial={{ opacity: 0 }}
-          animate={running ? { opacity: [0, 0.35, 0] } : { opacity: 0 }}
-          transition={{ duration: 1.2, delay: 0.8, ease: "easeOut" }}
+          animate={running ? { opacity: [0, 1, 0] } : { opacity: 0 }}
+          transition={
+            running
+              ? { duration: 1.4, times: [0, 0.2, 1], delay: duration * 0.7 }
+              : LEAVE
+          }
         />
       )}
 
@@ -42,24 +60,38 @@ export function RaceLane({
       </div>
 
       <div className="relative flex-1">
-        <div className="h-3 overflow-hidden rounded-full bg-white/[0.06]">
+        <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06]">
           <m.div
             className="h-full w-full origin-left rounded-full"
             style={
               brand
-                ? {
-                    background: `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`,
-                  }
+                ? { background: BRAND_GRADIENT }
                 : { background: "rgba(255,255,255,0.25)" }
             }
             initial={{ scaleX: 0 }}
             animate={{ scaleX: running ? 1 : 0 }}
-            transition={{
-              duration: running ? duration : 0.2,
-              ease: brand ? EASE_OUT : "linear",
-            }}
+            transition={travel}
           />
         </div>
+        <m.div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-3"
+          initial={{ x: "-100%" }}
+          animate={{ x: running ? "0%" : "-100%" }}
+          transition={travel}
+        >
+          <m.span
+            className="absolute top-1/2 right-0 size-8 translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ background: brand ? COMET_BRAND : COMET_PLAIN }}
+            initial={{ opacity: 0 }}
+            animate={running ? { opacity: [0, 1, 1, 0] } : { opacity: 0 }}
+            transition={
+              running
+                ? { duration: duration + 0.4, times: [0, 0.05, 0.85, 1] }
+                : LEAVE
+            }
+          />
+        </m.div>
         {caption && (
           <div className="absolute top-6 left-0 text-xs text-white/45">
             {caption}

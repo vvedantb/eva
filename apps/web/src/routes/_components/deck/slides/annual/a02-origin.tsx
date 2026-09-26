@@ -1,4 +1,4 @@
-import { CountUp } from "../../_components/CountUp";
+import { CountRoll, MaskedText } from "../../_components/motion";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
@@ -47,19 +47,19 @@ export function AnnualOrigin() {
         </Camera>
       </div>
 
-      <Reveal step={3} delay={0.2} className="mb-14">
-        <p className="text-2xl text-pretty text-white/85">
+      <p className="mb-14 text-2xl text-pretty text-white/85">
+        <MaskedText step={3} delay={0.2} stagger={0.05}>
           In all,{" "}
           <Accent>
-            <CountUp value={4732} step={3} delay={0.2} />
+            <CountRoll value={4732} step={3} delay={0.4} duration={1.4} />
           </Accent>{" "}
           changes shipped and{" "}
           <Accent>
-            <CountUp value={1348} step={3} delay={0.35} />
+            <CountRoll value={1348} step={3} delay={0.6} duration={1.4} />
           </Accent>{" "}
           sets of release notes written.
-        </p>
-      </Reveal>
+        </MaskedText>
+      </p>
 
       <Footnote>
         Dates from Eva&rsquo;s own records and the project&rsquo;s history, to

@@ -1,4 +1,3 @@
-import { CountUp } from "../../_components/CountUp";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
@@ -12,6 +11,7 @@ import {
   StaggerItem,
   Title,
 } from "../../_components/DeckPrimitives";
+import { CountRoll } from "../../_components/motion";
 import { AnnualAdoptionChart } from "../_parts/AnnualAdoptionChart";
 
 /**
@@ -54,7 +54,7 @@ export function AnnualAdoption() {
 
       <Stagger
         step={2}
-        delayChildren={0.1}
+        delayChildren={0.05}
         staggerChildren={0.1}
         className="mt-8 grid grid-cols-3 gap-6"
       >
@@ -63,14 +63,20 @@ export function AnnualAdoption() {
             <div className="text-6xl leading-none font-semibold tabular-nums">
               {figure.accent ? (
                 <Accent>
-                  <CountUp value={figure.value} step={2} delay={0.2} />
+                  <CountRoll
+                    value={figure.value}
+                    step={2}
+                    duration={1.4}
+                    delay={0.15}
+                  />
                 </Accent>
               ) : (
                 <span className="text-white">
-                  <CountUp
+                  <CountRoll
                     value={figure.value}
                     step={2}
-                    delay={0.2 + index * 0.1}
+                    duration={1.3}
+                    delay={0.3 + index * 0.1}
                   />
                 </span>
               )}

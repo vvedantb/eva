@@ -1,7 +1,5 @@
 import { IconDeviceMobile } from "@tabler/icons-react";
 import { m } from "motion/react";
-import type { Transition } from "motion/react";
-import { CountUp } from "../../_components/CountUp";
 import {
   Accent,
   Body,
@@ -11,9 +9,14 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-
-/** The whole slide reshapes on one spring, so every part uses the same one. */
-const RESHAPE: Transition = { type: "spring", bounce: 0, duration: 0.85 };
+import {
+  CountRoll,
+  DUR,
+  EASE,
+  MaskedText,
+  cueTransition,
+} from "../../_components/motion";
+import { MoF2Device } from "../_parts/MoF2Device";
 
 /** What the audit actually delivered, three words at most each. */
 const GAINS: readonly string[] = [
@@ -22,19 +25,8 @@ const GAINS: readonly string[] = [
   "Reachable controls",
 ];
 
-function Lines({ rows, width }: { rows: readonly number[]; width: string }) {
-  return (
-    <div className="space-y-2.5" style={{ width }}>
-      {rows.map((row, index) => (
-        <span
-          key={index}
-          className="block h-2 rounded-full bg-white/12"
-          style={{ width: `${row}%` }}
-        />
-      ))}
-    </div>
-  );
-}
+/** Step 0 centres the desktop on the stage; step 1 slides the phone aside for the numbers. */
+const CENTRE_OFFSET = 214;
 
 export function FridayMobile() {
   const phone = useDeckStep() >= 1;
@@ -51,84 +43,53 @@ export function FridayMobile() {
         Raise work from <Accent>your phone</Accent>.
       </Title>
       <Body className="mt-4 max-w-3xl">
-        The same web app, reshaped for a small screen.
+        <MaskedText delay={0.4} duration={0.8}>
+          The same web app, reshaped for a small screen.
+        </MaskedText>
       </Body>
 
       {/* Fixed height so the frame changes shape without shifting the row. */}
-      <div className="mt-6 flex h-[380px] items-center gap-24">
-        <div className="flex w-[660px] justify-center">
-          <m.div
-            className="bg-white/[0.06] ring-1 ring-white/10"
-            animate={{
-              width: phone ? 248 : 620,
-              height: phone ? 372 : 318,
-              borderRadius: phone ? 34 : 22,
-              padding: phone ? 10 : 8,
-            }}
-            transition={RESHAPE}
-          >
-            <m.div
-              className="flex h-full gap-3 bg-[#0b0c11] p-3 ring-1 ring-white/[0.06]"
-              animate={{ borderRadius: phone ? 24 : 14 }}
-              transition={RESHAPE}
-            >
-              <m.div
-                className="overflow-hidden rounded-[10px] bg-white/[0.05] p-3"
-                animate={{ width: phone ? 0 : 130, opacity: phone ? 0 : 1 }}
-                transition={RESHAPE}
-              >
-                <Lines rows={[90, 70, 80, 55]} width="106px" />
-              </m.div>
-
-              <div className="flex-1 overflow-hidden rounded-[10px] bg-white/[0.05] p-3">
-                <span className="block h-2.5 w-[60%] rounded-full bg-white/25" />
-                <div className="mt-4">
-                  <Lines rows={[100, 92, 78, 96, 64]} width="100%" />
-                </div>
-              </div>
-
-              <m.div
-                className="overflow-hidden rounded-[10px] bg-white/[0.05] p-3"
-                animate={{ width: phone ? 0 : 150, opacity: phone ? 0 : 1 }}
-                transition={RESHAPE}
-              >
-                <Lines rows={[80, 100, 60]} width="126px" />
-              </m.div>
-            </m.div>
-          </m.div>
-        </div>
+      <div className="mt-6 flex h-[400px] items-center gap-24">
+        <m.div
+          className="flex w-[660px] justify-center"
+          initial={{ opacity: 0, x: CENTRE_OFFSET, y: 24 }}
+          animate={{ opacity: 1, x: phone ? 0 : CENTRE_OFFSET, y: 0 }}
+          transition={{
+            x: { duration: 1, ease: EASE.expo },
+            y: { duration: DUR.hero, ease: EASE.expo, delay: 0.45 },
+            opacity: { duration: DUR.slow, delay: 0.45 },
+          }}
+        >
+          <MoF2Device phone={phone} />
+        </m.div>
 
         <div>
-          <div className="flex items-baseline gap-4">
-            <CountUp
+          <div className="text-6xl leading-none font-semibold text-white">
+            <CountRoll
               value={640}
               step={1}
+              delay={0.35}
               duration={1.2}
               suffix=" px"
-              className="text-6xl leading-none font-semibold tabular-nums text-white"
             />
           </div>
-          <m.div
-            className="mt-4 text-lg text-white/55"
-            animate={{ opacity: phone ? 1 : 0 }}
-            transition={{ duration: 0.4, delay: phone ? 0.3 : 0 }}
-          >
-            and below
-          </m.div>
+          <div className="mt-4 text-lg text-white/55">
+            <MaskedText step={1} delay={0.65} duration={0.7}>
+              and below
+            </MaskedText>
+          </div>
 
           <div className="mt-10 flex flex-col items-start gap-2.5">
             {GAINS.map((gain, index) => (
               <m.span
                 key={gain}
-                className="rounded-full bg-white/[0.07] px-4 py-2 text-sm text-white/85"
-                initial={{ opacity: 0, y: 14 }}
-                animate={phone ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
-                transition={{
-                  type: "spring",
-                  bounce: 0,
-                  duration: 0.55,
-                  delay: phone ? 0.45 + index * 0.09 : 0,
-                }}
+                className="rounded-full bg-white/[0.07] px-4 py-2 text-sm text-white/85 ring-1 ring-white/[0.06]"
+                initial={{ opacity: 0, x: -12 }}
+                animate={phone ? { opacity: 1, x: 0 } : { opacity: 0, x: -12 }}
+                transition={cueTransition(phone, 0.8 + index * 0.09, {
+                  duration: DUR.slow,
+                  ease: EASE.expo,
+                })}
               >
                 {gain}
               </m.span>

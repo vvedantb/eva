@@ -1,6 +1,8 @@
 import { m } from "motion/react";
 import { Layer } from "../../_components/DeckCamera";
-import { BRAND, EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import { useDeckStep } from "../../_components/DeckPrimitives";
+import { DUR, EASE, MaskedText, cueTransition } from "../../_components/motion";
+import { MoA1Dot, MoA1Rail } from "./MoA1Rail";
 
 export interface AnnADayMark {
   /** Index into `days`. */
@@ -11,24 +13,41 @@ export interface AnnADayMark {
   step: number;
 }
 
-/** Design size of the strip. */
-const TRACK_W = 880;
-const BOX_H = 220;
+/** Design size of the strip: the full content column. */
+const TRACK_W = 1088;
+const BOX_H = 230;
 /** Vertical position of the rail inside the box. */
-const RAIL_Y = 168;
-/** Keeps the first and last day labels inside the box. */
-const INSET = 80;
+const RAIL_Y = 172;
+/** Keeps the first and last day labels well inside the box. */
+const INSET = 96;
+/** The rail runs this far in from each edge. */
+const RAIL_PAD = 24;
 /** Stem length from the rail up to the marker label. */
 const STEM = 84;
 /** How far the markers sit in front of the rail they mark. */
 const DOT_DEPTH = 30;
+/** The light travels first; the marker lands as it arrives. */
+const LAND = 0.45;
 
 function xFor(index: number, count: number): number {
   return INSET + (index / (count - 1)) * (TRACK_W - INSET * 2);
 }
 
-function Marker({ mark, count }: { mark: AnnADayMark; count: number }) {
-  const active = useDeckStep() >= mark.step;
+/** Rail fraction under a given x, for the lit run. */
+function railAt(x: number): number {
+  return (x - RAIL_PAD) / (TRACK_W - RAIL_PAD * 2);
+}
+
+function Marker({
+  mark,
+  count,
+  liveStep,
+}: {
+  mark: AnnADayMark;
+  count: number;
+  liveStep: number;
+}) {
+  const on = useDeckStep() >= mark.step;
 
   return (
     <div
@@ -39,55 +58,51 @@ function Marker({ mark, count }: { mark: AnnADayMark; count: number }) {
         transformStyle: "preserve-3d",
       }}
     >
-      <m.div
-        aria-hidden
-        className="absolute w-px bg-white/15"
-        style={{ height: STEM, top: -STEM }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: active ? 1 : 0 }}
-        transition={{ duration: active ? 0.4 : 0.2, ease: EASE_OUT }}
-      />
-
       <Layer depth={DOT_DEPTH}>
         <m.div
           aria-hidden
-          className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_20px_rgba(139,63,184,0.65)]"
-          style={{
-            background: `linear-gradient(135deg, ${BRAND.purple}, ${BRAND.blue})`,
-          }}
-          initial={{ scale: 0 }}
-          animate={{ scale: active ? 1 : 0 }}
-          transition={
-            active
-              ? { type: "spring", bounce: 0.25, duration: 0.6 }
-              : { duration: 0.25, ease: EASE_OUT }
-          }
+          className="absolute w-px origin-bottom bg-gradient-to-t from-white/30 to-white/0"
+          style={{ height: STEM, top: -STEM }}
+          initial={{ scaleY: 0 }}
+          animate={{ scaleY: on ? 1 : 0 }}
+          transition={cueTransition(on, LAND + 0.1, {
+            duration: DUR.slow,
+            ease: EASE.expo,
+          })}
         />
-      </Layer>
+        <MoA1Dot step={mark.step} delay={LAND} liveStep={liveStep} />
 
-      <m.div
-        className="absolute w-[260px] -translate-x-1/2 text-center"
-        style={{ left: 0, bottom: STEM }}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: active ? 1 : 0, y: active ? 0 : 12 }}
-        transition={{
-          duration: active ? 0.5 : 0.25,
-          ease: EASE_OUT,
-          delay: active ? 0.1 : 0,
-        }}
-      >
-        <div className="text-3xl leading-tight font-semibold text-white">
-          {mark.title}
+        <div
+          className="absolute w-[300px] -translate-x-1/2 text-center"
+          style={{ left: 0, bottom: STEM + 4 }}
+        >
+          <div className="text-3xl leading-tight font-semibold text-white">
+            <MaskedText step={mark.step} delay={LAND + 0.2}>
+              {mark.title}
+            </MaskedText>
+          </div>
+          <m.div
+            className="mt-2 text-sm text-white/45"
+            initial={{ opacity: 0, y: 6 }}
+            animate={on ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+            transition={cueTransition(on, LAND + 0.4, {
+              duration: DUR.base,
+              ease: EASE.out,
+            })}
+          >
+            {mark.date}
+          </m.div>
         </div>
-        <div className="mt-2 text-sm text-white/45">{mark.date}</div>
-      </m.div>
+      </Layer>
     </div>
   );
 }
 
 /**
- * A short calendar rail: every day gets a tick, and the days that mattered get
- * a marker that lands on its own build step.
+ * A short calendar rail. It draws in with a tick per day, and a run of brand
+ * light waits on the first day. Each build step sends the light on to the next
+ * day that mattered, and that day's marker lands as the light arrives. On the
+ * last step both markers start to breathe: the ideas are still live.
  */
 export function AnnADayStrip({
   days,
@@ -96,66 +111,57 @@ export function AnnADayStrip({
   days: readonly string[];
   marks: readonly AnnADayMark[];
 }) {
+  const stops = [
+    railAt(xFor(0, days.length)),
+    ...marks.map((mark) => railAt(xFor(mark.day, days.length))),
+  ];
+  const liveStep = marks.reduce((last, mark) => Math.max(last, mark.step), 0);
+
   return (
     <div
       className="relative"
       style={{ width: TRACK_W, height: BOX_H, transformStyle: "preserve-3d" }}
     >
       <Layer depth={0}>
-        <svg
-          aria-hidden
-          width={TRACK_W}
-          height={BOX_H}
-          className="absolute inset-0"
-        >
-          <defs>
-            {/* userSpaceOnUse: a horizontal line has a zero-height bounding
-              box, so the default gradient units collapse it. */}
-            <linearGradient
-              id="anna-day-strip"
-              gradientUnits="userSpaceOnUse"
-              x1={0}
-              x2={TRACK_W}
-              y1={RAIL_Y}
-              y2={RAIL_Y}
-            >
-              <stop offset="0%" stopColor={BRAND.purple} stopOpacity="0.3" />
-              <stop offset="50%" stopColor={BRAND.purple} />
-              <stop offset="100%" stopColor={BRAND.blue} />
-            </linearGradient>
-          </defs>
-          <m.path
-            d={`M 24 ${RAIL_Y} L ${TRACK_W - 24} ${RAIL_Y}`}
-            stroke="url(#anna-day-strip)"
-            strokeWidth={2}
-            strokeLinecap="round"
-            fill="none"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1.2, ease: EASE_OUT, delay: 0.3 }}
-          />
-        </svg>
+        <MoA1Rail
+          width={TRACK_W - RAIL_PAD * 2}
+          stops={stops}
+          left={RAIL_PAD}
+          top={RAIL_Y}
+          delay={0.3}
+        />
       </Layer>
 
       {days.map((day, index) => (
         <m.div
           key={day}
-          className="absolute -translate-x-1/2 text-center text-sm text-white/40"
-          style={{ left: xFor(index, days.length), top: RAIL_Y + 20 }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          className="absolute"
+          style={{ left: xFor(index, days.length), top: RAIL_Y }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{
-            duration: 0.4,
-            ease: EASE_OUT,
-            delay: 0.6 + index * 0.08,
+            duration: DUR.base,
+            ease: EASE.out,
+            delay: 0.55 + index * 0.1,
           }}
         >
-          {day}
+          <span
+            aria-hidden
+            className="absolute -top-[5px] h-2.5 w-px -translate-x-1/2 bg-white/25"
+          />
+          <span className="absolute top-5 -translate-x-1/2 text-sm whitespace-nowrap text-white/40">
+            {day}
+          </span>
         </m.div>
       ))}
 
       {marks.map((mark) => (
-        <Marker key={mark.title} mark={mark} count={days.length} />
+        <Marker
+          key={mark.title}
+          mark={mark}
+          count={days.length}
+          liveStep={liveStep}
+        />
       ))}
     </div>
   );

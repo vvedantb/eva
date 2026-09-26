@@ -1,8 +1,7 @@
-import { AnimatePresence, m } from "motion/react";
-import type { Transition } from "motion/react";
+import { m } from "motion/react";
 import { cn } from "@eva/ui";
+import { Camera } from "../../_components/DeckCamera";
 import {
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -10,19 +9,18 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
+import { SETTLE } from "../../_components/motion";
 import { FriWindow } from "../_parts/FriMock";
-
-interface Bar {
-  label: string;
-  /** Left edge and length in track pixels, at each zoom level. */
-  month: { offset: number; width: number };
-  week: { offset: number; width: number };
-  /** How far along the work is, 0 to 1. */
-  done: number;
-}
+import {
+  MoF2Axis,
+  MoF2RoadmapRow,
+  MoF2Today,
+  MOF2_LABEL,
+} from "../_parts/MoF2Roadmap";
+import type { MoF2Bar } from "../_parts/MoF2Roadmap";
 
 /** Four jobs, top to bottom, in the order they run. */
-const BARS: readonly Bar[] = [
+const BARS: readonly MoF2Bar[] = [
   {
     label: "Referral portal",
     month: { offset: 0, width: 300 },
@@ -51,13 +49,8 @@ const BARS: readonly Bar[] = [
 
 const ZOOMS: readonly string[] = ["Quarter", "Month", "Week"];
 
-const TICKS: Record<"month" | "week", readonly string[]> = {
-  month: ["Jun", "Jul", "Aug", "Sep"],
-  week: ["W1", "W2", "W3", "W4", "W5", "W6"],
-};
-
-const TRACK = 780;
-const SETTLE: Transition = { type: "spring", bounce: 0, duration: 0.6 };
+/** The zoom is the step-2 move; the camera leans in with it. */
+const SHOTS = [{}, {}, { translateZ: 28, y: -4 }];
 
 function ZoomSwitch() {
   const active = useDeckStep() >= 2 ? "Week" : "Month";
@@ -69,13 +62,13 @@ function ZoomSwitch() {
           {zoom === active ? (
             <m.span
               layoutId="fri-zoom-active"
-              className="absolute inset-0 rounded-[8px] bg-white/[0.14]"
+              className="absolute inset-0 rounded-[8px] bg-white/[0.14] ring-1 ring-white/10"
               transition={SETTLE}
             />
           ) : null}
           <span
             className={cn(
-              "relative text-[11px]",
+              "relative text-[11px] transition-colors duration-300",
               zoom === active ? "text-white" : "text-white/40",
             )}
           >
@@ -83,75 +76,6 @@ function ZoomSwitch() {
           </span>
         </span>
       ))}
-    </div>
-  );
-}
-
-function RoadmapRow({ bar, index }: { bar: Bar; index: number }) {
-  const step = useDeckStep();
-  const filled = step >= 1;
-  const place = step >= 2 ? bar.week : bar.month;
-
-  return (
-    <div className="flex items-center gap-5">
-      <span className="w-[150px] shrink-0 truncate text-[13px] text-white/55">
-        {bar.label}
-      </span>
-      <div
-        className="relative h-9 overflow-hidden rounded-[12px] bg-white/[0.04]"
-        style={{ width: TRACK }}
-      >
-        <m.div
-          layout
-          className="absolute top-1.5 h-6 overflow-hidden rounded-[8px] bg-white/[0.07]"
-          style={{ left: place.offset, width: place.width }}
-          transition={SETTLE}
-        >
-          <m.div
-            className="h-full origin-left rounded-[8px] bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: filled ? bar.done : 0 }}
-            transition={{
-              type: "spring",
-              bounce: 0,
-              duration: 0.9,
-              delay: filled ? index * 0.1 : 0,
-            }}
-          />
-        </m.div>
-      </div>
-    </div>
-  );
-}
-
-function TickRow() {
-  const zoom = useDeckStep() >= 2 ? "week" : "month";
-
-  return (
-    <div className="flex items-center gap-5">
-      <span className="w-[150px] shrink-0" />
-      <div className="relative h-4" style={{ width: TRACK }}>
-        <AnimatePresence mode="wait" initial={false}>
-          <m.div
-            key={zoom}
-            className="flex"
-            initial={{ opacity: 0, filter: "blur(6px)" }}
-            animate={{ opacity: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: EASE_OUT }}
-          >
-            {TICKS[zoom].map((tick) => (
-              <span
-                key={tick}
-                className="text-[11px] text-white/35 tabular-nums"
-                style={{ width: TRACK / TICKS[zoom].length }}
-              >
-                {tick}
-              </span>
-            ))}
-          </m.div>
-        </AnimatePresence>
-      </div>
     </div>
   );
 }
@@ -164,19 +88,23 @@ export function FridayProjects() {
         <Title size="md">See the whole job at once.</Title>
       </Reveal>
 
-      <Reveal delay={0.1} className="mt-10">
-        <FriWindow
-          label="Referral portal"
-          className="h-[320px] w-full"
-          bodyClassName="flex flex-col gap-3 px-6 py-5"
-          trailing={<ZoomSwitch />}
-        >
-          <TickRow />
-          {BARS.map((bar, index) => (
-            <RoadmapRow key={bar.label} bar={bar} index={index} />
-          ))}
-        </FriWindow>
-      </Reveal>
+      <Camera shots={SHOTS} className="mt-10">
+        <Reveal delay={0.2} distance={28}>
+          <FriWindow
+            label="Referral portal"
+            className="h-[372px] w-full"
+            bodyClassName="relative flex flex-col gap-3 px-6 pt-5 pb-5"
+            trailing={<ZoomSwitch />}
+          >
+            <MoF2Axis />
+            <MoF2Today />
+            <div className="h-4 shrink-0" style={{ marginLeft: MOF2_LABEL }} />
+            {BARS.map((bar, index) => (
+              <MoF2RoadmapRow key={bar.label} bar={bar} index={index} />
+            ))}
+          </FriWindow>
+        </Reveal>
+      </Camera>
 
       <Footnote>
         The projects timeline became a roadmap with completion bars, zoom

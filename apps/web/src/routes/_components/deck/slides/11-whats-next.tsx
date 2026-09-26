@@ -1,10 +1,7 @@
-import { IconArrowRight } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { CountUp } from "../_components/CountUp";
 import {
   Body,
   Card,
-  EASE_OUT,
   Footnote,
   Kicker,
   Reveal,
@@ -12,6 +9,15 @@ import {
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
+import {
+  Connector,
+  CountRoll,
+  DUR,
+  EASE,
+  LEAVE,
+  Sheen,
+} from "../_components/motion";
+import { MoF3NextSteps } from "./_parts/MoF3NextSteps";
 
 const TOTAL = 141;
 
@@ -46,12 +52,75 @@ const sumPercent = (segments: readonly Segment[]) =>
 const REVIEW_LEFT = sumPercent(SEGMENTS.slice(0, REVIEW_INDEX));
 const REVIEW_WIDTH = sumPercent(SEGMENTS.slice(REVIEW_INDEX, REVIEW_INDEX + 1));
 
-const NEXT_STEPS: readonly string[] = [
-  "Model checks first",
-  "Ready means merged",
-  "Deploys itself",
-  "People sign off the risky part",
-];
+const BAR_COLUMN = 640;
+const GRID_GAP = 64;
+/** The bar's top edge inside the grid: number, label and margins above it. */
+const BAR_TOP = 140;
+const REVIEW_CENTRE = ((REVIEW_LEFT + REVIEW_WIDTH / 2) / 100) * BAR_COLUMN;
+/** Soft light under the review segment. A painted gradient, never a blur. */
+const REVIEW_GLOW =
+  "radial-gradient(closest-side, rgba(139,63,184,0.55), rgba(59,125,216,0.25) 55%, transparent)";
+
+function QueueBar({ focused }: { focused: boolean }) {
+  return (
+    <div className="relative mt-8">
+      <m.div
+        aria-hidden
+        className="pointer-events-none absolute -inset-y-10"
+        style={{
+          left: `${REVIEW_LEFT - 6}%`,
+          width: `${REVIEW_WIDTH + 12}%`,
+          background: REVIEW_GLOW,
+        }}
+        initial={{ opacity: 0 }}
+        animate={focused ? { opacity: [0.55, 1, 0.55] } : { opacity: 0 }}
+        transition={
+          focused
+            ? { duration: 2.4, repeat: Infinity, ease: "easeInOut", delay: 0.3 }
+            : LEAVE
+        }
+      />
+      <div className="relative flex h-12 overflow-hidden rounded-full">
+        {SEGMENTS.map((segment, index) => (
+          <m.div
+            key={segment.label}
+            className={`h-full origin-left ${segment.fill}`}
+            style={{ width: `${percent(segment.count)}%` }}
+            initial={{ scaleX: 0, opacity: 1 }}
+            animate={{
+              scaleX: 1,
+              opacity: focused && index !== REVIEW_INDEX ? 0.4 : 1,
+            }}
+            transition={{
+              scaleX: {
+                duration: DUR.slow,
+                ease: EASE.expo,
+                delay: 0.9 + index * 0.1,
+              },
+              opacity: { duration: DUR.slow, ease: EASE.out },
+            }}
+          />
+        ))}
+        <div
+          className="pointer-events-none absolute inset-y-0"
+          style={{ left: `${REVIEW_LEFT}%`, width: `${REVIEW_WIDTH}%` }}
+        >
+          <Sheen step={1} delay={0.2} className="size-full">
+            {/* The only segment worth naming, named where it sits. */}
+            <m.div
+              className="flex size-full items-center justify-center text-sm font-medium text-black/70 tabular-nums"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: DUR.base, ease: EASE.out, delay: 1.5 }}
+            >
+              In review · 43
+            </m.div>
+          </Sheen>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Slide11WhatsNext() {
   const step = useDeckStep();
@@ -66,109 +135,62 @@ export function Slide11WhatsNext() {
         </Body>
       </Reveal>
 
-      <div className="mt-14 grid grid-cols-[640px_1fr] gap-16">
+      <div
+        className="relative mt-14 grid"
+        style={{ gridTemplateColumns: `${BAR_COLUMN}px 1fr`, gap: GRID_GAP }}
+      >
         <div>
-          <CountUp
+          <CountRoll
             value={TOTAL}
-            className="text-7xl leading-none font-semibold tabular-nums"
+            delay={0.5}
+            duration={1.6}
+            className="text-7xl leading-none font-semibold"
           />
-          <div className="mt-3 text-base text-white/50">
+          <m.div
+            className="mt-3 text-base text-white/50"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.75 }}
+          >
             quick tasks on CarePulse since June
-          </div>
-
-          <div className="relative mt-8">
-            {step >= 1 ? (
-              <m.div
-                aria-hidden
-                className="pointer-events-none absolute -inset-y-5 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] blur-lg"
-                style={{
-                  left: `${REVIEW_LEFT}%`,
-                  width: `${REVIEW_WIDTH}%`,
-                }}
-                initial={{ opacity: 0.3 }}
-                animate={{ opacity: [0.3, 0.7, 0.3] }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
-            ) : null}
-
-            <div className="relative flex h-12 overflow-hidden rounded-full">
-              {SEGMENTS.map((segment, index) => (
-                <m.div
-                  key={segment.label}
-                  className={`h-full origin-left ${segment.fill}`}
-                  style={{ width: `${percent(segment.count)}%` }}
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{
-                    duration: 0.6,
-                    ease: EASE_OUT,
-                    delay: 0.3 + index * 0.12,
-                  }}
-                />
-              ))}
-
-              {/* The only segment worth naming, named where it sits. */}
-              <m.div
-                className="pointer-events-none absolute inset-y-0 flex items-center justify-center text-sm font-medium tabular-nums text-black/70"
-                style={{
-                  left: `${REVIEW_LEFT}%`,
-                  width: `${REVIEW_WIDTH}%`,
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.4, ease: EASE_OUT, delay: 1.1 }}
-              >
-                In review · 43
-              </m.div>
-            </div>
-          </div>
+          </m.div>
+          <QueueBar focused={step >= 1} />
         </div>
 
-        <Reveal step={1} from="right">
+        <Reveal step={1} from="right" delay={0.15} distance={40}>
           <Card>
-            <CountUp
+            <CountRoll
               value={43}
               step={1}
-              className="text-6xl leading-none font-semibold tabular-nums"
+              delay={0.35}
+              className="text-6xl leading-none font-semibold"
             />
             <div className="mt-4 text-lg leading-snug text-pretty text-white/75">
               finished bundles waiting for a human
             </div>
           </Card>
         </Reveal>
+
+        {/* The 43 in the bar and the 43 in the card are the same queue. */}
+        {/* Gated so the zero-length round cap never shows as a dot at rest. */}
+        <m.div
+          className="pointer-events-none absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: step >= 1 ? 1 : 0 }}
+          transition={{ duration: 0.01, delay: step >= 1 ? 0.3 : 0 }}
+        >
+          <Connector
+            from={{ x: REVIEW_CENTRE, y: BAR_TOP - 6 }}
+            to={{ x: BAR_COLUMN + GRID_GAP - 10, y: 74 }}
+            bend={-36}
+            step={1}
+            delay={0.3}
+            flowPeriod={1.3}
+          />
+        </m.div>
       </div>
 
-      <div className="mt-20 flex items-center gap-3">
-        {NEXT_STEPS.map((label, index) => (
-          <m.div
-            key={label}
-            className="flex items-center gap-3"
-            initial={{ opacity: 0, y: 14, scale: 0.94 }}
-            animate={
-              step >= 2
-                ? { opacity: 1, y: 0, scale: 1 }
-                : { opacity: 0, y: 14, scale: 0.94 }
-            }
-            transition={{
-              type: "spring",
-              bounce: 0,
-              duration: 0.55,
-              delay: step >= 2 ? index * 0.08 : 0,
-            }}
-          >
-            {index > 0 ? (
-              <IconArrowRight size={18} className="text-white/35" aria-hidden />
-            ) : null}
-            <span className="rounded-full bg-white/[0.07] px-5 py-2.5 text-base text-white/80">
-              {label}
-            </span>
-          </m.div>
-        ))}
-      </div>
+      <MoF3NextSteps shown={step >= 2} />
 
       <Footnote>
         Counts are CarePulse quick tasks created in Eva between 1 June and 10
