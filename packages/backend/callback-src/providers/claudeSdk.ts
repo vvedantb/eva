@@ -256,15 +256,19 @@ export async function loadSdk(): Promise<SdkModule> {
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
 
 /**
- * Version of a globally installed CLI package, from the first candidate root
- * that carries it at all (see `globalNpmRoots`), or null when no root has it.
+ * Version of the package behind an npm-installed `<prefix>/bin/<bin>` link, or
+ * null when the binary is not laid out that way (e.g. a native install).
+ *
+ * Read from the binary's own prefix rather than from whichever global root has
+ * the package: a `claude update` run in the terminal puts a newer copy in the
+ * user's npm prefix, which sits behind the image's copy on PATH. Probing roots
+ * found that newer copy, reported the pin as present and returned `command -v
+ * claude` — the image's stale 2.1.258 — so the agent stayed on it for good.
  */
-function globalCliVersion(packageName: string): string | null {
-  for (const root of globalNpmRoots()) {
-    const version = installedPackageVersion(root + "/" + packageName);
-    if (version !== null) return version;
-  }
-  return null;
+function binPackageVersion(binPath: string, packageName: string): string | null {
+  return installedPackageVersion(
+    dirname(dirname(binPath)) + "/lib/node_modules/" + packageName,
+  );
 }
 
 /**
@@ -279,11 +283,10 @@ function globalCliVersion(packageName: string): string | null {
  * without a reply"). Both roots are checked by manifest, like
  * resolvePinnedSdkEntry, so a stale fallback never wins either.
  *
- * The global check reads the manifest from every candidate root rather than
- * `npm root -g` alone, because the seed's `sudo npm install -g` writes to node's
- * prefix while this process runs as an unprivileged user with a per-user npm
- * prefix — every fresh sandbox used to log the seeded, correctly pinned CLI as
- * "cli version drift: global claude is unknown".
+ * The global check reads the manifest of the exact binary `command -v` returns
+ * (see `binPackageVersion`), mirroring the install guard in launch.ts — the two
+ * must agree on which copy counts, or launch skips the fallback install while
+ * this falls back to a stale global.
  *
  * Shared by the Claude and Codex loaders: both are an SDK compiled into this
  * bundle spawning a separately installed binary, and both float that binary to
@@ -305,7 +308,7 @@ export function resolvePinnedCliBinary(cli: {
     globalBin = "";
   }
   if (globalBin) {
-    const globalVersion = globalCliVersion(cli.packageName);
+    const globalVersion = binPackageVersion(globalBin, cli.packageName);
     if (pinned === null || globalVersion === pinned) return globalBin;
     log(
       "cli version drift: global " +
@@ -318,12 +321,10 @@ export function resolvePinnedCliBinary(cli: {
     );
   }
   if (cli.fallbackBinPath && existsSync(cli.fallbackBinPath)) {
-    // `<prefix>/bin/<bin>` → `<prefix>/lib/node_modules/<package>`.
-    const fallbackRoot =
-      dirname(dirname(cli.fallbackBinPath)) +
-      "/lib/node_modules/" +
-      cli.packageName;
-    const fallbackVersion = installedPackageVersion(fallbackRoot);
+    const fallbackVersion = binPackageVersion(
+      cli.fallbackBinPath,
+      cli.packageName,
+    );
     if (pinned === null || fallbackVersion === pinned) {
       return cli.fallbackBinPath;
     }
