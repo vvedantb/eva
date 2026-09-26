@@ -44,3 +44,14 @@ describe("rankEmoji", () => {
     expect(rankEmoji(probabilities)).toHaveLength(MAX_EMOJI_SUGGESTIONS);
   });
 });
+
+describe("rankEmoji with a custom floor", () => {
+  it("drops picks under the caller's floor", () => {
+    expect(
+      rankEmoji(
+        { "thumbs up, approve, agree, lgtm": 0.4, "plus, add, +1": 0.05 },
+        0.1,
+      ),
+    ).toEqual(["👍"]);
+  });
+});

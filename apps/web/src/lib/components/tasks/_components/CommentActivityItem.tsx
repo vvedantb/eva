@@ -187,7 +187,11 @@ export function CommentActivityItem({
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {!isEditing && !isDeleted ? (
-            <EmojiReactionPicker onSelect={toggle} variant="ghost" />
+            <EmojiReactionPicker
+              onSelect={toggle}
+              variant="ghost"
+              hoverSuggestFor={mentionTokensToEditableText(comment.content)}
+            />
           ) : null}
           {canManage && !isEditing ? (
             <DropdownMenu>

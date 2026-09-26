@@ -8,6 +8,8 @@
 
 /** Search box text cap — a query, not a message. */
 export const MAX_EMOJI_QUERY_CHARS = 200;
+/** Comment text cap — the gist is in the opening; Jev does not need an essay. */
+export const MAX_EMOJI_COMMENT_CHARS = 2000;
 /** How many emoji the action returns; matches the picker's quick-react row. */
 export const MAX_EMOJI_SUGGESTIONS = 6;
 /**
@@ -15,6 +17,12 @@ export const MAX_EMOJI_SUGGESTIONS = 6;
  * genuine match can sit well under 10%. This only drops the long tail.
  */
 export const MIN_EMOJI_PROBABILITY = 0.02;
+/**
+ * Comments have no query to anchor Jev, so its weaker picks illustrate words
+ * ("add" → ➕) rather than react; only confident picks survive, and the
+ * client pads the strip with the quick reactions.
+ */
+export const MIN_COMMENT_EMOJI_PROBABILITY = 0.1;
 
 /**
  * The reactions Jev chooses between, keyed by a plain-English name. Jev
@@ -218,10 +226,13 @@ const emojiByName = new Map(
  * Turns Jev's per-option probabilities back into emoji, best first. Options
  * Jev invented and the long tail are dropped rather than ranked.
  */
-export function rankEmoji(probabilities: Record<string, number>): string[] {
+export function rankEmoji(
+  probabilities: Record<string, number>,
+  minProbability = MIN_EMOJI_PROBABILITY,
+): string[] {
   const ranked: { emoji: string; probability: number }[] = [];
   for (const [name, probability] of Object.entries(probabilities)) {
-    if (probability < MIN_EMOJI_PROBABILITY) continue;
+    if (probability < minProbability) continue;
     const emoji = emojiByName.get(name.trim().toLowerCase());
     if (emoji === undefined) continue;
     ranked.push({ emoji, probability });
