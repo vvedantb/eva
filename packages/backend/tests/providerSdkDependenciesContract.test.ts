@@ -147,7 +147,7 @@ test("the CLI floor is never older than the agent SDK's own build", () => {
   // No unpinned install survives anywhere. The launch install interpolates the
   // version resolved for *this* launch — never a bare package or a literal
   // `@latest`, which would leave the guards below nothing to compare against.
-  expect(launchRuntime).toContain("@anthropic-ai/claude-code@${version}");
+  expect(launchRuntime).toContain("${cli.packageName}@${cli.version}");
   expect(snapshotActions).not.toMatch(/@anthropic-ai\/claude-code(?![@"])/);
   expect(launchRuntime).not.toMatch(/@anthropic-ai\/claude-code(?![@"])/);
   expect(launchRuntime).not.toContain("claude-code@latest");
@@ -160,6 +160,15 @@ test("the launch-resolved CLI version reaches both the install and the callback"
   // global (session 62, 2026-09-02: a 14 Aug snapshot's 2.1.232 failed every
   // Fable 5.1 turn while the guard only fired when `claude` was missing).
   expect(launchRuntime).toContain("cli_version()");
+  // Launch and callback judge the same copy: the one `command -v` finds. A
+  // `claude update` copy in the user's npm prefix, behind the image's stale
+  // CLI on PATH, used to skip the install while the callback ran the stale one.
+  expect(launchRuntime).toContain("function pinnedCliInstallCommand(");
+  expect(launchRuntime).toContain('bin_path="$(command -v');
+  expect(launchRuntime).not.toContain("npm root -g)/");
+  expect(claudeLoader).toContain(
+    "const globalVersion = binPackageVersion(globalBin, cli.packageName);",
+  );
 
   // One resolver call feeds the install and the env var, so the callback can
   // never be told to expect a version this launch did not install.
@@ -228,7 +237,7 @@ test("the Codex CLI floor is pinned, guarded in the seed, and floated at launch"
     'globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)',
   );
   expect(snapshotActions).toContain("@openai/codex@${CODEX_CLI_VERSION}");
-  expect(launchRuntime).toContain("@openai/codex@${version}");
+  expect(launchRuntime).toContain("packageName: CODEX_CLI_PACKAGE,");
   // No unpinned or hardcoded install survives.
   expect(snapshotActions).not.toMatch(/@openai\/codex@0\./);
   expect(launchRuntime).not.toMatch(/@openai\/codex@0\./);
