@@ -1,12 +1,53 @@
 "use client";
 
 import { useState } from "react";
+import { useAction } from "convex/react";
 import { EmojiPicker } from "frimousse";
+import { api } from "@eva/backend";
 import { Popover, PopoverContent, PopoverTrigger, cn } from "@eva/ui";
 import { IconMoodSmile } from "@tabler/icons-react";
+import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
 
 // Fast-path reactions shown above the full searchable grid.
 const QUICK_REACTIONS = ["👍", "❤️", "🎉", "😄", "🚀", "👀"];
+
+/** How long the search box must sit still before Eva asks Jev about it. */
+const SUGGEST_IDLE_MS = 400;
+/** One letter matches everything; Jev needs a word to read intent from. */
+const SUGGEST_MIN_CHARS = 2;
+
+/**
+ * Jev's picks for the search box. frimousse only matches emoji keywords, so
+ * "ship it" or "nice work" find nothing; Jev reads what the user meant. Picks
+ * are keyed by the query they answer, so they vanish as soon as it changes
+ * rather than lingering against text the user has since rewritten.
+ */
+function useEmojiSuggestions(): {
+  search: string;
+  setSearch: (value: string) => void;
+  suggestions: string[];
+} {
+  const suggest = useAction(api.emojiSuggestions.suggest);
+  const [search, setSearchValue] = useState("");
+  const [answered, setAnswered] = useState<{
+    query: string;
+    emoji: string[];
+  } | null>(null);
+  const schedule = useIdleCallback(SUGGEST_IDLE_MS, (query: string) => {
+    void suggest({ query })
+      .then((emoji) => setAnswered({ query, emoji }))
+      // Background hint: a failed evaluation just leaves the quick row.
+      .catch(() => {});
+  });
+  const setSearch = (value: string) => {
+    setSearchValue(value);
+    const query = value.trim();
+    if (query.length >= SUGGEST_MIN_CHARS) schedule(query);
+  };
+  const query = search.trim();
+  const suggestions = answered?.query === query ? answered.emoji : [];
+  return { search, setSearch, suggestions };
+}
 
 interface EmojiReactionPickerProps {
   onSelect: (emoji: string) => void;
@@ -29,10 +70,19 @@ export function EmojiReactionPicker({
   variant = "pill",
 }: EmojiReactionPickerProps) {
   const [open, setOpen] = useState(false);
+  const { search, setSearch, suggestions } = useEmojiSuggestions();
+  // Jev's picks take the quick row's place while they answer the search.
+  const rowEmoji = suggestions.length > 0 ? suggestions : QUICK_REACTIONS;
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    // The picker unmounts on close; a reopened one starts with an empty box.
+    if (!next) setSearch("");
+  };
 
   const choose = (emoji: string) => {
     onSelect(emoji);
-    setOpen(false);
+    handleOpenChange(false);
   };
 
   // Sizes grow to the 40px tap floor below `sm` instead of taking `hit-target`:
@@ -49,7 +99,7 @@ export function EmojiReactionPicker({
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -60,8 +110,14 @@ export function EmojiReactionPicker({
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-fit overflow-hidden p-0">
-        <div className="flex items-center gap-0.5 border-b border-border p-1.5">
-          {QUICK_REACTIONS.map((emoji) => (
+        <div
+          role="group"
+          aria-label={
+            suggestions.length > 0 ? "Suggested by Jev" : "Quick reactions"
+          }
+          className="flex items-center gap-0.5 border-b border-border p-1.5"
+        >
+          {rowEmoji.map((emoji) => (
             <button
               key={emoji}
               type="button"
@@ -77,7 +133,11 @@ export function EmojiReactionPicker({
           onEmojiSelect={({ emoji }) => choose(emoji)}
           className="isolate flex h-75 w-72 flex-col bg-popover/95 text-popover-foreground backdrop-blur-md"
         >
-          <EmojiPicker.Search className="z-10 mx-2 mt-2 appearance-none rounded-control border border-input bg-popover px-2.5 py-2 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45" />
+          <EmojiPicker.Search
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="z-10 mx-2 mt-2 appearance-none rounded-control border border-input bg-popover px-2.5 py-2 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45"
+          />
           <EmojiPicker.Viewport className="relative flex-1 outline-hidden">
             <EmojiPicker.Loading className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
               Loading…
