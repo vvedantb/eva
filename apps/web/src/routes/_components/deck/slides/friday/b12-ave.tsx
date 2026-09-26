@@ -54,7 +54,7 @@ export function FridayAve() {
 
   return (
     <Shell className="py-12">
-      <Kicker>Manager Ave</Kicker>
+      <Kicker>On its own · Manager Ave</Kicker>
       <Title size="md">
         One chat that <Accent>runs the others</Accent>.
       </Title>

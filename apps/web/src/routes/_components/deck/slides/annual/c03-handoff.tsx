@@ -76,7 +76,7 @@ export function AnnualHandoff() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Handoff</Kicker>
+        <Kicker>Platform · Handoff</Kicker>
         <Title size="md">Change your mind mid-job.</Title>
       </Reveal>
 

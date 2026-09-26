@@ -114,7 +114,7 @@ export function FridayReviews() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Reviews</Kicker>
+        <Kicker>Trust and reach · Reviewing</Kicker>
         <Title size="md">Review it without leaving.</Title>
       </Reveal>
 

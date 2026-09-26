@@ -29,7 +29,7 @@ export function AnnualQ1() {
   return (
     <Shell className="py-14">
       <Reveal from="none">
-        <Kicker>Chapter one</Kicker>
+        <Kicker>Origin · Chapter one</Kicker>
       </Reveal>
       <Reveal delay={0.1}>
         <Title size="md">Build the surface.</Title>

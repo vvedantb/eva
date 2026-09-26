@@ -81,9 +81,9 @@ export function AnnualImpact() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Impact</Kicker>
+        <Kicker>In use · Impact</Kicker>
         <Title size="md" className="text-balance">
-          What it changed.
+          Not faster typing. A different job.
         </Title>
       </Reveal>
 

@@ -28,7 +28,7 @@ export function AnnualRename() {
   return (
     <Shell center className="py-14">
       <Reveal from="none">
-        <Kicker>The name</Kicker>
+        <Kicker>Origin · The name</Kicker>
       </Reveal>
 
       <div className="flex h-40 items-center">

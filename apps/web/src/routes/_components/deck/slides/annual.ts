@@ -41,14 +41,19 @@ import { AnnualLessons } from "./annual/d07-lessons";
 import { AnnualDurable } from "./annual/d08-durable";
 
 /**
- * Annual CDM deck order — Eva's whole life and its impact. Five movements:
- * the origin story, who used it and what it changed, how the platform is
- * built, the craft behind it, then the framework it is all evidence for.
- * The index here is the slide number minus one.
+ * Annual CDM deck order: Eva's story and the evidence for it. Five acts, then
+ * the close: origin, in use, the platform, craft, people, then the year ahead,
+ * the framework map and the last word. Kickers carry the act name so the room
+ * always knows where it is. The index here is the slide number minus one.
  */
 export const ANNUAL_SLIDES: DeckSlide[] = [
-  // ── Movement one: the origin story ──────────────────────────────────
-  { id: "a01-title", title: "Title", Component: AnnualTitle, steps: 0 },
+  // ── Act one: origin. Day one, the shape of the year, three chapters, recap ──
+  {
+    id: "a01-title",
+    title: "A year of building Eva",
+    Component: AnnualTitle,
+    steps: 0,
+  },
   {
     id: "annual-b01-day-one",
     title: "Day one",
@@ -61,18 +66,28 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualFirstWeek,
     steps: 2,
   },
-  { id: "annual-b03-q1", title: "Chapter one", Component: AnnualQ1, steps: 3 },
+  {
+    id: "annual-b07-volume",
+    title: "The shape of the year",
+    Component: AnnualVolume,
+    steps: 2,
+  },
+  {
+    id: "annual-b03-q1",
+    title: "Chapter one: build the surface",
+    Component: AnnualQ1,
+    steps: 3,
+  },
   {
     id: "annual-b04-load",
-    title: "Make it load",
+    title: "Then make it load",
     Component: AnnualLoad,
     steps: 2,
   },
-  { id: "annual-b05-q2", title: "Chapter two", Component: AnnualQ2, steps: 3 },
   {
-    id: "annual-b06-q3",
-    title: "Chapter three",
-    Component: AnnualQ3,
+    id: "annual-b05-q2",
+    title: "Chapter two: work together",
+    Component: AnnualQ2,
     steps: 3,
   },
   {
@@ -82,22 +97,21 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
-    id: "a02-origin",
-    title: "Where it started",
-    Component: AnnualOrigin,
+    id: "annual-b06-q3",
+    title: "Chapter three: make it dependable",
+    Component: AnnualQ3,
     steps: 3,
   },
   {
-    id: "annual-b07-volume",
-    title: "Shape of the year",
-    Component: AnnualVolume,
-    steps: 2,
+    id: "a02-origin",
+    title: "The story so far",
+    Component: AnnualOrigin,
+    steps: 3,
   },
-
-  // ── Movement two: who used it, and what it changed ──────────────────
+  // ── Act two: in use. Scale, adoption, the team, impact, the loop ──
   {
     id: "a03-numbers",
-    title: "The year in numbers",
+    title: "What eight months produced",
     Component: AnnualNumbers,
     steps: 1,
   },
@@ -107,14 +121,23 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualAdoption,
     steps: 2,
   },
-  { id: "09-team", title: "The team", Component: Slide09Team, steps: 4 },
-  { id: "a06-impact", title: "Impact", Component: AnnualImpact, steps: 3 },
+  {
+    id: "09-team",
+    title: "Built by the team",
+    Component: Slide09Team,
+    steps: 4,
+  },
+  {
+    id: "a06-impact",
+    title: "What it changed",
+    Component: AnnualImpact,
+    steps: 3,
+  },
   { id: "a07-how", title: "How it works", Component: AnnualHow, steps: 2 },
-
-  // ── Movement three: how the platform is built ───────────────────────
+  // ── Act three: the platform. How it is built, secured and paid for ──
   {
     id: "annual-c01-providers",
-    title: "Not one supplier",
+    title: "Not tied to one supplier",
     Component: AnnualProviders,
     steps: 2,
   },
@@ -126,7 +149,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
   },
   {
     id: "annual-c03-handoff",
-    title: "Change your mind",
+    title: "Change your mind mid-job",
     Component: AnnualHandoff,
     steps: 1,
   },
@@ -138,35 +161,39 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
   },
   {
     id: "annual-c05-mcp",
-    title: "A control panel",
+    title: "Other tools can drive Eva",
     Component: AnnualMcp,
     steps: 3,
   },
   {
     id: "annual-c06-mcp-security",
-    title: "Locked down",
+    title: "Locked down by design",
     Component: AnnualMcpSecurity,
     steps: 2,
   },
   {
     id: "annual-c07-sandbox-economics",
-    title: "What a workspace costs",
+    title: "Workspaces clean up",
     Component: AnnualSandboxEconomics,
     steps: 3,
   },
-
-  // ── Movement four: the craft behind it ──────────────────────────────
-  { id: "a09-design", title: "Design", Component: AnnualDesign, steps: 3 },
+  // ── Act four: craft. Design, debugging, reliability, security, measurement, standards ──
   {
-    id: "annual-c08-occ",
-    title: "Fighting itself",
-    Component: AnnualOcc,
+    id: "a09-design",
+    title: "Decided on paper first",
+    Component: AnnualDesign,
     steps: 3,
   },
   {
     id: "a10-debugging",
-    title: "Debugging",
+    title: "Symptom, cause, then a test",
     Component: AnnualDebugging,
+    steps: 3,
+  },
+  {
+    id: "annual-c08-occ",
+    title: "The database was fighting itself",
+    Component: AnnualOcc,
     steps: 3,
   },
   {
@@ -177,14 +204,19 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
   },
   {
     id: "annual-d01-security",
-    title: "Locking the doors",
+    title: "One guard on every door",
     Component: AnnualSecurity,
     steps: 3,
   },
-  { id: "a11-craft", title: "Beyond code", Component: AnnualCraft, steps: 2 },
+  {
+    id: "a11-craft",
+    title: "Measure it, do not guess",
+    Component: AnnualCraft,
+    steps: 2,
+  },
   {
     id: "annual-d04-frontend-perf",
-    title: "Quick to open",
+    title: "Three waits, measured and cut",
     Component: AnnualFrontendPerf,
     steps: 3,
   },
@@ -196,54 +228,64 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
   },
   {
     id: "annual-d03-motion",
-    title: "How it moves",
+    title: "One set of rules for motion",
     Component: AnnualMotion,
     steps: 2,
   },
-  { id: "a12-quality", title: "Quality", Component: AnnualQuality, steps: 2 },
+  {
+    id: "a12-quality",
+    title: "The bar is enforced",
+    Component: AnnualQuality,
+    steps: 2,
+  },
   {
     id: "annual-d05-scale",
-    title: "How big it is",
+    title: "A product, not a prototype",
     Component: AnnualScale,
     steps: 2,
   },
   {
     id: "annual-d06-abandoned",
-    title: "Things we stopped",
+    title: "Knowing what to stop",
     Component: AnnualAbandoned,
     steps: 3,
   },
-
-  // ── Movement five: the people, the lessons, the framework ───────────
+  // ── Act five: people. Colleagues, users, lessons ──
   {
     id: "a13-people",
-    title: "Working with others",
+    title: "Their problems set the agenda",
     Component: AnnualPeople,
     steps: 3,
   },
   {
-    id: "annual-d07-lessons",
-    title: "What we learned",
-    Component: AnnualLessons,
-    steps: 2,
-  },
-  {
     id: "a14-users",
-    title: "The people using it",
+    title: "Built for who uses it",
     Component: AnnualUsers,
     steps: 2,
   },
   {
+    id: "annual-d07-lessons",
+    title: "Two lessons, one direction",
+    Component: AnnualLessons,
+    steps: 2,
+  },
+  // ── Close: the year ahead, the framework map, the last word ──
+  {
     id: "a08-ahead",
-    title: "The year ahead",
+    title: "The bottleneck has moved",
     Component: AnnualAhead,
     steps: 2,
   },
   {
     id: "a15-framework",
-    title: "Against the framework",
+    title: "Senior engineer, mapped",
     Component: AnnualFramework,
     steps: 3,
   },
-  { id: "15-closing", title: "Closing", Component: Slide15Closing, steps: 0 },
+  {
+    id: "15-closing",
+    title: "Built in Eva, by Eva",
+    Component: Slide15Closing,
+    steps: 0,
+  },
 ];

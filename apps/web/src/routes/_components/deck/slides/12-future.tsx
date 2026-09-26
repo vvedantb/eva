@@ -56,7 +56,7 @@ export function Slide12Future() {
       <div className="grid min-h-0 flex-1 grid-cols-[532px_1fr] gap-4 pb-8">
         <div>
           <Reveal>
-            <Kicker>Where this is heading</Kicker>
+            <Kicker>What&apos;s next · Direction</Kicker>
           </Reveal>
           <BlurWordsTitle size="lg" lines={["Manage agents,", "not tasks."]} />
           <Reveal delay={0.6}>

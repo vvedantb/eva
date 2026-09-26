@@ -132,7 +132,7 @@ export function AnnualDurable() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Reliability</Kicker>
+        <Kicker>Craft · Reliability</Kicker>
         <Title size="md">Finishing what it starts.</Title>
       </Reveal>
 

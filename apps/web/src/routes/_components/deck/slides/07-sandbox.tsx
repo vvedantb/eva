@@ -30,12 +30,12 @@ export function Slide07Sandbox() {
 
   return (
     <Shell className="py-14">
-      <Kicker>Vercel Sandbox</Kicker>
+      <Kicker>Three months · Workspaces</Kicker>
       <Title size="md">
         From forty seconds to <Accent>under one</Accent>.
       </Title>
       <Body className="mt-4 max-w-4xl">
-        Every session runs in its own cloud workspace. Starting one used to be a
+        Every job gets its own cloud workspace. Starting one used to take a
         coffee break.
       </Body>
 

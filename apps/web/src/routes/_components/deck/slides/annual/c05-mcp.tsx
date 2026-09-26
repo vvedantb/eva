@@ -91,8 +91,8 @@ export function AnnualMcp() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>Interfaces</Kicker>
-        <Title size="md">Eva as a control panel.</Title>
+        <Kicker>Platform · Control panel</Kicker>
+        <Title size="md">Other tools can drive Eva.</Title>
       </Reveal>
 
       <div className="relative mt-4 h-[500px]">

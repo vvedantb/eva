@@ -25,7 +25,7 @@ export function AnnualDayOne() {
   return (
     <Shell className="justify-center py-16">
       <Reveal from="none">
-        <Kicker>Day one</Kicker>
+        <Kicker>Origin · Day one</Kicker>
       </Reveal>
       <Reveal delay={0.1}>
         <Title size="xl">11 January 2026</Title>
@@ -51,8 +51,8 @@ export function AnnualDayOne() {
 
       <Reveal step={2} delay={0.15} className="mt-12">
         <p className="max-w-3xl text-3xl leading-snug text-balance text-white/85">
-          The foundation it still runs on was{" "}
-          <Accent>chosen on day one</Accent>.
+          The foundation it still runs on was <Accent>chosen on day one</Accent>
+          .
         </p>
       </Reveal>
 

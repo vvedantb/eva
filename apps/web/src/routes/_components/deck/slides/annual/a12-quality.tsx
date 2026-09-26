@@ -23,7 +23,7 @@ interface Stat {
 const STATS: readonly Stat[] = [
   { value: 303, label: "tests", delay: 0.5, accent: true },
   { value: 79, label: "contract tests", delay: 0.65 },
-  { value: 46, label: "test backfills", delay: 0.8 },
+  { value: 46, label: "nightly test backfills", delay: 0.8 },
   { value: 4, label: "custom rules", delay: 0.95 },
 ];
 
@@ -43,7 +43,7 @@ export function AnnualQuality() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Quality</Kicker>
+        <Kicker>Craft · Quality</Kicker>
         <Title size="md">The bar is enforced, not remembered.</Title>
       </Reveal>
 

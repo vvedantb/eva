@@ -20,8 +20,8 @@ export function AnnualMotion() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Motion</Kicker>
-        <Title size="md">How it moves.</Title>
+        <Kicker>Craft · Motion</Kicker>
+        <Title size="md">One set of rules for motion.</Title>
       </Reveal>
 
       <Stagger

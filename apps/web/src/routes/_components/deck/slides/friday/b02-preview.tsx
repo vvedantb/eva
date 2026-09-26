@@ -207,10 +207,10 @@ export function FridayPreview() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Live preview</Kicker>
+        <Kicker>Using Eva · Preview</Kicker>
         <Title size="md">See it before it is real.</Title>
         <Body className="mt-5 max-w-3xl">
-          Click through a change before anyone merges it.
+          Click through a change before anyone agrees to it.
         </Body>
       </Reveal>
 

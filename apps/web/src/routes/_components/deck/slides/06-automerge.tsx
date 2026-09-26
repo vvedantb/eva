@@ -38,10 +38,10 @@ export function Slide06Automerge() {
 
   return (
     <Shell className="py-14">
-      <Kicker>Grok bot automations</Kicker>
+      <Kicker>On its own · Auto-merge</Kicker>
       <Title size="md">Changes that ship themselves.</Title>
       <Body className="mt-4 max-w-3xl">
-        One click from a person. Everything after that is automatic.
+        One click from you. The rest is automatic.
       </Body>
 
       <div className="mt-10 flex items-stretch">

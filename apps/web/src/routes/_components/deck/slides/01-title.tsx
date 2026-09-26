@@ -24,7 +24,7 @@ export function Slide01Title() {
 
       <Reveal delay={1.4}>
         <Body className="text-white/55">
-          What changed between June and September 2026.
+          What changed this summer, and what it means for you.
         </Body>
       </Reveal>
     </Shell>

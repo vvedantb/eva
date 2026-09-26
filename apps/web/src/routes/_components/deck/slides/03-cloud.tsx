@@ -47,7 +47,7 @@ export function Slide03Cloud() {
       <div className="grid grid-cols-[480px_560px] items-center gap-10">
         <div>
           <Reveal>
-            <Kicker>Where the work happens</Kicker>
+            <Kicker>Three months · The cloud</Kicker>
             <Title size="md">Nothing was built on a laptop.</Title>
             <Body className="text-lg">
               Written, tested and shipped from a browser tab.

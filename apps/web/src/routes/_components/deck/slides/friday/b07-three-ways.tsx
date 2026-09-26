@@ -99,7 +99,7 @@ export function FridayThreeWays() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Ways to ask</Kicker>
+        <Kicker>Using Eva · Three sizes</Kicker>
         <Title size="md">Three sizes of ask.</Title>
       </Reveal>
 
@@ -111,7 +111,7 @@ export function FridayThreeWays() {
 
       <Reveal step={3} className="mt-10">
         <p className="text-3xl text-pretty text-white/85">
-          Same engine. <Accent>Different size of job.</Accent>
+          Pick by the job, <Accent>not by the person.</Accent>
         </p>
       </Reveal>
     </Shell>

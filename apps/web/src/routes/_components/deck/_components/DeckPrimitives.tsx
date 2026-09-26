@@ -1,41 +1,30 @@
-import { createContext, use } from "react";
+import { Children, isValidElement } from "react";
 import type { ReactNode } from "react";
 import { m } from "motion/react";
+import type { TargetAndTransition, Transition } from "motion/react";
 import { cn } from "@eva/ui";
+import { MotionCueContext, useDeckStep } from "./deckContext";
+import { Kicker, Title } from "./DeckText";
+import { MaskedText } from "./motion/MaskedText";
+import { DUR, EASE } from "./motion/tokens";
 
-/**
- * The current build step of the active slide. 0 = the slide's resting state,
- * before the presenter has clicked. `Deck` provides it; the default of 0
- * means a slide rendered on its own still shows its step-0 content.
+/*
+ * The slide vocabulary. Contexts, tokens and the self-animating type
+ * primitives live in their own files; they are re-exported here so every slide
+ * keeps a single import.
  */
-export const DeckStepContext = createContext<number>(0);
-
-export function useDeckStep(): number {
-  return use(DeckStepContext);
-}
-
-/** Light or dark slides sit in the same deck. */
-export type DeckTheme = "dark" | "light";
-
-/**
- * The surface the active slide is painted on. `Deck`, `PresenterView` and the
- * index page's preview boxes all provide it, so a slide picks its own text
- * colours from here rather than assuming the deck is dark.
- */
-export const DeckThemeContext = createContext<DeckTheme>("dark");
-
-export function useDeckTheme(): DeckTheme {
-  return use(DeckThemeContext);
-}
-
-/** Decelerating curve, no overshoot — the deck uses this everywhere. */
-export const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
-
-/** Eva's two brand colours. The deck's gradients and orbs are built from these. */
-export const BRAND: { readonly purple: string; readonly blue: string } = {
-  purple: "#8B3FB8",
-  blue: "#3B7DD8",
-};
+export {
+  DeckStepContext,
+  DeckThemeContext,
+  useDeckStep,
+  useDeckTheme,
+  useMotionCue,
+} from "./deckContext";
+export type { DeckTheme } from "./deckContext";
+export { BRAND, EASE_OUT } from "./motion/tokens";
+export { Accent } from "./DeckAccent";
+export { Kicker, Title } from "./DeckText";
+export { Card } from "./DeckSurface";
 
 type RevealFrom = "up" | "down" | "left" | "right" | "none";
 
@@ -54,6 +43,60 @@ function offset(from: RevealFrom, distance: number): { x: number; y: number } {
   }
 }
 
+const TEXT_TAGS = new Set(["p", "span", "strong", "em", "h1", "h2", "h3"]);
+
+/**
+ * True when every child is a line of text. Blur reads as focus pulling on a
+ * sentence, but on a chart or a panel it is a full-layer filter every frame,
+ * so only text-sized reveals get it.
+ */
+function isTextual(children: ReactNode): boolean {
+  return Children.toArray(children).every(
+    (child) =>
+      typeof child === "string" ||
+      typeof child === "number" ||
+      (isValidElement(child) &&
+        ((typeof child.type === "string" && TEXT_TAGS.has(child.type)) ||
+          child.type === Body)),
+  );
+}
+
+/** Titles and kickers bring their own entrance; a reveal around them only times it. */
+function isSelfAnimating(children: ReactNode): boolean {
+  return Children.toArray(children).every(
+    (child) =>
+      isValidElement(child) &&
+      (child.type === Title ||
+        child.type === Kicker ||
+        child.type === MaskedText),
+  );
+}
+
+/** Soft rise: the fade finishes early, the travel decelerates long after. */
+const RISE: Transition = {
+  duration: DUR.hero,
+  ease: EASE.expo,
+  opacity: { duration: DUR.slow, ease: EASE.out },
+};
+const TEXT_BLUR = "blur(4px)";
+
+function risePair(
+  x: number,
+  y: number,
+  blur: boolean,
+): { hidden: TargetAndTransition; shown: TargetAndTransition } {
+  return {
+    hidden: { opacity: 0, x, y, ...(blur && { filter: TEXT_BLUR }) },
+    shown: {
+      opacity: 1,
+      x: 0,
+      y: 0,
+      // A resting `blur(0px)` would still flatten 3D and make a layer.
+      ...(blur && { filter: "blur(0px)", transitionEnd: { filter: "none" } }),
+    },
+  };
+}
+
 interface RevealProps {
   children: ReactNode;
   step?: number;
@@ -61,12 +104,14 @@ interface RevealProps {
   className?: string;
   from?: RevealFrom;
   distance?: number;
+  /** Defaults to a 4px focus-pull on text-only children, none on anything else. */
   blur?: boolean;
 }
 
 /**
- * Fades and slides its children in once the deck reaches `step`. Children are
- * never unmounted, so measured layout stays stable across the build.
+ * Fades and rises its children in once the deck reaches `step`. Children are
+ * never unmounted, so measured layout stays stable across the build. Wrapping
+ * only a `Title`/`Kicker`, it leaves the motion to them and just times it.
  */
 export function Reveal({
   children,
@@ -75,26 +120,30 @@ export function Reveal({
   className,
   from = "up",
   distance = 16,
-  blur = true,
+  blur,
 }: RevealProps) {
   const visible = useDeckStep() >= step;
+  const cue = { on: visible, delay };
+
+  if (isSelfAnimating(children)) {
+    return (
+      <div className={className}>
+        <MotionCueContext value={cue}>{children}</MotionCueContext>
+      </div>
+    );
+  }
+
   const { x, y } = offset(from, distance);
-  const hidden = {
-    opacity: 0,
-    x,
-    y,
-    filter: blur ? "blur(8px)" : "blur(0px)",
-  };
-  const shown = { opacity: 1, x: 0, y: 0, filter: "blur(0px)" };
+  const { hidden, shown } = risePair(x, y, blur ?? isTextual(children));
 
   return (
     <m.div
       initial={hidden}
       animate={visible ? shown : hidden}
-      transition={{ duration: 0.5, ease: EASE_OUT, delay: visible ? delay : 0 }}
+      transition={visible ? { ...RISE, delay } : { duration: DUR.fast }}
       className={className}
     >
-      {children}
+      <MotionCueContext value={cue}>{children}</MotionCueContext>
     </m.div>
   );
 }
@@ -107,7 +156,11 @@ interface StaggerProps {
   className?: string;
 }
 
-/** Container half of the stagger pair. Wrap each child in `StaggerItem`. */
+/**
+ * Container half of the stagger pair. Wrap each child in `StaggerItem`. Each
+ * child also gets its own cue, so an `Accent` or `Card` inside the fifth item
+ * plays when the fifth item lands, not when the first does.
+ */
 export function Stagger({
   children,
   step = 0,
@@ -126,7 +179,17 @@ export function Stagger({
       }}
       className={className}
     >
-      {children}
+      {Children.toArray(children).map((child, index) => (
+        <MotionCueContext
+          key={isValidElement(child) && child.key !== null ? child.key : index}
+          value={{
+            on: visible,
+            delay: delayChildren + index * staggerChildren,
+          }}
+        >
+          {child}
+        </MotionCueContext>
+      ))}
     </m.div>
   );
 }
@@ -138,13 +201,11 @@ export function StaggerItem({
   children: ReactNode;
   className?: string;
 }) {
+  const { hidden, shown } = risePair(0, 18, isTextual(children));
   return (
     <m.div
-      variants={{
-        hidden: { opacity: 0, y: 14, filter: "blur(6px)" },
-        show: { opacity: 1, y: 0, filter: "blur(0px)" },
-      }}
-      transition={{ duration: 0.5, ease: EASE_OUT }}
+      variants={{ hidden, show: shown }}
+      transition={RISE}
       className={className}
     >
       {children}
@@ -175,52 +236,6 @@ export function Shell({
   );
 }
 
-export function Kicker({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "mb-5 text-[13px] font-medium tracking-[0.22em] text-white/45 uppercase",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function Title({
-  children,
-  size = "lg",
-  className,
-}: {
-  children: ReactNode;
-  size?: "md" | "lg" | "xl";
-  className?: string;
-}) {
-  const sizeClass =
-    size === "md" ? "text-5xl" : size === "xl" ? "text-7xl" : "text-6xl";
-  return (
-    <h1
-      className={cn(
-        // Balanced: a two-line title on a 1280px stage should not strand one
-        // word on the second line.
-        "font-semibold tracking-[-0.02em] text-balance text-white",
-        "leading-[1.05]",
-        sizeClass,
-        className,
-      )}
-    >
-      {children}
-    </h1>
-  );
-}
-
 export function Body({
   children,
   className,
@@ -238,29 +253,6 @@ export function Body({
     >
       {children}
     </p>
-  );
-}
-
-/** Brand-gradient text. Use sparingly — one phrase per slide. */
-export function Accent({ children }: { children: ReactNode }) {
-  return (
-    <span className="bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] bg-clip-text text-transparent">
-      {children}
-    </span>
-  );
-}
-
-export function Card({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("rounded-2xl bg-white/[0.05] p-6", className)}>
-      {children}
-    </div>
   );
 }
 

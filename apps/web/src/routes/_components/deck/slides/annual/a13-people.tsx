@@ -56,7 +56,7 @@ export function AnnualPeople() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Working with others</Kicker>
+        <Kicker>People · Working with others</Kicker>
         <Title size="md">Their problems set the agenda.</Title>
       </Reveal>
 

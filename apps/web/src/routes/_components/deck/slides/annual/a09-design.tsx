@@ -55,7 +55,7 @@ export function AnnualDesign() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Design</Kicker>
+        <Kicker>Craft · Design</Kicker>
         <Title size="md">Decided on paper first.</Title>
         <Body className="mt-3 max-w-3xl text-lg">
           The engine every workspace runs on, replaced in six phases.

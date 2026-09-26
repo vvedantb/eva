@@ -8,6 +8,7 @@ import {
 import { cn, motionFast, motionSlow } from "@eva/ui";
 import type { DeckTheme } from "./DeckPrimitives";
 import { DECK_TONES } from "./deckTone";
+import { EASE } from "./motion/tokens";
 import { DeckShareBar } from "./DeckShareBar";
 import type { LiveShare } from "./useLiveShare";
 
@@ -48,10 +49,20 @@ export function DeckChrome({
     <div className="pointer-events-none absolute inset-0 z-10">
       <div className={cn("absolute right-0 bottom-0 left-0 h-0.5", tone.track)}>
         <m.div
-          className="h-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
+          className="relative h-full overflow-hidden bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
           animate={{ width: pct }}
           transition={motionSlow}
-        />
+        >
+          {/* One glint along the filled bar per slide change, keyed to remount. */}
+          <m.span
+            key={slide}
+            aria-hidden
+            className="absolute inset-0 bg-[linear-gradient(90deg,transparent_35%,rgba(255,255,255,0.75)_50%,transparent_65%)]"
+            initial={{ x: "-100%" }}
+            animate={{ x: "100%" }}
+            transition={{ duration: 1.1, ease: EASE.inOut, delay: 0.2 }}
+          />
+        </m.div>
       </div>
 
       <div

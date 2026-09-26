@@ -123,8 +123,8 @@ export function AnnualFrontendPerf() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Front end</Kicker>
-        <Title size="md">Making it quick to open.</Title>
+        <Kicker>Craft · Speed</Kicker>
+        <Title size="md">Three waits, measured and cut.</Title>
       </Reveal>
 
       <div className="mt-16">

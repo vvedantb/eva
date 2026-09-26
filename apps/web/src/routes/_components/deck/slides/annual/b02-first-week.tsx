@@ -32,7 +32,7 @@ export function AnnualFirstWeek() {
   return (
     <Shell className="py-14">
       <Reveal from="none">
-        <Kicker>Week one</Kicker>
+        <Kicker>Origin · Week one</Kicker>
       </Reveal>
       <Reveal delay={0.1}>
         <Title size="md">Four days set the shape.</Title>

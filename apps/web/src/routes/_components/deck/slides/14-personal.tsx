@@ -35,7 +35,7 @@ export function Slide14Personal() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>Eva and everyone else</Kicker>
+        <Kicker>What&apos;s next · Eva and the rest</Kicker>
         <Title size="md" className="text-balance">
           Same idea. <Accent>Ours to shape.</Accent>
         </Title>

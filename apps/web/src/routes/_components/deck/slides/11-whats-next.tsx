@@ -47,10 +47,10 @@ const REVIEW_LEFT = sumPercent(SEGMENTS.slice(0, REVIEW_INDEX));
 const REVIEW_WIDTH = sumPercent(SEGMENTS.slice(REVIEW_INDEX, REVIEW_INDEX + 1));
 
 const NEXT_STEPS: readonly string[] = [
-  "Model reviews first",
-  "Ready means merge",
+  "Model checks first",
+  "Ready means merged",
   "Deploys itself",
-  "People watch the irreversible",
+  "People sign off the risky part",
 ];
 
 export function Slide11WhatsNext() {
@@ -59,7 +59,7 @@ export function Slide11WhatsNext() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>What&apos;s next</Kicker>
+        <Kicker>What&apos;s next · The queue</Kicker>
         <Title size="md">The bottleneck has moved.</Title>
         <Body className="mt-4 max-w-3xl text-lg text-pretty">
           Eva finishes work faster than we can check it in.

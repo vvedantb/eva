@@ -3,12 +3,10 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import type { DeckSlide } from "./slides/types";
-import {
-  DeckStepContext,
-  DeckThemeContext,
-  EASE_OUT,
-} from "./_components/DeckPrimitives";
+import { DeckStepContext, DeckThemeContext } from "./_components/deckContext";
+import { EASE } from "./_components/motion/tokens";
 import { DeckAmbient } from "./_components/DeckAmbient";
+import { DeckWash } from "./_components/DeckWash";
 import { STAGE_PERSPECTIVE } from "./_components/DeckCamera";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
@@ -42,27 +40,40 @@ interface DeckProps {
 }
 
 /**
- * Slides arrive out of depth rather than sliding across. No animated `filter`:
- * blurring a full-screen layer every frame is the expensive path, and the push
- * in Z carries the same "this replaces that" reading for free.
+ * Slides arrive out of depth rather than sliding across: the incoming slide
+ * travels in from behind the screen, turned slightly towards the direction of
+ * travel, and settles on a long expo curve while the outgoing one falls back
+ * the other way in half the time. No animated `filter` — blurring a
+ * full-screen layer every frame is the expensive path, and the push in Z plus
+ * the `DeckWash` light carry the "this replaces that" reading for free.
  */
 const slideVariants = {
   enter: (dir: number) => ({
     opacity: 0,
-    rotateY: dir * 12,
-    z: -220,
+    x: dir * 60,
+    rotateY: dir * 10,
+    z: -320,
+    scale: 0.97,
   }),
   center: {
     opacity: 1,
+    x: 0,
     rotateY: 0,
     z: 0,
-    transition: { duration: 0.55, ease: EASE_OUT },
+    scale: 1,
+    transition: {
+      duration: 0.78,
+      ease: EASE.expo,
+      opacity: { duration: 0.4, ease: EASE.out, delay: 0.06 },
+    },
   },
   exit: (dir: number) => ({
     opacity: 0,
-    rotateY: dir * -8,
-    z: -120,
-    transition: { duration: 0.3, ease: EASE_OUT },
+    x: dir * -40,
+    rotateY: dir * -6,
+    z: -160,
+    scale: 0.985,
+    transition: { duration: 0.34, ease: EASE.in },
   }),
 };
 
@@ -217,6 +228,12 @@ export function Deck({
             </m.div>
           </AnimatePresence>
         </div>
+
+        <DeckWash
+          key={share.effectiveSlide}
+          direction={direction}
+          theme={theme}
+        />
 
         <DeckChrome
           slide={share.effectiveSlide}

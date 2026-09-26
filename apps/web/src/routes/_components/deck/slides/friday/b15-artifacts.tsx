@@ -217,7 +217,7 @@ export function FridayArtifacts() {
 
   return (
     <Shell className="py-12">
-      <Kicker>Artifacts</Kicker>
+      <Kicker>Trust and reach · Artifacts</Kicker>
       <Title size="md">
         Pages you can <Accent>just open</Accent>.
       </Title>

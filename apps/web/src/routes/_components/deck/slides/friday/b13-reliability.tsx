@@ -66,9 +66,9 @@ export function FridayReliability() {
 
   return (
     <Shell className="py-14">
-      <Kicker>Reliability</Kicker>
+      <Kicker>Trust and reach · Reliability</Kicker>
       <Title size="md">
-        When it <Accent>goes wrong</Accent>.
+        When it breaks, <Accent>you know</Accent>.
       </Title>
 
       {/* The three cards are the story, so they take the middle of the stage. */}

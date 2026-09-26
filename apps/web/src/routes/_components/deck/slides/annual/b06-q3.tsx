@@ -13,7 +13,7 @@ import type { AnnABeat } from "../_parts/AnnABeats";
 const BEATS: readonly AnnABeat[] = [
   { heading: 1052, label: "July, the sandbox cutover", accent: true },
   { heading: 877, label: "August, durable turns and security" },
-  { heading: 102, label: "September, multi-repo and decisions" },
+  { heading: 102, label: "September, multi-repo and decision models" },
 ];
 
 export function AnnualQ3() {
@@ -22,7 +22,7 @@ export function AnnualQ3() {
       <div className="flex items-start justify-between">
         <div>
           <Reveal from="none">
-            <Kicker>Chapter three</Kicker>
+            <Kicker>Origin · Chapter three</Kicker>
           </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">Make it dependable.</Title>

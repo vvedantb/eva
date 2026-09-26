@@ -25,7 +25,7 @@ export function AnnualTitle() {
 
       <Reveal delay={1.4}>
         <Body className="text-white/55">
-          From an empty repository in January to how we build everything.
+          From an empty repository to how we build software.
         </Body>
       </Reveal>
     </Shell>

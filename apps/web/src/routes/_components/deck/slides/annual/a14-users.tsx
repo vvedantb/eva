@@ -82,8 +82,8 @@ export function AnnualUsers() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>The people using it</Kicker>
-        <Title size="md">Built for who is actually looking at it.</Title>
+        <Kicker>People · Users</Kicker>
+        <Title size="md">Built for who actually uses it.</Title>
       </Reveal>
 
       <div className="mt-12 flex flex-col gap-8">

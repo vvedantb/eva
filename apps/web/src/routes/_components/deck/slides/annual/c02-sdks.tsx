@@ -24,7 +24,7 @@ export function AnnualSdks() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Foundations</Kicker>
+        <Kicker>Platform · Connections</Kicker>
         <Title size="md">Built on proper connections.</Title>
         <Body className="mt-4 max-w-3xl text-lg">
           Fewer silent failures, and faster replies.

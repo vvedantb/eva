@@ -23,8 +23,8 @@ interface Stat {
 
 const HEADLINE: Stat[] = [
   { value: 4732, label: "changes shipped", delay: 0.6, accent: true },
-  { value: 887, label: "pieces of work raised", delay: 0.75 },
-  { value: 367, label: "working sessions", delay: 0.9 },
+  { value: 887, label: "quick tasks raised", delay: 0.75 },
+  { value: 367, label: "sessions", delay: 0.9 },
   { value: 1348, label: "release notes written", delay: 1.05 },
 ];
 
@@ -42,7 +42,7 @@ export function AnnualNumbers() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>The year in numbers</Kicker>
+        <Kicker>In use · The numbers</Kicker>
         <Title size="md">What eight months produced.</Title>
       </Reveal>
 

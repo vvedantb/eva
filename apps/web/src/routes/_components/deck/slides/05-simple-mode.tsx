@@ -14,16 +14,14 @@ export function Slide05SimpleMode() {
       <div className="flex flex-1 items-center gap-10">
         <div className="w-[420px] shrink-0">
           <Reveal from="none">
-            <Kicker>Simple Mode</Kicker>
+            <Kicker>Using Eva · Simple Mode</Kicker>
           </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">One switch. Less machinery.</Title>
           </Reveal>
           <Reveal delay={0.25}>
             <Body className="text-lg">
-              Simple Mode hides files, consoles, settings and meters, and leaves
-              the conversation. Choosing a model went from a long list to one
-              slider.
+              Files, consoles and meters go. The conversation stays.
             </Body>
           </Reveal>
           <Reveal step={1} className="mt-6">

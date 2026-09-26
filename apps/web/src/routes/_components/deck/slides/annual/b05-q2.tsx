@@ -24,7 +24,7 @@ export function AnnualQ2() {
       <div className="flex items-start justify-between">
         <div>
           <Reveal from="none">
-            <Kicker>Chapter two</Kicker>
+            <Kicker>Origin · Chapter two</Kicker>
           </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">Work together.</Title>
@@ -43,7 +43,7 @@ export function AnnualQ2() {
 
       <Reveal delay={0.25}>
         <Body className="max-w-3xl text-2xl">
-          The quietest quarter was a <Accent>consolidation</Accent> quarter.
+          The quietest quarter went on <Accent>consolidation</Accent>.
         </Body>
       </Reveal>
 

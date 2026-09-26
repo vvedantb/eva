@@ -28,7 +28,7 @@ export function AnnualMcpSecurity() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Security</Kicker>
+        <Kicker>Platform · Access</Kicker>
         <Title size="md">Locked down by design.</Title>
       </Reveal>
 

@@ -87,7 +87,7 @@ export function Slide13Developer() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>The role of the developer</Kicker>
+        <Kicker>What&apos;s next · Developers</Kicker>
         <Title size="md" className="text-balance">
           From writing code to <Accent>tending the garden</Accent>.
         </Title>

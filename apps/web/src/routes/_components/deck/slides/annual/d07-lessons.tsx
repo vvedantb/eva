@@ -66,8 +66,8 @@ export function AnnualLessons() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Lessons</Kicker>
-        <Title size="md">What we learned.</Title>
+        <Kicker>People · Lessons</Kicker>
+        <Title size="md">Two lessons, one direction.</Title>
       </Reveal>
 
       <div className="relative mt-6 h-[400px] w-full">

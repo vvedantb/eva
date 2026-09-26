@@ -28,15 +28,14 @@ export function AnnualOrigin() {
   return (
     <Shell className="py-12">
       <Reveal from="none">
-        <Kicker>Where it started</Kicker>
+        <Kicker>Origin · The story so far</Kicker>
       </Reveal>
       <Reveal delay={0.1}>
-        <Title size="md">Eight months ago there was nothing.</Title>
+        <Title size="md">Eight months, five moments.</Title>
       </Reveal>
       <Reveal delay={0.25}>
         <Body className="mt-4 max-w-4xl text-lg">
-          Eva began as an empty repository on 11 January 2026. It now runs most
-          of how we build software.
+          From an empty repository to most of how we build software.
         </Body>
       </Reveal>
 
@@ -50,7 +49,7 @@ export function AnnualOrigin() {
 
       <Reveal step={3} delay={0.2} className="mb-14">
         <p className="text-2xl text-pretty text-white/85">
-          In between,{" "}
+          In all,{" "}
           <Accent>
             <CountUp value={4732} step={3} delay={0.2} />
           </Accent>{" "}

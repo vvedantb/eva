@@ -104,8 +104,8 @@ export function AnnualAbandoned() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Decisions</Kicker>
-        <Title size="md">Things we stopped.</Title>
+        <Kicker>Craft · Decisions</Kicker>
+        <Title size="md">Knowing what to stop.</Title>
       </Reveal>
 
       <div className="mt-10 flex gap-6">

@@ -108,7 +108,7 @@ export function Slide10CodeReviews() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Code reviews</Kicker>
+        <Kicker>What&apos;s next · Code reviews</Kicker>
         <Title size="md">Let the model find the bugs.</Title>
       </Reveal>
 
@@ -155,7 +155,7 @@ export function Slide10CodeReviews() {
       </Reveal>
 
       <Footnote>
-        Mechanics on slide 6: the nightly review routines and auto-merge.
+        The mechanics are the nightly routines and auto-merge, shown earlier.
       </Footnote>
     </Shell>
   );

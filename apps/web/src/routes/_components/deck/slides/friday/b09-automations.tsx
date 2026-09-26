@@ -115,14 +115,14 @@ export function FridayAutomations() {
       <Kicker>
         <span className="inline-flex items-center gap-2">
           <IconMoonStars size={15} aria-hidden />
-          Automations hub
+          On its own · Automations Hub
         </span>
       </Kicker>
       <Title size="md">
-        Work that <Accent>runs itself</Accent>.
+        Work that <Accent>starts itself</Accent>.
       </Title>
       <Body className="mt-4 max-w-3xl">
-        Ready-made routines, installed once for everyone.
+        Install a routine once, for everyone.
       </Body>
 
       {/* Edge to edge on the 1088px content width: dial, routines, results. */}

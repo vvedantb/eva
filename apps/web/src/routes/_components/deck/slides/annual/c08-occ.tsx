@@ -204,7 +204,7 @@ export function AnnualOcc() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Debugging</Kicker>
+        <Kicker>Craft · Performance</Kicker>
         <Title size="md">The database was fighting itself.</Title>
         <Body className="mt-4 max-w-3xl text-lg">
           Almost all the load was writes colliding, not reads.

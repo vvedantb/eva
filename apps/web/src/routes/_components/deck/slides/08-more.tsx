@@ -1,13 +1,13 @@
 import type { Icon } from "@tabler/icons-react";
 import {
-  IconDeviceMobile,
   IconFileCode,
   IconGauge,
   IconGitBranch,
-  IconInbox,
+  IconKeyboard,
   IconLink,
-  IconRobot,
-  IconUserStar,
+  IconPencil,
+  IconPin,
+  IconSparkles,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import type { TargetAndTransition } from "motion/react";
@@ -34,19 +34,23 @@ interface Item {
 /** Descriptions for each of these live in the slide's speaker notes. */
 const ITEMS: readonly Item[] = [
   {
-    icon: IconUserStar,
-    title: "Manager Ave",
+    icon: IconPencil,
+    title: "Suggested edits in documents",
     nudge: { scale: [1, 1.22, 1], rotate: [0, -8, 0] },
   },
   {
-    icon: IconRobot,
-    title: "Automations Hub",
+    icon: IconSparkles,
+    title: "Claude's built-in skills",
     nudge: { rotate: [0, -12, 9, 0] },
   },
-  { icon: IconInbox, title: "Two-pane inbox", nudge: { y: [0, -7, 2, 0] } },
   {
-    icon: IconDeviceMobile,
-    title: "Works on your phone",
+    icon: IconPin,
+    title: "Previews that stay put",
+    nudge: { y: [0, -7, 2, 0] },
+  },
+  {
+    icon: IconKeyboard,
+    title: "Rebindable shortcuts",
     nudge: { rotate: [0, -14, 8, 0] },
   },
   {
@@ -80,7 +84,7 @@ export function Slide08More() {
   return (
     <Shell>
       <Reveal>
-        <Kicker>Also shipped</Kicker>
+        <Kicker>Trust and reach · Also shipped</Kicker>
         <Title>And a great deal more.</Title>
       </Reveal>
 

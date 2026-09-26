@@ -22,7 +22,7 @@ export function AnnualLoad() {
   return (
     <Shell className="py-14">
       <Reveal from="none">
-        <Kicker>March 2026</Kicker>
+        <Kicker>Origin · March 2026</Kicker>
       </Reveal>
       <Reveal delay={0.1}>
         <Title size="md">Then make it load.</Title>
@@ -32,7 +32,7 @@ export function AnnualLoad() {
 
       <Reveal step={2} delay={0.1} className="mt-16">
         <p className="max-w-4xl text-3xl leading-snug text-balance text-white/85">
-          Anyone opening the app now waits for <Accent>a fifth as much</Accent>.
+          Opening the app now downloads <Accent>a fifth as much</Accent>.
         </p>
       </Reveal>
 

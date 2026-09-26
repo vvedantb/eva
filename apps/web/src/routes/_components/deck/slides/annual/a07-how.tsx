@@ -42,9 +42,9 @@ export function AnnualHow() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>How it works</Kicker>
+        <Kicker>In use · How it works</Kicker>
         <Title size="md" className="text-balance">
-          Describe it. Watch it. Review it.
+          Describe it. Eva builds it. Review it.
         </Title>
       </Reveal>
 

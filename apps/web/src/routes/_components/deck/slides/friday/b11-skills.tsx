@@ -44,11 +44,11 @@ export function FridaySkills() {
       <Kicker>
         <span className="inline-flex items-center gap-2">
           <IconSparkles size={15} aria-hidden />
-          Skills
+          Using Eva · Skills
         </span>
       </Kicker>
       <Title size="md">
-        Ready-made <Accent>commands</Accent>.
+        Never explain a job <Accent>twice</Accent>.
       </Title>
       <Body className="mt-4">Turned on per codebase, from Settings.</Body>
 

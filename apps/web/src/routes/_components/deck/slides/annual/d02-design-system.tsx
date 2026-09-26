@@ -103,7 +103,7 @@ export function AnnualDesignSystem() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Design system</Kicker>
+        <Kicker>Craft · Design system</Kicker>
         <Title size="md">One visual language.</Title>
       </Reveal>
 

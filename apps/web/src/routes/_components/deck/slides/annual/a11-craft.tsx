@@ -71,7 +71,7 @@ const RESULTS: readonly Result[] = [
 
 const HABITS: readonly { icon: Icon; label: string }[] = [
   { icon: IconChartDots, label: "Live traffic searchable" },
-  { icon: IconBook, label: "Written docs" },
+  { icon: IconBook, label: "Decisions written down" },
   { icon: IconRuler, label: "One design system" },
   { icon: IconAccessible, label: "Accessibility fixes" },
 ];
@@ -170,7 +170,7 @@ export function AnnualCraft() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Beyond code</Kicker>
+        <Kicker>Craft · Measurement</Kicker>
         <Title size="md">Measure it, do not guess.</Title>
       </Reveal>
 

@@ -155,7 +155,7 @@ export function AnnualDebugging() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Debugging</Kicker>
+        <Kicker>Craft · Debugging</Kicker>
         <Title size="md">Symptom, cause, then a test.</Title>
       </Reveal>
 

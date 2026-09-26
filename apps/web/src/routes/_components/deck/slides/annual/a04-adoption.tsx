@@ -30,22 +30,21 @@ const ADOPTION_SHOTS: readonly CameraShot[] = [
 const FIGURES: readonly { value: number; label: string; accent?: boolean }[] = [
   { value: 13, label: "colleagues raising work", accent: true },
   { value: 390, label: "for CarePulse" },
-  { value: 225, label: "ready to review" },
+  { value: 225, label: "sessions ready to review" },
 ];
 
 export function AnnualAdoption() {
   return (
     <Shell className="py-12">
       <Reveal from="none">
-        <Kicker>How it took hold</Kicker>
+        <Kicker>In use · Adoption</Kicker>
       </Reveal>
       <Reveal delay={0.1}>
         <Title size="md">From one person to the whole team.</Title>
       </Reveal>
       <Reveal delay={0.25}>
         <Body className="mt-4 max-w-4xl text-lg">
-          Every bar is a month of work raised in Eva. The habit spread as the
-          tool got easier to use.
+          Sessions started each month. The habit spread from July.
         </Body>
       </Reveal>
 

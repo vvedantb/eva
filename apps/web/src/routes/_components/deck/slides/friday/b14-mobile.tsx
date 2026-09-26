@@ -44,7 +44,7 @@ export function FridayMobile() {
       <Kicker>
         <span className="inline-flex items-center gap-2">
           <IconDeviceMobile size={15} aria-hidden />
-          Small screens
+          Trust and reach · Your phone
         </span>
       </Kicker>
       <Title size="md">

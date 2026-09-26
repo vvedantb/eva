@@ -100,7 +100,7 @@ export function Slide09Team() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Eva at work on CarePulse</Kicker>
+        <Kicker>In use · The team</Kicker>
         <Title size="md" className="text-balance">
           Built by the team, not just for them.
         </Title>

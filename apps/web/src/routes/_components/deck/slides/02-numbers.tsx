@@ -36,7 +36,7 @@ export function Slide02Numbers() {
   return (
     <Shell>
       <Reveal>
-        <Kicker>By the numbers</Kicker>
+        <Kicker>Three months · The numbers</Kicker>
         <Title>Twelve weeks of shipping.</Title>
       </Reveal>
 

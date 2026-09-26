@@ -110,7 +110,7 @@ export function AnnualProviders() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Model providers</Kicker>
+        <Kicker>Platform · Providers</Kicker>
         <Title size="md">Not tied to one supplier.</Title>
       </Reveal>
 

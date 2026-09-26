@@ -102,7 +102,7 @@ export function AnnualFramework() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>Against the framework</Kicker>
+        <Kicker>Evidence · The framework</Kicker>
         <Title size="md">Senior engineer, mapped.</Title>
       </Reveal>
 

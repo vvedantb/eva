@@ -36,8 +36,8 @@ export function AnnualScale() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Scale</Kicker>
-        <Title size="md">How big it is now.</Title>
+        <Kicker>Craft · Scale</Kicker>
+        <Title size="md">A product now, not a prototype.</Title>
       </Reveal>
 
       <Stagger

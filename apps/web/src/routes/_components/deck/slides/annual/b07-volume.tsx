@@ -44,7 +44,7 @@ export function AnnualVolume() {
       <div className="flex items-start justify-between">
         <div>
           <Reveal from="none">
-            <Kicker>The shape of the year</Kicker>
+            <Kicker>Origin · The shape of the year</Kicker>
           </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">It did not arrive evenly.</Title>

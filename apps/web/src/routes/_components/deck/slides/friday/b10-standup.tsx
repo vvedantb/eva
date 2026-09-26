@@ -63,7 +63,7 @@ export function FridayStandup() {
       <Kicker>
         <span className="inline-flex items-center gap-2">
           <IconSunrise size={15} aria-hidden />
-          Daily standup
+          On its own · Daily standup
         </span>
       </Kicker>
       <Title size="md">

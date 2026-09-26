@@ -178,8 +178,8 @@ export function FridayAsk() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>How it works</Kicker>
-        <Title size="md">How to ask for something.</Title>
+        <Kicker>Using Eva · Asking</Kicker>
+        <Title size="md">Say what you want.</Title>
       </Reveal>
 
       <div className="mt-10 flex items-start gap-5">

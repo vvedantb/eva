@@ -160,8 +160,8 @@ export function FridayProjects() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Projects</Kicker>
-        <Title size="md">Several jobs, in order.</Title>
+        <Kicker>Using Eva · Projects</Kicker>
+        <Title size="md">See the whole job at once.</Title>
       </Reveal>
 
       <Reveal delay={0.1} className="mt-10">

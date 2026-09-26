@@ -106,8 +106,8 @@ export function AnnualSecurity() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Security</Kicker>
-        <Title size="md">Locking the doors.</Title>
+        <Kicker>Craft · Security</Kicker>
+        <Title size="md">One guard on every door.</Title>
       </Reveal>
 
       <div className="mt-12 flex gap-3">
@@ -126,7 +126,9 @@ export function AnnualSecurity() {
           transition={{ duration: guarded ? 0.6 : 0.3, ease: EASE_OUT }}
         />
         <Reveal step={1} distance={8} className="pt-4 text-center">
-          <p className="text-sm text-white/50">One shared guard</p>
+          <p className="text-sm text-white/50">
+            Seven surfaces, one shared check
+          </p>
         </Reveal>
       </div>
 

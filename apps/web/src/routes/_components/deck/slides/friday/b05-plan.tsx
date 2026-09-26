@@ -95,7 +95,7 @@ export function FridayPlan() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Plans</Kicker>
+        <Kicker>Using Eva · Plans</Kicker>
         <Title size="md">Ask for a plan first.</Title>
       </Reveal>
 

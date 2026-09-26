@@ -126,7 +126,7 @@ export function FridayDocuments() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Documents</Kicker>
+        <Kicker>Using Eva · Documents</Kicker>
         <Title size="md">Write it down together.</Title>
       </Reveal>
 
