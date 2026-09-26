@@ -14,8 +14,8 @@ import type { AnnABeat } from "../_parts/AnnABeats";
 /** One beat per group of features, in the order they shipped. */
 const BEATS: readonly AnnABeat[] = [
   { heading: "Comments, suggestions, history", label: "Documents, 10 June" },
-  { heading: "The projects roadmap", label: "17 June" },
-  { heading: "Testing Arena for everyone", label: "17 June" },
+  { heading: "The projects roadmap", label: "Projects, 17 June" },
+  { heading: "Testing Arena for everyone", label: "Testing, 17 June" },
 ];
 
 export function AnnualQ2() {

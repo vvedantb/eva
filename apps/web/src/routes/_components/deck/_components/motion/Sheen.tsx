@@ -15,9 +15,8 @@ export interface SheenProps {
 }
 
 const BAND = {
-  dark: "linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.16) 50%, transparent 80%)",
-  light:
-    "linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.75) 50%, transparent 80%)",
+  dark: "linear-gradient(90deg, transparent, rgba(255,255,255,0.16) 50%, transparent)",
+  light: "linear-gradient(90deg, transparent, rgba(255,255,255,0.75) 50%, transparent)",
 };
 
 /**
@@ -43,7 +42,9 @@ export function Sheen({
       <m.span
         aria-hidden
         className="pointer-events-none absolute inset-y-0 left-0 w-2/3"
-        style={{ background: band }}
+        // The skew leans the band like light off glass; the gradient runs flat
+        // so its left and right edges are fully transparent.
+        style={{ background: band, skewX: -14 }}
         initial={{ x: "-100%" }}
         animate={{ x: on ? "160%" : "-100%" }}
         transition={

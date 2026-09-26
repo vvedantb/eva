@@ -4,9 +4,9 @@ import type { DeckTheme } from "./deckContext";
 import { EASE } from "./motion/tokens";
 
 const WASH: Record<DeckTheme, string> = {
-  dark: "linear-gradient(100deg, transparent 0%, rgba(139,63,184,0.13) 32%, rgba(255,255,255,0.07) 50%, rgba(59,125,216,0.13) 68%, transparent 100%)",
+  dark: "linear-gradient(90deg, transparent 0%, rgba(139,63,184,0.13) 32%, rgba(255,255,255,0.07) 50%, rgba(59,125,216,0.13) 68%, transparent 100%)",
   light:
-    "linear-gradient(100deg, transparent 0%, rgba(139,63,184,0.07) 32%, rgba(255,255,255,0.5) 50%, rgba(59,125,216,0.07) 68%, transparent 100%)",
+    "linear-gradient(90deg, transparent 0%, rgba(139,63,184,0.07) 32%, rgba(255,255,255,0.5) 50%, rgba(59,125,216,0.07) 68%, transparent 100%)",
 };
 
 /** The band is 70% of the pane: from -100% it starts clear of the left edge, at 143% it has cleared the right. */
