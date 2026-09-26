@@ -1,20 +1,28 @@
 import { m } from "motion/react";
+import { cn } from "@eva/ui";
 import { Layer } from "../../_components/DeckCamera";
 import { BRAND, EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
 
-/** Design size of the timeline box. */
-const TRACK_W = 1080;
-const BOX_H = 330;
+/** Design size of the timeline box, matching the slide's content column. */
+const TRACK_W = 1088;
 /** Vertical centre of the axis inside the box. */
-const LINE_Y = 168;
-/** Breathing room so the first and last labels stay inside the box. */
-const INSET = 90;
+const LINE_Y = 164;
+const BOX_H = 256;
+/** Room either side of the span so the end dots sit inside the box. */
+const INSET = 24;
 /** 11 January to 16 September 2026, the span the axis maps. */
 const SPAN_DAYS = 248;
-/** Stem lengths for the two label lanes. */
-const LANE: readonly number[] = [30, 100];
-/** How far the milestone dots sit in front of the axis they mark. */
-const DOT_DEPTH = 30;
+/**
+ * A label is its name at `text-base leading-snug`, then `mt-1` and the date
+ * at `text-sm`. The stem runs the full height of the label, like a flag pole,
+ * so it always reads as that label's own.
+ */
+const LABEL_H = 48;
+/** Axis to the shallowest lane, then clear space between stacked lanes. */
+const STEM_BASE = 26;
+const LANE_GAP = 20;
+/** How far each milestone sits in front of the axis it marks. */
+const DOT_DEPTH = 24;
 
 interface Milestone {
   /** Days after 11 January 2026. */
@@ -22,75 +30,45 @@ interface Milestone {
   label: string;
   date: string;
   above: boolean;
+  /** 0 hugs the axis; 1 stacks a label clear above lane 0. */
   lane: number;
-  width: number;
+  /** Which side of its stem the label hangs. `end` keeps the last one on stage. */
+  anchor: "start" | "end";
   /** Build step that reveals this milestone. */
   step: number;
   /** Stagger position within its step. */
   order: number;
 }
 
+/**
+ * The January cluster puts three dates inside 90px of axis, so each gets its
+ * own lane: the repository high above, the quick task low above, the session
+ * below. Each label hangs to one side of its stem, so no stem crosses a label.
+ */
+// One row per milestone reads as the table it is.
+// prettier-ignore
 const MILESTONES: readonly Milestone[] = [
-  {
-    day: 0,
-    label: "Empty repository",
-    date: "11 January",
-    above: true,
-    lane: 0,
-    width: 150,
-    step: 0,
-    order: 0,
-  },
-  {
-    day: 13,
-    label: "First session",
-    date: "24 January",
-    above: false,
-    lane: 0,
-    width: 150,
-    step: 1,
-    order: 0,
-  },
-  {
-    day: 21,
-    label: "First quick task",
-    date: "1 February",
-    above: true,
-    lane: 1,
-    width: 150,
-    step: 1,
-    order: 1,
-  },
-  {
-    day: 171,
-    label: "Work moves to the cloud",
-    date: "July",
-    above: false,
-    lane: 0,
-    width: 170,
-    step: 2,
-    order: 0,
-  },
-  {
-    day: 202,
-    label: "Eva starts opening its own work",
-    date: "August",
-    above: true,
-    lane: 0,
-    width: 220,
-    step: 2,
-    order: 1,
-  },
+  { day: 0, label: "Empty repository", date: "11 January", above: true, lane: 1, anchor: "start", step: 0, order: 0 },
+  { day: 13, label: "First session", date: "24 January", above: false, lane: 0, anchor: "start", step: 1, order: 0 },
+  { day: 21, label: "First quick task", date: "1 February", above: true, lane: 0, anchor: "start", step: 1, order: 1 },
+  { day: 171, label: "Work moves to the cloud", date: "July", above: false, lane: 0, anchor: "start", step: 2, order: 0 },
+  { day: 202, label: "Eva starts opening its own work", date: "August", above: true, lane: 0, anchor: "end", step: 2, order: 1 },
 ];
 
 function xFor(day: number): number {
   return INSET + (day / SPAN_DAYS) * (TRACK_W - INSET * 2);
 }
 
+/** Axis to the near edge of a label in `lane`. */
+function gapFor(lane: number): number {
+  return STEM_BASE + lane * (LABEL_H + LANE_GAP);
+}
+
 function MilestoneMark({ item }: { item: Milestone }) {
   const active = useDeckStep() >= item.step;
-  const stem = LANE[item.lane];
-  const delay = item.order * 0.12;
+  const gap = gapFor(item.lane);
+  const stem = gap + LABEL_H;
+  const delay = item.order * 0.1;
 
   return (
     <div
@@ -101,59 +79,72 @@ function MilestoneMark({ item }: { item: Milestone }) {
         transformStyle: "preserve-3d",
       }}
     >
-      <m.div
-        aria-hidden
-        className="absolute w-px bg-white/15"
-        style={{ height: stem, top: item.above ? -stem : 0 }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: active ? 1 : 0 }}
-        transition={{
-          duration: 0.4,
-          ease: EASE_OUT,
-          delay: active ? delay : 0,
-        }}
-      />
-
-      {/* The dot rides in front of the axis, so it keeps its own mark as the
-          camera dollies along the line. */}
+      {/* Stem, dot and label ride together in front of the axis, so they
+          slide along it as the camera dollies but never part from each other. */}
       <Layer depth={DOT_DEPTH}>
+        {/* Grows out of the axis towards its label. */}
         <m.div
           aria-hidden
-          className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_18px_rgba(139,63,184,0.6)]"
+          className={cn(
+            "absolute w-px bg-white/20",
+            item.above ? "origin-bottom" : "origin-top",
+          )}
+          style={{ height: stem, top: item.above ? -stem : 0 }}
+          initial={{ scaleY: 0, opacity: 0 }}
+          animate={
+            active ? { scaleY: 1, opacity: 1 } : { scaleY: 0, opacity: 0 }
+          }
+          transition={
+            active
+              ? { type: "spring", bounce: 0, duration: 0.6, delay }
+              : { duration: 0.25, ease: EASE_OUT }
+          }
+        />
+
+        <m.div
+          aria-hidden
+          className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_18px_rgba(139,63,184,0.6)]"
           style={{
             background: `linear-gradient(135deg, ${BRAND.purple}, ${BRAND.blue})`,
           }}
           initial={{ scale: 0 }}
           animate={{ scale: active ? 1 : 0 }}
-          transition={{
-            type: "spring",
-            bounce: 0.25,
-            duration: 0.6,
-            delay: active ? delay : 0,
-          }}
+          transition={
+            active
+              ? { type: "spring", bounce: 0, duration: 0.5, delay }
+              : { duration: 0.2, ease: EASE_OUT }
+          }
         />
-      </Layer>
 
-      <m.div
-        className="absolute -translate-x-1/2 text-center"
-        style={
-          item.above
-            ? { width: item.width, left: 0, bottom: stem }
-            : { width: item.width, left: 0, top: stem }
-        }
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: active ? 1 : 0, y: active ? 0 : 10 }}
-        transition={{
-          duration: 0.45,
-          ease: EASE_OUT,
-          delay: active ? delay + 0.08 : 0,
-        }}
-      >
-        <div className="text-sm leading-snug font-medium text-white/90">
-          {item.label}
-        </div>
-        <div className="mt-1 text-xs text-white/45">{item.date}</div>
-      </m.div>
+        <m.div
+          className={cn(
+            "absolute whitespace-nowrap",
+            item.anchor === "start" ? "left-0 pl-3" : "right-0 pr-3 text-right",
+          )}
+          style={item.above ? { bottom: gap } : { top: gap }}
+          initial={{ opacity: 0, y: item.above ? 10 : -10 }}
+          animate={
+            active
+              ? { opacity: 1, y: 0 }
+              : { opacity: 0, y: item.above ? 10 : -10 }
+          }
+          transition={
+            active
+              ? {
+                  type: "spring",
+                  bounce: 0,
+                  duration: 0.55,
+                  delay: delay + 0.1,
+                }
+              : { duration: 0.25, ease: EASE_OUT }
+          }
+        >
+          <div className="text-base leading-snug font-medium text-white/90">
+            {item.label}
+          </div>
+          <div className="mt-1 text-sm text-white/45">{item.date}</div>
+        </m.div>
+      </Layer>
     </div>
   );
 }
@@ -193,7 +184,7 @@ export function AnnualOriginTimeline() {
             </linearGradient>
           </defs>
           <m.path
-            d={`M 16 ${LINE_Y} L ${TRACK_W - 16} ${LINE_Y}`}
+            d={`M ${INSET} ${LINE_Y} L ${TRACK_W - INSET} ${LINE_Y}`}
             stroke="url(#annual-origin-line)"
             strokeWidth={2}
             strokeLinecap="round"

@@ -70,7 +70,7 @@ function CapabilityCard({
         whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
         transition={motionSpring}
       >
-        <Card className="relative flex h-[76px] items-center p-5">
+        <Card className="relative flex h-[68px] items-center p-5">
           <span className="text-base leading-snug font-medium text-white">
             {name}
           </span>
@@ -81,7 +81,7 @@ function CapabilityCard({
             animate={{ scale: evidenced ? 1 : 0, opacity: evidenced ? 1 : 0 }}
             transition={{
               type: "spring",
-              bounce: 0.35,
+              bounce: 0,
               duration: 0.5,
               delay: evidenced ? index * 0.06 : 0,
             }}
@@ -106,8 +106,8 @@ export function AnnualFramework() {
         <Title size="md">Senior engineer, mapped.</Title>
       </Reveal>
 
-      <Camera shots={FRAMEWORK_SHOTS} className="mt-9">
-        <div className="grid grid-cols-3 gap-4 [transform-style:preserve-3d]">
+      <Camera shots={FRAMEWORK_SHOTS} className="mt-7">
+        <div className="grid grid-cols-3 gap-3 [transform-style:preserve-3d]">
           {CAPABILITIES.map((name, index) => (
             <CapabilityCard
               key={name}
@@ -119,13 +119,15 @@ export function AnnualFramework() {
         </div>
       </Camera>
 
-      <Reveal step={1} className="mt-4">
+      <Reveal step={1} className="mt-3">
         <p className="text-sm text-white/45">
           Every one of these is a slide in this deck.
         </p>
       </Reveal>
 
-      <div className="mt-7">
+      {/* Grid, thin evidence and the closing line sit on one 40px rhythm, which
+          leaves the closing line clear of the footnote. */}
+      <div className="mt-10">
         <Reveal step={2}>
           <div className="text-xs tracking-[0.18em] text-white/35 uppercase">
             Thin evidence
@@ -156,7 +158,7 @@ export function AnnualFramework() {
         </div>
       </div>
 
-      <Reveal step={3} className="mt-7">
+      <Reveal step={3} className="mt-10">
         <p className="text-center text-2xl text-white/85">
           <span className="text-5xl leading-[1.3] font-semibold tracking-tight">
             <Accent>

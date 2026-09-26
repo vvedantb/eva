@@ -3,7 +3,6 @@ import { IconArrowBackUp, IconCloud, IconRobot } from "@tabler/icons-react";
 import { BlurWordsTitle } from "../_components/BlurWordsTitle";
 import {
   Body,
-  Card,
   Footnote,
   Kicker,
   Reveal,
@@ -30,34 +29,31 @@ interface Shift {
   step: number;
   icon: ReactNode;
   heading: string;
-  line: string;
 }
 
-const SHIFTS: Shift[] = [
+/** The line under each heading lives in the speaker notes. */
+const SHIFTS: readonly Shift[] = [
   {
     step: 1,
-    icon: <IconRobot size={24} className="text-white/70" />,
+    icon: <IconRobot size={28} stroke={1.6} className="text-white/75" />,
     heading: "More automations",
-    line: "Routine work runs on a schedule or a trigger. People set direction, not tasks.",
   },
   {
     step: 2,
-    icon: <IconArrowBackUp size={24} className="text-white/70" />,
+    icon: <IconArrowBackUp size={28} stroke={1.6} className="text-white/75" />,
     heading: "Mistakes become cheap",
-    line: "When any change can be remade in minutes, being wrong stops being expensive. Try more, worry less.",
   },
   {
     step: 3,
-    icon: <IconCloud size={24} className="text-white/70" />,
+    icon: <IconCloud size={28} stroke={1.6} className="text-white/75" />,
     heading: "Everything in sandboxes, managed from chat",
-    line: "Eva's own development already lives this way. The Grok bot merges its changes. Next, the same for all our work.",
   },
 ];
 
 export function Slide12Future() {
   return (
     <Shell className="py-14">
-      <div className="grid grid-cols-[532px_1fr] items-start gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[532px_1fr] gap-4 pb-8">
         <div>
           <Reveal>
             <Kicker>Where this is heading</Kicker>
@@ -65,35 +61,30 @@ export function Slide12Future() {
           <BlurWordsTitle size="lg" lines={["Manage agents,", "not tasks."]} />
           <Reveal delay={0.6}>
             <Body className="mt-5 text-lg">
-              Three shifts we expect, based on what has already happened inside
-              Eva.
+              Three shifts, each already true inside Eva.
             </Body>
           </Reveal>
 
-          <div className="mt-8 flex w-[520px] flex-col gap-[14px]">
+          <div className="mt-10 flex w-[500px] flex-col gap-4">
             {SHIFTS.map((shift) => (
-              <Reveal key={shift.heading} step={shift.step}>
-                <Card className="flex h-[92px] items-center gap-4 px-5 py-4">
+              <Reveal key={shift.heading} step={shift.step} from="left">
+                <div className="flex h-[84px] items-center gap-5 rounded-[20px] bg-white/[0.05] px-6">
                   <div className="shrink-0">{shift.icon}</div>
-                  <div>
-                    <div className="text-lg leading-tight font-semibold text-white">
-                      {shift.heading}
-                    </div>
-                    <div className="mt-1 text-sm leading-snug text-white/60">
-                      {shift.line}
-                    </div>
+                  <div className="text-xl leading-tight font-semibold text-balance text-white">
+                    {shift.heading}
                   </div>
-                </Card>
+                </div>
               </Reveal>
             ))}
           </div>
         </div>
 
-        <Camera
-          shots={FLEET_SHOTS}
-          className="flex h-full items-center justify-center"
-        >
-          <AgentFleet />
+        {/* The fleet sits on the middle of the column, level with the shifts,
+            rather than hanging from the top of it. */}
+        <Camera shots={FLEET_SHOTS} className="h-full">
+          <div className="flex h-full items-center justify-center">
+            <AgentFleet />
+          </div>
         </Camera>
       </div>
 

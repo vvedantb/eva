@@ -41,6 +41,14 @@ const SHIFTS: Shift[] = [
   },
 ];
 
+/**
+ * Where a row's after-text starts, measured from its 32px inset: the 330px
+ * before-column, a 32px gap, the 24px arrow and another 32px gap. Keep it in
+ * step with the row's `w-[330px]` and `gap-8`.
+ */
+const ARROW_W = 24;
+const AFTER_COLUMN_X = 330 + 32 + ARROW_W + 32;
+
 function ShiftRow({ shift }: { shift: Shift }) {
   const arrived = useDeckStep() >= shift.step;
 
@@ -59,7 +67,7 @@ function ShiftRow({ shift }: { shift: Shift }) {
           animate={arrived ? { opacity: 1, x: 0 } : { opacity: 0, x: -10 }}
           transition={{ type: "spring", bounce: 0, duration: 0.5, delay: 0.18 }}
         >
-          <IconArrowRight size={24} stroke={1.8} />
+          <IconArrowRight size={ARROW_W} stroke={1.8} />
         </m.div>
         <div className="text-3xl leading-snug font-medium text-balance text-white">
           {shift.after}
@@ -85,9 +93,11 @@ export function AnnualImpact() {
         ))}
       </div>
 
-      <Reveal step={3} delay={0.45} className="mt-8">
-        <div className="flex">
-          <div className="w-[330px]">
+      {/* Same insets as a row: the 13 sits under the before-column, the 390
+          under the after-column, so both read as part of the grid above. */}
+      <Reveal step={3} delay={0.45} className="mt-8 w-[1040px]">
+        <div className="flex px-8">
+          <div style={{ width: AFTER_COLUMN_X }}>
             <div className="text-6xl leading-none font-semibold tabular-nums">
               <Accent>
                 <CountUp value={13} step={3} delay={0.45} />

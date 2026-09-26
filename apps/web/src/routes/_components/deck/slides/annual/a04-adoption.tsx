@@ -1,8 +1,9 @@
+import { CountUp } from "../../_components/CountUp";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
+  Accent,
   Body,
-  Card,
   Footnote,
   Kicker,
   Reveal,
@@ -25,10 +26,11 @@ const ADOPTION_SHOTS: readonly CameraShot[] = [
   {},
 ];
 
-const ROWS: readonly string[] = [
-  "13 people beyond the developer have raised work in Eva",
-  "390 pieces of work raised against CarePulse",
-  "225 sessions ended in a bundle of changes ready to review",
+/** Left to right: who, what for, what came of it. Sentences are in the notes. */
+const FIGURES: readonly { value: number; label: string; accent?: boolean }[] = [
+  { value: 13, label: "colleagues raising work", accent: true },
+  { value: 390, label: "for CarePulse" },
+  { value: 225, label: "ready to review" },
 ];
 
 export function AnnualAdoption() {
@@ -51,22 +53,33 @@ export function AnnualAdoption() {
         <AnnualAdoptionChart />
       </Camera>
 
-      <Reveal step={2} className="mt-5">
-        <Card className="py-4">
-          <Stagger
-            step={2}
-            delayChildren={0.2}
-            staggerChildren={0.12}
-            className="space-y-2"
-          >
-            {ROWS.map((row) => (
-              <StaggerItem key={row}>
-                <div className="text-base text-white/80">{row}</div>
-              </StaggerItem>
-            ))}
-          </Stagger>
-        </Card>
-      </Reveal>
+      <Stagger
+        step={2}
+        delayChildren={0.1}
+        staggerChildren={0.1}
+        className="mt-8 grid grid-cols-3 gap-6"
+      >
+        {FIGURES.map((figure, index) => (
+          <StaggerItem key={figure.label}>
+            <div className="text-6xl leading-none font-semibold tabular-nums">
+              {figure.accent ? (
+                <Accent>
+                  <CountUp value={figure.value} step={2} delay={0.2} />
+                </Accent>
+              ) : (
+                <span className="text-white">
+                  <CountUp
+                    value={figure.value}
+                    step={2}
+                    delay={0.2 + index * 0.1}
+                  />
+                </span>
+              )}
+            </div>
+            <div className="mt-3 text-base text-white/50">{figure.label}</div>
+          </StaggerItem>
+        ))}
+      </Stagger>
 
       <Footnote>
         Counts are sessions created per calendar month in Eva, to 16 September

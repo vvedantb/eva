@@ -40,12 +40,16 @@ export function AnnualOrigin() {
         </Body>
       </Reveal>
 
-      <Camera shots={ORIGIN_SHOTS} className="mt-6">
-        <AnnualOriginTimeline />
-      </Camera>
+      {/* The axis takes the free height, so it sits centred between the
+          heading and the closing figures rather than hanging off the title. */}
+      <div className="flex flex-1 items-center">
+        <Camera shots={ORIGIN_SHOTS}>
+          <AnnualOriginTimeline />
+        </Camera>
+      </div>
 
-      <Reveal step={3} delay={0.2}>
-        <p className="text-lg text-white/85">
+      <Reveal step={3} delay={0.2} className="mb-14">
+        <p className="text-2xl text-pretty text-white/85">
           In between,{" "}
           <Accent>
             <CountUp value={4732} step={3} delay={0.2} />

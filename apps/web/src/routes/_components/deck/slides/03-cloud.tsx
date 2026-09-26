@@ -1,9 +1,9 @@
+import type { ReactNode } from "react";
 import { CountUp } from "../_components/CountUp";
 import { Camera } from "../_components/DeckCamera";
 import type { CameraShot } from "../_components/DeckCamera";
 import {
   Body,
-  Card,
   Footnote,
   Kicker,
   Reveal,
@@ -24,6 +24,23 @@ const CLOUD_SHOTS: readonly CameraShot[] = [
   { rotateY: -4, rotateX: 3, translateZ: 20, scale: 0.96 },
 ];
 
+const NUMBER_CLASS =
+  "text-[32px] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap text-white tabular-nums";
+
+/** The numbers carry the card; each label is four words at most. */
+function Stat({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <StaggerItem className="h-full">
+      <div className="flex h-[132px] flex-col justify-between rounded-[20px] bg-white/[0.05] p-4">
+        <div className={NUMBER_CLASS}>{children}</div>
+        <div className="text-sm leading-snug text-balance text-white/60">
+          {label}
+        </div>
+      </div>
+    </StaggerItem>
+  );
+}
+
 export function Slide03Cloud() {
   return (
     <Shell>
@@ -33,9 +50,7 @@ export function Slide03Cloud() {
             <Kicker>Where the work happens</Kicker>
             <Title size="md">Nothing was built on a laptop.</Title>
             <Body className="text-lg">
-              Every change in the last three months was written, tested and
-              shipped from a browser tab. Eva does the work inside its own cloud
-              workspaces.
+              Written, tested and shipped from a browser tab.
             </Body>
           </Reveal>
 
@@ -43,40 +58,19 @@ export function Slide03Cloud() {
             step={2}
             delayChildren={0.1}
             staggerChildren={0.1}
-            className="mt-10 grid grid-cols-3 gap-3"
+            className="mt-12 grid grid-cols-3 gap-3"
           >
-            <StaggerItem className="h-full">
-              <Card className="h-full p-4">
-                <div className="text-3xl font-semibold tracking-[-0.03em] whitespace-nowrap text-white">
-                  <CountUp value={346} step={2} duration={1.2} delay={0.2} />
-                </div>
-                <div className="mt-2 text-xs leading-snug text-white/55">
-                  changes authored by Eva itself
-                </div>
-              </Card>
-            </StaggerItem>
-            <StaggerItem className="h-full">
-              <Card className="h-full p-4">
-                <div className="text-3xl font-semibold tracking-[-0.03em] whitespace-nowrap text-white">
-                  <CountUp value={33} step={2} duration={1.2} delay={0.3} />
-                </div>
-                <div className="mt-2 text-xs leading-snug text-white/55">
-                  bundles of work Eva opened and finished on its own since
-                  August
-                </div>
-              </Card>
-            </StaggerItem>
-            <StaggerItem className="h-full">
-              <Card className="h-full p-4">
-                <div className="text-3xl font-semibold tracking-[-0.03em] whitespace-nowrap text-white">
-                  10 &rarr; 23
-                </div>
-                <div className="mt-2 text-xs leading-snug text-white/55">
-                  of those in all of August, then in the first ten days of
-                  September
-                </div>
-              </Card>
-            </StaggerItem>
+            <Stat label="changes written by Eva">
+              <CountUp value={346} step={2} duration={1.2} delay={0.2} />
+            </Stat>
+            <Stat label="bundles Eva finished alone">
+              <CountUp value={33} step={2} duration={1.2} delay={0.3} />
+            </Stat>
+            <Stat label="August to early September">
+              <CountUp value={10} step={2} duration={1.2} delay={0.4} />
+              <span className="mx-1 text-white/40">&rarr;</span>
+              <CountUp value={23} step={2} duration={1.2} delay={0.5} />
+            </Stat>
           </Stagger>
         </div>
 

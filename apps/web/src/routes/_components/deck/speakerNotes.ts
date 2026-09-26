@@ -12,8 +12,8 @@ Detail: the figures count themselves up over about two seconds; do not talk acro
 Figures: 2,081 changes shipped, 769 release notes written, 260,754 lines added, 98 bundles merged, about 23 changes a day including weekends. Source: Eva's git history, 12 June to 10 September 2026.`,
 
   "03-cloud": `The claim that makes the rest of the deck make sense: none of this was built on a laptop.
-→ Step 1: the laptop lifts into the cloud. Say every change was written, tested and shipped from a browser tab.
-→ Step 2: the three counters and the source line arrive together. Use the source line to answer the authorship question before it is asked.
+→ Step 1: the laptop lifts into the cloud. Say every change in the last three months was written, tested and shipped from a browser tab, and that Eva does the work inside its own cloud workspaces.
+→ Step 2: the three counters and the source line arrive together. The cards carry short labels only, so say each in full: 346 changes authored by Eva itself; 33 bundles of work Eva opened and finished on its own since August; and of those, 10 in all of August, then 23 in the first ten days of September. Use the source line to answer the authorship question before it is asked.
 Detail: authorship is read from the author field recorded on each change, so a change Eva wrote and a person merged still counts as Eva's.
 Figures: 346 changes authored by Eva itself; 33 bundles Eva opened and finished on its own since August; 10 of those in all of August against 23 in the first ten days of September.`,
 
@@ -41,7 +41,7 @@ Detail: nothing was given up in the move. The same workspace underneath still ha
 Figures: about 40 seconds before on Daytona against under one second now on Vercel Sandbox, more than 40 times faster. Timings are the product owner's own measurements before and after the move; the migration landed 6 to 8 July 2026.`,
 
   "08-more": `A deliberate flood: eight more things shipped in the same twelve weeks, none of which earned its own slide.
-Detail: do not read the grid. Pick two the room will care about and move on — Manager Ave, an agent that runs your other sessions, and works on your phone, which is what made the tool usable away from a desk. The 94% figure is the loading shimmer's main-thread cost after the September animation work, and it has its own slide in the annual deck.
+Detail: do not read the grid. Pick two the room will care about and move on — Manager Ave, an agent that runs your other sessions, and works on your phone, which is what made the tool usable away from a desk. The cards carry titles only; if asked, the rest are: Automations Hub, ready-made routines you install with one click; the two-pane inbox, everything that needs you in one place; works on your phone, every screen usable on a small screen; rich link previews, where Figma, Linear, Sentry and PostHog links become chips; editing files in the browser, open, change and save without leaving Eva; and reading sibling repos, so Eva can look across your other codebases while it works. The 94% figure is the loading shimmer's main-thread cost after the September animation work, and it has its own slide in the annual deck.
 Figures: eight items, all shipped between June and September 2026.`,
 
   "09-team": `The point is not that Eva is used, it is that people who do not write code raised the work themselves.
@@ -67,8 +67,8 @@ Figures: 141 quick tasks — 29 done, 43 waiting in code review, 14 in business 
 
   "12-future": `Three shifts to expect, each one already true inside Eva rather than predicted.
 → Step 1: more automations. Routine work runs on a schedule or a trigger, and people set direction rather than tasks.
-→ Step 2: mistakes become cheap. When a change can be remade in minutes, being wrong stops being expensive.
-→ Step 3: everything in sandboxes, managed from chat, and the fleet lights up behind it. Eva's own development already works this way.
+→ Step 2: mistakes become cheap. When a change can be remade in minutes, being wrong stops being expensive. Try more, worry less.
+→ Step 3: everything in sandboxes, managed from chat, and the fleet lights up behind it. Eva's own development already works this way, and the Grok bot merges its changes. Next, the same for all our work.
 Detail: say plainly that this is a direction of travel, not a plan with dates. Nothing here is a commitment.`,
 
   "13-developer": `The job did not disappear when the model started writing the code, it moved.
@@ -203,7 +203,7 @@ Figures: 4,732 changes, 887 pieces of work raised, 367 working sessions, 1,348 s
 
   "a04-adoption": `Adoption was not announced, it followed the tool becoming easy enough to use.
 → Step 1: July onward lights and the earlier months dim. The step change is July, when work moved to the cloud.
-→ Step 2: the three supporting rows. The tool left one person's hands.
+→ Step 2: the three figures count up. Read them as sentences: 13 people beyond the developer have raised work in Eva; 390 pieces of work were raised against CarePulse; 225 sessions ended in a bundle of changes ready to review. The tool left one person's hands.
 Detail: June is genuinely zero, not missing data, and the footnote says so — do not skip past it, because volunteering the gap is what makes the rest credible.
 Figures: sessions per month in 2026 — Jan 13, Feb 11, Mar 31, Apr 28, May 9, Jun 0, Jul 75, Aug 109, Sep 91. 13 people beyond the developer raised work; 390 pieces of work against CarePulse; 225 sessions ended in a bundle ready to review. To 16 September 2026.`,
 
@@ -388,7 +388,7 @@ Detail: the old method started each provider as a command-line program and read 
 Figures: Cursor 5 August 2026, Codex 12 August 2026, OpenCode 14 August 2026; the old runner deleted 18 August 2026.`,
 
   "annual-c03-handoff": `A choice of supplier is worth little if changing your mind means starting again.
-→ Step 1: the conversation card moves from one provider to the other and the messages do not change.
+→ Step 1: the conversation card lifts off Claude and lands on Cursor, word for word, and a handed-over badge appears on it.
 Detail: each provider keeps its own private record of the conversation inside the workspace, so before this a mid-conversation switch started the new provider blind. Replies are now stamped with the model that produced them, and on a switch only the turns the incoming provider has not seen are passed across, capped in size and clearly marked. The chat shows a badge on the turn where the handover happened, so the transcript stays honest about who wrote what.
 Figures: cross-provider handoffs landed 24 August 2026.`,
 
@@ -413,8 +413,8 @@ Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 day
 
   "annual-c07-sandbox-economics": `Every piece of work gets its own cloud workspace, so the discipline is making sure they do not quietly accumulate.
 → Step 1: while the work is alive its snapshot never expires, and only the most recent one is kept.
-→ Step 2: when a session or task ends, the workspace is deleted after a 48-hour grace period. Reopening the work inside that window cancels the deletion.
-→ Step 3: a weekly sweep clears anything the ordinary path missed.
+→ Step 2: the hours count down and the bar drains. When a session or task ends, the workspace is deleted after a 48-hour grace period. Reopening the work inside that window cancels the deletion.
+→ Step 3: the beam turns once round the calendar. A weekly sweep clears anything the ordinary path missed.
 Detail: short-lived workspaces expire after a day instead. This is also part of why the provider changed: the previous provider's snapshots could not capture running processes or a seeded database, so every start re-ran the setup. Deleting a workspace now actively purges its snapshots rather than trusting the provider to cascade.
 Figures: one snapshot retained per workspace, 48-hour grace period, weekly sweep, one-day expiry for short-lived workspaces. Snapshot lifecycle documented in the repository.`,
 
