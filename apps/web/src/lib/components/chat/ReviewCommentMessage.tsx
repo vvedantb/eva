@@ -1,9 +1,6 @@
 import { IconMessage } from "@tabler/icons-react";
 import { Surface } from "@eva/ui";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { parseReviewCommentSegments } from "@/lib/reviewComments";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -16,7 +13,7 @@ interface ReviewCommentMessageProps {
 // `wrap-anywhere` rather than `wrap-break-word`: only the former shrinks the
 // min-content width, so an unbreakable token (JWT, long URL) wraps inside the
 // bubble instead of widening it. `pre` blocks are unaffected (white-space: pre).
-const BODY_CLASS = `${MARKDOWN_PROSE_CLASS} text-sm leading-relaxed wrap-anywhere`;
+const BODY_CLASS = "text-sm wrap-anywhere";
 
 // This component only ever renders user-authored chat messages, whose composer
 // offers both teammates and data entities, so every `@` token here needs its

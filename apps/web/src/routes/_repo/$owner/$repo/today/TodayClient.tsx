@@ -6,15 +6,11 @@ import { api, DAILY_STANDUP_KEY } from "@eva/backend";
 import {
   CenteredSpinner,
   cn,
-  STREAMDOWN_TABLE_RADIUS_CLASS,
   motionBase,
   motionStagger,
 } from "@eva/ui";
 import { m } from "motion/react";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { Markdown } from "@eva/ui/markdown";
 import { IconSunrise } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -22,16 +18,13 @@ import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
-/** Same plugin set as the changelog surfaces, so all three render identically. */
-const standupPlugins = { cjk, math, mermaid };
-
 /**
  * A standup is a lead line plus a couple of `###` theme headings, so the
  * default heading scale swamps the bullets it labels. Demote headings to a
  * quiet section label and tighten list spacing to keep each card skimmable.
  */
 const standupProseClass =
-  "text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 " +
+  "text-sm " +
   "[&_h1]:text-xs [&_h2]:text-xs [&_h3]:text-xs [&_h4]:text-xs " +
   "[&_h1]:font-medium [&_h2]:font-medium [&_h3]:font-medium [&_h4]:font-medium " +
   "[&_h1]:uppercase [&_h2]:uppercase [&_h3]:uppercase [&_h4]:uppercase " +
@@ -119,15 +112,9 @@ export function TodayClient() {
                   </time>
                 </header>
                 <div className="px-4 py-3">
-                  <Streamdown
-                    className={cn(
-                      standupProseClass,
-                      STREAMDOWN_TABLE_RADIUS_CLASS,
-                    )}
-                    plugins={standupPlugins}
-                  >
+                  <Markdown className={standupProseClass}>
                     {entry.content}
-                  </Streamdown>
+                  </Markdown>
                 </div>
               </article>
             </m.li>

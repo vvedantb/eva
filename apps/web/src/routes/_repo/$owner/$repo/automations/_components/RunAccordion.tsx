@@ -27,13 +27,8 @@ import dayjs from "@eva/shared/dates";
 import { formatDuration } from "@eva/shared/duration";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { Markdown } from "@eva/ui/markdown";
 import { FindingsList } from "./FindingsList";
-
-const summaryPlugins = { cjk, math, mermaid };
 
 export function LatestRun({
   run,
@@ -339,12 +334,7 @@ function RunAccordion({
                   )}
                 {run.resultSummary && (
                   <div>
-                    <Streamdown
-                      className="text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                      plugins={summaryPlugins}
-                    >
-                      {run.resultSummary}
-                    </Streamdown>
+                    <Markdown className="text-sm">{run.resultSummary}</Markdown>
                   </div>
                 )}
               </>

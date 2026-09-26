@@ -9,11 +9,6 @@ import {
   CollapsibleTrigger,
 } from "../ui/collapsible";
 import { cn } from "../utils/cn";
-import { STREAMDOWN_TABLE_RADIUS_CLASS } from "../utils/surface-radius";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import { IconBrain, IconChevronDown } from "@tabler/icons-react";
 import {
   createContext,
@@ -25,8 +20,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
 
+import { Markdown } from "../markdown/Markdown";
 import { Shimmer } from "./shimmer";
 
 interface ReasoningContextValue {
@@ -215,8 +210,6 @@ export type ReasoningContentProps = ComponentProps<
   children: string;
 };
 
-const streamdownPlugins = { cjk, code, math, mermaid };
-
 export const ReasoningContent = memo(
   ({ className, children, ...props }: ReasoningContentProps) => (
     <CollapsibleContent
@@ -227,12 +220,7 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown
-        className={STREAMDOWN_TABLE_RADIUS_CLASS}
-        plugins={streamdownPlugins}
-      >
-        {children}
-      </Streamdown>
+      <Markdown>{children}</Markdown>
     </CollapsibleContent>
   ),
 );

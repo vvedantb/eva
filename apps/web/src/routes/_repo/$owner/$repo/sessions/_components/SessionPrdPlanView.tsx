@@ -14,11 +14,11 @@ import {
   PlanContent,
   PlanFooter,
   PlanTrigger,
-  MessageResponse,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import {
   IconCheck,
   IconCode,
@@ -231,9 +231,9 @@ export function SessionPrdPlanView({
               isPanel ? "min-h-0 flex-1" : "max-h-40 sm:max-h-64",
             )}
           >
-            <MessageResponse className="prose prose-sm dark:prose-invert max-w-none">
+            <Markdown className="text-sm">
               {planContent}
-            </MessageResponse>
+            </Markdown>
           </div>
         )}
       </PlanContent>
