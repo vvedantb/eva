@@ -778,6 +778,9 @@ importers:
       embla-carousel-react:
         specifier: ^8.5.1
         version: 8.6.0(react@19.2.1)
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.45
       media-chrome:
         specifier: ^4.14.0
         version: 4.19.0(react@19.2.1)

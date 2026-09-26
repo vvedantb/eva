@@ -3,7 +3,7 @@ import { parseMarkdownIntoBlocks } from "streamdown";
 import {
   parseMarkdownIntoBlocksIncremental,
   resetIncrementalMarkdownBlocks,
-} from "./incremental-markdown-blocks";
+} from "./incrementalBlocks";
 
 /**
  * The whole point of the incremental split is that it is indistinguishable

@@ -5,9 +5,9 @@ import {
   Badge,
   Button,
   cn,
-  MessageResponse,
   motionBase,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -171,9 +171,9 @@ export function ProposedPlanCard({
                   canCollapse && !expanded && "max-h-64 overflow-hidden",
                 )}
               >
-                <MessageResponse className="prose prose-sm dark:prose-invert max-w-none">
+                <Markdown className="text-sm">
                   {canCollapse && !expanded ? (collapsedPreview ?? "") : displayed}
-                </MessageResponse>
+                </Markdown>
               </div>
               {canCollapse && !expanded ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-card via-card/80 to-transparent" />

@@ -12,23 +12,15 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { cn } from "../utils/cn";
-import { parseMarkdownIntoBlocksIncremental } from "../utils/incremental-markdown-blocks";
-import { STREAMDOWN_TABLE_RADIUS_CLASS } from "../utils/surface-radius";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import {
   createContext,
-  memo,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -320,31 +312,6 @@ export const MessageBranchPage = ({
     </ButtonGroupText>
   );
 };
-
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
-
-const streamdownPlugins = { cjk, code, math, mermaid };
-
-export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        STREAMDOWN_TABLE_RADIUS_CLASS,
-        className,
-      )}
-      plugins={streamdownPlugins}
-      // Streamdown re-renders only the block still being written, but its
-      // default split re-lexes the whole reply behind every token. This one
-      // reuses the blocks a byte-identical prefix already produced.
-      parseMarkdownIntoBlocksFn={parseMarkdownIntoBlocksIncremental}
-      {...props}
-    />
-  ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children,
-);
-
-MessageResponse.displayName = "MessageResponse";
 
 export type MessageToolbarProps = ComponentProps<"div">;
 

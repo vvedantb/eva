@@ -6,10 +6,7 @@ import { AnimatePresence, m } from "motion/react";
 import { IconArrowUpRight, IconInbox } from "@tabler/icons-react";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { embedReadyMessage } from "@/lib/embed/embedded";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -165,7 +162,7 @@ export function NotificationDetailPane({
                   )}
                   repoId={notification.repoId}
                   atKind="user"
-                  className={MARKDOWN_PROSE_CLASS}
+                  className="text-sm"
                 />
               ) : (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">

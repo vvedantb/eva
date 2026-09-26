@@ -31,10 +31,7 @@ import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { FunctionReturnType } from "convex/server";
 import { AI_MODEL_OPTIONS, getAIModelProvider } from "@eva/backend";
 import type { api } from "@eva/backend";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { getUserDisplayName } from "./task-detail-constants";
 import type { TaskComment } from "../_utils/commentThread";
@@ -42,12 +39,7 @@ import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { RunActivityLog } from "../RunActivityLog";
 import { RunMedia } from "../RunMedia";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
-
-const summaryPlugins = { cjk, math, mermaid };
+import { Markdown } from "@eva/ui/markdown";
 
 /** Matches scroll cap used for run logs inside the same accordion. */
 const RUN_ACCORDION_SCROLL_CLASS =
@@ -309,12 +301,9 @@ export function RunTimelineItem({
               />
             )}
             {run.resultSummary && (
-              <Streamdown
-                className="text-sm text-muted-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                plugins={summaryPlugins}
-              >
+              <Markdown className="text-sm text-muted-foreground">
                 {run.resultSummary}
-              </Streamdown>
+              </Markdown>
             )}
             {run.error && (
               <div className="rounded bg-destructive/10 p-2 text-sm text-destructive">
@@ -391,7 +380,7 @@ function RunInlineComment({
         repoBasePath={basePath}
         repoId={repo._id}
         atKind="user"
-        className={`${MARKDOWN_PROSE_CLASS} text-sm wrap-break-word`}
+        className="text-sm wrap-break-word"
       />
     </div>
   );

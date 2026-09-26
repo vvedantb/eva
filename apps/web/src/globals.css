@@ -1,7 +1,12 @@
 @import "tailwindcss";
 @import "shadow-plugin";
+@import "../../../packages/ui/src/markdown/markdown.css";
 
 @config '../tailwind.config.js';
+
+/* Streamdown styles its tables, diagrams and controls with Tailwind classes
+ * inside its own dist, which the content globs never reach. */
+@source "../node_modules/streamdown/dist";
 
 /* v4 changed the default border colour to `currentcolor`. The upgrade codemod
  * adds a gray-200 compatibility shim here; it is not needed, because the base
@@ -2013,12 +2018,6 @@ html[data-page-hidden] .landing-pulse-dot,
   animation:
     logo-draw-stroke 1.8s ease forwards,
     logo-draw-fill 1.8s ease forwards;
-}
-
-/* Unlayered — streamdown table-wrapper uses rounded-lg; inner scroll div uses rounded-md. */
-[data-streamdown="table-wrapper"],
-[data-streamdown="table-wrapper"] > div:has([data-streamdown="table"]) {
-  border-radius: clamp(0.75rem, var(--radius), 1.25rem);
 }
 
 /* ───────────────────────────────────────────────────────────────────
