@@ -56,6 +56,24 @@ export const DAEMON_PID_LIVE_FN =
   `[ -r "/proc/$p/cmdline" ] || return 0; ` +
   `tr '\\0' '\\n' < "/proc/$p/cmdline" | grep -q 'run-design[.]mjs'; }`;
 
+/**
+ * Watchdog probe: exits 0 only while the callback runner is live, unfinished
+ * and not a zombie. `eva_pid_live` rather than a bare `kill -0`:
+ * /tmp/run-design.pid survives a stop/resume, and the reboot re-issues pids
+ * from 1, so an unguarded check reports a long-dead runner alive and the
+ * watchdog grants grace forever (see {@link DAEMON_PID_LIVE_FN}).
+ */
+export const CALLBACK_LIVENESS_COMMAND = [
+  DAEMON_PID_LIVE_FN,
+  [
+    "test ! -f /tmp/run-design.done",
+    "eva_pid_live /tmp/run-design.pid",
+    'pid="$(cat /tmp/run-design.pid)"',
+    'state="$(ps -p "$pid" -o stat= 2>/dev/null | tr -d " ")"',
+    'case "$state" in Z*) exit 1 ;; *) exit 0 ;; esac',
+  ].join(" && "),
+].join("; ");
+
 /** Shell snippet that prints alive | optsmismatch | stale | cold. */
 export function buildDaemonAliveCheckCmd(
   entityIdField: string,
