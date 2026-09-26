@@ -27,7 +27,12 @@ export interface MorphProps {
  *
  * @example <Morph states={[<OldFlow key="old" />, <NewFlow key="new" />]} from={1} />
  */
-export function Morph({ states, from = 0, blur = true, className }: MorphProps) {
+export function Morph({
+  states,
+  from = 0,
+  blur = true,
+  className,
+}: MorphProps) {
   const step = useDeckStep();
   const index = Math.max(0, Math.min(step - from, states.length - 1));
   const focus = (px: number) => (blur ? { filter: `blur(${px}px)` } : {});

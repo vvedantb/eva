@@ -37,7 +37,10 @@ export interface MotionCue {
   delay: number;
 }
 
-export const MotionCueContext = createContext<MotionCue>({ on: true, delay: 0 });
+export const MotionCueContext = createContext<MotionCue>({
+  on: true,
+  delay: 0,
+});
 
 /**
  * Resolves when a primitive should play. An explicit `step` wins and starts

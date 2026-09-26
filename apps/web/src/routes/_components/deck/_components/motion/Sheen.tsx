@@ -16,7 +16,8 @@ export interface SheenProps {
 
 const BAND = {
   dark: "linear-gradient(90deg, transparent, rgba(255,255,255,0.16) 50%, transparent)",
-  light: "linear-gradient(90deg, transparent, rgba(255,255,255,0.75) 50%, transparent)",
+  light:
+    "linear-gradient(90deg, transparent, rgba(255,255,255,0.75) 50%, transparent)",
 };
 
 /**
@@ -48,9 +49,7 @@ export function Sheen({
         initial={{ x: "-100%" }}
         animate={{ x: on ? "160%" : "-100%" }}
         transition={
-          on
-            ? { duration, ease: EASE.inOut, delay: start }
-            : { duration: 0 }
+          on ? { duration, ease: EASE.inOut, delay: start } : { duration: 0 }
         }
       />
     </div>

@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { createContext } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { m } from "motion/react";
 import { useMotionCue } from "./deckContext";
 import { BRAND_GRADIENT, EASE } from "./motion/tokens";
@@ -39,6 +40,24 @@ function sliceGeometry(slice: AccentSlice | undefined): {
   return {
     size: `${(slice.total / slice.length) * 100}%`,
     position: `${(slice.start / (slice.total - slice.length)) * 100}%`,
+  };
+}
+
+/**
+ * True inside an `Accent`. Gradient text is clipped to the glyphs of the
+ * element that owns the background, and moving descendants (odometer columns)
+ * escape that clip, so they read this and paint their own slice instead.
+ */
+export const InAccentContext = createContext(false);
+
+/** A static slice of the brand gradient, for a glyph that moves on its own. Pair with `bg-clip-text text-transparent`. */
+export function accentSliceStyle(slice: AccentSlice): CSSProperties {
+  const { size, position } = sliceGeometry(slice);
+  return {
+    backgroundImage: BRAND_GRADIENT,
+    backgroundSize: `${size} 100%`,
+    backgroundPosition: `${position} 0%`,
+    backgroundRepeat: "no-repeat",
   };
 }
 
@@ -84,7 +103,7 @@ export function Accent({ children }: { children: ReactNode }) {
   const cue = useMotionCue(undefined, SHEEN_LEAD);
   return (
     <AccentText on={cue.on} delay={cue.delay}>
-      {children}
+      <InAccentContext value>{children}</InAccentContext>
     </AccentText>
   );
 }

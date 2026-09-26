@@ -2,9 +2,8 @@ import { Children, isValidElement } from "react";
 import type { ReactNode } from "react";
 import { m } from "motion/react";
 import type { TargetAndTransition, Transition } from "motion/react";
-import { cn } from "@eva/ui";
 import { MotionCueContext, useDeckStep } from "./deckContext";
-import { Kicker, Title } from "./DeckText";
+import { Body, Kicker, Title } from "./DeckText";
 import { MaskedText } from "./motion/MaskedText";
 import { DUR, EASE } from "./motion/tokens";
 
@@ -23,7 +22,7 @@ export {
 export type { DeckTheme } from "./deckContext";
 export { BRAND, EASE_OUT } from "./motion/tokens";
 export { Accent } from "./DeckAccent";
-export { Kicker, Title } from "./DeckText";
+export { Body, Footnote, Kicker, Shell, Title } from "./DeckText";
 export { Card } from "./DeckSurface";
 
 type RevealFrom = "up" | "down" | "left" | "right" | "none";
@@ -210,67 +209,5 @@ export function StaggerItem({
     >
       {children}
     </m.div>
-  );
-}
-
-/** The standard slide frame: full bleed, generous gutters. */
-export function Shell({
-  children,
-  className,
-  center = false,
-}: {
-  children: ReactNode;
-  className?: string;
-  center?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "relative flex h-full w-full flex-col px-24 py-20",
-        center && "items-center justify-center text-center",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function Body({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <p
-      className={cn(
-        // Prose gets `pretty`, not `balance`: orphans go, the rest holds still.
-        "mt-6 max-w-2xl text-xl leading-relaxed text-pretty text-white/65",
-        className,
-      )}
-    >
-      {children}
-    </p>
-  );
-}
-
-export function Footnote({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "absolute right-24 bottom-10 left-24 text-xs text-pretty text-white/35",
-        className,
-      )}
-    >
-      {children}
-    </div>
   );
 }

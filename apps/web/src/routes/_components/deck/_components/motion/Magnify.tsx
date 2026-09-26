@@ -37,7 +37,9 @@ export function Magnify({
           focus === null ? "rest" : focus === index ? "lifted" : "receded";
         return (
           <m.div
-            key={isValidElement(child) && child.key !== null ? child.key : index}
+            key={
+              isValidElement(child) && child.key !== null ? child.key : index
+            }
             className="relative"
             style={{ zIndex: state === "lifted" ? 1 : 0 }}
             initial={false}

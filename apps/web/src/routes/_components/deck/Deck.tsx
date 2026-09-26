@@ -40,12 +40,9 @@ interface DeckProps {
 }
 
 /**
- * Slides arrive out of depth rather than sliding across: the incoming slide
- * travels in from behind the screen, turned slightly towards the direction of
- * travel, and settles on a long expo curve while the outgoing one falls back
- * the other way in half the time. No animated `filter` — blurring a
- * full-screen layer every frame is the expensive path, and the push in Z plus
- * the `DeckWash` light carry the "this replaces that" reading for free.
+ * The incoming slide travels in from depth, slightly turned, on a long expo
+ * curve; the outgoing one falls back the other way in under half the time. No
+ * animated `filter`: the Z push plus the `DeckWash` light carry the change.
  */
 const slideVariants = {
   enter: (dir: number) => ({

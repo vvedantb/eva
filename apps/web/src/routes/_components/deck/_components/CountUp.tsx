@@ -1,6 +1,8 @@
+import { use } from "react";
 import { animate, m } from "motion/react";
 import { cn } from "@eva/ui";
 import { useDeckStep } from "./deckContext";
+import { InAccentContext, accentSliceStyle } from "./DeckAccent";
 import { EASE, EASE_OUT, cueTransition } from "./motion/tokens";
 
 const DEFAULT_FORMAT = new Intl.NumberFormat("en-GB").format;
@@ -88,8 +90,24 @@ interface RollDigitsProps {
   className?: string;
 }
 
+/** Columns fade out at the top and bottom edge, like the window of a mechanical counter. */
+const COLUMN_WINDOW =
+  "linear-gradient(transparent, black 14%, black 86%, transparent)";
+
 function RollDigits({ text, on, duration, delay, className }: RollDigitsProps) {
+  const accent = use(InAccentContext);
   const chars = [...text];
+  const paint = (index: number) =>
+    accent
+      ? {
+          className: "bg-clip-text text-transparent",
+          style: accentSliceStyle({
+            start: index,
+            length: 1,
+            total: chars.length,
+          }),
+        }
+      : {};
   const digits = chars.filter((char) => /\d/.test(char)).length;
   let seen = 0;
 
@@ -105,6 +123,7 @@ function RollDigits({ text, on, duration, delay, className }: RollDigitsProps) {
             <m.span
               key={index}
               aria-hidden
+              {...paint(index)}
               initial={{ opacity: 0 }}
               animate={{ opacity: on ? 1 : 0 }}
               transition={cueTransition(on, delay)}
@@ -120,8 +139,8 @@ function RollDigits({ text, on, duration, delay, className }: RollDigitsProps) {
           <span
             key={index}
             aria-hidden
-            className="overflow-hidden"
-            style={{ height: "1lh" }}
+            className="-my-[0.12em] overflow-hidden py-[0.12em]"
+            style={{ height: "calc(1lh + 0.24em)", maskImage: COLUMN_WINDOW }}
           >
             <m.span
               className="block"
@@ -139,7 +158,9 @@ function RollDigits({ text, on, duration, delay, className }: RollDigitsProps) {
             >
               {CELLS.map((cell, row) => (
                 <span key={row} className="block">
-                  {cell}
+                  <span className="block" {...paint(index)}>
+                    {cell}
+                  </span>
                 </span>
               ))}
             </m.span>
