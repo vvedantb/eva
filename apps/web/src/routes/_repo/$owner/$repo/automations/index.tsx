@@ -113,6 +113,7 @@ function AutomationsHubPage() {
                 title={entry.title}
                 blurb={entry.blurb}
                 cronSchedule={entry.cronSchedule}
+                trigger={entry.trigger}
                 installed={entry.installed}
                 numId={entry.numId}
                 basePath={basePath}

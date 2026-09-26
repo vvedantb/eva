@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { internalMutation } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import { workflow } from "../workflowManager";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
@@ -14,6 +14,46 @@ import {
   createTaskRunSummary,
   setTaskLastRunStartedAt,
 } from "../_agentTasks/runSummary";
+
+/**
+ * Inserts a `todo` quick task on the automation's repo, as the automation's
+ * findings and event triggers both do. The caller decides whether to start it.
+ */
+export async function insertAutomationTask(
+  ctx: MutationCtx,
+  params: {
+    automation: Doc<"automations">;
+    repo: Doc<"githubRepos">;
+    userId: Id<"users">;
+    title: string;
+    description: string;
+  },
+): Promise<{ taskId: Id<"agentTasks">; numId: number }> {
+  const { automation, repo, userId, title, description } = params;
+  const now = Date.now();
+  const numId = await allocateNumId(ctx.db, automation.repoId, "agentTasks");
+  const taskId = await ctx.db.insert("agentTasks", {
+    title,
+    description,
+    repoId: automation.repoId,
+    status: "todo",
+    createdAt: now,
+    updatedAt: now,
+    createdBy: userId,
+    baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
+    model: automation.model ?? repo.defaultModel,
+    numId,
+  });
+  await createTaskRunSummary(ctx, taskId, automation.repoId);
+  await ensureSubscribed(ctx, taskId, userId);
+  await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
+    taskId,
+    title,
+    description,
+    existingTags: [],
+  });
+  return { taskId, numId };
+}
 
 /** Creates agent tasks from selected automation findings and optionally auto-starts them. */
 export const createTasksFromFindings = authMutation({
@@ -40,7 +80,6 @@ export const createTasksFromFindings = authMutation({
     const selectedIds = new Set(args.findingIds);
     const updatedFindings = [...run.findings];
     const taskIds: Id<"agentTasks">[] = [];
-    const now = Date.now();
 
     for (let i = 0; i < updatedFindings.length; i++) {
       const finding = updatedFindings[i];
@@ -54,25 +93,12 @@ export const createTasksFromFindings = authMutation({
         descriptionParts.push(`\nSuggested fix: ${finding.suggestedFix}`);
       }
 
-      const taskId = await ctx.db.insert("agentTasks", {
+      const { taskId } = await insertAutomationTask(ctx, {
+        automation,
+        repo,
+        userId: ctx.userId,
         title: finding.title,
         description: descriptionParts.join(""),
-        repoId: automation.repoId,
-        status: "todo",
-        createdAt: now,
-        updatedAt: now,
-        createdBy: ctx.userId,
-        baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-        model: automation.model ?? repo.defaultModel,
-        numId: await allocateNumId(ctx.db, automation.repoId, "agentTasks"),
-      });
-      await createTaskRunSummary(ctx, taskId, automation.repoId);
-      await ensureSubscribed(ctx, taskId, ctx.userId);
-      await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
-        taskId,
-        title: finding.title,
-        description: descriptionParts.join(""),
-        existingTags: [],
       });
 
       updatedFindings[i] = { ...finding, taskId };

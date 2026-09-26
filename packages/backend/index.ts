@@ -7,6 +7,13 @@ export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPu
 export { parseUsageLimitResetTime } from "./convex/_taskWorkflow/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
+  DEFAULT_ISSUE_LABEL,
+  REPO_EVENT_LABELS,
+  USER_REPO_EVENTS,
+  type AutomationTrigger,
+  type RepoEventKind,
+} from "./convex/_automationEvents/labels";
+export {
   INCOMPLETE_PR_RECAP_MESSAGE,
   isIncompleteReadyRecap,
   isViewableRecap,

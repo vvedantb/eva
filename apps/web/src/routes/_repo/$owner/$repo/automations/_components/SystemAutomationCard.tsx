@@ -3,19 +3,25 @@ import { Button, Surface, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconArrowRight,
+  IconBolt,
   IconBook,
   IconBug,
   IconCheck,
   IconClock,
   IconEye,
   IconFileText,
+  IconMessageCircle,
   IconRadioactive,
   IconSitemap,
   IconSparkles,
   IconTestPipe,
+  IconTicket,
+  IconTool,
 } from "@tabler/icons-react";
+import type { AutomationTrigger } from "@eva/backend";
 import type { Icon } from "@tabler/icons-react";
 import { describeCron } from "@/lib/components/CronScheduleCard";
+import { describeTrigger } from "./TriggerSection";
 
 /**
  * Per-entry glyph for the card's icon tile. Keyed by catalog key so the backend
@@ -28,6 +34,9 @@ const ENTRY_ICONS: Record<string, Icon> = {
   "generate-docs": IconBook,
   "improve-code-structure": IconSitemap,
   "thermo-nuclear-code-review": IconRadioactive,
+  "ci-autofix": IconTool,
+  "review-responder": IconMessageCircle,
+  "issue-to-task": IconTicket,
 };
 
 interface SystemAutomationCardProps {
@@ -37,6 +46,8 @@ interface SystemAutomationCardProps {
   blurb: string;
   /** Cron expression in UTC; shown in the reader's local time. */
   cronSchedule: string;
+  /** Event presets show what fires them instead of a schedule. */
+  trigger: AutomationTrigger;
   readOnly: boolean;
   installed: boolean;
   /** Per-repo URL id once installed; null otherwise. */
@@ -56,6 +67,7 @@ export function SystemAutomationCard({
   title,
   blurb,
   cronSchedule,
+  trigger,
   readOnly,
   installed,
   numId,
@@ -64,6 +76,7 @@ export function SystemAutomationCard({
   onUninstall,
 }: SystemAutomationCardProps) {
   const schedule = describeCron(cronSchedule);
+  const eventText = describeTrigger(trigger);
   const EntryIcon = ENTRY_ICONS[entryKey] ?? IconSparkles;
   // Plain `string`: `<Link to>` is a union of known route paths.
   const href: string = `${basePath}/automations/${numId}`;
@@ -102,12 +115,18 @@ export function SystemAutomationCard({
 
         {/* Pre-install the schedule is only a seed value, so showing a clock
             time would read as a fixed property of the automation. */}
-        {(installed || readOnly) && (
+        {(installed || readOnly || eventText !== null) && (
           <div className="flex flex-wrap items-center gap-1.5">
-            {installed && (
-              <Chip icon={IconClock}>
-                {schedule.valid ? schedule.text : cronSchedule}
-              </Chip>
+            {/* An event trigger is fixed by the catalog, so unlike a
+                schedule it is shown before install too. */}
+            {eventText !== null ? (
+              <Chip icon={IconBolt}>{eventText}</Chip>
+            ) : (
+              installed && (
+                <Chip icon={IconClock}>
+                  {schedule.valid ? schedule.text : cronSchedule}
+                </Chip>
+              )
             )}
             {readOnly && <Chip icon={IconEye}>Report only</Chip>}
           </div>

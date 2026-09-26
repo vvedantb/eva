@@ -206,7 +206,11 @@ export const updateRunStatus = internalMutation({
     if (args.prUrl !== undefined) patch.prUrl = args.prUrl;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     if (args.findings !== undefined) patch.findings = args.findings;
-    if (args.status === "success" || args.status === "error") {
+    if (
+      args.status === "success" ||
+      args.status === "error" ||
+      args.status === "cancelled"
+    ) {
       patch.finishedAt = Date.now();
     }
     await ctx.db.patch(args.runId, patch);

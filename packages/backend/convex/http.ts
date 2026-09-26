@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import { streamingHeartbeatHmacMessage } from "./_sandbox_runtime/callbackAuth";
+import { parseRepoEvents } from "./_automationEvents/events";
 
 const http = httpRouter();
 
@@ -582,6 +583,16 @@ http.route({
       !(await verifyWebhookSignature(body, signature, secret))
     ) {
       return new Response("Invalid signature", { status: 401 });
+    }
+
+    // Event-triggered automations (CI auto-fix, review responder, issue to
+    // task, user automations). Independent of the state sync below.
+    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.dispatch,
+        { event: repoEvent },
+      );
     }
 
     if (event === "pull_request") {
