@@ -114,6 +114,16 @@ const router = createRouter({
   // Twice the 50ms default: long enough that dragging the pointer across a
   // sidebar does not queue a fetch for every item it crosses.
   defaultPreloadDelay: 100,
+  // Page swaps fade the content column (`.vt-page` in globals.css). Keyed on
+  // the leaf route, so param-only moves — session to session, tab segments,
+  // search filters — stay instant. Returning `false` skips the transition.
+  defaultViewTransition: {
+    types: ({ fromLocation, toLocation }) =>
+      fromLocation !== undefined &&
+      leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
+        ? ["page"]
+        : false,
+  },
   // Monorepo apps: address bar + link hrefs use /owner/repo/app/… while the
   // route tree matches /owner/repo--app/… (single $repo segment).
   rewrite: {
@@ -127,6 +137,10 @@ const router = createRouter({
     },
   },
 });
+
+function leafRouteId(pathname: string): string | undefined {
+  return router.getMatchedRoutes(pathname).foundRoute?.id;
+}
 
 declare module "@tanstack/react-router" {
   interface Register {
