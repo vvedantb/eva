@@ -63,7 +63,7 @@ export function AnnualPeople() {
           initial={false}
           animate={
             closing
-              ? { scale: 0.86, y: -12, opacity: 0.3 }
+              ? { scale: 0.9, y: -12, opacity: 0.6 }
               : { scale: 1, y: 0, opacity: 1 }
           }
           transition={{ duration: DUR.hero, ease: EASE.expo }}
