@@ -12,6 +12,12 @@ export {
   isViewableRecap,
 } from "./convex/_prRecapWorkflow/recapState";
 export {
+  CONNECTOR_ENV_KEYS,
+  CONNECTOR_PROVIDERS,
+  CONNECTOR_LABEL,
+} from "./convex/_connectors/providers";
+export { pickConnectorToken } from "./convex/_connectors/pick";
+export {
   COMMENT_ANCHOR_PARAM,
   withCommentAnchor,
   AI_MODEL_OPTIONS,

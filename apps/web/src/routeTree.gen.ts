@@ -28,6 +28,7 @@ import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artif
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
 import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
 import { Route as GlobalSettingsAccountsRouteImport } from './routes/_global/settings/accounts'
+import { Route as GlobalSettingsConnectionsRouteImport } from './routes/_global/settings/connections'
 import { Route as GlobalSettingsExperimentalRouteImport } from './routes/_global/settings/experimental'
 import { Route as GlobalSettingsGrokBotRouteImport } from './routes/_global/settings/grok-bot'
 import { Route as GlobalSettingsNotificationsRouteImport } from './routes/_global/settings/notifications'
@@ -230,6 +231,12 @@ const GlobalSettingsAccountsRoute = GlobalSettingsAccountsRouteImport.update({
   path: '/accounts',
   getParentRoute: () => GlobalSettingsRouteRoute,
 } as any)
+const GlobalSettingsConnectionsRoute =
+  GlobalSettingsConnectionsRouteImport.update({
+    id: '/connections',
+    path: '/connections',
+    getParentRoute: () => GlobalSettingsRouteRoute,
+  } as any)
 const GlobalSettingsExperimentalRoute =
   GlobalSettingsExperimentalRouteImport.update({
     id: '/experimental',
@@ -878,6 +885,7 @@ export interface FileRoutesByFullPath {
   '/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
+  '/settings/connections': typeof GlobalSettingsConnectionsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
   '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
@@ -1002,6 +1010,7 @@ export interface FileRoutesByTo {
   '/whats-new': typeof GlobalWhatsNewRoute
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
+  '/settings/connections': typeof GlobalSettingsConnectionsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
   '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
@@ -1108,6 +1117,7 @@ export interface FileRoutesById {
   '/_global/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/_global/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/_global/settings/accounts': typeof GlobalSettingsAccountsRoute
+  '/_global/settings/connections': typeof GlobalSettingsConnectionsRoute
   '/_global/settings/experimental': typeof GlobalSettingsExperimentalRoute
   '/_global/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/_global/settings/notifications': typeof GlobalSettingsNotificationsRoute
@@ -1236,6 +1246,7 @@ export interface FileRouteTypes {
     | '/teams/$teamId'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
+    | '/settings/connections'
     | '/settings/experimental'
     | '/settings/grok-bot'
     | '/settings/notifications'
@@ -1360,6 +1371,7 @@ export interface FileRouteTypes {
     | '/whats-new'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
+    | '/settings/connections'
     | '/settings/experimental'
     | '/settings/grok-bot'
     | '/settings/notifications'
@@ -1465,6 +1477,7 @@ export interface FileRouteTypes {
     | '/_global/teams/$teamId'
     | '/_global/artifacts/$artifactId'
     | '/_global/settings/accounts'
+    | '/_global/settings/connections'
     | '/_global/settings/experimental'
     | '/_global/settings/grok-bot'
     | '/_global/settings/notifications'
@@ -1718,6 +1731,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/settings/accounts'
       preLoaderRoute: typeof GlobalSettingsAccountsRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
+    }
+    '/_global/settings/connections': {
+      id: '/_global/settings/connections'
+      path: '/connections'
+      fullPath: '/settings/connections'
+      preLoaderRoute: typeof GlobalSettingsConnectionsRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/experimental': {
@@ -2474,6 +2494,7 @@ declare module '@tanstack/react-router' {
 
 interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsAccountsRoute: typeof GlobalSettingsAccountsRoute
+  GlobalSettingsConnectionsRoute: typeof GlobalSettingsConnectionsRoute
   GlobalSettingsExperimentalRoute: typeof GlobalSettingsExperimentalRoute
   GlobalSettingsGrokBotRoute: typeof GlobalSettingsGrokBotRoute
   GlobalSettingsNotificationsRoute: typeof GlobalSettingsNotificationsRoute
@@ -2487,6 +2508,7 @@ interface GlobalSettingsRouteRouteChildren {
 
 const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsAccountsRoute: GlobalSettingsAccountsRoute,
+  GlobalSettingsConnectionsRoute: GlobalSettingsConnectionsRoute,
   GlobalSettingsExperimentalRoute: GlobalSettingsExperimentalRoute,
   GlobalSettingsGrokBotRoute: GlobalSettingsGrokBotRoute,
   GlobalSettingsNotificationsRoute: GlobalSettingsNotificationsRoute,

@@ -7,6 +7,8 @@ import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
 import { existsSync } from "fs";
 
 // callback-src/evaMcp.ts
+var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
+var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
 function buildEvaMcpServers({
   auth,
   baseUrl
@@ -20,15 +22,56 @@ function buildEvaMcpServers({
     }
   };
 }
+function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
+  const auth = env[authKey];
+  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
+  delete env[authKey];
+  delete env[urlKey];
+  if (!auth || !url) return { servers: {}, handoff: {} };
+  return {
+    servers: {
+      [name]: {
+        type: "http",
+        url,
+        headers: { Authorization: \`Bearer \${auth}\` }
+      }
+    },
+    handoff: {
+      [authKey]: auth,
+      [urlKey]: url
+    }
+  };
+}
 function consumeEvaMcpEnvironment(env) {
-  const auth = env.EVA_MCP_AUTH;
-  const baseUrl = env.EVA_MCP_BASE_URL;
-  const servers = buildEvaMcpServers({ auth, baseUrl });
+  const eva = buildEvaMcpServers({
+    auth: env.EVA_MCP_AUTH,
+    baseUrl: env.EVA_MCP_BASE_URL
+  });
+  const evaAuth = env.EVA_MCP_AUTH;
+  const evaBase = env.EVA_MCP_BASE_URL;
   delete env.EVA_MCP_AUTH;
   delete env.EVA_MCP_BASE_URL;
+  const linear = takeBearerServer(
+    env,
+    "linear",
+    "LINEAR_MCP_AUTH",
+    "LINEAR_MCP_URL",
+    LINEAR_MCP_DEFAULT_URL
+  );
+  const figma = takeBearerServer(
+    env,
+    "figma",
+    "FIGMA_MCP_AUTH",
+    "FIGMA_MCP_URL",
+    FIGMA_MCP_DEFAULT_URL
+  );
   return {
-    servers,
-    workerHandoffEnv: auth && baseUrl ? { EVA_MCP_AUTH: auth, EVA_MCP_BASE_URL: baseUrl } : {}
+    servers: { ...eva, ...linear.servers, ...figma.servers },
+    workerHandoffEnv: {
+      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
+      ...linear.handoff,
+      ...figma.handoff
+    }
   };
 }
 var consumed = consumeEvaMcpEnvironment(process.env);
