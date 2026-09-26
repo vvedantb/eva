@@ -26,6 +26,10 @@ import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
+import {
+  TriggerSection,
+  automationTriggerOf,
+} from "./_components/TriggerSection";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -97,22 +101,26 @@ export function AutomationClient({
         </div>
       }
       headerRight={
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={hasActiveRun === true || !automation.description}
-          onClick={() =>
-            withMutationToast(
-              runNow({ automationId: automation._id }),
-              "Run started",
-              "Couldn't start run",
-              "automation-run-now",
-            )
-          }
-        >
-          <IconPlayerPlay size={14} />
-          Run Now
-        </Button>
+        // Event presets act on a PR or issue, so there is nothing to run by hand.
+        automation.systemKey !== undefined &&
+        automationTriggerOf(automation).kind === "event" ? null : (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={hasActiveRun === true || !automation.description}
+            onClick={() =>
+              withMutationToast(
+                runNow({ automationId: automation._id }),
+                "Run started",
+                "Couldn't start run",
+                "automation-run-now",
+              )
+            }
+          >
+            <IconPlayerPlay size={14} />
+            Run Now
+          </Button>
+        )
       }
       tabs={
         <Tabs
@@ -282,12 +290,18 @@ function SettingsForm({
 
   return (
     <SettingsStack>
-      <CronScheduleCard
-        value={cronDraft}
-        onChange={setCronDraft}
-        onBlurCommit={(v) => {
-          if (v !== automation.cronSchedule) commit({ cronSchedule: v });
-        }}
+      <TriggerSection
+        trigger={automationTriggerOf(automation)}
+        onChange={(trigger) => commit({ trigger })}
+        schedule={
+          <CronScheduleCard
+            value={cronDraft}
+            onChange={setCronDraft}
+            onBlurCommit={(v) => {
+              if (v !== automation.cronSchedule) commit({ cronSchedule: v });
+            }}
+          />
+        }
       />
 
       <SettingsSection title="Description" bodyClassName="grid gap-5">

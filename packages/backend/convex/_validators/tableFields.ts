@@ -837,12 +837,38 @@ export const projectDetailsFields = {
   generatedSpec: v.optional(v.string()),
 };
 
+/**
+ * Repo events an automation can react to (see `_automationEvents/events.ts`).
+ * `ci_failed` and `pr_feedback` only ever fire for PRs Eva opened.
+ */
+export const repoEventKindValidator = v.union(
+  v.literal("ci_failed"),
+  v.literal("pr_feedback"),
+  v.literal("issue_labeled"),
+  v.literal("pr_opened"),
+  v.literal("pr_merged"),
+);
+
+/** What starts an automation: its cron schedule, or a repo event. */
+export const automationTriggerValidator = v.union(
+  v.object({ kind: v.literal("cron") }),
+  v.object({
+    kind: v.literal("event"),
+    event: repoEventKindValidator,
+    // `issue_labeled` only: the label that fires it (defaults to "eva").
+    label: v.optional(v.string()),
+  }),
+);
+
 export const automationFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
   title: v.string(),
   description: v.string(),
   cronSchedule: v.string(),
+  // Missing means `{ kind: "cron" }`, so rows from before event triggers
+  // keep their schedule without a migration.
+  trigger: v.optional(automationTriggerValidator),
   model: v.optional(aiModelValidator),
   enabled: v.boolean(),
   readOnly: v.optional(v.boolean()),
@@ -854,7 +880,7 @@ export const automationFields = {
   cronJobId: v.optional(v.string()),
   // Set when this row is a per-repo install of a hardcoded system automation
   // (see _automations/systemAutomations.ts). Content fields hold placeholders;
-  // the catalog overlays title/description/cronSchedule/readOnly/actionsEnabled
+  // the catalog overlays title/description/readOnly/actionsEnabled/trigger
   // at read and run time, so editing the code updates every install at once.
   systemKey: v.optional(v.string()),
   createdBy: v.id("users"),
@@ -876,6 +902,11 @@ export const automationRunFields = {
   activeWorkflowId: v.optional(v.string()),
   activityLog: v.optional(v.string()),
   findings: v.optional(v.array(automationFindingValidator)),
+  // Event-triggered runs only. `eventKey` dedupes a burst of webhooks into one
+  // run; `targetUrl` is the PR or issue the event was about.
+  eventKind: v.optional(repoEventKindValidator),
+  eventKey: v.optional(v.string()),
+  targetUrl: v.optional(v.string()),
 };
 
 /**
