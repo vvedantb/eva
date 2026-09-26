@@ -204,7 +204,6 @@ export function withSelfDefault<Ref extends EntityRef>(
  */
 export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   const { scopedRepoId } = credentials;
-  const isOrchestrator = credentials.isOrchestrator === true;
 
   /** The check the web mutations run: does this user reach this repo? */
   async function assertUserRepoAccess(
@@ -221,15 +220,14 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   }
 
   /**
-   * Credential-grade check: the user check plus the token pin. The master
-   * session reaches every repo the user can reach, so the pin does not apply
-   * to it.
+   * Credential-grade check: the user check plus the token pin. Manager Ave
+   * carries no `scopedRepoId`, so it reaches every repo the user can reach.
    */
   async function assertRepoAccess(
     repoId: string,
     userId: string,
   ): Promise<void> {
-    if (scopedRepoId && scopedRepoId !== repoId && !isOrchestrator) {
+    if (scopedRepoId && scopedRepoId !== repoId) {
       throw new Error(
         "Access denied: this token is scoped to a different repository.",
       );

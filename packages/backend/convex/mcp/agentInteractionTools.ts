@@ -269,7 +269,7 @@ urgency "normal" (default) also lands in the user's daily email digest if they h
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// orchestratorQuestionTools — master session only
+// orchestratorQuestionTools — Manager Ave only
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function orchestratorQuestionTools(

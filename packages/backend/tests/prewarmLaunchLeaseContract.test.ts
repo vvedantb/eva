@@ -74,29 +74,3 @@ describe("prewarm does not skip when the launch lease is held", () => {
     );
   });
 });
-
-/**
- * Ave's Ubuntu image has no docker binary. `ensureSandboxRunning` used to poll
- * `docker info` for ~30s *while holding the launch lease*, which is what let
- * the stale lastModel prewarm block the pending-turn one.
- */
-describe("orchestrator prewarm does not hold the lease for dockerd", () => {
-  test("session prewarm passes skipDocker from isOrchestrator", () => {
-    const body = functionBody(
-      executionSource,
-      "export const prewarmSessionDaemon = internalAction({",
-    );
-    expect(body).toContain("skipDocker: session?.isOrchestrator === true");
-  });
-
-  test("the launch-lease holder forwards skipDocker into ensureSandboxRunning", () => {
-    const prewarm = functionBody(
-      executionSource,
-      "async function runPrewarmEntityDaemon(",
-    );
-    const ensureAt = prewarm.indexOf("await ensureSandboxRunning(sandbox,");
-    expect(ensureAt, "ensureSandboxRunning moved").toBeGreaterThan(-1);
-    const call = prewarm.slice(ensureAt, prewarm.indexOf("});", ensureAt) + 3);
-    expect(call).toContain("skipDocker: args.skipDocker === true");
-  });
-});

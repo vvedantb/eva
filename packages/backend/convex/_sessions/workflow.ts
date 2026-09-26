@@ -29,7 +29,7 @@ import {
 } from "../_queues/helpers";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { buildCustomInstructionsBlock } from "../prompts";
-import { buildEditPrompt, buildOrchestratorPrompt } from "./prompts";
+import { buildEditPrompt } from "./prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { z } from "zod";
 import {
@@ -82,51 +82,6 @@ export const sessionCompleteEvent = defineEvent({
  * how planning and design work now that turn modes are gone.
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
-
-/**
- * The master ("orchestrator") session's tools: `SESSION_TOOLS` minus Write and
- * Edit. Manager Ave supervises agents and never implements, so the two tools
- * that make implementation possible are withheld rather than merely discouraged
- * — a prompt alone did not stop it. Bash stays: the supervision skill reads
- * production logs and CI state through it (`npx convex logs`, `gh pr checks`),
- * which is read-only in intent and enforced by prompt, not by tool list.
- *
- * This string is a Claude tool vocabulary and only the Claude SDK path reads it
- * (`ALLOWED_TOOLS` in `callback-src/providers/claudeSdk.ts`). The other SDKs
- * name their tools differently, so the cross-provider signal is the separate
- * `noWrites` flag below rather than this list.
- */
-export const ORCHESTRATOR_TOOLS = "Read,Bash,Glob,Grep,Skill";
-
-/** Launch config for a session's turns, derived once from what the session is. */
-export type SessionTurnTools = {
-  /** Claude-vocabulary allowlist; ignored by every other provider. */
-  allowedTools: string;
-  /**
-   * Provider-agnostic "this turn may not modify the workspace". Each SDK
-   * translates it into its own vocabulary — Cursor `disallowedTools`, Codex
-   * `sandboxMode: "read-only"` — so no provider has to understand Claude's
-   * tool names. Absent rather than `false` for a writing session: it is spread
-   * into launch args, and an omitted key keeps their opts signature unchanged.
-   */
-  noWrites?: true;
-};
-
-/**
- * Tools and write permission for a session's turns.
- *
- * One function returning both because both feed the warm-daemon opts signature
- * (`buildDaemonOptsSig`): if a call site set one without the other, the daemon
- * would either optsmismatch-kill and respawn every turn, or — worse — keep
- * serving a warm process that still holds its write tools.
- */
-export function sessionTurnTools(
-  isOrchestrator: boolean | undefined,
-): SessionTurnTools {
-  return isOrchestrator === true
-    ? { allowedTools: ORCHESTRATOR_TOOLS, noWrites: true }
-    : { allowedTools: SESSION_TOOLS };
-}
 
 /**
  * The `eva-design` reply contract. `variations` must be present and non-empty:
@@ -209,24 +164,6 @@ export async function buildSessionPrompt(
     args.message,
     session.repoId,
   );
-
-  // The master supervises rather than builds, so it gets none of the edit
-  // contract below — not the branch, not the commit line, not the repo system
-  // prompt (which is implementation guidance for the checked-out app).
-  if (session.isOrchestrator === true) {
-    let prompt = prefixBlock
-      ? `${prefixBlock}\n\n${buildOrchestratorPrompt(resolvedMessage, customInstructionsBlock)}`
-      : buildOrchestratorPrompt(resolvedMessage, customInstructionsBlock);
-    // Ave can switch providers mid-chat; catch the incoming CLI up the same way.
-    prompt = await prependModelHandoffContext(
-      ctx,
-      session._id,
-      args.model,
-      session.provider,
-      prompt,
-    );
-    return { prompt, branchName };
-  }
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // session owner, whose access the credential helper mints tokens against).
@@ -515,7 +452,7 @@ export const sessionExecuteWorkflow = workflow.define({
         thinkingEnabled: args.thinkingEnabled,
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
-        ...sessionTurnTools(data.isOrchestrator),
+        allowedTools: SESSION_TOOLS,
         providerAccountId: args.providerAccountId,
         credentialOwnerUserId: args.credentialOwnerUserId,
         sessionPersistenceId: args.sessionId,
@@ -556,7 +493,7 @@ export const sessionExecuteWorkflow = workflow.define({
           thinkingEnabled: args.thinkingEnabled,
           use1mContext: args.use1mContext,
           fastMode: args.fastMode,
-          ...sessionTurnTools(data.isOrchestrator),
+          allowedTools: SESSION_TOOLS,
           repoId: data.repoId,
           streamingEntityId: String(args.sessionId),
           sessionPersistenceId: args.sessionId,
@@ -906,8 +843,6 @@ export const getSessionData = internalQuery({
     model: aiModelValidator,
     deploymentProjectName: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    /** Selects the master's reduced tool set — see `sessionTurnTools`. */
-    isOrchestrator: v.optional(v.boolean()),
     /** Non-zero for a multi-repo session — gates the linked publish step. */
     linkedRepoCount: v.optional(v.number()),
   }),
@@ -950,7 +885,6 @@ export const getSessionData = internalQuery({
       model: normalizeAIModel(args.model),
       deploymentProjectName: repo.deploymentProjectName,
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
-      isOrchestrator: session.isOrchestrator,
       linkedRepoCount: session.linkedRepoCount,
     };
   },

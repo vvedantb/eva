@@ -914,26 +914,6 @@ export const getDocument = internalQuery({
   },
 });
 
-/**
- * The user's live Manager Ave session, if they have one. User-MCP watch_agent
- * uses this so a watch can still wake Ave without the master sandbox token.
- */
-export const getLiveOrchestratorSessionIdForUser = internalQuery({
-  args: { userId: v.string() },
-  returns: v.union(v.id("sessions"), v.null()),
-  handler: async (ctx, { userId }) => {
-    const uid = ctx.db.normalizeId("users", userId);
-    if (!uid) return null;
-    const user = await ctx.db.get(uid);
-    if (!user?.orchestratorSessionId) return null;
-    const session = entityVisible(await ctx.db.get(user.orchestratorSessionId));
-    if (!session || session.archived === true) return null;
-    if (session.isOrchestrator !== true) return null;
-    if (session.userId !== uid) return null;
-    return session._id;
-  },
-});
-
 /** One extra repo cloned into a session's sandbox, as reported over MCP. */
 export const mcpLinkedRepoValidator = v.object({
   repo: v.string(),

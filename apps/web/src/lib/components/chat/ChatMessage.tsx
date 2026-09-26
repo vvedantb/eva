@@ -45,7 +45,10 @@ import { EvaIcon } from "@/lib/components/EvaIcon";
 import { IconGitFork } from "@tabler/icons-react";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
-import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
+import type {
+  ChatBodyMessage,
+  ChatRepo,
+} from "@/lib/components/chat/chatBodyUtils";
 import {
   collectQuestionSteps,
   getAssistantTurnState,
@@ -109,7 +112,8 @@ interface ChatMessageProps {
    * wrong (nothing arrived) and the most expensive part of that commit.
    */
   animateIn?: boolean;
-  repoBasePath: string;
+  /** Absent (Manager Ave): user turns render as plain markdown. */
+  repo?: ChatRepo;
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
@@ -176,7 +180,7 @@ interface ChatMessageProps {
 export const ChatMessage = memo(function ChatMessage({
   message,
   animateIn = true,
-  repoBasePath,
+  repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
   changedFilesExpanded,
@@ -370,7 +374,7 @@ export const ChatMessage = memo(function ChatMessage({
                   >
                     <UserMessageBody
                       message={message}
-                      repoBasePath={repoBasePath}
+                      repo={repo}
                     />
                   </MessageContent>
                 </div>
@@ -552,10 +556,10 @@ export const ChatMessage = memo(function ChatMessage({
 
 function UserMessageBody({
   message,
-  repoBasePath,
+  repo,
 }: {
   message: ChatBodyMessage;
-  repoBasePath: string;
+  repo?: ChatRepo;
 }) {
   return (
     <>
@@ -572,7 +576,7 @@ function UserMessageBody({
         <CollapsibleUserMessageBody text={message.content}>
           <ReviewCommentMessage
             text={message.content}
-            repoBasePath={repoBasePath}
+            repo={repo}
           />
         </CollapsibleUserMessageBody>
       ) : null}

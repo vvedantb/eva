@@ -495,10 +495,10 @@ describe("which tokens get which tools", () => {
   const orchestratorTools = convexSource("mcp/orchestratorTools.ts");
 
   test("send_chat_message is registered for every MCP caller", () => {
-    // Registered in tools.ts, above the isOrchestrator gate at the bottom —
+    // Registered in tools.ts, above the isAve gate at the bottom —
     // that ordering is what puts it on a plain OAuth connector's tool list.
     const registered = tools.indexOf('"send_chat_message"');
-    const gate = tools.indexOf("if (isOrchestrator) {");
+    const gate = tools.indexOf("if (isAve) {");
     expect(registered).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(registered);
     expect(orchestratorTools).not.toContain('"send_chat_message"');
@@ -514,10 +514,10 @@ describe("which tokens get which tools", () => {
   });
 
   test("fleet tools are registered for every MCP caller", () => {
-    // fleetTools is spread into the catalog above the isOrchestrator gate,
+    // fleetTools is spread into the catalog above the isAve gate,
     // the same ordering that puts send_chat_message on an OAuth connector.
     const fleet = tools.indexOf("tools.push(...fleetTools(credentials, ctx))");
-    const gate = tools.indexOf("if (isOrchestrator) {");
+    const gate = tools.indexOf("if (isAve) {");
     expect(fleet).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(fleet);
     for (const name of [
@@ -532,24 +532,24 @@ describe("which tokens get which tools", () => {
     }
   });
 
-  test("send_agent_message stays behind the orchestrator gate", () => {
+  test("send_agent_message stays behind the Ave gate", () => {
     expect(orchestratorTools).toContain('"send_agent_message"');
     expect(tools).not.toContain('"send_agent_message"');
     const registerAt = tools.indexOf("tools.push(...orchestratorTools(");
-    const guardAt = tools.lastIndexOf("if (isOrchestrator) {", registerAt);
+    const guardAt = tools.lastIndexOf("if (isAve) {", registerAt);
     expect(registerAt).toBeGreaterThan(-1);
     expect(guardAt).toBeGreaterThan(-1);
     expect(tools.slice(guardAt, registerAt)).not.toContain("}");
     expect(tools).toContain(
-      "if (isOrchestrator) {\n    tools.push(...orchestratorTools(credentials, ctx));",
+      "if (isAve) {\n    tools.push(...orchestratorTools(credentials, ctx));",
     );
   });
 
-  test("watch_agent does not require the master sandbox token", () => {
-    expect(orchestratorTools).not.toContain(
-      "Watch tools require the master session's own sandbox token.",
+  test("watch_agent falls back to the user's live Ave thread", () => {
+    expect(orchestratorTools).toContain("resolveAveThreadId(ctx, credentials)");
+    expect(convexSource("mcp/toolShared.ts")).toContain(
+      "internal._ave.threads.getLiveThreadIdForUser",
     );
-    expect(orchestratorTools).toContain("getLiveOrchestratorSessionIdForUser");
   });
 
   test("the send checks repo access before it sends", () => {
@@ -594,65 +594,51 @@ describe("which tokens get which tools", () => {
   });
 });
 
-describe("user-MCP watch resolves Manager Ave without a master token", () => {
-  test("the owner’s live Ave session is returned, a stranger’s is not", async () => {
+describe("user-MCP watch resolves the live Manager Ave thread", () => {
+  test("the owner’s live thread is returned, a stranger’s is not", async () => {
     const f = await fixture();
-    const aveId = await f.t.run(async (ctx) => {
-      const sessionId = await ctx.db.insert("sessions", {
-        repoId: f.repoId,
+    const threadId = await f.t.run(async (ctx) =>
+      ctx.db.insert("aveThreads", {
         userId: f.ownerUserId,
-        title: "Manager Ave",
-        status: "active",
-        numId: 1,
-        isOrchestrator: true,
-      });
-      await ctx.db.patch(f.ownerUserId, { orchestratorSessionId: sessionId });
-      return sessionId;
-    });
-
+        status: "idle",
+        updatedAt: 1,
+      }),
+    );
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: f.ownerUserId },
-      ),
-    ).toBe(aveId);
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: f.ownerUserId,
+      }),
+    ).toBe(threadId);
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: f.strangerUserId },
-      ),
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: f.strangerUserId,
+      }),
     ).toBeNull();
   });
 
-  test("an archived or unflagged session is not a live master", async () => {
+  test("a reset (archived) thread is not live", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      const sessionId = await ctx.db.insert("sessions", {
-        repoId: f.repoId,
+      await ctx.db.insert("aveThreads", {
         userId: f.ownerUserId,
-        title: "Manager Ave",
-        status: "active",
-        numId: 1,
-        isOrchestrator: true,
-        archived: true,
+        status: "idle",
+        archivedAt: 1,
+        updatedAt: 1,
       });
-      await ctx.db.patch(f.ownerUserId, { orchestratorSessionId: sessionId });
     });
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: f.ownerUserId },
-      ),
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: f.ownerUserId,
+      }),
     ).toBeNull();
   });
 
-  test("a missing user id is rejected rather than guessed at", async () => {
+  test("a malformed user id is rejected rather than guessed at", async () => {
     const f = await fixture();
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: "not-an-id" },
-      ),
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: "not-an-id",
+      }),
     ).toBeNull();
   });
 });

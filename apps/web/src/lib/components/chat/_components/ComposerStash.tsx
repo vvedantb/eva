@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from "react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 import { AnimatePresence, m } from "motion/react";
@@ -139,15 +145,11 @@ export function ComposerStash({
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>
-      <div ref={rootRef} className="flex flex-col">
-        {/* Dock: tasks/queued panels flush on the input card's top edge. The
-            dock owns the inset, so the panels inside it are full width. */}
-        <div className="mx-auto w-[calc(100%-1.5rem)]">{panels}</div>
+      <ComposerDock ref={rootRef} panels={panels} bar={bar(stashButton)}>
         <PopoverAnchor asChild>
           <div>{children}</div>
         </PopoverAnchor>
-        {bar(stashButton)}
-      </div>
+      </ComposerDock>
       <PopoverContent
         side="top"
         align="center"
@@ -220,5 +222,31 @@ export function ComposerStash({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Dock layout shared with {@link ComposerStash}: tasks/queued panels flush on
+ * the input card's top edge, the input, then the muted under-card bar. Used
+ * bare by composers with no repo to stash against (Manager Ave).
+ */
+export function ComposerDock({
+  ref,
+  panels,
+  bar,
+  children,
+}: {
+  ref?: Ref<HTMLDivElement>;
+  panels: ReactNode;
+  bar: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div ref={ref} className="flex flex-col">
+      {/* The dock owns the inset, so the panels inside it are full width. */}
+      <div className="mx-auto w-[calc(100%-1.5rem)]">{panels}</div>
+      {children}
+      {bar}
+    </div>
   );
 }

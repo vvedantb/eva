@@ -175,27 +175,28 @@ export function NewSessionComposer() {
           <span>?</span>
         </h1>
         <ChatComposer
-          repoId={repo._id}
-          repoBasePath={basePath}
+          repo={{ id: repo._id, basePath }}
           conversationId={`new-session-${repo._id}`}
           queuedMessages={[]}
           messageHistory={[]}
           isExecuting={false}
           isInputDisabled={isSubmitting}
           placeholder="Ask Eva anything... / for skills · @ to mention"
-          model={model}
-          setModel={(next) => {
-            setModel(next);
-            setProviderAccountId(
-              providerAccountIdForModel(accounts, providerAccountId, next),
-            );
+          modelPicker={{
+            model,
+            setModel: (next) => {
+              setModel(next);
+              setProviderAccountId(
+                providerAccountIdForModel(accounts, providerAccountId, next),
+              );
+            },
+            modelOptions,
+            accounts,
+            accountId: providerAccountId,
+            onAccountChange: setProviderAccountId,
+            displayTraits,
+            onTraitsChange,
           }}
-          modelOptions={modelOptions}
-          accounts={accounts}
-          accountId={providerAccountId}
-          onAccountChange={setProviderAccountId}
-          displayTraits={displayTraits}
-          onTraitsChange={onTraitsChange}
           onSend={handleSend}
           onCancel={async () => {}}
           localDraft={{

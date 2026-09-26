@@ -17,7 +17,7 @@ const RECIPIENT_FIELD = /\b(to|email|recipient|cc|bcc)\s*:/;
 test("send_email is registered for every MCP caller", () => {
   const tools = convexSource("mcp/tools.ts");
   const registered = tools.indexOf("sendEmailTool(");
-  const gate = tools.indexOf("if (isOrchestrator) {");
+  const gate = tools.indexOf("if (isAve) {");
   expect(registered).toBeGreaterThan(-1);
   expect(gate).toBeGreaterThan(registered);
 });

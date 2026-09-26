@@ -3,8 +3,6 @@ import {
   ConversationContent,
   ConversationScrollButton,
   motionBase,
-  type ModelOption,
-  type ModelAccount,
 } from "@eva/ui";
 import {
   ChatEmptyState,
@@ -13,7 +11,11 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
-import { ChatComposer } from "@/lib/components/chat/ChatComposer";
+import {
+  ChatComposer,
+  type ChatModelPicker,
+  type LocalChatDraft,
+} from "@/lib/components/chat/ChatComposer";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
@@ -46,14 +48,7 @@ import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import {
-  api,
-  type AIModel,
-  type BackgroundAgentEntry,
-  type Id,
-  type StoredModelTraits,
-  type resolveTraitsForDisplay,
-} from "@eva/backend";
+import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
@@ -72,6 +67,7 @@ import {
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
+  type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
 export type { ChatBodyMessage };
@@ -88,16 +84,19 @@ export interface ChatSendOptions {
 }
 
 interface ChatBodyProps {
-  repoId: Id<"githubRepos">;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
+  /**
+   * The codebase this chat belongs to. Absent for Manager Ave, which has none:
+   * skills, the prompt stash and repo mentions switch off.
+   */
+  repo?: ChatRepo;
   /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
   /**
    * The same chat, typed as the id its messages hang off. Used to load the
    * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   * Absent (Manager Ave): no panels are loaded.
    */
-  chatParentId: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+  chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -141,23 +140,8 @@ interface ChatBodyProps {
    * gives the empty state its button and the blocked-send toast its action.
    */
   onStartSandbox?: () => void;
-  model: AIModel;
-  setModel: (model: AIModel) => void;
-  modelOptions: ReadonlyArray<ModelOption<AIModel>>;
-  /**
-   * The user's own provider accounts. When non-empty, the model picker nests
-   * Team + account submenus under each provider; the chosen account's
-   * credentials run the turn (see `accountId`/`onAccountChange`).
-   */
-  accounts?: ReadonlyArray<ModelAccount>;
-  accountId?: string | null;
-  onAccountChange?: (accountId: string | null) => void;
-  /**
-   * Model trait controls (reasoning effort, thinking toggle, Fast, 1M context). When
-   * provided, trait pills appear above the model list for capable models.
-   */
-  displayTraits?: ReturnType<typeof resolveTraitsForDisplay>;
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
+  /** Model, account and trait controls. Absent: no picker (fixed model). */
+  modelPicker?: ChatModelPicker;
   /**
    * Called with the tokenized content and any uploaded image attachment storage
    * ids. Caller decides whether to send or enqueue.
@@ -188,6 +172,8 @@ interface ChatBodyProps {
    * available. Use `isDraftLoading` to render a placeholder while waiting.
    */
   draft?: ChatDraftSeed;
+  /** localStorage-backed draft, for chats with no Convex draft row (Ave). */
+  localDraft?: LocalChatDraft;
   /**
    * When true, renders a disabled placeholder in place of the real input while
    * the draft query is in flight. This prevents the PromptInputProvider from
@@ -234,8 +220,7 @@ export function ChatBody(props: ChatBodyProps) {
 }
 
 function ChatBodyInner({
-  repoId,
-  repoBasePath,
+  repo,
   conversationId,
   chatParentId,
   messages,
@@ -254,14 +239,7 @@ function ChatBodyInner({
   emptyStateDescription = "",
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
-  model,
-  setModel,
-  modelOptions,
-  accounts,
-  accountId,
-  onAccountChange,
-  displayTraits,
-  onTraitsChange,
+  modelPicker,
   onSend,
   onCancel,
   preConversationContent,
@@ -270,6 +248,7 @@ function ChatBodyInner({
   emptyStateOverride,
   underCardLeading,
   draft,
+  localDraft,
   isDraftLoading,
   onOpenFile,
   onViewDiff,
@@ -460,9 +439,10 @@ function ChatBodyInner({
 
   // Agent-composed UI panels (`render_ui`). One query per chat covers all three
   // surfaces, since every one of them renders through this component.
-  const chatUiPanels = useQuery(api.chatUi.listByParent, {
-    parentId: chatParentId,
-  });
+  const chatUiPanels = useQuery(
+    api.chatUi.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const panelPlacement = placeChatUiPanels(
     chatUiPanels ?? [],
     new Set(displayMessages.map((message) => message._id)),
@@ -546,7 +526,7 @@ function ChatBodyInner({
         <ChatMessage
           message={message}
           animateIn={!isBacklog}
-          repoBasePath={repoBasePath}
+          repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
           {...(expandedByMessageId[message._id] !== undefined
@@ -667,8 +647,7 @@ function ChatBodyInner({
               transition={motionBase}
             >
               <ChatComposer
-                repoId={repoId}
-                repoBasePath={repoBasePath}
+                repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
                 messageHistory={messageHistory}
@@ -677,14 +656,7 @@ function ChatBodyInner({
                 disabledReason={disabledReason}
                 onStartSandbox={onStartSandbox}
                 placeholder={placeholder}
-                model={model}
-                setModel={setModel}
-                modelOptions={modelOptions}
-                accounts={accounts}
-                accountId={accountId}
-                onAccountChange={onAccountChange}
-                displayTraits={displayTraits}
-                onTraitsChange={onTraitsChange}
+                modelPicker={modelPicker}
                 onSend={sendWithPendingContext}
                 onCancel={onCancel}
                 beforeQueuedContent={beforeQueuedContent}
@@ -700,6 +672,7 @@ function ChatBodyInner({
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}
                 draft={draft}
+                localDraft={localDraft}
                 isDraftLoading={isDraftLoading}
                 hasPendingContext={hasComposerContext}
                 allowEmptySubmit={allowEmptySubmit}

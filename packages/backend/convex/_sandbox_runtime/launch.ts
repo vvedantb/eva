@@ -344,8 +344,8 @@ function ensureProviderCliAvailable(
  * installs: `/home/eva` (every provider-SDK self-install targets
  * `/home/eva/.eva-agent-sdk`) plus the agent-browser CLI, which agents invoke
  * by name off PATH — hence a global install, not the `--prefix` form the
- * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted from
- * the Vercel managed image (orchestrator sessions) have none of it. Both
+ * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted
+ * without a seeded snapshot have none of it. Both
  * halves are gated on the artifact already being present, so a snapshot boot
  * pays one probe and installs nothing.
  *
@@ -355,8 +355,8 @@ function ensureProviderCliAvailable(
  * agent-browser availability is eventually-consistent instead — a session
  * without browser tooling still chats and edits code. agentation-mcp is
  * deliberately NOT installed here: it exists for the preview annotation
- * widget (which image-booted orchestrator sandboxes never serve) and its
- * better-sqlite3 build needs gcc/make, which the managed image lacks — that
+ * widget and its better-sqlite3 build needs gcc/make, which a bare image may
+ * lack — that
  * compile is what blew the old synchronous install past its timeout.
  *
  * Nothing in here may throw: losing the SDK-fallback directory or the browser
@@ -439,8 +439,6 @@ export async function launchScript(
   opts: {
     model?: string;
     allowedTools?: string;
-    /** Read-only turn: each provider SDK translates this into its own option. */
-    noWrites?: boolean;
     systemPrompt?: string;
     extraEnvVars?: Record<string, string>;
     claudeSessionId?: string;
@@ -576,14 +574,6 @@ export async function launchScript(
       `HARNESS_CATALOG_TOKEN=${quote([opts.harnessCatalogToken])}`,
       `HARNESS_CATALOG_SANDBOX_ID=${quote([sandbox.id])}`,
     );
-  }
-  // One provider-agnostic read-only signal. Deliberately not derived from
-  // ALLOWED_TOOLS: that list is Claude's tool vocabulary, and teaching Cursor,
-  // Codex and OpenCode to parse Claude tool names would put four translations
-  // of the same decision in four SDK adapters. Each adapter reads this flag and
-  // applies its own restriction instead.
-  if (opts.noWrites) {
-    envParts.push("EVA_NO_WRITES=1");
   }
   if (opts.claudeSessionId) {
     envParts.push(`CLAUDE_SESSION_ID=${quote([opts.claudeSessionId])}`);

@@ -32,7 +32,7 @@ export async function scheduleTaskOrchestratorNotify(
   status: string,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (!task || task.watchedByOrchestrator === undefined) return;
+  if (!task || task.watchedByAve === undefined) return;
   await ctx.scheduler.runAfter(
     0,
     internal.orchestratorNotify.notifyOrchestratorOfChild,

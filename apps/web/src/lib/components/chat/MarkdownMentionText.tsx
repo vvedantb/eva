@@ -48,6 +48,25 @@ const MARKDOWN_MEDIA_CLASS = "max-h-80 w-auto max-w-full object-contain";
  * `@`/`/` tokens become chips.
  */
 const REMARK_PLUGINS = [remarkBreaks, remarkMentionChips];
+const PLAIN_REMARK_PLUGINS = [remarkBreaks];
+
+/**
+ * Markdown with no repo to resolve mentions against (Manager Ave). Its composer
+ * offers no mentions or skills, so there are no tokens to turn into chips.
+ */
+export function PlainMarkdownText({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  return (
+    <Markdown className={className} remarkPlugins={PLAIN_REMARK_PLUGINS}>
+      {text}
+    </Markdown>
+  );
+}
 
 /** Stop parent click-to-edit handlers when interacting with media. */
 function stopParentClick(e: MouseEvent) {
