@@ -6,7 +6,7 @@
 
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
  * inside its own dist, which the content globs never reach. */
-@source "../node_modules/streamdown/dist";
+@source "../../../packages/ui/node_modules/streamdown/dist";
 
 /* v4 changed the default border colour to `currentcolor`. The upgrade codemod
  * adds a gray-200 compatibility shim here; it is not needed, because the base
