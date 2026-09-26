@@ -21,6 +21,10 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 const UNKNOWN_WINDOW_TITLE = "Context window unknown for this model";
 
+/** One formatter for every compact token figure rendered below. */
+const compactNumber = new Intl.NumberFormat("en-US", { notation: "compact" });
+const compactFormat = (value: number) => compactNumber.format(value);
+
 type AggregatableLog = { rawResultEvent: string | undefined };
 
 /**
@@ -59,6 +63,7 @@ export function aggregateUsage(logs: AggregatableLog[] | undefined) {
   return {
     usedTokens: latest.contextUsedTokens,
     maxTokens,
+    model: latest.model,
     usage: {
       inputTokens: latest.inputTokens,
       outputTokens: latest.outputTokens,
@@ -71,30 +76,61 @@ export function aggregateUsage(logs: AggregatableLog[] | undefined) {
   };
 }
 
-function ContextUsageDisplay({
+/** t3 paints the donut red past 90% so a near-full window is obvious. */
+export const CONTEXT_OVERLOAD_RATIO = 0.9;
+
+export function contextUsedRatio(
+  usedTokens: number,
+  maxTokens: number | null,
+): number {
+  if (maxTokens === null || maxTokens <= 0) return 0;
+  return usedTokens / maxTokens;
+}
+
+export function contextCompactsAutomatically(model: string): boolean {
+  return model === "-" || model.includes("claude");
+}
+
+export function ContextUsageDisplay({
   aggregated,
+  defaultOpen = false,
+  onCompact,
 }: {
   aggregated: ReturnType<typeof aggregateUsage>;
+  defaultOpen?: boolean;
+  onCompact?: () => void;
 }) {
   if (!aggregated) return null;
-
   const { maxTokens } = aggregated;
+  const overloaded =
+    contextUsedRatio(aggregated.usedTokens, maxTokens) > CONTEXT_OVERLOAD_RATIO;
+  // Only a known window has a meaningful "left" figure.
+  const remainingLabel =
+    maxTokens === null
+      ? null
+      : compactFormat(Math.max(0, maxTokens - aggregated.usedTokens));
+  const autoCompact = contextCompactsAutomatically(aggregated.model);
+
   // `Context` requires a numeric `maxTokens`, so an unknown window passes the
   // used tokens as the denominator and suppresses every percentage instead: a
   // hardcoded 200k denominator is what made this meter lie in the first place.
   return (
     <Context
+      {...(defaultOpen ? { open: true } : {})}
       usedTokens={aggregated.usedTokens}
       maxTokens={maxTokens ?? aggregated.usedTokens}
       usage={aggregated.usage}
       costs={aggregated.costs}
     >
       {maxTokens === null ? (
+        // `ContextTrigger` only forwards props to its own fallback Button, so
+        // the test id has to ride on the Button we hand it as children.
         <ContextTrigger>
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            data-testid="context-meter"
             title={UNKNOWN_WINDOW_TITLE}
           >
             <span className="font-medium text-muted-foreground text-xs tabular-nums">
@@ -103,18 +139,18 @@ function ContextUsageDisplay({
           </Button>
         </ContextTrigger>
       ) : (
-        <ContextTrigger />
+        <ContextTrigger
+          data-testid="context-meter"
+          className={overloaded ? "text-destructive" : undefined}
+        />
       )}
-      <ContextContent>
+      <ContextContent data-testid="context-meter-popover">
         {maxTokens === null ? (
           <ContextContentHeader>
             <div className="flex items-center justify-between gap-3 text-xs tabular-nums">
               <p title={UNKNOWN_WINDOW_TITLE}>—</p>
               <p className="font-mono text-muted-foreground">
-                {new Intl.NumberFormat("en-US", {
-                  notation: "compact",
-                }).format(aggregated.usedTokens)}{" "}
-                used
+                {compactFormat(aggregated.usedTokens)} used
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -130,6 +166,27 @@ function ContextUsageDisplay({
           <ContextCacheReadUsage />
           <ContextCacheWriteUsage />
         </ContextContentBody>
+        <div className="space-y-2 px-3 pb-3 text-[11px] leading-4 text-muted-foreground">
+          {remainingLabel === null ? null : (
+            <p>
+              {remainingLabel} tokens left
+              {overloaded ? " · window is nearly full" : ""}
+            </p>
+          )}
+          {autoCompact ? (
+            <p>Context compacts automatically when needed.</p>
+          ) : null}
+          {onCompact ? (
+            <button
+              type="button"
+              data-testid="context-meter-compact"
+              className="inline-flex h-7 w-full items-center justify-center rounded-md border border-border bg-background text-xs text-foreground hover:bg-muted"
+              onClick={onCompact}
+            >
+              Compact
+            </button>
+          ) : null}
+        </div>
         <ContextContentFooter />
       </ContextContent>
     </Context>
@@ -139,20 +196,33 @@ function ContextUsageDisplay({
 interface EntityContextUsageProps {
   repoId: Id<"githubRepos">;
   entityId: string;
+  /** Demo / screenshot seed — skips the logs query. */
+  seedAggregated?: NonNullable<ReturnType<typeof aggregateUsage>>;
+  defaultOpen?: boolean;
+  onCompact?: () => void;
 }
 
 export function EntityContextUsage({
   repoId,
   entityId,
+  seedAggregated,
+  defaultOpen,
+  onCompact,
 }: EntityContextUsageProps) {
   const simpleView = useSimpleView();
   const logs = useQuery(
     api.logs.getByEntityId,
-    simpleView ? "skip" : { repoId, entityId },
+    simpleView || seedAggregated ? "skip" : { repoId, entityId },
   );
   if (simpleView) return null;
-  const aggregated = aggregateUsage(logs);
-  return <ContextUsageDisplay aggregated={aggregated} />;
+  const aggregated = seedAggregated ?? aggregateUsage(logs);
+  return (
+    <ContextUsageDisplay
+      aggregated={aggregated}
+      defaultOpen={defaultOpen}
+      onCompact={onCompact}
+    />
+  );
 }
 
 interface ProjectContextUsageProps {

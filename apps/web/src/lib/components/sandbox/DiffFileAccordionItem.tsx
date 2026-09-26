@@ -19,6 +19,7 @@ import {
   IconCopy,
   IconDots,
   IconExternalLink,
+  IconFileText,
   IconMessage,
 } from "@tabler/icons-react";
 import { useState } from "react";
@@ -26,6 +27,8 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { DiffView } from "@/lib/search-params";
+import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
+import { useOpenSandboxFile } from "@/lib/contexts/OpenSandboxFileContext";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { DiffCountBar, FileStatusChip } from "./DiffFileBadges";
 import { DiffFileLazyBody } from "./DiffFileLazyBody";
@@ -89,6 +92,10 @@ export function DiffFileAccordionItem({
   const { path, patch, status, additions, deletions, renamedFrom } = entry;
   const getPrFileContents = useAction(api.github.getPrFileContents);
   const review = usePendingReviewComments();
+  const openSandboxFile = useOpenSandboxFile();
+  const openInFiles = openSandboxFile
+    ? () => openSandboxFile(toSandboxFilePath(path))
+    : undefined;
   const [fullFile, setFullFile] = useState<FullFileState>({ status: "idle" });
 
   const pendingComments =
@@ -173,6 +180,21 @@ export function DiffFileAccordionItem({
             <DiffCountBar additions={additions} deletions={deletions} />
           )}
 
+          {openInFiles ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Open ${fileName} in Files`}
+              data-testid="open-in-files"
+              onClick={(event) => {
+                event.stopPropagation();
+                openInFiles();
+              }}
+            >
+              <IconFileText className="size-4" />
+            </Button>
+          ) : null}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="File actions">
@@ -197,6 +219,12 @@ export function DiffFileAccordionItem({
                 <IconCopy className="size-4" />
                 Copy path
               </DropdownMenuItem>
+              {openInFiles ? (
+                <DropdownMenuItem onSelect={openInFiles}>
+                  <IconFileText className="size-4" />
+                  Open in Files
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a

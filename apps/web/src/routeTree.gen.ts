@@ -24,6 +24,7 @@ import { Route as GlobalSessionsRouteImport } from './routes/_global/sessions'
 import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settings/route'
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
+import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
 import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
@@ -208,6 +209,11 @@ const GlobalWhatsNewRoute = GlobalWhatsNewRouteImport.update({
   id: '/whats-new',
   path: '/whats-new',
   getParentRoute: () => GlobalRoute,
+} as any)
+const DevFeaturePreviewsRoute = DevFeaturePreviewsRouteImport.update({
+  id: '/dev/feature-previews',
+  path: '/dev/feature-previews',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalArtifactsIndexRoute = GlobalArtifactsIndexRouteImport.update({
   id: '/artifacts/',
@@ -875,6 +881,7 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
+  '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -1000,6 +1007,7 @@ export interface FileRoutesByTo {
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
+  '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/experimental': typeof GlobalSettingsExperimentalRoute
@@ -1105,6 +1113,7 @@ export interface FileRoutesById {
   '/_global/sessions': typeof GlobalSessionsRoute
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
+  '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/_global/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/_global/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/_global/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -1233,6 +1242,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/testing'
     | '/whats-new'
+    | '/dev/feature-previews'
     | '/teams/$teamId'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
@@ -1358,6 +1368,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/testing'
     | '/whats-new'
+    | '/dev/feature-previews'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
     | '/settings/experimental'
@@ -1462,6 +1473,7 @@ export interface FileRouteTypes {
     | '/_global/sessions'
     | '/_global/testing'
     | '/_global/whats-new'
+    | '/dev/feature-previews'
     | '/_global/teams/$teamId'
     | '/_global/artifacts/$artifactId'
     | '/_global/settings/accounts'
@@ -1582,6 +1594,7 @@ export interface RootRouteChildren {
   AgentCallbackRoute: typeof AgentCallbackRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
   SlidesRoute: typeof SlidesRoute
+  DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
 }
 
@@ -1691,6 +1704,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/whats-new'
       preLoaderRoute: typeof GlobalWhatsNewRouteImport
       parentRoute: typeof GlobalRoute
+    }
+    '/dev/feature-previews': {
+      id: '/dev/feature-previews'
+      path: '/dev/feature-previews'
+      fullPath: '/dev/feature-previews'
+      preLoaderRoute: typeof DevFeaturePreviewsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_global/artifacts/': {
       id: '/_global/artifacts/'
@@ -3105,6 +3125,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentCallbackRoute: AgentCallbackRoute,
   PreviewAuthRoute: PreviewAuthRoute,
   SlidesRoute: SlidesRoute,
+  DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport

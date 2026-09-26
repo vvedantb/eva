@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import type { Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, Spinner, motionBase, motionStagger } from "@eva/ui";
+import { Accordion, Spinner, motionBase, motionStagger, toast } from "@eva/ui";
 import { m } from "motion/react";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
@@ -18,6 +18,8 @@ import { prNumberFromGithubUrl } from "@/lib/githubPr";
 import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
+import { applyIgnoreWhitespace } from "./diffFiles";
+import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
@@ -50,6 +52,12 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
 
   // Wrapping is a reading preference, so it persists across PRs and surfaces.
   const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", false);
+  const [ignoreWhitespace, setIgnoreWhitespace] = useLocalStorage(
+    "eva:pr-diff-ignore-ws",
+    false,
+  );
+  const review = usePendingReviewComments();
+
   const [fileFilter, setFileFilter] = useState("");
   // Controlled accordion open set — independent of Viewed so a viewed file can
   // still be expanded to re-read without clearing the checkbox (GitHub UX).
@@ -75,7 +83,28 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
 
   // One entry per changed file: patch, path, status, and change counts. Parsed
   // once when the diff is fetched, not on every render.
-  const fileEntries = state.status === "ready" ? state.entries : [];
+  const rawEntries = state.status === "ready" ? state.entries : [];
+
+  // A drafted review comment is anchored by its position in a walk of the patch
+  // it was drawn on (see `reviewComments.ts`), and ignore-whitespace rewrites
+  // that patch. Flipping the toggle underneath one would silently move it to
+  // another line or drop it, so the toggle is refused while a review is pending.
+  // Refusing in the handler, rather than pinning a copy of the setting in state,
+  // keeps the diff derived from props alone.
+  const hasPendingComments = (review?.comments.length ?? 0) > 0;
+  const handleIgnoreWhitespaceChange = (next: boolean) => {
+    if (hasPendingComments) {
+      toast.info(
+        "Submit or delete pending review comments first — they are pinned to the lines on screen.",
+      );
+      return;
+    }
+    setIgnoreWhitespace(next);
+  };
+
+  const fileEntries = ignoreWhitespace
+    ? applyIgnoreWhitespace(rawEntries)
+    : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
   const totals = fileEntries.reduce(
     (sum, entry) => ({
@@ -257,6 +286,8 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
         onDiffViewChange={setDiffView}
         wrapLines={wrapLines}
         onWrapLinesChange={setWrapLines}
+        ignoreWhitespace={ignoreWhitespace}
+        onIgnoreWhitespaceChange={handleIgnoreWhitespaceChange}
         allExpanded={
           visiblePaths.length > 0 &&
           visiblePaths.every((path) => openPaths.includes(path))

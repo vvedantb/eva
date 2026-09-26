@@ -62,6 +62,39 @@ interface EvaAnnotationContext {
   capturedAt: number;
 }
 
+interface EvaPreviewSnapshotElement {
+  role: string;
+  name: string;
+  selector: string;
+  bbox: { x: number; y: number; width: number; height: number };
+}
+
+interface EvaPreviewSnapshot {
+  url: string;
+  title: string;
+  loading: boolean;
+  visibleText: string;
+  interactiveElements: EvaPreviewSnapshotElement[];
+  accessibilityTree: Array<{ role: string; name: string }>;
+  consoleEntries: Array<{ level: string; text: string; at: number }>;
+  networkEntries: Array<{ url: string; status: number; at: number }>;
+}
+
+interface EvaWebMcpTool {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  readOnly: boolean;
+  source: "modelContext" | "form";
+}
+
+interface EvaWebMcpDiscovery {
+  origin: string;
+  implementation: string;
+  tools: EvaWebMcpTool[];
+}
+
 function evaPreviewAnnotationScript(): void {
   const ATTR = "data-eva-annotate";
   /** Computed values that carry no signal, so they never reach the agent. */
@@ -115,14 +148,192 @@ function evaPreviewAnnotationScript(): void {
   }
   root.setAttribute(ATTR, "1");
 
-  let parentOrigin = "*";
-  try {
-    if (document.referrer) {
-      parentOrigin = new URL(document.referrer).origin;
-    }
-  } catch {
-    /* keep "*" */
+  type RegisteredWebMcpTool = {
+    name: string;
+    title?: string;
+    description: string;
+    inputSchema: unknown;
+    execute: (
+      input: Record<string, unknown>,
+      options: { signal: AbortSignal },
+    ) => unknown;
+    annotations?: { readOnlyHint?: boolean };
+  };
+  const compatibilityTools = new Map<string, RegisteredWebMcpTool>();
+  /** Our own shim, once installed — never mistaken for the page's own. */
+  let compatibilityContext: object | null = null;
+
+  function normalizeToolName(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const name = value.trim();
+    return /^[A-Za-z0-9_.-]{1,128}$/.test(name) ? name : null;
   }
+
+  /**
+   * Reads a `modelContext` implementation off a host object. `Reflect.get`
+   * rather than a cast: `modelContext` is not in lib.dom yet and the repo bans
+   * type assertions.
+   */
+  function modelContextOn(host: object): object | null {
+    const value = Reflect.get(host, "modelContext");
+    return value !== null && typeof value === "object" ? value : null;
+  }
+
+  /**
+   * The implementation the previewed page itself provides, if any. Our shim is
+   * installed at `</head>` before app code runs, so it would otherwise always
+   * win and a page registering tools the spec way would list none.
+   */
+  function pageModelContext(): object | null {
+    for (const host of [navigator, document, window]) {
+      const ctx = modelContextOn(host);
+      if (ctx && ctx !== compatibilityContext) return ctx;
+    }
+    return null;
+  }
+
+  function ensureModelContext(): void {
+    if (pageModelContext()) return;
+    const ctx = {
+      registerTool(tool: RegisteredWebMcpTool) {
+        const name = normalizeToolName(tool?.name);
+        const description =
+          typeof tool?.description === "string" ? tool.description.trim() : "";
+        if (!name || !description || typeof tool?.execute !== "function") {
+          throw new TypeError("Invalid WebMCP tool definition");
+        }
+        if (compatibilityTools.has(name)) {
+          throw new DOMException(
+            "A WebMCP tool with this name is already registered",
+            "InvalidStateError",
+          );
+        }
+        compatibilityTools.set(name, {
+          name,
+          title: typeof tool.title === "string" ? tool.title : undefined,
+          description,
+          inputSchema: tool.inputSchema,
+          execute: tool.execute,
+          annotations: tool.annotations,
+        });
+        return Promise.resolve();
+      },
+      getTools() {
+        return Promise.resolve([...compatibilityTools.values()]);
+      },
+      executeTool(tool: { name: string }, input: Record<string, unknown>) {
+        const registered = compatibilityTools.get(tool.name);
+        if (!registered) {
+          return Promise.reject(
+            new DOMException("The WebMCP tool is stale", "InvalidStateError"),
+          );
+        }
+        return Promise.resolve(
+          registered.execute(input, { signal: new AbortController().signal }),
+        );
+      },
+    };
+    try {
+      // `navigator` is the surface the spec (and the official polyfill) uses.
+      // `writable` matters: a module doing `navigator.modelContext = impl` runs
+      // in strict mode, so a non-writable property would throw a TypeError and
+      // take the previewed app down with it.
+      Object.defineProperty(navigator, "modelContext", {
+        value: ctx,
+        configurable: true,
+        writable: true,
+      });
+      compatibilityContext = ctx;
+    } catch {
+      // A locked-down navigator is not worth breaking annotation over; form
+      // tools still work and `implementation` reports "none".
+    }
+  }
+  ensureModelContext();
+
+  const RING_MAX = 40;
+  const CONSOLE_RING: Array<{ level: string; text: string; at: number }> = [];
+  const NETWORK_RING: Array<{ url: string; status: number; at: number }> = [];
+
+  function pushRing<T>(ring: T[], entry: T): void {
+    ring.push(entry);
+    if (ring.length > RING_MAX) {
+      ring.splice(0, ring.length - RING_MAX);
+    }
+  }
+
+  function stringifyConsoleArg(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (value instanceof Error) return value.message;
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function wrapConsole(level: "log" | "info" | "warn" | "error"): void {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      pushRing(CONSOLE_RING, {
+        level,
+        text: args.map(stringifyConsoleArg).join(" ").slice(0, 400),
+        at: Date.now(),
+      });
+      original(...args);
+    };
+  }
+  wrapConsole("log");
+  wrapConsole("info");
+  wrapConsole("warn");
+  wrapConsole("error");
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    return originalFetch(input, init).then((response) => {
+      if (response.status >= 400) {
+        pushRing(NETWORK_RING, {
+          url: url.slice(0, 300),
+          status: response.status,
+          at: Date.now(),
+        });
+      }
+      return response;
+    });
+  };
+
+  function originOf(url: string): string {
+    try {
+      return new URL(url).origin;
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * Eva's origin, handed over by the proxy at injection time. `document.referrer`
+   * alone is not usable: the proxy sends `referrer-policy: no-referrer`, so on an
+   * authenticated load the referrer is empty (guard disabled, replies broadcast
+   * to "*"), and after an in-app navigation it becomes the preview's own origin
+   * (Eva's messages silently dropped). Read once, then removed so the previewed
+   * page keeps its own global scope.
+   */
+  function injectedParentOrigin(): string {
+    const raw = Reflect.get(window, "__evaPreviewParentOrigin");
+    Reflect.deleteProperty(window, "__evaPreviewParentOrigin");
+    return typeof raw === "string" && raw ? originOf(raw) : "";
+  }
+
+  /** Eva's origin, or "" when unknown (ungated proxy with no Eva URL). */
+  const parentOrigin =
+    injectedParentOrigin() ||
+    (document.referrer ? originOf(document.referrer) : "");
 
   let modeActive = false;
   let selectedEl: Element | null = null;
@@ -162,9 +373,40 @@ function evaPreviewAnnotationScript(): void {
           type: "eva-preview-screenshot-error";
           requestId: string;
           message: string;
+        }
+      | {
+          type: "eva-preview-snapshot";
+          requestId: string;
+          snapshot: EvaPreviewSnapshot;
+        }
+      | {
+          type: "eva-preview-snapshot-error";
+          requestId: string;
+          message: string;
+        }
+      | {
+          type: "eva-preview-webmcp-tools";
+          requestId: string;
+          origin: string;
+          implementation: string;
+          tools: EvaWebMcpTool[];
+        }
+      | {
+          type: "eva-preview-webmcp-result";
+          requestId: string;
+          name: string;
+          result: unknown;
+        }
+      | {
+          type: "eva-preview-webmcp-error";
+          requestId: string;
+          message: string;
         },
   ): void {
-    window.parent.postMessage(payload, parentOrigin);
+    // Payloads carry page text, console output and failing request URLs, so
+    // they go to Eva's exact origin. "*" only survives where no origin is known
+    // at all, which is the ungated legacy proxy.
+    window.parent.postMessage(payload, parentOrigin || "*");
   }
 
   function ensureOverlay(): void {
@@ -623,6 +865,437 @@ function evaPreviewAnnotationScript(): void {
     scheduleRectReport();
   }
 
+  function implicitRole(element: HTMLElement): string {
+    const explicit = element.getAttribute("role");
+    if (explicit) return explicit;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "a") return "link";
+    if (tag === "button") return "button";
+    if (tag === "main") return "main";
+    if (tag === "nav") return "navigation";
+    if (tag === "header") return "banner";
+    if (tag === "footer") return "contentinfo";
+    if (tag === "aside") return "complementary";
+    if (
+      tag === "h1" ||
+      tag === "h2" ||
+      tag === "h3" ||
+      tag === "h4" ||
+      tag === "h5" ||
+      tag === "h6"
+    ) {
+      return "heading";
+    }
+    if (tag === "select") return "combobox";
+    if (tag === "textarea") return "textbox";
+    if (tag === "input") {
+      const type = (element.getAttribute("type") || "text").toLowerCase();
+      if (type === "checkbox" || type === "radio") return type;
+      if (type === "submit" || type === "button" || type === "reset") {
+        return "button";
+      }
+      return "textbox";
+    }
+    if (element.isContentEditable) return "textbox";
+    return tag;
+  }
+
+  /**
+   * Never reads `element.value`. The snapshot is shown in Eva and sent to the
+   * model, and unlabelled fields are common in small dev apps, so falling back
+   * to the live value would ship whatever the user had typed — a password, an
+   * API key, an email address — straight into the conversation.
+   */
+  function accessibleName(element: HTMLElement): string {
+    const labelled = element.getAttribute("aria-label");
+    if (labelled) return labelled.replace(/\s+/g, " ").trim().slice(0, 80);
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      const fromLabel = element.labels?.item(0)?.textContent;
+      if (fromLabel) return fromLabel.replace(/\s+/g, " ").trim().slice(0, 80);
+      const placeholder = element.getAttribute("placeholder");
+      if (placeholder) return placeholder.slice(0, 80);
+      const named = element.getAttribute("name") || element.getAttribute("id");
+      if (named) return named.slice(0, 80);
+      if (element instanceof HTMLTextAreaElement) return "(textarea)";
+      const type = (element.getAttribute("type") || "text")
+        .toLowerCase()
+        .slice(0, 32);
+      return "(" + type + " input)";
+    }
+    if (element instanceof HTMLImageElement) {
+      return (element.alt || "").slice(0, 80);
+    }
+    return (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  }
+
+  function isVisibleBox(element: HTMLElement): boolean {
+    const rect = element.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return false;
+    const styles = window.getComputedStyle(element);
+    if (styles.visibility === "hidden" || styles.display === "none") {
+      return false;
+    }
+    if (styles.opacity === "0") return false;
+    return true;
+  }
+
+  function collectInteractive(): EvaPreviewSnapshotElement[] {
+    const selector =
+      "a[href], button, input, select, textarea, [role='button'], [role='link'], [role='tab'], [contenteditable='true']";
+    const nodes = document.querySelectorAll(selector);
+    const out: EvaPreviewSnapshotElement[] = [];
+    for (let i = 0; i < nodes.length && out.length < 80; i++) {
+      const node = nodes.item(i);
+      if (!(node instanceof HTMLElement)) continue;
+      if (node.getAttribute("aria-hidden") === "true") continue;
+      if (!isVisibleBox(node)) continue;
+      const rect = node.getBoundingClientRect();
+      out.push({
+        role: implicitRole(node),
+        name: accessibleName(node),
+        selector: generateSelector(node),
+        bbox: {
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+      });
+    }
+    return out;
+  }
+
+  function collectA11yTree(): Array<{ role: string; name: string }> {
+    const selector =
+      "main, nav, header, footer, aside, h1, h2, h3, h4, h5, h6, [role='main'], [role='navigation'], [role='banner'], [role='contentinfo'], [role='complementary']";
+    const nodes = document.querySelectorAll(selector);
+    const out: Array<{ role: string; name: string }> = [];
+    for (let i = 0; i < nodes.length && out.length < 40; i++) {
+      const node = nodes.item(i);
+      if (!(node instanceof HTMLElement)) continue;
+      out.push({
+        role: implicitRole(node),
+        name: accessibleName(node),
+      });
+    }
+    return out;
+  }
+
+  function collectSnapshot(): EvaPreviewSnapshot {
+    const bodyText = (document.body?.innerText || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return {
+      url: window.location.href,
+      title: document.title || "",
+      loading: document.readyState !== "complete",
+      visibleText: bodyText.slice(0, 4000),
+      interactiveElements: collectInteractive(),
+      accessibilityTree: collectA11yTree(),
+      consoleEntries: CONSOLE_RING.slice(),
+      networkEntries: NETWORK_RING.slice(),
+    };
+  }
+
+  /** Page implementation first, our compatibility shim only as a fallback. */
+  function modelContextRoot(): object | null {
+    return pageModelContext() ?? compatibilityContext;
+  }
+
+  function recordFromObject(value: object): Record<string, unknown> {
+    const record: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) {
+      record[key] = Reflect.get(value, key);
+    }
+    return record;
+  }
+
+  function cloneSchema(value: unknown): Record<string, unknown> {
+    let candidate: unknown = value;
+    if (typeof candidate === "string") {
+      try {
+        candidate = JSON.parse(candidate);
+      } catch {
+        return { type: "object", properties: {} };
+      }
+    }
+    if (candidate === undefined) return { type: "object", properties: {} };
+    if (
+      candidate === null ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate)
+    ) {
+      return { type: "object", properties: {} };
+    }
+    try {
+      const serialized = JSON.stringify(candidate);
+      if (serialized.length > 16_384) return { type: "object", properties: {} };
+      const cloned: unknown = JSON.parse(serialized);
+      if (
+        cloned === null ||
+        typeof cloned !== "object" ||
+        Array.isArray(cloned)
+      ) {
+        return { type: "object", properties: {} };
+      }
+      return recordFromObject(cloned);
+    } catch {
+      return { type: "object", properties: {} };
+    }
+  }
+
+  function toolFromUnknown(
+    value: unknown,
+    source: EvaWebMcpTool["source"],
+  ): EvaWebMcpTool | null {
+    if (value === null || typeof value !== "object") return null;
+    const name = normalizeToolName(Reflect.get(value, "name"));
+    const descriptionRaw = Reflect.get(value, "description");
+    const description =
+      typeof descriptionRaw === "string" ? descriptionRaw.trim().slice(0, 4096) : "";
+    if (!name || !description) return null;
+    const titleRaw = Reflect.get(value, "title");
+    const title = typeof titleRaw === "string" ? titleRaw.trim().slice(0, 256) : "";
+    const annotationsRaw = Reflect.get(value, "annotations");
+    const readOnly =
+      annotationsRaw !== null &&
+      typeof annotationsRaw === "object" &&
+      Reflect.get(annotationsRaw, "readOnlyHint") === true;
+    return {
+      name,
+      ...(title ? { title } : {}),
+      description,
+      inputSchema: cloneSchema(Reflect.get(value, "inputSchema")),
+      readOnly,
+      source,
+    };
+  }
+
+  function declarativeTools(): EvaWebMcpTool[] {
+    const forms = document.querySelectorAll(
+      "form[toolname], form[data-webmcp-tool]",
+    );
+    const out: EvaWebMcpTool[] = [];
+    for (let i = 0; i < forms.length && out.length < 64; i++) {
+      const node = forms.item(i);
+      if (!(node instanceof HTMLFormElement)) continue;
+      const name = normalizeToolName(
+        node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool"),
+      );
+      const description = (
+        node.getAttribute("tooldescription") ??
+        node.getAttribute("data-webmcp-description") ??
+        node.getAttribute("aria-label") ??
+        ""
+      )
+        .trim()
+        .slice(0, 4096);
+      if (!name || !description) continue;
+      const properties: Record<string, unknown> = {};
+      const required: string[] = [];
+      for (const element of Array.from(node.elements)) {
+        if (
+          !(
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLSelectElement ||
+            element instanceof HTMLTextAreaElement
+          )
+        ) {
+          continue;
+        }
+        if (element.disabled || element.name.trim().length === 0) continue;
+        if (properties[element.name]) continue;
+        properties[element.name] = { type: "string" };
+        if (element.required) required.push(element.name);
+      }
+      out.push({
+        name,
+        description,
+        inputSchema: {
+          type: "object",
+          properties,
+          ...(required.length > 0 ? { required } : {}),
+        },
+        readOnly: false,
+        source: "form",
+      });
+    }
+    return out;
+  }
+
+  async function listFromModelContext(): Promise<EvaWebMcpTool[]> {
+    const ctx = modelContextRoot();
+    if (!ctx) return [];
+    const getter =
+      Reflect.get(ctx, "getTools") ?? Reflect.get(ctx, "listTools");
+    let raw: unknown = Reflect.get(ctx, "tools");
+    if (typeof getter === "function") {
+      raw = await getter.call(ctx);
+    }
+    const list = Array.isArray(raw)
+      ? raw
+      : raw instanceof Map
+        ? [...raw.values()]
+        : [];
+    const out: EvaWebMcpTool[] = [];
+    for (const entry of list) {
+      const tool = toolFromUnknown(entry, "modelContext");
+      if (tool) out.push(tool);
+    }
+    return out;
+  }
+
+  async function collectWebMcp(): Promise<EvaWebMcpDiscovery> {
+    const fromApi = await listFromModelContext();
+    const fromForms = declarativeTools();
+    const byName = new Map<string, EvaWebMcpTool>();
+    for (const tool of [...fromApi, ...fromForms]) {
+      if (!byName.has(tool.name)) byName.set(tool.name, tool);
+    }
+    // Reported verbatim in the prompt sent to the agent, so it has to be
+    // honest about where the tools actually came from.
+    const implementation = pageModelContext()
+      ? "native"
+      : fromApi.length > 0
+        ? "compatibility"
+        : fromForms.length > 0
+          ? "form"
+          : "none";
+    return {
+      origin: window.location.origin,
+      implementation,
+      tools: [...byName.values()].slice(0, 64),
+    };
+  }
+
+  function findDeclarativeForm(name: string): HTMLFormElement | null {
+    const forms = document.querySelectorAll(
+      "form[toolname], form[data-webmcp-tool]",
+    );
+    for (let i = 0; i < forms.length; i++) {
+      const node = forms.item(i);
+      if (!(node instanceof HTMLFormElement)) continue;
+      const formName = normalizeToolName(
+        node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool"),
+      );
+      if (formName === name) return node;
+    }
+    return null;
+  }
+
+  function fillDeclarativeForm(
+    form: HTMLFormElement,
+    args: Record<string, unknown>,
+  ): void {
+    for (const key of Object.keys(args)) {
+      const control = form.elements.namedItem(key);
+      if (
+        !(
+          control instanceof HTMLInputElement ||
+          control instanceof HTMLTextAreaElement ||
+          control instanceof HTMLSelectElement
+        )
+      ) {
+        continue;
+      }
+      const value = args[key];
+      control.value =
+        typeof value === "string" ? value : JSON.stringify(value ?? "");
+    }
+  }
+
+  function asInvokeArgs(value: unknown): Record<string, unknown> | null {
+    let candidate: unknown = value;
+    if (candidate === undefined) return {};
+    if (typeof candidate === "string") {
+      try {
+        candidate = JSON.parse(candidate);
+      } catch {
+        return null;
+      }
+    }
+    if (
+      candidate === null ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate)
+    ) {
+      return null;
+    }
+    return recordFromObject(candidate);
+  }
+
+  function serializeToolResult(value: unknown): unknown {
+    try {
+      const serialized = JSON.stringify(value === undefined ? null : value);
+      if (serialized === undefined) {
+        return { error: "Tool result is not JSON serializable" };
+      }
+      if (serialized.length > 65_536) {
+        return { truncated: true, preview: serialized.slice(0, 2_000) };
+      }
+      return JSON.parse(serialized);
+    } catch {
+      return { error: "Tool result is not JSON serializable" };
+    }
+  }
+
+  async function invokeWebMcp(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown> {
+    const ctx = modelContextRoot();
+    if (ctx) {
+      const callTool = Reflect.get(ctx, "callTool");
+      if (typeof callTool === "function") {
+        return await callTool.call(ctx, name, args);
+      }
+      const executeTool = Reflect.get(ctx, "executeTool");
+      const getter =
+        Reflect.get(ctx, "getTools") ?? Reflect.get(ctx, "listTools");
+      let listed: unknown = Reflect.get(ctx, "tools");
+      if (typeof getter === "function") {
+        listed = await getter.call(ctx);
+      }
+      const list = Array.isArray(listed)
+        ? listed
+        : listed instanceof Map
+          ? [...listed.values()]
+          : [];
+      const match = list.find((entry) => {
+        return (
+          entry !== null &&
+          typeof entry === "object" &&
+          Reflect.get(entry, "name") === name
+        );
+      });
+      if (typeof executeTool === "function" && match) {
+        return await executeTool.call(ctx, match, args);
+      }
+      if (match) {
+        const execute = Reflect.get(match, "execute");
+        if (typeof execute === "function") {
+          return await execute.call(match, args, {
+            signal: new AbortController().signal,
+          });
+        }
+      }
+    }
+    const registered = compatibilityTools.get(name);
+    if (registered) {
+      return await registered.execute(args, {
+        signal: new AbortController().signal,
+      });
+    }
+    const form = findDeclarativeForm(name);
+    if (form) {
+      fillDeclarativeForm(form, args);
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
+      return { submitted: true, name };
+    }
+    throw new Error(`Unknown WebMCP tool: ${name}`);
+  }
+
   function restoreCaptureChrome(): void {
     if (overlay) overlay.style.display = overlayDisplayForCapture;
     if (labelEl) labelEl.style.display = labelDisplayForCapture;
@@ -693,7 +1366,7 @@ function evaPreviewAnnotationScript(): void {
   }
 
   window.addEventListener("message", (event) => {
-    if (parentOrigin !== "*" && event.origin !== parentOrigin) return;
+    if (parentOrigin && event.origin !== parentOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const type = Reflect.get(data, "type");
@@ -721,6 +1394,86 @@ function evaPreviewAnnotationScript(): void {
               error instanceof Error
                 ? error.message
                 : "Couldn't render this page as an image",
+          });
+        });
+      return;
+    }
+    if (type === "eva-preview-snapshot-capture") {
+      const requestId = Reflect.get(data, "requestId");
+      if (typeof requestId !== "string") return;
+      try {
+        post({
+          type: "eva-preview-snapshot",
+          requestId,
+          snapshot: collectSnapshot(),
+        });
+      } catch (error) {
+        post({
+          type: "eva-preview-snapshot-error",
+          requestId,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Couldn't snapshot this page",
+        });
+      }
+      return;
+    }
+    if (type === "eva-preview-webmcp-list") {
+      const requestId = Reflect.get(data, "requestId");
+      if (typeof requestId !== "string") return;
+      void collectWebMcp()
+        .then((discovery) => {
+          post({
+            type: "eva-preview-webmcp-tools",
+            requestId,
+            origin: discovery.origin,
+            implementation: discovery.implementation,
+            tools: discovery.tools,
+          });
+        })
+        .catch((error) => {
+          post({
+            type: "eva-preview-webmcp-error",
+            requestId,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Couldn't list page tools",
+          });
+        });
+      return;
+    }
+    if (type === "eva-preview-webmcp-invoke") {
+      const requestId = Reflect.get(data, "requestId");
+      const name = normalizeToolName(Reflect.get(data, "name"));
+      if (typeof requestId !== "string" || !name) return;
+      const args = asInvokeArgs(Reflect.get(data, "arguments"));
+      if (!args) {
+        post({
+          type: "eva-preview-webmcp-error",
+          requestId,
+          message: "WebMCP arguments must be a JSON object",
+        });
+        return;
+      }
+      void invokeWebMcp(name, args)
+        .then((result) => {
+          post({
+            type: "eva-preview-webmcp-result",
+            requestId,
+            name,
+            result: serializeToolResult(result),
+          });
+        })
+        .catch((error) => {
+          post({
+            type: "eva-preview-webmcp-error",
+            requestId,
+            message:
+              error instanceof Error
+                ? error.message
+                : "The page-declared WebMCP tool failed",
           });
         });
     }

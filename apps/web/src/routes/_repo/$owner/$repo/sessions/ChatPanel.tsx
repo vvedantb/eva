@@ -1,9 +1,11 @@
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
@@ -139,6 +141,8 @@ export function ChatPanel({
   isRouteActive = true,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
+  const navigate = useNavigate();
+  const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -201,6 +205,36 @@ export function ChatPanel({
   const review = usePendingReviewComments();
   const hasPendingReviewComments = (review?.comments.length ?? 0) > 0;
 
+  const handleForkTranscript = async (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => {
+    const accountId = resolveAccountId(providerAccountId) ?? null;
+    try {
+      const { numId } = await createSession({
+        repoId: repo._id,
+        title: input.title,
+        message: input.prompt,
+        model,
+        ...executionTraits,
+        reasoningLevel: displayTraits.effortLevel,
+        thinkingEnabled: displayTraits.thinkingEnabled,
+        use1mContext: displayTraits.use1mContext,
+        fastMode: displayTraits.fastMode,
+        providerAccountId: accountId,
+      });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Couldn't fork this chat";
+      toast.error(message);
+      throw error;
+    }
+  };
+
   const { isExecuting, handleSend, handleCancel } = useSessionSend({
     sessionId,
     model,
@@ -251,7 +285,10 @@ export function ChatPanel({
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
     onSendCommand: (command) => {
-      void handleSend(command, undefined, { skipReviewComments: true });
+      // Rejects on a failed send; the failure is already toasted.
+      void handleSend(command, undefined, { skipReviewComments: true }).catch(
+        () => {},
+      );
     },
   };
 
@@ -490,6 +527,7 @@ export function ChatPanel({
         onTraitsChange={onTraitsChange}
         onSend={handleSend}
         onCancel={handleCancel}
+        onForkTranscript={handleForkTranscript}
         afterMessage={(messageId) => {
           const plan = proposedPlanForMessage(capturedPlans, messageId);
           if (plan) {

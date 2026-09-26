@@ -45,6 +45,9 @@ import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -378,6 +381,9 @@ export function ProjectDetailClient({
     );
 
   const projectSandboxContent = (
+    <PendingPreviewSnapshotsProvider>
+    <PendingWebMcpProvider>
+    <OpenSandboxFileProvider onOpenFile={openFile}>
     <SandboxWorkspace
       ownerKind="project"
       ownerId={projectId}
@@ -426,6 +432,9 @@ export function ProjectDetailClient({
         />
       )}
     </SandboxWorkspace>
+    </OpenSandboxFileProvider>
+    </PendingWebMcpProvider>
+    </PendingPreviewSnapshotsProvider>
   );
 
   return (

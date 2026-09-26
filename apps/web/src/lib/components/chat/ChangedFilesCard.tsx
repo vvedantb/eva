@@ -107,6 +107,19 @@ export function toRepoRelativePath(path: string): string {
 }
 
 /**
+ * Inverse of `toRepoRelativePath` for Diffs → Files. Repo-relative git paths
+ * become the absolute `?file=` the viewer reads; already-absolute paths pass
+ * through. `/tmp/repo` is the Eva sandbox root and the prefix Files already
+ * understands when the live listing root has not loaded yet.
+ */
+export function toSandboxFilePath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed.length === 0) return trimmed;
+  if (trimmed.startsWith("/")) return trimmed;
+  return `${SANDBOX_REPO_PREFIXES[0]}${trimmed}`;
+}
+
+/**
  * Changed-files rows open the Review diffs tab when that handler exists
  * (the card is "what this turn changed"). Activity chips still use
  * `onOpenFile` → Files. Prefer diffs so a row click and View diff land
