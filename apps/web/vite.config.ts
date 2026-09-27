@@ -108,6 +108,8 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     cors: false,
+    // boat.dev sandbox preview URLs hit Vite directly with their own Host header
+    allowedHosts: [".on.boat.dev"],
   },
   // The @pierre/diffs highlight worker keeps a dynamic `import("shiki/wasm")`
   // that never runs (we stay on the JS highlighter). Vite's default `iife`
