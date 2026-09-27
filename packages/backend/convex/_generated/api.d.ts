@@ -355,6 +355,7 @@ import type * as http from "../http.js";
 import type * as legacyIds from "../legacyIds.js";
 import type * as linearActions from "../linearActions.js";
 import type * as logs from "../logs.js";
+import type * as mcp_automationTools from "../mcp/automationTools.js";
 import type * as mcp_browserLock from "../mcp/browserLock.js";
 import type * as mcp_chatContentTools from "../mcp/chatContentTools.js";
 import type * as mcp_chatSelfNodeActions from "../mcp/chatSelfNodeActions.js";
@@ -825,6 +826,7 @@ declare const fullApi: ApiFromModules<{
   legacyIds: typeof legacyIds;
   linearActions: typeof linearActions;
   logs: typeof logs;
+  "mcp/automationTools": typeof mcp_automationTools;
   "mcp/browserLock": typeof mcp_browserLock;
   "mcp/chatContentTools": typeof mcp_chatContentTools;
   "mcp/chatSelfNodeActions": typeof mcp_chatSelfNodeActions;
