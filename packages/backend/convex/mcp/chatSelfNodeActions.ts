@@ -144,3 +144,23 @@ export const restartDevServer = internalAction({
     return { restarted: true, listenPort };
   },
 });
+
+const vmStateValidator = v.object({
+  running: v.boolean(),
+  vmState: v.string(),
+});
+
+/**
+ * The VM's live state, read without waking it. Tools that hand work to
+ * another sandbox action check this first, since that action's first exec
+ * would lazily resume a stopped VM.
+ */
+export const sandboxVmState = internalAction({
+  args: { repoId: v.id("githubRepos"), sandboxId: v.string() },
+  returns: vmStateValidator,
+  handler: async (ctx, args): Promise<Infer<typeof vmStateValidator>> => {
+    const vm = await runningHandle(ctx, args.repoId, args.sandboxId);
+    if ("state" in vm) return { running: false, vmState: vm.state };
+    return { running: true, vmState: vm.handle.state };
+  },
+});

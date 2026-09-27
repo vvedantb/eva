@@ -102,8 +102,8 @@ function envRequestSpec(blocks: ChatUiBlock[], title: string): Spec {
 
 /**
  * Tools an agent uses on the chat it is running in: what this chat is, what
- * its dev server is doing, which env vars exist, and how to steer the user's
- * Preview tab. Every tool defaults to the caller's own chat and also accepts
+ * its dev server is doing, how to recover its background and startup
+ * commands, which env vars exist, and how to steer the user's Preview tab. Every tool defaults to the caller's own chat and also accepts
  * any other chat the user can reach.
  */
 export function chatSelfTools(
@@ -113,6 +113,43 @@ export function chatSelfTools(
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
   const { resolveEntityTarget } = entityAccess(ctx, credentials);
+
+  /**
+   * The sandbox id when the chat's sandbox is active and its VM is running
+   * right now, otherwise an error naming why. Read without waking the VM.
+   */
+  async function runningSandboxId(
+    target: EntityTarget,
+    action: string,
+  ): Promise<string | ReturnType<typeof errorResult>> {
+    if (
+      target.sandboxId === undefined ||
+      target.sandboxStatus !== "active"
+    ) {
+      return errorResult(
+        `This ${target.kind}'s sandbox is "${target.sandboxStatus}". ${action} only runs on an active sandbox; call start_sandbox first, or wait for it to settle.`,
+      );
+    }
+    const vm = await ctx.runAction(
+      internal.mcp.chatSelfNodeActions.sandboxVmState,
+      { repoId: target.repoId, sandboxId: target.sandboxId },
+    );
+    if (!vm.running) {
+      return errorResult(
+        `The VM is "${vm.vmState}", not running, so nothing was run. Call start_sandbox first.`,
+      );
+    }
+    return target.sandboxId;
+  }
+
+  /** The session row when the target is a session (orchestrators run no repo services). */
+  async function sessionRow(target: EntityTarget) {
+    return target.kind === "session"
+      ? await ctx.runQuery(internal.sessions.getInternal, {
+          id: target.targetId,
+        })
+      : null;
+  }
 
   /** Resolves the named chat (or the caller's own) plus its details row. */
   async function resolveChat(
@@ -555,6 +592,185 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
           ...(path !== undefined ? { previewPath: path } : {}),
           ...(port !== undefined ? { previewPort: port } : {}),
           updated: true,
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // restart_background_commands
+  // ───────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "restart_background_commands",
+      description: `Relaunch the repo's configured background commands — long-running daemons such as \`npx convex dev\` or \`supabase start\` — in the chat's sandbox. Use it when one of them died while the sandbox kept running (get_chat_context lists them; each logs to /tmp/bg-<index>.log). Eva already launches them on every sandbox start and resume, so this is only for recovery.
+
+Every command is relaunched, including ones still alive: each is stopped first (its whole process group, and any stray Convex backend for a Convex command), then started again. So it never leaves duplicate daemons, but it does briefly interrupt the healthy ones. If the VM turns out to be wedged, Eva may stop and resume it once.
+
+Name no chat and it relaunches your own. Refused unless the sandbox is active and its VM running; it never wakes a stopped VM, and it errors when the repo has no background commands. For sessions the reply lists launch errors; for tasks and projects the launch is queued and the reply means it was sent. Background commands never re-run startup commands (seeds, imports) — that is rerun_startup_commands.`,
+      mutating: true,
+      input: entityRefArgs,
+      handler: async (ref) => {
+        const chat = await resolveChat(ref);
+        if ("isError" in chat) return chat;
+        const { target, details } = chat;
+
+        if (details.backgroundCommands.length === 0) {
+          return errorResult(
+            "This repo has no background commands configured, so there is nothing to relaunch. Add them in the repo's app settings.",
+          );
+        }
+        const session = await sessionRow(target);
+        if (session?.isOrchestrator === true) {
+          return errorResult(
+            "This is an orchestrator session. It runs no repo services, so it has no background commands to relaunch.",
+          );
+        }
+        const sandboxId = await runningSandboxId(
+          target,
+          "Relaunching background commands",
+        );
+        if (typeof sandboxId !== "string") return sandboxId;
+
+        const summary = {
+          ...entitySummary(target),
+          backgroundCommands: details.backgroundCommands,
+        };
+        if (target.kind === "task" || target.kind === "project") {
+          await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            target.kind === "task"
+              ? {
+                  type: "mutation",
+                  path: "agentTasks:runBackgroundCommands",
+                  args: { taskId: target.targetId },
+                }
+              : {
+                  type: "mutation",
+                  path: "projects:runProjectBackgroundCommands",
+                  args: { projectId: target.targetId },
+                },
+            z.null(),
+          );
+          return textResult({
+            ...summary,
+            relaunched: "queued",
+            note: "Relaunch queued. Check /tmp/bg-<index>.log in the sandbox in a few seconds to confirm each daemon came up.",
+          });
+        }
+
+        // Sessions have no public mutation for this; resolveChat has already
+        // access-checked the chat, so the launcher is called directly.
+        const result = await ctx.runAction(
+          internal.sandbox.runBackgroundCommands,
+          {
+            sandboxId,
+            repoId: target.repoId,
+            ...(session ? { sessionId: session._id } : {}),
+          },
+        );
+        return textResult({
+          ...summary,
+          relaunched: result.commandCount,
+          errors: result.errors,
+          note:
+            result.errors.length > 0
+              ? "Some commands failed to launch; see errors."
+              : "Launched. Check /tmp/bg-<index>.log in the sandbox to confirm each daemon came up.",
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // rerun_startup_commands
+  // ───────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "rerun_startup_commands",
+      description: `Re-run the repo's startup commands — the one-time setup Eva runs on a fresh sandbox, such as seeding a database, importing data or running migrations — even though they already ran. Use it to recover when a seed or import failed.
+
+WARNING: startup commands can reset, reseed or overwrite the sandbox's local data, and for tasks and projects this restarts the whole sandbox startup flow (the sandbox goes to "starting", and a stopped one is started). If local data might be lost, ask the user before calling this. It is not the fix for a dead daemon; use restart_background_commands for that.
+
+Name no chat and it runs for your own. Refused while the sandbox is starting or stopping, and it errors when the repo has no startup commands. Sessions: only on an active sandbox with a running VM (it never wakes a stopped one); the commands run in the background, each for up to 10 minutes, alongside whatever is already running. The reply means the run was started, not that it finished.`,
+      mutating: true,
+      input: entityRefArgs,
+      handler: async (ref) => {
+        const chat = await resolveChat(ref);
+        if ("isError" in chat) return chat;
+        const { target, details } = chat;
+
+        if (details.startupCommands.length === 0) {
+          return errorResult(
+            "This repo has no startup commands configured, so there is nothing to re-run. Add them in the repo's app settings.",
+          );
+        }
+        const summary = {
+          ...entitySummary(target),
+          startupCommands: details.startupCommands,
+        };
+
+        if (target.kind === "task" || target.kind === "project") {
+          if (
+            target.sandboxStatus === "starting" ||
+            target.sandboxStatus === "stopping"
+          ) {
+            return errorResult(
+              `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Wait for it to settle before re-running startup commands.`,
+            );
+          }
+          // The public mutation applies the status and phase gates and starts
+          // the regular startup workflow with the force flag set.
+          await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            target.kind === "task"
+              ? {
+                  type: "mutation",
+                  path: "agentTasks:retryStartupCommands",
+                  args: { taskId: target.targetId },
+                }
+              : {
+                  type: "mutation",
+                  path: "projects:retryProjectStartupCommands",
+                  args: { projectId: target.targetId },
+                },
+            z.null(),
+          );
+          return textResult({
+            ...summary,
+            rerun: "started",
+            note: "The sandbox startup flow is running with startup commands forced. Its status is \"starting\" until it finishes; check get_chat_context, then get_dev_server_logs.",
+          });
+        }
+
+        const session = await sessionRow(target);
+        if (session?.isOrchestrator === true) {
+          return errorResult(
+            "This is an orchestrator session. It runs no repo services, so it has no startup commands to re-run.",
+          );
+        }
+        const sandboxId = await runningSandboxId(
+          target,
+          "Re-running startup commands",
+        );
+        if (typeof sandboxId !== "string") return sandboxId;
+
+        // Sessions have no startup workflow to restart, so the forced run is
+        // scheduled on its own (the action is too long to await in-line).
+        // resolveChat has already access-checked the chat.
+        await ctx.scheduler.runAfter(0, internal.sandbox.runStartupCommands, {
+          sandboxId,
+          repoId: target.repoId,
+          force: true,
+        });
+        return textResult({
+          ...summary,
+          rerun: "scheduled",
+          note: "Startup commands are running in the background. There is no progress signal: check the effect (for example, the seeded data) after a few minutes.",
         });
       },
     }),
