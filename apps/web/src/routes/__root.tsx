@@ -35,6 +35,15 @@ const DevAgentation = import.meta.env.DEV
     )
   : null;
 
+/** Lazy so @vedantb/redline stays out of the production bundle. */
+const DevRedline = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/lib/components/DevRedline").then((m) => ({
+        default: m.DevRedline,
+      })),
+    )
+  : null;
+
 function RootComponent() {
   useDocumentTitle();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -69,6 +78,11 @@ function RootComponent() {
       {DevAgentation ? (
         <Suspense fallback={null}>
           <DevAgentation />
+        </Suspense>
+      ) : null}
+      {DevRedline ? (
+        <Suspense fallback={null}>
+          <DevRedline />
         </Suspense>
       ) : null}
     </>
