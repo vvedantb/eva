@@ -7,3 +7,6 @@ dist-ssr
 tsconfig.tsbuildinfo
 tsconfig.buildinfo
 stats.html
+
+# Redline local baseline pin
+.redline/
