@@ -8,6 +8,11 @@ import { chatSelfTools } from "./chatSelfTools";
 import { chatContentTools } from "./chatContentTools";
 import { workTools } from "./workTools";
 import { automationTools } from "./automationTools";
+import { tabQueueTools } from "./tabQueueTools";
+import {
+  agentInteractionTools,
+  orchestratorQuestionTools,
+} from "./agentInteractionTools";
 import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
@@ -1493,7 +1498,8 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   // ─────────────────────────────────────────────────────────────────────────────
   // Chat control tools — the caller's own chat (context, dev server, env var
   // names, Preview), chat content (titles, plans, comments, artifact/doc
-  // deletes), project builds and task lifecycle, and automations. Each calls
+  // deletes), project builds and task lifecycle, automations, custom tabs,
+  // queued messages, sandbox services and in-app notifications. Each calls
   // the UI's own public function as the user (mcpCallAsUser) or resolves its
   // target through the shared access check; deletes require `confirmed`.
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1502,9 +1508,14 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   tools.push(...chatContentTools(credentials, ctx));
   tools.push(...workTools(credentials, ctx));
   tools.push(...automationTools(credentials, ctx));
+  tools.push(...tabQueueTools(credentials, ctx));
+  tools.push(...agentInteractionTools(credentials, ctx));
 
   if (isOrchestrator) {
     tools.push(...orchestratorTools(credentials, ctx));
+    // Answering a child's question speaks for the user, so only the master
+    // (which already relays for them) gets it.
+    tools.push(...orchestratorQuestionTools(credentials, ctx));
   }
 
   return tools;
