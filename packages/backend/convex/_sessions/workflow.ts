@@ -263,6 +263,13 @@ export async function buildSessionPrompt(
     [],
     readableRepos,
     linkedRepos,
+    {
+      ownerKey: `session-${session._id}`,
+      prUrl: session.prUrl,
+      devCommand: session.devCommand ?? repo.devCommand,
+      startupCommands: repo.startupCommands,
+      backgroundCommands: repo.backgroundCommands,
+    },
   );
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;

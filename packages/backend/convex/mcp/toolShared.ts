@@ -1,5 +1,7 @@
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { z } from "zod";
+import type { JsonValue } from "../_jev/jsonValue";
 
 // Leaf module shared by tools.ts and orchestratorTools.ts. Lives apart from
 // tools.ts so the orchestrator registration does not close an import cycle
@@ -42,6 +44,41 @@ export interface RepoInfo {
   rootDirectory: string | null;
   mcpRootPrompt: string | null;
 }
+
+/**
+ * Calls one public Eva function (e.g. "automations:runNow") as the MCP caller,
+ * so the tool inherits the same auth and repo-access checks the web UI hits.
+ * The reply is parsed at this boundary with the caller's schema.
+ */
+export async function mcpCallAsUser<T>(
+  ctx: ActionCtx,
+  clerkUserId: string,
+  call: {
+    type: "query" | "mutation" | "action";
+    path: string;
+    args: Record<string, JsonValue>;
+  },
+  schema: z.ZodType<T>,
+): Promise<T> {
+  const raw = await ctx.runAction(internal.mcp.nodeActions.callAsUser, {
+    clerkUserId,
+    type: call.type,
+    path: call.path,
+    argsJson: JSON.stringify(call.args),
+  });
+  return schema.parse(JSON.parse(raw));
+}
+
+/**
+ * Required on every tool that deletes or irreversibly removes something. The
+ * agent must ask the user in chat first; the literal makes skipping that a
+ * visible choice rather than a default.
+ */
+export const confirmedDeleteArg = z
+  .literal(true)
+  .describe(
+    "Deletion safeguard. Ask the user in chat and get an explicit yes before calling this tool, then pass true. Never set it on your own judgement.",
+  );
 
 /** Resolves the caller's Eva user id (creating the row on first contact). */
 export async function mcpGetContext(

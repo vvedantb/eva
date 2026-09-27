@@ -5,6 +5,7 @@ import { listAutomationsForRepo } from "../_automations/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { prStateValidator } from "../validators";
+import { latestTaskPrUrl } from "../_agentTasks/prUrl";
 import {
   openSessionIdsForRepo,
   projectIsExecuting,
@@ -362,9 +363,6 @@ const MAX_ENTITY_PAGE = 50;
  */
 const ENTITY_SCAN_BUDGET = 300;
 
-/** Runs looked at per task when finding the PR that task opened. */
-const TASK_PR_RUN_LOOKBACK = 3;
-
 const listedEntityValidator = v.object({
   kind: chatTargetKindValidator,
   id: v.string(),
@@ -531,19 +529,6 @@ async function scanProjects(
     )
     .order("desc")
     .take(take);
-}
-
-/** The PR a quick task opened. It lives on the run, never on the task row. */
-async function latestTaskPrUrl(
-  ctx: QueryCtx,
-  taskId: Id<"agentTasks">,
-): Promise<string | undefined> {
-  const runs = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .order("desc")
-    .take(TASK_PR_RUN_LOOKBACK);
-  return runs.find((run) => run.prUrl)?.prUrl;
 }
 
 type RepoRow = Pick<

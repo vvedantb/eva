@@ -173,6 +173,23 @@ export function entitySummary(target: EntityTarget): EntitySummary {
 }
 
 /**
+ * An agent asked "what is my preview link?" has no id for itself, and used to
+ * answer that no link existed. Naming no chat therefore means "the one I am
+ * running in", which the sandbox token already states. Shared by every tool
+ * whose natural target is the caller's own chat.
+ */
+export function withSelfDefault<Ref extends EntityRef>(
+  ref: Ref,
+  credentials: McpCredentials,
+): Ref {
+  const named =
+    ref.id !== undefined || ref.prUrl !== undefined || ref.numId !== undefined;
+  const { entityId, entityKind } = credentials;
+  if (named || entityId === undefined || entityKind === undefined) return ref;
+  return { ...ref, id: entityId, kind: entityKind };
+}
+
+/**
  * Repo and entity resolution bound to one MCP caller's credentials.
  *
  * Two access levels, on purpose:

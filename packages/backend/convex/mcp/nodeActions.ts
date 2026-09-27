@@ -24,7 +24,10 @@ import {
   type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
-import { TASK_CHAT_STREAM_PREFIX } from "../_chat/surfaceAdapters";
+import {
+  PROJECT_CHAT_STREAM_PREFIX,
+  TASK_CHAT_STREAM_PREFIX,
+} from "../_chat/surfaceAdapters";
 import { prStateValidator } from "../validators";
 import type { McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
@@ -522,6 +525,66 @@ async function runQueryAsUser(
   const result = parseConvexResponse(jsonValue.parse(json));
   return result.value;
 }
+
+/** Call a Convex action as the given user (mirrors runMutationAsUser via /api/action). */
+async function runActionAsUser(
+  convexUrl: string,
+  clerkUserId: string,
+  functionPath: string,
+  args: Record<string, JsonValue>,
+): Promise<JsonValue> {
+  const jwt = await signUserJwt(clerkUserId);
+  const response = await fetch(`${convexUrl}/api/action`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({ path: functionPath, args, format: "json" }),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+  }
+  const json = await response.json();
+  const result = parseConvexResponse(jsonValue.parse(json));
+  return result.value;
+}
+
+const AS_USER_RUNNERS = {
+  query: runQueryAsUser,
+  mutation: runMutationAsUser,
+  action: runActionAsUser,
+};
+
+/**
+ * Runs one public Eva function as the MCP caller, so the tool inherits the
+ * exact access checks (authQuery/authMutation, hasRepoAccess) the web UI hits.
+ * The one generic bridge MCP tools use to reach UI-backed functions; `path` is
+ * the Convex function path, e.g. "automations:runNow".
+ */
+export const callAsUser = internalAction({
+  args: {
+    clerkUserId: v.string(),
+    type: v.union(
+      v.literal("query"),
+      v.literal("mutation"),
+      v.literal("action"),
+    ),
+    path: v.string(),
+    argsJson: v.string(),
+  },
+  returns: v.string(),
+  handler: async (_ctx, { clerkUserId, type, path, argsJson }) => {
+    const args = z.record(z.string(), jsonValue).parse(JSON.parse(argsJson));
+    const value = await AS_USER_RUNNERS[type](
+      getEvaConvexCloudUrl(),
+      clerkUserId,
+      path,
+      args,
+    );
+    return JSON.stringify(value ?? null);
+  },
+});
 
 async function ensureUserExists(
   convexUrl: string,
@@ -1179,15 +1242,24 @@ export const listArtifacts = internalAction({
 // master can reach every agent the user can reach and nothing more.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const agentKindValidator = v.union(v.literal("session"), v.literal("task"));
-type AgentKind = "session" | "task";
+/**
+ * State, stop and watch reach all three chat surfaces, including a project's
+ * sandbox chat. Listing still only enumerates sessions and tasks.
+ */
+const agentKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+type AgentKind = "session" | "task" | "project";
 
 /**
- * Sending a message reaches one surface more than the fleet tools do: a
- * project's sandbox chat. Listing, state and stop stay on `agentKindValidator`
- * — the master session's fleet is sessions and tasks, and widening those would
- * put projects on the orchestrator surface as a side effect.
+ * Only sessions and tasks carry a `watchedByOrchestrator` pointer, so only
+ * they can wake Manager Ave when a turn finishes.
  */
+type WatchableKind = "session" | "task";
+
+/** Every surface a chat message can be sent into. */
 const chatKindValidator = v.union(
   v.literal("session"),
   v.literal("task"),
@@ -1258,6 +1330,11 @@ const agentTaskSchema = z.object({
 /** Slim projection of a `projects` document (its chat mirrors a task's). */
 const projectDocSchema = z.object({
   _id: z.string(),
+  _creationTime: z.number(),
+  numId: z.number().optional(),
+  title: z.string(),
+  phase: z.string(),
+  updatedAt: z.number().optional(),
   activeWorkflowId: z.string().optional(),
   activeBuildWorkflowId: z.string().optional(),
   activeChatWorkflowId: z.string().optional(),
@@ -1313,7 +1390,7 @@ const TRANSCRIPT_CHAR_LIMIT = 2000;
  */
 async function setWatchedByOrchestrator(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: WatchableKind,
   id: string,
   masterSessionId: string | undefined,
 ): Promise<void> {
@@ -1362,7 +1439,7 @@ async function resolveWatchMasterSessionId(
  */
 async function registerWatchIfMaster(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: WatchableKind,
   id: string,
   masterSessionId: string | undefined,
 ): Promise<void> {
@@ -1478,6 +1555,8 @@ const orchestratorAgentStateValidator = v.object({
   currentContent: v.optional(v.string()),
   pendingQuestion: v.optional(v.string()),
   queuedMessageCount: v.number(),
+  /** Projects only: a build runs apart from the chat and stop_agent leaves it. */
+  buildRunning: v.optional(v.boolean()),
   transcript: v.array(
     v.object({
       role: v.string(),
@@ -1514,7 +1593,9 @@ export const orchestratorGetAgentState = internalAction({
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
     const convexUrl = getEvaConvexCloudUrl();
     const streamingEntityId =
-      kind === "session" ? id : `${TASK_CHAT_STREAM_PREFIX}${id}`;
+      kind === "session"
+        ? id
+        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
 
     // The access check runs first, on its own. `messages:listByParent` *throws*
     // "Not authorized" while the entity read merely returns null, so in a
@@ -1523,7 +1604,7 @@ export const orchestratorGetAgentState = internalAction({
     const rawDoc = await runQueryAsUser(
       convexUrl,
       clerkUserId,
-      kind === "session" ? "_sessions/queries:get" : "_agentTasks/queries:get",
+      CHAT_DOC_QUERY[kind],
       { id },
     );
     if (rawDoc === null) {
@@ -1589,6 +1670,21 @@ export const orchestratorGetAgentState = internalAction({
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
         linkedRepos,
+      };
+    }
+
+    if (kind === "project") {
+      const project = projectDocSchema.parse(rawDoc);
+      return {
+        ...common,
+        numId: project.numId,
+        title: project.title,
+        status: project.phase,
+        model: project.lastChatModel ?? project.model,
+        updatedAt: project.updatedAt ?? project._creationTime,
+        deploymentUrl: undefined,
+        deploymentStatus: undefined,
+        buildRunning: project.activeBuildWorkflowId !== undefined,
       };
     }
 
@@ -1838,7 +1934,7 @@ export const orchestratorStopAgent = internalAction({
     kind: agentKindValidator,
     id: v.string(),
   },
-  returns: v.null(),
+  returns: v.object({ buildRunning: v.boolean() }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     const convexUrl = getEvaConvexCloudUrl();
     if (kind === "session") {
@@ -1848,7 +1944,28 @@ export const orchestratorStopAgent = internalAction({
         "_sessions/execution:cancelExecution",
         { sessionId: id },
       );
-      return null;
+      return { buildRunning: false };
+    }
+    if (kind === "project") {
+      // Only the sandbox chat. A running build is its own workflow and is
+      // reported back rather than cancelled (cancel_project_build owns that).
+      const rawDoc = await runQueryAsUser(
+        convexUrl,
+        clerkUserId,
+        CHAT_DOC_QUERY.project,
+        { id },
+      );
+      if (rawDoc === null) {
+        throw new Error(`No project ${id} found, or you do not have access.`);
+      }
+      const project = projectDocSchema.parse(rawDoc);
+      await runMutationAsUser(
+        convexUrl,
+        clerkUserId,
+        "projectChatWorkflow:cancelExecution",
+        { projectId: id },
+      );
+      return { buildRunning: project.activeBuildWorkflowId !== undefined };
     }
     // A task has two independent workflow slots: its main run and its sandbox
     // chat. Cancelling only the chat one reported success while a run kept
@@ -1865,7 +1982,7 @@ export const orchestratorStopAgent = internalAction({
       "_taskWorkflow/publicMutations:cancelExecution",
       { taskId: id },
     );
-    return null;
+    return { buildRunning: false };
   },
 });
 
@@ -2114,6 +2231,11 @@ export const orchestratorSetWatch = internalAction({
   },
   returns: v.null(),
   handler: async (_ctx, { clerkUserId, kind, id, masterSessionId }) => {
+    if (kind === "project") {
+      throw new Error(
+        "Projects cannot be watched yet: a project chat has no completion notification to Manager Ave. Poll get_agent_state instead.",
+      );
+    }
     await setWatchedByOrchestrator(clerkUserId, kind, id, masterSessionId);
     return null;
   },
