@@ -1,4 +1,5 @@
 import type { ActionCtx } from "../_generated/server";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import type { JsonValue } from "../_jev/jsonValue";
@@ -43,6 +44,29 @@ export interface RepoInfo {
   name: string;
   rootDirectory: string | null;
   mcpRootPrompt: string | null;
+}
+
+/** Strips the HTTP client's request-id and stack noise from a Convex error. */
+function cleanErrorMessage(error: Error): string {
+  const uncaught = /Uncaught Error: ([^\n]*)/.exec(error.message);
+  return uncaught ? uncaught[1] : error.message;
+}
+
+/**
+ * Turns a backend error thrown inside a tool (typically from mcpCallAsUser)
+ * into a tool error the agent can read, optionally with a recovery hint.
+ */
+export async function guarded(
+  run: () => Promise<CallToolResult>,
+  hint?: string,
+): Promise<CallToolResult> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof Error)) throw error;
+    const message = cleanErrorMessage(error);
+    return errorResult(hint ? `${message}. ${hint}` : message);
+  }
 }
 
 /**

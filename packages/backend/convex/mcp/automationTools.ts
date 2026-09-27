@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
 import { AI_MODEL_OPTIONS } from "../validators";
@@ -8,6 +7,7 @@ import { entityAccess, repoRefArgs } from "./entityRef";
 import {
   confirmedDeleteArg,
   errorResult,
+  guarded,
   mcpCallAsUser,
   mcpGetContext,
   mcpListUserRepos,
@@ -101,23 +101,6 @@ function truncate(text: string, limit: number): string {
 
 function isoTime(ms: number | undefined): string | null {
   return ms === undefined ? null : new Date(ms).toISOString();
-}
-
-/** Strips the HTTP client's request-id and stack noise from a Convex error. */
-function cleanErrorMessage(error: Error): string {
-  const uncaught = /Uncaught Error: ([^\n]*)/.exec(error.message);
-  return uncaught ? uncaught[1] : error.message;
-}
-
-async function guarded(
-  run: () => Promise<CallToolResult>,
-): Promise<CallToolResult> {
-  try {
-    return await run();
-  } catch (error) {
-    if (error instanceof Error) return errorResult(cleanErrorMessage(error));
-    throw error;
-  }
 }
 
 /** Claude short names the other tools accept, mapped to Eva model ids. */
