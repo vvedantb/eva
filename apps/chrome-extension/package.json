@@ -32,7 +32,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "convex": "^1.40.0",
+    "convex": "^1.46.0",
     "facehash": "^0.0.7",
     "highlight.js": "^11.11.1",
     "motion": "^12.33.0",

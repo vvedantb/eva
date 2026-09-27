@@ -955,4 +955,5 @@ export declare const components: {
   crons: import("@convex-dev/crons/_generated/component.js").ComponentApi<"crons">;
   actionCache: import("@convex-dev/action-cache/_generated/component.js").ComponentApi<"actionCache">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+  boat: import("../components/boat/_generated/component.js").ComponentApi<"boat">;
 };
