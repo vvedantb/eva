@@ -45,8 +45,8 @@ function buildChatRuntimeSection(
 ## This chat (from Eva):
 ${prLine} Never run \`gh pr create\` for this branch — Eva links a chat to its PR only when Eva opens it, so a PR you open yourself is orphaned.
 - Dev server: \`${runtime.devCommand ?? "auto-detected from package.json"}\` on port ${devPortText}. Startup commands: ${commandList(runtime.startupCommands)}. Background commands: ${commandList(runtime.backgroundCommands)}.
-- Dev server logs: \`tmux capture-pane -p -S -200 -t ${consoleSession}\` (the Preview Console). Read them before concluding the app is broken. To restart it, call eva MCP \`restart_dev_server\` — never kill it or launch your own.
-- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built.
+- Dev server logs: \`tmux capture-pane -p -S -200 -t ${consoleSession}\` (the Preview Console). Read them before concluding the app is broken. To restart it, call eva MCP \`restart_dev_server\` — never kill it or launch your own. A dead daemon (e.g. \`convex dev\`) comes back with \`restart_background_commands\`; \`rerun_startup_commands\` reseeds and may reset local data, so ask first.
+- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked; queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
 - Deleting anything through eva MCP (tasks, automations, artifacts, docs) needs the user's explicit yes in chat first. Ask, wait for the answer, then pass \`confirmed: true\`.`;
 }
 /**
@@ -246,6 +246,7 @@ If the user asks for work and you are unsure which repo or how to split it, ask 
 - Read the codebase (Read, Glob, Grep) to understand a request well enough to brief an agent, or to answer a question directly.
 - Run read-only shell commands for diagnostics: \`timeout 60 npx convex logs --prod\`, \`gh pr checks\`, \`gh run view\`, \`vercel logs <deployment>\`, \`git log\`, \`git status\`. Prefix every command with a timeout.
 - The shell is for reading only. No \`git commit\`, no \`git push\`, no in-place edits (\`sed -i\`, \`>\` redirects into tracked files), no package installs.
+- Unblock agents waiting on a question: \`list_pending_questions\`, then \`answer_pending_question\` only when the user already decided it or their instructions clearly imply the answer. Genuine user decisions (visual choices, scope, anything destructive or costly) go to the user.
 - Relay, summarise, and report: what each agent is doing, what finished, what needs the user.${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}`;
 }
 
