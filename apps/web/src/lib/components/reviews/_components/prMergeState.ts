@@ -40,6 +40,25 @@ export function checksOverallTone(counts: CheckCounts): StatusTone {
   return "neutral";
 }
 
+/** Rank of each tone in the Checks list — same precedence as `checksOverallTone`. */
+const CHECK_TONE_RANK: Record<StatusTone, number> = {
+  failure: 0,
+  pending: 1,
+  success: 2,
+  neutral: 3,
+};
+
+/**
+ * The Checks list, worst first: a reader opens the tab to find what broke, so
+ * a failure should not sit between two passes. `sort` is stable, so GitHub's
+ * own order survives within each tone.
+ */
+export function checksWorstFirst(checks: readonly PrCheck[]): PrCheck[] {
+  return [...checks].sort(
+    (a, b) => CHECK_TONE_RANK[checkTone(a)] - CHECK_TONE_RANK[checkTone(b)],
+  );
+}
+
 /** The Checks tab's verdict line, which has room to break every outcome out. */
 export function checksHeadline(counts: CheckCounts): string {
   if (counts.failure === 0 && counts.pending === 0 && counts.success > 0) {

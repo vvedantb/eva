@@ -169,6 +169,14 @@ export function PrStatusPill({
 export const SECTION_LABEL_CLASS =
   "shrink-0 text-xs font-medium text-muted-foreground";
 
+/**
+ * The content column of the Activity, Commits and Checks tabs. Capped for
+ * measure, but left-aligned rather than centred: the header, the tab row and the
+ * Changes tab all start on the same 16px edge, and a centred column sat ~220px
+ * in from it on a wide page, so the eye had two left margins to track.
+ */
+export const REVIEW_TAB_COLUMN_CLASS = "flex max-w-6xl flex-col px-4 py-4";
+
 /** Shared idiom for a quiet, non-blocking notice (truncation, empty states). */
 export const NOTICE_CLASS =
   "rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground";
@@ -206,5 +214,7 @@ export function shortSha(sha: string): string {
 /** Shared prose styling for GitHub-authored markdown (description, comments). */
 // `[&_pre]:overflow-x-auto`: a PR body's code fence is often wider than a phone,
 // and it used to push the whole column sideways instead of scrolling itself.
+// Headings are stepped down from prose-sm's 30/20px: agent-written bodies open
+// with `# Summary`, and at page-title size it outranked the PR title above it.
 export const MARKDOWN_CLASS =
-  "prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 max-sm:[&_pre]:overflow-x-auto";
+  "prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 max-sm:[&_pre]:overflow-x-auto [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_:is(h1,h2,h3)]:font-semibold";

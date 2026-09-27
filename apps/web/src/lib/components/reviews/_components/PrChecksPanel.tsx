@@ -1,12 +1,29 @@
 "use client";
 
-import { Button, CrossfadeIcon, Spinner, Surface, motionFast } from "@eva/ui";
+import {
+  Button,
+  CrossfadeIcon,
+  Spinner,
+  Surface,
+  cn,
+  motionFast,
+} from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { IconRefresh } from "@tabler/icons-react";
-import { checksHeadline, checksOverallTone, countChecks } from "./prMergeState";
+import {
+  checksHeadline,
+  checksOverallTone,
+  checksWorstFirst,
+  countChecks,
+} from "./prMergeState";
 import { PrCheckRow } from "./PrCheckRow";
-import { NOTICE_CLASS, ToneIcon, type PrOverview } from "./prOverviewMeta";
+import {
+  NOTICE_CLASS,
+  REVIEW_TAB_COLUMN_CLASS,
+  ToneIcon,
+  type PrOverview,
+} from "./prOverviewMeta";
 
 /**
  * The Checks tab: every check run and commit status on the head commit, under
@@ -35,7 +52,7 @@ export function PrChecksPanel({
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4">
+      <div className={cn(REVIEW_TAB_COLUMN_CLASS, "gap-3")}>
         <div className="flex items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center">
             <AnimatePresence mode="wait" initial={false}>
@@ -83,7 +100,7 @@ export function PrChecksPanel({
         ) : (
           <Surface density="none" className="overflow-hidden p-1.5">
             <ul className="space-y-0.5">
-              {overview.checks.map((check, index) => (
+              {checksWorstFirst(overview.checks).map((check, index) => (
                 <li key={`${check.kind}-${check.name}`}>
                   <ListEnter index={index} fast>
                     <PrCheckRow check={check} />

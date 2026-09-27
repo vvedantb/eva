@@ -50,6 +50,9 @@ export function PrReviewEventItem({ item }: { item: TimelineReviewItem }) {
           at={review.submittedAt}
           htmlUrl={review.htmlUrl}
           body={review.body}
+          // The verdict line above already says who, when, and links out;
+          // repeating it read "vvedantb approved… / vvedantb left a review".
+          byline={false}
         />
       ) : null}
 
