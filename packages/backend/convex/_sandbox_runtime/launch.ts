@@ -260,7 +260,7 @@ export async function ensureClaudeCliAvailable(
  * the user's npm prefix, behind the image's copy on PATH; probing that root
  * skipped this install and left the agent on the image's stale CLI.
  */
-function pinnedCliInstallCommand(cli: {
+export function pinnedCliInstallCommand(cli: {
   binName: string;
   packageName: string;
   fallbackInstallDir: string;
