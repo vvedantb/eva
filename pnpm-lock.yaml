@@ -5350,7 +5350,7 @@ packages:
     resolution: {integrity: sha512-WbBhLrooyePuQ1VZxrJjtLvTc4NVfpOyKx0sKqioq9bX1C1m7Jgykkn8gLrtwumBioXIqam8DLxp88Adbue6Hw==}
 
   '@vedantb/redline@file:apps/web/vendor/vedantb-redline-0.1.0.tgz':
-    resolution: {integrity: sha512-WnTvco0t8dxZ0e8hgIqJi6rM6JQEWkXRWMulM1dzWLVjObrWC7tAgeCeRGvQAuB3wthvMNW2r18QLYy2AoFQ7Q==, tarball: file:apps/web/vendor/vedantb-redline-0.1.0.tgz}
+    resolution: {integrity: sha512-dO+PF3SE/0xnYjOS24vVu7dQ8ave2T+P5W4FNjPx0aloJ6KPiuzgXQhg72k0zBQedaPE92S+0ZLnWg8eb3gLoA==, tarball: file:apps/web/vendor/vedantb-redline-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       next: '>=13'
