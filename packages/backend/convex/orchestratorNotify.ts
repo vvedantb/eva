@@ -22,8 +22,10 @@ type ChildSummary = {
   title: string;
   /** Optional because a quick task can exist before a repo is attached. */
   repoId: Id<"githubRepos"> | undefined;
-  parentId: Id<"sessions"> | Id<"agentTasks">;
+  parentId: ChildParentId;
 };
+
+type ChildParentId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
 
 async function loadChildSummary(
   ctx: MutationCtx,
@@ -38,6 +40,17 @@ async function loadChildSummary(
       title: session.title,
       repoId: session.repoId,
       parentId: session._id,
+    };
+  }
+  if (child.kind === "project") {
+    const project = await ctx.db.get(child.projectId);
+    if (!project || project.watchedByOrchestrator === undefined) return null;
+    return {
+      masterSessionId: project.watchedByOrchestrator,
+      kindLabel: "project",
+      title: project.title,
+      repoId: project.repoId,
+      parentId: project._id,
     };
   }
   const task = await ctx.db.get(child.taskId);
@@ -58,6 +71,10 @@ async function clearWatch(
 ): Promise<void> {
   if (child.kind === "session") {
     await ctx.db.patch(child.sessionId, { watchedByOrchestrator: undefined });
+    return;
+  }
+  if (child.kind === "project") {
+    await ctx.db.patch(child.projectId, { watchedByOrchestrator: undefined });
     return;
   }
   await ctx.db.patch(child.taskId, { watchedByOrchestrator: undefined });
@@ -84,7 +101,7 @@ function isLiveMaster(
  */
 async function resolveChildOutcome(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | Id<"agentTasks">,
+  parentId: ChildParentId,
   reportedStatus: string,
 ): Promise<{ status: string; tail: string | undefined }> {
   const recent = await ctx.db

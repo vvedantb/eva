@@ -82,178 +82,11 @@ const runSchema = z.object({
 });
 type Run = z.infer<typeof runSchema>;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Cron: the backend hands the spec to @convex-dev/crons (UTC, cron-parser),
-// which throws "Invalid cronspec" only when the automation is enabled. This
-// checks the same 5-field grammar up front so a disabled automation cannot
-// store a spec that would break the moment someone enables it, and gives the
-// list a readable description and next run without a new dependency.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MONTH_NAMES = [
-  "JAN",
-  "FEB",
-  "MAR",
-  "APR",
-  "MAY",
-  "JUN",
-  "JUL",
-  "AUG",
-  "SEP",
-  "OCT",
-  "NOV",
-  "DEC",
-];
-const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-
-interface CronField {
-  raw: string;
-  values: Set<number>;
-}
-
-interface ParsedCron {
-  minute: CronField;
-  hour: CronField;
-  dayOfMonth: CronField;
-  month: CronField;
-  dayOfWeek: CronField;
-}
-
-/** Swaps JAN/MON-style names for their numbers; month names count from 1. */
-function replaceNames(raw: string, names: string[], offset: number): string {
-  return raw
-    .toUpperCase()
-    .replace(/[A-Z]{3}/g, (name) => {
-      const index = names.indexOf(name);
-      return index === -1 ? name : String(index + offset);
-    });
-}
-
-function parseCronField(
-  raw: string,
-  min: number,
-  max: number,
-): CronField | null {
-  const values = new Set<number>();
-  for (const item of raw.split(",")) {
-    const match = /^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/.exec(item);
-    if (!match) return null;
-    const [, range, stepText] = match;
-    const step = stepText === undefined ? 1 : Number(stepText);
-    let start = min;
-    let end = max;
-    if (range !== "*") {
-      const [from, to] = range.split("-").map(Number);
-      start = from;
-      // "5/15" means 5, 20, 35, ... up to the field's max, as in cron-parser.
-      end = to ?? (stepText === undefined ? from : max);
-    }
-    if (step < 1 || start < min || end > max || start > end) return null;
-    for (let value = start; value <= end; value += step) values.add(value);
-  }
-  return { raw, values };
-}
-
-function parseCron(expression: string): ParsedCron | null {
-  const parts = expression.trim().split(/\s+/);
-  if (parts.length !== 5) return null;
-  const [minuteRaw, hourRaw, domRaw, monthRaw, dowRaw] = parts;
-  const minute = parseCronField(minuteRaw, 0, 59);
-  const hour = parseCronField(hourRaw, 0, 23);
-  const dayOfMonth = parseCronField(domRaw, 1, 31);
-  const month = parseCronField(replaceNames(monthRaw, MONTH_NAMES, 1), 1, 12);
-  const dayOfWeek = parseCronField(replaceNames(dowRaw, DAY_NAMES, 0), 0, 7);
-  if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) return null;
-  // 7 is Sunday too.
-  if (dayOfWeek.values.has(7)) dayOfWeek.values.add(0);
-  return { minute, hour, dayOfMonth, month, dayOfWeek };
-}
-
-/** Standard cron: when both day fields are restricted, either may match. */
-function dayMatches(cron: ParsedCron, date: Date): boolean {
-  const domOk = cron.dayOfMonth.values.has(date.getUTCDate());
-  const dowOk = cron.dayOfWeek.values.has(date.getUTCDay());
-  const domStar = cron.dayOfMonth.raw === "*";
-  const dowStar = cron.dayOfWeek.raw === "*";
-  if (!domStar && !dowStar) return domOk || dowOk;
-  if (!domStar) return domOk;
-  if (!dowStar) return dowOk;
-  return true;
-}
-
-/** Next UTC fire time after `from`, or null if nothing matches within ~5 years. */
-function nextCronRun(cron: ParsedCron, from: number): number | null {
-  const date = new Date(from);
-  date.setUTCSeconds(0, 0);
-  date.setUTCMinutes(date.getUTCMinutes() + 1);
-  for (let step = 0; step < 100_000; step++) {
-    if (!cron.month.values.has(date.getUTCMonth() + 1)) {
-      date.setUTCMonth(date.getUTCMonth() + 1, 1);
-      date.setUTCHours(0, 0);
-    } else if (!dayMatches(cron, date)) {
-      date.setUTCDate(date.getUTCDate() + 1);
-      date.setUTCHours(0, 0);
-    } else if (!cron.hour.values.has(date.getUTCHours())) {
-      date.setUTCHours(date.getUTCHours() + 1, 0);
-    } else if (!cron.minute.values.has(date.getUTCMinutes())) {
-      date.setUTCMinutes(date.getUTCMinutes() + 1);
-    } else {
-      return date.getTime();
-    }
-  }
-  return null;
-}
-
-function fieldPhrase(raw: string, unit: string): string {
-  if (raw === "*") return `every ${unit}`;
-  const step = /^\*\/(\d+)$/.exec(raw);
-  if (step) return `every ${step[1]} ${unit}s`;
-  return `${unit} ${raw}`;
-}
-
-function describeCron(cron: ParsedCron): string {
-  const { minute, hour, dayOfMonth, month, dayOfWeek } = cron;
-  const isPlain = (raw: string) => /^\d+$/.test(raw);
-  let time: string;
-  if (isPlain(minute.raw) && isPlain(hour.raw)) {
-    time = `At ${hour.raw.padStart(2, "0")}:${minute.raw.padStart(2, "0")} UTC`;
-  } else if (isPlain(minute.raw)) {
-    time = `At minute ${minute.raw} past ${fieldPhrase(hour.raw, "hour")} (UTC)`;
-  } else {
-    time = `${fieldPhrase(minute.raw, "minute")}, ${fieldPhrase(hour.raw, "hour")} (UTC)`;
-  }
-  const days: string[] = [];
-  if (dayOfWeek.raw !== "*") {
-    const named = replaceNames(dayOfWeek.raw, DAY_NAMES, 0).replace(
-      /\d+/g,
-      (n) => DAY_NAMES[Number(n) % 7],
-    );
-    days.push(`on ${named}`);
-  }
-  if (dayOfMonth.raw !== "*") days.push(`on day ${dayOfMonth.raw} of the month`);
-  if (month.raw !== "*") days.push(`in month ${month.raw}`);
-  return `${time}, ${days.length > 0 ? days.join(", ") : "every day"}`;
-}
-
 function scheduleSummary(automation: Automation) {
   const raw = automation.cronSchedule.trim();
-  if (raw === "") {
-    return {
-      schedule: { cron: "", description: "Manual only (no schedule)" },
-      nextRunAt: null,
-    };
-  }
-  const cron = parseCron(raw);
-  const next =
-    cron && automation.enabled ? nextCronRun(cron, Date.now()) : null;
-  return {
-    schedule: {
-      cron: raw,
-      timezone: "UTC",
-      description: cron ? describeCron(cron) : "Unrecognised cron expression",
-    },
-    nextRunAt: next === null ? null : new Date(next).toISOString(),
-  };
+  return raw === ""
+    ? { cron: "", description: "Manual only (no schedule)" }
+    : { cron: raw, timezone: "UTC" };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -351,34 +184,32 @@ const settingsArgs = {
     ),
 };
 
-/** Rejects a schedule the crons component would refuse on enable. */
-function scheduleError(cronSchedule: string | undefined) {
-  if (cronSchedule === undefined || cronSchedule.trim() === "") return null;
-  if (parseCron(cronSchedule)) return null;
-  return errorResult(
-    `"${cronSchedule}" is not a valid 5-field cron expression (minute hour day-of-month month day-of-week, UTC). Use numbers, *, ranges (1-5), lists (1,3), steps (*/15) and JAN/MON-style names.`,
-  );
+interface UpdateFields {
+  title?: string;
+  description?: string;
+  cronSchedule?: string;
+  model?: string;
+  enabled?: boolean;
+  readOnly?: boolean;
+  actionsEnabled?: boolean;
+  sendEmail?: boolean;
 }
 
-/** Builds the automations:update args, mirroring the UI's readOnly/actions coupling. */
-function buildUpdateArgs(
-  id: string,
-  fields: {
-    title?: string;
-    description?: string;
-    cronSchedule?: string;
-    model?: string;
-    enabled?: boolean;
-    readOnly?: boolean;
-    actionsEnabled?: boolean;
-    sendEmail?: boolean;
-  },
-): Record<string, JsonValue> | ReturnType<typeof errorResult> {
+/** The checks automations:update would only hit on enable, or the UI enforces. */
+function fieldsError(fields: UpdateFields) {
   if (fields.readOnly === false && fields.actionsEnabled === true) {
     return errorResult(
       "actionsEnabled only applies to read-only automations; set readOnly true as well, or leave actionsEnabled out.",
     );
   }
+  return null;
+}
+
+/** Builds the automations:update args, mirroring the UI's readOnly/actions coupling. */
+function buildUpdateArgs(
+  id: string,
+  fields: UpdateFields,
+): Record<string, JsonValue> {
   const args: Record<string, JsonValue> = { id };
   if (fields.title !== undefined) args.title = fields.title;
   if (fields.description !== undefined) args.description = fields.description;
@@ -465,7 +296,7 @@ export function automationTools(
       name: "list_automations",
       description: `List Eva automations for one repo, or across every repo you can reach when no repo is given. An automation is a saved prompt that an agent runs against its repo on a schedule, reporting a summary and findings and, unless read-only, opening a PR. ${DURABLE_NOTE}
 
-Each row has the "id" the other automation tools take, the schedule as raw cron plus a plain-English description, "enabled", "nextRunAt" (null when disabled or manual-only), and the latest run's status and times. "systemKey" marks a catalog system automation: its title, prompt and mode are managed by Eva, only its schedule, model, enabled and email settings can change. ${TIMEZONE_NOTE}
+Each row has the "id" the other automation tools take, the schedule as raw UTC cron (empty for manual-only), "enabled", and the latest run's status and times. "systemKey" marks a catalog system automation: its title, prompt and mode are managed by Eva, only its schedule, model, enabled and email settings can change. ${TIMEZONE_NOTE}
 
 A shared monorepo automation appears once, under the first app that surfaces it. Prompts are cut to ${FINDING_TEXT_LIMIT} characters here; get_automation_runs shows the full prompt.`,
       mutating: false,
@@ -627,8 +458,8 @@ New automations start disabled unless you pass enabled: true, and use the repo's
       },
       handler: ({ repoId, repoName, app, title, shared, ...fields }) =>
         guarded(async () => {
-          const badSchedule = scheduleError(fields.cronSchedule);
-          if (badSchedule) return badSchedule;
+          const invalid = fieldsError(fields);
+          if (invalid) return invalid;
           const { userId } = await mcpGetContext(ctx, clerkUserId);
           const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
           if ("isError" in ref) return ref;
@@ -647,7 +478,6 @@ New automations start disabled unless you pass enabled: true, and use the repo's
             z.string(),
           );
           const updateArgs = buildUpdateArgs(id, fields);
-          if ("isError" in updateArgs) return updateArgs;
           if (shared !== undefined) {
             updateArgs.shared = shared;
             updateArgs.contextRepoId = ref.repoId;
@@ -685,10 +515,9 @@ System automations (listed with a "systemKey") only accept cronSchedule, model, 
       },
       handler: ({ automationId, ...fields }) =>
         guarded(async () => {
-          const badSchedule = scheduleError(fields.cronSchedule);
-          if (badSchedule) return badSchedule;
+          const invalid = fieldsError(fields);
+          if (invalid) return invalid;
           const updateArgs = buildUpdateArgs(automationId, fields);
-          if ("isError" in updateArgs) return updateArgs;
           if (Object.keys(updateArgs).length === 1) {
             return errorResult("Pass at least one field to change.");
           }

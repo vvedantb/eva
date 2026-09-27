@@ -1253,12 +1253,6 @@ const agentKindValidator = v.union(
 );
 type AgentKind = "session" | "task" | "project";
 
-/**
- * Only sessions and tasks carry a `watchedByOrchestrator` pointer, so only
- * they can wake Manager Ave when a turn finishes.
- */
-type WatchableKind = "session" | "task";
-
 /** Every surface a chat message can be sent into. */
 const chatKindValidator = v.union(
   v.literal("session"),
@@ -1390,22 +1384,22 @@ const TRANSCRIPT_CHAR_LIMIT = 2000;
  */
 async function setWatchedByOrchestrator(
   clerkUserId: string,
-  kind: WatchableKind,
+  kind: AgentKind,
   id: string,
   masterSessionId: string | undefined,
 ): Promise<void> {
-  const args: Record<string, JsonValue> =
-    kind === "session" ? { sessionId: id } : { taskId: id };
+  const { fn, idArg } = WATCH_MUTATION[kind];
+  const args: Record<string, JsonValue> = { [idArg]: id };
   if (masterSessionId !== undefined) args.masterSessionId = masterSessionId;
-  await runMutationAsUser(
-    getEvaConvexCloudUrl(),
-    clerkUserId,
-    kind === "session"
-      ? "orchestratorWatch:setSessionWatchedBy"
-      : "orchestratorWatch:setTaskWatchedBy",
-    args,
-  );
+  await runMutationAsUser(getEvaConvexCloudUrl(), clerkUserId, fn, args);
 }
+
+/** The watch-pointer mutation per surface, and the id argument it takes. */
+const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
+  session: { fn: "orchestratorWatch:setSessionWatchedBy", idArg: "sessionId" },
+  task: { fn: "orchestratorWatch:setTaskWatchedBy", idArg: "taskId" },
+  project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
+};
 
 const orchestratorSessionPointerSchema = z
   .object({ sessionId: z.string() })
@@ -1439,7 +1433,7 @@ async function resolveWatchMasterSessionId(
  */
 async function registerWatchIfMaster(
   clerkUserId: string,
-  kind: WatchableKind,
+  kind: AgentKind,
   id: string,
   masterSessionId: string | undefined,
 ): Promise<void> {
@@ -1917,11 +1911,7 @@ export const orchestratorSendMessage = internalAction({
       await runMutationAsUser(convexUrl, clerkUserId, call.fn, call.args);
     }
 
-    // Only sessions and tasks can be watched: the master session's fleet tools
-    // never target a project, so there is no project watch pointer to set.
-    if (kind !== "project") {
-      await registerWatchIfMaster(clerkUserId, kind, id, masterSessionId);
-    }
+    await registerWatchIfMaster(clerkUserId, kind, id, masterSessionId);
     const delivered: "queued" | "started" =
       delivery.action === "queue" ? "queued" : "started";
     return { delivered, model: delivery.model };
@@ -2231,11 +2221,6 @@ export const orchestratorSetWatch = internalAction({
   },
   returns: v.null(),
   handler: async (_ctx, { clerkUserId, kind, id, masterSessionId }) => {
-    if (kind === "project") {
-      throw new Error(
-        "Projects cannot be watched yet: a project chat has no completion notification to Manager Ave. Poll get_agent_state instead.",
-      );
-    }
     await setWatchedByOrchestrator(clerkUserId, kind, id, masterSessionId);
     return null;
   },

@@ -32,13 +32,6 @@ const modelArg = z
     'Claude model ("opus", "sonnet", "haiku", or "fable"). Sessions are locked to the provider they were created with, so omit this to reuse the agent\'s own model — passing a model from another provider is rejected.',
   );
 
-/** Projects carry no watch pointer, so their chat can never wake Manager Ave. */
-function projectWatchError() {
-  return errorResult(
-    "Projects cannot be watched: a project chat sends no completion notification to Manager Ave. Poll get_agent_state with kind \"project\" instead.",
-  );
-}
-
 /**
  * Shared by the user-MCP fleet tools and the master-only send_agent_message.
  * Each backing action runs as the user against authQuery/authMutation, and
@@ -395,14 +388,13 @@ export function fleetTools(
     defineTool({
       name: "watch_agent",
       description:
-        'Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken). Sessions and quick tasks only: kind "project" is rejected because a project chat sends no completion notification — poll get_agent_state instead.',
+        'Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.',
       mutating: true,
       input: {
         kind: agentKindArg,
         id: agentIdArg,
       },
       handler: async ({ kind, id }) => {
-        if (kind === "project") return projectWatchError();
         const master = await resolveWatchMasterSessionId();
         if (typeof master !== "string") return master;
         await mcpGetContext(ctx, clerkUserId);
@@ -420,15 +412,13 @@ export function fleetTools(
   tools.push(
     defineTool({
       name: "unwatch_agent",
-      description:
-        'Stop being woken when this agent finishes. Sessions and quick tasks only; kind "project" is rejected since projects cannot be watched.',
+      description: "Stop being woken when this agent finishes.",
       mutating: true,
       input: {
         kind: agentKindArg,
         id: agentIdArg,
       },
       handler: async ({ kind, id }) => {
-        if (kind === "project") return projectWatchError();
         await mcpGetContext(ctx, clerkUserId);
         await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
           clerkUserId,
@@ -464,7 +454,7 @@ export function orchestratorTools(
       name: "send_agent_message",
       description: `Send a chat message to another agent as yourself. If the agent is mid-turn the message is queued and runs when the current turn finishes; if it is idle a new turn starts immediately. Returns which of the two happened.
 
-The message is marked as sent via MCP, and a session or task is registered so you are notified when it finishes (projects cannot be watched).`,
+The message is marked as sent via MCP, and the agent is registered so you are notified when it finishes.`,
       mutating: true,
       input: {
         kind: agentKindArg,

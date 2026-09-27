@@ -822,6 +822,9 @@ export const projectFields = {
   // Soft UX lock while the agent drives the shared desktop Chrome via
   // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
   agentBrowsingAt: v.optional(v.number()),
+  // Orchestrator session watching this project's chat for completion
+  // notifications (mirrors sessions.watchedByOrchestrator).
+  watchedByOrchestrator: v.optional(v.id("sessions")),
   /**
    * Branch the sandbox worktree is actually on, reported live by the in-sandbox
    * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
