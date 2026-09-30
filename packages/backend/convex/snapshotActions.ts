@@ -6,9 +6,13 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   resolveSandboxCredentials,
+  resolveVercelCredentialsOnly,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
 import { getInstallationToken } from "./githubAuth";
+import { listBoatSandboxes } from "./_sandbox/boatProvider";
+import { isBoatSandboxId, isUsableSnapshotRef } from "./_sandbox/boatApi";
+import { APT_DESKTOP_INSTALL, aptInstall } from "./_sandbox/shellCapabilities";
 import {
   buildConfigFileDownloadCommands,
   filterDownloadableConfigFiles,
@@ -320,6 +324,9 @@ export const launchSeedRun = internalAction({
       ...(backgroundCommands ?? []),
       ...(stopCommands ?? []),
     ]);
+    // Boat sandboxes are Ubuntu (apt, Chrome/gh/docker preinstalled); Vercel
+    // sandboxes are Amazon Linux 2023 (dnf). Only package installs differ.
+    const apt = isBoatSandboxId(args.sandboxId);
     const lines: string[] = [
       "#!/bin/bash",
       "exec > /tmp/seedrun.log 2>&1",
@@ -353,8 +360,14 @@ export const launchSeedRun = internalAction({
       // gcc/make: agentation-mcp → better-sqlite3 node-gyp rebuild. A fresh
       // node24 sandbox has none of these; without them the global npm install
       // dies with `gyp ERR! not found: make`.
-      'sudo dnf install -y docker git jq gzip tar procps-ng psmisc tigervnc-server python3 python3-pip xorg-x11-utils xterm dbus-x11 gcc gcc-c++ make || { echo "SEEDRUN-FAILED:toolchain-dnf"; exit 1; }',
-      "sudo dnf install -y gtk3 nss alsa-lib libXtst at-spi2-core libdrm mesa-libgbm libxkbcommon libXdamage libXcomposite libXrandr libXcursor libXinerama cups-libs >/tmp/desktop-gui-dnf.log 2>&1 || true",
+      ...(apt
+        ? [
+            `${aptInstall("git jq gzip tar procps psmisc tigervnc-standalone-server python3 python3-pip x11-utils x11-xserver-utils xterm dbus-x11 gcc g++ make", "/tmp/toolchain-apt.log")} || { echo "SEEDRUN-FAILED:toolchain-apt"; exit 1; }`,
+          ]
+        : [
+            'sudo dnf install -y docker git jq gzip tar procps-ng psmisc tigervnc-server python3 python3-pip xorg-x11-utils xterm dbus-x11 gcc gcc-c++ make || { echo "SEEDRUN-FAILED:toolchain-dnf"; exit 1; }',
+            "sudo dnf install -y gtk3 nss alsa-lib libXtst at-spi2-core libdrm mesa-libgbm libxkbcommon libXdamage libXcomposite libXrandr libXcursor libXinerama cups-libs >/tmp/desktop-gui-dnf.log 2>&1 || true",
+          ]),
       // ffmpeg for agent-browser WebM recording, baked into the seeded
       // snapshot. Shared with the desktop-start repair so the two cannot drift.
       FFMPEG_INSTALL_SCRIPT,
@@ -396,13 +409,21 @@ export const launchSeedRun = internalAction({
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
-      `command -v code-server >/dev/null 2>&1 || { github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm && sudo rpm -Uvh /tmp/code-server.rpm && rm -f /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
+      apt
+        ? `command -v code-server >/dev/null 2>&1 || { github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server_${CODE_SERVER_VERSION}_amd64.deb /tmp/code-server.deb && sudo dpkg -i /tmp/code-server.deb && rm -f /tmp/code-server.deb; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`
+        : `command -v code-server >/dev/null 2>&1 || { github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm && sudo rpm -Uvh /tmp/code-server.rpm && rm -f /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
       'command -v websockify >/dev/null 2>&1 || python3 -m pip install --user --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1 || { echo "SEEDRUN-FAILED:websockify"; exit 1; }',
       "sudo ln -sf $(python3 -m site --user-base)/bin/websockify /usr/local/bin/websockify 2>/dev/null || true",
       // Canonical path matches vercel-sandbox-gui + VercelDesktop (/opt/novnc).
       '[ -d /opt/novnc ] || { sudo rm -rf /opt/noVNC; sudo git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc; } || { echo "SEEDRUN-FAILED:novnc"; exit 1; }',
-      "sudo tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'\n[google-chrome]\nname=google-chrome\nbaseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64\nenabled=1\ngpgcheck=1\ngpgkey=https://dl.google.com/linux/linux_signing_key.pub\nEOF",
-      'command -v google-chrome-stable >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1 || sudo dnf install -y google-chrome-stable >/tmp/chrome-dnf.log 2>&1 || sudo dnf install -y chromium >/tmp/chromium-dnf.log 2>&1 || { echo "SEEDRUN-FAILED:chrome"; exit 1; }',
+      ...(apt
+        ? [
+            `command -v google-chrome-stable >/dev/null 2>&1 || { ${APT_DESKTOP_INSTALL.chrome.join(" ").trim()}; command -v google-chrome-stable >/dev/null 2>&1; } || { echo "SEEDRUN-FAILED:chrome"; exit 1; }`,
+          ]
+        : [
+            "sudo tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'\n[google-chrome]\nname=google-chrome\nbaseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64\nenabled=1\ngpgcheck=1\ngpgkey=https://dl.google.com/linux/linux_signing_key.pub\nEOF",
+            'command -v google-chrome-stable >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1 || sudo dnf install -y google-chrome-stable >/tmp/chrome-dnf.log 2>&1 || sudo dnf install -y chromium >/tmp/chromium-dnf.log 2>&1 || { echo "SEEDRUN-FAILED:chrome"; exit 1; }',
+          ]),
       "mkdir -p /home/eva/.claude/plugins/marketplaces",
       '[ -d /home/eva/.claude/plugins/marketplaces/claude-plugins-official/.git ] || git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git /home/eva/.claude/plugins/marketplaces/claude-plugins-official || { echo "SEEDRUN-FAILED:claude-plugins"; exit 1; }',
       '[ -d /home/eva/.claude/plugins/marketplaces/Dammyjay93/.git ] || git clone --depth 1 https://github.com/Dammyjay93/interface-design.git /home/eva/.claude/plugins/marketplaces/Dammyjay93 || { echo "SEEDRUN-FAILED:interface-design-plugin"; exit 1; }',
@@ -466,7 +487,9 @@ export const launchSeedRun = internalAction({
       'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile 2>&1 | tee /tmp/seed-install.log; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "SEEDRUN-FAILED:install"; exit 1; }; grep -q "Ignored build scripts" /tmp/seed-install.log && echo "SEEDRUN-WARN:ignored-build-scripts"; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
       // Python: independent of Node. Lazy-install compile deps only when a
       // Python manifest exists (libpq-devel for psycopg2 source builds).
-      "if [ -f requirements.txt ] || [ -f pyproject.toml ]; then sudo dnf install -y gcc gcc-c++ make python3-devel libpq-devel >/tmp/py-build-deps-dnf.log 2>&1 || true; fi",
+      apt
+        ? `if [ -f requirements.txt ] || [ -f pyproject.toml ]; then ${aptInstall("gcc g++ make python3-dev libpq-dev", "/tmp/py-build-deps-apt.log")} || true; fi`
+        : "if [ -f requirements.txt ] || [ -f pyproject.toml ]; then sudo dnf install -y gcc gcc-c++ make python3-devel libpq-devel >/tmp/py-build-deps-dnf.log 2>&1 || true; fi",
       'if [ -f requirements.txt ]; then python3 -m pip install --user --break-system-packages -r requirements.txt >/tmp/pip-install.log 2>&1 || python3 -m pip install --user -r requirements.txt >>/tmp/pip-install.log 2>&1 || { tail -50 /tmp/pip-install.log; echo "SEEDRUN-WARN:install-pip"; }; elif [ -f pyproject.toml ]; then python3 -m pip install --user --break-system-packages -e . >/tmp/pip-install.log 2>&1 || python3 -m pip install --user -e . >>/tmp/pip-install.log 2>&1 || { tail -50 /tmp/pip-install.log; echo "SEEDRUN-WARN:install-pip"; }; fi',
     );
     // Vercel node24 base has no container runtime. Install Docker if missing,
@@ -764,12 +787,16 @@ export const createSeedPrepSandbox = internalAction({
     }
     const { credentials, sandboxEnvVars } = resolved;
     const client = getSandboxClient(credentials);
-    // Vercel snapshot IDs are `snap_*`. If a non-`snap_*` name is passed (e.g.
-    // a stale/legacy value), fall back to a fresh sandbox (no snapshot source)
-    // so the first build can bootstrap the chain by cloning the repo from scratch.
-    const effectiveImageSnapshot = !args.imageSnapshot.startsWith("snap_")
-      ? undefined
-      : args.imageSnapshot;
+    // Only a capture made by this repo's provider can seed it (Vercel `snap_*`,
+    // Boat `bx_*` template). Anything else — a stale/legacy name, or the other
+    // provider's capture after a switch — boots a fresh sandbox so the build
+    // bootstraps the chain by cloning the repo from scratch.
+    const effectiveImageSnapshot = isUsableSnapshotRef(
+      args.imageSnapshot,
+      client.kind,
+    )
+      ? args.imageSnapshot
+      : undefined;
     const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
       repoId: args.repoId,
     });
@@ -814,7 +841,7 @@ export const deleteSeedPrepSandbox = internalAction({
   args: {
     repoId: v.id("githubRepos"),
     sandboxId: v.string(),
-    /** Keep this snap_* when tearing down the prep sandbox (successful seed). */
+    /** Keep this capture when tearing down the prep sandbox (successful seed). */
     preserveSnapshotId: v.optional(v.string()),
   },
   returns: v.null(),
@@ -936,36 +963,43 @@ export const stopAllRepoSandboxes = internalAction({
       // deletes the build's own prep sandbox explicitly on every exit path.
       // It also reclaims orphans left by a crashed build.
       const seedableSet = new Set<string>(args.seedableRepoIds);
-      const list = await Sandbox.list({
-        token: credentials.token,
-        teamId: credentials.teamId,
-        projectId: credentials.projectId,
-      });
-      // list() yields plain metadata (no .delete()); re-hydrate matches through
-      // the provider client to stop+remove them.
+      const isSeedPrepFor = (tags: Record<string, string>) => {
+        if (tags[SEED_PREP_LABEL_KEY] !== SEED_PREP_LABEL_VALUE) return false;
+        const sandboxRepoId = tags[SANDBOX_TAG.repoId];
+        return sandboxRepoId !== undefined && seedableSet.has(sandboxRepoId);
+      };
+      const matches: string[] = [];
+      if (credentials.vercel) {
+        // list() yields plain metadata (no .delete()); re-hydrate matches
+        // through the provider client to stop+remove them.
+        for await (const meta of await Sandbox.list(credentials.vercel)) {
+          if (isSeedPrepFor(meta.tags ?? {})) matches.push(meta.name);
+        }
+      }
+      if (credentials.boat) {
+        // Boat has no tags; eva encodes its labels in the sandbox name. A
+        // captured template is renamed, so it never matches here.
+        for (const sandbox of await listBoatSandboxes(credentials.boat)) {
+          if (isSeedPrepFor(sandbox.labels)) matches.push(sandbox.id);
+        }
+      }
       const client = getSandboxClient(credentials);
       let deleted = 0;
-      for await (const meta of list) {
-        const tags: Record<string, string> = meta.tags ?? {};
-        if (tags[SEED_PREP_LABEL_KEY] !== SEED_PREP_LABEL_VALUE) continue;
-        const sandboxRepoId = tags[SANDBOX_TAG.repoId];
-        if (sandboxRepoId === undefined || !seedableSet.has(sandboxRepoId)) {
-          continue;
-        }
+      for (const sandboxId of matches) {
         try {
-          const handle = await client.get(meta.name);
+          const handle = await client.get(sandboxId);
           await handle.delete();
           deleted++;
         } catch (err) {
           console.warn(
-            `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${
+            `[snapshot] stopAllRepoSandboxes: failed to delete ${sandboxId}: ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
         }
       }
       console.log(
-        `[snapshot] stopAllRepoSandboxes: deleted ${deleted} vercel seed-prep sandbox(es)`,
+        `[snapshot] stopAllRepoSandboxes: deleted ${deleted} seed-prep sandbox(es)`,
       );
     } catch (e) {
       console.error(
@@ -975,6 +1009,53 @@ export const stopAllRepoSandboxes = internalAction({
       );
     }
     return null;
+  },
+});
+
+/**
+ * Boat counterpart of purgeUnreferencedVercelSnapshots: deletes eva template
+ * sandboxes (captured seeded/base snapshots, named `eva template=…`) that no
+ * repo or group still references. The build workflow already deletes the
+ * previous template on success; this reclaims leaks from crashed builds.
+ * Only ever touches sandboxes eva named as templates.
+ *
+ *   npx convex run snapshotActions:purgeUnreferencedBoatTemplates --prod '{"repoId":"…"}'
+ */
+export const purgeUnreferencedBoatTemplates = internalAction({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.object({ deletedCount: v.number(), keptCount: v.number() }),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ deletedCount: number; keptCount: number }> => {
+    const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
+    if (!credentials.boat) return { deletedCount: 0, keptCount: 0 };
+    const protectedIds = new Set([
+      ...(await ctx.runQuery(
+        internal.repoSnapshots.listAllProtectedSnapshotIds,
+        {},
+      )),
+      ...(await ctx.runQuery(internal.repoGroups.listAllGroupSnapshotNames, {})),
+      ...(await ctx.runQuery(
+        internal.repoSnapshots.listReferencedSandboxIds,
+        {},
+      )),
+    ]);
+    const client = getSandboxClient(credentials);
+    let deletedCount = 0;
+    let keptCount = 0;
+    for (const sandbox of await listBoatSandboxes(credentials.boat)) {
+      if (sandbox.labels.template === undefined) continue;
+      if (protectedIds.has(sandbox.id)) {
+        keptCount++;
+        continue;
+      }
+      if (await client.deleteSnapshot(sandbox.id)) deletedCount++;
+    }
+    console.log(
+      `[snapshot] purgeUnreferencedBoatTemplates: deleted=${deletedCount} kept=${keptCount}`,
+    );
+    return { deletedCount, keptCount };
   },
 });
 
@@ -1037,12 +1118,16 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     deletedCount: number;
     skippedCount: number;
   }> => {
-    const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
-    const creds = {
-      token: credentials.token,
-      teamId: credentials.teamId,
-      projectId: credentials.projectId,
-    };
+    const creds = await resolveVercelCredentialsOnly(ctx, args.repoId);
+    if (!creds) {
+      return {
+        protectedCount: 0,
+        liveSandboxCount: 0,
+        evaSandboxCount: 0,
+        deletedCount: 0,
+        skippedCount: 0,
+      };
+    }
     const protectedIds = new Set(
       await ctx.runQuery(
         internal.repoSnapshots.listAllProtectedSnapshotIds,
@@ -1184,9 +1269,11 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
     }
 
     try {
-      const { credentials } = await resolveSandboxCredentials(ctx, repoId);
-      const projectKey = `${credentials.teamId}:${credentials.projectId}`;
-      if (!projectsSeen.has(projectKey)) {
+      const credentials = await resolveVercelCredentialsOnly(ctx, repoId);
+      const projectKey = credentials
+        ? `${credentials.teamId}:${credentials.projectId}`
+        : null;
+      if (projectKey !== null && !projectsSeen.has(projectKey)) {
         projectsSeen.add(projectKey);
         const result = await ctx.runAction(
           internal.snapshotActions.purgeUnreferencedVercelSnapshots,

@@ -1,4 +1,5 @@
 "use node";
+import { providerForId } from "../_sandbox/boatApi";
 import { createHash, randomBytes } from "crypto";
 import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
@@ -578,6 +579,14 @@ export async function resolveSandboxContext(
       { groupId: opts.repoGroupId },
     );
     if (groupSnapshotName) snapshotName = groupSnapshotName;
+  }
+  // Right after a provider switch the stored snapshots still belong to the old
+  // provider until the rebuild lands; boot fresh rather than hand one over.
+  if (snapshotName !== undefined && providerForId(snapshotName) !== client.kind) {
+    console.log(
+      `[sandbox] resolveSandboxContext repoId=${repoId}: snapshot ${snapshotName} belongs to ${providerForId(snapshotName)}, not ${client.kind}; booting fresh`,
+    );
+    snapshotName = undefined;
   }
   console.log(
     `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} orchestrator=${isOrchestrator} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,

@@ -67,8 +67,9 @@ describe("seed run GitHub release downloads survive direct-path failures", () =>
 
   test("every GitHub artifact install uses the shared downloader", () => {
     const calls = seedRunCommands.match(/github_release_download\s+\S+/g);
+    // code-server appears twice: an .rpm (Vercel) and a .deb (Boat) variant.
     expect(
-      calls?.length,
+      new Set(calls).size,
       "supabase, gh, rg, fd, git-lfs, and code-server each call github_release_download",
     ).toBe(6);
     expect(seedRunCommands).not.toMatch(/curl -fsSL https:\/\/github\.com/);

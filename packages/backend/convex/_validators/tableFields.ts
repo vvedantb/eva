@@ -714,6 +714,10 @@ export const githubRepoFields = {
   // Opt-out: when true, other sandboxes may not mint read tokens for this
   // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
   sandboxReadExcluded: v.optional(v.boolean()),
+  // Which provider creates this codebase's NEW sandboxes (unset = vercel).
+  // Existing sandboxes stay on the provider that made them (routed by id, see
+  // _sandbox/factory.ts). Shared across sibling app rows.
+  sandboxProvider: v.optional(sandboxProviderKindValidator),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),

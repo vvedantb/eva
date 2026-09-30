@@ -128,229 +128,218 @@ export const snapshotBuildWorkflow = workflow.define({
     // Bootstrap / toolchain path: rebuild the base Image first
     // (serial — captures contending with the Image builder slow both down).
     if (rebuildBaseImage) {
-      if (providerKind === "vercel") {
-        const baseSnapshotLabel = `base-${config.repoId}`;
-        let prepSandboxId: string | null = null;
-        // Keep-last-good: hold the previous base id and delete it only AFTER
-        // the new one is captured and stored. Deleting up front would leave
-        // repoSnapshots.baseSnapshotId pointing at a deleted snapshot on any
-        // failure, breaking every sandbox boot until the next success.
-        const previousBaseSnapshotId = config.baseSnapshotId ?? null;
+      // Provider-neutral: every step goes through the SandboxClient seam, and
+      // the capture is a Vercel `snap_*` or a stopped Boat template (`bx_*`).
+      const baseSnapshotLabel = `base-${config.repoId}`;
+      let prepSandboxId: string | null = null;
+      // Keep-last-good: hold the previous base id and delete it only AFTER
+      // the new one is captured and stored. Deleting up front would leave
+      // repoSnapshots.baseSnapshotId pointing at a deleted snapshot on any
+      // failure, breaking every sandbox boot until the next success.
+      const previousBaseSnapshotId = config.baseSnapshotId ?? null;
 
-        await step.runMutation(internal.repoSnapshots.appendLogs, {
-          buildId: args.buildId,
-          chunk:
-            "Vercel base Image build: fresh sandbox → toolchain + pnpm install + build commands → snap_* capture...\n",
-        });
+      await step.runMutation(internal.repoSnapshots.appendLogs, {
+        buildId: args.buildId,
+        chunk: `${providerKind} base Image build: fresh sandbox → toolchain + pnpm install + build commands → capture...\n`,
+      });
 
-        try {
-          const created = await step.runAction(
-            internal.snapshotActions.createSeedPrepSandbox,
-            { repoId: appRepoId, imageSnapshot: config.snapshotName },
-            { retry: { maxAttempts: 4, initialBackoffMs: 15000, base: 2 } },
-          );
-          if (!created.ok) {
-            await step.runMutation(internal.repoSnapshots.completeBuild, {
-              buildId: args.buildId,
-              status: "error",
-              logs: "",
-              error: created.error,
-            });
-            return;
-          }
-          prepSandboxId = created.sandboxId;
-
-          await step.runAction(
-            internal.sandbox.fetchBaseBranch,
-            {
-              sandboxId: prepSandboxId,
-              installationId: repo.installationId,
-              repoOwner: repo.owner,
-              repoName: repo.name,
-              baseBranch: branch,
-              repoId: appRepoId,
-            },
-            { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
-          );
-
-          await step.runAction(
-            internal.snapshotActions.launchSeedRun,
-            {
-              sandboxId: prepSandboxId,
-              repoId: appRepoId,
-              branch,
-              buildCommands: config.buildCommands ?? [],
-              seedCommands: config.seedCommands ?? [],
-            },
-            { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
-          );
-
-          let seedState = "running";
-          let lastStage: string | null = null;
-          for (
-            let pollAttempt = 1;
-            pollAttempt <= MAX_SEED_RUN_POLLS && seedState === "running";
-            pollAttempt++
-          ) {
-            const poll = await step.runAction(
-              internal.snapshotActions.pollSeedRun,
-              { sandboxId: prepSandboxId, repoId: appRepoId },
-              { runAfter: SEED_RUN_POLL_DELAY_MS },
-            );
-            seedState = poll.state;
-            // Stream stage transitions so the build page shows live progress
-            // instead of staying silent until the terminal status.
-            if (poll.stage !== null && poll.stage !== lastStage) {
-              lastStage = poll.stage;
-              await step.runMutation(internal.repoSnapshots.appendLogs, {
-                buildId: args.buildId,
-                chunk: `[base image] stage: ${poll.stage} (~${formatPollElapsed(pollAttempt)} in)\n`,
-              });
-            }
-          }
-          if (seedState !== "done") {
-            const diagnostics = await step.runAction(
-              internal.snapshotActions.fetchSeedDiagnostics,
-              { sandboxId: prepSandboxId, repoId: appRepoId },
-            );
-            await step.runMutation(internal.repoSnapshots.appendLogs, {
-              buildId: args.buildId,
-              chunk: `[Vercel base image] prep FAILED (${seedState}) — diagnostics:\n${diagnostics}\n`,
-            });
-            await step.runAction(
-              internal.snapshotActions.deleteSeedPrepSandbox,
-              { sandboxId: prepSandboxId, repoId: appRepoId },
-            );
-            prepSandboxId = null;
-            await step.runMutation(internal.repoSnapshots.completeBuild, {
-              buildId: args.buildId,
-              status: "error",
-              logs: "",
-              error: `Vercel base Image prep did not complete (state: ${seedState}) — see logs for diagnostics`,
-            });
-            return;
-          }
-
-          await step.runMutation(internal.repoSnapshots.appendLogs, {
-            buildId: args.buildId,
-            chunk:
-              "[base image] prep complete; capturing the sandbox filesystem into a snapshot (usually ~6m)...\n",
-          });
-          const { snapshotId: effectiveBaseId } = await step.runAction(
-            internal.snapshotActions.triggerSeededSnapshot,
-            {
-              repoId: appRepoId,
-              sandboxId: prepSandboxId,
-              seededName: baseSnapshotLabel,
-            },
-          );
-
-          let snapState = "pending";
-          for (
-            let pollAttempt = 1;
-            pollAttempt <= MAX_SEED_SNAPSHOT_POLLS &&
-            !isTerminalSnapshotState(snapState);
-            pollAttempt++
-          ) {
-            snapState = await step.runAction(
-              internal.snapshotActions.pollSeededSnapshotState,
-              { repoId: appRepoId, seededName: effectiveBaseId },
-              {
-                runAfter:
-                  pollAttempt === 1 ? 10_000 : SEED_SNAPSHOT_POLL_DELAY_MS,
-              },
-            );
-          }
-          if (snapState !== "active") {
-            await step.runAction(
-              internal.snapshotActions.deleteSeedPrepSandbox,
-              { sandboxId: prepSandboxId, repoId: appRepoId },
-            );
-            prepSandboxId = null;
-            await step.runAction(
-              internal.snapshotActions.deleteSeededSnapshot,
-              {
-                snapshotName: effectiveBaseId,
-                repoId: appRepoId,
-              },
-            );
-            await step.runMutation(internal.repoSnapshots.completeBuild, {
-              buildId: args.buildId,
-              status: "error",
-              logs: "",
-              error: `Vercel base Image did not reach active (last state: ${snapState})`,
-            });
-            return;
-          }
-
-          await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
-            sandboxId: prepSandboxId,
-            repoId: appRepoId,
-            // Keep the new base snap_* — Vercel delete does not cascade reliably.
-            preserveSnapshotId: effectiveBaseId,
-          });
-          prepSandboxId = null;
-
-          await step.runMutation(internal.repoSnapshots.setBaseSnapshotId, {
-            repoSnapshotId: args.repoSnapshotId,
-            baseSnapshotId: effectiveBaseId,
-          });
-
-          // New base is stored and bootable — now retire the previous one.
-          // Best-effort: a leaked old snapshot is harmless; failing the build
-          // here would be worse than leaving it for the next rebuild to clear.
-          if (
-            previousBaseSnapshotId &&
-            previousBaseSnapshotId !== effectiveBaseId
-          ) {
-            try {
-              await step.runAction(
-                internal.snapshotActions.deleteSeededSnapshot,
-                {
-                  snapshotName: previousBaseSnapshotId,
-                  repoId: appRepoId,
-                },
-              );
-            } catch (e) {
-              console.error(
-                `[snapshot] failed to delete previous Vercel base snapshot ${previousBaseSnapshotId}: ${
-                  e instanceof Error ? e.message : String(e)
-                }`,
-              );
-            }
-          }
-
-          await step.runMutation(internal.repoSnapshots.completeBuild, {
-            buildId: args.buildId,
-            status: "success",
-            logs: `Vercel base Image ${effectiveBaseId} built successfully.\n`,
-          });
-        } catch (e) {
-          if (prepSandboxId) {
-            await step.runAction(
-              internal.snapshotActions.deleteSeedPrepSandbox,
-              {
-                sandboxId: prepSandboxId,
-                repoId: appRepoId,
-              },
-            );
-          }
+      try {
+        const created = await step.runAction(
+          internal.snapshotActions.createSeedPrepSandbox,
+          { repoId: appRepoId, imageSnapshot: config.snapshotName },
+          { retry: { maxAttempts: 4, initialBackoffMs: 15000, base: 2 } },
+        );
+        if (!created.ok) {
           await step.runMutation(internal.repoSnapshots.completeBuild, {
             buildId: args.buildId,
             status: "error",
             logs: "",
-            error:
-              e instanceof Error
-                ? e.message
-                : "Vercel base Image build failed unexpectedly",
+            error: created.error,
           });
           return;
         }
+        prepSandboxId = created.sandboxId;
+
+        await step.runAction(
+          internal.sandbox.fetchBaseBranch,
+          {
+            sandboxId: prepSandboxId,
+            installationId: repo.installationId,
+            repoOwner: repo.owner,
+            repoName: repo.name,
+            baseBranch: branch,
+            repoId: appRepoId,
+          },
+          { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
+        );
+
+        await step.runAction(
+          internal.snapshotActions.launchSeedRun,
+          {
+            sandboxId: prepSandboxId,
+            repoId: appRepoId,
+            branch,
+            buildCommands: config.buildCommands ?? [],
+            seedCommands: config.seedCommands ?? [],
+          },
+          { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
+        );
+
+        let seedState = "running";
+        let lastStage: string | null = null;
+        for (
+          let pollAttempt = 1;
+          pollAttempt <= MAX_SEED_RUN_POLLS && seedState === "running";
+          pollAttempt++
+        ) {
+          const poll = await step.runAction(
+            internal.snapshotActions.pollSeedRun,
+            { sandboxId: prepSandboxId, repoId: appRepoId },
+            { runAfter: SEED_RUN_POLL_DELAY_MS },
+          );
+          seedState = poll.state;
+          // Stream stage transitions so the build page shows live progress
+          // instead of staying silent until the terminal status.
+          if (poll.stage !== null && poll.stage !== lastStage) {
+            lastStage = poll.stage;
+            await step.runMutation(internal.repoSnapshots.appendLogs, {
+              buildId: args.buildId,
+              chunk: `[base image] stage: ${poll.stage} (~${formatPollElapsed(pollAttempt)} in)\n`,
+            });
+          }
+        }
+        if (seedState !== "done") {
+          const diagnostics = await step.runAction(
+            internal.snapshotActions.fetchSeedDiagnostics,
+            { sandboxId: prepSandboxId, repoId: appRepoId },
+          );
+          await step.runMutation(internal.repoSnapshots.appendLogs, {
+            buildId: args.buildId,
+            chunk: `[Vercel base image] prep FAILED (${seedState}) — diagnostics:\n${diagnostics}\n`,
+          });
+          await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
+            sandboxId: prepSandboxId,
+            repoId: appRepoId,
+          });
+          prepSandboxId = null;
+          await step.runMutation(internal.repoSnapshots.completeBuild, {
+            buildId: args.buildId,
+            status: "error",
+            logs: "",
+            error: `Vercel base Image prep did not complete (state: ${seedState}) — see logs for diagnostics`,
+          });
+          return;
+        }
+
+        await step.runMutation(internal.repoSnapshots.appendLogs, {
+          buildId: args.buildId,
+          chunk:
+            "[base image] prep complete; capturing the sandbox filesystem into a snapshot (usually ~6m)...\n",
+        });
+        const { snapshotId: effectiveBaseId } = await step.runAction(
+          internal.snapshotActions.triggerSeededSnapshot,
+          {
+            repoId: appRepoId,
+            sandboxId: prepSandboxId,
+            seededName: baseSnapshotLabel,
+          },
+        );
+
+        let snapState = "pending";
+        for (
+          let pollAttempt = 1;
+          pollAttempt <= MAX_SEED_SNAPSHOT_POLLS &&
+          !isTerminalSnapshotState(snapState);
+          pollAttempt++
+        ) {
+          snapState = await step.runAction(
+            internal.snapshotActions.pollSeededSnapshotState,
+            { repoId: appRepoId, seededName: effectiveBaseId },
+            {
+              runAfter:
+                pollAttempt === 1 ? 10_000 : SEED_SNAPSHOT_POLL_DELAY_MS,
+            },
+          );
+        }
+        if (snapState !== "active") {
+          await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
+            sandboxId: prepSandboxId,
+            repoId: appRepoId,
+          });
+          prepSandboxId = null;
+          await step.runAction(internal.snapshotActions.deleteSeededSnapshot, {
+            snapshotName: effectiveBaseId,
+            repoId: appRepoId,
+          });
+          await step.runMutation(internal.repoSnapshots.completeBuild, {
+            buildId: args.buildId,
+            status: "error",
+            logs: "",
+            error: `Vercel base Image did not reach active (last state: ${snapState})`,
+          });
+          return;
+        }
+
+        await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
+          sandboxId: prepSandboxId,
+          repoId: appRepoId,
+          // Keep the new base snap_* — Vercel delete does not cascade reliably.
+          preserveSnapshotId: effectiveBaseId,
+        });
+        prepSandboxId = null;
+
+        await step.runMutation(internal.repoSnapshots.setBaseSnapshotId, {
+          repoSnapshotId: args.repoSnapshotId,
+          baseSnapshotId: effectiveBaseId,
+        });
+
+        // New base is stored and bootable — now retire the previous one.
+        // Best-effort: a leaked old snapshot is harmless; failing the build
+        // here would be worse than leaving it for the next rebuild to clear.
+        if (
+          previousBaseSnapshotId &&
+          previousBaseSnapshotId !== effectiveBaseId
+        ) {
+          try {
+            await step.runAction(
+              internal.snapshotActions.deleteSeededSnapshot,
+              {
+                snapshotName: previousBaseSnapshotId,
+                repoId: appRepoId,
+              },
+            );
+          } catch (e) {
+            console.error(
+              `[snapshot] failed to delete previous Vercel base snapshot ${previousBaseSnapshotId}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            );
+          }
+        }
+
+        await step.runMutation(internal.repoSnapshots.completeBuild, {
+          buildId: args.buildId,
+          status: "success",
+          logs: `${providerKind} base Image ${effectiveBaseId} built successfully.\n`,
+        });
+      } catch (e) {
+        if (prepSandboxId) {
+          await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
+            sandboxId: prepSandboxId,
+            repoId: appRepoId,
+          });
+        }
+        await step.runMutation(internal.repoSnapshots.completeBuild, {
+          buildId: args.buildId,
+          status: "error",
+          logs: "",
+          error:
+            e instanceof Error
+              ? e.message
+              : "Vercel base Image build failed unexpectedly",
+        });
+        return;
       }
-      // Vercel is the only sandbox provider; the historical Daytona path
-      // (declarative Image build via kickOffSnapshotBuild/pollSnapshotProgress)
-      // has been removed. providerKind is still recorded above (setBuildProvider)
-      // for historical build labeling.
     } else {
       await step.runMutation(internal.repoSnapshots.appendLogs, {
         buildId: args.buildId,

@@ -208,9 +208,9 @@ describe("no inline payload transports", () => {
       2,
     ],
     [
-      // Fixed 4-line yum repo stanza in the Chrome install command. No
+      // Fixed 4-line yum repo stanza in the (dnf) Chrome install command. No
       // interpolation, ~200 bytes, cannot grow.
-      "_sandbox/vercelProvider.ts",
+      "_sandbox/shellCapabilities.ts",
       1,
     ],
   ]);

@@ -19,7 +19,7 @@
  *   so terminals are wired one layer up in ../pty.ts, which returns a
  *   `ptyProtocol: v.literal("vercel")` discriminator and hands the browser a ws
  *   URL. See ../_pty/vercel.ts (tmux-backed shared panes).
- * - desktop: implemented, see VercelDesktop below (TigerVNC + websockify/noVNC).
+ * - desktop: implemented, see ShellDesktop (TigerVNC + websockify/noVNC, dnf install).
  * - volumes: the one genuine gap. `ensureVolume` throws — Drives are still beta.
  */
 
@@ -39,12 +39,17 @@ import type {
   SandboxProviderKind,
   SandboxSnapshotInfo,
   SandboxState,
+  VercelCredentials,
 } from "./provider";
 import {
   KEEP_LAST_SNAPSHOTS,
   vercelSnapshotCreateOptions,
 } from "./vercelSnapshotOptions";
-import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
+import {
+  DNF_DESKTOP_INSTALL,
+  ShellDesktop,
+  ShellGit,
+} from "./shellCapabilities";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
 
 export {
@@ -53,13 +58,6 @@ export {
   renderEvaEnvFile,
   tmuxNewSessionWithEvaEnv,
 } from "./vercelEnvFile";
-
-/** Vercel API credentials, passed on every SDK call. */
-interface VercelCredentials {
-  token: string;
-  teamId: string;
-  projectId: string;
-}
 
 const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 // Vercel caps the create-time `env` payload at 4 KB, but eva injects the full
@@ -185,187 +183,6 @@ function isVercelCommandStreamClosed(detail: string): boolean {
   );
 }
 
-/** Vercel git operations, implemented over the shell (no native git client). */
-class VercelGit implements SandboxGit {
-  constructor(private readonly handle: VercelSandboxHandle) {}
-
-  private async sh(cmd: string): Promise<string> {
-    // Goes through handle.exec so stream-closed refresh+retry applies.
-    const result = await this.handle.exec(cmd);
-    if (result.exitCode !== 0) {
-      throw new Error(
-        `git shell failed (exit ${result.exitCode}): ${cmd}\n${result.output.slice(-2000)}`,
-      );
-    }
-    return result.output;
-  }
-
-  async branches(workspaceDir: string): Promise<{ branches: string[] }> {
-    const out = await this.sh(
-      `cd ${workspaceDir} && git branch --format='%(refname:short)'`,
-    );
-    const branches = out
-      .split("\n")
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0);
-    return { branches };
-  }
-
-  async clone(
-    url: string,
-    dest: string,
-    authUser: string,
-    authToken: string,
-  ): Promise<void> {
-    // Inject credentials into the https URL (never logged). Falls back to the
-    // bare URL if it is not an https github URL.
-    const authed = url.startsWith("https://")
-      ? url.replace("https://", `https://${authUser}:${authToken}@`)
-      : url;
-    await this.sh(`git clone ${authed} ${dest}`);
-  }
-
-  async checkoutBranch(
-    workspaceDir: string,
-    branchName: string,
-  ): Promise<void> {
-    await this.sh(`cd ${workspaceDir} && git checkout ${branchName}`);
-  }
-}
-
-/**
- * Vercel desktop operations, aligned with timolins/vercel-sandbox-gui:
- * TigerVNC (Xvnc :1) + websockify + noVNC. Amazon Linux 2023 has no usable
- * window-manager packages (openbox/fluxbox/icewm are absent), so we follow the
- * GUI reference and run Chrome directly on the Xvnc display — no WM required.
- *
- * Critical: long-running Xvnc/websockify MUST use native `detached: true`
- * (execDetached). Backgrounding with `setsid … &` OR plain `&` inside a
- * synchronous runCommand leaves zombies (ppid=1, state Z) once that command
- * exits — HTTP may briefly answer then the RFB WebSocket hangs on noVNC
- * "Loading". Detached commands survive the launcher exiting.
- */
-class VercelDesktop implements SandboxDesktop {
-  constructor(private readonly handle: VercelSandboxHandle) {}
-
-  async start(): Promise<void> {
-    // ffmpeg: required by `agent-browser record` (WebM encode). Runs BEFORE the
-    // health/install logic below because older snapshots bake the VNC stack but
-    // not ffmpeg — both the healthy early-return and the INSTALLED=1 guard would
-    // skip it forever, so a broken encoder would never get repaired.
-    // Idempotent and soft-failing; see FFMPEG_INSTALL_SCRIPT.
-    await this.handle.exec(FFMPEG_INSTALL_SCRIPT, { timeoutSeconds: 180 });
-
-    // Idempotent: if a live (non-zombie) stack is already healthy, keep it.
-    // Re-killing a working Xvnc mid-session blacks the Computer tab and races
-    // Chrome relaunch. websockify listens on 16080 (internal); exposed 6080 is
-    // the auth preview proxy (see getPreviewUrl / VERCEL_DESKTOP_INTERNAL_PORT).
-    const healthy = await this.handle.exec(
-      [
-        "ps -eo pid,stat,cmd | awk '$2 !~ /Z/ && /Xvnc/ { xvnc=1 } $2 !~ /Z/ && /websockify/ { ws=1 } END { exit(xvnc && ws ? 0 : 1) }'",
-        "&& (curl -fsS http://127.0.0.1:16080/vnc_lite.html >/dev/null 2>&1 || curl -fsS http://127.0.0.1:16080/vnc.html >/dev/null 2>&1)",
-        "&& xprop -display :1 -root >/dev/null 2>&1",
-      ].join(" "),
-      { timeoutSeconds: 15 },
-    );
-    if (healthy.exitCode === 0) {
-      return;
-    }
-
-    // 1) Install + kill previous servers (sync).
-    await this.handle.exec(
-      [
-        'NOVNC_DIR=""',
-        "if [ -d /opt/novnc ]; then NOVNC_DIR=/opt/novnc; elif [ -d /opt/noVNC ]; then NOVNC_DIR=/opt/noVNC; fi",
-        "INSTALLED=0",
-        'if command -v Xvnc >/dev/null 2>&1 && command -v websockify >/dev/null 2>&1 && [ -n "$NOVNC_DIR" ]; then INSTALLED=1; fi',
-        'if [ "$INSTALLED" != "1" ]; then',
-        "  sudo dnf install -y tigervnc-server python3 python3-pip xorg-x11-utils xterm dbus-x11 procps-ng psmisc git >/tmp/desktop-dnf.log 2>&1",
-        "  sudo dnf install -y gtk3 nss alsa-lib libXScrnSaver libXtst at-spi2-core libdrm mesa-libgbm libxkbcommon libXdamage libXcomposite libXrandr libXcursor libXinerama cups-libs >/tmp/desktop-gui-dnf.log 2>&1 || true",
-        "  sudo python3 -m pip install --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1",
-        "  command -v websockify >/dev/null 2>&1 || sudo ln -sf $(python3 -m site --user-base)/bin/websockify /usr/local/bin/websockify || true",
-        '  if [ -z "$NOVNC_DIR" ]; then sudo git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc >/tmp/novnc-git.log 2>&1; NOVNC_DIR=/opt/novnc; fi',
-        "fi",
-        "if ! command -v google-chrome-stable >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then",
-        "  sudo tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'",
-        "[google-chrome]",
-        "name=google-chrome",
-        "baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64",
-        "enabled=1",
-        "gpgcheck=1",
-        "gpgkey=https://dl.google.com/linux/linux_signing_key.pub",
-        "EOF",
-        "  sudo dnf install -y google-chrome-stable >/tmp/chrome-dnf.log 2>&1 || sudo dnf install -y chromium >/tmp/chromium-dnf.log 2>&1 || true",
-        "fi",
-        "mkdir -p /home/eva/.vnc /tmp",
-        "sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix",
-        "pkill -9 -x Xvnc 2>/dev/null || true",
-        "pkill -9 -x x0vncserver 2>/dev/null || true",
-        "pkill -9 -f '[w]ebsockify' 2>/dev/null || true",
-        "fuser -k 16080/tcp 5901/tcp 2>/dev/null || true",
-        "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true",
-        "sleep 1",
-      ].join("\n"),
-      { timeoutSeconds: 240 },
-    );
-
-    // 2) Detach Xvnc so it outlives this action.
-    await this.handle.execDetached(
-      "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true; Xvnc :1 -geometry ${VNC_RESOLUTION:-1920x1080} -depth 24 -SecurityTypes None -AlwaysShared=1 >/tmp/xvnc.log 2>&1",
-    );
-
-    // 3) Wait for the display, then detach websockify on the INTERNAL port.
-    // Exposed 6080 is reserved for the auth preview proxy (open-in-new-tab gate).
-    await this.handle.exec(
-      [
-        "for i in $(seq 1 30); do xprop -display :1 -root >/dev/null 2>&1 && break; sleep 0.5; done",
-        "xprop -display :1 -root >/dev/null 2>&1",
-        "command -v xsetroot >/dev/null 2>&1 && DISPLAY=:1 xsetroot -solid '#1a1a1a' || true",
-      ].join("\n"),
-      { timeoutSeconds: 60 },
-    );
-
-    await this.handle.execDetached(
-      [
-        'NOVNC_DIR=""; if [ -d /opt/novnc ]; then NOVNC_DIR=/opt/novnc; elif [ -d /opt/noVNC ]; then NOVNC_DIR=/opt/noVNC; fi',
-        'WEBSOCKIFY_BIN="$(command -v websockify || echo "$(python3 -m site --user-base)/bin/websockify")"',
-        'exec "$WEBSOCKIFY_BIN" --web="$NOVNC_DIR" 127.0.0.1:16080 127.0.0.1:5901 >/tmp/novnc.log 2>&1',
-      ].join("; "),
-    );
-
-    // 4) Health-check: live (non-zombie) websockify + HTTP 200 on internal port.
-    await this.handle.exec(
-      [
-        "for i in $(seq 1 30); do",
-        "  if ps -eo pid,stat,cmd | awk '$2 !~ /Z/ && /websockify/ { found=1 } END { exit(found ? 0 : 1) }' \\",
-        "    && (curl -fsS http://127.0.0.1:16080/vnc_lite.html >/dev/null 2>&1 || curl -fsS http://127.0.0.1:16080/vnc.html >/dev/null 2>&1); then",
-        "    exit 0",
-        "  fi",
-        "  sleep 0.5",
-        "done",
-        'echo "desktop start: websockify/noVNC not healthy" >&2',
-        "tail -40 /tmp/novnc.log >&2 || true",
-        "tail -20 /tmp/xvnc.log >&2 || true",
-        "exit 1",
-      ].join("\n"),
-      { timeoutSeconds: 60 },
-    );
-  }
-
-  async stop(): Promise<void> {
-    await this.handle.exec(
-      [
-        "pkill -9 -x Xvnc 2>/dev/null || true",
-        "pkill -9 -x x0vncserver 2>/dev/null || true",
-        "pkill -9 -f '[w]ebsockify' 2>/dev/null || true",
-        "fuser -k 16080/tcp 5901/tcp 2>/dev/null || true",
-        "pkill -f '[X]vfb :0' 2>/dev/null || true",
-      ].join("; "),
-      { timeoutSeconds: 30 },
-    );
-  }
-}
-
 /** A handle to one Vercel sandbox, exposing the neutral {@link SandboxHandle}. */
 class VercelSandboxHandle implements SandboxHandle {
   readonly desktop: SandboxDesktop;
@@ -374,12 +191,12 @@ class VercelSandboxHandle implements SandboxHandle {
     private sandbox: Sandbox,
     private readonly creds: VercelCredentials,
   ) {
-    this.desktop = new VercelDesktop(this);
+    this.desktop = new ShellDesktop(this, DNF_DESKTOP_INSTALL);
   }
 
   /** Fresh git facade bound to the current session (refresh() swaps the sandbox). */
   get git(): SandboxGit {
-    return new VercelGit(this);
+    return new ShellGit(this);
   }
 
   /** Migration escape hatch (see unwrapVercelSandbox). */

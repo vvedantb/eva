@@ -19,3 +19,9 @@ export const PREVIEW_SESSION_COOKIE = "__eva_preview_session";
 
 /** Query-string param carrying the bootstrap grant to the proxy. */
 export const PREVIEW_GRANT_PARAM = "__eva_grant";
+
+/**
+ * Public hostname suffixes of sandbox preview origins: Vercel Sandbox and Boat.
+ * Mirrored in apps/web/src/routes/preview-auth.tsx (open-redirect guard).
+ */
+export const SANDBOX_PREVIEW_HOST_SUFFIXES = [".vercel.run", ".on.boat.dev"];

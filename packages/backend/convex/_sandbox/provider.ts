@@ -1,11 +1,10 @@
 /**
  * Provider-neutral sandbox contract.
  *
- * WHY: eva runs managed codebases in remote sandboxes. The only backend today
- * is Vercel Sandbox (sub-second snapshot restores — Phase 0 spike proved
- * ~0.3s regardless of size). Daytona was the original provider and has been
- * fully removed; this contract stays provider-neutral in shape so a future
- * provider swap does not require touching every `_sandbox_runtime/` consumer again.
+ * WHY: eva runs managed codebases in remote sandboxes on Vercel Sandbox or Boat
+ * (boat.dev), chosen per repo (`githubRepos.sandboxProvider`). Daytona was the
+ * original provider and has been fully removed. Consumers only see this
+ * contract; `./factory.ts` routes each call to the provider that owns it.
  *
  * These types are a hand-written contract, NOT Convex documents — they describe
  * an external SDK surface, so they are defined here rather than imported from
@@ -16,8 +15,8 @@
  * separate follow-up, not part of the provider removal.
  */
 
-/** Which backend fulfils sandbox operations. Vercel is the only implementation. */
-export type SandboxProviderKind = "vercel";
+/** Which backend fulfils sandbox operations. */
+export type SandboxProviderKind = "vercel" | "boat";
 
 /**
  * Coarse sandbox lifecycle state, normalised across providers.
@@ -264,13 +263,24 @@ export interface SandboxClient {
   deleteSnapshot(ref: string): Promise<boolean>;
 }
 
-/** Credentials for the active provider. */
-export type SandboxCredentials = {
-  kind: "vercel";
+export interface VercelCredentials {
   token: string;
   teamId: string;
   projectId: string;
-};
+}
+
+export interface BoatCredentials {
+  apiKey: string;
+}
+
+/**
+ * Credentials for a repo. `preferred` creates new sandboxes; the other
+ * provider's credentials, when present, still reach sandboxes and snapshots it
+ * created before the repo switched (routed by id, see `./factory.ts`).
+ */
+export type SandboxCredentials =
+  | { preferred: "vercel"; vercel: VercelCredentials; boat?: BoatCredentials }
+  | { preferred: "boat"; boat: BoatCredentials; vercel?: VercelCredentials };
 
 /**
  * A failure of the *provider client itself* — the HTTP call to the sandbox API

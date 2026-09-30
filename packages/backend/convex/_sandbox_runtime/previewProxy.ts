@@ -10,6 +10,7 @@ import {
   PREVIEW_GRANT_PARAM,
   PREVIEW_SESSION_COOKIE,
   PREVIEW_SESSION_TTL_SECONDS,
+  SANDBOX_PREVIEW_HOST_SUFFIXES,
 } from "../previewGrantConfig";
 import { PREVIEW_ANNOTATION_SCRIPT } from "./previewAnnotationScript.generated";
 import { PREVIEW_HTML2CANVAS_SCRIPT } from "./html2canvasScript.generated";
@@ -902,7 +903,7 @@ function rewriteHtml(html, injects, tabPrefix) {
 // dev-server port) would otherwise send the browser to a DIFFERENT port's
 // subdomain than the one it loaded the page from, which Vercel's edge then
 // rejects as "port is not exposed" for that host/path combination.
-const VERCEL_HOST_SUFFIX = ".vercel.run";
+const SANDBOX_HOST_SUFFIXES = ${JSON.stringify(SANDBOX_PREVIEW_HOST_SUFFIXES)};
 
 function rewriteLocationHeader(value, route) {
   try {
@@ -910,8 +911,10 @@ function rewriteLocationHeader(value, route) {
     const isLocalUpstream =
       (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
       Number(parsed.port || "80") === route.port;
-    const isVercelHost = parsed.hostname.endsWith(VERCEL_HOST_SUFFIX);
-    if (isLocalUpstream || isVercelHost) {
+    const isSandboxHost = SANDBOX_HOST_SUFFIXES.some(function (suffix) {
+      return parsed.hostname.endsWith(suffix);
+    });
+    if (isLocalUpstream || isSandboxHost) {
       const path = parsed.pathname + parsed.search + parsed.hash;
       // A tab upstream redirects within its own app ("/login"), which must stay
       // under the tab prefix or it would land on the dev server.

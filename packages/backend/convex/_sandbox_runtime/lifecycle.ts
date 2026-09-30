@@ -10,6 +10,8 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
+import { sandboxProviderKindValidator } from "../_validators/enums";
+import type { SandboxProviderKind } from "../_sandbox/provider";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
 
@@ -417,20 +419,31 @@ export const archiveSandbox = internalAction({
   },
 });
 
-/** Returns the active sandbox provider for a repo (for workflow thaw id selection). Vercel is the only provider. */
+/** The provider that creates this repo's new sandboxes (`githubRepos.sandboxProvider`). */
 export const getSandboxProviderKind = internalAction({
   args: { repoId: v.id("githubRepos") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
+  returns: sandboxProviderKindValidator,
+  handler: async (ctx, args): Promise<SandboxProviderKind> => {
+    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+      id: args.repoId,
+    });
+    return repo?.sandboxProvider ?? "vercel";
+  },
 });
 
-/**
- * Provider for a snapshot config. Vercel is the only provider, so this
- * always resolves "vercel"; kept as an internalAction (name unchanged) since
- * it is still part of the public `internal.sandbox.*` surface.
- */
+/** Provider for a snapshot config: the provider of the repo it belongs to. */
 export const getSnapshotSandboxProviderKind = internalAction({
   args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
+  returns: sandboxProviderKindValidator,
+  handler: async (ctx, args): Promise<SandboxProviderKind> => {
+    const config = await ctx.runQuery(
+      internal.repoSnapshots.getRepoSnapshotInternal,
+      { repoSnapshotId: args.repoSnapshotId },
+    );
+    if (!config) return "vercel";
+    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+      id: config.repoId,
+    });
+    return repo?.sandboxProvider ?? "vercel";
+  },
 });

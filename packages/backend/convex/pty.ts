@@ -5,12 +5,12 @@ import { action } from "./_generated/server";
 import { resolveSandboxCredentials } from "./envVarResolver";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 import { unwrapVercelSandbox } from "./_sandbox/vercelProvider";
+import { isBoatSandboxId } from "./_sandbox/boatApi";
 import { ownerArg, resolveOwner } from "./_pty/owners";
 import { getActionRepoWithAccess } from "./functions";
-import {
-  connectVercelInteractive,
-  ensureVercelSharedTerminal,
-} from "./_pty/vercel";
+import { connectVercelInteractive } from "./_pty/vercel";
+import { connectBoatTerminal } from "./_pty/boat";
+import { ensureSharedTerminal } from "./_pty/tmux";
 
 /** Connects to or creates a PTY for a session or task, returning the WebSocket URL. */
 export const connectPty = action({
@@ -47,7 +47,7 @@ export const connectPty = action({
     const resolved = await resolveOwner(ctx, args.owner);
     await getActionRepoWithAccess(ctx, resolved.repoId);
     // Never open a terminal against a stopping/closed sandbox: the setup exec
-    // (ensureVercelSharedTerminal) would lazily resume a stopped Vercel VM,
+    // (ensureSharedTerminal) would lazily resume a stopped Vercel VM,
     // resurrecting a sandbox the user stopped and defeating a manual stop. A
     // reconnecting terminal tab is what kept an idle sandbox running with no
     // active session.
@@ -61,7 +61,23 @@ export const connectPty = action({
       resolved.repoId,
       resolved.sandboxId,
     );
-    const shared = await ensureVercelSharedTerminal(handle, args.ptyInstanceId);
+    const shared = await ensureSharedTerminal(handle, args.ptyInstanceId);
+    // Both providers speak the same JSON-framed protocol ("vercel"): Vercel
+    // hosts the socket itself, Boat through the in-VM bridge (_pty/boatBridge.ts).
+    if (isBoatSandboxId(handle.id)) {
+      const { wsUrl } = await connectBoatTerminal(handle, {
+        repoId: resolved.repoId,
+        subject: identity.subject,
+      });
+      return {
+        wsUrl,
+        ptySessionId: shared.sessionName,
+        isNewPty: shared.isNewPty,
+        ptyProtocol: "vercel",
+        initialOutput: shared.initialOutput,
+        sharedPtySessionName: shared.sessionName,
+      };
+    }
     const vercelSandbox = unwrapVercelSandbox(handle);
     const { wsUrl, ptySessionId, authToken } = await connectVercelInteractive(
       vercelSandbox,

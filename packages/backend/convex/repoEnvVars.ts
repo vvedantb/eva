@@ -13,6 +13,8 @@ import {
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "./_envVars/documentStore";
+import { BOAT_API_KEY_VAR } from "./_envVars/boatCredentials";
+import { findAllSiblingRepoIds } from "./_githubRepos/helpers";
 
 /** Loads the single env var document for a repo, or null if none exists. */
 function findByRepo(db: DatabaseReader, repoId: Id<"githubRepos">) {
@@ -21,6 +23,33 @@ function findByRepo(db: DatabaseReader, repoId: Id<"githubRepos">) {
     .withIndex("by_repo", (q) => q.eq("repoId", repoId))
     .first();
 }
+
+/**
+ * Whether a Boat API key is set for this codebase (any sibling app repo, or
+ * the team). Presence only, never the value: gates the Boat provider option.
+ */
+export const hasBoatApiKey = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    const hasKey = (vars: ReadonlyArray<{ key: string; value: string }>) =>
+      vars.some(
+        (entry) => entry.key === BOAT_API_KEY_VAR && entry.value.trim() !== "",
+      );
+    for (const siblingId of await findAllSiblingRepoIds(ctx.db, args.repoId)) {
+      const doc = await findByRepo(ctx.db, siblingId);
+      if (doc && hasKey(doc.vars)) return true;
+    }
+    if (!repo.teamId) return false;
+    const teamId = repo.teamId;
+    const teamDoc = await ctx.db
+      .query("teamEnvVars")
+      .withIndex("by_team", (q) => q.eq("teamId", teamId))
+      .first();
+    return teamDoc !== null && hasKey(teamDoc.vars);
+  },
+});
 
 /** Lists repo env vars for the authenticated user, masking actual values. */
 export const list = authQuery({

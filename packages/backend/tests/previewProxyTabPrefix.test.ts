@@ -53,7 +53,7 @@ const resolveRouteWithReferer: (
 
 const locationFactory = new Function(
   [
-    'const VERCEL_HOST_SUFFIX = ".vercel.run";',
+    'const SANDBOX_HOST_SUFFIXES = [".vercel.run", ".on.boat.dev"];',
     extractFunctionSource("function rewriteLocationHeader(value, route) {"),
     "return rewriteLocationHeader;",
   ].join("\n\n"),

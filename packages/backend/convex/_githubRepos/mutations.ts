@@ -7,6 +7,8 @@ import { authMutation, getRepoWithAccess, hasTeamAccess } from "../functions";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 import { findAllSiblingRepoIds } from "./helpers";
+import { internal } from "../_generated/api";
+import { sandboxProviderKindValidator } from "../_validators/enums";
 
 /** Throws unless the user connected the repo or shares its team. */
 async function assertRepoWriteAccess(
@@ -244,6 +246,7 @@ export const updateConfig = authMutation({
     sessionsVncEnabled: v.optional(v.boolean()),
     sessionsVscodeEnabled: v.optional(v.boolean()),
     sandboxReadExcluded: v.optional(v.boolean()),
+    sandboxProvider: v.optional(sandboxProviderKindValidator),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
     devPort: v.optional(v.union(v.number(), v.null())),
@@ -281,9 +284,24 @@ export const updateConfig = authMutation({
     if (args.sandboxReadExcluded !== undefined)
       sharedPatch.sandboxReadExcluded = args.sandboxReadExcluded;
 
+    const providerChanged =
+      args.sandboxProvider !== undefined &&
+      args.sandboxProvider !== (repo.sandboxProvider ?? "vercel");
+    if (args.sandboxProvider !== undefined)
+      sharedPatch.sandboxProvider = args.sandboxProvider;
+
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {
       await ctx.db.patch(siblingId, sharedPatch);
+    }
+    // New sandboxes now boot on the other provider, whose snapshots do not
+    // exist yet: rebuild on it. Existing sandboxes stay where they are.
+    if (providerChanged) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.repoSnapshots.startBuildForRepo,
+        { repoId: args.repoId },
+      );
     }
 
     if (args.deploymentProjectName !== undefined) {

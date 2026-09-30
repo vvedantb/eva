@@ -8,7 +8,7 @@ import {
   EVA_ENV_FILE,
   tmuxNewSessionWithEvaEnv,
 } from "../_sandbox/vercelEnvFile";
-import { tmuxSessionName } from "./vercel";
+import { INSTALL_TMUX, tmuxSessionName } from "./tmux";
 
 /**
  * Per-`sessionName` so a linked repo's console session (a distinct tmux
@@ -41,10 +41,7 @@ export async function launchDevServerInVercelConsole(
   const sessionName = tmuxSessionName(defaultTerminalPtyId(ownerKey));
   const workspace = dir;
 
-  await handle.exec(
-    "command -v tmux >/dev/null 2>&1 || sudo dnf install -y tmux >/dev/null 2>&1",
-    { cwd: "/", timeoutSeconds: 120 },
-  );
+  await handle.exec(INSTALL_TMUX, { cwd: "/", timeoutSeconds: 120 });
 
   const portBusy = (
     await handle.exec(

@@ -7,11 +7,12 @@ import { api } from "@eva/backend";
 // Must match PREVIEW_GRANT_PARAM in packages/backend/convex/previewGrantConfig.ts.
 const GRANT_PARAM = "__eva_grant";
 
-// Open-redirect guard: only ever redirect back to a Vercel sandbox preview
-// origin over https. The proxy builds the `return` from its own Host, but
-// this is the trust boundary on the eva side, so we re-validate rather than
-// trust input.
-const VERCEL_PREVIEW_SUFFIX = ".vercel.run";
+// Open-redirect guard: only ever redirect back to a sandbox preview origin
+// (Vercel or Boat) over https. The proxy builds the `return` from its own Host,
+// but this is the trust boundary on the eva side, so we re-validate rather than
+// trust input. Must match SANDBOX_PREVIEW_HOST_SUFFIXES in
+// packages/backend/convex/previewGrantConfig.ts.
+const SANDBOX_PREVIEW_SUFFIXES = [".vercel.run", ".on.boat.dev"];
 
 const validateSearch = (search: Record<string, string>) => ({
   sandbox: typeof search.sandbox === "string" ? search.sandbox : "",
@@ -29,7 +30,13 @@ function parseAllowedReturn(url: string): URL | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return null;
-    if (!parsed.hostname.endsWith(VERCEL_PREVIEW_SUFFIX)) return null;
+    if (
+      !SANDBOX_PREVIEW_SUFFIXES.some((suffix) =>
+        parsed.hostname.endsWith(suffix),
+      )
+    ) {
+      return null;
+    }
     return parsed;
   } catch {
     return null;

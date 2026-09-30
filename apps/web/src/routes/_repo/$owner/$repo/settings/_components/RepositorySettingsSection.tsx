@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  api,
   normalizeAIModel,
   storedTraitsFromRepoDefaults,
   type AIModel,
@@ -8,7 +9,15 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { Switch } from "@eva/ui";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+} from "@eva/ui";
+import { useQuery } from "convex/react";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
@@ -24,7 +33,14 @@ type RepoConfigFields = {
   defaultUse1mContext?: boolean;
   defaultFastMode?: boolean;
   sandboxReadExcluded?: boolean;
+  sandboxProvider?: SandboxProvider;
 };
+
+type SandboxProvider = "vercel" | "boat";
+
+function isSandboxProvider(value: string): value is SandboxProvider {
+  return value === "vercel" || value === "boat";
+}
 
 type UpdateRepoConfig = (args: {
   repoId: Id<"githubRepos">;
@@ -35,6 +51,7 @@ type UpdateRepoConfig = (args: {
   defaultUse1mContext?: boolean;
   defaultFastMode?: boolean;
   sandboxReadExcluded?: boolean;
+  sandboxProvider?: SandboxProvider;
 }) => void;
 
 export function RepositorySettingsSection({
@@ -53,6 +70,8 @@ export function RepositorySettingsSection({
   updateConfig: UpdateRepoConfig;
 }) {
   const defaultModels = useAvailableAiModels(repoId, repo.defaultModel);
+  const hasBoatApiKey = useQuery(api.repoEnvVars.hasBoatApiKey, { repoId });
+  const sandboxProvider = repo.sandboxProvider ?? "vercel";
 
   const monorepoHint = isMonorepo ? (
     <>
@@ -119,6 +138,37 @@ export function RepositorySettingsSection({
         description={monorepoHint}
         bodyVariant="list"
       >
+        <SettingsToggleRow
+          title="Sandbox provider"
+          description={
+            hasBoatApiKey === false && sandboxProvider !== "boat"
+              ? "Where new sandboxes run. Add BOAT_API_KEY in Env vars to use Boat."
+              : "Where new sandboxes run. Running sandboxes stay put; switching rebuilds the snapshot."
+          }
+          action={
+            <Select
+              value={sandboxProvider}
+              onValueChange={(next) => {
+                if (isSandboxProvider(next) && next !== sandboxProvider) {
+                  updateConfig({ repoId, sandboxProvider: next });
+                }
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-[110px] text-xs"
+                aria-label="Sandbox provider"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vercel">Vercel</SelectItem>
+                <SelectItem value="boat" disabled={hasBoatApiKey !== true}>
+                  Boat
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
         <SettingsToggleRow
           title="Readable by other sandboxes"
           description="Sandboxes for other repositories you can access in Eva may clone this repository read-only. Turn off to keep it private to its own sandboxes."

@@ -5,7 +5,8 @@ import { Snapshot, Sandbox } from "@vercel/sandbox";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
-import { resolveSandboxCredentialsOnly } from "../envVarResolver";
+import { resolveVercelCredentialsOnly } from "../envVarResolver";
+import { isBoatSandboxId } from "../_sandbox/boatApi";
 import { getSandboxHandle, ensureSandboxRunning } from "./helpers";
 import { unwrapVercelSandbox } from "../_sandbox/vercelProvider";
 import {
@@ -134,11 +135,14 @@ export const inspectSnapshotRetention = internalAction({
       );
       for (const candidate of page.candidates) {
         if (samples.length >= limit) break;
+        // Vercel-only: Boat keeps one snapshot per sandbox with no retention knobs.
+        if (isBoatSandboxId(candidate.sandboxId)) continue;
         try {
-          const credentials = await resolveSandboxCredentialsOnly(
+          const credentials = await resolveVercelCredentialsOnly(
             ctx,
             candidate.repoId,
           );
+          if (!credentials) continue;
           const handle = await getSandboxHandle(
             ctx,
             candidate.repoId,
@@ -358,11 +362,13 @@ export const bulkUpdateSnapshotRetention = internalAction({
     const processOne = async (
       candidate: Candidate,
     ): Promise<CandidateResult> => {
+      if (isBoatSandboxId(candidate.sandboxId)) return { outcome: "skipped" };
       try {
-        const credentials = await resolveSandboxCredentialsOnly(
+        const credentials = await resolveVercelCredentialsOnly(
           ctx,
           candidate.repoId,
         );
+        if (!credentials) return { outcome: "skipped" };
         const handle = await getSandboxHandle(
           ctx,
           candidate.repoId,
@@ -532,9 +538,11 @@ export const purgeDeletedSnapshotTombstones = internalAction({
     }
 
     try {
-      const credentials = await resolveSandboxCredentialsOnly(ctx, repoId);
-      const projectKey = `${credentials.teamId}:${credentials.projectId}`;
-      if (!projectsSeen.has(projectKey)) {
+      const credentials = await resolveVercelCredentialsOnly(ctx, repoId);
+      const projectKey = credentials
+        ? `${credentials.teamId}:${credentials.projectId}`
+        : null;
+      if (credentials && projectKey !== null && !projectsSeen.has(projectKey)) {
         projectsSeen.add(projectKey);
         const listed = await Snapshot.list({
           token: credentials.token,
@@ -660,7 +668,7 @@ export const inspectSnapshotsByIds = internalAction({
       if (remaining.size === 0) break;
       let credentials;
       try {
-        credentials = await resolveSandboxCredentialsOnly(ctx, repoId);
+        credentials = await resolveVercelCredentialsOnly(ctx, repoId);
       } catch (err) {
         console.warn(
           `[inspectSnapshotsByIds] skip repo=${repoId}: ${
@@ -669,6 +677,7 @@ export const inspectSnapshotsByIds = internalAction({
         );
         continue;
       }
+      if (!credentials) continue;
       const projectKey = `${credentials.teamId}:${credentials.projectId}`;
       if (projectsSeen.has(projectKey)) continue;
       projectsSeen.add(projectKey);

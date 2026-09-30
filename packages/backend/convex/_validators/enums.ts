@@ -182,7 +182,10 @@ export const snapshotBuildKindValidator = v.union(
   v.literal("seeded"),
 );
 
-export const sandboxProviderKindValidator = v.literal("vercel");
+export const sandboxProviderKindValidator = v.union(
+  v.literal("vercel"),
+  v.literal("boat"),
+);
 
 export const teamMemberRoleValidator = v.union(
   v.literal("owner"),

@@ -1,3 +1,4 @@
+import { providerForId } from "../_sandbox/boatApi";
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -88,19 +89,28 @@ export const getRepoSnapshotName = internalQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.union(v.object({ snapshotName: v.string() }), v.null()),
   handler: async (ctx, args) => {
-    // Per-app seeded snapshot takes precedence (fast start with seeded DB).
+    // Only the repo's current provider can boot a capture: right after a
+    // provider switch the stored ids still belong to the old one until the
+    // rebuild lands (Boat ids are `bx_…`, see providerForId).
     const repo = await ctx.db.get(args.repoId);
-    if (repo?.seededSnapshotName) {
+    const provider = repo?.sandboxProvider ?? "vercel";
+    const bootable = (ref: string | undefined): ref is string =>
+      ref !== undefined && ref !== "" && providerForId(ref) === provider;
+
+    // Per-app seeded snapshot takes precedence (fast start with seeded DB).
+    if (bootable(repo?.seededSnapshotName)) {
       return { snapshotName: repo.seededSnapshotName };
     }
 
     const snapshot = await findSnapshotForRepo(ctx.db, args.repoId);
     if (!snapshot) return null;
 
-    // Vercel base Image (`snap_*`) — written by the provider-aware rebuild path.
-    if (snapshot.baseSnapshotId) {
+    // Base Image capture — written by the provider-aware rebuild path.
+    if (bootable(snapshot.baseSnapshotId)) {
       return { snapshotName: snapshot.baseSnapshotId };
     }
+    // Legacy named snapshots below predate Boat; they are Vercel-only.
+    if (provider !== "vercel") return null;
 
     const latestSuccessfulBuild = await ctx.db
       .query("snapshotBuilds")

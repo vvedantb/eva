@@ -5,7 +5,15 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { decryptCredentialMap } from "./_envVars/encryptedEntries";
 import { getAIModelProvider } from "./validators";
-import type { SandboxCredentials } from "./_sandbox/provider";
+import type {
+  SandboxCredentials,
+  SandboxProviderKind,
+  VercelCredentials,
+} from "./_sandbox/provider";
+import {
+  BOAT_API_KEY_VAR,
+  selectBoatApiKey,
+} from "./_envVars/boatCredentials";
 import {
   presentEnv,
   selectVercelCredentials,
@@ -63,7 +71,13 @@ export async function resolveEnvVars(
   });
   const repoEnvVars = decryptCredentialMap(repoVars);
 
-  return { ...teamEnvVars, ...repoEnvVars };
+  // The Boat key controls every sandbox on the account; it must never reach a
+  // VM whatever the var's sandbox-exclude toggle says.
+  const { [BOAT_API_KEY_VAR]: _boatKey, ...sandboxVars } = {
+    ...teamEnvVars,
+    ...repoEnvVars,
+  };
+  return sandboxVars;
 }
 
 /** All repos in the same codebase (owner/name), requested repo first. */
@@ -147,24 +161,88 @@ async function selectVercelCredentialsForRepo(
   };
 }
 
-async function resolveVercelCredentialsForRepo(
+/** Boat key from the target repo or a monorepo sibling (team vars included). */
+async function selectBoatApiKeyForRepo(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
-): Promise<Extract<SandboxCredentials, { kind: "vercel" }>> {
-  const { selected } = await selectVercelCredentialsForRepo(ctx, repoId);
-  if (!selected.ok) {
-    throw new Error(selected.message);
+): Promise<string | undefined> {
+  const repoIds = await listMonorepoRepoIds(ctx, repoId);
+  const varsList: Array<Record<string, string>> = [];
+  for (const id of repoIds) {
+    varsList.push(await resolveAllEnvVars(ctx, id));
+    const key = selectBoatApiKey(varsList[varsList.length - 1]);
+    if (key) return key;
+  }
+  return undefined;
+}
+
+/** The provider that creates this repo's new sandboxes. */
+async function preferredProviderForRepo(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<SandboxProviderKind> {
+  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+    id: repoId,
+  });
+  return repo?.sandboxProvider ?? "vercel";
+}
+
+/**
+ * Both providers' credentials for a repo. The preferred provider's are
+ * required; the other's are carried when present so sandboxes and snapshots
+ * made before a provider switch stay reachable.
+ */
+async function selectCredentialsForRepo(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<
+  | {
+      ok: true;
+      credentials: SandboxCredentials;
+      credentialRepoId: Id<"githubRepos">;
+    }
+  | { ok: false; error: string }
+> {
+  const preferred = await preferredProviderForRepo(ctx, repoId);
+  const { credentialRepoId, selected } = await selectVercelCredentialsForRepo(
+    ctx,
+    repoId,
+  );
+  const vercel: VercelCredentials | undefined = selected.ok
+    ? {
+        token: selected.token,
+        teamId: selected.teamId,
+        projectId: selected.projectId,
+      }
+    : undefined;
+  const apiKey = await selectBoatApiKeyForRepo(ctx, repoId);
+  const boat = apiKey ? { apiKey } : undefined;
+
+  if (preferred === "boat") {
+    if (!boat) {
+      return {
+        ok: false,
+        error: `Boat is this repo's sandbox provider, but ${BOAT_API_KEY_VAR} is not set on the repo or its team.`,
+      };
+    }
+    return {
+      ok: true,
+      credentials: { preferred: "boat", boat, vercel },
+      credentialRepoId: vercel ? credentialRepoId : repoId,
+    };
+  }
+  if (!vercel) {
+    return { ok: false, error: selected.ok ? "" : selected.message };
   }
   return {
-    kind: "vercel",
-    token: selected.token,
-    teamId: selected.teamId,
-    projectId: selected.projectId,
+    ok: true,
+    credentials: { preferred: "vercel", vercel, boat },
+    credentialRepoId,
   };
 }
 
 /**
- * Same as resolveSandboxCredentials, but missing Vercel env is a returned
+ * Same as resolveSandboxCredentials, but missing provider env is a returned
  * error instead of a throw (so snapshot create does not log Uncaught Error).
  */
 export async function tryResolveSandboxCredentials(
@@ -178,36 +256,41 @@ export async function tryResolveSandboxCredentials(
     }
   | { ok: false; error: string }
 > {
-  const { credentialRepoId, selected } = await selectVercelCredentialsForRepo(
-    ctx,
-    repoId,
-  );
-  if (!selected.ok) {
-    return { ok: false, error: selected.message };
-  }
-  const sandboxEnvVars = await resolveEnvVars(ctx, credentialRepoId);
-  return {
-    ok: true,
-    credentials: {
-      kind: "vercel",
-      token: selected.token,
-      teamId: selected.teamId,
-      projectId: selected.projectId,
-    },
-    sandboxEnvVars,
-  };
+  const selected = await selectCredentialsForRepo(ctx, repoId);
+  if (!selected.ok) return selected;
+  const sandboxEnvVars = await resolveEnvVars(ctx, selected.credentialRepoId);
+  return { ok: true, credentials: selected.credentials, sandboxEnvVars };
 }
 
 /**
  * Resolves the sandbox provider credentials (no full sandbox env map). Used
- * by kickoff/thaw paths that only need to call the provider SDK. Vercel is
- * the only provider, so this always resolves Vercel credentials.
+ * by kickoff/thaw paths that only need to call the provider API.
  */
 export async function resolveSandboxCredentialsOnly(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<SandboxCredentials> {
-  return resolveVercelCredentialsForRepo(ctx, repoId);
+  const selected = await selectCredentialsForRepo(ctx, repoId);
+  if (!selected.ok) throw new Error(selected.error);
+  return selected.credentials;
+}
+
+/**
+ * Vercel credentials alone, for the Vercel-only snapshot retention/purge jobs
+ * that call `@vercel/sandbox` directly. Returns null when the repo has none
+ * (a Boat-only repo), so those sweeps skip it instead of failing.
+ */
+export async function resolveVercelCredentialsOnly(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<VercelCredentials | null> {
+  const { selected } = await selectVercelCredentialsForRepo(ctx, repoId);
+  if (!selected.ok) return null;
+  return {
+    token: selected.token,
+    teamId: selected.teamId,
+    projectId: selected.projectId,
+  };
 }
 
 /**

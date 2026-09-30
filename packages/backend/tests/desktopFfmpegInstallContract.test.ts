@@ -6,8 +6,10 @@ import { FFMPEG_INSTALL_SCRIPT } from "../convex/_sandbox/ffmpegInstall";
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
 
+// The desktop stack is shared by both providers (ShellDesktop); only the
+// package installs differ.
 const vercelProviderSource = readFileSync(
-  join(testsDir, "../convex/_sandbox/vercelProvider.ts"),
+  join(testsDir, "../convex/_sandbox/shellCapabilities.ts"),
   "utf8",
 );
 
@@ -17,13 +19,13 @@ const snapshotActionsSource = readFileSync(
 );
 
 /**
- * `VercelDesktop.start`'s body with `//` comments stripped — the prose there
+ * `ShellDesktop.start`'s body with `//` comments stripped — the prose there
  * mentions the very gates these tests order against, so an ordering assertion
  * run over the raw text matches the comment instead of the code.
  */
 const desktopStartBody = (() => {
-  const classAt = vercelProviderSource.indexOf("class VercelDesktop");
-  expect(classAt, "VercelDesktop moved or was renamed").toBeGreaterThan(-1);
+  const classAt = vercelProviderSource.indexOf("class ShellDesktop");
+  expect(classAt, "ShellDesktop moved or was renamed").toBeGreaterThan(-1);
   const startAt = vercelProviderSource.indexOf("async start()", classAt);
   expect(startAt).toBeGreaterThan(-1);
   const nextMethodAt = vercelProviderSource.indexOf("\n  async ", startAt + 1);
