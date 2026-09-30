@@ -221,15 +221,23 @@ function evaPreviewAnnotationScript(): void {
       getTools() {
         return Promise.resolve([...compatibilityTools.values()]);
       },
-      executeTool(tool: { name: string }, input: Record<string, unknown>) {
+      executeTool(
+        tool: { name: string },
+        input: Record<string, unknown>,
+        options?: { signal?: AbortSignal },
+      ) {
         const registered = compatibilityTools.get(tool.name);
         if (!registered) {
           return Promise.reject(
             new DOMException("The WebMCP tool is stale", "InvalidStateError"),
           );
         }
+        // Forward the caller's signal so an Eva-side timeout actually reaches
+        // the tool; a fresh controller here could never be aborted.
         return Promise.resolve(
-          registered.execute(input, { signal: new AbortController().signal }),
+          registered.execute(input, {
+            signal: options?.signal ?? new AbortController().signal,
+          }),
         );
       },
     };
@@ -1071,6 +1079,45 @@ function evaPreviewAnnotationScript(): void {
     };
   }
 
+  /**
+   * The fields a declarative form tool advertises. Shared by listing and
+   * invoking so an invoke can only ever fill what the agent was shown.
+   */
+  function declaredFormFields(form: HTMLFormElement): {
+    properties: Record<string, unknown>;
+    required: string[];
+  } {
+    const properties: Record<string, unknown> = {};
+    const required: string[] = [];
+    for (const element of Array.from(form.elements)) {
+      if (
+        !(
+          element instanceof HTMLInputElement ||
+          element instanceof HTMLSelectElement ||
+          element instanceof HTMLTextAreaElement
+        )
+      ) {
+        continue;
+      }
+      if (element.disabled || element.name.trim().length === 0) continue;
+      if (properties[element.name]) continue;
+      properties[element.name] = { type: "string" };
+      if (element.required) required.push(element.name);
+    }
+    return { properties, required };
+  }
+
+  function formToolDescription(form: HTMLFormElement): string {
+    return (
+      form.getAttribute("tooldescription") ??
+      form.getAttribute("data-webmcp-description") ??
+      form.getAttribute("aria-label") ??
+      ""
+    )
+      .trim()
+      .slice(0, 4096);
+  }
+
   function declarativeTools(): EvaWebMcpTool[] {
     const forms = document.querySelectorAll(
       "form[toolname], form[data-webmcp-tool]",
@@ -1082,32 +1129,9 @@ function evaPreviewAnnotationScript(): void {
       const name = normalizeToolName(
         node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool"),
       );
-      const description = (
-        node.getAttribute("tooldescription") ??
-        node.getAttribute("data-webmcp-description") ??
-        node.getAttribute("aria-label") ??
-        ""
-      )
-        .trim()
-        .slice(0, 4096);
+      const description = formToolDescription(node);
       if (!name || !description) continue;
-      const properties: Record<string, unknown> = {};
-      const required: string[] = [];
-      for (const element of Array.from(node.elements)) {
-        if (
-          !(
-            element instanceof HTMLInputElement ||
-            element instanceof HTMLSelectElement ||
-            element instanceof HTMLTextAreaElement
-          )
-        ) {
-          continue;
-        }
-        if (element.disabled || element.name.trim().length === 0) continue;
-        if (properties[element.name]) continue;
-        properties[element.name] = { type: "string" };
-        if (element.required) required.push(element.name);
-      }
+      const { properties, required } = declaredFormFields(node);
       out.push({
         name,
         description,
@@ -1130,7 +1154,10 @@ function evaPreviewAnnotationScript(): void {
       Reflect.get(ctx, "getTools") ?? Reflect.get(ctx, "listTools");
     let raw: unknown = Reflect.get(ctx, "tools");
     if (typeof getter === "function") {
-      raw = await getter.call(ctx);
+      raw = await withPageTimeout(
+        `Listing page WebMCP tools timed out after ${PAGE_TOOL_TIMEOUT_MS / 1000} s`,
+        () => getter.call(ctx),
+      );
     }
     const list = Array.isArray(raw)
       ? raw
@@ -1178,7 +1205,9 @@ function evaPreviewAnnotationScript(): void {
       const formName = normalizeToolName(
         node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool"),
       );
-      if (formName === name) return node;
+      // Same rule as listing: a form without a description is never shown to
+      // the agent, so it must not be submittable either.
+      if (formName === name && formToolDescription(node)) return node;
     }
     return null;
   }
@@ -1187,21 +1216,63 @@ function evaPreviewAnnotationScript(): void {
     form: HTMLFormElement,
     args: Record<string, unknown>,
   ): void {
+    // Only the fields listing advertised. `namedItem` also matches by id, so
+    // an unchecked key could reach controls the tool never declared before
+    // `requestSubmit()` fires the page's real handler.
+    const declared = new Set(Object.keys(declaredFormFields(form).properties));
     for (const key of Object.keys(args)) {
+      if (!declared.has(key)) continue;
       const control = form.elements.namedItem(key);
-      if (
-        !(
-          control instanceof HTMLInputElement ||
-          control instanceof HTMLTextAreaElement ||
-          control instanceof HTMLSelectElement
-        )
-      ) {
-        continue;
-      }
       const value = args[key];
-      control.value =
+      const text =
         typeof value === "string" ? value : JSON.stringify(value ?? "");
+      // A radio group comes back as a RadioNodeList; its `value` setter checks
+      // the matching radio.
+      if (
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLTextAreaElement ||
+        control instanceof HTMLSelectElement ||
+        control instanceof RadioNodeList
+      ) {
+        control.value = text;
+      }
     }
+  }
+
+  const PAGE_TOOL_TIMEOUT_MS = 25_000;
+
+  /**
+   * Runs page-provided WebMCP code under a deadline. The web executor waits
+   * ~30 s and the backend ~40 s, so the page must give up first with a clear
+   * error rather than leave both hanging. The signal is aborted on timeout so
+   * well-behaved tools can stop work too.
+   */
+  function withPageTimeout(
+    timeoutMessage: string,
+    run: (signal: AbortSignal) => unknown,
+  ): Promise<unknown> {
+    const controller = new AbortController();
+    return new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        const error = new Error(timeoutMessage);
+        controller.abort(error);
+        reject(error);
+      }, PAGE_TOOL_TIMEOUT_MS);
+      // `.then(run)` so a synchronous throw from page code becomes a rejection
+      // instead of escaping into the page.
+      Promise.resolve(controller.signal)
+        .then(run)
+        .then(
+          (value) => {
+            window.clearTimeout(timer);
+            resolve(value);
+          },
+          (error: unknown) => {
+            window.clearTimeout(timer);
+            reject(error);
+          },
+        );
+    });
   }
 
   function asInvokeArgs(value: unknown): Record<string, unknown> | null {
@@ -1239,15 +1310,27 @@ function evaPreviewAnnotationScript(): void {
     }
   }
 
-  async function invokeWebMcp(
+  function invokeWebMcp(
     name: string,
     args: Record<string, unknown>,
+  ): Promise<unknown> {
+    // One deadline for lookup and execution together: either can hang.
+    return withPageTimeout(
+      `WebMCP tool "${name}" timed out after ${PAGE_TOOL_TIMEOUT_MS / 1000} s`,
+      (signal) => invokeWebMcpWithSignal(name, args, signal),
+    );
+  }
+
+  async function invokeWebMcpWithSignal(
+    name: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
   ): Promise<unknown> {
     const ctx = modelContextRoot();
     if (ctx) {
       const callTool = Reflect.get(ctx, "callTool");
       if (typeof callTool === "function") {
-        return await callTool.call(ctx, name, args);
+        return await callTool.call(ctx, name, args, { signal });
       }
       const executeTool = Reflect.get(ctx, "executeTool");
       const getter =
@@ -1269,22 +1352,18 @@ function evaPreviewAnnotationScript(): void {
         );
       });
       if (typeof executeTool === "function" && match) {
-        return await executeTool.call(ctx, match, args);
+        return await executeTool.call(ctx, match, args, { signal });
       }
       if (match) {
         const execute = Reflect.get(match, "execute");
         if (typeof execute === "function") {
-          return await execute.call(match, args, {
-            signal: new AbortController().signal,
-          });
+          return await execute.call(match, args, { signal });
         }
       }
     }
     const registered = compatibilityTools.get(name);
     if (registered) {
-      return await registered.execute(args, {
-        signal: new AbortController().signal,
-      });
+      return await registered.execute(args, { signal });
     }
     const form = findDeclarativeForm(name);
     if (form) {

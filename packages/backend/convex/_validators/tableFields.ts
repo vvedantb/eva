@@ -1375,6 +1375,33 @@ export const chatUiPanelFields = {
   createdAt: v.number(),
 };
 
+/**
+ * One agent request to run a WebMCP tool inside the chat's live preview. The
+ * sandbox cannot reach the page, so the request is relayed through the user's
+ * open Eva tab: the MCP tool inserts a row, a tab claims and runs it in the
+ * preview iframe, then writes the result back. Payloads stay JSON strings
+ * because their shape is the previewed app's business, not the database's.
+ */
+export const previewToolCallFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  kind: v.union(v.literal("list"), v.literal("invoke")),
+  /** Invoke only: the page tool to run. */
+  name: v.optional(v.string()),
+  /** Invoke only: the arguments, as JSON object text. */
+  argumentsJson: v.optional(v.string()),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("claimed"),
+    v.literal("done"),
+    v.literal("error"),
+  ),
+  /** Random per-browser-tab id of the tab that won the claim. */
+  claimedBy: v.optional(v.string()),
+  resultJson: v.optional(v.string()),
+  error: v.optional(v.string()),
+  createdAt: v.number(),
+};
+
 /** A captured ExitPlanMode plan, linked to the turn that proposed it. */
 export const proposedPlanFields = {
   sessionId: v.id("sessions"),

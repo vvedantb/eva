@@ -104,7 +104,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         getTools() {
           return Promise.resolve([...compatibilityTools.values()]);
         },
-        executeTool(tool, input) {
+        executeTool(tool, input, options) {
           const registered = compatibilityTools.get(tool.name);
           if (!registered) {
             return Promise.reject(
@@ -112,7 +112,9 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
             );
           }
           return Promise.resolve(
-            registered.execute(input, { signal: new AbortController().signal })
+            registered.execute(input, {
+              signal: options?.signal ?? new AbortController().signal
+            })
           );
         }
       };
@@ -748,6 +750,23 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         source
       };
     }
+    function declaredFormFields(form) {
+      const properties = {};
+      const required = [];
+      for (const element of Array.from(form.elements)) {
+        if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)) {
+          continue;
+        }
+        if (element.disabled || element.name.trim().length === 0) continue;
+        if (properties[element.name]) continue;
+        properties[element.name] = { type: "string" };
+        if (element.required) required.push(element.name);
+      }
+      return { properties, required };
+    }
+    function formToolDescription(form) {
+      return (form.getAttribute("tooldescription") ?? form.getAttribute("data-webmcp-description") ?? form.getAttribute("aria-label") ?? "").trim().slice(0, 4096);
+    }
     function declarativeTools() {
       const forms = document.querySelectorAll(
         "form[toolname], form[data-webmcp-tool]"
@@ -759,19 +778,9 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         const name = normalizeToolName(
           node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool")
         );
-        const description = (node.getAttribute("tooldescription") ?? node.getAttribute("data-webmcp-description") ?? node.getAttribute("aria-label") ?? "").trim().slice(0, 4096);
+        const description = formToolDescription(node);
         if (!name || !description) continue;
-        const properties = {};
-        const required = [];
-        for (const element of Array.from(node.elements)) {
-          if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)) {
-            continue;
-          }
-          if (element.disabled || element.name.trim().length === 0) continue;
-          if (properties[element.name]) continue;
-          properties[element.name] = { type: "string" };
-          if (element.required) required.push(element.name);
-        }
+        const { properties, required } = declaredFormFields(node);
         out.push({
           name,
           description,
@@ -792,7 +801,10 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       const getter = Reflect.get(ctx, "getTools") ?? Reflect.get(ctx, "listTools");
       let raw = Reflect.get(ctx, "tools");
       if (typeof getter === "function") {
-        raw = await getter.call(ctx);
+        raw = await withPageTimeout(
+          \`Listing page WebMCP tools timed out after \${PAGE_TOOL_TIMEOUT_MS / 1e3} s\`,
+          () => getter.call(ctx)
+        );
       }
       const list = Array.isArray(raw) ? raw : raw instanceof Map ? [...raw.values()] : [];
       const out = [];
@@ -826,19 +838,42 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         const formName = normalizeToolName(
           node.getAttribute("toolname") ?? node.getAttribute("data-webmcp-tool")
         );
-        if (formName === name) return node;
+        if (formName === name && formToolDescription(node)) return node;
       }
       return null;
     }
     function fillDeclarativeForm(form, args) {
+      const declared = new Set(Object.keys(declaredFormFields(form).properties));
       for (const key of Object.keys(args)) {
+        if (!declared.has(key)) continue;
         const control = form.elements.namedItem(key);
-        if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement)) {
-          continue;
-        }
         const value = args[key];
-        control.value = typeof value === "string" ? value : JSON.stringify(value ?? "");
+        const text = typeof value === "string" ? value : JSON.stringify(value ?? "");
+        if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement || control instanceof RadioNodeList) {
+          control.value = text;
+        }
       }
+    }
+    const PAGE_TOOL_TIMEOUT_MS = 25e3;
+    function withPageTimeout(timeoutMessage, run) {
+      const controller = new AbortController();
+      return new Promise((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+          const error = new Error(timeoutMessage);
+          controller.abort(error);
+          reject(error);
+        }, PAGE_TOOL_TIMEOUT_MS);
+        Promise.resolve(controller.signal).then(run).then(
+          (value) => {
+            window.clearTimeout(timer);
+            resolve(value);
+          },
+          (error) => {
+            window.clearTimeout(timer);
+            reject(error);
+          }
+        );
+      });
     }
     function asInvokeArgs(value) {
       let candidate = value;
@@ -869,12 +904,18 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
         return { error: "Tool result is not JSON serializable" };
       }
     }
-    async function invokeWebMcp(name, args) {
+    function invokeWebMcp(name, args) {
+      return withPageTimeout(
+        \`WebMCP tool "\${name}" timed out after \${PAGE_TOOL_TIMEOUT_MS / 1e3} s\`,
+        (signal) => invokeWebMcpWithSignal(name, args, signal)
+      );
+    }
+    async function invokeWebMcpWithSignal(name, args, signal) {
       const ctx = modelContextRoot();
       if (ctx) {
         const callTool = Reflect.get(ctx, "callTool");
         if (typeof callTool === "function") {
-          return await callTool.call(ctx, name, args);
+          return await callTool.call(ctx, name, args, { signal });
         }
         const executeTool = Reflect.get(ctx, "executeTool");
         const getter = Reflect.get(ctx, "getTools") ?? Reflect.get(ctx, "listTools");
@@ -887,22 +928,18 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
           return entry !== null && typeof entry === "object" && Reflect.get(entry, "name") === name;
         });
         if (typeof executeTool === "function" && match) {
-          return await executeTool.call(ctx, match, args);
+          return await executeTool.call(ctx, match, args, { signal });
         }
         if (match) {
           const execute = Reflect.get(match, "execute");
           if (typeof execute === "function") {
-            return await execute.call(match, args, {
-              signal: new AbortController().signal
-            });
+            return await execute.call(match, args, { signal });
           }
         }
       }
       const registered = compatibilityTools.get(name);
       if (registered) {
-        return await registered.execute(args, {
-          signal: new AbortController().signal
-        });
+        return await registered.execute(args, { signal });
       }
       const form = findDeclarativeForm(name);
       if (form) {

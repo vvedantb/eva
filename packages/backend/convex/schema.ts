@@ -54,6 +54,7 @@ import {
   sessionDaemonStateFields,
   turnFields,
   chatUiPanelFields,
+  previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
@@ -198,6 +199,12 @@ const schema = defineSchema({
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
+  // tab. Short-lived: cleared when the entity's sandbox stops.
+  previewToolCalls: defineTable(previewToolCallFields).index(
+    "by_parent_status",
+    ["parentId", "status"],
+  ),
   proposedPlans: defineTable(proposedPlanFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_capture_key", ["sessionId", "captureKey"])

@@ -6,6 +6,7 @@ import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
 import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
+import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
 import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
@@ -547,6 +548,28 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
           elementCount: outcome.elementCount,
           elapsedMs: outcome.elapsedMs,
         };
+      }),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // list_preview_tools / call_preview_tool — WebMCP tools in the live preview
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the request is relayed through *this* chat's open
+  // Eva tab, so a caller without an entity has no preview to reach.
+  if (entityKind !== undefined && entityId !== undefined) {
+    tools.push(
+      ...previewTools({
+        create: (request) =>
+          ctx.runMutation(internal.previewToolCalls.create, {
+            entityKind,
+            entityId,
+            ...request,
+          }),
+        get: (id) => ctx.runQuery(internal.previewToolCalls.get, { id }),
+        expire: (id, error) =>
+          ctx.runMutation(internal.previewToolCalls.expire, { id, error }),
       }),
     );
   }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Spinner, toast, WebPreviewNavigationButton } from "@eva/ui";
 import { IconPlug } from "@tabler/icons-react";
-import { parseWebMcpInbound } from "@/lib/components/sandbox/previewWebMcp";
+import { requestWebMcp } from "@/lib/components/sandbox/previewWebMcp";
 import { PreviewWebMcpDialog } from "@/lib/components/sandbox/PreviewWebMcpDialog";
 import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
 import type { WebMcpDiscovery } from "@/lib/components/sandbox/previewWebMcp";
@@ -38,38 +38,23 @@ export function PreviewWebMcpButton({
       return;
     }
 
-    const requestId = crypto.randomUUID();
     setDiscovering(true);
-    const timeoutId = window.setTimeout(() => {
-      finish();
-      toast.error("Page tools timed out");
-    }, DISCOVER_TIMEOUT_MS);
-
-    function finish() {
-      window.removeEventListener("message", onMessage);
-      window.clearTimeout(timeoutId);
-      setDiscovering(false);
-    }
-
-    function onMessage(event: MessageEvent) {
-      if (event.source !== target) return;
-      if (typeof event.data !== "object" || event.data === null) return;
-      const inbound = parseWebMcpInbound(event.data);
-      if (!inbound || inbound.requestId !== requestId) return;
-      // A "result" carrying this requestId is not an answer to discovery: keep
-      // listening rather than silently ending it with no dialog and no error.
-      if (inbound.type === "result") return;
-      finish();
-      if (inbound.type === "error") {
-        toast.error(inbound.message);
-        return;
-      }
-      setDiscovery(inbound.discovery);
-      setOpen(true);
-    }
-
-    window.addEventListener("message", onMessage);
-    target.postMessage({ type: "eva-preview-webmcp-list", requestId }, "*");
+    void requestWebMcp(target, { type: "list" }, DISCOVER_TIMEOUT_MS).then(
+      (inbound) => {
+        setDiscovering(false);
+        if (inbound.type === "error") {
+          toast.error(inbound.message);
+          return;
+        }
+        if (inbound.type !== "tools") return;
+        setDiscovery(inbound.discovery);
+        setOpen(true);
+      },
+      () => {
+        setDiscovering(false);
+        toast.error("Page tools timed out");
+      },
+    );
   }
 
   return (
