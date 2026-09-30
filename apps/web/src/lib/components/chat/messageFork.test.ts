@@ -23,7 +23,12 @@ describe("message fork", () => {
     expect(
       collectForkPrefix(
         [
-          { id: "sys", role: "assistant", content: "Sandbox started", isSystemAlert: true },
+          {
+            id: "sys",
+            role: "assistant",
+            content: "Sandbox started",
+            isSystemAlert: true,
+          },
           ...DEMO_FORK_MESSAGES,
         ],
         DEMO_FORK_THROUGH_ID,
@@ -38,7 +43,9 @@ describe("message fork", () => {
     expect(prompt).toContain("You:\nThe invoices table is empty on billing.");
     expect(prompt).toContain("Eva:\nI'll seed the invoices empty state");
     expect(prompt).not.toContain("upgrade banner");
-    expect(prompt).toContain("Continue this conversation from the last message above");
+    expect(prompt).toContain(
+      "Continue this conversation from the last message above",
+    );
   });
 
   test("title and summary come from the first user turn", () => {

@@ -58,7 +58,9 @@ describe("assistant citations", () => {
     });
     expect(citation).not.toBeNull();
     if (!citation) return;
-    expect(formatCitationBlock(citation)).not.toContain("</cited_assistant> here");
+    expect(formatCitationBlock(citation)).not.toContain(
+      "</cited_assistant> here",
+    );
     expect(formatCitationBlock(citation)).toContain("\\u003c/cited_assistant>");
   });
 });

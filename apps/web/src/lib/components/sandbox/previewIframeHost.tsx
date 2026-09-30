@@ -504,6 +504,12 @@ export function PreviewIframeHost() {
               ref={iframeRefFor(entry.key)}
               src={entry.src}
               title="Preview"
+              // The preview is cross-origin, and Chrome's native WebMCP
+              // (`navigator.modelContext`) refuses to run in a cross-origin
+              // frame unless the embedder delegates the `tools` feature. Without
+              // it every agent `call_preview_tool` fails with a permissions
+              // policy error.
+              allow="tools"
               className={
                 logical ? "block border-0" : "block size-full border-0"
               }

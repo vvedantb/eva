@@ -1,7 +1,12 @@
 "use client";
 
 import { useDeferredValue, useState } from "react";
-import { IconChevronDown, IconChevronUp, IconSearch, IconX } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconChevronUp,
+  IconSearch,
+  IconX,
+} from "@tabler/icons-react";
 import {
   FIND_QUERY_MAX_LENGTH,
   findThreadMatches,

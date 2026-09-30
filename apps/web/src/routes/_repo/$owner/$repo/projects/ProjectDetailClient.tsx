@@ -382,58 +382,58 @@ export function ProjectDetailClient({
 
   const projectSandboxContent = (
     <PendingPreviewSnapshotsProvider>
-    <PendingWebMcpProvider>
-    <OpenSandboxFileProvider onOpenFile={openFile}>
-    <SandboxWorkspace
-      ownerKind="project"
-      ownerId={projectId}
-      storageScope={`project:${projectId}`}
-      sandboxId={projectSandboxId}
-      isActive={isSandboxActive}
-      terminalPanes={project.terminalPanes}
-    >
-      {(panes, owner, terminalPanel) => (
-        <ResizablePanelLayout
-          storageKey="project-sandbox-panel"
-          leftDefaultSize="40%"
-          leftMinWidthPx={350}
-          rightMinWidthPx={300}
-          rightCollapsedSizePx={sandboxRailWidthPx}
-          defaultRightCollapsed={false}
-          expandRightSignal={expandRightSignal}
-          mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          leftPanel={() => (
-            <ProjectSandboxChatPanel
-              projectId={projectId}
-              isSandboxActive={isSandboxActive}
-              isSandboxToggling={isSandboxStarting || isSandboxStopping}
-              onOpenFile={openFile}
-              onViewDiff={openDiffs}
-              onOpenAgentsTab={openAgentsTab}
-              onSandboxToggle={
-                canStartSandbox || isSandboxActive
-                  ? (action) => {
-                      if (action === "start") void handleStartSandbox();
-                      else void handleStopSandbox();
+      <PendingWebMcpProvider>
+        <OpenSandboxFileProvider onOpenFile={openFile}>
+          <SandboxWorkspace
+            ownerKind="project"
+            ownerId={projectId}
+            storageScope={`project:${projectId}`}
+            sandboxId={projectSandboxId}
+            isActive={isSandboxActive}
+            terminalPanes={project.terminalPanes}
+          >
+            {(panes, owner, terminalPanel) => (
+              <ResizablePanelLayout
+                storageKey="project-sandbox-panel"
+                leftDefaultSize="40%"
+                leftMinWidthPx={350}
+                rightMinWidthPx={300}
+                rightCollapsedSizePx={sandboxRailWidthPx}
+                defaultRightCollapsed={false}
+                expandRightSignal={expandRightSignal}
+                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                leftPanel={() => (
+                  <ProjectSandboxChatPanel
+                    projectId={projectId}
+                    isSandboxActive={isSandboxActive}
+                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    onOpenFile={openFile}
+                    onViewDiff={openDiffs}
+                    onOpenAgentsTab={openAgentsTab}
+                    onSandboxToggle={
+                      canStartSandbox || isSandboxActive
+                        ? (action) => {
+                            if (action === "start") void handleStartSandbox();
+                            else void handleStopSandbox();
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-            />
-          )}
-          rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-            projectSandboxPanel(
-              panes,
-              owner,
-              terminalPanel,
-              rightPanelCollapsed,
-              onToggleRightPanel,
-            )
-          }
-        />
-      )}
-    </SandboxWorkspace>
-    </OpenSandboxFileProvider>
-    </PendingWebMcpProvider>
+                  />
+                )}
+                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+                  projectSandboxPanel(
+                    panes,
+                    owner,
+                    terminalPanel,
+                    rightPanelCollapsed,
+                    onToggleRightPanel,
+                  )
+                }
+              />
+            )}
+          </SandboxWorkspace>
+        </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
     </PendingPreviewSnapshotsProvider>
   );
 

@@ -102,7 +102,8 @@ export function forkThreadTitle(prefix: ForkTranscriptPrefix): string {
   const source = (firstUser?.text ?? prefix.turns[0]?.text ?? "chat")
     .replace(/\s+/g, " ")
     .trim();
-  const clipped = source.length > 48 ? `${source.slice(0, 48).trimEnd()}…` : source;
+  const clipped =
+    source.length > 48 ? `${source.slice(0, 48).trimEnd()}…` : source;
   return `Fork · ${clipped}`;
 }
 

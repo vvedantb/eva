@@ -14,7 +14,9 @@ import {
 
 describe("in-thread find", () => {
   test("matches case-insensitive non-overlapping substrings", () => {
-    expect(collectCaseInsensitiveSubstringRanges("Invoice invoices", "invoice")).toEqual([
+    expect(
+      collectCaseInsensitiveSubstringRanges("Invoice invoices", "invoice"),
+    ).toEqual([
       { startOffset: 0, endOffset: 7 },
       { startOffset: 8, endOffset: 15 },
     ]);
@@ -35,9 +37,9 @@ describe("in-thread find", () => {
       "asst-1",
       "asst-1",
     ]);
-    expect(threadFindCountLabel(DEMO_THREAD_FIND_QUERY, matches.length, 0)).toBe(
-      "1 / 3",
-    );
+    expect(
+      threadFindCountLabel(DEMO_THREAD_FIND_QUERY, matches.length, 0),
+    ).toBe("1 / 3");
     expect(threadFindCountLabel(DEMO_THREAD_FIND_QUERY, 0, 0)).toBe(
       "No results",
     );

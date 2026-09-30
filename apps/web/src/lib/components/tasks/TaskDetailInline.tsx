@@ -288,61 +288,61 @@ export function TaskDetailInline({
 
   const sandboxContent = (
     <PendingPreviewSnapshotsProvider>
-    <PendingWebMcpProvider>
-    <OpenSandboxFileProvider onOpenFile={openFile}>
-    <SandboxWorkspace
-      ownerKind="task"
-      ownerId={taskId}
-      storageScope={`task:${taskId}`}
-      sandboxId={sandboxId}
-      isActive={isSandboxActive}
-      terminalPanes={task.terminalPanes}
-    >
-      {(panes, owner, terminalPanel) => (
-        <ResizablePanelLayout
-          storageKey="task-sandbox-panel"
-          leftDefaultSize="40%"
-          leftMinWidthPx={350}
-          rightMinWidthPx={300}
-          rightCollapsedSizePx={sandboxRailWidthPx}
-          defaultRightCollapsed={false}
-          expandRightSignal={expandRightSignal}
-          mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          leftPanel={() => (
-            <TaskSandboxChatPanel
-              taskId={taskId}
-              isSandboxActive={isSandboxActive}
-              isSandboxToggling={isSandboxStarting || isSandboxStopping}
-              onOpenFile={openFile}
-              onViewDiff={openDiffs}
-              onOpenAgentsTab={() => {
-                handleSandboxTabChange("agents");
-                setExpandRightSignal((n) => n + 1);
-              }}
-              onSandboxToggle={
-                canStartSandbox || isSandboxActive
-                  ? (action) => {
-                      if (action === "start") void handleStartSandbox();
-                      else void handleStopSandbox();
+      <PendingWebMcpProvider>
+        <OpenSandboxFileProvider onOpenFile={openFile}>
+          <SandboxWorkspace
+            ownerKind="task"
+            ownerId={taskId}
+            storageScope={`task:${taskId}`}
+            sandboxId={sandboxId}
+            isActive={isSandboxActive}
+            terminalPanes={task.terminalPanes}
+          >
+            {(panes, owner, terminalPanel) => (
+              <ResizablePanelLayout
+                storageKey="task-sandbox-panel"
+                leftDefaultSize="40%"
+                leftMinWidthPx={350}
+                rightMinWidthPx={300}
+                rightCollapsedSizePx={sandboxRailWidthPx}
+                defaultRightCollapsed={false}
+                expandRightSignal={expandRightSignal}
+                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                leftPanel={() => (
+                  <TaskSandboxChatPanel
+                    taskId={taskId}
+                    isSandboxActive={isSandboxActive}
+                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    onOpenFile={openFile}
+                    onViewDiff={openDiffs}
+                    onOpenAgentsTab={() => {
+                      handleSandboxTabChange("agents");
+                      setExpandRightSignal((n) => n + 1);
+                    }}
+                    onSandboxToggle={
+                      canStartSandbox || isSandboxActive
+                        ? (action) => {
+                            if (action === "start") void handleStartSandbox();
+                            else void handleStopSandbox();
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-            />
-          )}
-          rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-            sandboxRightPanel(
-              panes,
-              owner,
-              terminalPanel,
-              rightPanelCollapsed,
-              onToggleRightPanel,
-            )
-          }
-        />
-      )}
-    </SandboxWorkspace>
-    </OpenSandboxFileProvider>
-    </PendingWebMcpProvider>
+                  />
+                )}
+                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+                  sandboxRightPanel(
+                    panes,
+                    owner,
+                    terminalPanel,
+                    rightPanelCollapsed,
+                    onToggleRightPanel,
+                  )
+                }
+              />
+            )}
+          </SandboxWorkspace>
+        </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
     </PendingPreviewSnapshotsProvider>
   );
 

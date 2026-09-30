@@ -301,78 +301,78 @@ export function SessionDetailClient({
   return (
     <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
       <PendingPreviewSnapshotsProvider>
-      <PendingWebMcpProvider>
-      <OpenSandboxFileProvider onOpenFile={onOpenFile}>
-      <SandboxWorkspace
-        ownerKind="session"
-        ownerId={sessionId}
-        storageScope={`session:${sessionId}`}
-        sandboxId={session.sandboxId}
-        isActive={isSandboxActive}
-        terminalPanes={session.terminalPanes}
-        hotkeyEnabled={isRouteActive}
-      >
-        {(panes, owner, terminalPanel) => (
-          <ResizablePanelLayout
-            leftPanel={({ rightPanelCollapsed }) =>
-              chatPanel(rightPanelCollapsed)
-            }
-            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
-              <SandboxPanel
-                sessionId={sessionId}
-                sandboxId={session.sandboxId}
-                isActive={isSandboxActive}
-                isRouteActive={isRouteActive}
-                repoId={session.repoId}
-                prUrl={session.prUrl}
-                // Prefer session (set after services start); fall back to app
-                // settings so preview doesn't default to 3000 before that lands.
-                devPort={session.devPort ?? repo.devPort}
-                devCommand={session.devCommand ?? repo.devCommand}
-                owner={owner}
-                panes={panes}
-                terminalPanel={terminalPanel}
-                planContent={session.planContent}
-                messages={messages ?? []}
-                backgroundAgents={session.backgroundAgents}
-                streamingActivity={streaming?.currentActivity}
-                isArchived={isReadOnly}
-                activeTab={activeSandboxTab}
-                onTabChange={onSandboxTabChange}
-                agentBrowsingAt={session.agentBrowsingAt}
-                onStartSandbox={
-                  isReadOnly || isSandboxStopping || isStopPending
-                    ? undefined
-                    : () => {
-                        void handleSandboxToggle("start");
+        <PendingWebMcpProvider>
+          <OpenSandboxFileProvider onOpenFile={onOpenFile}>
+            <SandboxWorkspace
+              ownerKind="session"
+              ownerId={sessionId}
+              storageScope={`session:${sessionId}`}
+              sandboxId={session.sandboxId}
+              isActive={isSandboxActive}
+              terminalPanes={session.terminalPanes}
+              hotkeyEnabled={isRouteActive}
+            >
+              {(panes, owner, terminalPanel) => (
+                <ResizablePanelLayout
+                  leftPanel={({ rightPanelCollapsed }) =>
+                    chatPanel(rightPanelCollapsed)
+                  }
+                  rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
+                    <SandboxPanel
+                      sessionId={sessionId}
+                      sandboxId={session.sandboxId}
+                      isActive={isSandboxActive}
+                      isRouteActive={isRouteActive}
+                      repoId={session.repoId}
+                      prUrl={session.prUrl}
+                      // Prefer session (set after services start); fall back to app
+                      // settings so preview doesn't default to 3000 before that lands.
+                      devPort={session.devPort ?? repo.devPort}
+                      devCommand={session.devCommand ?? repo.devCommand}
+                      owner={owner}
+                      panes={panes}
+                      terminalPanel={terminalPanel}
+                      planContent={session.planContent}
+                      messages={messages ?? []}
+                      backgroundAgents={session.backgroundAgents}
+                      streamingActivity={streaming?.currentActivity}
+                      isArchived={isReadOnly}
+                      activeTab={activeSandboxTab}
+                      onTabChange={onSandboxTabChange}
+                      agentBrowsingAt={session.agentBrowsingAt}
+                      onStartSandbox={
+                        isReadOnly || isSandboxStopping || isStopPending
+                          ? undefined
+                          : () => {
+                              void handleSandboxToggle("start");
+                            }
                       }
-                }
-                isSandboxStarting={isSandboxStarting}
-                collapsed={rightPanelCollapsed}
-                onToggle={onToggleRightPanel}
-                miniPlayer={
-                  session.numId !== undefined
-                    ? {
-                        returnTo: `${basePath}/sessions/${session.numId}/preview`,
-                        title: session.title,
+                      isSandboxStarting={isSandboxStarting}
+                      collapsed={rightPanelCollapsed}
+                      onToggle={onToggleRightPanel}
+                      miniPlayer={
+                        session.numId !== undefined
+                          ? {
+                              returnTo: `${basePath}/sessions/${session.numId}/preview`,
+                              title: session.title,
+                            }
+                          : undefined
                       }
-                    : undefined
-                }
-              />
-            )}
-            leftDefaultSize="40%"
-            leftMinWidthPx={350}
-            rightMinWidthPx={300}
-            rightCollapsedSizePx={sandboxRailWidthPx}
-            storageKey="sandbox-collapsed"
-            expandRightSignal={expandRightSignal}
-            hotkeyEnabled={isRouteActive}
-            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          />
-        )}
-      </SandboxWorkspace>
-      </OpenSandboxFileProvider>
-      </PendingWebMcpProvider>
+                    />
+                  )}
+                  leftDefaultSize="40%"
+                  leftMinWidthPx={350}
+                  rightMinWidthPx={300}
+                  rightCollapsedSizePx={sandboxRailWidthPx}
+                  storageKey="sandbox-collapsed"
+                  expandRightSignal={expandRightSignal}
+                  hotkeyEnabled={isRouteActive}
+                  mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                />
+              )}
+            </SandboxWorkspace>
+          </OpenSandboxFileProvider>
+        </PendingWebMcpProvider>
       </PendingPreviewSnapshotsProvider>
     </PendingReviewCommentsProvider>
   );

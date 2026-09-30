@@ -108,8 +108,8 @@ function CitePreview() {
           >
             <p ref={quoteRef}>{DEMO_ASSISTANT_CITATION.text}</p>
             <p className="mt-3 text-muted-foreground">
-              I can wire the invoices table next if you want that empty state
-              to match production.
+              I can wire the invoices table next if you want that empty state to
+              match production.
             </p>
           </div>
         </div>
@@ -182,9 +182,7 @@ function IgnoreWhitespacePreview() {
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Ignore whitespace
         </p>
-        <h1 className="mt-1 text-xl font-semibold">
-          Hide indent-only noise
-        </h1>
+        <h1 className="mt-1 text-xl font-semibold">Hide indent-only noise</h1>
       </div>
       <div className="mt-8 border-y border-border">
         <DiffsToolbar
@@ -291,9 +289,7 @@ function WebMcpPreview() {
 
 function SnapshotPreview() {
   return (
-    <PendingPreviewSnapshotsProvider
-      initialSnapshots={[DEMO_PREVIEW_SNAPSHOT]}
-    >
+    <PendingPreviewSnapshotsProvider initialSnapshots={[DEMO_PREVIEW_SNAPSHOT]}>
       <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Semantic preview snapshot

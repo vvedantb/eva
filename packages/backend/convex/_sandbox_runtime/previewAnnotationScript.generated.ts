@@ -905,10 +905,21 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       }
     }
     function invokeWebMcp(name, args) {
+      const form = findDeclarativeForm(name);
+      const waitsForUser = form !== null && !form.hasAttribute("toolautosubmit");
+      const timeoutMessage = waitsForUser ? \`WebMCP form tool "\${name}" was filled but not submitted within \${PAGE_TOOL_TIMEOUT_MS / 1e3} s: the form has no toolautosubmit attribute, so the browser waits for the user to press submit.\` : \`WebMCP tool "\${name}" timed out after \${PAGE_TOOL_TIMEOUT_MS / 1e3} s\`;
       return withPageTimeout(
-        \`WebMCP tool "\${name}" timed out after \${PAGE_TOOL_TIMEOUT_MS / 1e3} s\`,
+        timeoutMessage,
         (signal) => invokeWebMcpWithSignal(name, args, signal)
       );
+    }
+    function parseJsonText(value) {
+      if (typeof value !== "string") return value;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
     }
     async function invokeWebMcpWithSignal(name, args, signal) {
       const ctx = modelContextRoot();
@@ -928,7 +939,14 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
           return entry !== null && typeof entry === "object" && Reflect.get(entry, "name") === name;
         });
         if (typeof executeTool === "function" && match) {
-          return await executeTool.call(ctx, match, args, { signal });
+          const native = typeof Reflect.get(match, "inputSchema") === "string";
+          const result = await executeTool.call(
+            ctx,
+            match,
+            native ? JSON.stringify(args) : args,
+            { signal }
+          );
+          return native ? parseJsonText(result) : result;
         }
         if (match) {
           const execute = Reflect.get(match, "execute");

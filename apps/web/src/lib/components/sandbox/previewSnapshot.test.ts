@@ -90,9 +90,9 @@ describe("preview snapshot protocol", () => {
     expect(block).toContain('button "Upgrade" button.upgrade');
     expect(block).toContain("[error] Failed to load invoices: 500");
     expect(block).toContain("500 /api/invoices");
-    expect(appendSnapshotsToPrompt("Look at this", [DEMO_PREVIEW_SNAPSHOT])).toBe(
-      `Look at this\n\n${block}`,
-    );
+    expect(
+      appendSnapshotsToPrompt("Look at this", [DEMO_PREVIEW_SNAPSHOT]),
+    ).toBe(`Look at this\n\n${block}`);
   });
 
   test("chip label uses the path and control count", () => {
@@ -138,9 +138,9 @@ describe("hostile pages cannot break out of the prompt block", () => {
     expect(snapshot.interactiveElements).toEqual([]);
     expect(snapshot.accessibilityTree).toEqual([]);
     expect(snapshot.consoleEntries).toEqual([]);
-    expect(formatSnapshotPrompt(snapshot).match(/<\/preview_snapshot>/g)).toHaveLength(
-      1,
-    );
+    expect(
+      formatSnapshotPrompt(snapshot).match(/<\/preview_snapshot>/g),
+    ).toHaveLength(1);
   });
 
   test("url, title and visible text cannot close the block either", () => {

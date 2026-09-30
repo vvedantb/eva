@@ -89,7 +89,8 @@ function toJsonValue(
   if (budget.remaining <= 0 || depth > MAX_SCHEMA_DEPTH) return undefined;
   budget.remaining -= 1;
   if (value === null) return null;
-  if (typeof value === "string") return value.slice(0, MAX_SCHEMA_STRING_LENGTH);
+  if (typeof value === "string")
+    return value.slice(0, MAX_SCHEMA_STRING_LENGTH);
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean") return value;
   if (typeof value !== "object") return undefined;
@@ -297,7 +298,10 @@ function toRequestMessage(
  * list's requestId is not a discovery, so keep listening rather than ending
  * the request with nothing to show.
  */
-function answersRequest(request: WebMcpRequest, inbound: WebMcpInbound): boolean {
+function answersRequest(
+  request: WebMcpRequest,
+  inbound: WebMcpInbound,
+): boolean {
   if (inbound.type === "error") return true;
   return request.type === "list"
     ? inbound.type === "tools"
@@ -374,19 +378,13 @@ export function toWebMcpRequest(
   return { ok: true, request: { type: "invoke", name, arguments: args } };
 }
 
-/**
- * Well under Convex's 1 MiB document limit, leaving room for the rest of the
- * row. Truncating JSON would corrupt it, so an oversized result is an error.
- */
-const MAX_RESULT_JSON_LENGTH = 256_000;
-const MAX_ERROR_LENGTH = 2_000;
-
 export type PreviewToolCallOutcome =
   | { readonly resultJson: string }
   | { readonly error: string };
 
+/** Length caps live in the backend's `complete`, which marks truncation. */
 export function previewToolCallError(message: string): PreviewToolCallOutcome {
-  return { error: message.slice(0, MAX_ERROR_LENGTH) || "Unknown error" };
+  return { error: message.trim() || "Unknown error" };
 }
 
 /** What to write back for a bridge reply. Total: never throws. */
@@ -402,16 +400,12 @@ export function toPreviewToolCallOutcome(
       inbound.type === "tools" ? inbound.discovery : inbound.result,
     );
   } catch {
-    return previewToolCallError("The page tool returned a value that is not JSON");
-  }
-  // JSON.stringify(undefined) is undefined: a tool that returns nothing.
-  const text = resultJson ?? "null";
-  if (text.length > MAX_RESULT_JSON_LENGTH) {
     return previewToolCallError(
-      `The page tool result is larger than ${MAX_RESULT_JSON_LENGTH} characters`,
+      "The page tool returned a value that is not JSON",
     );
   }
-  return { resultJson: text };
+  // JSON.stringify(undefined) is undefined: a tool that returns nothing.
+  return { resultJson: resultJson ?? "null" };
 }
 
 function escapeWebMcpText(value: string): string {
@@ -466,7 +460,8 @@ export const DEMO_WEBMCP_DISCOVERY: WebMcpDiscovery = {
     {
       name: "billing.refund",
       title: "Refund invoice",
-      description: "Refund an invoice by id. Amount defaults to the remaining balance.",
+      description:
+        "Refund an invoice by id. Amount defaults to the remaining balance.",
       inputSchema: {
         type: "object",
         properties: {
@@ -481,7 +476,8 @@ export const DEMO_WEBMCP_DISCOVERY: WebMcpDiscovery = {
     {
       name: "billing.retryInvoices",
       title: "Retry failed invoices",
-      description: "Replay the last failed invoice fetch without leaving the page.",
+      description:
+        "Replay the last failed invoice fetch without leaving the page.",
       inputSchema: { type: "object", properties: {} },
       readOnly: false,
       source: "modelContext",

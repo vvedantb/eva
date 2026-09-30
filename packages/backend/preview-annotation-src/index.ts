@@ -771,9 +771,7 @@ function evaPreviewAnnotationScript(): void {
     // that is nothing but a hash), rather than rendering "<div.>".
     const stripped = rawClass ? stripClassHash(rawClass) : "";
     const cls =
-      el instanceof HTMLElement && rawClass
-        ? "." + (stripped || rawClass)
-        : "";
+      el instanceof HTMLElement && rawClass ? "." + (stripped || rawClass) : "";
     const react = collectReactNames(el);
     const reactPrefix = react[0] ? react[0] + " " : "";
     return reactPrefix + "<" + tag + cls + ">";
@@ -917,7 +915,10 @@ function evaPreviewAnnotationScript(): void {
   function accessibleName(element: HTMLElement): string {
     const labelled = element.getAttribute("aria-label");
     if (labelled) return labelled.replace(/\s+/g, " ").trim().slice(0, 80);
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
       const fromLabel = element.labels?.item(0)?.textContent;
       if (fromLabel) return fromLabel.replace(/\s+/g, " ").trim().slice(0, 80);
       const placeholder = element.getAttribute("placeholder");
@@ -1060,10 +1061,13 @@ function evaPreviewAnnotationScript(): void {
     const name = normalizeToolName(Reflect.get(value, "name"));
     const descriptionRaw = Reflect.get(value, "description");
     const description =
-      typeof descriptionRaw === "string" ? descriptionRaw.trim().slice(0, 4096) : "";
+      typeof descriptionRaw === "string"
+        ? descriptionRaw.trim().slice(0, 4096)
+        : "";
     if (!name || !description) return null;
     const titleRaw = Reflect.get(value, "title");
-    const title = typeof titleRaw === "string" ? titleRaw.trim().slice(0, 256) : "";
+    const title =
+      typeof titleRaw === "string" ? titleRaw.trim().slice(0, 256) : "";
     const annotationsRaw = Reflect.get(value, "annotations");
     const readOnly =
       annotationsRaw !== null &&
@@ -1315,10 +1319,26 @@ function evaPreviewAnnotationScript(): void {
     args: Record<string, unknown>,
   ): Promise<unknown> {
     // One deadline for lookup and execution together: either can hang.
-    return withPageTimeout(
-      `WebMCP tool "${name}" timed out after ${PAGE_TOOL_TIMEOUT_MS / 1000} s`,
-      (signal) => invokeWebMcpWithSignal(name, args, signal),
+    // A native `<form toolname>` without `toolautosubmit` is filled and then
+    // waits for a person to press submit, so say that rather than "timed out".
+    const form = findDeclarativeForm(name);
+    const waitsForUser = form !== null && !form.hasAttribute("toolautosubmit");
+    const timeoutMessage = waitsForUser
+      ? `WebMCP form tool "${name}" was filled but not submitted within ${PAGE_TOOL_TIMEOUT_MS / 1000} s: the form has no toolautosubmit attribute, so the browser waits for the user to press submit.`
+      : `WebMCP tool "${name}" timed out after ${PAGE_TOOL_TIMEOUT_MS / 1000} s`;
+    return withPageTimeout(timeoutMessage, (signal) =>
+      invokeWebMcpWithSignal(name, args, signal),
     );
+  }
+
+  /** Native tool results arrive as JSON text; unwrap them when they parse. */
+  function parseJsonText(value: unknown): unknown {
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
   }
 
   async function invokeWebMcpWithSignal(
@@ -1352,7 +1372,17 @@ function evaPreviewAnnotationScript(): void {
         );
       });
       if (typeof executeTool === "function" && match) {
-        return await executeTool.call(ctx, match, args, { signal });
+        // Chrome's native ModelContext takes the arguments as JSON text and
+        // answers with JSON text; it also reports `inputSchema` as a string,
+        // which is how a native tool is told apart from a polyfill's.
+        const native = typeof Reflect.get(match, "inputSchema") === "string";
+        const result: unknown = await executeTool.call(
+          ctx,
+          match,
+          native ? JSON.stringify(args) : args,
+          { signal },
+        );
+        return native ? parseJsonText(result) : result;
       }
       if (match) {
         const execute = Reflect.get(match, "execute");

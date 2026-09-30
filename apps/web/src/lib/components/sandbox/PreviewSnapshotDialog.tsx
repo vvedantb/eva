@@ -34,7 +34,10 @@ export function PreviewSnapshotDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" data-testid="preview-snapshot-dialog">
+      <DialogContent
+        className="max-w-2xl"
+        data-testid="preview-snapshot-dialog"
+      >
         <DialogHeader className="pr-8">
           <DialogTitle className="text-base">Page snapshot</DialogTitle>
           <DialogDescription className="font-mono text-xs">

@@ -107,7 +107,9 @@ export async function awaitPreviewToolCall(
   if (gaveUpFrom !== null) return errorResult(timeoutMessage(gaveUpFrom));
   const row = await relay.get(id);
   return row === null
-    ? errorResult("The request was cancelled because this chat's sandbox stopped.")
+    ? errorResult(
+        "The request was cancelled because this chat's sandbox stopped.",
+      )
     : resultOf(row);
 }
 
@@ -138,7 +140,9 @@ export function previewTools(
         name: z
           .string()
           .regex(/^[A-Za-z0-9_.-]{1,128}$/)
-          .describe("The tool name, exactly as list_preview_tools returned it."),
+          .describe(
+            "The tool name, exactly as list_preview_tools returned it.",
+          ),
         arguments: z
           .record(z.string(), z.unknown())
           .optional()

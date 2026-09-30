@@ -5,9 +5,16 @@ import {
   type DatabaseWriter,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { assertMessageParentAccess, authMutation, authQuery } from "../functions";
+import {
+  assertMessageParentAccess,
+  authMutation,
+  authQuery,
+} from "../functions";
 import { previewToolCallFields } from "../validators";
-import { chatEntityKindValidator, resolveChatParent } from "../_chat/chatParent";
+import {
+  chatEntityKindValidator,
+  resolveChatParent,
+} from "../_chat/chatParent";
 
 /**
  * Relay for agent → live-preview WebMCP tool calls. The sandbox cannot reach
@@ -82,7 +89,10 @@ export const claim = authMutation({
     if (!row) return false;
     await assertMessageParentAccess(ctx.db, row.parentId, ctx.userId);
     if (row.status !== "pending") return false;
-    await ctx.db.patch(row._id, { status: "claimed", claimedBy: args.clientId });
+    await ctx.db.patch(row._id, {
+      status: "claimed",
+      claimedBy: args.clientId,
+    });
     return true;
   },
 });

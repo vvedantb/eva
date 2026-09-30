@@ -118,9 +118,7 @@ function parseElement(value: unknown): PreviewSnapshotElement | null {
   return { role, name, selector, bbox };
 }
 
-function parseConsoleEntry(
-  value: unknown,
-): PreviewSnapshotConsoleEntry | null {
+function parseConsoleEntry(value: unknown): PreviewSnapshotConsoleEntry | null {
   const record = asRecord(value);
   if (!record) return null;
   const level = asToken(record.level);
@@ -130,9 +128,7 @@ function parseConsoleEntry(
   return { level, text, at };
 }
 
-function parseNetworkEntry(
-  value: unknown,
-): PreviewSnapshotNetworkEntry | null {
+function parseNetworkEntry(value: unknown): PreviewSnapshotNetworkEntry | null {
   const record = asRecord(value);
   if (!record) return null;
   const url = asCappedString(record.url, MAX_URL_LENGTH);
@@ -173,7 +169,10 @@ function parseSnapshot(value: unknown): PreviewSnapshot | null {
   const url = asCappedString(record.url, MAX_URL_LENGTH);
   const title = asCappedString(record.title, MAX_TITLE_LENGTH);
   const loading = asBoolean(record.loading);
-  const visibleText = asCappedString(record.visibleText, MAX_VISIBLE_TEXT_LENGTH);
+  const visibleText = asCappedString(
+    record.visibleText,
+    MAX_VISIBLE_TEXT_LENGTH,
+  );
   if (!url || title === null || loading === null || visibleText === null) {
     return null;
   }
