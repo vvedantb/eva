@@ -142,7 +142,7 @@ export function RepositorySettingsSection({
           title="Sandbox provider"
           description={
             hasBoatApiKey === false && sandboxProvider !== "boat"
-              ? "Where new sandboxes run. Add BOAT_API_KEY in Env vars to use Boat."
+              ? "Where new sandboxes run. Add BOAT_API_KEY in Env Variables to use Boat."
               : "Where new sandboxes run. Running sandboxes stay put; switching rebuilds the snapshot."
           }
           action={

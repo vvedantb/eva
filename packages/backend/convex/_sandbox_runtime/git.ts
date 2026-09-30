@@ -1025,7 +1025,16 @@ export async function cloneRepoInto(
   const githubToken = await getInstallationToken(installationId);
   const repoUrl = `https://github.com/${owner}/${name}.git`;
 
-  await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
+  // Empty a symlinked destination instead of removing it: on Boat the
+  // workspace is a link into the snapshot-captured home dir (see
+  // BOOTSTRAP_SCRIPT in _sandbox/boatProvider.ts), and replacing it with a
+  // plain directory would drop the repo from every resume and fork.
+  const dest = quote([destDir]);
+  await execHandle(
+    sandbox,
+    `if [ -L ${dest} ]; then find ${dest}/ -mindepth 1 -maxdepth 1 -exec rm -rf {} +; else rm -rf ${dest}; fi`,
+    30,
+  );
 
   const maxCloneAttempts = 3;
   for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {

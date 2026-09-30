@@ -65,7 +65,9 @@ export const CONVEX_FUNCTIONS_READY_ATTEMPTS = 60;
  * withhold. `repoDir` is the seed script's cwd.
  */
 export function buildConvexPostSeedPushLines(repoDir: string): string[] {
-  const findConfig = `find ${repoDir} -name node_modules -prune -o -path "*/.convex/local/*/config.json" -print`;
+  // -H: follow the start path when it is a symlink (Boat links the workspace
+  // into the snapshot-captured home dir); plain find would list nothing.
+  const findConfig = `find -H ${repoDir} -name node_modules -prune -o -path "*/.convex/local/*/config.json" -print`;
   const readField = (field: string) =>
     `python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))${field})' "$eva_cfg"`;
   return [

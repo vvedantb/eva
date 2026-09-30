@@ -74,6 +74,14 @@ function boatMachineType(): BoatMachineType {
 
 /** Boat's sync command cap; longer commands run detached and are polled. */
 const SYNC_EXEC_MAX_SECONDS = 600;
+/**
+ * Floor on create/fork readiness waits. Callers pass Vercel-tuned values (30s
+ * from a snapshot, where restores are sub-second); a Boat fork of a full
+ * seeded Eva template took 40s in the 2026-09-30 run.
+ */
+const MIN_READY_TIMEOUT_SECONDS = 180;
+/** Auto-stop ceiling on Boat free-trial accounts. */
+const TRIAL_MAX_TTL_SECONDS = 2 * 60 * 60;
 /** Boat's own maximum numeric TTL (30 days). */
 const MAX_TTL_SECONDS = 30 * 24 * 60 * 60;
 const STOP_CONFIRMATION_TIMEOUT_MS = 180_000;
@@ -90,19 +98,43 @@ function shq(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+/** Home-directory store behind the paths Boat snapshots would otherwise drop. */
+const PERSIST_ROOT = "/home/user/.eva-persist";
+
 /**
- * Runs once per create, before any caller I/O: the directories and symlinks the
- * Vercel-era runtime hard-codes, and a temp dir on the same filesystem as the
- * repo (Convex's local backend renames temp files into its storage dir and
- * fails with EXDEV when /tmp is a different mount).
+ * Paths the Vercel-era runtime hard-codes, each linked into {@link PERSIST_ROOT}.
+ * Boat snapshots (every resume and fork) capture only /home/user, Docker
+ * volumes and system dirs — never /tmp, /vercel or /home/eva — so without the
+ * links a resumed or forked sandbox came back without its repo, env file or
+ * agent config (seen in the 2026-09-30 e2e: a fork lost /tmp/repo).
  */
-const BOOTSTRAP_SCRIPT = [
-  "sudo mkdir -p /vercel/sandbox /tmp/repo /home/eva /home/user/tmp",
-  "sudo chown user:user /vercel/sandbox /tmp/repo /home/user/tmp",
-  "sudo chmod 777 /home/eva",
+const PERSISTED_PATHS: ReadonlyArray<readonly [path: string, store: string]> = [
+  ["/tmp/repo", "repo"],
+  ["/tmp/workspace", "workspace"],
+  ["/vercel/sandbox", "vercel-sandbox"],
+  ["/home/eva", "home-eva"],
+];
+
+/**
+ * Runs on every create and every resume, before any caller I/O: recreates the
+ * links above (they live outside the captured dirs, so they vanish on each
+ * boot while their targets persist), and a temp dir on the same filesystem as
+ * the repo (Convex's local backend renames temp files into its storage dir
+ * and fails with EXDEV across mounts). Idempotent.
+ */
+export const BOOTSTRAP_SCRIPT = [
+  "set -e",
+  `mkdir -p /home/user/tmp ${PERSISTED_PATHS.map(([, store]) => `${PERSIST_ROOT}/${store}`).join(" ")}`,
+  `chmod 777 ${PERSIST_ROOT}/home-eva`,
+  // A real directory at a linked path (created before the link existed) is
+  // merged into the store, then replaced by the link.
+  'link() { if [ -L "$1" ]; then return 0; fi; if [ -d "$1" ]; then sudo cp -a "$1/." "$2/"; sudo rm -rf "$1"; fi; sudo mkdir -p "$(dirname "$1")"; sudo ln -sfn "$2" "$1"; sudo chown -h user:user "$1"; }',
+  ...PERSISTED_PATHS.map(
+    ([path, store]) => `link ${path} ${PERSIST_ROOT}/${store}`,
+  ),
   "[ -e /home/vercel-sandbox ] || sudo ln -s /home/user /home/vercel-sandbox",
   "printf '%s\\n' 'export TMPDIR=/home/user/tmp' 'export CONVEX_TMPDIR=/home/user/tmp' | sudo tee /etc/profile.d/eva-boat.sh >/dev/null",
-].join(" && ");
+].join("\n");
 
 /** Maps Boat's sandbox state onto the neutral {@link SandboxState}. */
 export function normalizeBoatState(raw: string): SandboxState {
@@ -474,7 +506,18 @@ class BoatSandboxHandle implements SandboxHandle {
         throw providerError(`boat resume failed (sandbox=${this.id})`, error);
       }
     }
-    await this.waitForRunning(timeoutSeconds);
+    await this.waitForRunning(
+      Math.max(timeoutSeconds, MIN_READY_TIMEOUT_SECONDS),
+    );
+    await this.bootstrap();
+  }
+
+  /** See {@link BOOTSTRAP_SCRIPT}; must run after every boot, before caller I/O. */
+  async bootstrap(): Promise<void> {
+    const boot = await this.exec(BOOTSTRAP_SCRIPT, { timeoutSeconds: 60 });
+    if (boot.exitCode !== 0) {
+      throw new Error(`boat bootstrap failed: ${boot.output.slice(-500)}`);
+    }
   }
 
   async stop(): Promise<void> {
@@ -594,7 +637,6 @@ class BoatSandboxClient implements SandboxClient {
     );
     const body = {
       type: boatMachineType(),
-      ttlSeconds,
       // Never hand the Boat account's own secrets/repos to eva sandboxes.
       noEnv: true,
     };
@@ -609,25 +651,28 @@ class BoatSandboxClient implements SandboxClient {
         `[boat] ignoring non-Boat snapshot ${params.snapshot}; booting a fresh sandbox`,
       );
     }
-    const headers = { "Idempotency-Key": randomUUID() };
+    const path = template ? sandboxPath(template, "/fork") : "/sandboxes";
+    const post = (ttl: number) =>
+      this.api(sandboxResponse, "POST", path, {
+        body: { ...body, ttlSeconds: ttl },
+        headers: { "Idempotency-Key": randomUUID() },
+      });
     let created: BoatSandbox;
     try {
-      created = (
-        template
-          ? await this.api(
-              sandboxResponse,
-              "POST",
-              sandboxPath(template, "/fork"),
-              {
-                body,
-                headers,
-              },
-            )
-          : await this.api(sandboxResponse, "POST", "/sandboxes", {
-              body,
-              headers,
-            })
-      ).sandbox;
+      try {
+        created = (await post(ttlSeconds)).sandbox;
+      } catch (error) {
+        // Trial accounts cap auto-stop at 2h. The stall watchdog extends the
+        // deadline during live work (extendTimeout), so a shorter backstop is
+        // safe; retry at the cap rather than refusing to create.
+        if (
+          !(error instanceof BoatApiError) ||
+          error.code !== "trial_auto_stop_required"
+        ) {
+          throw error;
+        }
+        created = (await post(TRIAL_MAX_TTL_SECONDS)).sandbox;
+      }
     } catch (error) {
       throw providerError(
         `boat create failed (template=${template ?? "none"}, type=${body.type}, ttlSeconds=${ttlSeconds}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}])`,
@@ -639,11 +684,10 @@ class BoatSandboxClient implements SandboxClient {
       await this.api(sandboxResponse, "PATCH", sandboxPath(created.id), {
         body: { name: labelsToName(params.lifecycle.labels) },
       });
-      await handle.waitForRunning(params.readyTimeoutSeconds ?? 120);
-      const boot = await handle.exec(BOOTSTRAP_SCRIPT, { timeoutSeconds: 60 });
-      if (boot.exitCode !== 0) {
-        throw new Error(`boat bootstrap failed: ${boot.output.slice(-500)}`);
-      }
+      await handle.waitForRunning(
+        Math.max(params.readyTimeoutSeconds ?? 0, MIN_READY_TIMEOUT_SECONDS),
+      );
+      await handle.bootstrap();
     } catch (error) {
       // Never leak a billing sandbox the caller has no id for.
       await handle.delete().catch(() => undefined);

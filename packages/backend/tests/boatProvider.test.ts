@@ -267,7 +267,7 @@ describe("create", () => {
     expect(create?.headers.get("idempotency-key")).toBeTruthy();
     expect(
       calls.some((c) =>
-        JSON.stringify(c.body ?? {}).includes("mkdir -p /vercel/sandbox"),
+        JSON.stringify(c.body ?? {}).includes("link /vercel/sandbox"),
       ),
     ).toBe(true);
   });

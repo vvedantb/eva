@@ -302,6 +302,10 @@ function runConvex(args, options) {
     input,
     unset = [],
     allowFailure = false,
+    // Extra attempts for idempotent calls: a local backend that is still
+    // pushing functions answers some writes with a transient 503
+    // (OptimisticConcurrencyControlFailure), which aborted whole seeds.
+    retries = 0,
   } = options;
 
   let printable = ["convex", ...args].join(" ");
@@ -318,23 +322,39 @@ function runConvex(args, options) {
   }
   Object.assign(childEnv, env);
 
-  const result = spawnSync(
-    isWindows ? "npx.cmd" : "npx",
-    isWindows ? ["convex", ...args].map(quoteForShell) : ["convex", ...args],
-    {
-      cwd: appDir,
-      env: childEnv,
-      stdio: [
-        input === undefined ? "inherit" : "pipe",
-        capture ? "pipe" : "inherit",
-        "inherit",
-      ],
-      input,
-      shell: isWindows,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    },
-  );
+  const spawnOnce = () =>
+    spawnSync(
+      isWindows ? "npx.cmd" : "npx",
+      isWindows ? ["convex", ...args].map(quoteForShell) : ["convex", ...args],
+      {
+        cwd: appDir,
+        env: childEnv,
+        stdio: [
+          input === undefined ? "inherit" : "pipe",
+          capture ? "pipe" : "inherit",
+          "inherit",
+        ],
+        input,
+        shell: isWindows,
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
+  let result = spawnOnce();
+  for (
+    let attempt = 1;
+    attempt <= retries && !result.error && result.status !== 0;
+    attempt++
+  ) {
+    console.log(`[${label}] retrying (${attempt}/${retries})`);
+    Atomics.wait(
+      new Int32Array(new SharedArrayBuffer(4)),
+      0,
+      0,
+      2000 * attempt,
+    );
+    result = spawnOnce();
+  }
   if (result.error) {
     fail(`[${label}] could not start npx: ${result.error.message}`);
   }
@@ -560,6 +580,7 @@ if (values["include-env"]) {
           label: `env set ${name} on ${target.name}`,
           secrets: [target.adminKey],
           input: value,
+          retries: 3,
         },
       );
     }

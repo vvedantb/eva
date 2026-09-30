@@ -43,14 +43,20 @@ async function ensureBridge(handle: SandboxHandle): Promise<void> {
  * Eva's auth proxy on its own Boat port, with a fresh preview grant on the URL
  * (WebSocket upgrades cannot follow the grant→cookie redirect).
  *
- * Fails closed: without the preview-grant key the proxy would not gate, and an
- * ungated terminal is a public root shell.
+ * Fails closed: the proxy only gates when it has both the preview-grant key
+ * and WEB_APP_URL, and an ungated terminal is a public root shell.
  */
 export async function connectBoatTerminal(
   handle: SandboxHandle,
   params: { repoId: string; subject: string },
 ): Promise<{ wsUrl: string }> {
   const publicKeyJwk = getPreviewGrantPublicJwk();
+  const webAppUrl = process.env.WEB_APP_URL ?? "";
+  if (webAppUrl === "") {
+    throw new Error(
+      "Terminal unavailable: WEB_APP_URL is not set, so the terminal proxy could not require sign-in.",
+    );
+  }
   await ensureBridge(handle);
   const proxyPort = await ensurePreviewNavigationProxy(
     handle,
@@ -59,7 +65,7 @@ export async function connectBoatTerminal(
       publicKeyJwk,
       sandboxId: handle.id,
       repoId: params.repoId,
-      webAppUrl: process.env.WEB_APP_URL ?? "",
+      webAppUrl,
       inject: false,
       authPort: BOAT_PTY_PUBLIC_PORT,
     },
