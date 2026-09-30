@@ -127,8 +127,11 @@ export const BOOTSTRAP_SCRIPT = [
   `mkdir -p /home/user/tmp ${PERSISTED_PATHS.map(([, store]) => `${PERSIST_ROOT}/${store}`).join(" ")}`,
   `chmod 777 ${PERSIST_ROOT}/home-eva`,
   // A real directory at a linked path (created before the link existed) is
-  // merged into the store, then replaced by the link.
-  'link() { if [ -L "$1" ]; then return 0; fi; if [ -d "$1" ]; then sudo cp -a "$1/." "$2/"; sudo rm -rf "$1"; fi; sudo mkdir -p "$(dirname "$1")"; sudo ln -sfn "$2" "$1"; sudo chown -h user:user "$1"; }',
+  // merged into the store, then replaced by the link. Links stay root-owned:
+  // fs.protected_symlinks stops root following a `user`-owned link in sticky
+  // /tmp, which broke every sudo exec with cwd /tmp/repo; a root-owned link in
+  // root-owned /tmp is followable by both.
+  'link() { if [ -L "$1" ]; then sudo chown -h root:root "$1"; return 0; fi; if [ -d "$1" ]; then sudo cp -a "$1/." "$2/"; sudo rm -rf "$1"; fi; sudo mkdir -p "$(dirname "$1")"; sudo ln -sfn "$2" "$1"; }',
   ...PERSISTED_PATHS.map(
     ([path, store]) => `link ${path} ${PERSIST_ROOT}/${store}`,
   ),
