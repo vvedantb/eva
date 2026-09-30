@@ -79,6 +79,19 @@ describe("seeded dump restore does not wipe a populated public schema", () => {
     expect(tryAt, "the dump restore is no longer guarded").toBeGreaterThan(-1);
     expect(body.slice(tryAt)).toContain("} catch (error) {");
   });
+
+  test("every startup path alerts the chat when the restore fails", () => {
+    const direct = sessions.match(/\(\) =>\s*startSessionServices\(/g) ?? [];
+    expect(direct, "a startup path skips the restore alert").toEqual([]);
+    const helper = functionBody(
+      sessions,
+      "export async function startServicesWithRestoreAlert(",
+    );
+    expect(helper).toContain("internal._chat.seededRestoreAlert.insert");
+    const routed =
+      sessions.match(/\(\) =>\s*startServicesWithRestoreAlert\(/g) ?? [];
+    expect(routed.length, "session/task/project create + reuse").toBe(6);
+  });
 });
 
 function readSource(relativePath: string): string {

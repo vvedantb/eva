@@ -169,8 +169,8 @@ export async function startSessionServices(
   sandbox: SandboxHandle,
   rootDir: string,
   overrides?: { devPort?: number; devCommand?: string },
-): Promise<{ port: number; devCommand: string }> {
-  await restoreSeededRuntimeState(sandbox);
+): Promise<{ port: number; devCommand: string; restoreError?: string }> {
+  const restoreError = await restoreSeededRuntimeState(sandbox);
 
   const port =
     overrides?.devPort !== undefined
@@ -181,19 +181,24 @@ export async function startSessionServices(
     return {
       port,
       devCommand: `cd ${workspaceDirShell()} && HOSTNAME=0.0.0.0 PORT=${port} ${overrides.devCommand}`,
+      restoreError,
     };
   }
 
   const pm = await detectPackageManager(sandbox, rootDir);
   const dir = packageDirShell(rootDir, workspaceDirShell());
   const devCommand = `cd ${dir} && HOSTNAME=0.0.0.0 PORT=${port} ${pm} run dev`;
-  return { port, devCommand };
+  return { port, devCommand, restoreError };
 }
 
-/** Restores service state that was exported into a seeded snapshot filesystem. */
+/**
+ * Restores service state that was exported into a seeded snapshot filesystem.
+ * Returns the dump-restore error instead of throwing, so callers can alert the
+ * chat and still launch the dev server.
+ */
 export async function restoreSeededRuntimeState(
   sandbox: SandboxHandle,
-): Promise<void> {
+): Promise<string | undefined> {
   try {
     await execHandle(sandbox, `test -f ${SUPABASE_DUMP_PATH}`, 5);
   } catch {
@@ -222,10 +227,13 @@ export async function restoreSeededRuntimeState(
   // commands still own Supabase and surface their own failures.
   try {
     await restoreSeededSupabaseDump(sandbox);
+    return undefined;
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.warn(
-      `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${message}`,
     );
+    return message;
   }
 }
 

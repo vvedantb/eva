@@ -30,10 +30,7 @@ import {
   copySandboxConfigFilesToWorkspace,
   SESSION_LIFECYCLE,
 } from "./git";
-import {
-  SandboxGoneError,
-  isSandboxGoneError,
-} from "./sandboxErrors";
+import { SandboxGoneError, isSandboxGoneError } from "./sandboxErrors";
 import { ensureGitCredentialHelper } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
@@ -86,6 +83,32 @@ export async function launchPreviewDevServer(
     resolved.listenPort,
     dir,
   );
+}
+
+/**
+ * `startSessionServices` plus the chat alert for a failed seeded Supabase
+ * restore — that failure is non-fatal so the dev server still launches, and
+ * this alert is the only place the user sees it.
+ */
+export async function startServicesWithRestoreAlert(
+  ctx: GenericActionCtx<DataModel>,
+  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  handle: SandboxHandle,
+  rootDir: string,
+  repo: Doc<"githubRepos"> | null,
+): Promise<{ port: number; devCommand: string }> {
+  const services = await startSessionServices(
+    handle,
+    rootDir,
+    devOverrides(repo),
+  );
+  if (services.restoreError !== undefined) {
+    await ctx.runMutation(internal._chat.seededRestoreAlert.insert, {
+      parentId,
+      error: services.restoreError,
+    });
+  }
+  return { port: services.port, devCommand: services.devCommand };
 }
 
 /** Per-app dev server overrides loaded from the githubRepos doc. */
@@ -898,7 +921,14 @@ async function prepareSessionSandboxInternal(
           const services = await runLoggedSessionStep(
             "reuseSessionSandbox.startSessionServices",
             sandboxDetails,
-            () => startSessionServices(handle, rootDir, devOverrides(repo)),
+            () =>
+              startServicesWithRestoreAlert(
+                ctx,
+                args.sessionId,
+                handle,
+                rootDir,
+                repo,
+              ),
           );
           const devPort = services.port;
           const devCommand = services.devCommand;
@@ -909,11 +939,7 @@ async function prepareSessionSandboxInternal(
               () => startDesktopWithChrome(handle),
             );
           }
-          await abortReuseIfSessionStopped(
-            ctx,
-            args.sessionId,
-            handle.id,
-          );
+          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
           await emitSessionProgress(
             ctx,
             args.sessionId,
@@ -1107,7 +1133,8 @@ async function prepareSessionSandboxInternal(
             // need to be cloned/installed after this action returns (see
             // `sessionSandboxStartupWorkflow`), and the workflow — not this
             // action — clears the gate once they're done.
-            markSetupPending: Boolean(snapshotName) || args.hasLinkedRepos === true,
+            markSetupPending:
+              Boolean(snapshotName) || args.hasLinkedRepos === true,
             // Background + startup commands have not run yet on this fresh VM;
             // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
@@ -1326,7 +1353,14 @@ async function prepareSessionSandboxInternal(
     const services = await runLoggedSessionStep(
       "newSessionSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(
+          ctx,
+          args.sessionId,
+          handle,
+          rootDir,
+          repo,
+        ),
     );
     resolvedDevPort = services.port;
     resolvedDevCommand = services.devCommand;
@@ -1916,7 +1950,8 @@ async function prepareTaskPreviewSandboxInternal(
     const { port: devPort, devCommand } = await runLoggedSessionStep(
       "reuseTaskSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(ctx, args.taskId, handle, rootDir, repo),
     );
     completedSteps.push({
       type: "tool",
@@ -2147,7 +2182,8 @@ async function prepareTaskPreviewSandboxInternal(
     const { port: devPort, devCommand } = await runLoggedSessionStep(
       "newTaskSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(ctx, args.taskId, handle, rootDir, repo),
     );
     completedSteps.push({
       type: "tool",
@@ -2388,7 +2424,14 @@ async function prepareProjectPreviewSandboxInternal(
     const { port: devPort, devCommand } = await runLoggedSessionStep(
       "reuseProjectSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(
+          ctx,
+          args.projectId,
+          handle,
+          rootDir,
+          repo,
+        ),
     );
     completedSteps.push({
       type: "tool",
@@ -2620,7 +2663,8 @@ async function prepareProjectPreviewSandboxInternal(
   const { port: devPort, devCommand } = await runLoggedSessionStep(
     "newProjectSandbox.startSessionServices",
     sandboxDetails,
-    () => startSessionServices(handle, rootDir, devOverrides(repo)),
+    () =>
+      startServicesWithRestoreAlert(ctx, args.projectId, handle, rootDir, repo),
   );
   completedSteps.push({
     type: "tool",
