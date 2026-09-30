@@ -13,6 +13,9 @@ import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLa
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -284,81 +287,93 @@ export function SessionDetailClient({
   if (chatOnly) {
     return (
       <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
-        <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+        <PendingPreviewSnapshotsProvider>
+          <PendingWebMcpProvider>
+            <OpenSandboxFileProvider>
+              <div className="flex min-h-0 flex-1">{chatPanel()}</div>
+            </OpenSandboxFileProvider>
+          </PendingWebMcpProvider>
+        </PendingPreviewSnapshotsProvider>
       </PendingReviewCommentsProvider>
     );
   }
 
   return (
     <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
-      <SandboxWorkspace
-        ownerKind="session"
-        ownerId={sessionId}
-        storageScope={`session:${sessionId}`}
-        sandboxId={session.sandboxId}
-        isActive={isSandboxActive}
-        terminalPanes={session.terminalPanes}
-        hotkeyEnabled={isRouteActive}
-      >
-        {(panes, owner, terminalPanel) => (
-          <ResizablePanelLayout
-            leftPanel={({ rightPanelCollapsed }) =>
-              chatPanel(rightPanelCollapsed)
-            }
-            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
-              <SandboxPanel
-                sessionId={sessionId}
-                sandboxId={session.sandboxId}
-                isActive={isSandboxActive}
-                isRouteActive={isRouteActive}
-                repoId={session.repoId}
-                prUrl={session.prUrl}
-                // Prefer session (set after services start); fall back to app
-                // settings so preview doesn't default to 3000 before that lands.
-                devPort={session.devPort ?? repo.devPort}
-                devCommand={session.devCommand ?? repo.devCommand}
-                owner={owner}
-                panes={panes}
-                terminalPanel={terminalPanel}
-                planContent={session.planContent}
-                messages={messages ?? []}
-                backgroundAgents={session.backgroundAgents}
-                streamingActivity={streaming?.currentActivity}
-                isArchived={isReadOnly}
-                activeTab={activeSandboxTab}
-                onTabChange={onSandboxTabChange}
-                agentBrowsingAt={session.agentBrowsingAt}
-                onStartSandbox={
-                  isReadOnly || isSandboxStopping || isStopPending
-                    ? undefined
-                    : () => {
-                        void handleSandboxToggle("start");
+      <PendingPreviewSnapshotsProvider>
+        <PendingWebMcpProvider>
+          <OpenSandboxFileProvider onOpenFile={onOpenFile}>
+            <SandboxWorkspace
+              ownerKind="session"
+              ownerId={sessionId}
+              storageScope={`session:${sessionId}`}
+              sandboxId={session.sandboxId}
+              isActive={isSandboxActive}
+              terminalPanes={session.terminalPanes}
+              hotkeyEnabled={isRouteActive}
+            >
+              {(panes, owner, terminalPanel) => (
+                <ResizablePanelLayout
+                  leftPanel={({ rightPanelCollapsed }) =>
+                    chatPanel(rightPanelCollapsed)
+                  }
+                  rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
+                    <SandboxPanel
+                      sessionId={sessionId}
+                      sandboxId={session.sandboxId}
+                      isActive={isSandboxActive}
+                      isRouteActive={isRouteActive}
+                      repoId={session.repoId}
+                      prUrl={session.prUrl}
+                      // Prefer session (set after services start); fall back to app
+                      // settings so preview doesn't default to 3000 before that lands.
+                      devPort={session.devPort ?? repo.devPort}
+                      devCommand={session.devCommand ?? repo.devCommand}
+                      owner={owner}
+                      panes={panes}
+                      terminalPanel={terminalPanel}
+                      planContent={session.planContent}
+                      messages={messages ?? []}
+                      backgroundAgents={session.backgroundAgents}
+                      streamingActivity={streaming?.currentActivity}
+                      isArchived={isReadOnly}
+                      activeTab={activeSandboxTab}
+                      onTabChange={onSandboxTabChange}
+                      agentBrowsingAt={session.agentBrowsingAt}
+                      onStartSandbox={
+                        isReadOnly || isSandboxStopping || isStopPending
+                          ? undefined
+                          : () => {
+                              void handleSandboxToggle("start");
+                            }
                       }
-                }
-                isSandboxStarting={isSandboxStarting}
-                collapsed={rightPanelCollapsed}
-                onToggle={onToggleRightPanel}
-                miniPlayer={
-                  session.numId !== undefined
-                    ? {
-                        returnTo: `${basePath}/sessions/${session.numId}/preview`,
-                        title: session.title,
+                      isSandboxStarting={isSandboxStarting}
+                      collapsed={rightPanelCollapsed}
+                      onToggle={onToggleRightPanel}
+                      miniPlayer={
+                        session.numId !== undefined
+                          ? {
+                              returnTo: `${basePath}/sessions/${session.numId}/preview`,
+                              title: session.title,
+                            }
+                          : undefined
                       }
-                    : undefined
-                }
-              />
-            )}
-            leftDefaultSize="40%"
-            leftMinWidthPx={350}
-            rightMinWidthPx={300}
-            rightCollapsedSizePx={sandboxRailWidthPx}
-            storageKey="sandbox-collapsed"
-            expandRightSignal={expandRightSignal}
-            hotkeyEnabled={isRouteActive}
-            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          />
-        )}
-      </SandboxWorkspace>
+                    />
+                  )}
+                  leftDefaultSize="40%"
+                  leftMinWidthPx={350}
+                  rightMinWidthPx={300}
+                  rightCollapsedSizePx={sandboxRailWidthPx}
+                  storageKey="sandbox-collapsed"
+                  expandRightSignal={expandRightSignal}
+                  hotkeyEnabled={isRouteActive}
+                  mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                />
+              )}
+            </SandboxWorkspace>
+          </OpenSandboxFileProvider>
+        </PendingWebMcpProvider>
+      </PendingPreviewSnapshotsProvider>
     </PendingReviewCommentsProvider>
   );
 }

@@ -36,9 +36,13 @@ function renamedFromPatch(patch: string): string | null {
 
 /**
  * Counts changed lines the way GitHub's file header does: `+`/`-` content
- * lines only, excluding the `+++`/`---` file markers of the patch header.
- * Context lines and hunk count come from the same pass — they are only used to
- * estimate a file's rendered height before it is mounted.
+ * lines only. Context lines and hunk count come from the same pass — they are
+ * only used to estimate a file's rendered height before it is mounted.
+ *
+ * Only lines inside a hunk are counted. The `---`/`+++` file markers live in
+ * the patch header, before the first `@@`, so skipping everything up to it is
+ * what excludes them — testing for a `---`/`+++` prefix instead would miss a
+ * deleted `---` (YAML front matter), `--brand: red;` (CSS), or an added `++i`.
  */
 function diffFileStats(patch: string): {
   additions: number;
@@ -51,12 +55,14 @@ function diffFileStats(patch: string): {
   let contextLines = 0;
   let hunkCount = 0;
   for (const line of patch.split("\n")) {
-    if (line.startsWith("@@ ")) hunkCount += 1;
-    else if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
-    else if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
-    // Context lines only exist inside hunks, so the leading-space test is only
-    // meaningful once a hunk header has been seen.
-    else if (hunkCount > 0 && line.startsWith(" ")) contextLines += 1;
+    if (line.startsWith("@@ ")) {
+      hunkCount += 1;
+      continue;
+    }
+    if (hunkCount === 0) continue;
+    if (line.startsWith("+")) additions += 1;
+    else if (line.startsWith("-")) deletions += 1;
+    else if (line.startsWith(" ")) contextLines += 1;
   }
   return { additions, deletions, contextLines, hunkCount };
 }
@@ -119,5 +125,143 @@ export function buildDiffFileEntries(diff: string): DiffFileEntry[] {
         /^Binary files .* differ$/m.test(patch),
       hasHunks: /^@@ /m.test(patch),
     };
+  });
+}
+
+/** Collapse whitespace so `foo  bar` and `foo bar` compare equal. */
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, "");
+}
+
+/*
+ * Hunk-body classification: a leading `-`/`+` is always a real change. The
+ * `---`/`+++` file markers only occur in the patch header, which
+ * `ignoreWhitespaceInPatch` copies straight through before it ever reaches a
+ * hunk, so excluding them here would silently swallow genuine edits to lines
+ * whose own content starts with `-`/`+` (`---`, `--brand: red;`, `++i`).
+ */
+function isMinusLine(line: string): boolean {
+  return line.startsWith("-");
+}
+
+function isPlusLine(line: string): boolean {
+  return line.startsWith("+");
+}
+
+/**
+ * Pair deleted/added lines that differ only by whitespace and turn those
+ * pairs into context. Unmatched +/- lines stay as real changes — the same
+ * idea as `git diff --ignore-all-space`, applied to an already-fetched
+ * unified patch so the GitHub PR payload does not need a second fetch.
+ */
+function filterHunkLines(lines: string[]): {
+  lines: string[];
+  hasChanges: boolean;
+} {
+  const out: string[] = [];
+  let hasChanges = false;
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (!isMinusLine(line) && !isPlusLine(line)) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    const minus: string[] = [];
+    const plus: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined || !isMinusLine(current)) break;
+      minus.push(current);
+      index += 1;
+    }
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined || !isPlusLine(current)) break;
+      plus.push(current);
+      index += 1;
+    }
+    const usedPlus = new Set<number>();
+    for (const removed of minus) {
+      const normalized = collapseWhitespace(removed.slice(1));
+      const matchAt = plus.findIndex(
+        (added, plusIndex) =>
+          !usedPlus.has(plusIndex) &&
+          collapseWhitespace(added.slice(1)) === normalized,
+      );
+      if (matchAt >= 0) {
+        usedPlus.add(matchAt);
+        const kept = plus[matchAt];
+        out.push(` ${kept ? kept.slice(1) : removed.slice(1)}`);
+        continue;
+      }
+      out.push(removed);
+      hasChanges = true;
+    }
+    for (const [plusIndex, added] of plus.entries()) {
+      if (usedPlus.has(plusIndex)) continue;
+      out.push(added);
+      hasChanges = true;
+    }
+  }
+  return { lines: out, hasChanges };
+}
+
+/**
+ * Re-emit a unified patch with whitespace-only edits dropped. Binary patches
+ * and header-only files are left alone.
+ */
+export function ignoreWhitespaceInPatch(patch: string): string {
+  if (
+    /^GIT binary patch/m.test(patch) ||
+    /^Binary files .* differ$/m.test(patch)
+  ) {
+    return patch;
+  }
+  const lines = patch.split("\n");
+  const out: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (!line.startsWith("@@ ")) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    const header = line;
+    index += 1;
+    const hunk: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined) break;
+      if (current.startsWith("@@ ") || current.startsWith("diff --git ")) {
+        break;
+      }
+      hunk.push(current);
+      index += 1;
+    }
+    const filtered = filterHunkLines(hunk);
+    if (!filtered.hasChanges) continue;
+    out.push(header);
+    out.push(...filtered.lines);
+  }
+  return out.join("\n");
+}
+
+/** Apply ignore-whitespace to each file entry and recompute header stats. */
+export function applyIgnoreWhitespace(
+  entries: ReadonlyArray<DiffFileEntry>,
+): DiffFileEntry[] {
+  return entries.flatMap((entry) => {
+    if (entry.binary || !entry.hasHunks) return [entry];
+    // A file whose every hunk was whitespace-only filters down to a header-only
+    // patch. GitHub drops such files from the list entirely; keeping them would
+    // render a "nothing to diff" body and inflate the toolbar's file count.
+    return buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch)).filter(
+      (filtered) => filtered.hasHunks,
+    );
   });
 }

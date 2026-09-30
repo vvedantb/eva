@@ -17,6 +17,7 @@ import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { startNextQueuedSessionMessageAfterSandboxReady } from "../_queues/helpers";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
@@ -190,16 +191,16 @@ export const forcePushBranch = authMutation({
         throw new Error("Linked repository not found for this session");
       }
     }
-    const branchName = linkedRepo
-      ? linkedRepo.branchName
-      : session.branchName;
+    const branchName = linkedRepo ? linkedRepo.branchName : session.branchName;
     if (!branchName) {
       throw new Error("Session has no branch to publish");
     }
     // Only eva-owned session branches may ever be rewritten on GitHub; a base
     // branch must never be reachable through this path.
     if (!isEvaOwnedBranch(branchName)) {
-      throw new Error(`Refusing to force-push non-session branch ${branchName}`);
+      throw new Error(
+        `Refusing to force-push non-session branch ${branchName}`,
+      );
     }
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -234,6 +235,7 @@ export async function requestSessionSandboxStop(
   // Stopping kills the paused turn, so any blocking AskUserQuestion can never
   // be claimed — clear it or it hides the composer forever.
   await clearPendingQuestionsForEntity(ctx.db, String(sessionId));
+  await clearPreviewToolCallsForParent(ctx.db, sessionId);
 
   // Allow stop from closed when a sandboxId remains — start can early-ready
   // then fail and leave a live Vercel VM while UI shows inactive.

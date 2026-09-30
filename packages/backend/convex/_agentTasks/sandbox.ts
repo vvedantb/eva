@@ -15,6 +15,7 @@ import {
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -316,6 +317,7 @@ export async function requestTaskSandboxStop(
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
   // never be claimed — clear it or it hides the composer forever.
   await clearPendingQuestionsForEntity(ctx.db, String(taskId));
+  await clearPreviewToolCallsForParent(ctx.db, taskId);
 
   // Keep sandboxId so we can resume the stopped sandbox later.
   await ctx.db.patch(taskId, {
