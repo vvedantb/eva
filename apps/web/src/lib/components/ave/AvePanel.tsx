@@ -1,6 +1,7 @@
 "use client";
 
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
+import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { IconArrowsDiagonal, IconMinus } from "@tabler/icons-react";
@@ -118,7 +119,7 @@ export function AvePanel({
         </Tooltip>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Suspense
+        <ViewTransitionSuspense
           fallback={
             <div
               className="flex min-h-0 flex-1"
@@ -128,7 +129,7 @@ export function AvePanel({
           }
         >
           <AvePanelBody />
-        </Suspense>
+        </ViewTransitionSuspense>
       </div>
     </m.div>
   );
