@@ -621,12 +621,6 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
             "This repo has no background commands configured, so there is nothing to relaunch. Add them in the repo's app settings.",
           );
         }
-        const session = await sessionRow(target);
-        if (session?.isOrchestrator === true) {
-          return errorResult(
-            "This is an orchestrator session. It runs no repo services, so it has no background commands to relaunch.",
-          );
-        }
         const sandboxId = await runningSandboxId(
           target,
           "Relaunching background commands",
@@ -663,6 +657,7 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
 
         // Sessions have no public mutation for this; resolveChat has already
         // access-checked the chat, so the launcher is called directly.
+        const session = await sessionRow(target);
         const result = await ctx.runAction(
           internal.sandbox.runBackgroundCommands,
           {
@@ -747,12 +742,6 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           });
         }
 
-        const session = await sessionRow(target);
-        if (session?.isOrchestrator === true) {
-          return errorResult(
-            "This is an orchestrator session. It runs no repo services, so it has no startup commands to re-run.",
-          );
-        }
         const sandboxId = await runningSandboxId(
           target,
           "Re-running startup commands",

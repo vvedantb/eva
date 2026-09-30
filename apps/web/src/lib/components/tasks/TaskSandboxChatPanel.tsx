@@ -375,8 +375,7 @@ export function TaskSandboxChatPanel({
         usageAccountLabel={usageAccountLabel}
       />
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={taskId}
         chatParentId={taskId}
         messages={[...firstRunTurn, ...(messages ?? [])]}
@@ -418,14 +417,16 @@ export function TaskSandboxChatPanel({
             ? () => onSandboxToggle("start")
             : undefined
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={accounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={onTraitsChange}
+        modelPicker={{
+          model,
+          setModel,
+          modelOptions,
+          accounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}

@@ -1,4 +1,4 @@
-import { getAIModelProvider, type Doc } from "@eva/backend";
+import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel, type ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -9,11 +9,22 @@ import {
 } from "@/lib/components/chat/ChangedFilesCard";
 import { z } from "zod";
 
+/**
+ * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
+ * skill slash items, the prompt stash and repo mentions all switch off.
+ */
+export interface ChatRepo {
+  id: Id<"githubRepos">;
+  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
+  basePath: string;
+}
+
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without
 // forging a branded id. Real docs stay assignable; nothing in the chat tree
-// feeds `_id` back into Convex.
-export type ChatBodyMessage = Omit<Doc<"messages">, "_id"> & {
+// feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
+// `aveMessages` rows (keyed by thread, not by chat entity) fit too.
+export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
   /** @deprecated Prefer `attachments` — kept for optimistic/local messages. */

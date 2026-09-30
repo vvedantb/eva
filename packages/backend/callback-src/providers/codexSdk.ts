@@ -6,7 +6,6 @@ import {
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
-  NO_WRITES,
   SYSTEM_PROMPT,
   WORK_DIR,
   normalizedCodexModel,
@@ -59,29 +58,10 @@ function codexEnvironment(): Record<string, string> {
   return env;
 }
 
-/**
- * Codex's equivalent of Cursor's `disallowedTools` is its sandbox mode, which
- * gates writes at the filesystem rather than by tool name: `--sandbox read-only`
- * lets the agent run commands but refuses to modify the workspace. Paired with
- * the existing `approvalPolicy: "never"` a blocked write simply fails, rather
- * than stalling the turn on an approval nobody can answer.
- *
- * Deliberately NOT passing `networkAccessEnabled`. It looks like the way to keep
- * the master's log-reading shell working, but the SDK compiles it to
- * `--config sandbox_workspace_write.network_access=…`, which only configures the
- * *workspace-write* sandbox and is a no-op under `read-only`. Setting it would
- * read as a guarantee the flag does not provide.
- *
- * Known caveat: whether a read-only Codex sandbox permits outbound network from
- * shell commands is unverified, so `npx convex logs` may not work on this
- * provider even though it does on Cursor. Blocking writes is the requirement
- * here; if Codex ever becomes a real master provider, that needs testing on a
- * live sandbox. Writing sessions are untouched.
- */
 export function buildCodexSdkThreadOptions(): ThreadOptions {
   return {
     model: normalizedCodexModel,
-    sandboxMode: NO_WRITES ? "read-only" : "danger-full-access",
+    sandboxMode: "danger-full-access",
     workingDirectory: WORK_DIR,
     skipGitRepoCheck: true,
     approvalPolicy: "never",

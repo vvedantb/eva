@@ -42,10 +42,6 @@ import {
 } from "@/lib/hooks/useAvailableAiModels";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { PendingReviewCommentChips } from "@/lib/components/chat/PendingReviewCommentChips";
-import {
-  AveResetChatDialog,
-  useResetOrchestratorChat,
-} from "@/lib/components/ave/AveResetChatDialog";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { toast } from "@eva/ui";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
@@ -86,12 +82,6 @@ interface ChatPanelProps {
   isReadOnly?: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
   sandboxCollapsed?: boolean;
-  /** Canonical link to this session; omitted when the URL already is one. */
-  permalinkPath?: string;
-  /** Chat-only surface (the orchestrator): hides branch/PR affordances. */
-  chatOnly?: boolean;
-  /** Popover already titles the surface — omit the session-chat title. */
-  hideTitle?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
@@ -131,9 +121,6 @@ export function ChatPanel({
   isArchived = false,
   isReadOnly = false,
   deploymentStatus,
-  permalinkPath,
-  chatOnly,
-  hideTitle = false,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -146,11 +133,9 @@ export function ChatPanel({
   const simpleView = useSimpleView();
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [showResetChatDialog, setShowResetChatDialog] = useState(false);
   const altHeld = useAltHeld();
   const { sendForReview } = useSendSessionForReview(sessionId);
   const { startSummary } = useStartSessionSummary(sessionId);
-  const { reset: resetOrchestratorChat } = useResetOrchestratorChat();
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // The picker lists the session owner's accounts, not the viewer's — the turn
@@ -337,9 +322,6 @@ export function ChatPanel({
     isSandboxToggling,
     isAssistantResponding: isExecuting,
     deploymentStatus,
-    permalinkPath,
-    chatOnly,
-    hideTitle,
     simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
@@ -363,18 +345,6 @@ export function ChatPanel({
           });
         },
       ),
-    // Only Manager Ave can be reset: it is the one chat the user cannot simply
-    // replace by opening a new session.
-    onOpenResetChatDialog: chatOnly
-      ? () =>
-          requestConfirm(
-            altHeld,
-            () => setShowResetChatDialog(true),
-            () => {
-              void resetOrchestratorChat();
-            },
-          )
-      : undefined,
   });
 
   const startupStreamingNode = (
@@ -475,8 +445,7 @@ export function ChatPanel({
       headerRight={headerRight}
     >
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={sessionId}
         chatParentId={sessionId}
         messages={messages}
@@ -500,14 +469,11 @@ export function ChatPanel({
         }
         emptyStateOverride={emptyStateOverride}
         underCardLeading={
-          // The orchestrator chat carries no branch affordances at all.
-          chatOnly ? undefined : (
-            <SandboxBranchChip
-              branch={sandboxBranch}
-              isSandboxActive={isSandboxActive}
-              intendedBranch={branchName}
-            />
-          )
+          <SandboxBranchChip
+            branch={sandboxBranch}
+            isSandboxActive={isSandboxActive}
+            intendedBranch={branchName}
+          />
         }
         beforeQueuedContent={beforeQueuedContent}
         preInputContent={preInputContent}
@@ -517,14 +483,16 @@ export function ChatPanel({
             summaryStreamingActivity={summaryStreamingActivity}
           />
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={accounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={onTraitsChange}
+        modelPicker={{
+          model,
+          setModel,
+          modelOptions,
+          accounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
         onForkTranscript={handleForkTranscript}
@@ -607,12 +575,6 @@ export function ChatPanel({
         open={showReviewModal}
         onClose={() => setShowReviewModal(false)}
       />
-      {chatOnly && (
-        <AveResetChatDialog
-          open={showResetChatDialog}
-          onOpenChange={setShowResetChatDialog}
-        />
-      )}
     </ChatPageWrapper>
   );
 }

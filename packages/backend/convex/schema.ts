@@ -8,6 +8,8 @@ import {
   teamMemberRoleValidator,
   webhookEventStatusValidator,
   messageFields,
+  aveThreadFields,
+  aveMessageFields,
   automationFields,
   automationRunFields,
   agentTaskFields,
@@ -164,6 +166,11 @@ const schema = defineSchema({
     // not to the session that produced it: a PR that re-lands those commits on
     // a fresh branch (an extract) must still carry the warning.
     .index("by_after_sha", ["afterSha"]),
+  aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
+    "userId",
+    "archivedAt",
+  ]),
+  aveMessages: defineTable(aveMessageFields).index("by_thread", ["threadId"]),
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
     .index("by_parent_and_order", ["parentId", "order"]),

@@ -13,6 +13,8 @@ import {
   motionSpring,
 } from "@eva/ui";
 import { AveMark } from "@/lib/components/ave/AveMark";
+import { AveNewChatButton } from "@/lib/components/ave/AveResetChatDialog";
+import { AVE_HEADER_BUTTON_CLASS } from "@/lib/components/ave/aveHeaderButton";
 import { PANEL_POSITION_STYLE } from "@/lib/components/ave/useAveLauncherPosition";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
@@ -21,9 +23,6 @@ const AvePanelBody = lazy(() =>
     default: m.AvePanelBody,
   })),
 );
-
-const HEADER_BUTTON_CLASS =
-  "motion-press flex size-7 items-center justify-center rounded-md text-muted-foreground active:scale-[0.9] hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40";
 
 /**
  * Manager Ave's chat as a floating popover, anchored above the launcher button
@@ -40,7 +39,7 @@ const HEADER_BUTTON_CLASS =
  * loop diverge and grow the surface by hundreds of px per second.
  *
  * The chrome is eager so the first click can play this spring immediately. The
- * session tree stays lazy — it is what used to delay the whole surface.
+ * chat tree stays lazy — it is what used to delay the whole surface.
  *
  * Below `lg` there is no launcher to anchor to — the summon button lives in the
  * mobile header — so the popover becomes a sheet filling the space under that
@@ -91,13 +90,14 @@ export function AvePanel({
         <span className="flex-1 truncate text-sm font-semibold">
           Manager Ave
         </span>
+        <AveNewChatButton />
         <Tooltip>
           <TooltipTrigger asChild>
             <Link
               to="/ave"
               onClick={onMinimize}
               aria-label="Open Manager Ave full screen"
-              className={HEADER_BUTTON_CLASS}
+              className={AVE_HEADER_BUTTON_CLASS}
             >
               <IconArrowsDiagonal size={16} />
             </Link>
@@ -110,7 +110,7 @@ export function AvePanel({
               type="button"
               onClick={onMinimize}
               aria-label="Minimize Manager Ave"
-              className={HEADER_BUTTON_CLASS}
+              className={AVE_HEADER_BUTTON_CLASS}
             >
               <IconMinus size={16} />
             </button>

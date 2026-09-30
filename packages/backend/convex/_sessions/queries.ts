@@ -59,8 +59,6 @@ const sessionListItemValidator = v.object({
   lastFastMode: v.optional(v.boolean()),
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
-  /** True for the user's persistent master session (badged in the sidebar). */
-  isOrchestrator: v.optional(v.boolean()),
   /**
    * True while a turn is in flight — either a tracked chat workflow, or a
    * daemon-minted continuation (`/loop`), which never gets an
@@ -113,7 +111,6 @@ function toSessionListItem(
     lastFastMode: session.lastFastMode,
     deploymentStatus: session.deploymentStatus,
     deploymentUrl: session.deploymentUrl,
-    isOrchestrator: session.isOrchestrator,
     isExecuting: sessionIsExecuting(session, openSessionIds),
   };
 }

@@ -4,7 +4,7 @@ import { forwardRef, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { usePromptInputController, usePromptInputAttachments } from "@eva/ui";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { attachPastedTextIfLarge } from "@/lib/components/attachments/attachmentMeta";
 import {
@@ -16,6 +16,7 @@ import {
   isSkillTokenId,
   mergeMentionItems,
 } from "@/lib/components/mentions";
+import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
@@ -26,12 +27,10 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 export type MentionTextareaHandle = MentionEditorHandle;
 
 interface MentionTextareaProps {
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
-  repoId: Id<"githubRepos">;
+  /** Absent (Manager Ave): no people/data mentions and no skills link. */
+  repo?: ChatRepo;
   /** `/` menu entries — repo skills plus installed Eva skills. */
   skillItems?: SlashItem[];
-  skillsSettingsHref?: string;
   placeholder?: string;
   initialMentionMap?: Map<string, string>;
   initialSkillMap?: Map<string, string>;
@@ -73,10 +72,8 @@ export const MentionTextarea = forwardRef<
   MentionTextareaProps
 >(function MentionTextarea(
   {
-    repoBasePath,
-    repoId,
+    repo,
     skillItems = [],
-    skillsSettingsHref,
     placeholder,
     initialMentionMap,
     initialSkillMap,
@@ -93,10 +90,10 @@ export const MentionTextarea = forwardRef<
   const controller = usePromptInputController();
   const attachments = usePromptInputAttachments();
   const value = controller.textInput.value;
-  const peopleItems = usePeopleMentionItems(repoId);
-  const dataItems = useDataMentionItems(repoId);
+  const peopleItems = usePeopleMentionItems(repo?.id);
+  const dataItems = useDataMentionItems(repo?.id);
   const { items, peopleIds } = mergeMentionItems(peopleItems, dataItems);
-  const navigateToData = useDataMentionNavigate(repoBasePath, repoId);
+  const navigateToData = useDataMentionNavigate(repo?.basePath ?? "", repo?.id);
   const flags = useQuery(api.auth.getExperimentalFlags);
   const { suggestion, dismiss } = useInlineSuggestion(
     value,
@@ -156,9 +153,13 @@ export const MentionTextarea = forwardRef<
   // Enter key that should send; a phone Return key should insert a newline.
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
+  const skillsSettingsHref = repo
+    ? `${repo.basePath}/settings/skills`
+    : undefined;
+
   const handleSkillChipClick = (_skillId: string) => {
-    if (simpleView) return;
-    navigate({ to: `${repoBasePath}/settings/skills` });
+    if (simpleView || !skillsSettingsHref) return;
+    navigate({ to: skillsSettingsHref });
   };
 
   return (
@@ -186,9 +187,9 @@ export const MentionTextarea = forwardRef<
       renderMentionChipHoverCard={(id) =>
         peopleIds.has(id) ? (
           <UserProfileHoverCardBody userId={id} />
-        ) : (
-          <DataMentionHoverCardBody entityId={id} repoId={repoId} />
-        )
+        ) : repo ? (
+          <DataMentionHoverCardBody entityId={id} repoId={repo.id} />
+        ) : null
       }
       renderSkillChipHoverCard={(id) =>
         isSkillTokenId(id) ? <SkillMentionHoverCardBody skillId={id} /> : null

@@ -632,11 +632,11 @@ describe("the new tools reach every MCP caller and write no review state", () =>
   const entityTools = convexSource("mcp/entityTools.ts");
   const nodeActions = convexSource("mcp/nodeActions.ts");
 
-  test("they are registered above the orchestrator gate, like send_chat_message", () => {
+  test("they are registered above the Ave gate, like send_chat_message", () => {
     const registered = tools.indexOf(
       "tools.push(...entityTools(credentials, ctx))",
     );
-    const gate = tools.indexOf("if (isOrchestrator) {");
+    const gate = tools.indexOf("if (isAve) {");
     expect(registered).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(registered);
     for (const name of [

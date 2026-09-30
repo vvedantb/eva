@@ -67,8 +67,6 @@ const createSessionArgs = v.object({
   ),
   baseBranch: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** Marks the user's persistent master session. Set only at creation. */
-  isOrchestrator: v.optional(v.boolean()),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
   /**
@@ -90,7 +88,7 @@ export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
  * (optionally) the first queued message. Used by the `create` mutation and by
- * `_sessions/orchestrator.ts` so the master session takes the same path.
+ * the MCP `create_session` tool.
  */
 export async function createSession(
   ctx: AuthMutationCtx,
@@ -167,9 +165,6 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
-    ...(args.isOrchestrator !== undefined
-      ? { isOrchestrator: args.isOrchestrator }
-      : {}),
   });
   const branchName = `eva/session-${sessionId}`;
   await ctx.db.patch(sessionId, { branchName });
@@ -492,7 +487,7 @@ export const updateSummary = authMutation({
  * master — retire it through exactly this path instead of a second copy.
  */
 export async function archiveSessionDoc(
-  ctx: AuthMutationCtx,
+  ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
   // Archive the sandbox (stops it first, then moves to cold storage)

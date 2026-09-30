@@ -9,16 +9,18 @@ import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 
 /**
  * Navigates to a Data `@` mention target (document / session / project /
- * quick task) using `mentions.getEntity` to resolve kind + numId.
+ * quick task) using `mentions.getEntity` to resolve kind + numId. Without a
+ * repo (Manager Ave) there is nothing to resolve against, so it does nothing.
  */
 export function useDataMentionNavigate(
   repoBasePath: string,
-  repoId: Id<"githubRepos">,
+  repoId: Id<"githubRepos"> | undefined,
 ) {
   const navigate = useNavigate();
   const convex = useConvex();
 
   return async (entityId: string) => {
+    if (repoId === undefined) return;
     const entity = await convex.query(api.mentions.getEntity, {
       id: entityId,
       repoId,

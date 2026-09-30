@@ -39,7 +39,6 @@ interface SessionItem {
   /** Set when the last wake attempt failed; the row's dot reads as an error. */
   sandboxError?: string;
   isExecuting?: boolean;
-  isOrchestrator?: boolean;
   updatedAt?: number;
   sandboxId?: string;
   branchName?: string;
@@ -125,7 +124,6 @@ export function SidebarSessionRow<T extends SessionItem>({
                 status={session.status}
                 sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
-                isOrchestrator={session.isOrchestrator === true}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
                 prUrl={session.prUrl}

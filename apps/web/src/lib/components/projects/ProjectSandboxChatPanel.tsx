@@ -321,8 +321,7 @@ export function ProjectSandboxChatPanel({
         usageAccountLabel={usageAccountLabel}
       />
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={projectId}
         chatParentId={projectId}
         messages={messages ?? []}
@@ -352,14 +351,16 @@ export function ProjectSandboxChatPanel({
             ? () => onSandboxToggle("start")
             : undefined
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={displayAccounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={setTraits}
+        modelPicker={{
+          model,
+          setModel,
+          modelOptions,
+          accounts: displayAccounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange: setTraits,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}

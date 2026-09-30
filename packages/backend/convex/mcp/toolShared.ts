@@ -35,7 +35,12 @@ export interface McpCredentials {
   scopedRepoId?: string;
   entityId?: string;
   entityKind?: "session" | "task" | "project";
-  isOrchestrator?: boolean;
+  /**
+   * Set only by Manager Ave's own server-side run (`mcp/aveRun.ts`) — no token
+   * path can carry it. Unlocks `send_agent_message` and makes the tools that
+   * start or message agents register a watch on this thread.
+   */
+  aveThreadId?: string;
 }
 
 export interface RepoInfo {
@@ -110,6 +115,25 @@ export async function mcpGetContext(
   clerkUserId: string,
 ): Promise<{ deployKey: string; userId: string }> {
   return ctx.runAction(internal.mcp.nodeActions.getContext, { clerkUserId });
+}
+
+/**
+ * The Manager Ave thread a watch should wake: Ave's own run carries it, any
+ * other caller falls back to the user's live thread. `undefined` when the user
+ * has never opened Ave — nothing to wake, and creating one here would start
+ * spending model turns the user never asked for.
+ */
+export async function resolveAveThreadId(
+  ctx: ActionCtx,
+  credentials: McpCredentials,
+): Promise<string | undefined> {
+  if (credentials.aveThreadId !== undefined) return credentials.aveThreadId;
+  const { userId } = await mcpGetContext(ctx, credentials.clerkUserId);
+  const threadId = await ctx.runQuery(
+    internal._ave.threads.getLiveThreadIdForUser,
+    { userId },
+  );
+  return threadId ?? undefined;
 }
 
 /** Lists every repo the user can reach (own + team). */

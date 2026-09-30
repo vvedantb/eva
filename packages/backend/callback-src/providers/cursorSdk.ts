@@ -16,7 +16,6 @@ import type { SqliteLocalAgentStore } from "@cursor/sdk/sqlite";
 import {
   CURSOR_SDK_STORE_DIR,
   MAX_TOTAL_RUNTIME_MS,
-  NO_WRITES,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
   AGENT_CWD,
@@ -253,29 +252,6 @@ export function filterModeParamsByModel(
 }
 
 type SdkAgentOptions = AgentOptions;
-
-/**
- * Cursor's built-in tools that modify the workspace, denied when `NO_WRITES`.
- *
- * A denylist rather than the sibling `tools` allowlist: the SDK documents
- * `disallowedTools` as "everything else in the default toolset remains
- * available — including tools added to the platform after this SDK was
- * released", so an SDK bump cannot silently strip Ave's read-only tools. An
- * allowlist would have to be revisited on every upgrade.
- *
- * `shell` and `mcp` are deliberately absent: the master reads production logs
- * through the shell, and `mcp` is a capability group whose omission "disables
- * MCP entirely" — which would remove the very orchestration tools it exists to
- * use. Shell writes are therefore prompt-enforced, not tool-enforced.
- *
- * Passed via the shared `options` object, so it reaches both `Agent.create` and
- * `Agent.resume` — required, because the SDK does not persist it on the agent.
- */
-const CURSOR_WRITE_TOOLS: NonNullable<AgentOptions["disallowedTools"]> = [
-  "edit",
-  "delete",
-  "applyAgentDiff",
-];
 
 type SdkTokenUsage = TokenUsage;
 type SdkAgentUsage = AgentUsage;
@@ -839,7 +815,6 @@ export async function runCursorSdkAttempt(
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
       : {}),
-    ...(NO_WRITES ? { disallowedTools: [...CURSOR_WRITE_TOOLS] } : {}),
   };
 
   const persistAgentId = (agentId: string): void => {

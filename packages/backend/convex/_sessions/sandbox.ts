@@ -618,7 +618,7 @@ export const sandboxError = internalMutation({
     // queue-drain hook (its queued first turn stays queued), so without this
     // the orchestrator waits on it forever. Notify only — deliberately no
     // drain, which would start that turn on a session just marked closed.
-    if (session.watchedByOrchestrator !== undefined) {
+    if (session.watchedByAve !== undefined) {
       await ctx.scheduler.runAfter(
         0,
         internal.orchestratorNotify.notifyOrchestratorOfChild,

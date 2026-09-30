@@ -75,7 +75,6 @@ const internalTokenClaims = z.object({
   repoId: z.string(),
   entityId: z.string().optional(),
   entityKind: z.enum(["session", "task", "project"]).optional(),
-  orchestrator: z.boolean().optional(),
 });
 
 type OauthTokens = {
@@ -203,7 +202,6 @@ export const verifyAccessToken = internalAction({
       entityKind: v.optional(
         v.union(v.literal("session"), v.literal("task"), v.literal("project")),
       ),
-      isOrchestrator: v.optional(v.boolean()),
     }),
     v.null(),
   ),
@@ -237,7 +235,6 @@ export const verifyAccessToken = internalAction({
           scopedRepoId: undefined,
           entityId: undefined,
           entityKind: undefined,
-          isOrchestrator: undefined,
         };
       }
       // OAuth payload missing sub — fall through to internal token
@@ -273,9 +270,6 @@ export const verifyAccessToken = internalAction({
           : {}),
         ...(claims.data.entityKind !== undefined
           ? { entityKind: claims.data.entityKind }
-          : {}),
-        ...(claims.data.orchestrator !== undefined
-          ? { isOrchestrator: claims.data.orchestrator }
           : {}),
       };
     } catch (err) {
@@ -1302,7 +1296,6 @@ const sessionListItemSchema = z.object({
   updatedAt: z.number().optional(),
   lastModel: z.string().optional(),
   isExecuting: z.boolean(),
-  isOrchestrator: z.boolean().optional(),
 });
 
 /** Slim projection of an `agentTasks` document. */
@@ -1377,20 +1370,20 @@ const createdSessionSchema = z.object({
 const TRANSCRIPT_CHAR_LIMIT = 2000;
 
 /**
- * Points a child session/task at the master session so a later completion can
- * wake it, or clears the pointer when `masterSessionId` is omitted. Only
+ * Points a child session/task/project at a Manager Ave thread so a later completion
+ * can wake it, or clears the pointer when `aveThreadId` is omitted. Only
  * `unwatch_agent` wants the clearing behaviour — implicit registration must go
- * through `registerWatchIfMaster`.
+ * through `registerWatchIfAve`.
  */
-async function setWatchedByOrchestrator(
+async function setWatchedByAve(
   clerkUserId: string,
   kind: AgentKind,
   id: string,
-  masterSessionId: string | undefined,
+  aveThreadId: string | undefined,
 ): Promise<void> {
   const { fn, idArg } = WATCH_MUTATION[kind];
   const args: Record<string, JsonValue> = { [idArg]: id };
-  if (masterSessionId !== undefined) args.masterSessionId = masterSessionId;
+  if (aveThreadId !== undefined) args.aveThreadId = aveThreadId;
   await runMutationAsUser(getEvaConvexCloudUrl(), clerkUserId, fn, args);
 }
 
@@ -1401,48 +1394,32 @@ const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
 };
 
-const orchestratorSessionPointerSchema = z
-  .object({ sessionId: z.string() })
-  .nullable();
+const aveThreadPointerSchema = z.object({ _id: z.string() }).nullable();
 
 /**
- * Master sandbox token carries the id; a user OAuth token does not, so look
- * up the user's live Manager Ave instead. Missing Ave means "nothing to
- * wake" — never clear an existing watch.
+ * Implicit watch registration for create/send. Ave's own run passes its thread;
+ * any other MCP caller registers against the user's live thread, if they have
+ * one. Never clears an existing watch — that is what `setWatchedByAve` would
+ * do without a thread id.
  */
-async function resolveWatchMasterSessionId(
-  clerkUserId: string,
-  tokenMasterSessionId: string | undefined,
-): Promise<string | undefined> {
-  if (tokenMasterSessionId !== undefined) return tokenMasterSessionId;
-  const pointer = orchestratorSessionPointerSchema.parse(
-    await runQueryAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "sessions:getOrchestratorSession",
-      {},
-    ),
-  );
-  return pointer?.sessionId;
-}
-
-/**
- * Implicit watch registration for create/send. Looks up Manager Ave when the
- * caller has no master sandbox token. Never clears an existing watch — that
- * is what `setWatchedByOrchestrator` would do without a master id.
- */
-async function registerWatchIfMaster(
+async function registerWatchIfAve(
   clerkUserId: string,
   kind: AgentKind,
   id: string,
-  masterSessionId: string | undefined,
+  aveThreadId: string | undefined,
 ): Promise<void> {
-  const resolved = await resolveWatchMasterSessionId(
-    clerkUserId,
-    masterSessionId,
-  );
+  const resolved =
+    aveThreadId ??
+    aveThreadPointerSchema.parse(
+      await runQueryAsUser(
+        getEvaConvexCloudUrl(),
+        clerkUserId,
+        "ave:getThread",
+        {},
+      ),
+    )?._id;
   if (resolved === undefined) return;
-  await setWatchedByOrchestrator(clerkUserId, kind, id, resolved);
+  await setWatchedByAve(clerkUserId, kind, id, resolved);
 }
 
 export const orchestratorListAgents = internalAction({
@@ -1482,11 +1459,6 @@ export const orchestratorListAgents = internalAction({
     const agents: OrchestratorAgent[] = [];
     for (const group of sessionGroups) {
       for (const item of z.array(sessionListItemSchema).parse(group)) {
-        // Never list an orchestrator session. `_sessions/queries:list` is
-        // repo-scoped, so on a shared repo it also returns a teammate's master
-        // — and driving somebody else's supervisor is never intended. The
-        // caller's own id is excluded below, but that only covers itself.
-        if (item.isOrchestrator === true) continue;
         agents.push({
           kind: "session",
           id: item._id,
@@ -1832,7 +1804,7 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
-    masterSessionId: v.optional(v.string()),
+    aveThreadId: v.optional(v.string()),
     /**
      * Stamps the "via MCP" chat badge. True for every MCP send — master
      * sandbox and user OAuth connector alike — so the row is not mistaken
@@ -1852,7 +1824,7 @@ export const orchestratorSendMessage = internalAction({
       id,
       message,
       model,
-      masterSessionId,
+      aveThreadId,
       sentViaOrchestrator,
     },
   ) => {
@@ -1911,7 +1883,7 @@ export const orchestratorSendMessage = internalAction({
       await runMutationAsUser(convexUrl, clerkUserId, call.fn, call.args);
     }
 
-    await registerWatchIfMaster(clerkUserId, kind, id, masterSessionId);
+    await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
     const delivered: "queued" | "started" =
       delivery.action === "queue" ? "queued" : "started";
     return { delivered, model: delivery.model };
@@ -2140,7 +2112,7 @@ export const orchestratorCreateSession = internalAction({
     title: v.optional(v.string()),
     message: v.string(),
     baseBranch: v.optional(v.string()),
-    masterSessionId: v.optional(v.string()),
+    aveThreadId: v.optional(v.string()),
     /** Extra repos to clone beside `repoId`. Mutually exclusive with `repoGroupId`. */
     linkedRepoIds: v.optional(v.array(v.string())),
     /** Saved codebase group whose members prefill the selection. */
@@ -2160,7 +2132,7 @@ export const orchestratorCreateSession = internalAction({
       title,
       message,
       baseBranch,
-      masterSessionId,
+      aveThreadId,
       linkedRepoIds,
       repoGroupId,
       installDependencies,
@@ -2192,11 +2164,11 @@ export const orchestratorCreateSession = internalAction({
         createArgs,
       ),
     );
-    await registerWatchIfMaster(
+    await registerWatchIfAve(
       clerkUserId,
       "session",
       created.sessionId,
-      masterSessionId,
+      aveThreadId,
     );
     const linkedRepos: McpLinkedRepo[] = await ctx.runQuery(
       internal.mcp.queries.sessionLinkedRepos,
@@ -2217,11 +2189,11 @@ export const orchestratorSetWatch = internalAction({
     clerkUserId: v.string(),
     kind: agentKindValidator,
     id: v.string(),
-    masterSessionId: v.optional(v.string()),
+    aveThreadId: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (_ctx, { clerkUserId, kind, id, masterSessionId }) => {
-    await setWatchedByOrchestrator(clerkUserId, kind, id, masterSessionId);
+  handler: async (_ctx, { clerkUserId, kind, id, aveThreadId }) => {
+    await setWatchedByAve(clerkUserId, kind, id, aveThreadId);
     return null;
   },
 });
@@ -2305,7 +2277,6 @@ export const handleMcpRequest = internalAction({
     entityKind: v.optional(
       v.union(v.literal("session"), v.literal("task"), v.literal("project")),
     ),
-    isOrchestrator: v.optional(v.boolean()),
     body: v.string(),
   },
   returns: v.object({
@@ -2314,7 +2285,7 @@ export const handleMcpRequest = internalAction({
   }),
   handler: async (
     ctx,
-    { clerkUserId, scopedRepoId, entityId, entityKind, isOrchestrator, body },
+    { clerkUserId, scopedRepoId, entityId, entityKind, body },
   ) => {
     try {
       const parsedBody = JSON.parse(body);
@@ -2332,7 +2303,6 @@ export const handleMcpRequest = internalAction({
         scopedRepoId,
         entityId,
         entityKind,
-        isOrchestrator,
       };
       const tools = buildTools(credentials, ctx);
       let supabase: EvaTool[] = [];
