@@ -143,6 +143,51 @@ export const githubOauthStateFields = {
   expiresAt: v.number(),
 };
 
+export const connectorProviderValidator = v.union(
+  v.literal("linear"),
+  v.literal("figma"),
+);
+
+export const connectorActorValidator = v.union(
+  v.literal("user"),
+  v.literal("app"),
+);
+
+/**
+ * A user's (or team-shared) OAuth connection to Linear or Figma. Tokens are
+ * ciphertext (`encryption.ts`); plaintext exists only inside a node action.
+ * Env-var API keys are not stored here — those stay on team/repo env vars and
+ * are the fallback when no row exists.
+ */
+export const connectedAccountFields = {
+  userId: v.id("users"),
+  provider: connectorProviderValidator,
+  actor: connectorActorValidator,
+  workspaceId: v.optional(v.string()),
+  workspaceName: v.optional(v.string()),
+  accountLabel: v.optional(v.string()),
+  accessToken: v.string(),
+  accessTokenExpiresAt: v.number(),
+  refreshToken: v.optional(v.string()),
+  refreshTokenExpiresAt: v.optional(v.number()),
+  scopes: v.optional(v.string()),
+  shared: v.optional(v.boolean()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+/** CSRF nonce for Linear/Figma OAuth. Consumed on first use, like GitHub. */
+export const connectorOauthStateFields = {
+  nonce: v.string(),
+  userId: v.id("users"),
+  provider: connectorProviderValidator,
+  actor: connectorActorValidator,
+  /** Relative path to bounce back to. Must start with `/settings`. */
+  returnPath: v.optional(v.string()),
+  codeVerifier: v.optional(v.string()),
+  expiresAt: v.number(),
+};
+
 export const repoEntityTypeValidator = v.union(
   v.literal("sessions"),
   v.literal("docs"),
