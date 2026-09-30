@@ -262,11 +262,6 @@ export async function restoreSeededRuntimeState(
   );
 }
 
-/** Stable default terminal pane id — must match `sandboxPanes.defaultPane`. */
-export function defaultTerminalPtyId(ownerKey: string): string {
-  return `${ownerKey}-terminal-default`;
-}
-
 const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 
 const DEVSERVER_LOCK = "/tmp/eva-devserver.lock";

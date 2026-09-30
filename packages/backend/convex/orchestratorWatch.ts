@@ -72,3 +72,26 @@ export const setTaskWatchedBy = authMutation({
     return null;
   },
 });
+
+/** Project counterpart of `setSessionWatchedBy`, for its sandbox chat. */
+export const setProjectWatchedBy = authMutation({
+  args: {
+    projectId: v.id("projects"),
+    masterSessionId: v.optional(v.id("sessions")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    const watchedByOrchestrator = await assertOwnOrchestratorSession(
+      ctx.db,
+      args.masterSessionId,
+      ctx.userId,
+    );
+    await ctx.db.patch(args.projectId, { watchedByOrchestrator });
+    return null;
+  },
+});

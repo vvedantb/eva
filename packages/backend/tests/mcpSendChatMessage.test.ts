@@ -579,8 +579,11 @@ describe("which tokens get which tools", () => {
     expect(getState).toContain(
       "No ${kind} ${id} found, or you do not have access.",
     );
-    expect(getState).toContain('"_sessions/queries:get"');
-    expect(getState).toContain('"_agentTasks/queries:get"');
+    // The per-surface user-authorised read, shared with send and sandbox start.
+    expect(getState).toContain("CHAT_DOC_QUERY[kind]");
+    expect(nodeActions).toContain('session: "_sessions/queries:get"');
+    expect(nodeActions).toContain('task: "_agentTasks/queries:get"');
+    expect(nodeActions).toContain('project: "_projects/queries:get"');
   });
 
   test("code-mode tools are mounted beside the flat tools, never instead of them", () => {

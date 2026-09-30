@@ -16,9 +16,9 @@ import {
 import { defineTool, type EvaTool } from "./registry";
 
 const agentKindArg = z
-  .enum(["session", "task"])
+  .enum(["session", "task", "project"])
   .describe(
-    'Which kind of agent: "session" (interactive chat session) or "task" (quick task).',
+    'Which kind of agent: "session" (interactive chat session), "task" (quick task) or "project" (a project\'s sandbox chat).',
   );
 
 const agentIdArg = z
@@ -169,7 +169,7 @@ export function fleetTools(
     defineTool({
       name: "get_agent_state",
       description:
-        "Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated.",
+        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight.',
       mutating: false,
       input: {
         kind: agentKindArg,
@@ -200,7 +200,7 @@ export function fleetTools(
     defineTool({
       name: "stop_agent",
       description:
-        "Cancel the agent's in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again.",
+        'Cancel the agent\'s in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again. For a project this stops only its sandbox chat; a running build keeps going and the reply says so with "buildRunning" (use cancel_project_build to stop it).',
       mutating: true,
       input: {
         kind: agentKindArg,
@@ -208,12 +208,21 @@ export function fleetTools(
       },
       handler: async ({ kind, id }) => {
         await mcpGetContext(ctx, clerkUserId);
-        await ctx.runAction(internal.mcp.nodeActions.orchestratorStopAgent, {
-          clerkUserId,
+        const { buildRunning } = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorStopAgent,
+          { clerkUserId, kind, id },
+        );
+        return textResult({
           kind,
           id,
+          status: "cancel_requested",
+          ...(buildRunning
+            ? {
+                buildRunning,
+                note: "The project build is still running. Only its sandbox chat was cancelled; call cancel_project_build if the user wants the build stopped too.",
+              }
+            : {}),
         });
-        return textResult({ kind, id, status: "cancel_requested" });
       },
     }),
   );
@@ -379,7 +388,7 @@ export function fleetTools(
     defineTool({
       name: "watch_agent",
       description:
-        "Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken).",
+        'Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.',
       mutating: true,
       input: {
         kind: agentKindArg,

@@ -659,7 +659,7 @@ describe("the new tools reach every MCP caller and write no review state", () =>
     ).toBe(3);
     // get_preview_url falls back to the chat the token names, then resolves
     // that through the very same check rather than trusting the claim.
-    expect(entityTools).toContain("const chatRef = withSelfDefault(ref)");
+    expect(entityTools).toContain("const chatRef = withSelfDefault(ref, credentials)");
     expect(entityTools).toContain("resolveEntityTarget(chatRef, userId)");
     expect(entityTools).toContain("assertUserRepoAccess(ref.repoId, userId)");
   });

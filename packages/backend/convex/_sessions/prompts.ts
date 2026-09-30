@@ -10,6 +10,45 @@ import {
 } from "../prompts";
 import type { LinkedRepoPromptRow } from "../prompts";
 import { stripMentionTokens } from "../_mentions/resolveDocMentions";
+import { previewConsoleSessionName } from "../_pty/consoleSessionName";
+
+/**
+ * Facts about the chat's own runtime that Eva already knows, stated up front
+ * so the agent does not have to rediscover (or guess) them each turn.
+ */
+export interface ChatRuntimeFacts {
+  /** Sandbox owner key: `session-<id>`, `task-<id>` or `project-<id>`. */
+  ownerKey: string;
+  prUrl?: string;
+  devCommand?: string;
+  startupCommands?: readonly string[];
+  backgroundCommands?: readonly string[];
+}
+
+function commandList(commands: readonly string[] | undefined): string {
+  if (commands === undefined || commands.length === 0) return "none";
+  return commands.map((command) => `\`${command}\``).join(", ");
+}
+
+/** The "this chat" block: PR, dev server wiring, and the Eva MCP controls. */
+function buildChatRuntimeSection(
+  runtime: ChatRuntimeFacts,
+  branchName: string,
+  devPortText: string,
+): string {
+  const consoleSession = previewConsoleSessionName(runtime.ownerKey);
+  const prLine = runtime.prUrl
+    ? `- Pull request: ${runtime.prUrl}. Eva pushes "${branchName}" after your turn, which updates it.`
+    : `- Pull request: none yet. Eva pushes "${branchName}" after your turn and opens the PR through its own flow.`;
+  return `
+
+## This chat (from Eva):
+${prLine} Never run \`gh pr create\` for this branch — Eva links a chat to its PR only when Eva opens it, so a PR you open yourself is orphaned.
+- Dev server: \`${runtime.devCommand ?? "auto-detected from package.json"}\` on port ${devPortText}. Startup commands: ${commandList(runtime.startupCommands)}. Background commands: ${commandList(runtime.backgroundCommands)}.
+- Dev server logs: \`tmux capture-pane -p -S -200 -t ${consoleSession}\` (the Preview Console). Read them before concluding the app is broken. To restart it, call eva MCP \`restart_dev_server\` — never kill it or launch your own. A dead daemon (e.g. \`convex dev\`) comes back with \`restart_background_commands\`; \`rerun_startup_commands\` reseeds and may reset local data, so ask first.
+- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked; queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
+- Deleting anything through eva MCP (tasks, automations, artifacts, docs) needs the user's explicit yes in chat first. Ask, wait for the answer, then pass \`confirmed: true\`.`;
+}
 /**
  * Session chat no longer injects this block: Cursor resumes one agent and the
  * SDK compacts in place. The helper remains for tests and any caller that
@@ -207,6 +246,7 @@ If the user asks for work and you are unsure which repo or how to split it, ask 
 - Read the codebase (Read, Glob, Grep) to understand a request well enough to brief an agent, or to answer a question directly.
 - Run read-only shell commands for diagnostics: \`timeout 60 npx convex logs --prod\`, \`gh pr checks\`, \`gh run view\`, \`vercel logs <deployment>\`, \`git log\`, \`git status\`. Prefix every command with a timeout.
 - The shell is for reading only. No \`git commit\`, no \`git push\`, no in-place edits (\`sed -i\`, \`>\` redirects into tracked files), no package installs.
+- Unblock agents waiting on a question: \`list_pending_questions\`, then \`answer_pending_question\` only when the user already decided it or their instructions clearly imply the answer. Genuine user decisions (visual choices, scope, anything destructive or costly) go to the user.
 - Relay, summarise, and report: what each agent is doing, what finished, what needs the user.${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}`;
 }
 
@@ -223,6 +263,7 @@ export function buildEditPrompt(
   conversationHistory: Array<{ role: string; content: string }> = [],
   readableRepos: ReadonlyArray<{ owner: string; name: string }> = [],
   linkedRepos: LinkedRepoPromptRow[] = [],
+  runtime?: ChatRuntimeFacts,
 ): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
   const baseBranch = repo.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
@@ -265,7 +306,10 @@ When the user asks for a recording, walkthrough video, or screenshot:
 6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
 7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
 8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.`;
-  return `${message}${planContext}${conversationContext}${devServerSection}${browserSection}
+  const runtimeSection = runtime
+    ? buildChatRuntimeSection(runtime, branchName, devPortText)
+    : "";
+  return `${message}${planContext}${conversationContext}${devServerSection}${runtimeSection}${browserSection}
 
 Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
