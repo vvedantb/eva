@@ -84,13 +84,14 @@ function GlobalMainContent() {
           <SessionChromeTabsBar pathname={pathname} />
         ) : null}
         <div
-          className={
+          className={cn(
+            "vt-page",
             isInbox || isAvePath
               ? "relative z-10 flex w-full min-h-0 flex-1 flex-col overflow-hidden"
               : isGlobalSettingsPath(pathname)
                 ? "relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col"
-                : "relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8"
-          }
+                : "relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8",
+          )}
         >
           <Outlet />
         </div>

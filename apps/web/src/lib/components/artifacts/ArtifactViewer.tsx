@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, type ReactNode } from "react";
+import { use, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -8,6 +8,7 @@ import { Spinner } from "@eva/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
 import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
+import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import {
   artifactSourceLabel,
   artifactSourceRoute,
@@ -106,7 +107,7 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
       </div>
       <div className="min-h-0 w-full flex-1 overflow-hidden rounded-surface border border-border bg-white">
         {url ? (
-          <Suspense
+          <ViewTransitionSuspense
             fallback={
               <Centered>
                 <div className="flex flex-col items-center gap-2">
@@ -119,7 +120,7 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
             }
           >
             <ArtifactHtmlBody key={url} url={url} title={artifact.name} />
-          </Suspense>
+          </ViewTransitionSuspense>
         ) : (
           <Centered>
             <p className="text-sm text-muted-foreground">

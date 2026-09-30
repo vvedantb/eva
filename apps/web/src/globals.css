@@ -1,7 +1,12 @@
 @import "tailwindcss";
 @import "shadow-plugin";
+@import "../../../packages/ui/src/markdown/markdown.css";
 
 @config '../tailwind.config.js';
+
+/* Streamdown styles its tables, diagrams and controls with Tailwind classes
+ * inside its own dist, which the content globs never reach. */
+@source "../../../packages/ui/node_modules/streamdown/dist";
 
 /* v4 changed the default border colour to `currentcolor`. The upgrade codemod
  * adds a gray-200 compatibility shim here; it is not needed, because the base
@@ -981,6 +986,61 @@
   html[data-page-motion="off"] .score-bar-fill,
   html[data-page-motion="off"] .project-progress-fill {
     transition-duration: 0s !important;
+  }
+
+  /*
+   * View transitions: React `<ViewTransition>` classes
+   * (`lib/components/viewTransitions.tsx`) and the router's `page` type
+   * (`main.tsx`, on the `.vt-page` content column of `_global` / `$repo`).
+   * The root never takes part: only named elements are snapshotted, so the
+   * sidebar, preview iframes and toasts stay live, and the overlay lets
+   * clicks through mid-swap. Enter matches the house Motion entrance
+   * (`opacity 0, y 8` on `--motion-base`); exit is a quicker fade.
+   */
+  :root {
+    view-transition-name: none;
+  }
+
+  ::view-transition {
+    pointer-events: none;
+  }
+
+  /* Named only during a page swap, so React's transitions never snapshot it. */
+  html:active-view-transition-type(page) .vt-page {
+    view-transition-name: page;
+  }
+
+  ::view-transition-group(page) {
+    animation: none;
+  }
+
+  ::view-transition-old(.vt-exit),
+  ::view-transition-old(page) {
+    animation: t-vt-fade-out var(--motion-fast) var(--motion-ease-out) both;
+  }
+
+  ::view-transition-new(.vt-enter),
+  ::view-transition-new(page) {
+    animation: t-vt-rise-in var(--motion-base) var(--motion-ease-out) both;
+  }
+
+  html[data-page-motion="off"]::view-transition-group(*),
+  html[data-page-motion="off"]::view-transition-old(*),
+  html[data-page-motion="off"]::view-transition-new(*) {
+    animation: none !important;
+  }
+
+  @keyframes t-vt-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes t-vt-rise-in {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
   }
 
   @keyframes t-heatmap-fade {
@@ -2013,12 +2073,6 @@ html[data-page-hidden] .landing-pulse-dot,
   animation:
     logo-draw-stroke 1.8s ease forwards,
     logo-draw-fill 1.8s ease forwards;
-}
-
-/* Unlayered — streamdown table-wrapper uses rounded-lg; inner scroll div uses rounded-md. */
-[data-streamdown="table-wrapper"],
-[data-streamdown="table-wrapper"] > div:has([data-streamdown="table"]) {
-  border-radius: clamp(0.75rem, var(--radius), 1.25rem);
 }
 
 /* ───────────────────────────────────────────────────────────────────

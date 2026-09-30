@@ -22,10 +22,7 @@ import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { getUserDisplayName } from "./task-detail-constants";
 import {
   CommentMentionInput,
@@ -187,7 +184,11 @@ export function CommentActivityItem({
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {!isEditing && !isDeleted ? (
-            <EmojiReactionPicker onSelect={toggle} variant="ghost" />
+            <EmojiReactionPicker
+              onSelect={toggle}
+              variant="ghost"
+              hoverSuggestFor={mentionTokensToEditableText(comment.content)}
+            />
           ) : null}
           {canManage && !isEditing ? (
             <DropdownMenu>
@@ -267,7 +268,7 @@ export function CommentActivityItem({
           repoBasePath={basePath}
           repoId={repo._id}
           atKind="user"
-          className={`${MARKDOWN_PROSE_CLASS} mt-1 text-sm leading-relaxed wrap-break-word`}
+          className="mt-1 text-sm wrap-break-word"
         />
       )}
 

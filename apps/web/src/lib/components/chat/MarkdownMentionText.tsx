@@ -6,7 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Streamdown, defaultRemarkPlugins } from "streamdown";
+import { Markdown, MarkdownLink } from "@eva/ui/markdown";
 import remarkBreaks from "remark-breaks";
 import {
   DataMentionChip,
@@ -43,24 +43,11 @@ interface MarkdownMentionTextProps {
 const MARKDOWN_MEDIA_CLASS = "max-h-80 w-auto max-w-full object-contain";
 
 /**
- * Shared typography for rendered comment/message markdown. First/last margins are
- * collapsed so a block-level first child doesn't push the body off its baseline.
+ * Extends the shared renderer's plugins: authors type single newlines
+ * expecting a line break, not markdown's paragraph-continuation behaviour, and
+ * `@`/`/` tokens become chips.
  */
-export const MARKDOWN_PROSE_CLASS =
-  "prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
-
-/**
- * `remarkPlugins` REPLACES Streamdown's defaults rather than extending them, so
- * `defaultRemarkPlugins` (GFM + code-fence meta) must be spread back in — without
- * it, tables, strikethrough and task lists silently render as literal text.
- * `remarkBreaks` follows because authors type single newlines expecting a line
- * break, not markdown's paragraph-continuation behaviour.
- */
-const REMARK_PLUGINS = [
-  ...Object.values(defaultRemarkPlugins),
-  remarkBreaks,
-  remarkMentionChips,
-];
+const REMARK_PLUGINS = [remarkBreaks, remarkMentionChips];
 
 /** Stop parent click-to-edit handlers when interacting with media. */
 function stopParentClick(e: MouseEvent) {
@@ -132,7 +119,7 @@ export function MarkdownMentionText({
   const navigateToData = useDataMentionNavigate(repoBasePath, repoId);
 
   return (
-    <Streamdown
+    <Markdown
       className={className}
       remarkPlugins={REMARK_PLUGINS}
       components={{
@@ -174,11 +161,7 @@ export function MarkdownMentionText({
             if (typeof href === "string" && isChipLinkUrl(href)) {
               return <LinkChip url={href} />;
             }
-            return (
-              <a href={href} target="_blank" rel="noopener noreferrer">
-                {children}
-              </a>
-            );
+            return <MarkdownLink href={href}>{children}</MarkdownLink>;
           }
 
           const prefix = match[1];
@@ -245,6 +228,6 @@ export function MarkdownMentionText({
       }}
     >
       {text}
-    </Streamdown>
+    </Markdown>
   );
 }

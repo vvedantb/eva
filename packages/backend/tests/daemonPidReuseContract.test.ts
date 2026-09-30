@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import {
   buildDaemonAliveCheckCmd,
+  CALLBACK_LIVENESS_COMMAND,
   entityDaemonPaths,
 } from "../convex/_sandbox_runtime/daemonPaths";
 
@@ -155,6 +156,91 @@ bashDescribe("the generated alive-check against real processes", () => {
         verdict(fixture),
         "the identity check rejected a genuine daemon — every turn would cold-start",
       ).not.toBe("cold");
+    } finally {
+      cleanup(fixture);
+    }
+  }, 20_000);
+});
+
+/**
+ * The same recycled pid, read by the stall watchdog. `verifySandboxLiveness`
+ * treats a zero exit as "callback still running" and grants grace, so a probe
+ * that accepts any live pid keeps a dead turn on "Working…" indefinitely
+ * instead of letting `turns.finalizeExpired` settle it.
+ *
+ * The command hard-codes /tmp/run-design.*, which a real runner on this machine
+ * may own, so each case rewrites those markers into its own temp dir. The
+ * `run-design[.]mjs` argv pattern is untouched by the rewrite.
+ */
+bashDescribe("the watchdog liveness probe against real processes", () => {
+  type Fixture = { dir: string; pid: number };
+
+  const startProcess = async (scriptName: string): Promise<Fixture> => {
+    const dir = mkdtempSync(join(tmpdir(), "eva-liveness-"));
+    const script = join(dir, scriptName);
+    const pidFile = join(dir, "proc.pid");
+    writeFileSync(script, `echo $$ > ${pidFile}\nsleep 300\n`);
+    spawn("setsid", ["bash", script], {
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+    const pid = await readPid(pidFile);
+    writeFileSync(join(dir, "run-design.pid"), String(pid));
+    return { dir, pid };
+  };
+
+  const cleanup = (fixture: Fixture): void => {
+    if (fixture.pid > 0) {
+      try {
+        process.kill(fixture.pid, "SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    }
+    rmSync(fixture.dir, { recursive: true, force: true });
+  };
+
+  const probeSaysAlive = (fixture: Fixture): boolean => {
+    const cmd = CALLBACK_LIVENESS_COMMAND.replaceAll(
+      "/tmp/run-design.",
+      `${fixture.dir}/run-design.`,
+    );
+    try {
+      execFileSync("bash", ["-c", cmd], { stdio: "ignore", timeout: 10_000 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  test("the probe only reads markers it was pointed at", () => {
+    expect(CALLBACK_LIVENESS_COMMAND).toContain("/tmp/run-design.pid");
+    expect(CALLBACK_LIVENESS_COMMAND).toContain("/tmp/run-design.done");
+  });
+
+  test("a recycled pid owned by another service reads dead", async () => {
+    const fixture = await startProcess("vite.js");
+    try {
+      expect(fixture.pid).toBeGreaterThan(0);
+      expect(
+        probeSaysAlive(fixture),
+        "the watchdog granted grace to a pid the reboot gave to another service",
+      ).toBe(false);
+    } finally {
+      cleanup(fixture);
+    }
+  }, 20_000);
+
+  test("a live runner reads alive until it writes the done marker", async () => {
+    const fixture = await startProcess("run-design.mjs");
+    try {
+      expect(fixture.pid).toBeGreaterThan(0);
+      expect(
+        probeSaysAlive(fixture),
+        "the identity check rejected a genuine runner — the watchdog would kill live turns",
+      ).toBe(true);
+      writeFileSync(join(fixture.dir, "run-design.done"), "");
+      expect(probeSaysAlive(fixture)).toBe(false);
     } finally {
       cleanup(fixture);
     }

@@ -3,13 +3,13 @@ import {
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  MessageResponse,
   motionFast,
   ProviderIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -238,10 +238,7 @@ export const ChatMessage = memo(function ChatMessage({
         onClick: onFork,
       }
     : undefined;
-  const rowActions = [
-    ...(forkAction ? [forkAction] : []),
-    ...checkpoint.items,
-  ];
+  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
 
   // Two MCP provenances, never both on one row: a child chat shows the turns
   // posted from outside the composer, Eva shows the wake-ups its children fired.
@@ -283,11 +280,7 @@ export const ChatMessage = memo(function ChatMessage({
     message.content.trim().length > 0;
   /* wrap-anywhere: without it a long unbreakable token is silently clipped by
      MessageContent's overflow-hidden. */
-  const turnProse = (
-    <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-      {message.content}
-    </MessageResponse>
-  );
+  const turnProse = <Markdown>{message.content}</Markdown>;
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
@@ -304,10 +297,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <>
-      <ChatMessageContextMenu
-        content={copySource}
-        extraItems={rowActions}
-      >
+      <ChatMessageContextMenu content={copySource} extraItems={rowActions}>
         <m.div
           data-message-id={message._id}
           initial={animateIn ? { opacity: 0, y: 10 } : false}
@@ -418,9 +408,9 @@ export const ChatMessage = memo(function ChatMessage({
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
                         <div data-assistant-cite-source={message._id}>
-                          <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
+                          <Markdown className="mt-2">
                             {streamingContent}
-                          </MessageResponse>
+                          </Markdown>
                         </div>
                       ) : null}
                     </>

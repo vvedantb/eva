@@ -5580,12 +5580,10 @@ async function loadSdk() {
   return mod;
 }
 var CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
-function globalCliVersion(packageName) {
-  for (const root of globalNpmRoots()) {
-    const version = installedPackageVersion(root + "/" + packageName);
-    if (version !== null) return version;
-  }
-  return null;
+function binPackageVersion(binPath, packageName) {
+  return installedPackageVersion(
+    dirname(dirname(binPath)) + "/lib/node_modules/" + packageName
+  );
 }
 function resolvePinnedCliBinary(cli) {
   const pinned = cli.pinnedVersion;
@@ -5598,15 +5596,17 @@ function resolvePinnedCliBinary(cli) {
     globalBin = "";
   }
   if (globalBin) {
-    const globalVersion = globalCliVersion(cli.packageName);
+    const globalVersion = binPackageVersion(globalBin, cli.packageName);
     if (pinned === null || globalVersion === pinned) return globalBin;
     log(
       "cli version drift: global " + cli.binName + " is " + (globalVersion ?? "unknown") + ", need " + pinned + "; preferring the pinned fallback install"
     );
   }
   if (cli.fallbackBinPath && existsSync6(cli.fallbackBinPath)) {
-    const fallbackRoot = dirname(dirname(cli.fallbackBinPath)) + "/lib/node_modules/" + cli.packageName;
-    const fallbackVersion = installedPackageVersion(fallbackRoot);
+    const fallbackVersion = binPackageVersion(
+      cli.fallbackBinPath,
+      cli.packageName
+    );
     if (pinned === null || fallbackVersion === pinned) {
       return cli.fallbackBinPath;
     }
