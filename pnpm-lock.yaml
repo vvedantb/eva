@@ -306,18 +306,6 @@ importers:
       '@radix-ui/react-use-controllable-state':
         specifier: ^1.2.2
         version: 1.2.2(@types/react@19.3.0)(react@19.3.0)
-      '@streamdown/cjk':
-        specifier: ^1.0.1
-        version: 1.0.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.3.0)(unified@11.0.5)
-      '@streamdown/code':
-        specifier: ^1.0.1
-        version: 1.1.1(react@19.3.0)
-      '@streamdown/math':
-        specifier: ^1.0.1
-        version: 1.0.2(react@19.3.0)
-      '@streamdown/mermaid':
-        specifier: ^1.0.1
-        version: 1.0.2(react@19.3.0)
       '@t3-oss/env-core':
         specifier: ^0.13.8
         version: 0.13.11(typescript@7.0.1-rc)(zod@3.25.76)
@@ -447,9 +435,6 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      streamdown:
-        specifier: ^2.1.0
-        version: 2.5.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.1
@@ -780,6 +765,9 @@ importers:
       embla-carousel-react:
         specifier: ^8.5.1
         version: 8.6.0(react@19.3.0)
+      katex:
+        specifier: ^0.16.45
+        version: 0.16.45
       media-chrome:
         specifier: ^4.14.0
         version: 4.19.0(react@19.3.0)

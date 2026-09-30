@@ -3,13 +3,13 @@ import {
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  MessageResponse,
   motionFast,
   ProviderIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -264,9 +264,9 @@ export const ChatMessage = memo(function ChatMessage({
   /* wrap-anywhere: without it a long unbreakable token is silently clipped by
      MessageContent's overflow-hidden. */
   const turnProse = (
-    <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
+    <Markdown>
       {message.content}
-    </MessageResponse>
+    </Markdown>
   );
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
@@ -393,9 +393,9 @@ export const ChatMessage = memo(function ChatMessage({
                       {agentSpawnRow}
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
-                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
+                        <Markdown className="mt-2">
                           {streamingContent}
-                        </MessageResponse>
+                        </Markdown>
                       ) : null}
                     </>
                   ) : (
