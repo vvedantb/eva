@@ -3,10 +3,8 @@
 import { ConvexError, v } from "convex/values";
 import type { FunctionReturnType } from "convex/server";
 import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
-import type { ActionCtx } from "../_generated/server";
 import { authAction } from "../functions";
-import { getSandboxHandle, resolveSandboxClientOnly } from "./helpers";
+import { getSandboxHandle } from "./helpers";
 
 type ForkSource = FunctionReturnType<typeof internal.sessions.getForkSource>;
 
@@ -14,7 +12,6 @@ const NO_SANDBOX =
   "This session's sandbox was deleted, so there is nothing to fork.";
 
 const STOP_WAIT_MS = 3 * 60_000;
-const SNAPSHOT_WAIT_MS = 90_000;
 const POLL_MS = 2_000;
 
 function sleep(ms: number): Promise<void> {
@@ -22,43 +19,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * The source sandbox's last-stop snapshot, once it is usable. `undefined` when
- * the sandbox (and with it every snapshot) is gone, so the fork is refused.
- */
-async function resolveForkSnapshot(
-  ctx: ActionCtx,
-  repoId: Id<"githubRepos">,
-  sandboxId: string,
-): Promise<string | undefined> {
-  let snapshotId: string | undefined;
-  try {
-    const handle = await getSandboxHandle(ctx, repoId, sandboxId);
-    snapshotId = handle.currentSnapshotId;
-  } catch (error) {
-    console.log(
-      `[sandbox][fork] source sandbox unavailable sandboxId=${sandboxId}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return undefined;
-  }
-  if (!snapshotId) return undefined;
-  const client = await resolveSandboxClientOnly(ctx, repoId);
-  const deadline = Date.now() + SNAPSHOT_WAIT_MS;
-  for (;;) {
-    const info = await client.getSnapshot(snapshotId);
-    if (info?.status === "ready") return snapshotId;
-    if (!info || info.status === "error" || Date.now() > deadline) {
-      return undefined;
-    }
-    await sleep(POLL_MS);
-  }
-}
-
-/**
- * "Fork session": a new session with the source's transcript whose sandbox
- * boots from the source sandbox's disk, so local DBs (Supabase volume, Convex
- * local backend) and untracked seed files come along. A running source is
- * stopped first — stopping is what writes the snapshot — and resumes from it
- * untouched the next time it is opened.
+ * "Fork session": a new session with the source's transcript whose first
+ * sandbox is a Vercel fork (`Sandbox.fork`) of the source sandbox, so local DBs
+ * (Supabase volume, Convex local backend) and untracked seed files come along.
+ *
+ * A Vercel fork restores from the source's current snapshot, not its live
+ * disk, and stopping is what writes that snapshot — so a running source is
+ * stopped first. It resumes untouched the next time it is opened.
  */
 export const forkSession = authAction({
   args: { sessionId: v.id("sessions") },
@@ -88,13 +55,18 @@ export const forkSession = authAction({
         sessionId: args.sessionId,
       });
     }
-    const snapshotId = source.sandboxId
-      ? await resolveForkSnapshot(ctx, source.repoId, source.sandboxId)
-      : undefined;
-    if (!snapshotId) throw new ConvexError(NO_SANDBOX);
+    const sourceSandboxId = source.sandboxId;
+    if (!sourceSandboxId) throw new ConvexError(NO_SANDBOX);
+    // The fork itself runs when the new session boots; fail now, not then, if
+    // the provider has already dropped the source.
+    try {
+      await getSandboxHandle(ctx, source.repoId, sourceSandboxId);
+    } catch {
+      throw new ConvexError(NO_SANDBOX);
+    }
     return await ctx.runMutation(internal.sessions.createForkedSession, {
       sourceSessionId: args.sessionId,
-      snapshotId,
+      sourceSandboxId,
     });
   },
 });

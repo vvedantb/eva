@@ -1066,22 +1066,20 @@ async function prepareSessionSandboxInternal(
   });
 
   // Create path needs full env map + snapshot — load only after reuse failed.
-  const { sandboxEnvVars, snapshotName: repoSnapshotName } =
-    await runLoggedSessionStep(
-      "resolveSessionSandboxContext",
-      actionDetails,
-      () =>
-        resolveSandboxContext(ctx, args.repoId, {
-          repoGroupId: launchSession?.repoGroupId,
-        }),
-    );
-  // A forked session's first sandbox boots from the source's disk (DBs
-  // included). A replacement for an expired fork sandbox uses the repo
-  // snapshot, since the source snapshot may be gone by then.
-  const snapshotName =
-    reuseId === undefined && launchSession?.forkSnapshotId
-      ? launchSession.forkSnapshotId
-      : repoSnapshotName;
+  const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
+    "resolveSessionSandboxContext",
+    actionDetails,
+    () =>
+      resolveSandboxContext(ctx, args.repoId, {
+        repoGroupId: launchSession?.repoGroupId,
+      }),
+  );
+  // A forked session's first sandbox is a Vercel fork of the source sandbox
+  // (DBs included). A replacement for an expired fork sandbox boots the repo
+  // snapshot instead, since the source may be gone by then.
+  const forkFrom =
+    reuseId === undefined ? launchSession?.forkSourceSandboxId : undefined;
+  const bootsFromImage = Boolean(snapshotName) || forkFrom !== undefined;
 
   if (reuseId) {
     await emitSessionProgress(
@@ -1111,7 +1109,7 @@ async function prepareSessionSandboxInternal(
   let earlyReadyEmitted = false;
   const prepared = await runLoggedSessionStep(
     "createSessionSandboxAndPrepareRepo",
-    `${actionDetails}, snapshot=${snapshotName ?? "none"}`,
+    `${actionDetails}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}`,
     () =>
       createSandboxAndPrepareRepo(
         ctx,
@@ -1133,7 +1131,7 @@ async function prepareSessionSandboxInternal(
             sandboxId: sandbox.id,
             branchName: args.branchName,
             isNew: true,
-            usedSnapshot: Boolean(snapshotName),
+            usedSnapshot: bootsFromImage,
             resumeFellBack: reuseId !== undefined,
             // Snapshot restores keep a stale checkout + baked modules; gate the
             // queued first turn until the base pull + install below finish.
@@ -1142,7 +1140,7 @@ async function prepareSessionSandboxInternal(
             // `sessionSandboxStartupWorkflow`), and the workflow — not this
             // action — clears the gate once they're done.
             markSetupPending:
-              Boolean(snapshotName) || args.hasLinkedRepos === true,
+              bootsFromImage || args.hasLinkedRepos === true,
             // Background + startup commands have not run yet on this fresh VM;
             // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
@@ -1156,6 +1154,9 @@ async function prepareSessionSandboxInternal(
         },
         undefined,
         { mode: "none" },
+        undefined,
+        false,
+        forkFrom,
       ),
   );
   const handle = prepared.sandbox;

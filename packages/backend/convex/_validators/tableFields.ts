@@ -536,11 +536,11 @@ export const sessionFields = {
   /** Session this one was forked from ("Fork session"). Informational. */
   forkedFromSessionId: v.optional(v.id("sessions")),
   /**
-   * The source sandbox's last-stop snapshot. The fork's first sandbox boots
-   * from it instead of the repo snapshot, so its local DBs (Supabase volume,
-   * Convex local state) carry over.
+   * Source sandbox to Vercel-fork for this session's first sandbox, instead of
+   * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
+   * state) carry over.
    */
-  forkSnapshotId: v.optional(v.string()),
+  forkSourceSandboxId: v.optional(v.string()),
 };
 
 /**

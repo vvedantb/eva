@@ -70,6 +70,12 @@ export interface SandboxCreateParams {
   /** Vercel snapshotId. Omit for a bare sandbox. */
   snapshot?: string;
   /**
+   * Fork this existing sandbox (by id) instead: the provider restores the new
+   * sandbox from the source's current snapshot ("Fork session"). Takes
+   * precedence over `snapshot` and `image`.
+   */
+  forkFrom?: string;
+  /**
    * Vercel Container Registry image to boot from (e.g. the managed
    * `vercel/sandbox/universal:latest`). Ignored when `snapshot` is set — a
    * snapshot restore already carries its own image. Omit for the legacy
@@ -149,11 +155,6 @@ export interface SandboxHandle {
   readonly memory?: number;
   /** Allocated disk in GB, if reported. */
   readonly disk?: number;
-  /**
-   * Snapshot of this sandbox's disk as of its last stop, if the provider keeps
-   * one. Forking a session boots the new sandbox from it.
-   */
-  readonly currentSnapshotId?: string;
 
   /** Last-known normalised state. Call {@link refresh} to update. */
   readonly state: SandboxState;
