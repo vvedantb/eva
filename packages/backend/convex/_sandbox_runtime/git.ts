@@ -36,7 +36,10 @@ import {
   rewrittenBranchPublishError,
 } from "./divergedPublish";
 import { ensureSwapFile } from "./swap";
-import { COREPACK_SANDBOX_ENV } from "../_sandbox/vercelEnvFile";
+import {
+  AGENT_CLI_PATH_LINE,
+  COREPACK_SANDBOX_ENV,
+} from "../_sandbox/vercelEnvFile";
 import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
@@ -378,7 +381,7 @@ export async function createSandbox(
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),
-          }),
+          }) + AGENT_CLI_PATH_LINE,
         ),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources

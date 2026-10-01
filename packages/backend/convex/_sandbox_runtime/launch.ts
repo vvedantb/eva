@@ -16,6 +16,10 @@ import { DAEMON_PID_LIVE_FN, entityDaemonPaths } from "./daemonPaths";
 import { CLAUDE_CODE_VERSION } from "./claudeCliVersion";
 import { CODEX_CLI_VERSION } from "./codexCliVersion";
 import type { SandboxHandle } from "../_sandbox/provider";
+import {
+  CLAUDE_CLI_INSTALL_DIR,
+  CODEX_CLI_INSTALL_DIR,
+} from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
@@ -35,13 +39,13 @@ export const CURSOR_RUNTIME_HOME_DIR = "/tmp/cursor-home";
 export const CURSOR_PERSIST_VOLUME_MOUNT_PATH = "/home/eva/.cursor-persist";
 
 const CLAUDE_INSTALL_TIMEOUT_SECONDS = 300;
-const CLAUDE_FALLBACK_INSTALL_DIR = "/tmp/claude-cli";
+const CLAUDE_FALLBACK_INSTALL_DIR = CLAUDE_CLI_INSTALL_DIR;
 export const CLAUDE_FALLBACK_BIN_PATH = `${CLAUDE_FALLBACK_INSTALL_DIR}/bin/claude`;
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
 /** Where `npm install -g --prefix CLAUDE_FALLBACK_INSTALL_DIR` places the package. */
 const CLAUDE_FALLBACK_PACKAGE_ROOT = `${CLAUDE_FALLBACK_INSTALL_DIR}/lib/node_modules/${CLAUDE_CODE_PACKAGE}`;
 const CODEX_INSTALL_TIMEOUT_SECONDS = 300;
-const CODEX_FALLBACK_INSTALL_DIR = "/tmp/codex-cli";
+const CODEX_FALLBACK_INSTALL_DIR = CODEX_CLI_INSTALL_DIR;
 const CODEX_FALLBACK_BIN_PATH = `${CODEX_FALLBACK_INSTALL_DIR}/bin/codex`;
 const CODEX_CLI_PACKAGE = "@openai/codex";
 /** Where `npm install -g --prefix CODEX_FALLBACK_INSTALL_DIR` places the package. */
