@@ -54,6 +54,7 @@ import {
 } from "@/lib/components/chat/_components/ComposerTasksPanel";
 import type {
   ChatBodyQueuedMessage,
+  ChatHeldFollowUp,
   ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
@@ -100,6 +101,8 @@ interface ChatComposerProps {
   repo?: ChatRepo;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
   messageHistory: string[];
   isExecuting: boolean;
   isInputDisabled: boolean;
@@ -138,6 +141,7 @@ export function ChatComposer({
   repo,
   conversationId,
   queuedMessages,
+  heldFollowUps = [],
   messageHistory,
   isExecuting,
   isInputDisabled,
@@ -275,6 +279,23 @@ export function ChatComposer({
       </div>
     );
 
+  const renderQueuedContent = (content: string) => {
+    const stripped = stripReviewCommentBlocks(content);
+    const display = tokenizedToEditable(stripped.text).displayText;
+    const suffix =
+      stripped.reviewCommentCount > 0
+        ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
+        : "";
+    return (
+      <MessageMentionText
+        as="span"
+        text={`${display}${suffix}`}
+        repo={repo}
+        className="text-xs leading-4 text-foreground/90"
+      />
+    );
+  };
+
   const dockPanels = (
     <>
       <ComposerTasksPanel
@@ -283,22 +304,7 @@ export function ChatComposer({
       />
       <QueuedMessagesPanel
         items={queuedMessageItems}
-        renderContent={(content) => {
-          const stripped = stripReviewCommentBlocks(content);
-          const display = tokenizedToEditable(stripped.text).displayText;
-          const suffix =
-            stripped.reviewCommentCount > 0
-              ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
-              : "";
-          return (
-            <MessageMentionText
-              as="span"
-              text={`${display}${suffix}`}
-              repo={repo}
-              className="text-xs leading-4 text-foreground/90"
-            />
-          );
-        }}
+        renderContent={renderQueuedContent}
         onEdit={async (id, content) => {
           await updateQueuedMessage({ id, content });
         }}
@@ -310,6 +316,10 @@ export function ChatComposer({
           if (!parentId) return;
           await reorderQueuedMessages({ parentId, orderedIds });
         }}
+      />
+      <QueuedMessagesPanel
+        items={heldFollowUps}
+        renderContent={renderQueuedContent}
       />
     </>
   );
