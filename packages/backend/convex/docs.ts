@@ -1,12 +1,10 @@
 import { v } from "convex/values";
-import type { GenericDatabaseReader } from "convex/server";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   authAction,
   authQuery,
   authMutation,
   hasRepoAccess,
-  hasTaskAccess,
 } from "./functions";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
 import {
@@ -41,223 +39,22 @@ import {
   resolveCodebaseDocsRepoId,
 } from "./_githubRepos/helpers";
 import { isEvaOwnedPullRequest } from "./_github/evaPrOwnership";
+import {
+  callerCanSeeChatSource,
+  chatSourceArgValidator,
+  chatSourceFieldsFromArg,
+  chatSourceSummaryValidator,
+  listRowsForChatSource,
+  resolveChatSource,
+  type ChatSourceArg,
+  type RepoCache,
+} from "./_chatSource/helpers";
 
 const docValidator = v.object({
   _id: v.id("docs"),
   _creationTime: v.number(),
   ...docFields,
 });
-
-const docSourceSummary = v.union(
-  v.null(),
-  v.object({
-    kind: v.union(
-      v.literal("session"),
-      v.literal("task"),
-      v.literal("project"),
-    ),
-    id: v.string(),
-    title: v.string(),
-    numId: v.optional(v.number()),
-    owner: v.string(),
-    repo: v.string(),
-    rootDirectory: v.optional(v.string()),
-  }),
-);
-
-const docSourceRequired = v.union(
-  v.object({
-    kind: v.literal("session"),
-    sessionId: v.id("sessions"),
-  }),
-  v.object({
-    kind: v.literal("task"),
-    taskId: v.id("agentTasks"),
-  }),
-  v.object({
-    kind: v.literal("project"),
-    projectId: v.id("projects"),
-  }),
-);
-
-const docSourceArg = v.optional(docSourceRequired);
-
-type DocSourceArg = {
-  kind: "session";
-  sessionId: Id<"sessions">;
-} | {
-  kind: "task";
-  taskId: Id<"agentTasks">;
-} | {
-  kind: "project";
-  projectId: Id<"projects">;
-};
-
-type DocSourceSummary =
-  | null
-  | {
-      kind: "session" | "task" | "project";
-      id: string;
-      title: string;
-      numId?: number;
-      owner: string;
-      repo: string;
-      rootDirectory?: string;
-    };
-
-type DocSourceFields = {
-  sourceKind?: "session" | "task" | "project";
-  sourceSessionId?: Id<"sessions">;
-  sourceTaskId?: Id<"agentTasks">;
-  sourceProjectId?: Id<"projects">;
-};
-
-/** Binds a create() source arg to stored fields, or skips a missing entity. */
-async function sourceFieldsFromArg(
-  ctx: { db: GenericDatabaseReader<DataModel>; userId: Id<"users"> },
-  source: DocSourceArg | undefined,
-): Promise<DocSourceFields> {
-  if (source === undefined) return {};
-  if (source.kind === "session") {
-    const sessionId = ctx.db.normalizeId("sessions", String(source.sessionId));
-    if (!sessionId) return {};
-    const session = await ctx.db.get(sessionId);
-    if (!session) return {};
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error(
-        "Not authorized to attach this document to that session.",
-      );
-    }
-    return { sourceKind: "session", sourceSessionId: sessionId };
-  }
-  if (source.kind === "task") {
-    const taskId = ctx.db.normalizeId("agentTasks", String(source.taskId));
-    if (!taskId) return {};
-    const task = await ctx.db.get(taskId);
-    if (!task) return {};
-    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-      throw new Error("Not authorized to attach this document to that task.");
-    }
-    return { sourceKind: "task", sourceTaskId: taskId };
-  }
-  const projectId = ctx.db.normalizeId("projects", String(source.projectId));
-  if (!projectId) return {};
-  const project = await ctx.db.get(projectId);
-  if (!project) return {};
-  if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-    throw new Error(
-      "Not authorized to attach this document to that project.",
-    );
-  }
-  return { sourceKind: "project", sourceProjectId: projectId };
-}
-
-async function repoFromCache(
-  ctx: QueryCtx,
-  repoId: Id<"githubRepos">,
-  cache: Map<string, Doc<"githubRepos"> | null>,
-): Promise<Doc<"githubRepos"> | null> {
-  const key = String(repoId);
-  const cached = cache.get(key);
-  if (cached !== undefined) return cached;
-  const repo = await ctx.db.get(repoId);
-  cache.set(key, repo);
-  return repo;
-}
-
-function sourceSummary(
-  kind: "session" | "task" | "project",
-  entity: { _id: string; title: string; numId?: number; deletedAt?: number },
-  repo: Doc<"githubRepos"> | null,
-): DocSourceSummary {
-  if (isEntityDeleted(entity) || repo === null) return null;
-  return {
-    kind,
-    id: String(entity._id),
-    title: entity.title,
-    ...(entity.numId !== undefined ? { numId: entity.numId } : {}),
-    owner: repo.owner,
-    repo: repo.name,
-    ...(repo.rootDirectory !== undefined
-      ? { rootDirectory: repo.rootDirectory }
-      : {}),
-  };
-}
-
-/**
- * Resolves the chat this doc was created from. `sourceKind` wins; otherwise
- * `sessionId` (Plan → Save as document) is treated as a session source so those
- * rows still show on the Documents tab and in the sidebar.
- */
-async function resolveSource(
-  ctx: QueryCtx,
-  doc: Doc<"docs">,
-  repoCache: Map<string, Doc<"githubRepos"> | null>,
-): Promise<DocSourceSummary> {
-  if (doc.sourceKind === "session" && doc.sourceSessionId) {
-    const session = await ctx.db.get(doc.sourceSessionId);
-    if (!session) return null;
-    return sourceSummary(
-      "session",
-      session,
-      await repoFromCache(ctx, session.repoId, repoCache),
-    );
-  }
-  if (doc.sourceKind === "task" && doc.sourceTaskId) {
-    const task = await ctx.db.get(doc.sourceTaskId);
-    if (!task) return null;
-    const repoId = task.repoId
-      ? task.repoId
-      : task.projectId
-        ? (await ctx.db.get(task.projectId))?.repoId
-        : undefined;
-    if (!repoId) return null;
-    return sourceSummary(
-      "task",
-      task,
-      await repoFromCache(ctx, repoId, repoCache),
-    );
-  }
-  if (doc.sourceKind === "project" && doc.sourceProjectId) {
-    const project = await ctx.db.get(doc.sourceProjectId);
-    if (!project) return null;
-    return sourceSummary(
-      "project",
-      project,
-      await repoFromCache(ctx, project.repoId, repoCache),
-    );
-  }
-  if (doc.sessionId) {
-    const session = await ctx.db.get(doc.sessionId);
-    if (!session) return null;
-    return sourceSummary(
-      "session",
-      session,
-      await repoFromCache(ctx, session.repoId, repoCache),
-    );
-  }
-  return null;
-}
-
-async function callerCanSeeSource(
-  ctx: QueryCtx & { userId: Id<"users"> },
-  source: DocSourceArg,
-): Promise<boolean> {
-  if (source.kind === "session") {
-    const session = await ctx.db.get(source.sessionId);
-    return session
-      ? await hasRepoAccess(ctx.db, session.repoId, ctx.userId)
-      : false;
-  }
-  if (source.kind === "task") {
-    const task = await ctx.db.get(source.taskId);
-    return task ? await hasTaskAccess(ctx.db, task, ctx.userId) : false;
-  }
-  const project = await ctx.db.get(source.projectId);
-  return project
-    ? await hasRepoAccess(ctx.db, project.repoId, ctx.userId)
-    : false;
-}
 
 /** Soft-limit matching sidebar hover preview — avoid shipping full bodies on list. */
 const DOC_LIST_PREVIEW_MAX = 280;
@@ -291,7 +88,7 @@ const docListItemValidator = v.object({
   createdBy: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
-  source: docSourceSummary,
+  source: chatSourceSummaryValidator,
 });
 
 function docListPreview(doc: {
@@ -341,11 +138,11 @@ function toDocListItem(doc: Doc<"docs">) {
 async function toDocListItemWithSource(
   ctx: QueryCtx,
   doc: Doc<"docs">,
-  repoCache: Map<string, Doc<"githubRepos"> | null>,
+  repoCache: RepoCache,
 ) {
   return {
     ...toDocListItem(doc),
-    source: await resolveSource(ctx, doc, repoCache),
+    source: await resolveChatSource(ctx, doc, repoCache, doc.sessionId),
   };
 }
 
@@ -391,7 +188,7 @@ export const list = authQuery({
     }
 
     // PR recaps: newest PRs first. Other docs: most recently created first.
-    const repoCache = new Map<string, Doc<"githubRepos"> | null>();
+    const repoCache: RepoCache = new Map();
     return Promise.all(
       docs
         .toSorted((a, b) => {
@@ -408,32 +205,16 @@ export const list = authQuery({
 
 /** Docs created from one session, quick task, or project sandbox. */
 export const listForSource = authQuery({
-  args: { source: docSourceRequired },
+  args: { source: chatSourceArgValidator },
   returns: v.array(docListItemValidator),
   handler: async (ctx, args) => {
-    if (!(await callerCanSeeSource(ctx, args.source))) return [];
-    const source = args.source;
-    const rows =
-      source.kind === "session"
-        ? await listDocsForSession(ctx, source.sessionId)
-        : source.kind === "task"
-          ? await ctx.db
-              .query("docs")
-              .withIndex("by_source_task", (q) =>
-                q.eq("sourceTaskId", source.taskId),
-              )
-              .collect()
-          : await ctx.db
-              .query("docs")
-              .withIndex("by_source_project", (q) =>
-                q.eq("sourceProjectId", source.projectId),
-              )
-              .collect();
+    if (!(await callerCanSeeChatSource(ctx, args.source))) return [];
+    const rows = await listDocsForSource(ctx, args.source);
     const visible = rows.filter(
       (doc) => !isEntityDeleted(doc) && doc.kind !== "pr-recap",
     );
     visible.sort((a, b) => b.createdAt - a.createdAt);
-    const repoCache = new Map<string, Doc<"githubRepos"> | null>();
+    const repoCache: RepoCache = new Map();
     return Promise.all(
       visible.map((doc) => toDocListItemWithSource(ctx, doc, repoCache)),
     );
@@ -441,20 +222,19 @@ export const listForSource = authQuery({
 });
 
 /**
- * Session Documents tab: MCP-created docs (`sourceSessionId`) plus Plan → Save
- * as document (`sessionId`). `getBySession` still reads only `sessionId`.
+ * Docs for a chat's Documents tab. Sessions also include Plan → Save as
+ * document (`sessionId`); `getBySession` still reads only `sessionId`.
  */
-async function listDocsForSession(
+async function listDocsForSource(
   ctx: QueryCtx,
-  sessionId: Id<"sessions">,
+  source: ChatSourceArg,
 ): Promise<Doc<"docs">[]> {
+  if (source.kind !== "session") {
+    return listRowsForChatSource(ctx, "docs", source);
+  }
+  const sessionId = source.sessionId;
   const [fromSource, fromPlan] = await Promise.all([
-    ctx.db
-      .query("docs")
-      .withIndex("by_source_session", (q) =>
-        q.eq("sourceSessionId", sessionId),
-      )
-      .collect(),
+    listRowsForChatSource(ctx, "docs", source),
     ctx.db
       .query("docs")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
@@ -574,7 +354,7 @@ export const create = authMutation({
     repoId: v.id("githubRepos"),
     title: v.string(),
     content: v.string(),
-    source: docSourceArg,
+    source: v.optional(chatSourceArgValidator),
   },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
@@ -591,7 +371,7 @@ export const create = authMutation({
       createdAt: now,
       updatedAt: now,
       numId,
-      ...(await sourceFieldsFromArg(ctx, args.source)),
+      ...(await chatSourceFieldsFromArg(ctx, args.source, "document")),
     });
 
     await prosemirrorSync.create(ctx, docId, markdownToDocJson(args.content));
