@@ -488,6 +488,7 @@ export function TaskDetailInline({
         task={task}
         status={status}
         hasActiveRun={hasActiveRun}
+        hasRuns={hasRuns}
         latestPrUrl={latestPrUrl}
         latestPrError={latestPrError}
         latestDeployment={latestDeployment}

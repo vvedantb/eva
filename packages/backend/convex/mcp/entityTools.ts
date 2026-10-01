@@ -184,7 +184,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
       name: "start_sandbox",
       description: `Start the preview sandbox for a session, quick task or project — the same Start button the Eva UI has. Returns only once the VM is genuinely active, or fails saying why; it never leaves you guessing at "resuming sandbox".
 
-Already-active sandboxes are left alone. Each surface has its own gate: a quick task must be in code_review, business_review or done, and a project must be in in_progress, business_review or code_review, before a preview sandbox will start.`,
+Already-active sandboxes are left alone. Each surface has its own gate: a quick task must be in code_review, business_review or done (or in todo after it has already run), and a project must be in in_progress, business_review or code_review, before a preview sandbox will start.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {

@@ -5,7 +5,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
@@ -23,16 +23,36 @@ const PREVIEW_ALLOWED_STATUSES = [
   "done",
 ] as const;
 
-function assertPreviewSandboxAllowed(task: {
-  status: string;
-  sandboxId?: string;
-}): void {
+/**
+ * Review statuses always allow a preview. A task moved back to `todo` after it
+ * already ran keeps its branch, so it previews like a reviewed task instead of
+ * offering a first run again (mirrors `canStartSandbox` in `useTaskDetail`).
+ */
+async function isPreviewSandboxAllowed(
+  db: MutationCtx["db"],
+  task: Doc<"agentTasks">,
+): Promise<boolean> {
+  if (PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
+    return true;
+  }
+  if (task.status !== "todo") return false;
+  const run = await db
+    .query("agentRuns")
+    .withIndex("by_task", (q) => q.eq("taskId", task._id))
+    .first();
+  return run !== null;
+}
+
+async function assertPreviewSandboxAllowed(
+  db: MutationCtx["db"],
+  task: Doc<"agentTasks">,
+): Promise<void> {
   if (task.sandboxId) {
     return;
   }
-  if (!PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
+  if (!(await isPreviewSandboxAllowed(db, task))) {
     throw new Error(
-      `Task must be in code_review, business_review or done status to start sandbox. Current status: ${task.status}`,
+      `Task must be in code_review, business_review or done status, or have run before, to start sandbox. Current status: ${task.status}`,
     );
   }
 }
@@ -49,7 +69,7 @@ export const startTaskSandbox = authMutation({
 
     if (!task.repoId) throw new Error("Task has no associated repository");
 
-    assertPreviewSandboxAllowed(task);
+    await assertPreviewSandboxAllowed(ctx.db, task);
 
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -128,7 +148,7 @@ export const retryStartupCommands = authMutation({
 
     if (!task.repoId) throw new Error("Task has no associated repository");
 
-    assertPreviewSandboxAllowed(task);
+    await assertPreviewSandboxAllowed(ctx.db, task);
 
     if (
       task.reviewTaskSandboxStatus === "starting" ||
@@ -197,9 +217,9 @@ export const runDevServer = authMutation({
       throw new Error("Start the sandbox before running the dev server");
     }
 
-    if (!PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
+    if (!(await isPreviewSandboxAllowed(ctx.db, task))) {
       throw new Error(
-        `Task must be in code_review, business_review or done status. Current status: ${task.status}`,
+        `Task must be in code_review, business_review or done status, or have run before. Current status: ${task.status}`,
       );
     }
 

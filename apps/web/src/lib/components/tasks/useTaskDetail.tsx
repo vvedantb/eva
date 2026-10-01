@@ -190,9 +190,13 @@ export function useTaskDetail(
     setIsStopping(false);
   };
 
+  // A task moved back to `todo` after it already ran keeps its branch, so it
+  // previews like a reviewed task rather than offering a first run again.
+  // Mirrors `isPreviewSandboxAllowed` in the backend.
   const canStartSandbox =
     task?.status !== undefined &&
-    PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status);
+    (PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status) ||
+      (task.status === "todo" && hasRuns));
 
   const isSandboxActive = task?.reviewTaskSandboxStatus === "active";
   const isSandboxStartingFromStatus =
