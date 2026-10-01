@@ -65,6 +65,23 @@ export function findHandoffBoundaryIds(
   return boundaries;
 }
 
+/**
+ * Turns that open a new local calendar day — the first turn of the transcript
+ * included — so ChatBody can head each day with an iMessage-style date label.
+ */
+export function findDayBoundaryIds(
+  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
+): Set<string> {
+  const boundaries = new Set<string>();
+  let previousDay: string | undefined;
+  for (const message of messages) {
+    const day = new Date(message.timestamp).toDateString();
+    if (day !== previousDay) boundaries.add(message._id);
+    previousDay = day;
+  }
+  return boundaries;
+}
+
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
 
 const SANDBOX_LIFECYCLE_ALERTS = new Set([

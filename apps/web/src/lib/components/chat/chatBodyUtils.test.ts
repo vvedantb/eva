@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import type { ActivityStep } from "@eva/ui";
 import {
   collectQuestionSteps,
+  findDayBoundaryIds,
   findHandoffBoundaryIds,
   findStreamingTargetMessage,
   visibleChatMessages,
@@ -180,6 +181,21 @@ describe("findHandoffBoundaryIds", () => {
     ]);
 
     expect([...boundaries]).toEqual([]);
+  });
+});
+
+describe("findDayBoundaryIds", () => {
+  test("heads the first turn and every turn that starts a new local day", () => {
+    const at = (day: number, hour: number) =>
+      new Date(2026, 8, day, hour).getTime();
+    const ids = findDayBoundaryIds([
+      { _id: "a", timestamp: at(1, 9) },
+      { _id: "b", timestamp: at(1, 23) },
+      { _id: "c", timestamp: at(2, 0) },
+      { _id: "d", timestamp: at(2, 8) },
+      { _id: "e", timestamp: at(5, 12) },
+    ]);
+    expect([...ids]).toEqual(["a", "c", "e"]);
   });
 });
 
