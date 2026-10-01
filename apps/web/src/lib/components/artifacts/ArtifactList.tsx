@@ -16,12 +16,15 @@ export function ArtifactList({
   emptyDescription,
   showSource = true,
   compact = false,
+  onOpen,
 }: {
   artifacts: ArtifactRow[];
   emptyDescription: string;
   showSource?: boolean;
   /** Single column — the sandbox Artifacts pane is too narrow for the grid. */
   compact?: boolean;
+  /** Open a row in place instead of navigating to the viewer. */
+  onOpen?: (artifactId: string) => void;
 }) {
   if (artifacts.length === 0) {
     if (compact) {
@@ -59,6 +62,7 @@ export function ArtifactList({
             artifact={artifact}
             showSource={showSource}
             compact={compact}
+            onOpen={onOpen}
           />
         </ListEnter>
       ))}

@@ -6,10 +6,9 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { CenteredSpinner } from "@eva/ui";
-import { IconChevronLeft } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { mutationError } from "@/lib/utils/mutationToast";
-import { sessionSourceViewAllClass } from "@/lib/components/sandbox/SessionSourcePane";
+import { SessionSourceDetailHeader } from "@/lib/components/sandbox/SessionSourcePane";
 import { baseDocEditorExtensions, useDocSync } from "./_utils/useDocSync";
 
 /**
@@ -29,21 +28,11 @@ export function SourceDocumentEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to documents"
-          title="Back to documents"
-          className={sessionSourceViewAllClass}
-        >
-          <IconChevronLeft size={14} />
-          Documents
-        </button>
+      <SessionSourceDetailHeader backLabel="Documents" onBack={onBack}>
         {doc ? (
           <DocTitleInput key={doc._id} id={doc._id} title={doc.title} />
         ) : null}
-      </div>
+      </SessionSourceDetailHeader>
       {doc === undefined ? (
         <CenteredSpinner label="Loading" />
       ) : doc === null ? (

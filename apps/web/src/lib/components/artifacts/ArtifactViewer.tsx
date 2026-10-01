@@ -71,8 +71,6 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
     );
   }
 
-  const url = artifact.url;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* Only the artifact name is essential on a phone, so the breadcrumb and
@@ -106,30 +104,44 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         </button>
       </div>
       <div className="min-h-0 w-full flex-1 overflow-hidden rounded-surface border border-border bg-white">
-        {url ? (
-          <ViewTransitionSuspense
-            fallback={
-              <Centered>
-                <div className="flex flex-col items-center gap-2">
-                  <Spinner />
-                  <span className="text-sm text-muted-foreground">
-                    Loading dashboard…
-                  </span>
-                </div>
-              </Centered>
-            }
-          >
-            <ArtifactHtmlBody key={url} url={url} title={artifact.name} />
-          </ViewTransitionSuspense>
-        ) : (
-          <Centered>
-            <p className="text-sm text-muted-foreground">
-              Artifact has no content URL.
-            </p>
-          </Centered>
-        )}
+        <ArtifactContent url={artifact.url} title={artifact.name} />
       </div>
     </div>
+  );
+}
+
+/** Artifact HTML in its bridged iframe, with loading / error / empty states. */
+export function ArtifactContent({
+  url,
+  title,
+}: {
+  url: string | null;
+  title: string;
+}) {
+  if (!url) {
+    return (
+      <Centered>
+        <p className="text-sm text-muted-foreground">
+          Artifact has no content URL.
+        </p>
+      </Centered>
+    );
+  }
+  return (
+    <ViewTransitionSuspense
+      fallback={
+        <Centered>
+          <div className="flex flex-col items-center gap-2">
+            <Spinner />
+            <span className="text-sm text-muted-foreground">
+              Loading dashboard…
+            </span>
+          </div>
+        </Centered>
+      }
+    >
+      <ArtifactHtmlBody key={url} url={url} title={title} />
+    </ViewTransitionSuspense>
   );
 }
 

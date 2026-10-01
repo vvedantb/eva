@@ -2,7 +2,7 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import { CenteredSpinner, cn } from "@eva/ui";
-import { IconChevronRight } from "@tabler/icons-react";
+import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import {
   forwardRef,
   type ComponentPropsWithoutRef,
@@ -58,6 +58,33 @@ export function SessionSourcePane({
           children
         )}
       </div>
+    </div>
+  );
+}
+
+/** Header for an item opened inside the pane: back to the list, then its title. */
+export function SessionSourceDetailHeader({
+  backLabel,
+  onBack,
+  children,
+}: {
+  backLabel: string;
+  onBack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label={`Back to ${backLabel.toLowerCase()}`}
+        title={`Back to ${backLabel.toLowerCase()}`}
+        className={sessionSourceViewAllClass}
+      >
+        <IconChevronLeft size={14} />
+        {backLabel}
+      </button>
+      {children}
     </div>
   );
 }

@@ -34,16 +34,21 @@ import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 
-/** A single artifact tile: left-click opens the viewer; right-click for actions. */
+/**
+ * A single artifact tile: left-click opens the viewer (or `onOpen`, which the
+ * sandbox pane uses to show it inline); right-click for actions.
+ */
 export function ArtifactCard({
   artifact,
   showSource = true,
   compact = false,
+  onOpen,
 }: {
   artifact: ArtifactRow;
   showSource?: boolean;
   /** Sandbox pane: a list row. The global Artifacts page keeps the tile. */
   compact?: boolean;
+  onOpen?: (artifactId: string) => void;
 }) {
   const navigate = useNavigate();
   const remove = useMutation(api.artifacts.remove);
@@ -66,11 +71,16 @@ export function ArtifactCard({
   };
 
   const menuProps = {
-    onOpen: () =>
+    onOpen: () => {
+      if (onOpen) {
+        onOpen(artifact._id);
+        return;
+      }
       void navigate({
         to: "/artifacts/$artifactId",
         params: { artifactId: artifact._id },
-      }),
+      });
+    },
     onOpenInNewTab: openInNewTab,
     ...(source && sourceRoute
       ? {
@@ -145,10 +155,14 @@ export function ArtifactCard({
               timeLabel={compactRelativeTime(artifact.createdAt)}
               icon={<IconLayoutDashboard size={16} />}
               link={
-                <Link
-                  to="/artifacts/$artifactId"
-                  params={{ artifactId: artifact._id }}
-                />
+                onOpen ? (
+                  <button type="button" onClick={() => onOpen(artifact._id)} />
+                ) : (
+                  <Link
+                    to="/artifacts/$artifactId"
+                    params={{ artifactId: artifact._id }}
+                  />
+                )
               }
               trailing={kebab}
             />

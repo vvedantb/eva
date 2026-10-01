@@ -373,6 +373,9 @@ export const docModeParser = parseAsStringLiteral(docModes)
 // Doc (numId) open in the sandbox Documents tab's inline editor.
 export const panelDocParser = parseAsInteger.withOptions(tabOptions);
 
+// Artifact id open in the sandbox Artifacts tab's inline viewer.
+export const panelArtifactParser = parseAsString.withOptions(tabOptions);
+
 const docCommentFilters = ["open", "resolved"] as const;
 export const docCommentFilterParser = parseAsStringLiteral(docCommentFilters)
   .withDefault("open")
