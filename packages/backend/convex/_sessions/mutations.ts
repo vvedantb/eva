@@ -85,7 +85,7 @@ type CreateSessionArgs = Infer<typeof createSessionArgs>;
 /** Internal-only: never accepted from clients, so nobody boots a chosen snapshot. */
 export interface CreateSessionFork {
   sourceSessionId: Id<"sessions">;
-  snapshotId: string | undefined;
+  snapshotId: string;
 }
 
 /** Mutation context after `authMutation` injects the caller's user id. */
@@ -175,9 +175,7 @@ export async function createSession(
     ...(fork
       ? {
           forkedFromSessionId: fork.sourceSessionId,
-          ...(fork.snapshotId !== undefined
-            ? { forkSnapshotId: fork.snapshotId }
-            : {}),
+          forkSnapshotId: fork.snapshotId,
         }
       : {}),
   });

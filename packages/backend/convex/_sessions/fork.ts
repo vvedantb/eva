@@ -38,13 +38,13 @@ export const getForkSource = internalAuthQuery({
 
 /**
  * Creates the fork: same repo, base, linked repos and composer traits as the
- * source, the transcript as its first message, and (when the source still has
- * one) the source sandbox's snapshot to boot from.
+ * source, the transcript as its first message, and the source sandbox's
+ * snapshot to boot from.
  */
 export const createForkedSession = internalAuthMutation({
   args: {
     sourceSessionId: v.id("sessions"),
-    snapshotId: v.optional(v.string()),
+    snapshotId: v.string(),
   },
   returns: v.object({ numId: v.number() }),
   handler: async (ctx, args) => {

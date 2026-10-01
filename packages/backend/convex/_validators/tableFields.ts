@@ -538,7 +538,7 @@ export const sessionFields = {
   /**
    * The source sandbox's last-stop snapshot. The fork's first sandbox boots
    * from it instead of the repo snapshot, so its local DBs (Supabase volume,
-   * Convex local state) carry over. Unset when the source had no snapshot left.
+   * Convex local state) carry over.
    */
   forkSnapshotId: v.optional(v.string()),
 };

@@ -10,6 +10,9 @@ import { getSandboxHandle, resolveSandboxClientOnly } from "./helpers";
 
 type ForkSource = FunctionReturnType<typeof internal.sessions.getForkSource>;
 
+const NO_SANDBOX =
+  "This session's sandbox was deleted, so there is nothing to fork.";
+
 const STOP_WAIT_MS = 3 * 60_000;
 const SNAPSHOT_WAIT_MS = 90_000;
 const POLL_MS = 2_000;
@@ -20,9 +23,7 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * The source sandbox's last-stop snapshot, once it is usable. `undefined` when
- * the sandbox (and with it every snapshot) was already deleted — e.g. an
- * archived session past its 48h grace — so the fork falls back to the repo
- * snapshot and only the transcript carries over.
+ * the sandbox (and with it every snapshot) is gone, so the fork is refused.
  */
 async function resolveForkSnapshot(
   ctx: ActionCtx,
@@ -61,48 +62,39 @@ async function resolveForkSnapshot(
  */
 export const forkSession = authAction({
   args: { sessionId: v.id("sessions") },
-  returns: v.object({ numId: v.number(), carriedSandbox: v.boolean() }),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ numId: number; carriedSandbox: boolean }> => {
+  returns: v.object({ numId: v.number() }),
+  handler: async (ctx, args): Promise<{ numId: number }> => {
     let source: ForkSource = await ctx.runQuery(internal.sessions.getForkSource, {
       sessionId: args.sessionId,
     });
+    if (!source.sandboxId) throw new ConvexError(NO_SANDBOX);
     if (source.hasOpenTurn) {
       throw new ConvexError("Wait for the current turn to finish, then fork.");
     }
-    let snapshotId: string | undefined;
-    if (source.sandboxId) {
-      if (source.status === "active" || source.status === "starting") {
-        await ctx.runMutation(internal.sessions.requestStopSandbox, {
-          sessionId: args.sessionId,
-        });
-      }
-      const deadline = Date.now() + STOP_WAIT_MS;
-      while (source.status !== "closed") {
-        if (Date.now() > deadline) {
-          throw new ConvexError(
-            "The session's sandbox is taking too long to stop. Try forking again in a minute.",
-          );
-        }
-        await sleep(POLL_MS);
-        source = await ctx.runQuery(internal.sessions.getForkSource, {
-          sessionId: args.sessionId,
-        });
-      }
-      if (source.sandboxId) {
-        snapshotId = await resolveForkSnapshot(
-          ctx,
-          source.repoId,
-          source.sandboxId,
+    if (source.status === "active" || source.status === "starting") {
+      await ctx.runMutation(internal.sessions.requestStopSandbox, {
+        sessionId: args.sessionId,
+      });
+    }
+    const deadline = Date.now() + STOP_WAIT_MS;
+    while (source.status !== "closed") {
+      if (Date.now() > deadline) {
+        throw new ConvexError(
+          "The session's sandbox is taking too long to stop. Try forking again in a minute.",
         );
       }
+      await sleep(POLL_MS);
+      source = await ctx.runQuery(internal.sessions.getForkSource, {
+        sessionId: args.sessionId,
+      });
     }
-    const { numId }: { numId: number } = await ctx.runMutation(
-      internal.sessions.createForkedSession,
-      { sourceSessionId: args.sessionId, snapshotId },
-    );
-    return { numId, carriedSandbox: snapshotId !== undefined };
+    const snapshotId = source.sandboxId
+      ? await resolveForkSnapshot(ctx, source.repoId, source.sandboxId)
+      : undefined;
+    if (!snapshotId) throw new ConvexError(NO_SANDBOX);
+    return await ctx.runMutation(internal.sessions.createForkedSession, {
+      sourceSessionId: args.sessionId,
+      snapshotId,
+    });
   },
 });

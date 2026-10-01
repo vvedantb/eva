@@ -45,6 +45,7 @@ interface ChromeTabSession {
   baseBranch?: string;
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
+  sandboxId?: string;
 }
 
 export interface SessionChromeTabProps {

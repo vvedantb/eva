@@ -29,6 +29,8 @@ export interface SessionMenuSession {
   branchName?: string;
   prUrl?: string;
   titleRegeneration?: { startedAt: number };
+  /** Unset before the first boot and after an archived sandbox is deleted — nothing to fork. */
+  sandboxId?: string;
 }
 
 /**
@@ -80,6 +82,7 @@ export function SessionMenuItems({
   const simpleView = useSimpleView();
   const branchName = simpleView ? undefined : session.branchName;
   const prUrl = simpleView ? undefined : session.prUrl;
+  const canFork = session.sandboxId !== undefined;
 
   return (
     <>
@@ -107,19 +110,15 @@ export function SessionMenuItems({
       ) : null}
       {onForkNavigate ? (
         <ContextMenuItem
+          disabled={!canFork}
           onSelect={() => {
             // Can take a minute: a running source sandbox is stopped first so
             // its disk (DBs included) is snapshotted for the fork to boot from.
             const toastId = "session-fork";
             toast.loading("Forking session…", { id: toastId });
             forkSession({ sessionId: session._id }).then(
-              ({ numId, carriedSandbox }) => {
-                toast.success(
-                  carriedSandbox
-                    ? "Session forked"
-                    : "Forked — the sandbox was already deleted, so only the chat came along",
-                  { id: toastId },
-                );
+              ({ numId }) => {
+                toast.success("Session forked", { id: toastId });
                 onForkNavigate(String(numId));
               },
               (error) => {
@@ -133,6 +132,12 @@ export function SessionMenuItems({
         >
           <IconGitFork size={16} />
           Fork session
+          {/* Disabled items drop pointer events, so a title tooltip never shows. */}
+          {canFork ? null : (
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+              No sandbox
+            </span>
+          )}
         </ContextMenuItem>
       ) : null}
       <ContextMenuItem
