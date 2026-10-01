@@ -10,6 +10,7 @@ import {
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
+import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
   ChatComposer,
@@ -54,6 +55,7 @@ import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildJumpRailTicks,
   buildMessageHistory,
+  findDayBoundaryIds,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findLastAssistantMessageId,
@@ -409,6 +411,7 @@ function ChatBodyInner({
 
   const jumpRailMessages = buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
+  const dayBoundaryIds = findDayBoundaryIds(displayMessages);
   const findDocuments = collectThreadFindDocuments(
     displayMessages.map((message) => ({
       id: message._id,
@@ -523,6 +526,9 @@ function ChatBodyInner({
 
     return (
       <div key={message._id} className="flex flex-col gap-3">
+        {dayBoundaryIds.has(message._id) ? (
+          <ChatDayDivider timestamp={message.timestamp} />
+        ) : null}
         <ChatMessage
           message={message}
           animateIn={!isBacklog}
