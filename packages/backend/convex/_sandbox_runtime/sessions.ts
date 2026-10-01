@@ -1066,14 +1066,22 @@ async function prepareSessionSandboxInternal(
   });
 
   // Create path needs full env map + snapshot — load only after reuse failed.
-  const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
-    "resolveSessionSandboxContext",
-    actionDetails,
-    () =>
-      resolveSandboxContext(ctx, args.repoId, {
-        repoGroupId: launchSession?.repoGroupId,
-      }),
-  );
+  const { sandboxEnvVars, snapshotName: repoSnapshotName } =
+    await runLoggedSessionStep(
+      "resolveSessionSandboxContext",
+      actionDetails,
+      () =>
+        resolveSandboxContext(ctx, args.repoId, {
+          repoGroupId: launchSession?.repoGroupId,
+        }),
+    );
+  // A forked session's first sandbox boots from the source's disk (DBs
+  // included). A replacement for an expired fork sandbox uses the repo
+  // snapshot, since the source snapshot may be gone by then.
+  const snapshotName =
+    reuseId === undefined && launchSession?.forkSnapshotId
+      ? launchSession.forkSnapshotId
+      : repoSnapshotName;
 
   if (reuseId) {
     await emitSessionProgress(

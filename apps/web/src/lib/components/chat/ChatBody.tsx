@@ -30,7 +30,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
-} from "@/lib/components/chat/messageFork";
+} from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
 import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";

@@ -240,6 +240,7 @@ import type * as _sandbox_runtime_runDevServer from "../_sandbox_runtime/runDevS
 import type * as _sandbox_runtime_sandboxErrors from "../_sandbox_runtime/sandboxErrors.js";
 import type * as _sandbox_runtime_sandboxFiles from "../_sandbox_runtime/sandboxFiles.js";
 import type * as _sandbox_runtime_services from "../_sandbox_runtime/services.js";
+import type * as _sandbox_runtime_sessionFork from "../_sandbox_runtime/sessionFork.js";
 import type * as _sandbox_runtime_sessions from "../_sandbox_runtime/sessions.js";
 import type * as _sandbox_runtime_snapshotStates from "../_sandbox_runtime/snapshotStates.js";
 import type * as _sandbox_runtime_swap from "../_sandbox_runtime/swap.js";
@@ -256,6 +257,7 @@ import type * as _sessions_backgroundAgents from "../_sessions/backgroundAgents.
 import type * as _sessions_baseBranch from "../_sessions/baseBranch.js";
 import type * as _sessions_daemonState from "../_sessions/daemonState.js";
 import type * as _sessions_execution from "../_sessions/execution.js";
+import type * as _sessions_fork from "../_sessions/fork.js";
 import type * as _sessions_helpers from "../_sessions/helpers.js";
 import type * as _sessions_internal from "../_sessions/internal.js";
 import type * as _sessions_mutations from "../_sessions/mutations.js";
@@ -722,6 +724,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/sandboxErrors": typeof _sandbox_runtime_sandboxErrors;
   "_sandbox_runtime/sandboxFiles": typeof _sandbox_runtime_sandboxFiles;
   "_sandbox_runtime/services": typeof _sandbox_runtime_services;
+  "_sandbox_runtime/sessionFork": typeof _sandbox_runtime_sessionFork;
   "_sandbox_runtime/sessions": typeof _sandbox_runtime_sessions;
   "_sandbox_runtime/snapshotStates": typeof _sandbox_runtime_snapshotStates;
   "_sandbox_runtime/swap": typeof _sandbox_runtime_swap;
@@ -738,6 +741,7 @@ declare const fullApi: ApiFromModules<{
   "_sessions/baseBranch": typeof _sessions_baseBranch;
   "_sessions/daemonState": typeof _sessions_daemonState;
   "_sessions/execution": typeof _sessions_execution;
+  "_sessions/fork": typeof _sessions_fork;
   "_sessions/helpers": typeof _sessions_helpers;
   "_sessions/internal": typeof _sessions_internal;
   "_sessions/mutations": typeof _sessions_mutations;

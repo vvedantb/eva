@@ -149,6 +149,11 @@ export interface SandboxHandle {
   readonly memory?: number;
   /** Allocated disk in GB, if reported. */
   readonly disk?: number;
+  /**
+   * Snapshot of this sandbox's disk as of its last stop, if the provider keeps
+   * one. Forking a session boots the new sandbox from it.
+   */
+  readonly currentSnapshotId?: string;
 
   /** Last-known normalised state. Call {@link refresh} to update. */
   readonly state: SandboxState;

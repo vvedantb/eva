@@ -400,6 +400,9 @@ class VercelSandboxHandle implements SandboxHandle {
     // Vercel does not report a per-sandbox disk figure (fixed 32 GB ephemeral NVMe).
     return undefined;
   }
+  get currentSnapshotId(): string | undefined {
+    return this.sandbox.currentSnapshotId;
+  }
   get state(): SandboxState {
     // `Sandbox.status` reads currentSession(), which THROWS when the record
     // was fetched with resume:false and the sandbox has no live session.

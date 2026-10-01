@@ -8,10 +8,10 @@ import {
   IconArchive,
   IconArchiveOff,
   IconClipboard,
-  IconCopy,
   IconExternalLink,
   IconEye,
   IconGitBranch,
+  IconGitFork,
   IconLink,
   IconPencil,
   IconSparkles,
@@ -19,6 +19,7 @@ import {
 import { useAction } from "convex/react";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
@@ -47,9 +48,8 @@ interface SessionMenuItemsProps {
   isRegeneratingTitle: boolean;
   /** Active list only — omitting hides Rename and Regenerate title. */
   onRenameRequest?: () => void;
-  /** Active list only — both are needed for Duplicate to show. */
-  onDuplicate?: () => Promise<string>;
-  onDuplicateNavigate?: (pathSegment: string) => void;
+  /** Shows Fork session; called with the fork's path segment once it exists. */
+  onForkNavigate?: (pathSegment: string) => void;
   /** Sessions with a branch and no open PR yet — opens the review dialog. */
   onSendForReview?: () => void;
   /** Active list: archive. Omit in archived list. */
@@ -68,13 +68,13 @@ export function SessionMenuItems({
   href,
   isRegeneratingTitle,
   onRenameRequest,
-  onDuplicate,
-  onDuplicateNavigate,
+  onForkNavigate,
   onSendForReview,
   onArchiveRequest,
   onUnarchive,
 }: SessionMenuItemsProps) {
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
+  const forkSession = useAction(api.sandbox.forkSession);
   // Simple view hides branch/PR actions, matching the hidden PR chip on the
   // row: dropping the values here drops Copy branch name, Open PR and Review.
   const simpleView = useSimpleView();
@@ -105,16 +105,34 @@ export function SessionMenuItems({
           </ContextMenuItem>
         </>
       ) : null}
-      {onDuplicate && onDuplicateNavigate ? (
+      {onForkNavigate ? (
         <ContextMenuItem
           onSelect={() => {
-            void onDuplicate().then((newPathSegment) => {
-              onDuplicateNavigate(newPathSegment);
-            });
+            // Can take a minute: a running source sandbox is stopped first so
+            // its disk (DBs included) is snapshotted for the fork to boot from.
+            const toastId = "session-fork";
+            toast.loading("Forking session…", { id: toastId });
+            forkSession({ sessionId: session._id }).then(
+              ({ numId, carriedSandbox }) => {
+                toast.success(
+                  carriedSandbox
+                    ? "Session forked"
+                    : "Forked — the sandbox was already deleted, so only the chat came along",
+                  { id: toastId },
+                );
+                onForkNavigate(String(numId));
+              },
+              (error) => {
+                toast.error(
+                  convexErrorMessage(error, "Couldn't fork session"),
+                  { id: toastId },
+                );
+              },
+            );
           }}
         >
-          <IconCopy size={16} />
-          Duplicate
+          <IconGitFork size={16} />
+          Fork session
         </ContextMenuItem>
       ) : null}
       <ContextMenuItem

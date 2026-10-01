@@ -82,6 +82,12 @@ const createSessionArgs = v.object({
 
 type CreateSessionArgs = Infer<typeof createSessionArgs>;
 
+/** Internal-only: never accepted from clients, so nobody boots a chosen snapshot. */
+export interface CreateSessionFork {
+  sourceSessionId: Id<"sessions">;
+  snapshotId: string | undefined;
+}
+
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
@@ -93,6 +99,7 @@ export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 export async function createSession(
   ctx: AuthMutationCtx,
   args: CreateSessionArgs,
+  fork?: CreateSessionFork,
 ): Promise<{ sessionId: Id<"sessions">; numId: number }> {
   if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
     throw new Error("Not authorized");
@@ -165,6 +172,14 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
+    ...(fork
+      ? {
+          forkedFromSessionId: fork.sourceSessionId,
+          ...(fork.snapshotId !== undefined
+            ? { forkSnapshotId: fork.snapshotId }
+            : {}),
+        }
+      : {}),
   });
   const branchName = `eva/session-${sessionId}`;
   await ctx.db.patch(sessionId, { branchName });

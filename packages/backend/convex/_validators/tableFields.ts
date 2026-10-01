@@ -533,6 +533,14 @@ export const sessionFields = {
   // How many `sessionRepos` rows this session has. Denormalised so list rows
   // and resume paths can tell a multi-repo session apart without a join.
   linkedRepoCount: v.optional(v.number()),
+  /** Session this one was forked from ("Fork session"). Informational. */
+  forkedFromSessionId: v.optional(v.id("sessions")),
+  /**
+   * The source sandbox's last-stop snapshot. The fork's first sandbox boots
+   * from it instead of the repo snapshot, so its local DBs (Supabase volume,
+   * Convex local state) carry over. Unset when the source had no snapshot left.
+   */
+  forkSnapshotId: v.optional(v.string()),
 };
 
 /**

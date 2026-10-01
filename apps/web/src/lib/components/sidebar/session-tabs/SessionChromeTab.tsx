@@ -59,8 +59,7 @@ export interface SessionChromeTabProps {
   onArchiveRequest: () => void;
   /** Dismisses the tab locally — the session keeps running. */
   onClose: () => void;
-  onDuplicate: () => Promise<string>;
-  onDuplicateNavigate: (pathSegment: string) => void;
+  onForkNavigate: (pathSegment: string) => void;
 }
 
 function prStateIconColor(
@@ -102,8 +101,7 @@ export function SessionChromeTab({
   onRenameRequest,
   onArchiveRequest,
   onClose,
-  onDuplicate,
-  onDuplicateNavigate,
+  onForkNavigate,
 }: SessionChromeTabProps) {
   const statusStyle = SANDBOX_STATUS_STYLES[session.status];
   const isRegeneratingTitle = useIsRegeneratingTitle(session);
@@ -267,8 +265,7 @@ export function SessionChromeTab({
             href={href}
             isRegeneratingTitle={isRegeneratingTitle}
             onRenameRequest={onRenameRequest}
-            onDuplicate={onDuplicate}
-            onDuplicateNavigate={onDuplicateNavigate}
+            onForkNavigate={onForkNavigate}
             onArchiveRequest={onArchiveRequest}
           />
         </ContextMenuContent>
