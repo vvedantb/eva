@@ -31,7 +31,10 @@ import {
 } from "@tabler/icons-react";
 import { docSourceRoute } from "@/lib/components/docs/_source";
 import { DocSourceBadge } from "@/lib/components/docs/DocSourceBadge";
-import { useCreateAndOpenDoc } from "@/lib/components/docs/useCreateAndOpenDoc";
+import {
+  useCreateDoc,
+  useOpenDocInViewer,
+} from "@/lib/components/docs/useCreateDoc";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -72,7 +75,8 @@ export function DocsSidebar({
     repoId,
     excludeEvaRecaps: true,
   });
-  const createAndOpenDoc = useCreateAndOpenDoc(basePath);
+  const createDoc = useCreateDoc();
+  const openDocInViewer = useOpenDocInViewer(basePath);
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.docs.list, {
@@ -123,9 +127,9 @@ export function DocsSidebar({
   const handleCreateDoc = async () => {
     if (!newDocTitle.trim()) return;
     setIsCreating(true);
-    let opened = false;
+    let numId: number | null = null;
     try {
-      opened = await createAndOpenDoc({
+      numId = await createDoc({
         repoId,
         title: newDocTitle.trim(),
         content: "",
@@ -136,7 +140,8 @@ export function DocsSidebar({
       return;
     }
     setIsCreating(false);
-    if (!opened) return;
+    if (numId === null) return;
+    void openDocInViewer(numId);
     setNewDocTitle("");
     setIsCreateDialogOpen(false);
     if (onNavigate) onNavigate();
@@ -177,9 +182,9 @@ export function DocsSidebar({
     prdContent: string;
   }) => {
     setIsUploading(true);
-    let opened = false;
+    let numId: number | null = null;
     try {
-      opened = await createAndOpenDoc({ repoId, title, content: prdContent });
+      numId = await createDoc({ repoId, title, content: prdContent });
     } catch (error) {
       console.error("PRD upload failed", error);
       mutationError("Couldn't create the document. Try again.", "doc-create");
@@ -187,7 +192,8 @@ export function DocsSidebar({
       return;
     }
     setIsUploading(false);
-    if (!opened) return;
+    if (numId === null) return;
+    void openDocInViewer(numId);
     setIsCreateDialogOpen(false);
     setShowUploadSection(false);
     setPastedPrdContent("");

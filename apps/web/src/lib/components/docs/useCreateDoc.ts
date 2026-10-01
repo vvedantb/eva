@@ -3,18 +3,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
-import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { DocSourceArg } from "./_source";
 
 /**
- * Creates a doc and opens it in the repo Documents viewer. Shared by the
- * Documents sidebar and the sandbox Documents tab. Resolves true once the
- * viewer is open; throws when the mutation fails.
+ * Creates a doc and resolves its per-repo numId (null if it has none). Shared
+ * by the Documents sidebar and the sandbox Documents tab; throws when the
+ * mutation fails.
  */
-export function useCreateAndOpenDoc(basePath: string) {
+export function useCreateDoc() {
   const convex = useConvex();
-  const navigate = useNavigate();
   const createDoc = useMutation(api.docs.create);
 
   return async (args: {
@@ -22,18 +20,21 @@ export function useCreateAndOpenDoc(basePath: string) {
     title: string;
     content: string;
     source?: DocSourceArg;
-  }): Promise<boolean> => {
+  }): Promise<number | null> => {
     const id = await createDoc(args);
     const created = await convex.query(api.docs.get, { id });
-    if (!created) return false;
-    const segment = entityPathSegment(created);
-    if (!segment) return false;
-    void navigate({
+    return created?.numId ?? null;
+  };
+}
+
+/** Navigates to a doc in the repo Documents viewer. */
+export function useOpenDocInViewer(basePath: string) {
+  const navigate = useNavigate();
+  return (numId: number) =>
+    navigate({
       to: toInternalRepoHref(
-        `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
+        `${basePath}/docs/${numId}/${DOC_VIEWER_DEFAULT_TAB}`,
       ),
       search: (prev) => prev,
     });
-    return true;
-  };
 }

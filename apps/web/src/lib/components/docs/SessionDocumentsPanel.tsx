@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryState } from "nuqs";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -17,14 +18,16 @@ import {
 import { IconArrowUpRight, IconPlus } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
+import { mutationError } from "@/lib/utils/mutationToast";
+import { panelDocParser } from "@/lib/search-params";
 import {
   SessionSourcePane,
   sessionSourceViewAllClass,
 } from "@/lib/components/sandbox/SessionSourcePane";
 import { DocumentList } from "./DocumentList";
 import type { DocSourceArg } from "./_source";
-import { useCreateAndOpenDoc } from "./useCreateAndOpenDoc";
+import { SourceDocumentEditor } from "./SourceDocumentEditor";
+import { useCreateDoc } from "./useCreateDoc";
 
 /** Documents created from this session / task / project chat. */
 export function useSourceDocuments(source: DocSourceArg) {
@@ -33,13 +36,30 @@ export function useSourceDocuments(source: DocSourceArg) {
 }
 
 /**
- * Sandbox-pane list of documents generated in this chat. The same rows appear
- * in the repo Documents sidebar; cards open that viewer so both surfaces stay
- * one object. "New" creates a doc linked to this chat (notes for the task).
+ * Sandbox-pane list of documents linked to this chat. The same rows appear in
+ * the repo Documents sidebar (with a source badge). Here, rows and "New" open
+ * an inline editor so notes are written without leaving the chat.
  */
 export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
   const { docs, documentCount } = useSourceDocuments(source);
   const { basePath } = useRepo();
+  const [openNumId, setOpenNumId] = useQueryState("panelDoc", panelDocParser);
+
+  // Only docs linked to this chat open inline: `panelDoc` can ride along in
+  // the URL to another chat's panel, where it should fall back to the list.
+  const isOpenDocLinked =
+    openNumId !== null &&
+    docs !== undefined &&
+    docs.some((doc) => doc.numId === openNumId);
+
+  if (openNumId !== null && isOpenDocLinked) {
+    return (
+      <SourceDocumentEditor
+        numId={openNumId}
+        onBack={() => void setOpenNumId(null)}
+      />
+    );
+  }
 
   return (
     <SessionSourcePane
@@ -47,7 +67,10 @@ export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
       count={documentCount}
       viewAll={
         <div className="flex shrink-0 items-center gap-1">
-          <NewSourceDocumentButton source={source} />
+          <NewSourceDocumentButton
+            source={source}
+            onCreated={(numId) => void setOpenNumId(numId)}
+          />
           <Link
             to={toInternalRepoHref(`${basePath}/docs`)}
             search={(prev) => prev}
@@ -64,15 +87,22 @@ export function SessionDocumentsPanel({ source }: { source: DocSourceArg }) {
         docs={docs ?? []}
         basePath={basePath}
         showSource={false}
+        onOpen={(numId) => void setOpenNumId(numId)}
         emptyDescription="Create a note for this chat, or ask the agent to write one. Documents also appear in the Documents sidebar."
       />
     </SessionSourcePane>
   );
 }
 
-function NewSourceDocumentButton({ source }: { source: DocSourceArg }) {
-  const { repoId, basePath } = useRepo();
-  const createAndOpenDoc = useCreateAndOpenDoc(basePath);
+function NewSourceDocumentButton({
+  source,
+  onCreated,
+}: {
+  source: DocSourceArg;
+  onCreated: (numId: number) => void;
+}) {
+  const { repoId } = useRepo();
+  const createDoc = useCreateDoc();
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -81,9 +111,9 @@ function NewSourceDocumentButton({ source }: { source: DocSourceArg }) {
     const trimmed = title.trim();
     if (!trimmed) return;
     setIsCreating(true);
-    let opened = false;
+    let numId: number | null = null;
     try {
-      opened = await createAndOpenDoc({
+      numId = await createDoc({
         repoId,
         title: trimmed,
         content: "",
@@ -95,10 +125,10 @@ function NewSourceDocumentButton({ source }: { source: DocSourceArg }) {
       return;
     }
     setIsCreating(false);
-    if (!opened) return;
+    if (numId === null) return;
     setTitle("");
     setIsOpen(false);
-    mutationSuccess("Document created", "doc-create");
+    onCreated(numId);
   };
 
   return (

@@ -17,17 +17,22 @@ import { docSourceLabel } from "./_source";
 
 type DocRow = FunctionReturnType<typeof api.docs.listForSource>[number];
 
-/** Compact list of Eva docs, or an empty state. */
+/**
+ * Compact list of Eva docs, or an empty state. Rows link to the Documents
+ * viewer unless `onOpen` is given (the sandbox tab opens them inline).
+ */
 export function DocumentList({
   docs,
   basePath,
   emptyDescription,
   showSource = true,
+  onOpen,
 }: {
   docs: DocRow[];
   basePath: string;
   emptyDescription: string;
   showSource?: boolean;
+  onOpen?: (numId: number) => void;
 }) {
   if (docs.length === 0) {
     return (
@@ -42,7 +47,8 @@ export function DocumentList({
     <SessionSourceList>
       {docs.map((doc) => {
         const segment = entityPathSegment(doc);
-        if (!segment) return null;
+        const numId = doc.numId;
+        if (!segment || numId === undefined) return null;
         const href = toInternalRepoHref(
           `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
         );
@@ -57,7 +63,13 @@ export function DocumentList({
             preview={preview}
             timeLabel={compactRelativeTime(doc.updatedAt)}
             icon={<IconFile size={16} />}
-            link={<Link to={href} search={(prev) => prev} />}
+            link={
+              onOpen ? (
+                <button type="button" onClick={() => onOpen(numId)} />
+              ) : (
+                <Link to={href} search={(prev) => prev} />
+              )
+            }
           />
         );
       })}

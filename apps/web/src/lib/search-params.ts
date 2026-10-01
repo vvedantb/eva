@@ -370,6 +370,9 @@ export const docModeParser = parseAsStringLiteral(docModes)
   .withDefault("editing")
   .withOptions(searchOptions);
 
+// Doc (numId) open in the sandbox Documents tab's inline editor.
+export const panelDocParser = parseAsInteger.withOptions(tabOptions);
+
 const docCommentFilters = ["open", "resolved"] as const;
 export const docCommentFilterParser = parseAsStringLiteral(docCommentFilters)
   .withDefault("open")
