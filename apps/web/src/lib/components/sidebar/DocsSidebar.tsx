@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation, useConvex } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -29,7 +29,9 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
-import { docSourceLabel, docSourceRoute } from "@/lib/components/docs/_source";
+import { docSourceRoute } from "@/lib/components/docs/_source";
+import { DocSourceBadge } from "@/lib/components/docs/DocSourceBadge";
+import { useCreateAndOpenDoc } from "@/lib/components/docs/useCreateAndOpenDoc";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -66,12 +68,11 @@ export function DocsSidebar({
   createRequestId,
 }: DocsSidebarProps) {
   const navigate = useNavigate();
-  const convex = useConvex();
   const docs = useQuery(api.docs.list, {
     repoId,
     excludeEvaRecaps: true,
   });
-  const createDoc = useMutation(api.docs.create);
+  const createAndOpenDoc = useCreateAndOpenDoc(basePath);
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.docs.list, {
@@ -122,42 +123,24 @@ export function DocsSidebar({
   const handleCreateDoc = async () => {
     if (!newDocTitle.trim()) return;
     setIsCreating(true);
+    let opened = false;
     try {
-      const id = await createDoc({
+      opened = await createAndOpenDoc({
         repoId,
         title: newDocTitle.trim(),
         content: "",
       });
-      const created = await convex.query(api.docs.get, { id });
-      // Guarded with ifs rather than a ternary, and onNavigate called through
-      // an if rather than `?.`: React Compiler bails on the whole file when a
-      // conditional, logical or optional-chaining expression sits inside a
-      // try/catch.
-      if (!created) {
-        setIsCreating(false);
-        return;
-      }
-      const segment = entityPathSegment(created);
-      if (!segment) {
-        setIsCreating(false);
-        return;
-      }
-      setNewDocTitle("");
-      setIsCreateDialogOpen(false);
-      navigate({
-        to: toInternalRepoHref(
-          `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
-        ),
-        search: (prev) => prev,
-      });
-      if (onNavigate) onNavigate();
-      mutationSuccess("Document created", "doc-create");
     } catch {
       mutationError("Couldn't create document", "doc-create");
       setIsCreating(false);
       return;
     }
     setIsCreating(false);
+    if (!opened) return;
+    setNewDocTitle("");
+    setIsCreateDialogOpen(false);
+    if (onNavigate) onNavigate();
+    mutationSuccess("Document created", "doc-create");
   };
 
   const readFileContent = (file: File): Promise<string> =>
@@ -194,35 +177,23 @@ export function DocsSidebar({
     prdContent: string;
   }) => {
     setIsUploading(true);
+    let opened = false;
     try {
-      const id = await createDoc({ repoId, title, content: prdContent });
-      const created = await convex.query(api.docs.get, { id });
-      if (!created) {
-        setIsUploading(false);
-        return;
-      }
-      const segment = entityPathSegment(created);
-      if (!segment) {
-        setIsUploading(false);
-        return;
-      }
-      setIsCreateDialogOpen(false);
-      setShowUploadSection(false);
-      setPastedPrdContent("");
-      setNewDocTitle("");
-      navigate({
-        to: toInternalRepoHref(
-          `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
-        ),
-        search: (prev) => prev,
-      });
-      if (onNavigate) onNavigate();
-      mutationSuccess("Document created", "doc-create");
+      opened = await createAndOpenDoc({ repoId, title, content: prdContent });
     } catch (error) {
       console.error("PRD upload failed", error);
       mutationError("Couldn't create the document. Try again.", "doc-create");
+      setIsUploading(false);
+      return;
     }
     setIsUploading(false);
+    if (!opened) return;
+    setIsCreateDialogOpen(false);
+    setShowUploadSection(false);
+    setPastedPrdContent("");
+    setNewDocTitle("");
+    if (onNavigate) onNavigate();
+    mutationSuccess("Document created", "doc-create");
   };
 
   const handleUploadSelect = async (
@@ -357,8 +328,8 @@ export function DocsSidebar({
                                 {doc.title}
                               </span>
                               {doc.source ? (
-                                <span className="block truncate text-[10px] text-muted-foreground">
-                                  {docSourceLabel(doc.source)}
+                                <span className="mt-0.5 flex">
+                                  <DocSourceBadge source={doc.source} />
                                 </span>
                               ) : null}
                             </span>

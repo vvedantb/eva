@@ -1,21 +1,31 @@
 import type { FunctionReturnType } from "convex/server";
-import type { api } from "@eva/backend";
+import type { api, Id } from "@eva/backend";
 import { encodeRepoParam } from "@/lib/utils/repoUrl";
 
 type DocRow = FunctionReturnType<typeof api.docs.list>[number];
 
 export type DocSource = NonNullable<DocRow["source"]>;
 
-/** One-line source label for sidebar rows and the session Documents pane. */
-export function docSourceLabel(source: DocSource): string {
+/** Chat a new doc is created from (`docs.create` / `docs.listForSource`). */
+export type DocSourceArg =
+  | { kind: "session"; sessionId: Id<"sessions"> }
+  | { kind: "task"; taskId: Id<"agentTasks"> }
+  | { kind: "project"; projectId: Id<"projects"> };
+
+/** Badge text: chat kind and number, e.g. "Task #12". */
+export function docSourceShortLabel(source: DocSource): string {
   const kind =
     source.kind === "session"
       ? "Session"
       : source.kind === "task"
         ? "Task"
         : "Project";
-  const num = source.numId !== undefined ? ` #${source.numId}` : "";
-  return `${kind}${num} · ${source.title}`;
+  return source.numId !== undefined ? `${kind} #${source.numId}` : kind;
+}
+
+/** Full source label (badge tooltip): "Task #12 · Fix login". */
+export function docSourceLabel(source: DocSource): string {
+  return `${docSourceShortLabel(source)} · ${source.title}`;
 }
 
 /** Route into the source chat's Documents tab, or null when numId is missing. */
