@@ -61,6 +61,7 @@ import type * as _chat_taskChatDaemon from "../_chat/taskChatDaemon.js";
 import type * as _chat_turnLease from "../_chat/turnLease.js";
 import type * as _chat_turnProjection from "../_chat/turnProjection.js";
 import type * as _chat_turnStore from "../_chat/turnStore.js";
+import type * as _chatSource_helpers from "../_chatSource/helpers.js";
 import type * as _deployment_vercel from "../_deployment/vercel.js";
 import type * as _docEditor_markdown from "../_docEditor/markdown.js";
 import type * as _drafts_helpers from "../_drafts/helpers.js";
@@ -542,6 +543,7 @@ declare const fullApi: ApiFromModules<{
   "_chat/turnLease": typeof _chat_turnLease;
   "_chat/turnProjection": typeof _chat_turnProjection;
   "_chat/turnStore": typeof _chat_turnStore;
+  "_chatSource/helpers": typeof _chatSource_helpers;
   "_deployment/vercel": typeof _deployment_vercel;
   "_docEditor/markdown": typeof _docEditor_markdown;
   "_drafts/helpers": typeof _drafts_helpers;

@@ -2,13 +2,14 @@
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner } from "@eva/ui";
-import { useRepo } from "@/lib/contexts/RepoContext";
+import { CenteredSpinner, cn } from "@eva/ui";
 import { mutationError } from "@/lib/utils/mutationToast";
-import { SessionSourceDetailHeader } from "@/lib/components/sandbox/SessionSourcePane";
+import {
+  SessionSourceDetail,
+  sessionSourceDetailTitleClass,
+} from "@/lib/components/sandbox/SessionSourcePane";
 import { baseDocEditorExtensions, useDocSync } from "./_utils/useDocSync";
 
 /**
@@ -17,32 +18,20 @@ import { baseDocEditorExtensions, useDocSync } from "./_utils/useDocSync";
  * comments / history / suggestions chrome.
  */
 export function SourceDocumentEditor({
-  numId,
+  doc,
   onBack,
 }: {
-  numId: number;
+  doc: { _id: Id<"docs">; title: string };
   onBack: () => void;
 }) {
-  const { repoId } = useRepo();
-  const doc = useQuery(api.docs.getByNumId, { repoId, numId });
-
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <SessionSourceDetailHeader backLabel="Documents" onBack={onBack}>
-        {doc ? (
-          <DocTitleInput key={doc._id} id={doc._id} title={doc.title} />
-        ) : null}
-      </SessionSourceDetailHeader>
-      {doc === undefined ? (
-        <CenteredSpinner label="Loading" />
-      ) : doc === null ? (
-        <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-          This document was deleted.
-        </p>
-      ) : (
-        <DocBody docId={doc._id} />
-      )}
-    </div>
+    <SessionSourceDetail
+      backLabel="Documents"
+      onBack={onBack}
+      title={<DocTitleInput key={doc._id} id={doc._id} title={doc.title} />}
+    >
+      <DocBody docId={doc._id} />
+    </SessionSourceDetail>
   );
 }
 
@@ -62,7 +51,10 @@ function DocTitleInput({ id, title }: { id: Id<"docs">; title: string }) {
     <input
       defaultValue={title}
       aria-label="Document title"
-      className="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-1 text-[13px] font-medium tracking-[-0.01em] text-foreground outline-hidden hover:bg-muted focus:bg-muted"
+      className={cn(
+        sessionSourceDetailTitleClass,
+        "rounded-md bg-transparent outline-hidden hover:bg-muted focus:bg-muted",
+      )}
       onBlur={(event) => save(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();

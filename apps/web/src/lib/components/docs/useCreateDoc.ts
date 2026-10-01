@@ -1,15 +1,12 @@
 import { useConvex, useMutation } from "convex/react";
-import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
-import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import type { DocSourceArg } from "./_source";
+import { mutationError } from "@/lib/utils/mutationToast";
+import type { ChatSourceArg } from "@/lib/components/sandbox/chatSource";
 
 /**
- * Creates a doc and resolves its per-repo numId (null if it has none). Shared
- * by the Documents sidebar and the sandbox Documents tab; throws when the
- * mutation fails.
+ * Creates a doc and resolves it (`_id`, `numId`, …), or null after showing an
+ * error toast. Shared by the Documents sidebar and the sandbox Documents tab.
  */
 export function useCreateDoc() {
   const convex = useConvex();
@@ -19,22 +16,14 @@ export function useCreateDoc() {
     repoId: Id<"githubRepos">;
     title: string;
     content: string;
-    source?: DocSourceArg;
-  }): Promise<number | null> => {
-    const id = await createDoc(args);
-    const created = await convex.query(api.docs.get, { id });
-    return created?.numId ?? null;
+    source?: ChatSourceArg;
+  }) => {
+    try {
+      const id = await createDoc(args);
+      return await convex.query(api.docs.get, { id });
+    } catch {
+      mutationError("Couldn't create the document. Try again.", "doc-create");
+      return null;
+    }
   };
-}
-
-/** Navigates to a doc in the repo Documents viewer. */
-export function useOpenDocInViewer(basePath: string) {
-  const navigate = useNavigate();
-  return (numId: number) =>
-    navigate({
-      to: toInternalRepoHref(
-        `${basePath}/docs/${numId}/${DOC_VIEWER_DEFAULT_TAB}`,
-      ),
-      search: (prev) => prev,
-    });
 }

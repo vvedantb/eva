@@ -1146,6 +1146,19 @@ export const sandboxGitCredentialsFields = {
   createdAt: v.number(),
 };
 
+/**
+ * Chat (session / quick task / project) a doc or artifact was created from.
+ * Shared by `docs` and `artifacts`; resolved by `_chatSource/helpers.ts`.
+ */
+export const chatSourceFields = {
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
+};
+
 export const docFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1154,12 +1167,7 @@ export const docFields = {
   // Chat that created this doc (`create_eva_doc` from a sandbox token, or
   // Save-as-document from a session plan). Manual New Document leaves these
   // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
-  sourceKind: v.optional(
-    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-  ),
-  sourceSessionId: v.optional(v.id("sessions")),
-  sourceTaskId: v.optional(v.id("agentTasks")),
-  sourceProjectId: v.optional(v.id("projects")),
+  ...chatSourceFields,
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -1328,12 +1336,7 @@ export const artifactFields = {
   createdAt: v.number(),
   // Chat that created this artifact (`create_artifact` from a sandbox token).
   // Manual uploads leave these unset. Indexes skip rows with no source.
-  sourceKind: v.optional(
-    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-  ),
-  sourceSessionId: v.optional(v.id("sessions")),
-  sourceTaskId: v.optional(v.id("agentTasks")),
-  sourceProjectId: v.optional(v.id("projects")),
+  ...chatSourceFields,
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port

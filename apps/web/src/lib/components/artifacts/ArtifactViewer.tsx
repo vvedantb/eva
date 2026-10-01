@@ -10,10 +10,11 @@ import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import {
-  artifactSourceLabel,
-  artifactSourceRoute,
-  type ArtifactSource,
-} from "./_source";
+  chatSourceLabel,
+  chatSourceRoute,
+  type ChatSource,
+} from "@/lib/components/sandbox/chatSource";
+import { openArtifactInNewTab } from "./_open";
 
 type ArtifactHtmlResult =
   | { ok: true; html: string }
@@ -93,9 +94,7 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         ) : null}
         <button
           type="button"
-          onClick={() =>
-            window.open(`/artifacts/${artifact._id}`, "_blank", "noopener")
-          }
+          onClick={() => openArtifactInNewTab(artifact._id)}
           aria-label="Open in new tab"
           className="max-sm:hit-target flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
@@ -145,9 +144,9 @@ export function ArtifactContent({
   );
 }
 
-function SourceLink({ source }: { source: ArtifactSource }) {
-  const route = artifactSourceRoute(source);
-  const label = artifactSourceLabel(source);
+function SourceLink({ source }: { source: ChatSource }) {
+  const route = chatSourceRoute(source, "artifacts");
+  const label = chatSourceLabel(source);
   if (!route) {
     return (
       <span className="hidden min-w-0 truncate text-sm text-muted-foreground sm:inline">

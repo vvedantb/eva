@@ -2,56 +2,55 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { CenteredSpinner } from "@eva/ui";
 import { IconExternalLink } from "@tabler/icons-react";
 import {
-  SessionSourceDetailHeader,
+  SessionSourceDetail,
+  sessionSourceDetailTitleClass,
   sessionSourceViewAllClass,
 } from "@/lib/components/sandbox/SessionSourcePane";
 import { ArtifactContent } from "./ArtifactViewer";
+import { openArtifactInNewTab } from "./_open";
 
 /**
  * Artifact opened from the sandbox Artifacts tab, rendered beside the chat
  * instead of navigating to `/artifacts/$id`.
  */
 export function SourceArtifactViewer({
-  artifactId,
+  artifact,
   onBack,
 }: {
-  artifactId: string;
+  artifact: { _id: Id<"artifacts">; name: string };
   onBack: () => void;
 }) {
-  const artifact = useQuery(api.artifacts.get, { id: artifactId });
+  // The list rows carry no signed URL; `get` resolves it.
+  const withUrl = useQuery(api.artifacts.get, { id: artifact._id });
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <SessionSourceDetailHeader backLabel="Artifacts" onBack={onBack}>
-        <p className="min-w-0 flex-1 truncate px-1.5 text-[13px] font-medium tracking-[-0.01em] text-foreground">
-          {artifact?.name}
-        </p>
+    <SessionSourceDetail
+      backLabel="Artifacts"
+      onBack={onBack}
+      title={<p className={sessionSourceDetailTitleClass}>{artifact.name}</p>}
+      actions={
         <button
           type="button"
-          onClick={() =>
-            window.open(`/artifacts/${artifactId}`, "_blank", "noopener")
-          }
+          onClick={() => openArtifactInNewTab(artifact._id)}
           aria-label="Open in new tab"
           title="Open in new tab"
           className={sessionSourceViewAllClass}
         >
           <IconExternalLink size={14} />
         </button>
-      </SessionSourceDetailHeader>
-      {artifact === undefined ? (
-        <CenteredSpinner label="Loading" />
-      ) : artifact === null ? (
-        <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-          This artifact was deleted.
-        </p>
-      ) : (
+      }
+    >
+      {withUrl ? (
         <div className="min-h-0 flex-1 bg-white">
-          <ArtifactContent url={artifact.url} title={artifact.name} />
+          <ArtifactContent url={withUrl.url} title={artifact.name} />
         </div>
+      ) : (
+        <CenteredSpinner label="Loading" />
       )}
-    </div>
+    </SessionSourceDetail>
   );
 }

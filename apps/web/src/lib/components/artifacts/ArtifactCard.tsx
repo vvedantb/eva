@@ -28,7 +28,12 @@ import { SessionSourceRow } from "@/lib/components/sandbox/SessionSourcePane";
 import { relativeTime } from "./_format";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ArtifactCardMenuItems } from "./ArtifactCardMenuItems";
-import { artifactSourceLabel, artifactSourceRoute } from "./_source";
+import {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceRoute,
+} from "@/lib/components/sandbox/chatSource";
+import { openArtifactInNewTab } from "./_open";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
@@ -55,10 +60,9 @@ export function ArtifactCard({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const altHeld = useAltHeld();
   const source = showSource ? artifact.source : null;
-  const sourceRoute = source ? artifactSourceRoute(source) : null;
+  const sourceRoute = source ? chatSourceRoute(source, "artifacts") : null;
 
-  const openInNewTab = () =>
-    window.open(`/artifacts/${artifact._id}`, "_blank", "noopener");
+  const openInNewTab = () => openArtifactInNewTab(artifact._id);
 
   const onDelete = async () => {
     await withMutationToast(
@@ -89,12 +93,7 @@ export function ArtifactCard({
               to: sourceRoute.to,
               params: sourceRoute.params,
             }),
-          sourceLabel:
-            source.kind === "session"
-              ? "session"
-              : source.kind === "task"
-                ? "task"
-                : "project",
+          sourceLabel: chatSourceKindLabel(source.kind).toLowerCase(),
         }
       : {}),
     onDelete: () =>
@@ -134,14 +133,14 @@ export function ArtifactCard({
       ) : null}
       {source ? (
         <p className="truncate text-xs text-muted-foreground">
-          {artifactSourceLabel(source)}
+          {chatSourceLabel(source)}
         </p>
       ) : null}
     </>
   );
 
   const compactPreview = source
-    ? artifactSourceLabel(source)
+    ? chatSourceLabel(source)
     : (artifact.description ?? null);
 
   return (
