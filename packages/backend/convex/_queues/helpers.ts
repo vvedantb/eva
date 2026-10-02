@@ -29,6 +29,10 @@ import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentia
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  activityRefForParentId,
+  touchUserActivity,
+} from "../_sandbox/activity";
 import type { OrchestratorNotifyChild } from "../orchestratorShared";
 import {
   bindTurnWorkflow,
@@ -273,6 +277,9 @@ async function startNextQueuedChatMessage<
 
   const now = Date.now();
   await config.insertUserMessage(ctx, id, entity, nextMessage, guard.data, now);
+  // A dequeued follow-up is the user's message landing: restart the idle clock.
+  const activityRef = activityRefForParentId(ctx.db, String(id));
+  if (activityRef) await touchUserActivity(ctx, activityRef, now);
   // After the user row exists, so detection sees the turn it is deciding about.
   await maybeInsertModelHandoffAlert(
     ctx,

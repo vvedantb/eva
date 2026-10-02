@@ -20,6 +20,12 @@ import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { normalizeAIModel } from "../validators";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
+import {
+  stopAlertText,
+  stopReasonValidator,
+  type StopReason,
+} from "../_sandbox/stopReason";
+import { touchUserActivity } from "../_sandbox/activity";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -330,45 +336,69 @@ export const stopProjectSandbox = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-
-    if (!project.sandboxId) {
-      // Nothing to stop — close immediately.
-      await ctx.db.patch(args.projectId, {
-        reviewProjectSandboxStatus: "closed",
-      });
-      return null;
-    }
-
-    await scheduleFinalizeStopProject(ctx, {
-      projectId: args.projectId,
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-    });
-
-    // Clear leftover start steps so stop does not re-show startup activity.
-    await clearSandboxStartupActivity(
-      ctx.db,
-      `project-sandbox-startup-${args.projectId}`,
-    );
-
-    // Stopping kills the paused turn, so any blocking AskUserQuestion can
-    // never be claimed — clear it or it hides the composer forever.
-    await clearPendingQuestionsForEntity(ctx.db, String(args.projectId));
-    await clearPreviewToolCallsForParent(ctx.db, args.projectId);
-
-    // Keep sandboxId so we can resume the stopped sandbox later.
-    await ctx.db.patch(args.projectId, {
-      reviewProjectSandboxStatus: "stopping",
-    });
-
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    await requestProjectSandboxStop(ctx, args.projectId);
     return null;
   },
 });
+
+/**
+ * Shared stop path for the user Stop button and the idle-pause sweep. Marks the
+ * project `"stopping"` then schedules provider teardown (mirrors
+ * requestSessionSandboxStop / requestTaskSandboxStop).
+ */
+export async function requestProjectSandboxStop(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  options: { stopReason?: StopReason } = {},
+): Promise<void> {
+  const project = await ctx.db.get(projectId);
+  if (!project) return;
+  const { stopReason } = options;
+
+  if (!project.sandboxId) {
+    // Nothing to stop — close immediately.
+    await ctx.db.patch(projectId, {
+      reviewProjectSandboxStatus: "closed",
+    });
+    return;
+  }
+
+  if (project.reviewProjectSandboxStatus === "stopping") {
+    // Already stopping — re-issue the idempotent finalize so a stalled first
+    // attempt recovers instead of leaving the row wedged.
+    await scheduleFinalizeStopProject(ctx, {
+      projectId,
+      sandboxId: project.sandboxId,
+      repoId: project.repoId,
+      stopReason,
+    });
+    return;
+  }
+
+  await scheduleFinalizeStopProject(ctx, {
+    projectId,
+    sandboxId: project.sandboxId,
+    repoId: project.repoId,
+    stopReason,
+  });
+
+  // Clear leftover start steps so stop does not re-show startup activity.
+  await clearSandboxStartupActivity(
+    ctx.db,
+    `project-sandbox-startup-${projectId}`,
+  );
+
+  // Stopping kills the paused turn, so any blocking AskUserQuestion can
+  // never be claimed — clear it or it hides the composer forever.
+  await clearPendingQuestionsForEntity(ctx.db, String(projectId));
+  await clearPreviewToolCallsForParent(ctx.db, projectId);
+
+  // Keep sandboxId so we can resume the stopped sandbox later.
+  await ctx.db.patch(projectId, {
+    reviewProjectSandboxStatus: "stopping",
+  });
+}
 
 /**
  * Schedules project sandbox teardown. Every path that flips a project to
@@ -381,6 +411,7 @@ export async function scheduleFinalizeStopProject(
     projectId: Id<"projects">;
     sandboxId: string;
     repoId: Id<"githubRepos">;
+    stopReason?: StopReason;
   },
 ): Promise<void> {
   await ctx.scheduler.runAfter(
@@ -434,6 +465,7 @@ export const finalizeStopProjectSandbox = internalAction({
     projectId: v.id("projects"),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -449,6 +481,7 @@ export const finalizeStopProjectSandbox = internalAction({
     await ctx.runMutation(internal._projects.sandbox.markProjectSandboxClosed, {
       projectId: args.projectId,
       error: stopError,
+      stopReason: args.stopReason,
     });
     return null;
   },
@@ -462,6 +495,7 @@ export const markProjectSandboxClosed = internalMutation({
   args: {
     projectId: v.id("projects"),
     error: v.optional(v.string()),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -486,7 +520,7 @@ export const markProjectSandboxClosed = internalMutation({
     await ctx.db.insert("messages", {
       parentId: args.projectId,
       role: "assistant",
-      content: "Sandbox stopped",
+      content: stopAlertText(args.stopReason),
       timestamp: Date.now(),
       isSystemAlert: true,
     });
@@ -543,6 +577,11 @@ export const projectSandboxReady = internalMutation({
       lastSandboxActivity: Date.now(),
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
+    });
+    // A wake is an interaction: the idle sweep grants a full grace window.
+    await touchUserActivity(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
     });
 
     return null;

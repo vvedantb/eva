@@ -21,6 +21,15 @@ crons.interval(
   {},
 );
 
+// Pause sandboxes nobody is using (agent finished + no interaction for the
+// configured grace). A no-op while `appSettings.sandboxIdlePauseMode` is off.
+crons.interval(
+  "sandbox idle pause sweep",
+  { minutes: 5 },
+  internal.sandboxIdlePause.run,
+  {},
+);
+
 // Rescan supported skill roots on every connected codebase every 6 hours. Push
 // webhooks also trigger an immediate sync when the base branch changes skills;
 // this cron is the backup when push events are not subscribed or a sync fails.
