@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation, useConvex } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -17,7 +17,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Spinner,
   Surface,
   Textarea,
@@ -29,7 +28,13 @@ import {
   IconTrash,
   IconUpload,
 } from "@tabler/icons-react";
-import { docSourceLabel, docSourceRoute } from "@/lib/components/docs/_source";
+import {
+  chatSourceKindLabel,
+  chatSourceRoute,
+} from "@/lib/components/sandbox/chatSource";
+import { ChatSourceBadge } from "@/lib/components/sandbox/ChatSourceBadge";
+import { NewDocumentDialog } from "@/lib/components/docs/NewDocumentDialog";
+import { useCreateDoc } from "@/lib/components/docs/useCreateDoc";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -66,12 +71,11 @@ export function DocsSidebar({
   createRequestId,
 }: DocsSidebarProps) {
   const navigate = useNavigate();
-  const convex = useConvex();
   const docs = useQuery(api.docs.list, {
     repoId,
     excludeEvaRecaps: true,
   });
-  const createDoc = useMutation(api.docs.create);
+  const createDoc = useCreateDoc();
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.docs.list, {
@@ -95,8 +99,6 @@ export function DocsSidebar({
   const altHeld = useAltHeld();
   const [isUploading, setIsUploading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newDocTitle, setNewDocTitle] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
   const [showUploadSection, setShowUploadSection] = useState(false);
   const [pastedPrdContent, setPastedPrdContent] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -119,46 +121,29 @@ export function DocsSidebar({
     ? docs.filter((doc) => doc.kind !== "pr-recap")
     : [];
 
-  const handleCreateDoc = async () => {
-    if (!newDocTitle.trim()) return;
-    setIsCreating(true);
-    try {
-      const id = await createDoc({
-        repoId,
-        title: newDocTitle.trim(),
-        content: "",
-      });
-      const created = await convex.query(api.docs.get, { id });
-      // Guarded with ifs rather than a ternary, and onNavigate called through
-      // an if rather than `?.`: React Compiler bails on the whole file when a
-      // conditional, logical or optional-chaining expression sits inside a
-      // try/catch.
-      if (!created) {
-        setIsCreating(false);
-        return;
-      }
-      const segment = entityPathSegment(created);
-      if (!segment) {
-        setIsCreating(false);
-        return;
-      }
-      setNewDocTitle("");
-      setIsCreateDialogOpen(false);
-      navigate({
-        to: toInternalRepoHref(
-          `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
-        ),
-        search: (prev) => prev,
-      });
-      if (onNavigate) onNavigate();
-      mutationSuccess("Document created", "doc-create");
-    } catch {
-      mutationError("Couldn't create document", "doc-create");
-      setIsCreating(false);
-      return;
-    }
-    setIsCreating(false);
+  /** Opens a just-created doc in the viewer and closes the dialog. */
+  const finishCreate = (
+    created: Awaited<ReturnType<typeof createDoc>>,
+  ): boolean => {
+    if (!created) return false;
+    const segment = entityPathSegment(created);
+    if (!segment) return false;
+    setIsCreateDialogOpen(false);
+    setShowUploadSection(false);
+    setPastedPrdContent("");
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
+      ),
+      search: (prev) => prev,
+    });
+    if (onNavigate) onNavigate();
+    mutationSuccess("Document created", "doc-create");
+    return true;
   };
+
+  const handleCreateDoc = async (title: string) =>
+    finishCreate(await createDoc({ repoId, title, content: "" }));
 
   const readFileContent = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -194,35 +179,9 @@ export function DocsSidebar({
     prdContent: string;
   }) => {
     setIsUploading(true);
-    try {
-      const id = await createDoc({ repoId, title, content: prdContent });
-      const created = await convex.query(api.docs.get, { id });
-      if (!created) {
-        setIsUploading(false);
-        return;
-      }
-      const segment = entityPathSegment(created);
-      if (!segment) {
-        setIsUploading(false);
-        return;
-      }
-      setIsCreateDialogOpen(false);
-      setShowUploadSection(false);
-      setPastedPrdContent("");
-      setNewDocTitle("");
-      navigate({
-        to: toInternalRepoHref(
-          `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
-        ),
-        search: (prev) => prev,
-      });
-      if (onNavigate) onNavigate();
-      mutationSuccess("Document created", "doc-create");
-    } catch (error) {
-      console.error("PRD upload failed", error);
-      mutationError("Couldn't create the document. Try again.", "doc-create");
-    }
+    const created = await createDoc({ repoId, title, content: prdContent });
     setIsUploading(false);
+    finishCreate(created);
   };
 
   const handleUploadSelect = async (
@@ -357,8 +316,8 @@ export function DocsSidebar({
                                 {doc.title}
                               </span>
                               {doc.source ? (
-                                <span className="block truncate text-[10px] text-muted-foreground">
-                                  {docSourceLabel(doc.source)}
+                                <span className="mt-0.5 flex">
+                                  <ChatSourceBadge source={doc.source} />
                                 </span>
                               ) : null}
                             </span>
@@ -370,13 +329,17 @@ export function DocsSidebar({
                       </SharedLayoutNavSurface>
                     </ContextMenuTrigger>
                     <ContextMenuContent onClick={(e) => e.stopPropagation()}>
-                      {doc.source && docSourceRoute(doc.source) ? (
+                      {doc.source &&
+                      chatSourceRoute(doc.source, "documents") ? (
                         <ContextMenuItem
                           onClick={() => {
                             // The guard above narrows the JSX, not this
                             // callback, so the source is re-checked here.
                             if (!doc.source) return;
-                            const route = docSourceRoute(doc.source);
+                            const route = chatSourceRoute(
+                              doc.source,
+                              "documents",
+                            );
                             if (!route) return;
                             void navigate({
                               to: route.to,
@@ -387,11 +350,7 @@ export function DocsSidebar({
                         >
                           <IconMessage size={16} />
                           Open{" "}
-                          {doc.source.kind === "session"
-                            ? "session"
-                            : doc.source.kind === "task"
-                              ? "task"
-                              : "project"}
+                          {chatSourceKindLabel(doc.source.kind).toLowerCase()}
                         </ContextMenuItem>
                       ) : null}
                       {doc.kind !== "pr-recap" ? (
@@ -423,23 +382,30 @@ export function DocsSidebar({
         )}
       </div>
 
-      <Dialog
+      <NewDocumentDialog
         open={isCreateDialogOpen}
         onOpenChange={(open) => {
-          if (isUploading || isCreating) return;
           setIsCreateDialogOpen(open);
           if (!open) {
-            setNewDocTitle("");
             setShowUploadSection(false);
             setPastedPrdContent("");
           }
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Document</DialogTitle>
-          </DialogHeader>
-          {showUploadSection ? (
+        onCreate={handleCreateDoc}
+        placeholder="e.g., User Authentication PRD"
+        busy={isUploading}
+        extra={
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-control border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            onClick={() => setShowUploadSection(true)}
+          >
+            <IconUpload size={14} />
+            Upload PRD instead
+          </button>
+        }
+        alternate={
+          showUploadSection ? (
             <div className="space-y-4">
               <Surface density="tight">
                 <p className="text-sm font-medium">Upload a file</p>
@@ -488,48 +454,9 @@ export function DocsSidebar({
                 </Button>
               </DialogFooter>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <Input
-                placeholder="e.g., User Authentication PRD"
-                value={newDocTitle}
-                onChange={(event) => setNewDocTitle(event.target.value)}
-                autoFocus
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && newDocTitle.trim()) {
-                    void handleCreateDoc();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-control border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                onClick={() => setShowUploadSection(true)}
-              >
-                <IconUpload size={14} />
-                Upload PRD instead
-              </button>
-              <DialogFooter>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setIsCreateDialogOpen(false);
-                    setNewDocTitle("");
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleCreateDoc}
-                  disabled={isCreating || !newDocTitle.trim()}
-                >
-                  {isCreating ? <Spinner size="sm" /> : "Create Document"}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          ) : undefined
+        }
+      />
 
       <Dialog
         open={!!docToDelete}

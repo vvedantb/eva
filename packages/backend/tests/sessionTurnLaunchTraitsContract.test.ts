@@ -182,19 +182,6 @@ describe("every chat workflow start normalises its launch traits", () => {
       ],
     },
     {
-      label: "the orchestrator wake-up",
-      path: "../convex/orchestratorNotify.ts",
-      anchor: "internal.sessionWorkflow.sessionExecuteWorkflow",
-      entityField: "sessionId",
-      spread: "launchTraitsFromStored(",
-      rawFields: [
-        "master.lastReasoningLevel",
-        "master.lastThinkingEnabled",
-        "master.lastUse1mContext",
-        "master.lastFastMode",
-      ],
-    },
-    {
       label: "the task chat queued-message drain",
       path: "../convex/_queues/helpers.ts",
       anchor: "internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow",

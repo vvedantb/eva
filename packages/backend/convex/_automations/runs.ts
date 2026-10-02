@@ -51,6 +51,11 @@ export const listRuns = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    const automation = await ctx.db.get(args.automationId);
+    if (!automation) return [];
+    if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     return await ctx.db
       .query("automationRuns")
       .withIndex("by_automation", (q) =>

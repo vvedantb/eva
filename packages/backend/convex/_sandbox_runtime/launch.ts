@@ -16,6 +16,10 @@ import { DAEMON_PID_LIVE_FN, entityDaemonPaths } from "./daemonPaths";
 import { CLAUDE_CODE_VERSION } from "./claudeCliVersion";
 import { CODEX_CLI_VERSION } from "./codexCliVersion";
 import type { SandboxHandle } from "../_sandbox/provider";
+import {
+  CLAUDE_CLI_INSTALL_DIR,
+  CODEX_CLI_INSTALL_DIR,
+} from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
@@ -35,13 +39,13 @@ export const CURSOR_RUNTIME_HOME_DIR = "/tmp/cursor-home";
 export const CURSOR_PERSIST_VOLUME_MOUNT_PATH = "/home/eva/.cursor-persist";
 
 const CLAUDE_INSTALL_TIMEOUT_SECONDS = 300;
-const CLAUDE_FALLBACK_INSTALL_DIR = "/tmp/claude-cli";
+const CLAUDE_FALLBACK_INSTALL_DIR = CLAUDE_CLI_INSTALL_DIR;
 export const CLAUDE_FALLBACK_BIN_PATH = `${CLAUDE_FALLBACK_INSTALL_DIR}/bin/claude`;
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
 /** Where `npm install -g --prefix CLAUDE_FALLBACK_INSTALL_DIR` places the package. */
 const CLAUDE_FALLBACK_PACKAGE_ROOT = `${CLAUDE_FALLBACK_INSTALL_DIR}/lib/node_modules/${CLAUDE_CODE_PACKAGE}`;
 const CODEX_INSTALL_TIMEOUT_SECONDS = 300;
-const CODEX_FALLBACK_INSTALL_DIR = "/tmp/codex-cli";
+const CODEX_FALLBACK_INSTALL_DIR = CODEX_CLI_INSTALL_DIR;
 const CODEX_FALLBACK_BIN_PATH = `${CODEX_FALLBACK_INSTALL_DIR}/bin/codex`;
 const CODEX_CLI_PACKAGE = "@openai/codex";
 /** Where `npm install -g --prefix CODEX_FALLBACK_INSTALL_DIR` places the package. */
@@ -226,35 +230,54 @@ export function resolveCodexCliVersion(): Promise<string> {
  * `claude` for life (only a reseed upgrades the global). Session 62 on a 14 Aug
  * snapshot failed every Fable 5.1 turn with "Claude Code 2.1.232 does not
  * support this model" because the old guard only installed when `claude` was
- * missing. When neither the global nor the fallback prefix holds the pin, the
- * pin is installed under the fallback prefix (user-writable; the global npm
- * root is root-owned), and the callback prefers it over a drifted global —
- * see `claudeExecutablePath` in callback-src/providers/claudeSdk.ts.
- *
- * Three roots are probed, because the seed installs with `sudo npm install -g`
- * into node's own prefix (`/vercel/runtimes/node24/lib/node_modules`) while this
- * command runs as the unprivileged sandbox user, whose `npm root -g` is a
- * per-user prefix holding only pnpm. Testing `npm root -g` alone missed the
- * seeded CLI, so every fresh sandbox reinstalled the pin (~2.5s on the launch
- * critical path) despite already having it. Mirrors `globalNpmRoots()` in
- * callback-src/providers/claudeSdk.ts.
+ * missing. When neither the `claude` on PATH nor the fallback prefix holds the
+ * pin, the pin is installed under the fallback prefix (user-writable; the
+ * global npm root is root-owned), and the callback prefers it over a drifted
+ * global — see `claudeExecutablePath` in callback-src/providers/claudeSdk.ts
+ * and `pinnedCliInstallCommand` for why only the PATH copy counts.
  */
 export async function ensureClaudeCliAvailable(
   sandbox: SandboxHandle,
   version: string,
 ): Promise<void> {
-  const pinned = quote([version]);
   await execHandle(
     sandbox,
-    [
-      `cli_version() { node -p "require(process.argv[1] + '/package.json').version" "$1" 2>/dev/null; }`,
-      // node lives at `<prefix>/bin/node`, so its global modules are at
-      // `<prefix>/lib/node_modules` whatever the calling user's npm config says.
-      `node_root="$(dirname "$(dirname "$(command -v node)")")/lib/node_modules"`,
-      `if [ "$(cli_version "$node_root/${CLAUDE_CODE_PACKAGE}")" != ${pinned} ] && [ "$(cli_version "$(npm root -g)/${CLAUDE_CODE_PACKAGE}")" != ${pinned} ] && [ "$(cli_version ${quote([CLAUDE_FALLBACK_PACKAGE_ROOT])})" != ${pinned} ]; then npm install -g --prefix ${quote([CLAUDE_FALLBACK_INSTALL_DIR])} @anthropic-ai/claude-code@${version}; fi`,
-    ].join("; "),
+    pinnedCliInstallCommand({
+      binName: "claude",
+      packageName: CLAUDE_CODE_PACKAGE,
+      fallbackInstallDir: CLAUDE_FALLBACK_INSTALL_DIR,
+      fallbackPackageRoot: CLAUDE_FALLBACK_PACKAGE_ROOT,
+      version,
+    }),
     CLAUDE_INSTALL_TIMEOUT_SECONDS,
   );
+}
+
+/**
+ * Shell guard that installs `packageName@version` under the fallback prefix
+ * unless the binary on PATH, or the fallback, is already that version.
+ *
+ * Checks the package behind `command -v <bin>` (`<prefix>/bin/<bin>` →
+ * `<prefix>/lib/node_modules/<package>`), not every global root: the callback's
+ * `resolvePinnedCliBinary` runs whatever PATH finds first, so a matching copy
+ * anywhere else must not count. A `claude update` in the terminal installs into
+ * the user's npm prefix, behind the image's copy on PATH; probing that root
+ * skipped this install and left the agent on the image's stale CLI.
+ */
+export function pinnedCliInstallCommand(cli: {
+  binName: string;
+  packageName: string;
+  fallbackInstallDir: string;
+  fallbackPackageRoot: string;
+  version: string;
+}): string {
+  const pinned = quote([cli.version]);
+  return [
+    `cli_version() { node -p "require(process.argv[1] + '/package.json').version" "$1" 2>/dev/null; }`,
+    `bin_path="$(command -v ${quote([cli.binName])} || true)"`,
+    `path_version="$([ -n "$bin_path" ] && cli_version "$(dirname "$(dirname "$bin_path")")/lib/node_modules/${cli.packageName}")"`,
+    `if [ "$path_version" != ${pinned} ] && [ "$(cli_version ${quote([cli.fallbackPackageRoot])})" != ${pinned} ]; then npm install -g --prefix ${quote([cli.fallbackInstallDir])} ${cli.packageName}@${cli.version}; fi`,
+  ].join("; ");
 }
 
 /**
@@ -263,22 +286,22 @@ export async function ensureClaudeCliAvailable(
  * Version-checked, not existence-checked, for the same reason as
  * `ensureClaudeCliAvailable`: this guard used to fire only when the binary was
  * absent, so a sandbox seeded months ago kept its stale global `codex` for life
- * and a model gated on a newer CLI could never run there. Probes the same three roots
- * (node's own prefix, the caller's `npm root -g`, the fallback prefix) because
- * the seed installs as root while this runs unprivileged.
+ * and a model gated on a newer CLI could never run there. Same guard, see
+ * `pinnedCliInstallCommand`.
  */
 async function ensureCodexRuntimeAvailable(
   sandbox: SandboxHandle,
   version: string,
 ): Promise<void> {
-  const pinned = quote([version]);
   await execHandle(
     sandbox,
-    [
-      `cli_version() { node -p "require(process.argv[1] + '/package.json').version" "$1" 2>/dev/null; }`,
-      `node_root="$(dirname "$(dirname "$(command -v node)")")/lib/node_modules"`,
-      `if [ "$(cli_version "$node_root/${CODEX_CLI_PACKAGE}")" != ${pinned} ] && [ "$(cli_version "$(npm root -g)/${CODEX_CLI_PACKAGE}")" != ${pinned} ] && [ "$(cli_version ${quote([CODEX_FALLBACK_PACKAGE_ROOT])})" != ${pinned} ]; then npm install -g --prefix ${quote([CODEX_FALLBACK_INSTALL_DIR])} @openai/codex@${version}; fi`,
-    ].join("; "),
+    pinnedCliInstallCommand({
+      binName: "codex",
+      packageName: CODEX_CLI_PACKAGE,
+      fallbackInstallDir: CODEX_FALLBACK_INSTALL_DIR,
+      fallbackPackageRoot: CODEX_FALLBACK_PACKAGE_ROOT,
+      version,
+    }),
     CODEX_INSTALL_TIMEOUT_SECONDS,
   );
 }
@@ -325,8 +348,8 @@ function ensureProviderCliAvailable(
  * installs: `/home/eva` (every provider-SDK self-install targets
  * `/home/eva/.eva-agent-sdk`) plus the agent-browser CLI, which agents invoke
  * by name off PATH — hence a global install, not the `--prefix` form the
- * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted from
- * the Vercel managed image (orchestrator sessions) have none of it. Both
+ * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted
+ * without a seeded snapshot have none of it. Both
  * halves are gated on the artifact already being present, so a snapshot boot
  * pays one probe and installs nothing.
  *
@@ -336,8 +359,8 @@ function ensureProviderCliAvailable(
  * agent-browser availability is eventually-consistent instead — a session
  * without browser tooling still chats and edits code. agentation-mcp is
  * deliberately NOT installed here: it exists for the preview annotation
- * widget (which image-booted orchestrator sandboxes never serve) and its
- * better-sqlite3 build needs gcc/make, which the managed image lacks — that
+ * widget and its better-sqlite3 build needs gcc/make, which a bare image may
+ * lack — that
  * compile is what blew the old synchronous install past its timeout.
  *
  * Nothing in here may throw: losing the SDK-fallback directory or the browser
@@ -420,8 +443,6 @@ export async function launchScript(
   opts: {
     model?: string;
     allowedTools?: string;
-    /** Read-only turn: each provider SDK translates this into its own option. */
-    noWrites?: boolean;
     systemPrompt?: string;
     extraEnvVars?: Record<string, string>;
     claudeSessionId?: string;
@@ -557,14 +578,6 @@ export async function launchScript(
       `HARNESS_CATALOG_TOKEN=${quote([opts.harnessCatalogToken])}`,
       `HARNESS_CATALOG_SANDBOX_ID=${quote([sandbox.id])}`,
     );
-  }
-  // One provider-agnostic read-only signal. Deliberately not derived from
-  // ALLOWED_TOOLS: that list is Claude's tool vocabulary, and teaching Cursor,
-  // Codex and OpenCode to parse Claude tool names would put four translations
-  // of the same decision in four SDK adapters. Each adapter reads this flag and
-  // applies its own restriction instead.
-  if (opts.noWrites) {
-    envParts.push("EVA_NO_WRITES=1");
   }
   if (opts.claudeSessionId) {
     envParts.push(`CLAUDE_SESSION_ID=${quote([opts.claudeSessionId])}`);

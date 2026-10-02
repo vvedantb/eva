@@ -6,7 +6,8 @@
  * {@link evaluateDecision}, so the caps, the timeout, the zero-data-retention
  * flag and the error mapping are defined once.
  *
- * Imports stay confined to the SDK and the two leaf modules beside this file;
+ * Imports stay confined to the SDK, the leaf modules beside this file and the
+ * shared gateway-error leaf (`_ai/gatewayErrors.ts`);
  * reaching into `mcp/*` or `functions.ts` would put a `"use node"` chunk in an
  * import cycle, which breaks the Convex prod push.
  */
@@ -14,18 +15,8 @@
 import {
   experimental_evaluate as evaluate,
   Experimental_EvaluationUnsupportedQuestionTypeError,
-  InvalidArgumentError,
-  InvalidResponseDataError,
-  NoSuchModelError,
-  RetryError,
 } from "ai";
-import {
-  GatewayAuthenticationError,
-  GatewayError,
-  GatewayInvalidRequestError,
-  GatewayModelNotFoundError,
-  GatewayRateLimitError,
-} from "@ai-sdk/gateway";
+import { classifyGatewayError, errorMessageOf } from "../_ai/gatewayErrors";
 import {
   EVALUATE_MODEL,
   evaluateInput,
@@ -50,69 +41,52 @@ function failure(
   return { ok: false, errorCode, error, retryable };
 }
 
-function messageOf(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return "Unknown error";
-}
-
 /**
- * Maps SDK and gateway failures onto the three caller-facing error codes.
- * Never includes the request body or the API key; the SDK messages do not
- * carry them either, but the guard is the point.
+ * Maps SDK and gateway failures onto the three caller-facing error codes. The
+ * gateway classification itself is shared (`_ai/gatewayErrors.ts`); only
+ * Jev's own codes and copy live here.
  */
 function classifyError(error: unknown): Failure {
-  if (RetryError.isInstance(error)) return classifyError(error.lastError);
-  if (
-    Experimental_EvaluationUnsupportedQuestionTypeError.isInstance(error) ||
-    InvalidArgumentError.isInstance(error) ||
-    GatewayInvalidRequestError.isInstance(error)
-  ) {
-    return failure("invalid_request", messageOf(error));
+  if (Experimental_EvaluationUnsupportedQuestionTypeError.isInstance(error)) {
+    return failure("invalid_request", errorMessageOf(error));
   }
-  if (GatewayAuthenticationError.isInstance(error)) {
-    return failure(
-      "missing_config",
-      `AI Gateway rejected AI_GATEWAY_API_KEY: ${messageOf(error)}`,
-    );
+  const gatewayFailure = classifyGatewayError(error);
+  const { message, retryable } = gatewayFailure;
+  switch (gatewayFailure.kind) {
+    case "invalid_request":
+      return failure("invalid_request", message);
+    case "auth":
+      return failure(
+        "missing_config",
+        `AI Gateway rejected AI_GATEWAY_API_KEY: ${message}`,
+      );
+    case "model_not_found":
+      return failure(
+        "provider_error",
+        `Model ${EVALUATE_MODEL} is not available on AI Gateway (check the model id and the team's model allow-list): ${message}`,
+      );
+    case "gateway":
+      return failure(
+        "provider_error",
+        `AI Gateway error ${gatewayFailure.statusCode ?? "unknown"}: ${message}`,
+        retryable,
+      );
+    case "malformed_response":
+      return failure(
+        "provider_error",
+        `Jev returned a malformed answer set: ${message}`,
+        true,
+      );
+    case "timeout":
+      return failure(
+        "provider_error",
+        `Jev did not answer within ${REQUEST_TIMEOUT_MS / 1000} seconds`,
+        true,
+      );
+    case "rate_limit":
+    case "other":
+      return failure("provider_error", message, retryable);
   }
-  if (
-    NoSuchModelError.isInstance(error) ||
-    GatewayModelNotFoundError.isInstance(error)
-  ) {
-    return failure(
-      "provider_error",
-      `Model ${EVALUATE_MODEL} is not available on AI Gateway (check the model id and the team's model allow-list): ${messageOf(error)}`,
-    );
-  }
-  if (GatewayRateLimitError.isInstance(error)) {
-    return failure("provider_error", messageOf(error), true);
-  }
-  if (GatewayError.isInstance(error)) {
-    return failure(
-      "provider_error",
-      `AI Gateway error ${error.statusCode}: ${messageOf(error)}`,
-      error.isRetryable,
-    );
-  }
-  if (InvalidResponseDataError.isInstance(error)) {
-    return failure(
-      "provider_error",
-      `Jev returned a malformed answer set: ${messageOf(error)}`,
-      true,
-    );
-  }
-  if (
-    error instanceof Error &&
-    (error.name === "TimeoutError" || error.name === "AbortError")
-  ) {
-    return failure(
-      "provider_error",
-      `Jev did not answer within ${REQUEST_TIMEOUT_MS / 1000} seconds`,
-      true,
-    );
-  }
-  return failure("provider_error", messageOf(error));
 }
 
 /** Copies only the fields callers are promised, so SDK extras never leak through. */

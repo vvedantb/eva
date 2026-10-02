@@ -141,7 +141,6 @@ export function buildFirstRunChatTurn({
     {
       _id: `first-run-${run._id}-user`,
       _creationTime: task.createdAt,
-      parentId: task._id,
       role: "user",
       content: task.description
         ? `${task.title}\n\n${task.description}`
@@ -159,7 +158,6 @@ export function buildFirstRunChatTurn({
     {
       _id: `first-run-${run._id}-assistant`,
       _creationTime: startedAt,
-      parentId: task._id,
       role: "assistant",
       timestamp: startedAt,
       ...(media && media.length > 0 ? { media } : {}),

@@ -63,12 +63,6 @@ describe("session PR read-only state", () => {
     },
   );
 
-  test("Manager Ave never sends for review", () => {
-    expect(
-      canSendSessionForReview({ branchName: "eva/x", isOrchestrator: true }),
-    ).toBe(false);
-  });
-
   test("manual archive has its own fallback and live sessions have none", () => {
     expect(
       getSessionReadOnlyMessage({ isArchived: true, prState: "open" }),

@@ -10,7 +10,7 @@ import {
   HoverCardTrigger,
   LoadingState,
 } from "@eva/ui";
-import { IconGitPullRequest, IconSparkles } from "@tabler/icons-react";
+import { IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
@@ -76,8 +76,6 @@ interface SidebarSessionItemProps {
   sandboxError?: string;
   /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
-  /** The user's persistent orchestrator session — marked instead of dotted. */
-  isOrchestrator?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
@@ -144,27 +142,15 @@ function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
-  isOrchestrator,
 }: {
   label: string;
   dotClassName: string;
   isExecuting: boolean;
-  isOrchestrator: boolean;
 }) {
   if (isExecuting) {
     return (
       <span className="flex shrink-0 items-center" title="Working">
         <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
-      </span>
-    );
-  }
-  // Manager Ave is one persistent session per user rather than a piece of
-  // work, so it is marked instead of dotted: its sandbox status is not what the
-  // reader needs to tell it apart from the sessions around it.
-  if (isOrchestrator) {
-    return (
-      <span className="flex shrink-0 items-center" title="Manager Ave">
-        <IconSparkles size={12} className="shrink-0 text-sidebar-primary" />
       </span>
     );
   }
@@ -204,7 +190,6 @@ export function SidebarSessionItem({
   status,
   sandboxError,
   isExecuting = false,
-  isOrchestrator = false,
   isSelected,
   onNavigate,
   prUrl,
@@ -236,7 +221,6 @@ export function SidebarSessionItem({
       label={statusLabel}
       dotClassName={statusStyle.dot}
       isExecuting={isExecuting}
-      isOrchestrator={isOrchestrator}
     />
   );
 

@@ -203,8 +203,5 @@ export function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }
 
-/** Shared prose styling for GitHub-authored markdown (description, comments). */
-// `[&_pre]:overflow-x-auto`: a PR body's code fence is often wider than a phone,
-// and it used to push the whole column sideways instead of scrolling itself.
-export const MARKDOWN_CLASS =
-  "prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 max-sm:[&_pre]:overflow-x-auto";
+/** Text size for GitHub-authored markdown (description, comments). */
+export const MARKDOWN_CLASS = "text-sm";

@@ -75,8 +75,11 @@ export const userFields = {
   experimentalFlags: v.optional(experimentalFlagsValidator),
   /** Rebound keyboard shortcuts (settings → Shortcuts). Sparse: missing = default. */
   shortcutOverrides: v.optional(shortcutOverridesValidator),
-  // The user's single persistent orchestrator ("master") session. Absent until
-  // first opened; repointed if the master is archived/deleted and recreated.
+  /**
+   * @deprecated Pre-rebuild Manager Ave session pointer. Nothing reads or writes
+   * it; `retireOrchestratorSessions` clears it, then the field is dropped. Ave
+   * lives in `aveThreads` now.
+   */
   orchestratorSessionId: v.optional(v.id("sessions")),
   /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
   grokBotWebhookUrl: v.optional(v.string()),
@@ -353,9 +356,11 @@ export const agentTaskFields = {
   // Soft UX lock while the agent drives the shared desktop Chrome via
   // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
   agentBrowsingAt: v.optional(v.number()),
-  // Orchestrator session watching this task for completion notifications
-  // (mirrors sessions.watchedByOrchestrator).
+  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
+  // Manager Ave thread watching this task for completion notifications
+  // (mirrors sessions.watchedByAve).
+  watchedByAve: v.optional(v.id("aveThreads")),
   /**
    * Branch the sandbox worktree is actually on, reported live by the in-sandbox
    * daemon (see callback-src/runtime/branchWatcher.ts). Tasks store no intended
@@ -506,13 +511,14 @@ export const sessionFields = {
   // background heal so it never relaunches daemons the lifecycle is about to
   // launch itself (double launch orphaned children and truncated logs).
   sandboxServicesPending: v.optional(v.boolean()),
-  // Persistent per-user master ("orchestrator") session. Set only at creation —
-  // the sandbox token's orchestrator claim is minted at launch, never toggled.
+  /** @deprecated Pre-rebuild Manager Ave flag; cleared by migration, then dropped. */
   isOrchestrator: v.optional(v.boolean()),
-  // Orchestrator session watching this one for completion notifications. Set
-  // implicitly when the master touches this session (send/create) or via
-  // watch_agent; cleared by unwatch_agent or when the master is gone.
+  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
+  // Manager Ave thread watching this session for completion notifications. Set
+  // implicitly when Ave touches this session (send/create) or via watch_agent;
+  // cleared by unwatch_agent or when the thread is reset.
+  watchedByAve: v.optional(v.id("aveThreads")),
   /**
    * Branch the sandbox worktree is actually on, reported live by the in-sandbox
    * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
@@ -527,6 +533,21 @@ export const sessionFields = {
   // How many `sessionRepos` rows this session has. Denormalised so list rows
   // and resume paths can tell a multi-repo session apart without a join.
   linkedRepoCount: v.optional(v.number()),
+  /** Session this one was forked from ("Fork session"). Informational. */
+  forkedFromSessionId: v.optional(v.id("sessions")),
+  /**
+   * Source sandbox to Vercel-fork for this session's first sandbox, instead of
+   * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
+   * state) carry over.
+   */
+  forkSourceSandboxId: v.optional(v.string()),
+  /**
+   * Set when the source was running at fork time and had to be stopped. The
+   * fork's first boot starts the source again once the Vercel fork has been
+   * taken (or has failed), never before — forking a mid-resume source is not
+   * something Vercel documents.
+   */
+  forkRestartsSource: v.optional(v.boolean()),
 };
 
 /**
@@ -822,6 +843,11 @@ export const projectFields = {
   // Soft UX lock while the agent drives the shared desktop Chrome via
   // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
   agentBrowsingAt: v.optional(v.number()),
+  /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
+  watchedByOrchestrator: v.optional(v.id("sessions")),
+  // Manager Ave thread watching this project's chat for completion
+  // notifications (mirrors sessions.watchedByAve).
+  watchedByAve: v.optional(v.id("aveThreads")),
   /**
    * Branch the sandbox worktree is actually on, reported live by the in-sandbox
    * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
@@ -983,8 +1009,9 @@ export const messageFields = {
   // User-role message injected via MCP (master session or user OAuth
   // connector). Drives a "via MCP" badge in chat.
   sentViaOrchestrator: v.optional(v.boolean()),
-  // User-role wake-up row inserted into the master session when a watched
-  // child agent finishes. Drives distinct UI styling.
+  // Legacy: wake-up rows in pre-rebuild Manager Ave sessions. No writer any
+  // more (Ave's notifications live in `aveMessages`); kept so archived Ave
+  // transcripts still render their "agent update" styling.
   orchestratorNotification: v.optional(v.boolean()),
   // Turn checkpoint (assistant rows on session, quick-task and project chat):
   // sandbox git HEAD when the turn started and after persistTurnWork
@@ -1002,6 +1029,52 @@ export const messageFields = {
   // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
   // three chat surfaces; task runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
+};
+
+/**
+ * Manager Ave's conversation. One live thread per user (`archivedAt` unset);
+ * a reset archives it and the next send opens a fresh one. Ave runs
+ * server-side (`mcp/aveRun.ts`), so there is no sandbox, repo or model here —
+ * only the run state that keeps one run in flight at a time.
+ */
+export const aveThreadFields = {
+  userId: v.id("users"),
+  status: v.union(v.literal("idle"), v.literal("running")),
+  /** Fences a run: every run mutation no-ops unless it presents this id. */
+  runId: v.optional(v.string()),
+  runStartedAt: v.optional(v.number()),
+  /** The reply bubble the current run is writing into. */
+  runMessageId: v.optional(v.id("aveMessages")),
+  /** Something arrived mid-run; start one follow-up run when this one ends. */
+  rerunRequested: v.optional(v.boolean()),
+  cancelRequested: v.optional(v.boolean()),
+  archivedAt: v.optional(v.number()),
+  updatedAt: v.number(),
+};
+
+/**
+ * One Manager Ave chat row. Field names deliberately match `messageFields` so
+ * the shared chat UI renders these unchanged.
+ */
+export const aveMessageFields = {
+  threadId: v.id("aveThreads"),
+  role: roleValidator,
+  content: v.string(),
+  timestamp: v.number(),
+  finishedAt: v.optional(v.number()),
+  /** JSON `ActivityStep[]` — the tool steps the run took. */
+  activityLog: v.optional(v.string()),
+  userId: v.optional(v.id("users")),
+  clientId: v.optional(v.string()),
+  isSystemAlert: v.optional(v.boolean()),
+  errorDetail: v.optional(v.string()),
+  /** Wake-up row inserted when a watched agent finishes. */
+  orchestratorNotification: v.optional(v.boolean()),
+  /**
+   * Assistant rows: JSON `ResponseMessage[]` from the run (tool calls and
+   * capped results), replayed as model context on later runs.
+   */
+  modelMessages: v.optional(v.string()),
 };
 
 export const queuedMessageFields = {
@@ -1027,10 +1100,7 @@ export const queuedMessageFields = {
   interactionMode: v.optional(interactionModeValidator),
   // Carried from the composer through the queue to the started user message.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  // Set when a child-completion wake-up had to be queued because the master was
-  // busy. Copied onto the started user message so the row still renders as a
-  // notification rather than a plain user turn (mirrors
-  // messageFields.orchestratorNotification).
+  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by migration. */
   orchestratorNotification: v.optional(v.boolean()),
   // Same idea for a message the orchestrator sent to a BUSY child: without it
   // the "via orchestrator" badge was lost on exactly the messages that had to
@@ -1122,6 +1192,19 @@ export const sandboxGitCredentialsFields = {
   createdAt: v.number(),
 };
 
+/**
+ * Chat (session / quick task / project) a doc or artifact was created from.
+ * Shared by `docs` and `artifacts`; resolved by `_chatSource/helpers.ts`.
+ */
+export const chatSourceFields = {
+  sourceKind: v.optional(
+    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  ),
+  sourceSessionId: v.optional(v.id("sessions")),
+  sourceTaskId: v.optional(v.id("agentTasks")),
+  sourceProjectId: v.optional(v.id("projects")),
+};
+
 export const docFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1130,12 +1213,7 @@ export const docFields = {
   // Chat that created this doc (`create_eva_doc` from a sandbox token, or
   // Save-as-document from a session plan). Manual New Document leaves these
   // unset. Distinct from `sessionId`, which is the Plan tab's one linked doc.
-  sourceKind: v.optional(
-    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-  ),
-  sourceSessionId: v.optional(v.id("sessions")),
-  sourceTaskId: v.optional(v.id("agentTasks")),
-  sourceProjectId: v.optional(v.id("projects")),
+  ...chatSourceFields,
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
@@ -1304,12 +1382,7 @@ export const artifactFields = {
   createdAt: v.number(),
   // Chat that created this artifact (`create_artifact` from a sandbox token).
   // Manual uploads leave these unset. Indexes skip rows with no source.
-  sourceKind: v.optional(
-    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-  ),
-  sourceSessionId: v.optional(v.id("sessions")),
-  sourceTaskId: v.optional(v.id("agentTasks")),
-  sourceProjectId: v.optional(v.id("projects")),
+  ...chatSourceFields,
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port
@@ -1403,6 +1476,33 @@ export const chatUiPanelFields = {
   prompt: v.string(),
   spec: v.string(),
   elementCount: v.number(),
+  createdAt: v.number(),
+};
+
+/**
+ * One agent request to run a WebMCP tool inside the chat's live preview. The
+ * sandbox cannot reach the page, so the request is relayed through the user's
+ * open Eva tab: the MCP tool inserts a row, a tab claims and runs it in the
+ * preview iframe, then writes the result back. Payloads stay JSON strings
+ * because their shape is the previewed app's business, not the database's.
+ */
+export const previewToolCallFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  kind: v.union(v.literal("list"), v.literal("invoke")),
+  /** Invoke only: the page tool to run. */
+  name: v.optional(v.string()),
+  /** Invoke only: the arguments, as JSON object text. */
+  argumentsJson: v.optional(v.string()),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("claimed"),
+    v.literal("done"),
+    v.literal("error"),
+  ),
+  /** Random per-browser-tab id of the tab that won the claim. */
+  claimedBy: v.optional(v.string()),
+  resultJson: v.optional(v.string()),
+  error: v.optional(v.string()),
   createdAt: v.number(),
 };
 

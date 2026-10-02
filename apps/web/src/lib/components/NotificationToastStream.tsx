@@ -9,7 +9,7 @@ import { Badge, Button, Card, CardContent } from "@eva/ui";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { playNotificationChime } from "@/lib/utils/notificationChime";
+import { playNotificationBell } from "@/lib/utils/notificationChime";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 import {
   NotificationIcon,
@@ -47,6 +47,8 @@ export function NotificationToastStream() {
   // `{}` is the unarchived inbox: `notifications.list` now takes an `archived`
   // flag, and toasts only ever announce live notifications.
   const notifications = useQuery(api.notifications.list, {});
+  const flags = useQuery(api.auth.getExperimentalFlags);
+  const isBellEnabled = flags?.notificationBell === true;
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
@@ -97,12 +99,12 @@ export function NotificationToastStream() {
       return;
     }
 
-    // One chime per batch, however many landed together, and only for unread
-    // arrivals. `list` returns the newest 100, so pruning an old notification
-    // pulls the next one into the window and it reads as newly arrived â€” but
+    // One bell per batch (behind the `notificationBell` flag), however many
+    // landed together, and only for unread arrivals. `list` returns the newest 100, so pruning an old notification
+    // pulls the next one into the window and it reads as newly arrived — but
     // anything resurfacing that way is long since read.
-    if (announced.some((notification) => !notification.read)) {
-      playNotificationChime();
+    if (isBellEnabled && announced.some((notification) => !notification.read)) {
+      playNotificationBell();
     }
 
     setToasts((previous) => {
@@ -123,7 +125,8 @@ export function NotificationToastStream() {
       }
       return next.slice(0, TOAST_LIMIT);
     });
-  }, [notifications]);
+    // Re-running on a flag flip is harmless: nothing is newly arrived then.
+  }, [notifications, isBellEnabled]);
 
   useEffect(() => {
     const delay = nextToastExpiryDelay(

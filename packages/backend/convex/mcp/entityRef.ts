@@ -173,6 +173,23 @@ export function entitySummary(target: EntityTarget): EntitySummary {
 }
 
 /**
+ * An agent asked "what is my preview link?" has no id for itself, and used to
+ * answer that no link existed. Naming no chat therefore means "the one I am
+ * running in", which the sandbox token already states. Shared by every tool
+ * whose natural target is the caller's own chat.
+ */
+export function withSelfDefault<Ref extends EntityRef>(
+  ref: Ref,
+  credentials: McpCredentials,
+): Ref {
+  const named =
+    ref.id !== undefined || ref.prUrl !== undefined || ref.numId !== undefined;
+  const { entityId, entityKind } = credentials;
+  if (named || entityId === undefined || entityKind === undefined) return ref;
+  return { ...ref, id: entityId, kind: entityKind };
+}
+
+/**
  * Repo and entity resolution bound to one MCP caller's credentials.
  *
  * Two access levels, on purpose:
@@ -187,7 +204,6 @@ export function entitySummary(target: EntityTarget): EntitySummary {
  */
 export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   const { scopedRepoId } = credentials;
-  const isOrchestrator = credentials.isOrchestrator === true;
 
   /** The check the web mutations run: does this user reach this repo? */
   async function assertUserRepoAccess(
@@ -204,15 +220,14 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   }
 
   /**
-   * Credential-grade check: the user check plus the token pin. The master
-   * session reaches every repo the user can reach, so the pin does not apply
-   * to it.
+   * Credential-grade check: the user check plus the token pin. Manager Ave
+   * carries no `scopedRepoId`, so it reaches every repo the user can reach.
    */
   async function assertRepoAccess(
     repoId: string,
     userId: string,
   ): Promise<void> {
-    if (scopedRepoId && scopedRepoId !== repoId && !isOrchestrator) {
+    if (scopedRepoId && scopedRepoId !== repoId) {
       throw new Error(
         "Access denied: this token is scoped to a different repository.",
       );
