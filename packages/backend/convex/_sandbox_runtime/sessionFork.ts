@@ -2,7 +2,7 @@
 
 import { ConvexError, v } from "convex/values";
 import type { FunctionReturnType } from "convex/server";
-import { internal } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { authAction } from "../functions";
 import { getSandboxHandle } from "./helpers";
 
@@ -25,7 +25,8 @@ function sleep(ms: number): Promise<void> {
  *
  * A Vercel fork restores from the source's current snapshot, not its live
  * disk, and stopping is what writes that snapshot — so a running source is
- * stopped first. It resumes untouched the next time it is opened.
+ * stopped first, then started again once the fork exists. A source that was
+ * already stopped or archived is left as it was.
  */
 export const forkSession = authAction({
   args: { sessionId: v.id("sessions") },
@@ -38,7 +39,9 @@ export const forkSession = authAction({
     if (source.hasOpenTurn) {
       throw new ConvexError("Wait for the current turn to finish, then fork.");
     }
-    if (source.status === "active" || source.status === "starting") {
+    const wasRunning =
+      source.status === "active" || source.status === "starting";
+    if (wasRunning) {
       await ctx.runMutation(internal.sessions.requestStopSandbox, {
         sessionId: args.sessionId,
       });
@@ -64,9 +67,24 @@ export const forkSession = authAction({
     } catch {
       throw new ConvexError(NO_SANDBOX);
     }
-    return await ctx.runMutation(internal.sessions.createForkedSession, {
+    const fork = await ctx.runMutation(internal.sessions.createForkedSession, {
       sourceSessionId: args.sessionId,
       sourceSandboxId,
     });
+    if (wasRunning) {
+      // Bring the source back the way the Start button does. Safe for the fork:
+      // it restores from the snapshot the stop wrote, which a resume leaves
+      // untouched. Best-effort — the fork already exists either way.
+      try {
+        await ctx.runMutation(api.sessions.startSandbox, {
+          sessionId: args.sessionId,
+        });
+      } catch (error) {
+        console.warn(
+          `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    return fork;
   },
 });
