@@ -63,6 +63,7 @@ import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { latestTaskPrUrl } from "./_agentTasks/prUrl";
+import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -344,6 +345,12 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.taskId, { updatedAt: Date.now() });
+    if (role === "user") {
+      await touchUserActivity(ctx, {
+        kind: "task",
+        entityId: String(args.taskId),
+      });
+    }
     return null;
   },
 });
@@ -370,6 +377,10 @@ export const startExecute = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -530,6 +541,10 @@ export const enqueueMessage = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -1126,6 +1141,10 @@ export const saveResult = internalMutation({
       // See `_chat/pendingTurnRestage.ts`.
       pendingTurnClaimedAt: undefined,
       updatedAt: Date.now(),
+    });
+    await touchAgentFinished(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
     });
 
     await startNextQueuedTaskChatMessage(ctx, args.taskId);

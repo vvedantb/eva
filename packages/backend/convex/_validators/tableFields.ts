@@ -1135,11 +1135,41 @@ export const taskSubscriberFields = {
 // `sandboxAutoStop` cron stops every active sandbox so none are left running
 // overnight. `sandboxAutoStopLastRunDate` is the once-per-day dedup guard
 // (the local date "YYYY-MM-DD" of the last occurrence that was swept).
+// Idle pause (`sandboxIdlePause` cron): `off` is today's behaviour, `dry-run`
+// only logs which sandboxes would pause, `on` pauses them. All three fields are
+// optional so existing rows need no migration; readers default to off / 5 / 20.
+export const sandboxIdlePauseModeValidator = v.union(
+  v.literal("off"),
+  v.literal("dry-run"),
+  v.literal("on"),
+);
+
 export const appSettingsFields = {
   sandboxAutoStopEnabled: v.boolean(),
   sandboxAutoStopTime: v.string(),
   sandboxAutoStopTimeZone: v.string(),
   sandboxAutoStopLastRunDate: v.optional(v.string()),
+  sandboxIdlePauseMode: v.optional(sandboxIdlePauseModeValidator),
+  sandboxIdleAfterAgentMinutes: v.optional(v.number()),
+  sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
+};
+
+// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
+// its own table (not on the session/task/project doc) so the frequent, throttled
+// touches never join the write set of hot entity documents.
+export const sandboxActivityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+
+export const sandboxActivityFields = {
+  kind: sandboxActivityKindValidator,
+  entityId: v.string(),
+  /** Last human interaction: message sent, tab opened, preview traffic, presence. */
+  lastUserActivityAt: v.optional(v.number()),
+  /** Last time an agent turn or run finished for this entity. */
+  lastAgentFinishedAt: v.optional(v.number()),
 };
 
 export const sandboxGitCredentialsFields = {

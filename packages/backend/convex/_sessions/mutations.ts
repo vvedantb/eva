@@ -40,6 +40,7 @@ import {
   getRepoGroupForSession,
 } from "../repoGroups";
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
+import { touchUserActivity } from "../_sandbox/activity";
 
 /** Loads a session by id, throwing if it does not exist. */
 async function getSessionOrThrow(
@@ -335,6 +336,12 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.id, { updatedAt: Date.now() });
+    if (args.role === "user") {
+      await touchUserActivity(ctx, {
+        kind: "session",
+        entityId: String(args.id),
+      });
+    }
     return null;
   },
 });

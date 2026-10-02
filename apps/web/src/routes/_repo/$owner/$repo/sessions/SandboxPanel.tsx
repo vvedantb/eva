@@ -400,6 +400,9 @@ export function SandboxPanel({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           onAnnotationSubmit={submitAnnotation}
+          // Only the session on screen holds the idle-pause presence beacon;
+          // cached siblings and a collapsed rail must not keep a VM awake.
+          presenceEnabled={isRouteActive && !collapsed}
           // Multi-repo sessions run a dev server per repo; the Preview port
           // control offers each one instead of only the primary's.
           previewPortOptions={previewPortOptions(

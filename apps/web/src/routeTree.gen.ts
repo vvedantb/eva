@@ -42,6 +42,7 @@ import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/ind
 import { Route as GlobalTeamsTeamIdRouteRouteImport } from './routes/_global/teams/$teamId/route'
 import { Route as RepoOwnerRepoRouteImport } from './routes/_repo/$owner/$repo'
 import { Route as McpOauthAuthorizeRouteImport } from './routes/mcp/oauth/authorize'
+import { Route as PKindIdRouteImport } from './routes/p.$kind.$id'
 import { Route as GlobalTeamsTeamIdIndexRouteImport } from './routes/_global/teams/$teamId/index'
 import { Route as GlobalTeamsTeamIdTeamTabRouteImport } from './routes/_global/teams/$teamId/$teamTab'
 import { Route as RepoOwnerRepoIndexRouteImport } from './routes/_repo/$owner/$repo/index'
@@ -302,6 +303,11 @@ const RepoOwnerRepoRoute = RepoOwnerRepoRouteImport.update({
 const McpOauthAuthorizeRoute = McpOauthAuthorizeRouteImport.update({
   id: '/mcp/oauth/authorize',
   path: '/mcp/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PKindIdRoute = PKindIdRouteImport.update({
+  id: '/p/$kind/$id',
+  path: '/p/$kind/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalTeamsTeamIdIndexRoute = GlobalTeamsTeamIdIndexRouteImport.update({
@@ -896,6 +902,7 @@ export interface FileRoutesByFullPath {
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
+  '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
   '/settings/': typeof GlobalSettingsIndexRoute
   '/teams/': typeof GlobalTeamsIndexRoute
@@ -1020,6 +1027,7 @@ export interface FileRoutesByTo {
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
+  '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
   '/settings': typeof GlobalSettingsIndexRoute
   '/teams': typeof GlobalTeamsIndexRoute
@@ -1128,6 +1136,7 @@ export interface FileRoutesById {
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
   '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
+  '/p/$kind/$id': typeof PKindIdRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
   '/_global/settings/': typeof GlobalSettingsIndexRoute
   '/_global/teams/': typeof GlobalTeamsIndexRoute
@@ -1257,6 +1266,7 @@ export interface FileRouteTypes {
     | '/setup/$id'
     | '/$owner/$repo'
     | '/mcp/oauth/authorize'
+    | '/p/$kind/$id'
     | '/artifacts/'
     | '/settings/'
     | '/teams/'
@@ -1381,6 +1391,7 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/setup/$id'
     | '/mcp/oauth/authorize'
+    | '/p/$kind/$id'
     | '/artifacts'
     | '/settings'
     | '/teams'
@@ -1488,6 +1499,7 @@ export interface FileRouteTypes {
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
     | '/mcp/oauth/authorize'
+    | '/p/$kind/$id'
     | '/_global/artifacts/'
     | '/_global/settings/'
     | '/_global/teams/'
@@ -1596,6 +1608,7 @@ export interface RootRouteChildren {
   SlidesRoute: typeof SlidesRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
   McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
+  PKindIdRoute: typeof PKindIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1829,6 +1842,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp/oauth/authorize'
       fullPath: '/mcp/oauth/authorize'
       preLoaderRoute: typeof McpOauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p/$kind/$id': {
+      id: '/p/$kind/$id'
+      path: '/p/$kind/$id'
+      fullPath: '/p/$kind/$id'
+      preLoaderRoute: typeof PKindIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/teams/$teamId/': {
@@ -3127,6 +3147,7 @@ const rootRouteChildren: RootRouteChildren = {
   SlidesRoute: SlidesRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
   McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
+  PKindIdRoute: PKindIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

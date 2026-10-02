@@ -31,6 +31,8 @@ interface CustomTabPanelProps {
    */
   previewPort: number;
   repoId: Id<"githubRepos">;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
+  externalHref?: string;
 }
 
 const MAX_ATTEMPTS = 40;
@@ -56,6 +58,7 @@ export function CustomTabPanel({
   isForeground = true,
   previewPort,
   repoId,
+  externalHref,
 }: CustomTabPanelProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<PanelState>("loading");
@@ -214,7 +217,7 @@ export function CustomTabPanel({
           </Button>
           <Button size="icon" variant="ghost" className="size-8" asChild>
             <a
-              href={stripPreviewGrant(url)}
+              href={externalHref ?? stripPreviewGrant(url)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open ${name} in a new tab`}

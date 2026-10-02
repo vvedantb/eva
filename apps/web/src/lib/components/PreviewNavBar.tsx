@@ -128,6 +128,11 @@ interface PreviewNavBarProps {
   onRefresh?: () => void;
   /** Rendered after fullscreen, e.g. an overflow menu of preview tools. */
   trailing?: ReactNode;
+  /**
+   * Idle pause on: builds the Eva wake link for "Open in new tab" from the
+   * current preview path, instead of the raw sandbox URL.
+   */
+  externalHrefForPath?: (path: string) => string;
 }
 
 type PreviewHistoryCommand =
@@ -149,6 +154,7 @@ export function PreviewNavBar({
   isLoading = false,
   onRefresh,
   trailing,
+  externalHrefForPath,
 }: PreviewNavBarProps) {
   function currentIframe(): HTMLIFrameElement | null {
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
@@ -288,10 +294,13 @@ export function PreviewNavBar({
 
   // Strip the grant from the shareable "open in new tab" link: opening it is a
   // top-level navigation that runs the sign-in handshake, and the link must not
-  // carry a bearer token.
-  const openInNewTabHref = previewUrl
-    ? stripPreviewGrant(buildUrlWithPath(previewUrl, pathInput))
-    : undefined;
+  // carry a bearer token. With idle pause on, the host hands over the Eva wake
+  // link instead, which keeps working after the sandbox is paused.
+  const openInNewTabHref = externalHrefForPath
+    ? externalHrefForPath(normalizePreviewPath(pathInput))
+    : previewUrl
+      ? stripPreviewGrant(buildUrlWithPath(previewUrl, pathInput))
+      : undefined;
 
   function toggleFullscreen() {
     if (onToggleFullscreen) {
