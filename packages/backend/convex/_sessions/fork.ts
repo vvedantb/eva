@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internalMutation } from "../_generated/server";
 import { collectSessionForkPrefix, formatForkPrompt } from "@eva/shared";
 import {
   getSessionWithAccess,
@@ -8,6 +9,7 @@ import {
 import { sessionStatusValidator } from "../validators";
 import { sessionHasOpenTurn } from "../_chat/turnProjection";
 import { createSession } from "./mutations";
+import { requestSessionSandboxStart } from "./sandbox";
 
 /** Recent messages read for the fork transcript; the prompt budget is far smaller. */
 const FORK_MESSAGE_WINDOW = 200;
@@ -45,6 +47,7 @@ export const createForkedSession = internalAuthMutation({
   args: {
     sourceSessionId: v.id("sessions"),
     sourceSandboxId: v.string(),
+    restartSource: v.boolean(),
   },
   returns: v.object({ numId: v.number() }),
   handler: async (ctx, args) => {
@@ -93,8 +96,37 @@ export const createForkedSession = internalAuthMutation({
       {
         sourceSessionId: args.sourceSessionId,
         sourceSandboxId: args.sourceSandboxId,
+        restartSource: args.restartSource,
       },
     );
     return { numId };
+  },
+});
+
+/**
+ * Called by the fork's first boot once the Vercel fork has been taken or has
+ * failed: starts the source again if `forkSession` had to stop it, and (when
+ * the source sandbox turned out to be gone) drops the fork source so the next
+ * Start boots the repo snapshot instead of retrying a fork that cannot work.
+ */
+export const settleForkSource = internalMutation({
+  args: { sessionId: v.id("sessions"), sourceGone: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const fork = await ctx.db.get(args.sessionId);
+    if (!fork) return null;
+    if (fork.forkRestartsSource && fork.forkedFromSessionId) {
+      const source = await ctx.db.get(fork.forkedFromSessionId);
+      // Only a source still parked by the fork: anything else means the user
+      // (or a message) already woke it, or archived it since.
+      if (source && source.status === "closed" && source.sandboxId && !source.archived) {
+        await requestSessionSandboxStart(ctx, source);
+      }
+    }
+    await ctx.db.patch(args.sessionId, {
+      forkRestartsSource: undefined,
+      ...(args.sourceGone ? { forkSourceSandboxId: undefined } : {}),
+    });
+    return null;
   },
 });

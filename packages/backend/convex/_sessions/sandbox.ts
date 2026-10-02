@@ -102,61 +102,72 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    const repo = await ctx.db.get(session.repoId);
-    if (!repo) throw new Error("Repository not found");
-    const branchName = session.branchName || `eva/session-${args.sessionId}`;
-    const baseBranch = resolveSessionBaseBranch(session, repo);
-    await ctx.db.patch(args.sessionId, {
-      status: "starting",
-      // A new attempt owns the outcome: drop the previous failure so the dot
-      // leaves "Couldn't wake up" the moment Try again is pressed.
-      sandboxError: undefined,
-      updatedAt: Date.now(),
-    });
-    // Seed startup streaming immediately so the UI shows a real step instead of
-    // the random "Eva is inferring…" spinner while the workflow schedules.
-    await seedSandboxStartupActivity(
-      ctx.db,
-      `session-startup-${args.sessionId}`,
-    );
-    const reusableSandboxId = session.sandboxId;
-    console.log(
-      `[sessions] startSandbox sessionId=${args.sessionId} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
-    );
-    const startArgs = {
-      sessionId: args.sessionId,
-      existingSandboxId: session.sandboxId,
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      branchName,
-      baseBranch,
-      repoId: session.repoId,
-      hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
-    };
-    // Vercel: schedule the start action directly. Workflow step scheduling was
-    // measured at ~6s before the first action ran.
-    // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
-    // arms `sandboxSetupPending` for them and only the workflow's
-    // `prepareLinkedRepo` steps clear it again, so a direct schedule would
-    // leave the gate armed forever (and re-clone nothing when a failed resume
-    // falls back to a fresh sandbox).
-    if (reusableSandboxId && !startArgs.hasLinkedRepos) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.startSessionSandbox,
-        startArgs,
-      );
-    } else {
-      await workflow.start(
-        ctx,
-        internal.sessionWorkflow.sessionSandboxStartupWorkflow,
-        startArgs,
-      );
-    }
+    await requestSessionSandboxStart(ctx, session);
     return null;
   },
 });
+
+/**
+ * Shared start path for the user Start button and the fork's source restart.
+ * Marks the session `"starting"` then schedules resume or create.
+ */
+export async function requestSessionSandboxStart(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<void> {
+  const repo = await ctx.db.get(session.repoId);
+  if (!repo) throw new Error("Repository not found");
+  const branchName = session.branchName || `eva/session-${session._id}`;
+  const baseBranch = resolveSessionBaseBranch(session, repo);
+  await ctx.db.patch(session._id, {
+    status: "starting",
+    // A new attempt owns the outcome: drop the previous failure so the dot
+    // leaves "Couldn't wake up" the moment Try again is pressed.
+    sandboxError: undefined,
+    updatedAt: Date.now(),
+  });
+  // Seed startup streaming immediately so the UI shows a real step instead of
+  // the random "Eva is inferring…" spinner while the workflow schedules.
+  await seedSandboxStartupActivity(
+    ctx.db,
+    `session-startup-${session._id}`,
+  );
+  const reusableSandboxId = session.sandboxId;
+  console.log(
+    `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
+  );
+  const startArgs = {
+    sessionId: session._id,
+    existingSandboxId: session.sandboxId,
+    installationId: repo.installationId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    branchName,
+    baseBranch,
+    repoId: session.repoId,
+    hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
+  };
+  // Vercel: schedule the start action directly. Workflow step scheduling was
+  // measured at ~6s before the first action ran.
+  // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
+  // arms `sandboxSetupPending` for them and only the workflow's
+  // `prepareLinkedRepo` steps clear it again, so a direct schedule would
+  // leave the gate armed forever (and re-clone nothing when a failed resume
+  // falls back to a fresh sandbox).
+  if (reusableSandboxId && !startArgs.hasLinkedRepos) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.startSessionSandbox,
+      startArgs,
+    );
+  } else {
+    await workflow.start(
+      ctx,
+      internal.sessionWorkflow.sessionSandboxStartupWorkflow,
+      startArgs,
+    );
+  }
+}
 
 /**
  * User-confirmed recovery for the rewritten-branch publish refusal: replaces

@@ -541,6 +541,13 @@ export const sessionFields = {
    * state) carry over.
    */
   forkSourceSandboxId: v.optional(v.string()),
+  /**
+   * Set when the source was running at fork time and had to be stopped. The
+   * fork's first boot starts the source again once the Vercel fork has been
+   * taken (or has failed), never before — forking a mid-resume source is not
+   * something Vercel documents.
+   */
+  forkRestartsSource: v.optional(v.boolean()),
 };
 
 /**

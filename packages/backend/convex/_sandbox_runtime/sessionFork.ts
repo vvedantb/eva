@@ -5,9 +5,11 @@ import type { FunctionReturnType } from "convex/server";
 import { api, internal } from "../_generated/api";
 import { authAction } from "../functions";
 import { getSandboxHandle } from "./helpers";
+import { isSandboxGoneError } from "./sandboxErrors";
 
 type ForkSource = FunctionReturnType<typeof internal.sessions.getForkSource>;
 
+const TURN_OPEN = "Wait for the current turn to finish, then fork.";
 const NO_SANDBOX =
   "This session's sandbox was deleted, so there is nothing to fork.";
 
@@ -25,8 +27,10 @@ function sleep(ms: number): Promise<void> {
  *
  * A Vercel fork restores from the source's current snapshot, not its live
  * disk, and stopping is what writes that snapshot — so a running source is
- * stopped first, then started again once the fork exists. A source that was
- * already stopped or archived is left as it was.
+ * stopped first. It is started again only after the fork's sandbox has been
+ * taken (`settleForkSource`, from the fork's first boot), or right here if the
+ * fork fails before it exists. A source that was already stopped or archived
+ * is left as it was.
  */
 export const forkSession = authAction({
   args: { sessionId: v.id("sessions") },
@@ -36,9 +40,7 @@ export const forkSession = authAction({
       sessionId: args.sessionId,
     });
     if (!source.sandboxId) throw new ConvexError(NO_SANDBOX);
-    if (source.hasOpenTurn) {
-      throw new ConvexError("Wait for the current turn to finish, then fork.");
-    }
+    if (source.hasOpenTurn) throw new ConvexError(TURN_OPEN);
     const wasRunning =
       source.status === "active" || source.status === "starting";
     if (wasRunning) {
@@ -46,45 +48,48 @@ export const forkSession = authAction({
         sessionId: args.sessionId,
       });
     }
-    const deadline = Date.now() + STOP_WAIT_MS;
-    while (source.status !== "closed") {
-      if (Date.now() > deadline) {
-        throw new ConvexError(
-          "The session's sandbox is taking too long to stop. Try forking again in a minute.",
-        );
-      }
-      await sleep(POLL_MS);
-      source = await ctx.runQuery(internal.sessions.getForkSource, {
-        sessionId: args.sessionId,
-      });
-    }
-    const sourceSandboxId = source.sandboxId;
-    if (!sourceSandboxId) throw new ConvexError(NO_SANDBOX);
-    // The fork itself runs when the new session boots; fail now, not then, if
-    // the provider has already dropped the source.
     try {
-      await getSandboxHandle(ctx, source.repoId, sourceSandboxId);
-    } catch {
-      throw new ConvexError(NO_SANDBOX);
-    }
-    const fork = await ctx.runMutation(internal.sessions.createForkedSession, {
-      sourceSessionId: args.sessionId,
-      sourceSandboxId,
-    });
-    if (wasRunning) {
-      // Bring the source back the way the Start button does. Safe for the fork:
-      // it restores from the snapshot the stop wrote, which a resume leaves
-      // untouched. Best-effort — the fork already exists either way.
-      try {
-        await ctx.runMutation(api.sessions.startSandbox, {
+      const deadline = Date.now() + STOP_WAIT_MS;
+      while (source.status !== "closed") {
+        if (Date.now() > deadline) {
+          throw new ConvexError(
+            "The session's sandbox is taking too long to stop. Try forking again in a minute.",
+          );
+        }
+        await sleep(POLL_MS);
+        source = await ctx.runQuery(internal.sessions.getForkSource, {
           sessionId: args.sessionId,
         });
-      } catch (error) {
-        console.warn(
-          `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${error instanceof Error ? error.message : String(error)}`,
-        );
       }
+      const sourceSandboxId = source.sandboxId;
+      if (!sourceSandboxId) throw new ConvexError(NO_SANDBOX);
+      // The fork itself runs when the new session boots; fail now, not then, if
+      // the provider has already dropped the source.
+      try {
+        await getSandboxHandle(ctx, source.repoId, sourceSandboxId);
+      } catch (error) {
+        if (isSandboxGoneError(error)) throw new ConvexError(NO_SANDBOX);
+        throw error;
+      }
+      return await ctx.runMutation(internal.sessions.createForkedSession, {
+        sourceSessionId: args.sessionId,
+        sourceSandboxId,
+        restartSource: wasRunning,
+      });
+    } catch (error) {
+      // No fork session exists to restart the source later — do it now.
+      if (wasRunning) {
+        try {
+          await ctx.runMutation(api.sessions.startSandbox, {
+            sessionId: args.sessionId,
+          });
+        } catch (restartError) {
+          console.warn(
+            `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${restartError instanceof Error ? restartError.message : String(restartError)}`,
+          );
+        }
+      }
+      throw error;
     }
-    return fork;
   },
 });

@@ -86,6 +86,8 @@ type CreateSessionArgs = Infer<typeof createSessionArgs>;
 export interface CreateSessionFork {
   sourceSessionId: Id<"sessions">;
   sourceSandboxId: string;
+  /** Start the source again after this fork's first sandbox is taken. */
+  restartSource: boolean;
 }
 
 /** Mutation context after `authMutation` injects the caller's user id. */
@@ -176,6 +178,7 @@ export async function createSession(
       ? {
           forkedFromSessionId: fork.sourceSessionId,
           forkSourceSandboxId: fork.sourceSandboxId,
+          ...(fork.restartSource ? { forkRestartsSource: true } : {}),
         }
       : {}),
   });

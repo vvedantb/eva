@@ -46,7 +46,11 @@ export {
 
 export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 
-export { getForkSource, createForkedSession } from "./_sessions/fork";
+export {
+  getForkSource,
+  createForkedSession,
+  settleForkSource,
+} from "./_sessions/fork";
 
 export {
   getInternal,

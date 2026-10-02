@@ -31,6 +31,8 @@ export interface SessionMenuSession {
   titleRegeneration?: { startedAt: number };
   /** Unset before the first boot and after an archived sandbox is deleted — nothing to fork. */
   sandboxId?: string;
+  /** Mid-turn sessions cannot fork: the fork stops the source sandbox. */
+  isExecuting?: boolean;
 }
 
 /**
@@ -82,7 +84,12 @@ export function SessionMenuItems({
   const simpleView = useSimpleView();
   const branchName = simpleView ? undefined : session.branchName;
   const prUrl = simpleView ? undefined : session.prUrl;
-  const canFork = session.sandboxId !== undefined;
+  const forkBlockedReason =
+    session.sandboxId === undefined
+      ? "No sandbox"
+      : session.isExecuting === true
+        ? "Agent working"
+        : null;
 
   return (
     <>
@@ -110,7 +117,7 @@ export function SessionMenuItems({
       ) : null}
       {onForkNavigate ? (
         <ContextMenuItem
-          disabled={!canFork}
+          disabled={forkBlockedReason !== null}
           onSelect={() => {
             // Can take a minute: a running source sandbox is stopped first so
             // its disk (DBs included) is snapshotted for the fork to boot from.
@@ -133,9 +140,9 @@ export function SessionMenuItems({
           <IconGitFork size={16} />
           Fork session
           {/* Disabled items drop pointer events, so a title tooltip never shows. */}
-          {canFork ? null : (
+          {forkBlockedReason === null ? null : (
             <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-              No sandbox
+              {forkBlockedReason}
             </span>
           )}
         </ContextMenuItem>
