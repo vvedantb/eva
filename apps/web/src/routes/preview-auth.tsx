@@ -4,15 +4,6 @@ import { useAction } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@eva/backend";
 
-// Must match PREVIEW_GRANT_PARAM in packages/backend/convex/previewGrantConfig.ts.
-const GRANT_PARAM = "__eva_grant";
-
-// Open-redirect guard: only ever redirect back to a Vercel sandbox preview
-// origin over https. The proxy builds the `return` from its own Host, but
-// this is the trust boundary on the eva side, so we re-validate rather than
-// trust input.
-const VERCEL_PREVIEW_SUFFIX = ".vercel.run";
-
 const validateSearch = (search: Record<string, string>) => ({
   sandbox: typeof search.sandbox === "string" ? search.sandbox : "",
   repo: typeof search.repo === "string" ? search.repo : "",
@@ -25,22 +16,13 @@ export const Route = createFileRoute("/preview-auth")({
   component: PreviewAuth,
 });
 
-function parseAllowedReturn(url: string): URL | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return null;
-    if (!parsed.hostname.endsWith(VERCEL_PREVIEW_SUFFIX)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Handshake route for cold/shared preview links. The in-sandbox proxy redirects
- * unauthenticated visitors here; we require an eva sign-in, confirm repo access
- * via the backend, mint a short-lived grant, then redirect back to the preview
- * origin with the grant attached. The proxy exchanges it for a session cookie.
+ * unauthenticated visitors here; we require an eva sign-in, then the backend
+ * confirms repo access, checks the return host (the open-redirect guard lives
+ * there, since only it can verify proxy-domain hosts) and hands back the
+ * preview URL with a short-lived grant attached. The proxy exchanges the grant
+ * for a session cookie.
  */
 function PreviewAuth() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -52,10 +34,9 @@ function PreviewAuth() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || ran.current) return;
 
-    const parsedReturn = parseAllowedReturn(search.return);
     const port = Number(search.port);
     if (
-      !parsedReturn ||
+      !search.return ||
       !search.repo ||
       !search.sandbox ||
       !Number.isFinite(port)
@@ -69,12 +50,12 @@ function PreviewAuth() {
       sandboxId: search.sandbox,
       port,
       repoId: search.repo,
+      returnUrl: search.return,
     })
-      .then((grant) => {
-        parsedReturn.searchParams.set(GRANT_PARAM, grant);
-        // Cross-origin navigation to the Vercel preview origin — must use the
+      .then((grantedUrl) => {
+        // Cross-origin navigation to the preview origin — must use the
         // full-page location API, not the SPA router.
-        window.location.replace(parsedReturn.toString());
+        window.location.replace(grantedUrl);
       })
       .catch((err: Error) => {
         setError(err.message || "You do not have access to this preview.");

@@ -7,8 +7,10 @@ import { importJWK, SignJWT, type JWK } from "jose";
 import {
   PREVIEW_GRANT_AUDIENCE,
   PREVIEW_GRANT_ISSUER,
+  PREVIEW_GRANT_PARAM,
   PREVIEW_GRANT_TTL_SECONDS,
 } from "./previewGrantConfig";
+import { isPreviewReturnHost } from "./previewProxyDomain";
 import { assertActionSandboxAccess } from "./functions";
 
 /**
@@ -61,22 +63,46 @@ export async function signPreviewGrant(params: {
     .sign(key);
 }
 
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Mints a preview grant for the signed-in user, after confirming they have
- * access to the repo. Called by the `/preview-auth` handshake route when a
- * cold/shared preview link is opened.
+ * access to the repo, and returns `returnUrl` with the grant attached. Called
+ * by the `/preview-auth` handshake route when a cold/shared preview link is
+ * opened.
+ *
+ * `returnUrl` is the open-redirect trust boundary, so it is checked here: only
+ * an https Vercel sandbox host or a proxy host Eva signed may receive a grant.
  */
 export const mintPreviewGrant = action({
   args: {
     sandboxId: v.string(),
     port: v.number(),
     repoId: v.string(),
+    returnUrl: v.string(),
   },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+
+    const returnUrl = parseUrl(args.returnUrl);
+    if (
+      !returnUrl ||
+      returnUrl.protocol !== "https:" ||
+      !(await isPreviewReturnHost(returnUrl.hostname))
+    ) {
+      throw new Error(
+        "This preview link is invalid or points to an untrusted host.",
+      );
     }
 
     // `githubRepos.getByIdString` returns the repo only for the connector or a team
@@ -89,10 +115,12 @@ export const mintPreviewGrant = action({
     }
     await assertActionSandboxAccess(ctx, repo._id, args.sandboxId);
 
-    return await signPreviewGrant({
+    const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
       port: args.port,
       sub: identity.subject,
     });
+    returnUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
+    return returnUrl.toString();
   },
 });

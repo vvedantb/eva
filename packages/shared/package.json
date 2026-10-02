@@ -10,6 +10,7 @@
     "./generativeUi": "./src/generativeUi/index.ts",
     "./modelPricing": "./src/modelPricing.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
+    "./previewHost": "./src/previewHost.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
     "./user-initials": "./src/components/user-initials.tsx"

@@ -1,0 +1,14 @@
+# Cloudflare Worker that serves Eva sandbox previews from our own domain.
+# Deploy: `npx wrangler deploy` from this directory, then
+# `npx wrangler secret put PREVIEW_PROXY_SECRET` (same value as Convex's).
+name = "eva-preview-proxy"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+
+# Replace with the preview domain, and set the same value as
+# PREVIEW_PROXY_DOMAIN in Convex. The zone must be on this Cloudflare account,
+# with a proxied wildcard DNS record (`*` → any placeholder, e.g. AAAA 100::).
+routes = [{ pattern = "*.preview-domain.example/*", zone_name = "preview-domain.example" }]
+
+[vars]
+PREVIEW_PROXY_DOMAIN = "preview-domain.example"

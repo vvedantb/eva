@@ -120,6 +120,7 @@ import {
 import { vercelAppListenPort } from "./vercelAppPorts";
 import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
+import { toPublicPreviewUrl } from "../previewProxyDomain";
 
 const sessionPersistenceKindValidator = v.union(
   v.literal("sessions"),
@@ -1060,8 +1061,11 @@ export const getPreviewUrl = action({
     }
 
     const signedPreview = await handle.previewUrl(previewPort, 86400);
-    const parsedUrl = new URL(signedPreview.url);
-    parsedUrl.protocol = "https:";
+    const sandboxUrl = new URL(signedPreview.url);
+    sandboxUrl.protocol = "https:";
+    // Our own domain instead of `*.vercel.run` (when configured), so saved
+    // logins carry across previews in the browser's password manager.
+    const parsedUrl = await toPublicPreviewUrl(sandboxUrl);
 
     // Append a fresh short-lived grant so the in-app iframe (and the authed
     // user's "open in new tab") loads without a login round-trip. The proxy
