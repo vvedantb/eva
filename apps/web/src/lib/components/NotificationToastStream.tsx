@@ -18,6 +18,10 @@ import {
 } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
 import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
+import {
+  isDesktopNotificationsEnabled,
+  showDesktopNotification,
+} from "@/lib/components/notifications/desktopNotifications";
 
 const TOAST_LIMIT = 4;
 const TOAST_TTL_MS = 9000;
@@ -73,6 +77,26 @@ export function NotificationToastStream() {
   const seenNotificationIdsRef = useRef<Set<Id<"notifications">> | null>(null);
   const [toasts, setToasts] = useState<ToastEntry[]>([]);
 
+  const dismissToast = (id: Id<"notifications">) => {
+    setToasts((previous) =>
+      previous.filter((entry) => entry.notification._id !== id),
+    );
+  };
+
+  const openNotification = (notification: Notification) => {
+    if (!notification.read) {
+      markAsRead({ id: notification._id }).catch(() => undefined);
+    }
+    dismissToast(notification._id);
+    if (notification.href) {
+      // Same treatment as the inbox: the `repo--app` rewrite plus the search
+      // split the router needs to see a comment anchor at all.
+      navigate(hrefToNavigateOptions(notification.href));
+      return;
+    }
+    navigate({ to: "/inbox" });
+  };
+
   useEffect(() => {
     if (!notifications) {
       return;
@@ -105,6 +129,21 @@ export function NotificationToastStream() {
     // anything resurfacing that way is long since read.
     if (isBellEnabled && announced.some((notification) => !notification.read)) {
       playNotificationBell();
+    }
+
+    // The in-app toast is enough while Eva is focused; otherwise also raise an
+    // OS pop-up so it reaches someone working in another app.
+    if (!document.hasFocus() && isDesktopNotificationsEnabled()) {
+      for (const notification of announced) {
+        if (notification.read) continue;
+        const { subject, event } = splitNotificationTitle(notification);
+        showDesktopNotification({
+          id: notification._id,
+          title: subject,
+          body: event,
+          onClick: () => openNotification(notification),
+        });
+      }
     }
 
     setToasts((previous) => {
@@ -142,26 +181,6 @@ export function NotificationToastStream() {
     }, delay);
     return () => window.clearTimeout(timeoutId);
   }, [toasts]);
-
-  const dismissToast = (id: Id<"notifications">) => {
-    setToasts((previous) =>
-      previous.filter((entry) => entry.notification._id !== id),
-    );
-  };
-
-  const openNotification = (notification: Notification) => {
-    if (!notification.read) {
-      markAsRead({ id: notification._id }).catch(() => undefined);
-    }
-    dismissToast(notification._id);
-    if (notification.href) {
-      // Same treatment as the inbox: the `repo--app` rewrite plus the search
-      // split the router needs to see a comment anchor at all.
-      navigate(hrefToNavigateOptions(notification.href));
-      return;
-    }
-    navigate({ to: "/inbox" });
-  };
 
   // Keep the fixed host mounted so AnimatePresence can play exit animations.
   const toastEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
