@@ -8,9 +8,9 @@ import type { Id } from "../_generated/dataModel";
 import { getInstallationOctokit } from "../githubAuth";
 import { buildEvaTaskUrl } from "../_taskWorkflow/urls";
 import {
+  ciPassedValidator,
   describeRepoEvent,
   repoEventValidator,
-  TRUSTED_ASSOCIATIONS,
   type RepoEvent,
 } from "./events";
 import {
@@ -18,10 +18,10 @@ import {
   buildCiGiveUpMessage,
   buildIssueTaskDescription,
   buildReviewFeedbackMessage,
+  collectFeedback,
   MAX_CI_FIX_ATTEMPTS,
   tailLog,
   type FailedCheck,
-  type FeedbackItem,
 } from "./messages";
 
 const FAILED_CONCLUSIONS = new Set(["failure", "timed_out", "startup_failure"]);
@@ -32,6 +32,8 @@ const MAX_LOGGED_CHECKS = 3;
  * before GitHub delivers its webhook.
  */
 const FEEDBACK_LOOKBACK_MS = 60_000;
+/** How long a review batch waits for an earlier one for the same PR. */
+const SIBLING_RETRY_MS = 30_000;
 
 interface RepoRef {
   octokit: Octokit;
@@ -44,13 +46,13 @@ async function fetchFailedChecks(
   { octokit, owner, repo }: RepoRef,
   headSha: string,
 ): Promise<FailedCheck[]> {
-  const res = await octokit.rest.checks.listForRef({
+  const runs = await octokit.paginate(octokit.rest.checks.listForRef, {
     owner,
     repo,
     ref: headSha,
     per_page: 100,
   });
-  const failed = res.data.check_runs.filter(
+  const failed = runs.filter(
     (run) => run.conclusion !== null && FAILED_CONCLUSIONS.has(run.conclusion),
   );
   return await Promise.all(
@@ -74,91 +76,39 @@ async function fetchFailedChecks(
   );
 }
 
-/** Trusted human feedback on a PR created after `since`, oldest first. */
-async function fetchFeedbackSince(
+/**
+ * Review feedback on a PR newer than `after`. Every page, so a long-running PR
+ * past 100 reviews or comments still has its newest ones seen.
+ */
+async function fetchFeedback(
   { octokit, owner, repo }: RepoRef,
   prNumber: number,
-  since: number,
-): Promise<FeedbackItem[]> {
+  after: number,
+): Promise<ReturnType<typeof collectFeedback>> {
+  const since = new Date(after).toISOString();
   const [reviews, inline, comments] = await Promise.all([
-    octokit.rest.pulls.listReviews({
+    octokit.paginate(octokit.rest.pulls.listReviews, {
       owner,
       repo,
       pull_number: prNumber,
       per_page: 100,
     }),
-    octokit.rest.pulls.listReviewComments({
+    octokit.paginate(octokit.rest.pulls.listReviewComments, {
       owner,
       repo,
       pull_number: prNumber,
-      since: new Date(since).toISOString(),
+      since,
       per_page: 100,
     }),
-    octokit.rest.issues.listComments({
+    octokit.paginate(octokit.rest.issues.listComments, {
       owner,
       repo,
       issue_number: prNumber,
-      since: new Date(since).toISOString(),
+      since,
       per_page: 100,
     }),
   ]);
-
-  const items: Array<FeedbackItem & { at: number }> = [];
-  const accept = (
-    user: { login: string; type: string } | null,
-    association: string,
-    createdAt: string | undefined,
-  ): boolean =>
-    user !== null &&
-    user.type !== "Bot" &&
-    TRUSTED_ASSOCIATIONS.has(association) &&
-    createdAt !== undefined &&
-    Date.parse(createdAt) >= since;
-
-  for (const review of reviews.data) {
-    if (!review.body?.trim()) continue;
-    if (!accept(review.user, review.author_association, review.submitted_at)) {
-      continue;
-    }
-    items.push({
-      author: review.user?.login ?? "reviewer",
-      body: review.body,
-      url: review.html_url,
-      path: null,
-      line: null,
-      at: Date.parse(review.submitted_at ?? ""),
-    });
-  }
-  for (const comment of inline.data) {
-    if (!accept(comment.user, comment.author_association, comment.created_at)) {
-      continue;
-    }
-    items.push({
-      author: comment.user.login,
-      body: comment.body,
-      url: comment.html_url,
-      path: comment.path,
-      line: comment.line ?? comment.original_line ?? null,
-      at: Date.parse(comment.created_at),
-    });
-  }
-  for (const comment of comments.data) {
-    if (!comment.body?.trim()) continue;
-    if (!accept(comment.user, comment.author_association, comment.created_at)) {
-      continue;
-    }
-    items.push({
-      author: comment.user?.login ?? "commenter",
-      body: comment.body,
-      url: comment.html_url,
-      path: null,
-      line: null,
-      at: Date.parse(comment.created_at),
-    });
-  }
-  return items
-    .sort((a, b) => a.at - b.at)
-    .map(({ at: _at, ...item }) => item);
+  return collectFeedback({ reviews, inline, comments }, after);
 }
 
 /**
@@ -175,28 +125,48 @@ export const flush = internalAction({
     );
     if (context === null) return null;
 
+    if (context.action === "run") {
+      // Agent runs settle through their workflow, like a cron run.
+      await ctx.runMutation(internal.automations.startEventRun, {
+        runId,
+        context: describeRepoEvent(event),
+      });
+      return null;
+    }
+
+    // An earlier batch for this PR is still sending; its cursor decides where
+    // this one starts, so wait for it rather than overlap.
+    if (context.siblingRunning) {
+      await ctx.scheduler.runAfter(
+        SIBLING_RETRY_MS,
+        internal._automationEvents.flush.flush,
+        { runId, event },
+      );
+      return null;
+    }
+    const claimed = await ctx.runMutation(
+      internal._automationEvents.dispatch.claimEventRun,
+      { runId },
+    );
+    if (!claimed) return null;
+
     const settle = async (
       status: "success" | "error" | "cancelled",
       message: string,
+      eventCursor?: number,
     ) => {
-      await ctx.runMutation(internal.automations.updateRunStatus, {
-        runId,
-        status,
-        ...(status === "error"
-          ? { error: message }
-          : { resultSummary: message }),
-      });
+      await ctx.runMutation(
+        internal._automationEvents.dispatch.settleEventRun,
+        {
+          runId,
+          status,
+          message,
+          eventCursor,
+        },
+      );
     };
 
     try {
-      if (context.action === "run") {
-        await ctx.runMutation(internal.automations.startEventRun, {
-          runId,
-          context: describeRepoEvent(event),
-        });
-        return null;
-      }
-
       const ref: RepoRef = {
         octokit: await getInstallationOctokit(context.installationId),
         owner: event.owner,
@@ -221,12 +191,17 @@ export const flush = internalAction({
             }),
           },
         );
-        if (created === null) return null;
-        await commentOnIssue(ref, event, created.taskId, context);
-        await ctx.runMutation(internal.automations.updateRunStatus, {
-          runId,
-          status: "success",
-        });
+        if (created === null) {
+          await settle("cancelled", "A task already exists for this issue");
+          return null;
+        }
+        // The task exists and is starting; the link comment is a courtesy.
+        try {
+          await commentOnIssue(ref, event, created.taskId, context);
+        } catch {
+          // Missing Issues permission or WEB_APP_URL: the task still runs.
+        }
+        await settle("success", `Created quick task #${created.numId}`);
         return null;
       }
 
@@ -239,8 +214,8 @@ export const flush = internalAction({
         await settle("error", "The chat's owner has no linked sign-in");
         return null;
       }
-      const message = await buildRoutedMessage(ref, event, context);
-      if (message === null) {
+      const routed = await buildRoutedMessage(ref, event, context);
+      if (routed === null) {
         await settle("cancelled", "Nothing new to send");
         return null;
       }
@@ -248,19 +223,14 @@ export const flush = internalAction({
         clerkUserId: context.clerkUserId,
         kind: context.chat.kind,
         id: context.chat.id,
-        message,
+        message: routed.message,
         sentViaOrchestrator: true,
       });
       const chatLabel =
         context.chat.numId === undefined
           ? context.chat.kind
           : `${context.chat.kind} #${context.chat.numId}`;
-      await settle(
-        "success",
-        event.kind === "ci_failed"
-          ? `Sent CI failure to ${chatLabel}`
-          : `Sent review feedback to ${chatLabel}`,
-      );
+      await settle("success", routed.summary(chatLabel), routed.cursor);
     } catch (error) {
       await settle(
         "error",
@@ -271,22 +241,76 @@ export const flush = internalAction({
   },
 });
 
+/**
+ * A commit is green once every check run on it has completed and none
+ * failed. Only then do past CI fix attempts stop counting toward the cap.
+ */
+export const confirmCiGreen = internalAction({
+  args: {
+    passed: ciPassedValidator,
+    automationIds: v.array(v.id("automations")),
+    installationId: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { passed, automationIds, installationId }) => {
+    const octokit = await getInstallationOctokit(installationId);
+    const owner = passed.owner;
+    const repo = passed.name;
+    const pr = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: passed.prNumber,
+    });
+    // A green old commit says nothing about the PR as it is now.
+    if (pr.data.head.sha !== passed.headSha) return null;
+    const runs = await octokit.paginate(octokit.rest.checks.listForRef, {
+      owner,
+      repo,
+      ref: passed.headSha,
+      per_page: 100,
+    });
+    const green = runs.every(
+      (run) =>
+        run.status === "completed" &&
+        (run.conclusion === null || !FAILED_CONCLUSIONS.has(run.conclusion)),
+    );
+    if (!green) return null;
+    await ctx.runMutation(internal._automationEvents.dispatch.resetCiAttempts, {
+      automationIds,
+      prUrl: passed.prUrl,
+    });
+    return null;
+  },
+});
+
 type FlushContext = {
   instructions: string;
-  deliveries: number;
-  lastDeliveredAt: number | null;
+  ciAttempts: number;
+  feedbackCursor: number | null;
   runStartedAt: number;
 };
+
+interface RoutedMessage {
+  message: string;
+  /** Run-history line, given the chat's label ("session #12"). */
+  summary: (chatLabel: string) => string;
+  /** Review runs: where the next batch starts. */
+  cursor?: number;
+}
 
 /** The chat message for a routed event, or null when it has gone stale. */
 async function buildRoutedMessage(
   ref: RepoRef,
   event: RepoEvent,
   context: FlushContext,
-): Promise<string | null> {
+): Promise<RoutedMessage | null> {
   if (event.kind === "ci_failed") {
-    if (context.deliveries >= MAX_CI_FIX_ATTEMPTS) {
-      return buildCiGiveUpMessage(event.prNumber);
+    if (context.ciAttempts >= MAX_CI_FIX_ATTEMPTS) {
+      return {
+        message: buildCiGiveUpMessage(event.prNumber),
+        summary: (chat) =>
+          `Stopped CI auto-fix after ${MAX_CI_FIX_ATTEMPTS} attempts (${chat})`,
+      };
     }
     // A newer push supersedes this failure; its own checks will report.
     const pr = await ref.octokit.rest.pulls.get({
@@ -297,26 +321,36 @@ async function buildRoutedMessage(
     if (pr.data.head.sha !== event.headSha || pr.data.state !== "open") {
       return null;
     }
-    return buildCiFailureMessage({
-      prUrl: event.prUrl,
-      prNumber: event.prNumber,
-      headSha: event.headSha,
-      attempt: context.deliveries + 1,
-      checks: await fetchFailedChecks(ref, event.headSha),
-      instructions: context.instructions,
-    });
+    const attempt = context.ciAttempts + 1;
+    return {
+      message: buildCiFailureMessage({
+        prUrl: event.prUrl,
+        prNumber: event.prNumber,
+        headSha: event.headSha,
+        attempt,
+        checks: await fetchFailedChecks(ref, event.headSha),
+        instructions: context.instructions,
+      }),
+      summary: (chat) =>
+        `Sent CI failure to ${chat} (attempt ${attempt} of ${MAX_CI_FIX_ATTEMPTS})`,
+    };
   }
   if (event.kind === "pr_feedback") {
-    const since =
-      context.lastDeliveredAt ?? context.runStartedAt - FEEDBACK_LOOKBACK_MS;
-    const items = await fetchFeedbackSince(ref, event.prNumber, since);
-    if (items.length === 0) return null;
-    return buildReviewFeedbackMessage({
-      prUrl: event.prUrl,
-      prNumber: event.prNumber,
-      items,
-      instructions: context.instructions,
-    });
+    const after =
+      context.feedbackCursor ?? context.runStartedAt - FEEDBACK_LOOKBACK_MS;
+    const { items, newestAt } = await fetchFeedback(ref, event.prNumber, after);
+    if (items.length === 0 || newestAt === null) return null;
+    return {
+      message: buildReviewFeedbackMessage({
+        prUrl: event.prUrl,
+        prNumber: event.prNumber,
+        items,
+        instructions: context.instructions,
+      }),
+      summary: (chat) =>
+        `Sent ${items.length} review comment${items.length === 1 ? "" : "s"} to ${chat}`,
+      cursor: newestAt,
+    };
   }
   return null;
 }
@@ -335,13 +369,10 @@ async function commentOnIssue(
     undefined,
     context.rootDirectory || undefined,
   );
-  await octokit.rest.issues
-    .createComment({
-      owner,
-      repo,
-      issue_number: event.issueNumber,
-      body: `Eva is working on this: [view the task](${url}). A pull request will link back here when it is ready.`,
-    })
-    // The task is already running; a missing Issues permission must not fail it.
-    .catch(() => undefined);
+  await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: event.issueNumber,
+    body: `Eva is working on this: [view the task](${url}). A pull request will link back here when it is ready.`,
+  });
 }

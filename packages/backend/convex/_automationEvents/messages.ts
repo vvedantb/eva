@@ -1,3 +1,5 @@
+import { TRUSTED_ASSOCIATIONS } from "./events";
+
 /**
  * Chat and task copy for event-triggered automations. Pure, so the exact text
  * an agent receives is unit-tested (see tests/automationEvents.test.ts).
@@ -24,6 +26,96 @@ export interface FeedbackItem {
   /** Inline review comments only. */
   path: string | null;
   line: number | null;
+}
+
+interface GitHubAuthor {
+  login: string;
+  type: string;
+}
+
+/** The fields Eva reads from GitHub's review, inline and issue comments. */
+export interface RawFeedback {
+  reviews: ReadonlyArray<{
+    user: GitHubAuthor | null;
+    author_association: string;
+    body: string | null;
+    html_url: string;
+    submitted_at?: string;
+  }>;
+  inline: ReadonlyArray<{
+    user: GitHubAuthor | null;
+    author_association: string;
+    body: string;
+    html_url: string;
+    path: string;
+    line?: number | null;
+    original_line?: number | null;
+    created_at: string;
+  }>;
+  comments: ReadonlyArray<{
+    user: GitHubAuthor | null;
+    author_association: string;
+    body?: string;
+    html_url: string;
+    created_at: string;
+  }>;
+}
+
+/**
+ * Trusted human feedback newer than `after` (GitHub time), oldest first, and
+ * the time of the newest item, which becomes the next run's `after`. Using
+ * GitHub's own timestamps rather than Eva's clock means a comment that lands
+ * while a batch is being sent is simply picked up by the next one.
+ */
+export function collectFeedback(
+  raw: RawFeedback,
+  after: number,
+): { items: FeedbackItem[]; newestAt: number | null } {
+  const timed: Array<FeedbackItem & { at: number }> = [];
+  const add = (
+    user: GitHubAuthor | null,
+    association: string,
+    createdAt: string | undefined,
+    item: Omit<FeedbackItem, "author">,
+  ) => {
+    if (user === null || user.type === "Bot") return;
+    if (!TRUSTED_ASSOCIATIONS.has(association)) return;
+    if (createdAt === undefined || !item.body.trim()) return;
+    const at = Date.parse(createdAt);
+    if (!(at > after)) return;
+    timed.push({ ...item, author: user.login, at });
+  };
+
+  for (const review of raw.reviews) {
+    add(review.user, review.author_association, review.submitted_at, {
+      body: review.body ?? "",
+      url: review.html_url,
+      path: null,
+      line: null,
+    });
+  }
+  for (const comment of raw.inline) {
+    add(comment.user, comment.author_association, comment.created_at, {
+      body: comment.body,
+      url: comment.html_url,
+      path: comment.path,
+      line: comment.line ?? comment.original_line ?? null,
+    });
+  }
+  for (const comment of raw.comments) {
+    add(comment.user, comment.author_association, comment.created_at, {
+      body: comment.body ?? "",
+      url: comment.html_url,
+      path: null,
+      line: null,
+    });
+  }
+
+  timed.sort((a, b) => a.at - b.at);
+  return {
+    items: timed.map(({ at: _at, ...item }) => item),
+    newestAt: timed.length === 0 ? null : timed[timed.length - 1].at,
+  };
 }
 
 // GitHub Actions prefixes every log line with an ISO timestamp.

@@ -11,11 +11,8 @@ import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
-import {
-  IssueLabelField,
-  automationTriggerOf,
-  describeTrigger,
-} from "./TriggerSection";
+import { IssueLabelField } from "./TriggerSection";
+import { automationTriggerOf, describeTrigger } from "./trigger";
 
 /**
  * Settings tab for an installed system automation. eva owns the title, prompt
@@ -105,17 +102,21 @@ export function SystemAutomationSettings({
             />
           }
         />
-        <SettingsToggleRow
-          title="Send email"
-          description="Email this automation's run summary to all users when a run succeeds."
-          action={
-            <Switch
-              checked={automation.sendEmail === true}
-              onCheckedChange={(next) => commit({ sendEmail: next })}
-              aria-label="Send email"
-            />
-          }
-        />
+        {/* Event presets post a one-line note per run, so there is no
+            summary worth emailing; the backend never sends one. */}
+        {trigger.kind === "cron" ? (
+          <SettingsToggleRow
+            title="Send email"
+            description="Email this automation's run summary to all users when a run succeeds."
+            action={
+              <Switch
+                checked={automation.sendEmail === true}
+                onCheckedChange={(next) => commit({ sendEmail: next })}
+                aria-label="Send email"
+              />
+            }
+          />
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Model">

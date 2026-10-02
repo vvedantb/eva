@@ -5,7 +5,10 @@ import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import { streamingHeartbeatHmacMessage } from "./_sandbox_runtime/callbackAuth";
-import { parseRepoEvents } from "./_automationEvents/events";
+import {
+  parseCiPassed,
+  parseRepoEvents,
+} from "./_automationEvents/events";
 
 const http = httpRouter();
 
@@ -592,6 +595,13 @@ http.route({
         0,
         internal._automationEvents.dispatch.dispatch,
         { event: repoEvent },
+      );
+    }
+    for (const passed of parseCiPassed(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.noteCiPassed,
+        { passed },
       );
     }
 

@@ -16,7 +16,7 @@ import {
   gatherAccessibleRepos,
   resolveSandboxRepoId,
 } from "../_githubRepos/helpers";
-import { resolveAutomationDoc } from "./systemAutomations";
+import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 
 /** Loads a run and its automation, throwing unless the user can access the repo. */
 async function loadRunWithAccess(
@@ -235,7 +235,12 @@ export const updateRunStatus = internalMutation({
     if (args.status === "success") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
-      if (automation?.sendEmail === true) {
+      // Event presets settle through `settleEventRun` and never email; this
+      // guards a preset row reaching here by any other path.
+      if (
+        automation?.sendEmail === true &&
+        automationAction(automation) === "run"
+      ) {
         await ctx.scheduler.runAfter(
           0,
           internal.automationEmail.sendAutomationEmail,

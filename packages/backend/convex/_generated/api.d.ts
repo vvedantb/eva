@@ -29,6 +29,7 @@ import type * as _automationEvents_events from "../_automationEvents/events.js";
 import type * as _automationEvents_flush from "../_automationEvents/flush.js";
 import type * as _automationEvents_labels from "../_automationEvents/labels.js";
 import type * as _automationEvents_messages from "../_automationEvents/messages.js";
+import type * as _automationEvents_select from "../_automationEvents/select.js";
 import type * as _automationWorkflow_deliverable from "../_automationWorkflow/deliverable.js";
 import type * as _automationWorkflow_findings from "../_automationWorkflow/findings.js";
 import type * as _automationWorkflow_prompts from "../_automationWorkflow/prompts.js";
@@ -519,6 +520,7 @@ declare const fullApi: ApiFromModules<{
   "_automationEvents/flush": typeof _automationEvents_flush;
   "_automationEvents/labels": typeof _automationEvents_labels;
   "_automationEvents/messages": typeof _automationEvents_messages;
+  "_automationEvents/select": typeof _automationEvents_select;
   "_automationWorkflow/deliverable": typeof _automationWorkflow_deliverable;
   "_automationWorkflow/findings": typeof _automationWorkflow_findings;
   "_automationWorkflow/prompts": typeof _automationWorkflow_prompts;

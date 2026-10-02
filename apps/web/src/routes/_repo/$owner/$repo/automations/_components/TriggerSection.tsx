@@ -5,6 +5,7 @@ import {
   USER_REPO_EVENTS,
   type AutomationTrigger,
 } from "@eva/backend";
+import { CRON_TRIGGER, capitalise } from "./trigger";
 import {
   Input,
   Select,
@@ -18,23 +19,6 @@ import {
 } from "@eva/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsField } from "@/lib/components/settings/SettingsField";
-
-const CRON_TRIGGER: AutomationTrigger = { kind: "cron" };
-
-/** A row's trigger; rows from before event triggers run on their schedule. */
-export function automationTriggerOf(automation: {
-  trigger?: AutomationTrigger;
-}): AutomationTrigger {
-  return automation.trigger ?? CRON_TRIGGER;
-}
-
-/** "Runs when …" for an event trigger, or null for a schedule. */
-export function describeTrigger(trigger: AutomationTrigger): string | null {
-  if (trigger.kind === "cron") return null;
-  const when = REPO_EVENT_LABELS[trigger.event];
-  if (trigger.event !== "issue_labeled") return `Runs when ${when}`;
-  return `Runs when an issue is labelled "${trigger.label ?? DEFAULT_ISSUE_LABEL}"`;
-}
 
 /**
  * Trigger picker for a user automation: its cron schedule (rendered by the
@@ -139,8 +123,4 @@ export function IssueLabelField({
       />
     </SettingsField>
   );
-}
-
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

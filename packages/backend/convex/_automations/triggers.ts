@@ -6,6 +6,10 @@ import { DEFAULT_AI_MODEL, normalizeAIModel } from "../validators";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { buildAutomationRunBranchName } from "./helpers";
+import {
+  EVENT_RUN_MAX_WAIT_MS,
+  EVENT_RUN_RETRY_MS,
+} from "../_automationEvents/events";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 
 /**
@@ -144,8 +148,8 @@ export const runNow = authMutation({
 
 /**
  * Starts the agent run for an event-triggered `run` automation, once its
- * debounce has passed. The queued row already exists; a busy automation marks
- * it skipped rather than stacking a second sandbox.
+ * debounce has passed. The queued row already exists; while the automation is
+ * busy it retries every few minutes, never stacking a second sandbox.
  */
 export const startEventRun = internalMutation({
   args: { runId: v.id("automationRuns"), context: v.string() },
@@ -163,12 +167,22 @@ export const startEventRun = internalMutation({
       });
       return null;
     }
+    // Busy: wait for the current run rather than drop the event, so a burst
+    // of merges still runs once per merge.
     if (await hasRunInFlight(ctx, automation._id)) {
-      await ctx.db.patch(args.runId, {
-        status: "error",
-        error: "Skipped: a run was already in progress",
-        finishedAt: Date.now(),
-      });
+      if (Date.now() - run.startedAt > EVENT_RUN_MAX_WAIT_MS) {
+        await ctx.db.patch(args.runId, {
+          status: "error",
+          error: "Skipped: the automation stayed busy for a day",
+          finishedAt: Date.now(),
+        });
+        return null;
+      }
+      await ctx.scheduler.runAfter(
+        EVENT_RUN_RETRY_MS,
+        internal.automations.startEventRun,
+        args,
+      );
       return null;
     }
     await startAutomationRun(ctx, automation, repo, {

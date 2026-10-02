@@ -54,6 +54,19 @@ export const repoEventValidator = v.union(
 
 export type RepoEvent = Infer<typeof repoEventValidator>;
 
+/**
+ * A check suite passed on a PR. Not an automation trigger: it only resets the
+ * CI auto-fix cap, once every check on the commit is green.
+ */
+export const ciPassedValidator = v.object({
+  ...repoRef,
+  prUrl: v.string(),
+  prNumber: v.number(),
+  headSha: v.string(),
+});
+
+export type CiPassed = Infer<typeof ciPassedValidator>;
+
 /** Delay before a queued event runs, so a burst of webhooks lands as one run. */
 export const EVENT_DEBOUNCE_MS: Record<RepoEventKind, number> = {
   // Each check suite (Actions, Vercel, …) completes separately.
@@ -64,6 +77,15 @@ export const EVENT_DEBOUNCE_MS: Record<RepoEventKind, number> = {
   pr_opened: 0,
   pr_merged: 0,
 };
+
+/** A preset run that has not finished by now is marked timed out. */
+export const STALE_EVENT_RUN_MS = 15 * 60_000;
+/** How often a `run` automation's event retries while the automation is busy. */
+export const EVENT_RUN_RETRY_MS = 2 * 60_000;
+/** A waiting `run` event gives up after this long, rather than queue forever. */
+export const EVENT_RUN_MAX_WAIT_MS = 24 * 60 * 60_000;
+/** Backstop for a waiting `run` event, just past its own give-up time. */
+export const STALE_WAITING_RUN_MS = EVENT_RUN_MAX_WAIT_MS + 60 * 60_000;
 
 /**
  * Dedupe key for a run. Webhooks sharing a key while a run is still queued
@@ -130,16 +152,18 @@ const senderSchema = z
  * Only people with write access may put text in front of the agent. Anyone
  * can comment on a public repo's PR, so this is the prompt-injection gate.
  */
-export const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+export const TRUSTED_ASSOCIATIONS = new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+]);
 
 const checkSuiteSchema = z.object({
   action: z.string(),
   check_suite: z.object({
     conclusion: z.string().nullable().catch(null),
     head_sha: z.string(),
-    pull_requests: z
-      .array(z.object({ number: z.number() }))
-      .catch([]),
+    pull_requests: z.array(z.object({ number: z.number() })).catch([]),
   }),
   repository: repositorySchema,
 });
@@ -199,6 +223,28 @@ const pullRequestSchema = z.object({
   repository: repositorySchema,
   sender: senderSchema,
 });
+
+/** Passing check suites on PRs, for `parseRepoEvents`' CI-reset sibling. */
+export function parseCiPassed(githubEvent: string, body: string): CiPassed[] {
+  if (githubEvent !== "check_suite") return [];
+  try {
+    const parsed = checkSuiteSchema.safeParse(JSON.parse(body));
+    if (!parsed.success || parsed.data.action !== "completed") return [];
+    const { check_suite: suite, repository } = parsed.data;
+    if (suite.conclusion !== "success") return [];
+    const owner = repository.owner.login;
+    const name = repository.name;
+    return suite.pull_requests.map((pr) => ({
+      owner,
+      name,
+      prUrl: pullUrl(owner, name, pr.number),
+      prNumber: pr.number,
+      headSha: suite.head_sha,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 function isBot(sender: z.infer<typeof senderSchema>): boolean {
   return sender?.type === "Bot";
@@ -287,8 +333,13 @@ function parseRepoEventsOrThrow(
     case "pull_request_review": {
       const parsed = reviewSchema.safeParse(JSON.parse(body));
       if (!parsed.success) return [];
-      const { action, review, pull_request: pr, repository, sender } =
-        parsed.data;
+      const {
+        action,
+        review,
+        pull_request: pr,
+        repository,
+        sender,
+      } = parsed.data;
       if (action !== "submitted" || isBot(sender)) return [];
       // An approval with no request attached gives the agent nothing to do.
       if (review.state.toLowerCase() === "approved") return [];
@@ -306,8 +357,13 @@ function parseRepoEventsOrThrow(
     case "pull_request_review_comment": {
       const parsed = reviewCommentSchema.safeParse(JSON.parse(body));
       if (!parsed.success) return [];
-      const { action, comment, pull_request: pr, repository, sender } =
-        parsed.data;
+      const {
+        action,
+        comment,
+        pull_request: pr,
+        repository,
+        sender,
+      } = parsed.data;
       if (action !== "created" || isBot(sender)) return [];
       if (!TRUSTED_ASSOCIATIONS.has(comment.author_association)) return [];
       return [

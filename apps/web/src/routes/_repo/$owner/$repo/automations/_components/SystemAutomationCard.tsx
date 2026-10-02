@@ -21,7 +21,7 @@ import {
 import type { AutomationTrigger } from "@eva/backend";
 import type { Icon } from "@tabler/icons-react";
 import { describeCron } from "@/lib/components/CronScheduleCard";
-import { describeTrigger } from "./TriggerSection";
+import { describeTrigger } from "./trigger";
 
 /**
  * Per-entry glyph for the card's icon tile. Keyed by catalog key so the backend

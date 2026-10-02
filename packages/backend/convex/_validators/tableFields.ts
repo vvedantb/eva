@@ -933,6 +933,13 @@ export const automationRunFields = {
   eventKind: v.optional(repoEventKindValidator),
   eventKey: v.optional(v.string()),
   targetUrl: v.optional(v.string()),
+  // Review feedback: GitHub time of the newest comment this run delivered, so
+  // the next run sends only what came after it.
+  eventCursor: v.optional(v.number()),
+  // Issue runs: the quick task created for the issue, so it is never re-made.
+  createdTaskId: v.optional(v.id("agentTasks")),
+  // CI fix attempts stop counting toward the cap once the PR goes green.
+  superseded: v.optional(v.boolean()),
 };
 
 /**

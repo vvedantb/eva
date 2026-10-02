@@ -26,10 +26,8 @@ import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
-import {
-  TriggerSection,
-  automationTriggerOf,
-} from "./_components/TriggerSection";
+import { TriggerSection } from "./_components/TriggerSection";
+import { automationTriggerOf } from "./_components/trigger";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";

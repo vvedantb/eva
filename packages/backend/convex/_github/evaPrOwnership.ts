@@ -29,16 +29,18 @@ export async function isEvaOwnedPullRequest(
   return false;
 }
 
-/** The Eva chat that opened a PR, and the user it runs as. */
+interface PrChatOwner {
+  numId?: number;
+  userId: Id<"users">;
+  /** The app row the PR's code lives in; undefined for a repo-less task. */
+  repoId?: Id<"githubRepos">;
+}
+
+/** The Eva chat that opened a PR, the user it runs as, and its app row. */
 export type PrChat =
-  | { kind: "session"; id: Id<"sessions">; numId?: number; userId: Id<"users"> }
-  | { kind: "task"; id: Id<"agentTasks">; numId?: number; userId: Id<"users"> }
-  | {
-      kind: "project";
-      id: Id<"projects">;
-      numId?: number;
-      userId: Id<"users">;
-    };
+  | ({ kind: "session"; id: Id<"sessions"> } & PrChatOwner)
+  | ({ kind: "task"; id: Id<"agentTasks"> } & PrChatOwner)
+  | ({ kind: "project"; id: Id<"projects"> } & PrChatOwner);
 
 /**
  * Finds the session, quick task or project whose PR this is. A session's
@@ -48,22 +50,33 @@ export async function findChatForPrUrl(
   ctx: MutationCtx | QueryCtx,
   prUrl: string,
 ): Promise<PrChat | null> {
-  const session =
-    (await ctx.db
-      .query("sessions")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-      .first()) ??
-    (await ctx.db
-      .query("sessionRepos")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-      .first()
-      .then((linked) => (linked ? ctx.db.get(linked.sessionId) : null)));
+  const session = await ctx.db
+    .query("sessions")
+    .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
+    .first();
   if (session) {
     return {
       kind: "session",
       id: session._id,
       numId: session.numId,
       userId: session.userId,
+      repoId: session.repoId,
+    };
+  }
+
+  // A linked repo's PR belongs to the session, but its code to the linked repo.
+  const linked = await ctx.db
+    .query("sessionRepos")
+    .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
+    .first();
+  const linkedSession = linked ? await ctx.db.get(linked.sessionId) : null;
+  if (linked && linkedSession) {
+    return {
+      kind: "session",
+      id: linkedSession._id,
+      numId: linkedSession.numId,
+      userId: linkedSession.userId,
+      repoId: linked.repoId,
     };
   }
 
@@ -77,6 +90,7 @@ export async function findChatForPrUrl(
       id: project._id,
       numId: project.numId,
       userId: project.userId,
+      repoId: project.repoId,
     };
   }
 
@@ -91,6 +105,7 @@ export async function findChatForPrUrl(
       id: task._id,
       numId: task.numId,
       userId: task.createdBy,
+      repoId: task.repoId,
     };
   }
 
