@@ -15,7 +15,7 @@ import {
   forkDialogSummary,
   forkThreadTitle,
   type ForkTranscriptPrefix,
-} from "@/lib/components/chat/messageFork";
+} from "@eva/shared";
 
 export function MessageForkDialog({
   prefix,
