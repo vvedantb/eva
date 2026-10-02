@@ -12,13 +12,13 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupText,
   InputGroupTextarea,
   cn,
 } from "@eva/ui";
 import { IconArrowUp, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { AveMark } from "@/lib/components/ave/AveMark";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { participantNames, sourceLabel } from "@/lib/components/routed/status";
 import {
   catchMutationError,
@@ -28,6 +28,14 @@ import {
 type RoutedThread = FunctionReturnType<
   typeof api.routedThreads.listWaitingForMe
 >[number];
+
+/** Where the dock is mounted; the full-screen page has room for a taller one. */
+export type RoutedQuestionDockSize = "popover" | "page";
+
+const DOCK_MAX_HEIGHT: Record<RoutedQuestionDockSize, string> = {
+  popover: "max-h-[min(40dvh,20rem)]",
+  page: "max-h-[min(60dvh,40rem)]",
+};
 
 /**
  * Questions Eva routed to the caller, docked above Manager Ave's composer.
@@ -41,13 +49,23 @@ type RoutedThread = FunctionReturnType<
  * Unlike AskUserQuestion's dock it sits above the composer instead of
  * replacing it — the user can still talk to Ave while questions are waiting.
  */
-export function RoutedQuestionDock() {
+export function RoutedQuestionDock({
+  size = "popover",
+}: {
+  size?: RoutedQuestionDockSize;
+}) {
   const threads = useQuery(api.routedThreads.listWaitingForMe, {});
   if (!threads || threads.length === 0) return null;
-  return <QuestionStack threads={threads} />;
+  return <QuestionStack threads={threads} size={size} />;
 }
 
-function QuestionStack({ threads }: { threads: RoutedThread[] }) {
+function QuestionStack({
+  threads,
+  size,
+}: {
+  threads: RoutedThread[];
+  size: RoutedQuestionDockSize;
+}) {
   // `null` means the user collapsed everything. Any other id that has left
   // the list (it was answered) falls through to the next waiting question,
   // so answering one opens the one after it.
@@ -61,12 +79,17 @@ function QuestionStack({ threads }: { threads: RoutedThread[] }) {
 
   return (
     <div className="mb-2 rounded-surface border border-border bg-card px-3 py-2">
-      <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+      <div className="mb-1 text-xs font-medium text-muted-foreground">
         {threads.length === 1
           ? "Question for you"
           : `${threads.length} questions for you`}
       </div>
-      <ul className="flex max-h-[min(40dvh,20rem)] flex-col divide-y divide-border overflow-y-auto scrollbar">
+      <ul
+        className={cn(
+          "flex flex-col divide-y divide-border overflow-y-auto scrollbar",
+          DOCK_MAX_HEIGHT[size],
+        )}
+      >
         {threads.map((thread) => (
           <QuestionCard
             key={thread._id}
@@ -92,24 +115,38 @@ function QuestionCard({
   onToggle: () => void;
 }) {
   return (
-    <li className="py-1.5 first:pt-0 last:pb-0">
+    <li className="py-1 first:pt-0 last:pb-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
+        className="flex w-full items-start gap-2 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-muted/60"
       >
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium">{thread.title}</span>
-          <span className="truncate text-xs text-muted-foreground">
-            {sourceLabel(thread)}
-            {thread.sourceTitle ? ` · ${thread.sourceTitle}` : ""}
+        <AveMark size={16} className="mt-0.5 shrink-0" />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {/* Collapsed rows truncate so the list scans; open, this line is the
+              question itself, so it wraps instead of being repeated below. */}
+          <span
+            className={cn(
+              "text-sm font-medium",
+              expanded ? "text-pretty" : "truncate",
+            )}
+          >
+            {thread.title}
+          </span>
+          <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <span className="truncate">
+              {sourceLabel(thread)}
+              {thread.sourceTitle ? ` · ${thread.sourceTitle}` : ""}
+            </span>
+            <span aria-hidden>·</span>
+            <RelativeDateTime at={thread.createdAt} className="shrink-0" />
           </span>
         </span>
         <IconChevronDown
           size={14}
           className={cn(
-            "shrink-0 text-muted-foreground transition-transform",
+            "mt-1 shrink-0 text-muted-foreground transition-transform",
             expanded && "rotate-180",
           )}
         />
@@ -119,21 +156,45 @@ function QuestionCard({
   );
 }
 
+/**
+ * Who else is on a group question, in one line: "Priya replied",
+ * "Also asked Sam", or "Priya replied · waiting on Sam". `null` for a
+ * question asked of the viewer alone.
+ */
+function teammatesSummary(
+  teammates: readonly { name: string; needsReply: boolean }[],
+): string | null {
+  const replied = teammates.filter((person) => !person.needsReply);
+  const pending = teammates.filter((person) => person.needsReply);
+  const parts: string[] = [];
+  if (replied.length > 0) parts.push(`${participantNames(replied)} replied`);
+  if (pending.length > 0) {
+    parts.push(
+      `${replied.length > 0 ? "waiting on" : "Also asked"} ${participantNames(pending)}`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function QuestionBody({ thread }: { thread: RoutedThread }) {
   const messages = useQuery(api.routedThreads.listMessages, {
     threadId: thread._id,
   });
+  const me = useQuery(api.auth.me);
   const reply = useMutation(api.routedThreads.reply);
   const resolve = useMutation(api.routedThreads.resolve);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // As in `MentionTextarea`: a phone's Return key inserts a newline, while a
+  // physical Enter key sends.
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
-  const me = useQuery(api.auth.me);
   // The others on a group question, so a reply is not written blind.
-  const teammates = thread.participants.filter(
-    (participant) => participant.userId !== me,
-  );
-  const replied = teammates.filter((participant) => !participant.needsReply);
+  const teammates =
+    me === undefined
+      ? []
+      : thread.participants.filter((participant) => participant.userId !== me);
+  const summary = teammatesSummary(teammates);
 
   const handleSend = async () => {
     const body = draft.trim();
@@ -156,68 +217,76 @@ function QuestionBody({ thread }: { thread: RoutedThread }) {
   };
 
   return (
-    <div className="px-1.5 pb-1 pt-1">
+    <div className="flex flex-col gap-2.5 pb-1.5 pl-[1.875rem] pr-1.5 pt-0.5">
+      {summary ? (
+        <p className="text-[11px] text-muted-foreground">{summary}</p>
+      ) : null}
       {messages === undefined ? (
         <CenteredSpinner label="Loading question" />
       ) : (
-        <div className="flex flex-col gap-3">
-          {messages.map((message) => {
-            const fromEva = message.authorKind === "eva";
-            const name = message.authorName ?? (fromEva ? "Eva" : "You");
+        messages.map((message) => {
+          if (message.authorKind === "eva") {
+            // The header already shows the question; only a follow-up ask on
+            // the same topic says something new.
+            const isRepeat = message.body.trim() === thread.title;
             return (
-              <article key={message._id} className="flex gap-2">
-                {fromEva ? (
-                  <AveMark size={20} className="mt-0.5 shrink-0" />
-                ) : (
-                  <Avatar className="mt-0.5 size-5 shrink-0">
-                    <AvatarFallback className="text-[10px] font-medium">
-                      {name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-medium">{name}</span>
-                    <RelativeDateTime
-                      at={message.createdAt}
-                      className="text-[11px] text-muted-foreground"
-                    />
-                  </div>
-                  {message.context ? (
-                    <QuestionBackground context={message.context} />
-                  ) : null}
-                  <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
+              <div key={message._id} className="flex flex-col gap-2">
+                {message.context ? (
+                  <QuestionBackground context={message.context} />
+                ) : null}
+                {isRepeat ? null : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
                     {message.body}
                   </p>
-                </div>
-              </article>
+                )}
+              </div>
             );
-          })}
-        </div>
+          }
+          const name = message.authorName ?? "Teammate";
+          return (
+            <article key={message._id} className="flex gap-2">
+              <Avatar className="mt-0.5 size-5 shrink-0">
+                <AvatarFallback className="text-[10px] font-medium">
+                  {name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs font-medium">{name}</span>
+                  <RelativeDateTime
+                    at={message.createdAt}
+                    className="text-[11px] text-muted-foreground"
+                  />
+                </div>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
+                  {message.body}
+                </p>
+              </div>
+            </article>
+          );
+        })
       )}
-      {me !== undefined && teammates.length > 0 ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Also asked {participantNames(teammates)}
-          {replied.length > 0 ? ` · ${participantNames(replied)} replied` : ""}
-        </p>
-      ) : null}
-      <InputGroup className="mt-2 overflow-hidden rounded-surface">
+      <InputGroup className="overflow-hidden rounded-surface">
         <InputGroupTextarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          className="min-h-[64px] text-sm"
+          className="min-h-[56px] text-sm"
           placeholder="Reply to Eva…"
+          // Same keys as the chat composer: Enter sends, Shift+Enter breaks
+          // the line. An IME confirming a word also fires Enter; leave it be.
           onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            if (
+              !isCoarsePointer &&
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
               event.preventDefault();
               void handleSend();
             }
           }}
         />
-        <InputGroupAddon align="block-end" className="justify-between">
-          <InputGroupText className="text-[11px] font-normal">
-            ⌘↵ to send
-          </InputGroupText>
+        <InputGroupAddon align="block-end" className="justify-end">
           <span className="flex items-center gap-1">
             <InputGroupButton
               variant="ghost"
@@ -258,7 +327,7 @@ function QuestionBody({ thread }: { thread: RoutedThread }) {
 function QuestionBackground({ context }: { context: string }) {
   const [showAll, setShowAll] = useState(false);
   return (
-    <div className="mt-1.5 rounded-lg bg-muted/60 px-2.5 py-2">
+    <div className="rounded-lg bg-muted/60 px-2.5 py-2">
       <p className="text-[11px] font-medium text-muted-foreground">
         Background
       </p>

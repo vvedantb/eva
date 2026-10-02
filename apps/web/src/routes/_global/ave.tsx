@@ -24,7 +24,7 @@ function AveRoute() {
         </span>
         <AveNewChatButton />
       </div>
-      <AveChat />
+      <AveChat size="page" />
     </div>
   );
 }

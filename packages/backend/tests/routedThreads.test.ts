@@ -502,7 +502,8 @@ describe("reply wakes the source", () => {
       const thread = await f.asDesigner.query(api.routedThreads.get, {
         id: asked.threadId,
       });
-      expect(thread?.status).toBe("waiting_eva");
+      // Sam still owes an answer, so the group thread still needs a human.
+      expect(thread?.status).toBe("waiting_human");
       expect(thread?.needsMyReply).toBe(false);
       expect(thread?.participants).toEqual([
         { userId: f.designerUserId, name: "Dana Designer", needsReply: false },
@@ -534,6 +535,10 @@ describe("reply wakes the source", () => {
       const wakes = await queuedWakes(f);
       expect(wakes).toHaveLength(2);
       expect(wakes[1]).toContain("Everyone asked has now replied.");
+      const settled = await second.as.query(api.routedThreads.get, {
+        id: asked.threadId,
+      });
+      expect(settled?.status).toBe("waiting_eva");
       expect(await second.as.query(api.routedThreads.countWaitingForMe, {}))
         .toBe(0);
     },

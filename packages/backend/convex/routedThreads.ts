@@ -673,11 +673,6 @@ export const reply = authMutation({
       body,
       createdAt: now,
     });
-    await ctx.db.patch(thread._id, {
-      status: "waiting_eva",
-      lastMessageAt: now,
-      lastPreview: previewOf(body),
-    });
     // Snapshot before patching, so `needsReply` still reads as it did when Eva
     // asked and the outstanding list is the people who have not answered yet.
     const rows = await threadParticipants(ctx, thread._id);
@@ -697,6 +692,13 @@ export const reply = authMutation({
       }
     }
     outstanding.sort((a, b) => a.localeCompare(b));
+    // A group question still needs a human until everyone asked has answered;
+    // Eva is woken on each reply either way (below), so this is display state.
+    await ctx.db.patch(thread._id, {
+      status: outstanding.length > 0 ? "waiting_human" : "waiting_eva",
+      lastMessageAt: now,
+      lastPreview: previewOf(body),
+    });
     const source = await loadSource(ctx, thread.sourceKind, thread.sourceId);
     const author = await ctx.db.get(ctx.userId);
     const name = displayName(author);

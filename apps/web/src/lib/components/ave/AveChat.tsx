@@ -5,7 +5,10 @@ import { Button } from "@eva/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { useAveChat } from "@/lib/components/ave/useAveChat";
-import { RoutedQuestionDock } from "@/lib/components/routed/RoutedQuestionDock";
+import {
+  RoutedQuestionDock,
+  type RoutedQuestionDockSize,
+} from "@/lib/components/routed/RoutedQuestionDock";
 
 /**
  * Manager Ave's chat. Shared by the launcher popover and the `/ave` page.
@@ -16,7 +19,12 @@ import { RoutedQuestionDock } from "@/lib/components/routed/RoutedQuestionDock";
  * next run by the server. Questions Eva routed to the user dock above the
  * composer (`RoutedQuestionDock`).
  */
-export function AveChat() {
+export function AveChat({
+  size = "popover",
+}: {
+  /** The full-screen `/ave` page has room for a taller question dock. */
+  size?: RoutedQuestionDockSize;
+}) {
   return (
     <QueryErrorBoundary
       fallback={(retry) => (
@@ -29,12 +37,12 @@ export function AveChat() {
         </div>
       )}
     >
-      <AveChatBody />
+      <AveChatBody size={size} />
     </QueryErrorBoundary>
   );
 }
 
-function AveChatBody() {
+function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
   const chat = useAveChat();
 
   return (
@@ -56,7 +64,7 @@ function AveChatBody() {
         localDraft={chat.localDraft}
         preInputContent={
           <QueryErrorBoundary>
-            <RoutedQuestionDock />
+            <RoutedQuestionDock size={size} />
           </QueryErrorBoundary>
         }
       />
