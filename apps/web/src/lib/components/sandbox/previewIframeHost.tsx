@@ -259,7 +259,9 @@ function remeasureAll(): void {
   let changed = false;
   for (const [key, entry] of entries) {
     if (entry.anchor === null) continue;
-    if (!anchorNeedsLayoutTracking(entry.anchor)) continue;
+    // Measure 0×0 anchors too: a sandbox tab switch hides the pane with
+    // `display: none` without unmounting it, and skipping it here left the
+    // overlay painted at the last visible rect. A 0×0 rect hides the overlay.
     const rect = measure(entry.anchor);
     if (!sameRect(rect, entry.rect)) {
       entries.set(key, { ...entry, rect });

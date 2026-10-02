@@ -19,7 +19,7 @@ FOLLOW ALL OF THESE RULES
 - Prefer simplicity, small diffs, co-location, explicit behavior, long-term maintainability. No premature abstractions. No new deps unless necessary.
 - Do not default to `useState`/`useRef` — pick the right state ownership first.
 - useCallback and useMemo are banned as React Compiler is enabled
-- useEffect is banned as it introduces performance regressions
+- Avoid useEffect; use it only when absolutely necessary (it invites performance regressions), preferring derived state, event handlers or `useSyncExternalStore`.
 - Never call a component as a function in render; name hook-calling helpers `use*` (the compiler memoises capitalised calls and skips them).
 - Do not run dev / lint / build unless the user asks.
 - After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (or `internal/changelog.md`).
