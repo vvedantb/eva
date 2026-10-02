@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, type RefObject } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   Button,
   DropdownMenu,
@@ -120,6 +126,8 @@ interface PreviewNavBarProps {
   onPathChange?: (path: string) => void;
   isLoading?: boolean;
   onRefresh?: () => void;
+  /** Rendered after fullscreen, e.g. an overflow menu of preview tools. */
+  trailing?: ReactNode;
 }
 
 type PreviewHistoryCommand =
@@ -140,6 +148,7 @@ export function PreviewNavBar({
   onPathChange,
   isLoading = false,
   onRefresh,
+  trailing,
 }: PreviewNavBarProps) {
   function currentIframe(): HTMLIFrameElement | null {
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
@@ -380,6 +389,7 @@ export function PreviewNavBar({
       >
         <IconMaximize className="w-3.5 h-3.5" />
       </WebPreviewNavigationButton>
+      {trailing}
     </>
   );
 }

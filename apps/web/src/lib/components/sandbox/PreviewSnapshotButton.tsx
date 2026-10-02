@@ -10,14 +10,20 @@ import type { PreviewSnapshot } from "@/lib/components/sandbox/previewSnapshot";
 
 const CAPTURE_TIMEOUT_MS = 20_000;
 
-export function PreviewSnapshotButton({
-  iframeElement,
-  seedSnapshot,
-}: {
+interface PreviewSnapshotOptions {
   iframeElement: HTMLIFrameElement | null;
   /** Opens the dialog with this snapshot instead of capturing (demo / tests). */
   seedSnapshot?: PreviewSnapshot;
-}) {
+}
+
+/**
+ * Captures a semantic snapshot of the preview. Render `dialog` outside any
+ * menu that triggers `capture`, so it outlives the menu closing.
+ */
+export function usePreviewSnapshot({
+  iframeElement,
+  seedSnapshot,
+}: PreviewSnapshotOptions) {
   const pending = usePendingPreviewSnapshots();
   const [capturing, setCapturing] = useState(false);
   const [snapshot, setSnapshot] = useState<PreviewSnapshot | null>(
@@ -72,13 +78,34 @@ export function PreviewSnapshotButton({
     );
   }
 
+  const dialog = (
+    <PreviewSnapshotDialog
+      snapshot={snapshot}
+      open={open}
+      onOpenChange={setOpen}
+      onAddToChat={
+        pending
+          ? (next) => {
+              pending.add(next);
+              toast.success("Snapshot added to chat");
+            }
+          : undefined
+      }
+    />
+  );
+  const disabled = capturing || (iframeElement === null && !seedSnapshot);
+  return { capturing, disabled, capture, dialog };
+}
+
+export function PreviewSnapshotButton(props: PreviewSnapshotOptions) {
+  const { capturing, disabled, capture, dialog } = usePreviewSnapshot(props);
   return (
     <>
       <WebPreviewNavigationButton
         tooltip={capturing ? "Capturing snapshot…" : "Semantic snapshot"}
         aria-label={capturing ? "Capturing snapshot" : "Semantic snapshot"}
         className="max-sm:hit-target"
-        disabled={capturing || (iframeElement === null && !seedSnapshot)}
+        disabled={disabled}
         data-testid="preview-snapshot-button"
         onClick={capture}
       >
@@ -88,19 +115,7 @@ export function PreviewSnapshotButton({
           <IconListTree className="h-3.5 w-3.5" />
         )}
       </WebPreviewNavigationButton>
-      <PreviewSnapshotDialog
-        snapshot={snapshot}
-        open={open}
-        onOpenChange={setOpen}
-        onAddToChat={
-          pending
-            ? (next) => {
-                pending.add(next);
-                toast.success("Snapshot added to chat");
-              }
-            : undefined
-        }
-      />
+      {dialog}
     </>
   );
 }
