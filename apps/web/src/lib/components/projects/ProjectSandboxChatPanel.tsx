@@ -13,11 +13,12 @@ import {
   type Id,
 } from "@eva/backend";
 import { toast } from "@eva/ui";
-import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
   readableSendError,
+  sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
@@ -187,21 +188,59 @@ export function ProjectSandboxChatPanel({
     Boolean(project?.activeChatWorkflowId) ||
     isAssistantTurnInProgress(messages ?? []);
 
+  // A thrown send rolls the whole turn back (no placeholder, no workflow) and
+  // the composer has already cleared, so the prompt only exists here. The toast
+  // owns the failure and hands the text back through the same `drafts` row the
+  // composer reads (same contract as useSessionSend).
+  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
+    toast.error("Couldn't send your message", {
+      id: "project-chat-send",
+      description: readableSendError(errorMessage),
+      action: {
+        label: "Restore draft",
+        onClick: () => {
+          void setDraft({
+            target: { kind: "projectChat", projectId },
+            content: draftContent,
+          });
+        },
+      },
+    });
+  };
+
   const handleSend = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => {
+    // What the user typed. A ChatBody send has already appended its citation /
+    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
+    // re-edit, so the restore has to use the pre-append text.
+    const draftContent = options?.draftContent ?? content;
+    // Hoisted out of the `try`: React Compiler bails on the whole file when it
+    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    const enqueueReasoningLevel =
+      displayTraits.effortLevel ?? executionTraits.reasoningLevel;
     if (isExecuting) {
-      await enqueueMessage({
-        projectId,
-        message: content,
-        model,
-        ...executionTraits,
-        reasoningLevel:
-          displayTraits.effortLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: resolveAccountId(providerAccountId),
-        attachmentStorageIds,
-      });
+      try {
+        await enqueueMessage({
+          projectId,
+          message: content,
+          model,
+          ...executionTraits,
+          reasoningLevel: enqueueReasoningLevel,
+          providerAccountId: resolveAccountId(providerAccountId),
+          attachmentStorageIds,
+        });
+      } catch (error) {
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
+      }
       return;
     }
     const accountId = resolveAccountId(providerAccountId);
@@ -222,28 +261,21 @@ export function ProjectSandboxChatPanel({
         providerAccountId: accountId,
       });
     } catch (error) {
-      // A thrown startExecute rolls the whole turn back (no placeholder, no
-      // workflow) and the composer has already cleared, so the prompt only
-      // exists here. The toast owns the failure and hands the text back through
-      // the same `drafts` row the composer reads (same contract as
-      // useSessionSend).
-      toast.error("Couldn't send your message", {
-        id: "project-chat-send",
-        description: readableSendError(
-          error instanceof Error ? error.message : "",
-        ),
-        action: {
-          label: "Restore draft",
-          onClick: () => {
-            void setDraft({
-              target: { kind: "projectChat", projectId },
-              content,
-            });
-          },
-        },
-      });
+      raiseSendFailure(
+        error instanceof Error ? error.message : "",
+        draftContent,
+      );
+      // Rethrow: the caller tells a delivered send from a failed one by whether
+      // this settles, and keeps its pending chips on a failure.
+      throw error;
     }
   };
+
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+  });
 
   const handleCancel = async () => {
     await cancelExecution({ projectId });
@@ -275,7 +307,8 @@ export function ProjectSandboxChatPanel({
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
     onSendCommand: (command) => {
-      void handleSend(command);
+      // Rejects on a failed send; the failure is already toasted.
+      void handleSend(command).catch(() => {});
     },
   };
 
@@ -283,17 +316,12 @@ export function ProjectSandboxChatPanel({
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
         repoId={repo._id}
-        isSandboxActive={isSandboxActive}
-        isSandboxToggling={isSandboxToggling}
-        onSandboxToggle={onSandboxToggle}
-        isAssistantResponding={isExecuting}
         model={model}
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
       />
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={projectId}
         chatParentId={projectId}
         messages={messages ?? []}
@@ -305,14 +333,8 @@ export function ProjectSandboxChatPanel({
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
-        isInputDisabled={!isSandboxActive || isSwitchingAccount}
-        placeholder={
-          !isSandboxActive
-            ? SANDBOX_CHAT_COPY.asleepPlaceholder
-            : isSwitchingAccount
-              ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-              : SANDBOX_CHAT_COPY.activePlaceholder
-        }
+        isInputDisabled={composer.isInputDisabled}
+        placeholder={composer.placeholder}
         emptyStateTitle={
           isSandboxActive
             ? "Ask Eva anything about this project's running sandbox."
@@ -323,24 +345,22 @@ export function ProjectSandboxChatPanel({
             ? SANDBOX_CHAT_COPY.activeDescription
             : SANDBOX_CHAT_COPY.asleepDescription
         }
-        disabledReason={
-          isSwitchingAccount
-            ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-            : SANDBOX_CHAT_COPY.asleepDisabledReason
-        }
+        disabledReason={composer.disabledReason}
         onStartSandbox={
           !isSandboxActive && !isSandboxToggling && onSandboxToggle
             ? () => onSandboxToggle("start")
             : undefined
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={displayAccounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={setTraits}
+        modelPicker={{
+          model,
+          setModel,
+          modelOptions,
+          accounts: displayAccounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange: setTraits,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}

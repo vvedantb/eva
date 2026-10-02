@@ -3,28 +3,23 @@
 import { useState, useEffect, useRef, type RefObject } from "react";
 import {
   Button,
-  CrossfadeIcon,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
-  Spinner,
   WebPreviewNavigationButton,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconArrowLeft,
   IconArrowRight,
   IconCheck,
   IconChevronDown,
-  IconRefresh,
   IconExternalLink,
   IconMaximize,
 } from "@tabler/icons-react";
-import {
-  stripPreviewGrant,
-  carryPreviewGrant,
-} from "@/lib/utils/previewGrant";
+import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import { normalizePreviewPath } from "./previewPathHistory";
@@ -320,15 +315,7 @@ export function PreviewNavBar({
         onClick={isLoading && onRefresh ? onRefresh : reload}
         disabled={isLoading}
       >
-        <CrossfadeIcon
-          show={isLoading}
-          trueKey="loading"
-          falseKey="idle"
-          variant="soft"
-          className="relative flex size-3.5 items-center justify-center"
-          whenTrue={<Spinner size="sm" />}
-          whenFalse={<IconRefresh className="w-3.5 h-3.5" />}
-        />
+        <RefreshSpinIcon busy={isLoading} className="size-3.5" />
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}

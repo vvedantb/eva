@@ -2,17 +2,23 @@
 
 import { v } from "convex/values";
 import { quote } from "shell-quote";
+import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 import { getInstallationOctokit } from "../githubAuth";
 import { extractPrNumber } from "./prUrl";
 import { getPullRequest, patchPullRequest } from "./pullRequestWrite";
 import { resolveEnvVars } from "../envVarResolver";
 import { getAIProviderAvailability } from "../_validators/aiModels";
-import { execHandle, getSandboxHandle } from "../_sandbox_runtime/helpers";
+import {
+  ensureSandboxRunning,
+  execHandle,
+  getSandboxHandle,
+} from "../_sandbox_runtime/helpers";
 import { writeSandboxFile } from "../_sandbox_runtime/sandboxFiles";
 import {
   CLAUDE_FALLBACK_BIN_PATH,
   ensureClaudeCliAvailable,
+  resolveClaudeCliVersion,
 } from "../_sandbox_runtime/launch";
 import { fetchPullRequestDiff } from "./prRecapService";
 import {
@@ -47,6 +53,10 @@ export const generatePrDescription = internalAction({
     prUrl: v.string(),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    /** Set by the quick-task review path, whose sandbox was stopped when the
+     * run ended: resume it for the model call and stop it again afterwards, so
+     * a description costs one short resume rather than a sandbox left up. */
+    restoreStoppedSandbox: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -93,17 +103,43 @@ export const generatePrDescription = internalAction({
       });
 
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-      await Promise.all([
-        ensureClaudeCliAvailable(sandbox),
-        writeSandboxFile(sandbox, PROMPT_PATH, prompt),
-      ]);
-      // Prompt goes in on stdin: it carries the whole diff, which is far past
-      // what belongs on a command line. No tools — the diff is the input.
-      const text = await execHandle(
-        sandbox,
-        `bin="$(command -v claude || echo ${quote([CLAUDE_FALLBACK_BIN_PATH])})"; "$bin" -p --model ${quote([PR_DESCRIPTION_MODEL])} --output-format text --allowedTools "" --max-turns 1 < ${quote([PROMPT_PATH])}`,
-        EXEC_TIMEOUT_SECONDS,
-      );
+      let text: string;
+      try {
+        if (args.restoreStoppedSandbox) {
+          // User-initiated (they moved the task to code_review), so a stop
+          // still in flight is waited out rather than refusing the resume.
+          await ensureSandboxRunning(sandbox, { resumeAfterStop: true });
+        }
+        await Promise.all([
+          resolveClaudeCliVersion().then((version) =>
+            ensureClaudeCliAvailable(sandbox, version),
+          ),
+          writeSandboxFile(sandbox, PROMPT_PATH, prompt),
+        ]);
+        // Prompt goes in on stdin: it carries the whole diff, which is far past
+        // what belongs on a command line. No tools — the diff is the input.
+        text = await execHandle(
+          sandbox,
+          `bin="$(command -v claude || echo ${quote([CLAUDE_FALLBACK_BIN_PATH])})"; "$bin" -p --model ${quote([PR_DESCRIPTION_MODEL])} --output-format text --allowedTools "" --max-turns 1 < ${quote([PROMPT_PATH])}`,
+          EXEC_TIMEOUT_SECONDS,
+        );
+      } finally {
+        // Put the sandbox back the way we found it, on the failure path too —
+        // a failed description must not leave a quick-task sandbox running.
+        // The task row still reads "closed", so no UI state to unwind.
+        if (args.restoreStoppedSandbox) {
+          try {
+            await ctx.runAction(internal.sandbox.stopSandbox, {
+              sandboxId: args.sandboxId,
+              repoId: args.repoId,
+            });
+          } catch (stopError) {
+            console.error(
+              `[pr-description] ${label} re-stop failed: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
+            );
+          }
+        }
+      }
       const description = cleanPrDescription(text);
       if (description.length === 0) {
         console.error(`[pr-description] ${label} model returned empty text`);

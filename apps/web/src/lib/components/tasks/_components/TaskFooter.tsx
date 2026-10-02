@@ -15,12 +15,12 @@ import {
   DropdownMenuSeparator,
   motionFast,
   CrossfadeIconSlot,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
   IconPlayerPlay,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -31,7 +31,7 @@ import dayjs from "@eva/shared/dates";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
-import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
+import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
@@ -45,6 +45,7 @@ interface TaskFooterProps {
   task: Doc<"agentTasks"> | undefined;
   status: TaskStatus | undefined;
   hasActiveRun: boolean;
+  hasRuns: boolean;
   latestPrUrl: string | undefined;
   latestPrError: string | undefined;
   latestDeployment: RunDoc | undefined;
@@ -52,6 +53,7 @@ interface TaskFooterProps {
   isStarting: boolean;
   canStartSandbox: boolean;
   isSandboxActive: boolean;
+  isSandboxStarting: boolean;
   isSandboxStopping: boolean;
   isRetryingStartupCommands: boolean;
   isRunningDevServer: boolean;
@@ -59,8 +61,8 @@ interface TaskFooterProps {
   canCreatePr: boolean;
   isCreatingPr: boolean;
   onCreatePr: () => void;
+  onStartSandbox: () => void;
   onStopSandbox: () => void;
-  isSandboxViewActive?: boolean;
   onRunStartupCommands: () => void;
   onRunDevServer: () => void;
   onRunBackgroundCommands: () => void;
@@ -74,6 +76,7 @@ export function TaskFooter({
   task,
   status,
   hasActiveRun,
+  hasRuns,
   latestPrUrl,
   latestPrError,
   latestDeployment,
@@ -81,6 +84,7 @@ export function TaskFooter({
   isStarting,
   canStartSandbox,
   isSandboxActive,
+  isSandboxStarting,
   isSandboxStopping,
   isRetryingStartupCommands,
   isRunningDevServer,
@@ -88,8 +92,8 @@ export function TaskFooter({
   canCreatePr,
   isCreatingPr,
   onCreatePr,
+  onStartSandbox,
   onStopSandbox,
-  isSandboxViewActive = false,
   onRunStartupCommands,
   onRunDevServer,
   onRunBackgroundCommands,
@@ -101,16 +105,20 @@ export function TaskFooter({
   const isHeader = variant === "header";
   const buttonSize = isHeader ? "sm" : "default";
   const iconSize = isHeader ? 16 : 18;
+  // `todo` only offers a first run; once it has run, the sandbox toggle takes
+  // its place (`canStartSandbox` covers that case).
   const showRunButton =
     !task?.projectId &&
-    (status === "todo" || (status === "in_progress" && !hasActiveRun));
-  // Hidden on the sandbox surface: the chat header there has its own stop
-  // control, and two buttons for one action read as a bug.
-  const showStopSandbox =
-    isSandboxActive && !isSandboxStopping && !isSandboxViewActive;
-  // Inert, not hidden, mid-turn — see `SleepEvaButton`. Gated on the chat turn
-  // only, not `hasActiveRun`: that also counts *queued* runs, and a task waiting
-  // in the queue is no reason to refuse to sleep a sandbox. A main run has its
+    ((status === "todo" && !hasRuns) ||
+      (status === "in_progress" && !hasActiveRun));
+  // One control for both directions, on every surface: the sandbox chat header
+  // no longer carries a start/stop pair, so a header that only knew how to stop
+  // left a slept sandbox with no way back. Held open through both transitions
+  // rather than popping out, so the row does not jump while it wakes or sleeps.
+  const showSandboxToggle = isSandboxActive || canStartSandbox;
+  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the chat
+  // turn only, not `hasActiveRun`: that also counts *queued* runs, and a task
+  // waiting in the queue is no reason to refuse to sleep it. A main run has its
   // own confirmed Stop; blocking this during one is a separate call.
   const sleepBlockedMidTurn = Boolean(task?.activeChatWorkflowId);
   // Simple view hides the git/sandbox plumbing: conflict resolution and the
@@ -140,7 +148,7 @@ export function TaskFooter({
     showResolveConflicts ||
     hasSandboxCommandItems ||
     prLinks.hasItems;
-  const hasSecondaryContent = isHeader || showStopSandbox || showMoreMenu;
+  const hasSecondaryContent = isHeader || showSandboxToggle || showMoreMenu;
 
   return (
     <div
@@ -233,7 +241,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -251,7 +259,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -266,7 +274,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -280,7 +288,7 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -304,18 +312,22 @@ export function TaskFooter({
             </DropdownMenu>
           )}
           <AnimatePresence initial={false} mode="popLayout">
-            {showStopSandbox ? (
+            {showSandboxToggle ? (
               <m.div
-                key="stop-sandbox"
+                key="toggle-sandbox"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={motionFast}
               >
-                <SleepEvaButton
-                  onStop={onStopSandbox}
-                  isStopping={isSandboxStopping}
-                  blockedMidTurn={sleepBlockedMidTurn}
+                <SandboxStartStopButton
+                  isActive={isSandboxActive}
+                  isToggling={isSandboxStarting || isSandboxStopping}
+                  onToggle={(action) => {
+                    if (action === "start") onStartSandbox();
+                    else onStopSandbox();
+                  }}
+                  isAssistantResponding={sleepBlockedMidTurn}
                   size={buttonSize}
                 />
               </m.div>
@@ -374,7 +386,10 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <IconLoader2 size={iconSize} className="animate-spin" />
+                  <CircleSpinner
+                    size="sm"
+                    style={{ width: iconSize, height: iconSize }}
+                  />
                 ) : isScheduled ? (
                   <IconCalendarClock size={iconSize} />
                 ) : (

@@ -29,7 +29,7 @@ import {
 } from "../_queues/helpers";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { buildCustomInstructionsBlock } from "../prompts";
-import { buildEditPrompt, buildOrchestratorPrompt } from "./prompts";
+import { buildEditPrompt } from "./prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { z } from "zod";
 import {
@@ -41,7 +41,11 @@ import {
   insertAssistantPlaceholderIfNeeded,
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
-import { isUnclaimedOpenTurn } from "./pendingTurnRecovery";
+import { scheduleScopeCheck } from "../_scopeCheck/mutations";
+import {
+  isPendingTurnLive,
+  isUnclaimedOpenTurn,
+} from "./pendingTurnRecovery";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
@@ -78,51 +82,6 @@ export const sessionCompleteEvent = defineEvent({
  * how planning and design work now that turn modes are gone.
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
-
-/**
- * The master ("orchestrator") session's tools: `SESSION_TOOLS` minus Write and
- * Edit. Manager Ave supervises agents and never implements, so the two tools
- * that make implementation possible are withheld rather than merely discouraged
- * — a prompt alone did not stop it. Bash stays: the supervision skill reads
- * production logs and CI state through it (`npx convex logs`, `gh pr checks`),
- * which is read-only in intent and enforced by prompt, not by tool list.
- *
- * This string is a Claude tool vocabulary and only the Claude SDK path reads it
- * (`ALLOWED_TOOLS` in `callback-src/providers/claudeSdk.ts`). The other SDKs
- * name their tools differently, so the cross-provider signal is the separate
- * `noWrites` flag below rather than this list.
- */
-export const ORCHESTRATOR_TOOLS = "Read,Bash,Glob,Grep,Skill";
-
-/** Launch config for a session's turns, derived once from what the session is. */
-export type SessionTurnTools = {
-  /** Claude-vocabulary allowlist; ignored by every other provider. */
-  allowedTools: string;
-  /**
-   * Provider-agnostic "this turn may not modify the workspace". Each SDK
-   * translates it into its own vocabulary — Cursor `disallowedTools`, Codex
-   * `sandboxMode: "read-only"` — so no provider has to understand Claude's
-   * tool names. Absent rather than `false` for a writing session: it is spread
-   * into launch args, and an omitted key keeps their opts signature unchanged.
-   */
-  noWrites?: true;
-};
-
-/**
- * Tools and write permission for a session's turns.
- *
- * One function returning both because both feed the warm-daemon opts signature
- * (`buildDaemonOptsSig`): if a call site set one without the other, the daemon
- * would either optsmismatch-kill and respawn every turn, or — worse — keep
- * serving a warm process that still holds its write tools.
- */
-export function sessionTurnTools(
-  isOrchestrator: boolean | undefined,
-): SessionTurnTools {
-  return isOrchestrator === true
-    ? { allowedTools: ORCHESTRATOR_TOOLS, noWrites: true }
-    : { allowedTools: SESSION_TOOLS };
-}
 
 /**
  * The `eva-design` reply contract. `variations` must be present and non-empty:
@@ -206,24 +165,6 @@ export async function buildSessionPrompt(
     session.repoId,
   );
 
-  // The master supervises rather than builds, so it gets none of the edit
-  // contract below — not the branch, not the commit line, not the repo system
-  // prompt (which is implementation guidance for the checked-out app).
-  if (session.isOrchestrator === true) {
-    let prompt = prefixBlock
-      ? `${prefixBlock}\n\n${buildOrchestratorPrompt(resolvedMessage, customInstructionsBlock)}`
-      : buildOrchestratorPrompt(resolvedMessage, customInstructionsBlock);
-    // Ave can switch providers mid-chat; catch the incoming CLI up the same way.
-    prompt = await prependModelHandoffContext(
-      ctx,
-      session._id,
-      args.model,
-      session.provider,
-      prompt,
-    );
-    return { prompt, branchName };
-  }
-
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // session owner, whose access the credential helper mints tokens against).
   const readableRepos = await listReadableSiblingRepos(
@@ -262,6 +203,13 @@ export async function buildSessionPrompt(
     [],
     readableRepos,
     linkedRepos,
+    {
+      ownerKey: `session-${session._id}`,
+      prUrl: session.prUrl,
+      devCommand: session.devCommand ?? repo.devCommand,
+      startupCommands: repo.startupCommands,
+      backgroundCommands: repo.backgroundCommands,
+    },
   );
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
@@ -475,6 +423,10 @@ export const sessionExecuteWorkflow = workflow.define({
         turnId: args.turnId,
         sandboxId,
       });
+      await step.runMutation(
+        internal.sessionWorkflow.clearSessionClosedStatus,
+        { sessionId: args.sessionId },
+      );
     }
 
     // A cancel can race with startExecute and wipe pendingTurn while a daemon
@@ -500,7 +452,7 @@ export const sessionExecuteWorkflow = workflow.define({
         thinkingEnabled: args.thinkingEnabled,
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
-        ...sessionTurnTools(data.isOrchestrator),
+        allowedTools: SESSION_TOOLS,
         providerAccountId: args.providerAccountId,
         credentialOwnerUserId: args.credentialOwnerUserId,
         sessionPersistenceId: args.sessionId,
@@ -541,7 +493,7 @@ export const sessionExecuteWorkflow = workflow.define({
           thinkingEnabled: args.thinkingEnabled,
           use1mContext: args.use1mContext,
           fastMode: args.fastMode,
-          ...sessionTurnTools(data.isOrchestrator),
+          allowedTools: SESSION_TOOLS,
           repoId: data.repoId,
           streamingEntityId: String(args.sessionId),
           sessionPersistenceId: args.sessionId,
@@ -891,8 +843,6 @@ export const getSessionData = internalQuery({
     model: aiModelValidator,
     deploymentProjectName: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    /** Selects the master's reduced tool set — see `sessionTurnTools`. */
-    isOrchestrator: v.optional(v.boolean()),
     /** Non-zero for a multi-repo session — gates the linked publish step. */
     linkedRepoCount: v.optional(v.number()),
   }),
@@ -935,7 +885,6 @@ export const getSessionData = internalQuery({
       model: normalizeAIModel(args.model),
       deploymentProjectName: repo.deploymentProjectName,
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
-      isOrchestrator: session.isOrchestrator,
       linkedRepoCount: session.linkedRepoCount,
     };
   },
@@ -962,6 +911,49 @@ export const updateSandboxId = internalMutation({
       updates.branchName = args.branchName;
     }
     await ctx.db.patch(args.sessionId, updates);
+    return null;
+  },
+});
+
+/**
+ * Drops a session's stale `closed` status once this turn has a sandbox that
+ * validated as running.
+ *
+ * `prepareSessionSandbox` flips the status back to "active" whenever it starts
+ * or replaces a VM, but the reuse branch above never calls it — a healthy
+ * sandbox needs no preparing — so the status stayed at whatever the last stop
+ * left. `prewarmSessionDaemon` then refuses to start the agent daemon on a
+ * closing session (`isSandboxClosingStatus`, `_sandbox_runtime/execution.ts`),
+ * returning in ~60ms without launching anything: the turn opens, no daemon ever
+ * calls `claimPendingTurn`, its lease is never acquired, and the watchdog
+ * stalls it out 15 minutes later. That is how Manager Ave (session 111) went
+ * silent — every agent-notification wake-up revalidated the same healthy
+ * sandbox, skipped prewarm, and posted "Turn stalled".
+ *
+ * Only "closed" is cleared, never "stopping": a stop that is genuinely in
+ * flight must win over a turn that raced it, and the stop path flips the status
+ * itself when it settles.
+ *
+ * This does not weaken the `prewarmNeverResurrects` contract. It runs only
+ * after the workflow validated the VM as running, and the page-open guard in
+ * `prewarmDaemon` is untouched, so opening a stopped session's page still
+ * cannot wake its sandbox.
+ */
+export const clearSessionClosedStatus = internalMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.status !== "closed") return null;
+    await ctx.db.patch(args.sessionId, {
+      status: "active",
+      // Awake again: whatever the last attempt failed on is history.
+      sandboxError: undefined,
+      updatedAt: Date.now(),
+    });
+    console.log(
+      `[sessionWorkflow] clearSessionClosedStatus sessionId=${args.sessionId}`,
+    );
     return null;
   },
 });
@@ -1384,7 +1376,10 @@ export const ensurePendingTurn = internalMutation({
       .first();
     if (
       !isUnclaimedOpenTurn({
-        hasPendingTurn: session.pendingTurn !== undefined,
+        hasPendingTurn: isPendingTurnLive({
+          pendingTurn: session.pendingTurn,
+          openTurnId: openTurn?._id,
+        }),
         lastAssistant: last,
       })
     ) {
@@ -1427,7 +1422,15 @@ export const restageOpenTurn = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session)
       return { restaged: false as const, reason: "session not found" };
-    if (session.pendingTurn)
+    // Orphans do not count: a slot left behind by a turn that already closed is
+    // exactly the wedge this escape hatch exists to clear, and refusing on it
+    // made the hatch useless on the sessions that needed it most.
+    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
+    const pendingTurnLive = isPendingTurnLive({
+      pendingTurn: session.pendingTurn,
+      openTurnId: openTurn?._id,
+    });
+    if (pendingTurnLive)
       return { restaged: false as const, reason: "pendingTurn already set" };
 
     const messages = await ctx.db
@@ -1441,7 +1444,7 @@ export const restageOpenTurn = internalMutation({
     if (
       lastAssistant === undefined ||
       !isUnclaimedOpenTurn({
-        hasPendingTurn: session.pendingTurn !== undefined,
+        hasPendingTurn: pendingTurnLive,
         lastAssistant,
       }) ||
       lastAssistant.content !== ""
@@ -1481,7 +1484,6 @@ export const restageOpenTurn = internalMutation({
       model: session.lastModel ?? lastUser.model ?? DEFAULT_AI_MODEL,
     });
 
-    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
     const pendingTurn = {
       prompt,
       requestedAt: Date.now(),
@@ -1648,6 +1650,12 @@ export const completeSyntheticTurn = authMutation({
       patch.model = undefined;
     }
     await ctx.db.patch(args.messageId, patch);
+    // Judged out of band; a turn that changed no code schedules nothing.
+    await scheduleScopeCheck(ctx, {
+      _id: args.messageId,
+      beforeSha: patch.beforeSha,
+      afterSha: patch.afterSha,
+    });
 
     await ctx.db.patch(args.sessionId, {
       syntheticTurnMessageId: undefined,

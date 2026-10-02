@@ -22,8 +22,17 @@ const globalsCss = readFileSync(join(here, "globals.css"), "utf8").replaceAll(
 
 /** The `r g b` triple for a token inside the light theme's `:root` block. */
 function lightToken(name: string): [number, number, number] {
+  return themeToken(name, ":root {");
+}
+
+/** The `r g b` triple for a token inside the dark theme's `.dark` block. */
+function darkToken(name: string): [number, number, number] {
+  return themeToken(name, ".dark {");
+}
+
+function themeToken(name: string, selector: string): [number, number, number] {
   const block = globalsCss.slice(
-    globalsCss.indexOf(":root {", globalsCss.indexOf("@layer base")),
+    globalsCss.indexOf(selector, globalsCss.indexOf("@layer base")),
   );
   const match = new RegExp(`--${name}:\\s*(\\d+) (\\d+) (\\d+);`).exec(block);
   expect(match, `--${name} is not declared as an r g b triple`).not.toBeNull();
@@ -63,6 +72,23 @@ describe("light theme contrast", () => {
       lightToken("background"),
     );
     expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * Tinted chips — Jev's scope verdict is the live one — pair a `-bg` wash with
+   * a `-strong` text colour. `--warning` and `--destructive` themselves are
+   * fills, not text: on their own tint they measure around 2:1.
+   */
+  it.each([
+    ["warning-strong", "warning-bg"],
+    ["destructive-strong", "destructive-bg"],
+  ])("keeps --%s readable on --%s", (text, background) => {
+    expect(
+      contrastRatio(lightToken(text), lightToken(background)),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrastRatio(darkToken(text), darkToken(background)),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 });
 

@@ -76,6 +76,33 @@ export const appendLog = authMutation({
   },
 });
 
+/**
+ * Records media the sandbox harvested for this run (screenshots, recordings).
+ *
+ * Called by the in-sandbox callback as the run finishes, before the completion
+ * mutation: a run is not a chat turn, so there is no `messages` row for
+ * `screenshots:attachMedia` to patch. Ids append in capture order, matching how
+ * a chat turn accumulates media across a turn.
+ */
+export const attachMedia = authMutation({
+  args: {
+    id: v.id("agentRuns"),
+    mediaStorageIds: v.array(v.id("_storage")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.mediaStorageIds.length === 0) return null;
+    const { run } = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
+    await ctx.db.patch(args.id, {
+      mediaStorageIds: [
+        ...(run.mediaStorageIds ?? []),
+        ...args.mediaStorageIds,
+      ],
+    });
+    return null;
+  },
+});
+
 /** Marks a run as complete, updates the task status, saves activity log, and notifies relevant users. */
 export const complete = authMutation({
   args: {

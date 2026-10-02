@@ -25,10 +25,8 @@ import {
   Button,
   useDragSensors,
 } from "@eva/ui";
-import {
-  isTaskAgentActive,
-  QuickTaskCard,
-} from "@/lib/components/quick-tasks/QuickTaskCard";
+import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
+import { isTaskAgentActive } from "@/lib/components/tasks/taskAgentActivity";
 import {
   statusConfig,
   TASK_STATUSES,

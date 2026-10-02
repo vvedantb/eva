@@ -9,12 +9,12 @@ import {
   AvatarFallback,
   Badge,
   Button,
+  CenteredSpinner,
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupText,
   InputGroupTextarea,
-  Skeleton,
 } from "@eva/ui";
 import { IconArrowUp, IconCheck } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
@@ -149,11 +149,7 @@ export function ThreadDetailPane({ thread }: { thread: Thread }) {
         <div className="mx-auto w-full max-w-2xl px-5 py-5">
           <div className="rounded-surface border border-border bg-background px-5 py-5">
             {messages === undefined ? (
-              <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-20" />
-                ))}
-              </div>
+              <CenteredSpinner label="Loading thread" />
             ) : (
               <div className="flex flex-col divide-y divide-border">
                 {messages.map((message) => {

@@ -4,11 +4,20 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
+import { chatSelfTools } from "./chatSelfTools";
+import { chatContentTools } from "./chatContentTools";
+import { workTools } from "./workTools";
+import { automationTools } from "./automationTools";
+import { tabQueueTools } from "./tabQueueTools";
+import {
+  agentInteractionTools,
+  orchestratorQuestionTools,
+} from "./agentInteractionTools";
 import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
+import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
-import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
 import {
   entityAccess,
   entityRefArgs,
@@ -42,7 +51,8 @@ export function buildTools(
   ctx: ActionCtx,
 ): EvaTool[] {
   const { clerkUserId, scopedRepoId, entityId, entityKind } = credentials;
-  const isOrchestrator = credentials.isOrchestrator === true;
+  const { aveThreadId } = credentials;
+  const isAve = aveThreadId !== undefined;
   const tools: EvaTool[] = [];
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -552,6 +562,28 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // list_preview_tools / call_preview_tool — WebMCP tools in the live preview
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the request is relayed through *this* chat's open
+  // Eva tab, so a caller without an entity has no preview to reach.
+  if (entityKind !== undefined && entityId !== undefined) {
+    tools.push(
+      ...previewTools({
+        create: (request) =>
+          ctx.runMutation(internal.previewToolCalls.create, {
+            entityKind,
+            entityId,
+            ...request,
+          }),
+        get: (id) => ctx.runQuery(internal.previewToolCalls.get, { id }),
+        expire: (id, error) =>
+          ctx.runMutation(internal.previewToolCalls.expire, { id, error }),
+      }),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Task creation tools
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -563,21 +595,17 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     return matchRepoByName(await getUserRepos(userId), repoName, app);
   }
 
-  /** The master session's own id, carried on the orchestrator sandbox token. */
-  const masterSessionId =
-    isOrchestrator && entityKind === "session" ? entityId : undefined;
-
   /**
-   * Registers a task the master just created so it is woken when that task
-   * finishes. No-op for every non-orchestrator caller.
+   * Registers a task Manager Ave just created so it is woken when that task
+   * finishes. No-op for every caller that is not Ave's own run.
    */
-  async function watchTaskAsOrchestrator(taskId: string): Promise<void> {
-    if (masterSessionId === undefined) return;
+  async function watchTaskAsAve(taskId: string): Promise<void> {
+    if (aveThreadId === undefined) return;
     await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
       clerkUserId,
       kind: "task",
       id: taskId,
-      masterSessionId,
+      aveThreadId,
     });
   }
 
@@ -645,7 +673,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       projectId: input.projectId,
     });
 
-    await watchTaskAsOrchestrator(taskId);
+    await watchTaskAsAve(taskId);
 
     return { taskId, repoFullName: `${repo.owner}/${repo.name}` };
   }
@@ -797,7 +825,7 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
           .safeParse(rawResult);
         if (created.success) {
           for (const taskId of created.data.taskIds) {
-            await watchTaskAsOrchestrator(taskId);
+            await watchTaskAsAve(taskId);
           }
         }
 
@@ -867,8 +895,8 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             id: target.targetId,
             message,
             model,
-            masterSessionId,
-            // Any MCP send — master sandbox or user OAuth connector — stamps the
+            aveThreadId,
+            // Any MCP send — Manager Ave or a user OAuth connector — stamps the
             // "via MCP" chat badge so it is not mistaken for a composer-typed turn.
             sentViaOrchestrator: true,
           },
@@ -1505,16 +1533,6 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
           ),
       },
       handler: async ({ name, repoName, app }) => {
-        // The master's own skill is not repo-scoped and is never installed on a
-        // repo — the launch path ships its stub, so serve it off the token claim.
-        if (name === "eva-orchestrator" && isOrchestrator) {
-          return {
-            content: [
-              { type: "text" as const, text: buildEvaOrchestratorContent() },
-            ],
-          };
-        }
-
         const { userId } = await getContext();
 
         let repoId = scopedRepoId;
@@ -1552,23 +1570,42 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   // ─────────────────────────────────────────────────────────────────────────────
   // Fleet tools — every MCP caller (OAuth connector included). Authz is the
   // same hasRepoAccess checks the backing actions already run as the user.
-  // send_agent_message stays behind the orchestrator gate: it is the master
-  // speaking, and needs the master sandbox token.
+  // send_agent_message stays behind the Ave gate: it is Manager Ave speaking,
+  // and only Ave's own server-side run carries `aveThreadId`.
   // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(...fleetTools(credentials, ctx));
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Entity tools — list_entities, start_sandbox, stop_sandbox and
-  // cancel_queued_message. Same audience and same authz as send_chat_message:
+  // Entity tools — list_entities, start_sandbox, stop_sandbox,
+  // get_preview_url and cancel_queued_message. Same audience and same authz as send_chat_message:
   // every caller gets them, and each one resolves its target through the
   // shared repo-access check above.
   // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(...entityTools(credentials, ctx));
 
-  if (isOrchestrator) {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Chat control tools — the caller's own chat (context, dev server, env var
+  // names, Preview), chat content (titles, plans, comments, artifact/doc
+  // deletes), project builds and task lifecycle, automations, custom tabs,
+  // queued messages, sandbox services and in-app notifications. Each calls
+  // the UI's own public function as the user (mcpCallAsUser) or resolves its
+  // target through the shared access check; deletes require `confirmed`.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  tools.push(...chatSelfTools(credentials, ctx));
+  tools.push(...chatContentTools(credentials, ctx));
+  tools.push(...workTools(credentials, ctx));
+  tools.push(...automationTools(credentials, ctx));
+  tools.push(...tabQueueTools(credentials, ctx));
+  tools.push(...agentInteractionTools(credentials, ctx));
+
+  if (isAve) {
     tools.push(...orchestratorTools(credentials, ctx));
+    // Answering a child's question speaks for the user, so only Manager Ave
+    // (which already relays for them) gets it.
+    tools.push(...orchestratorQuestionTools(credentials, ctx));
   }
 
   return tools;

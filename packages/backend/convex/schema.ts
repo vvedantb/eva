@@ -8,6 +8,8 @@ import {
   teamMemberRoleValidator,
   webhookEventStatusValidator,
   messageFields,
+  aveThreadFields,
+  aveMessageFields,
   automationFields,
   automationRunFields,
   agentTaskFields,
@@ -54,6 +56,7 @@ import {
   sessionDaemonStateFields,
   turnFields,
   chatUiPanelFields,
+  previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
@@ -161,7 +164,17 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
+  messages: defineTable(messageFields)
+    .index("by_parent", ["parentId"])
+    // Scope verdicts are published to whichever PR contains the turn's commit,
+    // not to the session that produced it: a PR that re-lands those commits on
+    // a fresh branch (an extract) must still carry the warning.
+    .index("by_after_sha", ["afterSha"]),
+  aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
+    "userId",
+    "archivedAt",
+  ]),
+  aveMessages: defineTable(aveMessageFields).index("by_thread", ["threadId"]),
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
     .index("by_parent_and_order", ["parentId", "order"]),
@@ -197,6 +210,12 @@ const schema = defineSchema({
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
+  // tab. Short-lived: cleared when the entity's sandbox stops.
+  previewToolCalls: defineTable(previewToolCallFields).index(
+    "by_parent_status",
+    ["parentId", "status"],
+  ),
   proposedPlans: defineTable(proposedPlanFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_capture_key", ["sessionId", "captureKey"])
@@ -520,6 +539,33 @@ const schema = defineSchema({
     "userId",
     "repoId",
   ]),
+
+  // Live sharing for the `/slides` deck — "follow the presenter" (Teams-style).
+  // The presenter is the sole driver: only the browser holding the secret
+  // `hostKey` (returned once from `createSession`) may move the deck.
+  presentationSessions: defineTable({
+    code: v.string(),
+    hostKey: v.string(),
+    slide: v.number(),
+    status: v.union(v.literal("live"), v.literal("ended")),
+    lastActiveAt: v.number(),
+  }).index("by_code", ["code"]),
+
+  // Per-participant poll votes within a presentation session.
+  presentationVotes: defineTable({
+    code: v.string(),
+    pollId: v.string(),
+    participantKey: v.string(),
+    optionId: v.string(),
+  })
+    .index("by_code_poll", ["code", "pollId"])
+    .index("by_code_poll_participant", ["code", "pollId", "participantKey"])
+    .index("by_code_poll_participant_option", [
+      "code",
+      "pollId",
+      "participantKey",
+      "optionId",
+    ]),
 });
 
 export default schema;

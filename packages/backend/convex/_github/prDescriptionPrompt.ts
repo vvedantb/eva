@@ -1,3 +1,5 @@
+import { stripBlock, upsertBlockAboveFooter } from "./prBodyBlocks";
+
 /** Markers that delimit the generated block inside a PR body. Everything
  * outside them (Task / Change Requests / Summary sections and the Eva footer)
  * is owned by `prBody.ts`; everything inside is rewritten on every push. */
@@ -8,14 +10,20 @@ export const PR_DESCRIPTION_END = "<!-- /eva-pr-description -->";
  * prose, which is exactly what the visual format exists to avoid. */
 const MAX_DESCRIPTION_CHARS = 6_000;
 
-const FOOTER_SEPARATOR = "\n---\n";
-
 /**
  * Builds the prompt for the reviewer-facing PR description. The output is
  * deliberately "show-me" shaped: one short paragraph, one code-shape visual
  * that fits the change (file tree, call-tree diff, signature block or
- * component-tree diff), and at most three review notes. The point is a body a
+ * component-tree diff), and a short list of review notes. The point is a body a
  * reviewer can scan in ten seconds before opening the diff.
+ *
+ * The review notes lead on visible changes the Intent did not ask for. This is
+ * the only such check a quick task **run** gets: a run stamps no turn diff
+ * (`appendTurnCheckpoint` bails on `RUN_ID`), so the scope check never judges
+ * it and no chip is ever drawn — and asking the run's own summary to confess
+ * would fight its 3-5 bullet cap and rely on the same agent noticing what it
+ * did. This reader has the whole diff and the task description side by side,
+ * which is how an unrequested trophy icon reached production unnoticed.
  */
 export function buildPrDescriptionPrompt(params: {
   prTitle: string;
@@ -55,7 +63,10 @@ ONE fenced code block that shows the shape of the change. Pick the smallest form
 Only use file paths, identifiers, routes and props that appear in the diff. Never invent names. Keep it under 25 lines.
 
 ### Review notes
-Zero to three bullets: risks, edge cases, behaviour that is easy to miss, or where to look first. Omit the section entirely if there is nothing worth flagging.
+Bullets a reviewer needs, in this order:
+1. **Visible changes the Intent did not ask for**, when the diff has any: a swapped or resized icon, a changed colour or shade, reworded copy or labels, a control that moved or appeared. Name what changed and where — "Awarded banner icon: medal → trophy, not part of the stated task." One bullet each, up to three. Lead with these: they are what reaches production unreviewed, because a one-line icon swap disappears inside a larger diff.
+2. Then up to three more: risks, edge cases, behaviour that is easy to miss, or where to look first.
+Judge (1) against the Intent above; when no Intent is given, skip (1) rather than guessing at what was asked for. Omit the whole section only when both are empty.
 
 ## Rules
 - Plain, direct sentences. No filler, no praise, no "this PR".
@@ -84,12 +95,7 @@ export function cleanPrDescription(raw: string): string {
 /** Returns the body with the generated block removed, so the static sections
  * can be handed back to the model as intent without the previous answer. */
 export function stripPrDescription(body: string): string {
-  const start = body.indexOf(PR_DESCRIPTION_START);
-  const end = body.indexOf(PR_DESCRIPTION_END);
-  if (start === -1 || end === -1 || end < start) return body;
-  const before = body.slice(0, start).trimEnd();
-  const after = body.slice(end + PR_DESCRIPTION_END.length).trimStart();
-  return after.length > 0 ? `${before}\n\n${after}` : before;
+  return stripBlock(body, PR_DESCRIPTION_START, PR_DESCRIPTION_END);
 }
 
 /**
@@ -98,26 +104,10 @@ export function stripPrDescription(body: string): string {
  * the static sections stay on top and the footer stays last.
  */
 export function insertPrDescription(body: string, description: string): string {
-  const block = `${PR_DESCRIPTION_START}\n${description.trim()}\n${PR_DESCRIPTION_END}`;
-  const stripped = stripPrDescription(body);
-  const footerAt = findFooterStart(stripped);
-  if (footerAt === -1) {
-    return stripped.trim().length > 0
-      ? `${stripped.trimEnd()}\n\n${block}`
-      : block;
-  }
-  const head = stripped.slice(0, footerAt).trimEnd();
-  const footer = stripped.slice(footerAt);
-  return head.length > 0
-    ? `${head}\n\n${block}\n${footer}`
-    : `${block}\n${footer}`;
-}
-
-/** Index of the `---` line that opens the Eva footer, or -1. The rule is the
- * last line that is exactly `---`, which may be the very first line when the
- * body has no static sections. */
-function findFooterStart(body: string): number {
-  const at = body.lastIndexOf(FOOTER_SEPARATOR);
-  if (at !== -1) return at + 1;
-  return body.startsWith(FOOTER_SEPARATOR.slice(1)) ? 0 : -1;
+  return upsertBlockAboveFooter(
+    body,
+    PR_DESCRIPTION_START,
+    PR_DESCRIPTION_END,
+    description,
+  );
 }

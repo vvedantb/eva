@@ -15,7 +15,7 @@ import {
   IconExternalLink,
   IconPencil,
 } from "@tabler/icons-react";
-import { Streamdown } from "streamdown";
+import { Markdown } from "@eva/ui/markdown";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { usePrEdit } from "../usePrEdit";
 import { MARKDOWN_CLASS, type PrOverview } from "./prOverviewMeta";
@@ -143,7 +143,7 @@ export function PrDescriptionSection({
 
         <CollapsibleContent>
           {hasBody ? (
-            <Streamdown className={MARKDOWN_CLASS}>{body}</Streamdown>
+            <Markdown className={MARKDOWN_CLASS}>{body}</Markdown>
           ) : (
             <p className="text-sm text-muted-foreground">
               No description yet. Add one to say what changed and why.

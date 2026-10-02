@@ -106,7 +106,9 @@ bashDescribe("the generated command kills a real process tree", () => {
     const entityId = randomUUID();
     const paths = entityDaemonPaths("testEntityId", entityId);
     const dir = mkdtempSync(join(tmpdir(), "eva-kill-tree-"));
-    const script = join(dir, "tree.sh");
+    // Named for the real runner: `reap` only signals a pid whose argv still
+    // names run-design.mjs, so a generic script would be (correctly) spared.
+    const script = join(dir, "run-design.mjs");
     const parentPidFile = join(dir, "parent.pid");
     const childPidFile = join(dir, "child.pid");
     writeFileSync(
@@ -154,6 +156,53 @@ bashDescribe("the generated command kills a real process tree", () => {
           } catch {
             /* already gone */
           }
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(paths.pid, { force: true });
+    }
+  }, 20_000);
+
+  /**
+   * The counterpart: a pidfile that outlived a stop/resume names a pid the
+   * reboot handed to something else. Signalling it kills an innocent tree —
+   * on a resumed sandbox, most likely vite or the Convex backend.
+   */
+  test("a pidfile whose pid was recycled by an unrelated process is spared", async () => {
+    const entityId = randomUUID();
+    const paths = entityDaemonPaths("testEntityId", entityId);
+    const dir = mkdtempSync(join(tmpdir(), "eva-kill-bystander-"));
+    const script = join(dir, "bystander.sh");
+    const pidFile = join(dir, "bystander.pid");
+    writeFileSync(script, `echo $$ > ${pidFile}\nsleep 300\n`);
+
+    spawn("setsid", ["bash", script], {
+      detached: true,
+      stdio: "ignore",
+    }).unref();
+
+    let bystanderPid = 0;
+    try {
+      bystanderPid = await readPid(pidFile);
+      expect(bystanderPid).toBeGreaterThan(0);
+
+      writeFileSync(paths.pid, String(bystanderPid));
+      execFileSync(
+        "bash",
+        ["-c", buildKillEntityDaemonCmd("testEntityId", entityId)],
+        { stdio: "ignore", timeout: 10_000 },
+      );
+
+      expect(
+        pidAlive(bystanderPid),
+        "reap signalled a process that is not a callback runner",
+      ).toBe(true);
+    } finally {
+      if (bystanderPid > 0) {
+        try {
+          process.kill(bystanderPid, "SIGKILL");
+        } catch {
+          /* already gone */
         }
       }
       rmSync(dir, { recursive: true, force: true });

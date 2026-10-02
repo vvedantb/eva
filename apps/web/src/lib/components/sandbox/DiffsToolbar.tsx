@@ -11,12 +11,12 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconChevronsDown,
   IconChevronsUp,
-  IconRefresh,
+  IconSpacingHorizontal,
   IconTextWrap,
 } from "@tabler/icons-react";
 import { isDiffView, type DiffView } from "@/lib/search-params";
@@ -33,6 +33,8 @@ interface DiffsToolbarProps {
   onDiffViewChange: (view: DiffView) => void;
   wrapLines: boolean;
   onWrapLinesChange: (wrap: boolean) => void;
+  ignoreWhitespace: boolean;
+  onIgnoreWhitespaceChange: (ignore: boolean) => void;
   allExpanded: boolean;
   onExpandAll: () => void;
   onCollapseAll: () => void;
@@ -60,6 +62,8 @@ export function DiffsToolbar({
   onDiffViewChange,
   wrapLines,
   onWrapLinesChange,
+  ignoreWhitespace,
+  onIgnoreWhitespaceChange,
   allExpanded,
   onExpandAll,
   onCollapseAll,
@@ -130,6 +134,30 @@ export function DiffsToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              variant={ignoreWhitespace ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-pressed={ignoreWhitespace}
+              aria-label={
+                ignoreWhitespace
+                  ? "Show whitespace changes"
+                  : "Hide whitespace changes"
+              }
+              data-testid="ignore-whitespace-toggle"
+              onClick={() => onIgnoreWhitespaceChange(!ignoreWhitespace)}
+            >
+              <IconSpacingHorizontal className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {ignoreWhitespace
+              ? "Show whitespace changes"
+              : "Hide whitespace changes"}
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
               variant="ghost"
               size="icon-sm"
               aria-label={
@@ -158,9 +186,7 @@ export function DiffsToolbar({
               disabled={isLoading}
               aria-label="Refresh diffs"
             >
-              <IconRefresh
-                className={cn("size-4", isLoading && "animate-spin")}
-              />
+              <RefreshSpinIcon busy={isLoading} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Refresh</TooltipContent>

@@ -59,20 +59,40 @@ function currentBranch(): string {
   return result.status === 0 ? (result.stdout || "").trim() : "";
 }
 
+/** Surfaces whose completion path both accepts and persists the shas. */
+const CHECKPOINTED_ENTITY_ID_FIELDS = new Set([
+  "sessionId",
+  "taskId",
+  "projectId",
+]);
+
 /**
  * Stamps `beforeSha`/`afterSha` onto a completion payload. Must run AFTER
  * `persistTurnWork()` so `afterSha` includes the turn-end auto-commit. Skipped
  * for task runs and non-eva branches, mirroring persistTurnWork: those turns
  * have no session-owned commits to diff or restore.
  *
- * Sessions only: `sessionWorkflow:handleCompletion` is the one completion
- * mutation that accepts the shas (messageFields.beforeSha). Task and project
- * chat turns also run on `eva/` branches with no RUN_ID, so without this gate
- * their completion payload carried an `afterSha` the Convex args validator
- * rejected and the turn never finished (prod, 2026-09-02).
+ * Chat surfaces only: session, quick-task and project chat persist the shas
+ * onto the assistant message. Every other entity kind (`docId`, `reportId`,
+ * `automationRunId`) is excluded — untested here, and some never run on an
+ * `eva/` branch at all.
+ *
+ * The allow-list is deliberate. It began as sessions-only after task and
+ * project chat turns — which also run on `eva/` branches with no RUN_ID —
+ * sent shas that the Convex args validator rejected outright, killing the
+ * whole completion call so the turn hung on "Working…" (prod, 2026-09-02).
+ * Every completion receiver now spreads `turnCheckpointArgs`, so an unlisted
+ * surface would be accepted rather than rejected; it would simply drop the
+ * shas. The list still stands so a surface only stamps once its persistence
+ * path is in place.
  */
 export function appendTurnCheckpoint(args: JsonObject): void {
-  if (ENTITY_ID_FIELD !== "sessionId") return;
+  if (
+    ENTITY_ID_FIELD === undefined ||
+    !CHECKPOINTED_ENTITY_ID_FIELDS.has(ENTITY_ID_FIELD)
+  ) {
+    return;
+  }
   if (RUN_ID || turnStartSha === "") return;
   if (!currentBranch().startsWith("eva/")) return;
   const afterSha = readGitHeadSha();

@@ -12,14 +12,10 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CircleSpinner,
   cn,
 } from "@eva/ui";
-import {
-  IconGitBranch,
-  IconLoader2,
-  IconCheck,
-  IconChevronDown,
-} from "@tabler/icons-react";
+import { IconGitBranch, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useBranches } from "@/lib/hooks/useBranches";
 
@@ -50,11 +46,15 @@ export function BranchSelect({
   );
   const listRef = useRef<HTMLDivElement>(null);
 
+  /* eslint-disable no-effect/no-event-handler --
+     Resets the popover list's DOM scroll position; the list only exists once
+     Radix has mounted it, so this cannot run in the trigger's click handler. */
   useEffect(() => {
     if (open && listRef.current) {
       listRef.current.scrollTop = 0;
     }
   }, [open]);
+  /* eslint-enable no-effect/no-event-handler */
 
   useEffect(() => {
     if (!isLoading && listRef.current) {
@@ -121,7 +121,7 @@ export function BranchSelect({
           >
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                <IconLoader2 size={14} className="animate-spin" />
+                <CircleSpinner size="sm" className="size-3.5" />
                 <span>Loading branches...</span>
               </div>
             ) : (

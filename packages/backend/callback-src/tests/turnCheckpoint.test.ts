@@ -115,10 +115,29 @@ describe("appendTurnCheckpoint", () => {
     expect(args).toEqual({});
   });
 
-  test("skips task and project chat turns, whose completion mutations reject the shas", () => {
-    // Task chat runs on eva/task-* with no RUN_ID, so branch and run checks
-    // alone let the shas through to agentTaskChatWorkflow:handleCompletion.
+  test("stamps task and project chat turns", () => {
     for (const entityIdField of ["taskId", "projectId"]) {
+      workspace.entityIdField = entityIdField;
+      const before = commit("start " + entityIdField);
+      beginTurnCheckpoint();
+      const after = commit("turn work " + entityIdField);
+      const args: JsonObject = { success: true };
+      appendTurnCheckpoint(args);
+      expect(args).toEqual({
+        success: true,
+        beforeSha: before,
+        afterSha: after,
+        beforeShas: [{ path: workspace.dir, sha: before }],
+        afterShas: [{ path: workspace.dir, sha: after }],
+      });
+      resetTurnCheckpoint();
+    }
+  });
+
+  test("skips entity kinds with no persistence path", () => {
+    // Nothing downstream of these reads the shas, so they are left off the
+    // payload rather than written and ignored.
+    for (const entityIdField of ["docId", "reportId", "automationRunId"]) {
       workspace.entityIdField = entityIdField;
       commit("start " + entityIdField);
       beginTurnCheckpoint();

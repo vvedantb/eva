@@ -6,7 +6,7 @@ import { useNavigate, useLocation } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import { decodeRepoParam, toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { FunctionReturnType } from "convex/server";
-import { Skeleton } from "@eva/ui";
+import { CenteredSpinner } from "@eva/ui";
 import { RepoNotFound } from "@/lib/components/RepoNotFound";
 
 type Repo = NonNullable<
@@ -97,6 +97,9 @@ export function RepoProvider({
     appName,
   });
 
+  /* eslint-disable no-effect/no-event-handler --
+     Canonicalises the URL the user landed on (bookmark, shared link, back
+     button) once the repo row arrives from Convex — no click involved. */
   // Bare /owner/repo URLs for monorepos without a visible root row resolve to an
   // app repo — canonicalize to the public slash form (router rewrite maps it
   // to the internal `--` segment for matching).
@@ -119,6 +122,7 @@ export function RepoProvider({
       replace: true,
     });
   }, [repo, appName, owner, name, location.pathname, navigate, passive]);
+  /* eslint-enable no-effect/no-event-handler */
 
   /**
    * Public path prefix for the active repo. Monorepo apps use slash form
@@ -131,11 +135,7 @@ export function RepoProvider({
     ? `/${owner}/${name}/${resolvedAppName}`
     : `/${owner}/${name}`;
 
-  const loadState = resolveLoadState(
-    repo,
-    { basePath, owner, name },
-    passive,
-  );
+  const loadState = resolveLoadState(repo, { basePath, owner, name }, passive);
 
   return (
     <RepoLoadStateContext.Provider value={loadState}>
@@ -161,14 +161,7 @@ export function RepoGate({ children }: { children: React.ReactNode }) {
   // does not re-centre as the real content lands.
   if (loadState.status === "pending") {
     return (
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-3 p-3"
-        aria-busy="true"
-        aria-label="Loading codebase"
-      >
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="min-h-0 flex-1" />
-      </div>
+      <CenteredSpinner label="Loading codebase" />
     );
   }
 

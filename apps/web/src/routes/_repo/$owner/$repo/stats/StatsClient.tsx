@@ -2,7 +2,7 @@ import { useQueryState } from "nuqs";
 import { timeRangeParser } from "@/lib/search-params";
 import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { Skeleton, motionBase } from "@eva/ui";
+import { CenteredSpinner, motionBase } from "@eva/ui";
 import { m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -90,20 +90,7 @@ export function StatsClient() {
       }
     >
       {isLoading ? (
-        <div
-          className="min-h-144 space-y-8"
-          aria-busy="true"
-          aria-label="Loading stats"
-        >
-          <Skeleton className="h-40 border border-border" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 border border-border" />
-            ))}
-          </div>
-          <Skeleton className="h-28 border border-border" />
-          <Skeleton className="h-56 border border-border" />
-        </div>
+        <CenteredSpinner label="Loading stats" className="min-h-144" />
       ) : (
         <div className="space-y-8">
           <ActivityHeatmap data={heatmap} />

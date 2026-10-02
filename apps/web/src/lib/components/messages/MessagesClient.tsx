@@ -7,7 +7,13 @@ import { useQueryState } from "nuqs";
 import { PageHeader } from "@/lib/components/PageHeader";
 import { usePageTitleSync } from "@/lib/contexts/PageTitleContext";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
-import { Badge, Skeleton, Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import {
+  Badge,
+  CenteredSpinner,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@eva/ui";
 import { IconMessage } from "@tabler/icons-react";
 import {
   isMessagesScope,
@@ -108,16 +114,7 @@ export function MessagesClient() {
             />
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
               {threads === undefined ? (
-                <div
-                  className="space-y-2 p-4"
-                  aria-busy="true"
-                  aria-label="Loading messages"
-                >
-                  <Skeleton className="h-4 w-24" />
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-14" />
-                  ))}
-                </div>
+                <CenteredSpinner label="Loading messages" />
               ) : threads.length === 0 ? (
                 <div className="flex min-h-0 flex-1 items-center justify-center">
                   <EmptyState

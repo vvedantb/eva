@@ -7,6 +7,7 @@ import { api } from "@eva/backend";
 import { CrossfadeIconSlot, Spinner, cn, toast } from "@eva/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { PrRemedy } from "./prMergeState";
 import type { StatusTone } from "./prOverviewMeta";
 
@@ -53,7 +54,9 @@ export function PrRemedyButton({
         message: remedy.prompt,
         baseBranch: headRef,
       });
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Couldn't start a session",

@@ -1,4 +1,4 @@
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { LoadingState, Tabs, TabsList, TabsTrigger } from "@eva/ui";
 import { SANDBOX_STATUS_STYLES } from "./sandboxStatusStyles";
 
 /**
@@ -23,6 +23,7 @@ export function SandboxSurfaceTabs({
   isSandboxActive,
   isSandboxStarting,
   isSandboxStopping,
+  isAgentActive = false,
   onSurfaceChange,
 }: {
   /** Label for the non-sandbox half, e.g. "Task" or "Project". */
@@ -31,6 +32,8 @@ export function SandboxSurfaceTabs({
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
+  /** A turn is in flight — the pixel grid stands in for the status dot. */
+  isAgentActive?: boolean;
   onSurfaceChange: (surface: SandboxSurface) => void;
 }) {
   // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
@@ -58,7 +61,18 @@ export function SandboxSurfaceTabs({
         <TabsTrigger value="main">{mainLabel}</TabsTrigger>
         <TabsTrigger value="sandbox" className="gap-1.5">
           Sandbox
-          {status ? (
+          {/* Same swap the session rows make: a turn in flight already implies
+              an active sandbox, so the grid stands in for the dot. */}
+          {isAgentActive ? (
+            <span className="flex shrink-0 items-center" title="Working">
+              <LoadingState
+                label="Working"
+                variant="Drive"
+                size="sm"
+                iconOnly
+              />
+            </span>
+          ) : status ? (
             <span
               className={`size-2 shrink-0 rounded-full ${SANDBOX_STATUS_STYLES[status].dot}`}
               title={SANDBOX_STATUS_STYLES[status].label}

@@ -30,9 +30,6 @@ export const mintSandboxSessionTokens = internalAction({
     entityKind: v.optional(
       v.union(v.literal("session"), v.literal("task"), v.literal("project")),
     ),
-    // Marks the launch as the user's persistent orchestrator session, which
-    // unlocks the extra orchestrator-only MCP tools.
-    isOrchestrator: v.optional(v.boolean()),
   },
   returns: v.object({
     sandboxToken: v.string(),
@@ -88,7 +85,6 @@ export const mintSandboxSessionTokens = internalAction({
             ...(args.entityKind !== undefined
               ? { entityKind: args.entityKind }
               : {}),
-            ...(args.isOrchestrator ? { orchestrator: true } : {}),
           })
             .setProtectedHeader({ alg: "HS256" })
             .setExpirationTime(`${expiresIn}s`)

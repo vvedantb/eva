@@ -5,6 +5,7 @@ import { listAutomationsForRepo } from "../_automations/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { prStateValidator } from "../validators";
+import { latestTaskPrUrl } from "../_agentTasks/prUrl";
 import {
   openSessionIdsForRepo,
   projectIsExecuting,
@@ -290,6 +291,12 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: v.string(),
       repoName: v.string(),
       repoRootDirectory: v.optional(v.string()),
+      /** Preview VM state, `"closed"` when the entity has never started one. */
+      sandboxStatus: v.string(),
+      /** The VM itself, absent until the entity has had one. */
+      sandboxId: v.optional(v.string()),
+      /** Port the app dev server listens on, entity setting before repo default. */
+      devPort: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -322,6 +329,16 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       repoRootDirectory: repo.rootDirectory,
+      // A session's own status IS its sandbox's; the other two park the
+      // reviewer-facing VM state in their own field (see list_entities).
+      sandboxStatus:
+        hit.kind === "session"
+          ? hit.doc.status
+          : hit.kind === "task"
+            ? (hit.doc.reviewTaskSandboxStatus ?? "closed")
+            : (hit.doc.reviewProjectSandboxStatus ?? "closed"),
+      sandboxId: doc.sandboxId,
+      devPort: doc.devPort ?? repo.devPort,
     };
   },
 });
@@ -345,9 +362,6 @@ const MAX_ENTITY_PAGE = 50;
  * six repos still hears about all six.
  */
 const ENTITY_SCAN_BUDGET = 300;
-
-/** Runs looked at per task when finding the PR that task opened. */
-const TASK_PR_RUN_LOOKBACK = 3;
 
 const listedEntityValidator = v.object({
   kind: chatTargetKindValidator,
@@ -373,12 +387,7 @@ const listedEntityValidator = v.object({
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
 
-const SESSION_STATUSES = [
-  "active",
-  "starting",
-  "stopping",
-  "closed",
-] as const;
+const SESSION_STATUSES = ["active", "starting", "stopping", "closed"] as const;
 
 const TASK_STATUSES = [
   "draft",
@@ -405,15 +414,21 @@ const PROJECT_PHASES = [
  * per-status index can be used without an assertion. A status that belongs to
  * another kind simply matches nothing there, which is the honest answer.
  */
-function asSessionStatus(status: string): (typeof SESSION_STATUSES)[number] | undefined {
+function asSessionStatus(
+  status: string,
+): (typeof SESSION_STATUSES)[number] | undefined {
   return SESSION_STATUSES.find((candidate) => candidate === status);
 }
 
-function asTaskStatus(status: string): (typeof TASK_STATUSES)[number] | undefined {
+function asTaskStatus(
+  status: string,
+): (typeof TASK_STATUSES)[number] | undefined {
   return TASK_STATUSES.find((candidate) => candidate === status);
 }
 
-function asProjectPhase(status: string): (typeof PROJECT_PHASES)[number] | undefined {
+function asProjectPhase(
+  status: string,
+): (typeof PROJECT_PHASES)[number] | undefined {
   return PROJECT_PHASES.find((candidate) => candidate === status);
 }
 
@@ -422,7 +437,11 @@ function asProjectPhase(status: string): (typeof PROJECT_PHASES)[number] | undef
  * repo. Returns at most `limit`, and never less than one, so every repo the
  * caller can reach contributes something.
  */
-function rowsPerScan(limit: number, repoCount: number, kindCount: number): number {
+function rowsPerScan(
+  limit: number,
+  repoCount: number,
+  kindCount: number,
+): number {
   const scans = Math.max(repoCount * kindCount, 1);
   return Math.max(1, Math.min(limit, Math.floor(ENTITY_SCAN_BUDGET / scans)));
 }
@@ -512,19 +531,6 @@ async function scanProjects(
     .take(take);
 }
 
-/** The PR a quick task opened. It lives on the run, never on the task row. */
-async function latestTaskPrUrl(
-  ctx: QueryCtx,
-  taskId: Id<"agentTasks">,
-): Promise<string | undefined> {
-  const runs = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .order("desc")
-    .take(TASK_PR_RUN_LOOKBACK);
-  return runs.find((run) => run.prUrl)?.prUrl;
-}
-
 type RepoRow = Pick<
   Doc<"githubRepos">,
   "_id" | "owner" | "name" | "rootDirectory"
@@ -573,7 +579,10 @@ export const listEntitiesForUser = internalQuery({
     const userId = ctx.db.normalizeId("users", args.userId);
     if (!userId) return { entities: [], truncated: false };
 
-    const limit = Math.min(Math.max(Math.trunc(args.limit), 1), MAX_ENTITY_PAGE);
+    const limit = Math.min(
+      Math.max(Math.trunc(args.limit), 1),
+      MAX_ENTITY_PAGE,
+    );
     const kinds = kindsToSearch(args.kind);
     const repoIds = args.repoIds
       .map((rawRepoId) => ctx.db.normalizeId("githubRepos", rawRepoId))
@@ -902,26 +911,6 @@ export const getDocument = internalQuery({
     }
 
     return null;
-  },
-});
-
-/**
- * The user's live Manager Ave session, if they have one. User-MCP watch_agent
- * uses this so a watch can still wake Ave without the master sandbox token.
- */
-export const getLiveOrchestratorSessionIdForUser = internalQuery({
-  args: { userId: v.string() },
-  returns: v.union(v.id("sessions"), v.null()),
-  handler: async (ctx, { userId }) => {
-    const uid = ctx.db.normalizeId("users", userId);
-    if (!uid) return null;
-    const user = await ctx.db.get(uid);
-    if (!user?.orchestratorSessionId) return null;
-    const session = entityVisible(await ctx.db.get(user.orchestratorSessionId));
-    if (!session || session.archived === true) return null;
-    if (session.isOrchestrator !== true) return null;
-    if (session.userId !== uid) return null;
-    return session._id;
   },
 });
 

@@ -6,6 +6,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionModel } from "@/lib/hooks/useSessionModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
   buildPlanImplementationPrompt,
   buildPlanImplementationThreadTitle,
@@ -85,7 +86,9 @@ export function useSessionPlanImplementation({
           implementationSessionId: nextSessionId,
         });
       }
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Couldn't start new session",

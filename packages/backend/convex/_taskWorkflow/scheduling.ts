@@ -9,6 +9,7 @@ import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import { normalizeAIModel } from "../validators";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
+import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -221,6 +222,11 @@ export const clearActiveWorkflow = internalMutation({
 
     if (!activeRun) {
       await ctx.db.patch(args.taskId, { activeWorkflowId: undefined });
+      // The run is the only thing the task chat queue waits on while a task is
+      // running, and nothing else drains it at this point — a follow-up typed
+      // during the run would sit there forever. The drain re-checks the task
+      // itself, so a chat turn already in flight keeps the queue where it is.
+      await startNextQueuedTaskChatMessage(ctx, args.taskId);
     }
 
     return null;

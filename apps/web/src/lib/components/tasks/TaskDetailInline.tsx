@@ -6,10 +6,10 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, cn, motionFast } from "@eva/ui";
+import { Badge, CircleSpinner, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
-import { IconLoader2, IconClock } from "@tabler/icons-react";
+import { IconClock } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { useTaskDetail } from "./useTaskDetail";
 import { TaskHeader } from "./_components/TaskHeader";
@@ -28,6 +28,7 @@ import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
+import { isTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
   SandboxWorkspace,
@@ -35,6 +36,9 @@ import {
 } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -97,7 +101,6 @@ export function TaskDetailInline({
     latestPrError,
     latestDeployment,
     baseBranch,
-    setBaseBranch,
     executionError,
     showStopConfirm,
     setShowStopConfirm,
@@ -190,6 +193,9 @@ export function TaskDetailInline({
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const agentBrowsingAt = task?.agentBrowsingAt;
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent --
+     The agent taking the browser happens in the sandbox and arrives as a live
+     query change, so there is no local event to switch the tab from. */
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
@@ -199,11 +205,12 @@ export function TaskDetailInline({
     // Full deps are safe: the ref guard above makes re-runs no-ops, and a
     // disable comment here makes React Compiler skip the whole file.
   }, [agentBrowsingAt, handleSandboxTabChange]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent */
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <IconLoader2 size={20} className="animate-spin text-muted-foreground" />
+        <CircleSpinner size="sm" className="size-5" />
       </div>
     );
   }
@@ -280,57 +287,63 @@ export function TaskDetailInline({
     );
 
   const sandboxContent = (
-    <SandboxWorkspace
-      ownerKind="task"
-      ownerId={taskId}
-      storageScope={`task:${taskId}`}
-      sandboxId={sandboxId}
-      isActive={isSandboxActive}
-      terminalPanes={task.terminalPanes}
-    >
-      {(panes, owner, terminalPanel) => (
-        <ResizablePanelLayout
-          storageKey="task-sandbox-panel"
-          leftDefaultSize="40%"
-          leftMinWidthPx={350}
-          rightMinWidthPx={300}
-          rightCollapsedSizePx={sandboxRailWidthPx}
-          defaultRightCollapsed={false}
-          expandRightSignal={expandRightSignal}
-          mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          leftPanel={() => (
-            <TaskSandboxChatPanel
-              taskId={taskId}
-              isSandboxActive={isSandboxActive}
-              isSandboxToggling={isSandboxStarting || isSandboxStopping}
-              onOpenFile={openFile}
-              onViewDiff={openDiffs}
-              onOpenAgentsTab={() => {
-                handleSandboxTabChange("agents");
-                setExpandRightSignal((n) => n + 1);
-              }}
-              onSandboxToggle={
-                canStartSandbox || isSandboxActive
-                  ? (action) => {
-                      if (action === "start") void handleStartSandbox();
-                      else void handleStopSandbox();
+    <PendingPreviewSnapshotsProvider>
+      <PendingWebMcpProvider>
+        <OpenSandboxFileProvider onOpenFile={openFile}>
+          <SandboxWorkspace
+            ownerKind="task"
+            ownerId={taskId}
+            storageScope={`task:${taskId}`}
+            sandboxId={sandboxId}
+            isActive={isSandboxActive}
+            terminalPanes={task.terminalPanes}
+          >
+            {(panes, owner, terminalPanel) => (
+              <ResizablePanelLayout
+                storageKey="task-sandbox-panel"
+                leftDefaultSize="40%"
+                leftMinWidthPx={350}
+                rightMinWidthPx={300}
+                rightCollapsedSizePx={sandboxRailWidthPx}
+                defaultRightCollapsed={false}
+                expandRightSignal={expandRightSignal}
+                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                leftPanel={() => (
+                  <TaskSandboxChatPanel
+                    taskId={taskId}
+                    isSandboxActive={isSandboxActive}
+                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    onOpenFile={openFile}
+                    onViewDiff={openDiffs}
+                    onOpenAgentsTab={() => {
+                      handleSandboxTabChange("agents");
+                      setExpandRightSignal((n) => n + 1);
+                    }}
+                    onSandboxToggle={
+                      canStartSandbox || isSandboxActive
+                        ? (action) => {
+                            if (action === "start") void handleStartSandbox();
+                            else void handleStopSandbox();
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-            />
-          )}
-          rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-            sandboxRightPanel(
-              panes,
-              owner,
-              terminalPanel,
-              rightPanelCollapsed,
-              onToggleRightPanel,
-            )
-          }
-        />
-      )}
-    </SandboxWorkspace>
+                  />
+                )}
+                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+                  sandboxRightPanel(
+                    panes,
+                    owner,
+                    terminalPanel,
+                    rightPanelCollapsed,
+                    onToggleRightPanel,
+                  )
+                }
+              />
+            )}
+          </SandboxWorkspace>
+        </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
+    </PendingPreviewSnapshotsProvider>
   );
 
   const detailContent = (
@@ -451,7 +464,6 @@ export function TaskDetailInline({
                 users={users}
                 projects={projects}
                 baseBranch={baseBranch}
-                setBaseBranch={setBaseBranch}
                 latestDeployment={latestDeployment}
                 hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}
@@ -476,6 +488,7 @@ export function TaskDetailInline({
         task={task}
         status={status}
         hasActiveRun={hasActiveRun}
+        hasRuns={hasRuns}
         latestPrUrl={latestPrUrl}
         latestPrError={latestPrError}
         latestDeployment={latestDeployment}
@@ -483,13 +496,14 @@ export function TaskDetailInline({
         isStarting={isStarting}
         canStartSandbox={canStartSandbox}
         isSandboxActive={isSandboxActive}
+        isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
         isRetryingStartupCommands={isRetryingStartupCommands}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
+        onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        isSandboxViewActive={isSandboxViewActive}
         onRunStartupCommands={() =>
           requestConfirm(
             altHeld,
@@ -528,6 +542,7 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
+        isAgentActive={isTaskAgentActive(task)}
         onSurfaceChange={handleSelectSurface}
       />
     ) : null;

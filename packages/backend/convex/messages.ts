@@ -13,6 +13,7 @@ import {
   messageMediaStorageIds,
   messageNeedsUrlResolution,
 } from "./_messages/media";
+import { trimActivityLogForTranscript } from "./_messages/activityLog";
 import { resolveStorageEntries } from "./_chat/storageUrls";
 
 const parentIdValidator = messageFields.parentId;
@@ -102,13 +103,48 @@ async function resolveMessageUrls(
   );
 }
 
-/** Lists all messages for a parent entity (session, doc, etc.) with resolved media URLs. */
+/**
+ * Lists all messages for a parent entity (session, doc, etc.) with resolved
+ * media URLs.
+ *
+ * Activity payloads ship without their expanded-only step detail — the single
+ * heaviest thing on this subscription, and invisible until a reader opens a
+ * disclosure. `activityLogById` serves the full payload for the one turn that
+ * gets expanded.
+ */
 export const listByParent = authQuery({
   args: { parentId: parentIdValidator },
   returns: v.array(messageValidator),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
-    return await resolveMessageUrls(ctx, args.parentId);
+    const messages = await resolveMessageUrls(ctx, args.parentId);
+    return messages.map((message) => {
+      const activityLog = trimActivityLogForTranscript(message.activityLog);
+      return activityLog === message.activityLog
+        ? message
+        : Object.assign({}, message, { activityLog });
+    });
+  },
+});
+
+/**
+ * The untrimmed activity payload for one message, fetched when a reader expands
+ * a turn whose steps `listByParent` trimmed.
+ *
+ * Takes a plain string because the chat renders optimistic rows under
+ * client-minted ids; `normalizeId` rejects those the same way it rejects a
+ * deleted row, so the caller gets `null` rather than an argument error.
+ */
+export const activityLogById = authQuery({
+  args: { messageId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    const messageId = ctx.db.normalizeId("messages", args.messageId);
+    if (!messageId) return null;
+    const message = await ctx.db.get(messageId);
+    if (!message) return null;
+    await assertMessageParentAccess(ctx.db, message.parentId, ctx.userId);
+    return message.activityLog ?? null;
   },
 });
 

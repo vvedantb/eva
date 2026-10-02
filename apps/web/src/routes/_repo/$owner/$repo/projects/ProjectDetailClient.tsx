@@ -19,8 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DialogBody,
+  CenteredSpinner,
   toast,
   motionFast,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -41,8 +43,11 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
-import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
+import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -55,14 +60,12 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
-import { ProjectDetailSkeleton } from "./_components/ProjectsSkeletons";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 import {
   IconHammer,
   IconPlayerStop,
   IconTerminal2,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -298,7 +301,7 @@ export function ProjectDetailClient({
   };
 
   if (project === undefined) {
-    return <ProjectDetailSkeleton />;
+    return <CenteredSpinner label="Loading project" />;
   }
 
   if (project === null) {
@@ -378,54 +381,60 @@ export function ProjectDetailClient({
     );
 
   const projectSandboxContent = (
-    <SandboxWorkspace
-      ownerKind="project"
-      ownerId={projectId}
-      storageScope={`project:${projectId}`}
-      sandboxId={projectSandboxId}
-      isActive={isSandboxActive}
-      terminalPanes={project.terminalPanes}
-    >
-      {(panes, owner, terminalPanel) => (
-        <ResizablePanelLayout
-          storageKey="project-sandbox-panel"
-          leftDefaultSize="40%"
-          leftMinWidthPx={350}
-          rightMinWidthPx={300}
-          rightCollapsedSizePx={sandboxRailWidthPx}
-          defaultRightCollapsed={false}
-          expandRightSignal={expandRightSignal}
-          mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          leftPanel={() => (
-            <ProjectSandboxChatPanel
-              projectId={projectId}
-              isSandboxActive={isSandboxActive}
-              isSandboxToggling={isSandboxStarting || isSandboxStopping}
-              onOpenFile={openFile}
-              onViewDiff={openDiffs}
-              onOpenAgentsTab={openAgentsTab}
-              onSandboxToggle={
-                canStartSandbox || isSandboxActive
-                  ? (action) => {
-                      if (action === "start") void handleStartSandbox();
-                      else void handleStopSandbox();
+    <PendingPreviewSnapshotsProvider>
+      <PendingWebMcpProvider>
+        <OpenSandboxFileProvider onOpenFile={openFile}>
+          <SandboxWorkspace
+            ownerKind="project"
+            ownerId={projectId}
+            storageScope={`project:${projectId}`}
+            sandboxId={projectSandboxId}
+            isActive={isSandboxActive}
+            terminalPanes={project.terminalPanes}
+          >
+            {(panes, owner, terminalPanel) => (
+              <ResizablePanelLayout
+                storageKey="project-sandbox-panel"
+                leftDefaultSize="40%"
+                leftMinWidthPx={350}
+                rightMinWidthPx={300}
+                rightCollapsedSizePx={sandboxRailWidthPx}
+                defaultRightCollapsed={false}
+                expandRightSignal={expandRightSignal}
+                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                leftPanel={() => (
+                  <ProjectSandboxChatPanel
+                    projectId={projectId}
+                    isSandboxActive={isSandboxActive}
+                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    onOpenFile={openFile}
+                    onViewDiff={openDiffs}
+                    onOpenAgentsTab={openAgentsTab}
+                    onSandboxToggle={
+                      canStartSandbox || isSandboxActive
+                        ? (action) => {
+                            if (action === "start") void handleStartSandbox();
+                            else void handleStopSandbox();
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-            />
-          )}
-          rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-            projectSandboxPanel(
-              panes,
-              owner,
-              terminalPanel,
-              rightPanelCollapsed,
-              onToggleRightPanel,
-            )
-          }
-        />
-      )}
-    </SandboxWorkspace>
+                  />
+                )}
+                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+                  projectSandboxPanel(
+                    panes,
+                    owner,
+                    terminalPanel,
+                    rightPanelCollapsed,
+                    onToggleRightPanel,
+                  )
+                }
+              />
+            )}
+          </SandboxWorkspace>
+        </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
+    </PendingPreviewSnapshotsProvider>
   );
 
   return (
@@ -478,7 +487,7 @@ export function ProjectDetailClient({
                       disabled={isResolvingConflicts}
                     >
                       {isResolvingConflicts ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconHammer size={14} />
                       )}
@@ -502,7 +511,7 @@ export function ProjectDetailClient({
                       disabled={isRetryingStartupCommands}
                     >
                       {isRetryingStartupCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconRefresh size={14} />
                       )}
@@ -516,7 +525,7 @@ export function ProjectDetailClient({
                       disabled={isRunningBackgroundCommands}
                     >
                       {isRunningBackgroundCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconServerBolt size={14} />
                       )}
@@ -550,16 +559,20 @@ export function ProjectDetailClient({
                   <CopyLinkMenuItem />
                 </DropdownMenuContent>
               </DropdownMenu>
-              {/* Inert while a chat turn is in flight — see `SleepEvaButton`.
-                  A running build keeps its own confirmed "Stop Build", so it is
-                  not gated here. Hidden on the sandbox surface, which has its
-                  own stop control in the chat header. */}
-              {isSandboxActive && !isSandboxStopping && !isSandboxSurface ? (
-                <SleepEvaButton
-                  onStop={handleStopSandbox}
-                  isStopping={isSandboxStopping}
-                  blockedMidTurn={Boolean(project?.activeChatWorkflowId)}
-                  size="sm"
+              {/* One control for both directions — see `SandboxStartStopButton`.
+                  Inert while a chat turn is in flight; a running build keeps its
+                  own confirmed "Stop Build", so it is not gated here. This is the
+                  only wake/sleep control now, the sandbox chat header carries
+                  usage alone. */}
+              {isSandboxActive || canStartSandbox ? (
+                <SandboxStartStopButton
+                  isActive={isSandboxActive}
+                  isToggling={isSandboxStarting || isSandboxStopping}
+                  onToggle={(action) => {
+                    if (action === "start") void handleStartSandbox();
+                    else void handleStopSandbox();
+                  }}
+                  isAssistantResponding={Boolean(project?.activeChatWorkflowId)}
                 />
               ) : null}
               {canBuildProject ? (
@@ -581,11 +594,7 @@ export function ProjectDetailClient({
                     disabled={isStoppingBuild}
                   >
                     {isStoppingBuild ? (
-                      <IconLoader2
-                        size={16}
-                        className="animate-spin"
-                        aria-hidden
-                      />
+                      <CircleSpinner size="sm" aria-hidden />
                     ) : (
                       <IconPlayerStop size={16} aria-hidden />
                     )}

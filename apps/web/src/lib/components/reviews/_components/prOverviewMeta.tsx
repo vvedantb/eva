@@ -2,7 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { cn } from "@eva/ui";
+import { CircleSpinner, cn } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCircleCheck,
@@ -11,7 +11,6 @@ import {
   IconGitPullRequest,
   IconGitPullRequestClosed,
   IconGitPullRequestDraft,
-  IconLoader2,
   IconMessageCircle,
   IconMinus,
   type Icon as TablerIcon,
@@ -57,9 +56,10 @@ export function ToneIcon({
 }) {
   if (tone === "pending") {
     return (
-      <IconLoader2
-        size={size}
-        className="shrink-0 animate-spin text-muted-foreground"
+      <CircleSpinner
+        size="sm"
+        style={{ width: size, height: size }}
+        className="shrink-0"
       />
     );
   }
@@ -203,8 +203,5 @@ export function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }
 
-/** Shared prose styling for GitHub-authored markdown (description, comments). */
-// `[&_pre]:overflow-x-auto`: a PR body's code fence is often wider than a phone,
-// and it used to push the whole column sideways instead of scrolling itself.
-export const MARKDOWN_CLASS =
-  "prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 max-sm:[&_pre]:overflow-x-auto";
+/** Text size for GitHub-authored markdown (description, comments). */
+export const MARKDOWN_CLASS = "text-sm";
