@@ -15,6 +15,7 @@ import {
   previewContainedLayout,
   resolveMiniPlayerLogicalSize,
 } from "./previewContain";
+import { setPreviewDocumentLoading } from "./previewDocumentLoading";
 
 /**
  * Global preview-iframe keep-alive.
@@ -402,6 +403,8 @@ function iframeRefFor(key: string): (el: HTMLIFrameElement | null) => void {
   const callback = (el: HTMLIFrameElement | null) => {
     const entry = entries.get(key);
     if (entry === undefined || entry.element === el) return;
+    // A fresh element is a fresh document: it spins until its first `load`.
+    if (el !== null) setPreviewDocumentLoading(el, true);
     entries.set(key, { ...entry, element: el });
     onElementByKey.get(key)?.(el);
     notify();
@@ -510,6 +513,9 @@ export function PreviewIframeHost() {
               // it every agent `call_preview_tool` fails with a permissions
               // policy error.
               allow="tools"
+              onLoad={(event) => {
+                setPreviewDocumentLoading(event.currentTarget, false);
+              }}
               className={
                 logical ? "block border-0" : "block size-full border-0"
               }
