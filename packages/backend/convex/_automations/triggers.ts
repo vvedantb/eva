@@ -1,48 +1,65 @@
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../validators";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { buildAutomationRunBranchName } from "./helpers";
-import { resolveAutomationDoc } from "./systemAutomations";
+import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 
-/** True when the automation already has a queued or running execution. */
+/**
+ * True when the automation already has an agent run executing. An event run
+ * still waiting out its debounce is `queued` with no workflow yet, and does
+ * not count: it has not claimed a sandbox.
+ */
 async function hasRunInFlight(
   ctx: MutationCtx,
-  automationId: Doc<"automations">["_id"],
+  automationId: Id<"automations">,
 ): Promise<boolean> {
-  const lastRun = await ctx.db
+  const running = await ctx.db
     .query("automationRuns")
-    .withIndex("by_automation", (q) => q.eq("automationId", automationId))
-    .order("desc")
+    .withIndex("by_automation_and_status", (q) =>
+      q.eq("automationId", automationId).eq("status", "running"),
+    )
     .first();
-  return (
-    lastRun !== null &&
-    (lastRun.status === "queued" || lastRun.status === "running")
-  );
+  if (running !== null) return true;
+  const queued = await ctx.db
+    .query("automationRuns")
+    .withIndex("by_automation_and_status", (q) =>
+      q.eq("automationId", automationId).eq("status", "queued"),
+    )
+    .collect();
+  return queued.some((run) => run.activeWorkflowId !== undefined);
 }
 
 /**
- * Inserts a queued automation run and starts its execution workflow.
- * Shared by the cron triggers and the manual "run now" path — both enqueue an
- * identical run once their eligibility checks pass. The workflow never re-reads
- * the row, so this is where the system-automation catalog overlay is applied.
+ * Starts an automation's execution workflow, inserting a queued run unless an
+ * event trigger already made one. Shared by the cron, "run now" and event
+ * paths — all start an identical run once their eligibility checks pass. The
+ * workflow never re-reads the row, so this is where the system-automation
+ * catalog overlay is applied, and where an event's details join the prompt.
  */
 async function startAutomationRun(
   ctx: MutationCtx,
   storedAutomation: Doc<"automations">,
   repo: Doc<"githubRepos">,
+  event?: { runId: Id<"automationRuns">; context: string },
 ): Promise<void> {
   const automation = resolveAutomationDoc(storedAutomation);
-  const runId = await ctx.db.insert("automationRuns", {
-    automationId: automation._id,
-    repoId: automation.repoId,
-    status: "queued",
-    startedAt: Date.now(),
-    acknowledged: false,
-  });
+  const runId =
+    event?.runId ??
+    (await ctx.db.insert("automationRuns", {
+      automationId: automation._id,
+      repoId: automation.repoId,
+      status: "queued",
+      startedAt: Date.now(),
+      acknowledged: false,
+    }));
+  const description =
+    event === undefined
+      ? automation.description
+      : `${automation.description}\n\n## Trigger event\n${event.context}`;
 
   const branchName = buildAutomationRunBranchName(automation._id, runId);
 
@@ -55,7 +72,7 @@ async function startAutomationRun(
       repoId: automation.repoId,
       installationId: repo.installationId,
       branchName,
-      description: automation.description,
+      description,
       title: automation.title,
       model: normalizeAIModel(
         automation.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
@@ -79,6 +96,7 @@ export const triggerAutomation = internalMutation({
   handler: async (ctx, args) => {
     const automation = await ctx.db.get(args.automationId);
     if (!automation || !automation.enabled) return null;
+    if (automationAction(automation) !== "run") return null;
 
     const repo = await ctx.db.get(automation.repoId);
     if (!repo) return null;
@@ -107,6 +125,9 @@ export const runNow = authMutation({
     if (!automation.description) {
       throw new Error("Automation has no description/prompt configured");
     }
+    if (automationAction(automation) !== "run") {
+      throw new Error("This automation only runs when its event happens");
+    }
 
     const repo = await ctx.db.get(automation.repoId);
     if (!repo) throw new Error("Repo not found");
@@ -117,6 +138,43 @@ export const runNow = authMutation({
 
     await startAutomationRun(ctx, automation, repo);
 
+    return null;
+  },
+});
+
+/**
+ * Starts the agent run for an event-triggered `run` automation, once its
+ * debounce has passed. The queued row already exists; a busy automation marks
+ * it skipped rather than stacking a second sandbox.
+ */
+export const startEventRun = internalMutation({
+  args: { runId: v.id("automationRuns"), context: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || run.status !== "queued") return null;
+    const automation = await ctx.db.get(run.automationId);
+    const repo = automation ? await ctx.db.get(automation.repoId) : null;
+    if (!automation || !automation.enabled || !repo) {
+      await ctx.db.patch(args.runId, {
+        status: "error",
+        error: "Automation is disabled or its repo is gone",
+        finishedAt: Date.now(),
+      });
+      return null;
+    }
+    if (await hasRunInFlight(ctx, automation._id)) {
+      await ctx.db.patch(args.runId, {
+        status: "error",
+        error: "Skipped: a run was already in progress",
+        finishedAt: Date.now(),
+      });
+      return null;
+    }
+    await startAutomationRun(ctx, automation, repo, {
+      runId: args.runId,
+      context: args.context,
+    });
     return null;
   },
 });

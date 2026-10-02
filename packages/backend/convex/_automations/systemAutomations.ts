@@ -1,4 +1,10 @@
 import type { Doc } from "../_generated/dataModel";
+import type { AutomationTrigger } from "../_automationEvents/events";
+import {
+  CI_AUTOFIX_PROMPT,
+  ISSUE_TO_TASK_PROMPT,
+  REVIEW_RESPONDER_PROMPT,
+} from "./prompts/eventPresets";
 import { ADD_TEST_COVERAGE_PROMPT } from "./prompts/addTestCoverage";
 import { DAILY_STANDUP_PROMPT } from "./prompts/dailyStandup";
 import { FIND_CRITICAL_BUGS_PROMPT } from "./prompts/findCriticalBugs";
@@ -23,13 +29,27 @@ export interface SystemAutomationDefinition {
   blurb: string;
   /** Prompt the agent runs each time. */
   description: string;
-  /** Standard 5-field cron expression in UTC, seeded onto new installs. */
+  /**
+   * Standard 5-field cron expression in UTC, seeded onto new installs. Empty
+   * for event-triggered entries.
+   */
   defaultCronSchedule: string;
+  /** Cron or repo event. For an event, `label` is the only install-owned part. */
+  trigger: AutomationTrigger;
+  /**
+   * What firing does: start an agent run, post the event into the chat that
+   * owns the PR, or create a quick task (see `_automationEvents/flush.ts`).
+   */
+  action: AutomationAction;
   /** Report-only runs never push a branch or open a PR. */
   readOnly: boolean;
   /** Whether the run parses actionable findings that can become tasks. */
   actionsEnabled: boolean;
 }
+
+export type AutomationAction = "run" | "route_to_pr_chat" | "create_task";
+
+const CRON: AutomationTrigger = { kind: "cron" };
 
 /**
  * Stable key of the daily standup install. The Today page and its sidebar tab
@@ -52,6 +72,8 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "0 8 * * 1-5",
     readOnly: true,
     actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
   },
   {
     key: "find-critical-bugs",
@@ -62,6 +84,8 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "0 3 * * *",
     readOnly: false,
     actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
   },
   {
     key: "add-test-coverage",
@@ -71,6 +95,8 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "30 3 * * *",
     readOnly: false,
     actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
   },
   {
     key: "generate-docs",
@@ -81,6 +107,8 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "0 4 * * *",
     readOnly: false,
     actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
   },
   {
     key: "improve-code-structure",
@@ -91,6 +119,8 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "30 4 * * *",
     readOnly: false,
     actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
   },
   {
     key: "thermo-nuclear-code-review",
@@ -101,6 +131,44 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     defaultCronSchedule: "0 5 * * *",
     readOnly: false,
     actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
+  },
+  {
+    key: "ci-autofix",
+    title: "Fix failing CI",
+    blurb:
+      "When CI fails on a PR Eva opened, sends the failing logs back to that chat to fix.",
+    description: CI_AUTOFIX_PROMPT,
+    defaultCronSchedule: "",
+    readOnly: false,
+    actionsEnabled: false,
+    trigger: { kind: "event", event: "ci_failed" },
+    action: "route_to_pr_chat",
+  },
+  {
+    key: "review-responder",
+    title: "Address review comments",
+    blurb:
+      "When someone reviews a PR Eva opened, sends their comments back to that chat to address.",
+    description: REVIEW_RESPONDER_PROMPT,
+    defaultCronSchedule: "",
+    readOnly: false,
+    actionsEnabled: false,
+    trigger: { kind: "event", event: "pr_feedback" },
+    action: "route_to_pr_chat",
+  },
+  {
+    key: "issue-to-task",
+    title: "Issues to tasks",
+    blurb:
+      "When a GitHub issue gets the eva label, creates a quick task for it and starts it.",
+    description: ISSUE_TO_TASK_PROMPT,
+    defaultCronSchedule: "",
+    readOnly: false,
+    actionsEnabled: false,
+    trigger: { kind: "event", event: "issue_labeled" },
+    action: "create_task",
   },
 ];
 
@@ -111,13 +179,44 @@ export function getSystemAutomation(
   return SYSTEM_AUTOMATIONS.find((entry) => entry.key === key);
 }
 
+/** The trigger a row runs on, catalog overlay included. */
+export function automationTrigger(
+  doc: Pick<Doc<"automations">, "systemKey" | "trigger">,
+): AutomationTrigger {
+  const entry =
+    doc.systemKey === undefined ? undefined : getSystemAutomation(doc.systemKey);
+  if (!entry) return doc.trigger ?? CRON;
+  return overlayTrigger(entry.trigger, doc.trigger);
+}
+
+/**
+ * The cron spec to register for a row, or null when nothing should be
+ * scheduled (disabled, no schedule, or triggered by an event instead).
+ */
+export function automationCronspec(
+  doc: Pick<
+    Doc<"automations">,
+    "enabled" | "cronSchedule" | "systemKey" | "trigger"
+  >,
+): string | null {
+  if (!doc.enabled || !doc.cronSchedule) return null;
+  return automationTrigger(doc).kind === "cron" ? doc.cronSchedule : null;
+}
+
+/** User automations can only `run`; the other actions are catalog presets. */
+export function automationAction(doc: Doc<"automations">): AutomationAction {
+  if (doc.systemKey === undefined) return "run";
+  return getSystemAutomation(doc.systemKey)?.action ?? "run";
+}
+
 /**
  * Overlays the code-defined definition onto an install row. A read-only view:
  * the returned doc must never be written back. Non-system rows, and installs
  * whose key no longer exists in the catalog, pass through unchanged (the latter
  * keep their stored fallback title and stay non-runnable via an empty prompt).
  *
- * `cronSchedule` is deliberately not overlaid — it belongs to the install.
+ * `cronSchedule` is deliberately not overlaid — it belongs to the install, as
+ * does an event trigger's `label`.
  */
 export function resolveAutomationDoc(
   doc: Doc<"automations">,
@@ -131,5 +230,16 @@ export function resolveAutomationDoc(
     description: entry.description,
     readOnly: entry.readOnly,
     actionsEnabled: entry.actionsEnabled,
+    trigger: overlayTrigger(entry.trigger, doc.trigger),
   };
+}
+
+function overlayTrigger(
+  catalog: AutomationTrigger,
+  stored: AutomationTrigger | undefined,
+): AutomationTrigger {
+  if (catalog.kind !== "event" || stored?.kind !== "event") return catalog;
+  return stored.label === undefined
+    ? catalog
+    : { ...catalog, label: stored.label };
 }
