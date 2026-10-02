@@ -13,6 +13,7 @@ import { PrPanel } from "./PrPanel";
 import { SandboxPaneBoundary } from "./SandboxPaneBoundary";
 import { PreviewPaneTabs } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPaneTabs";
 import { ConsoleDock } from "./ConsoleDock";
+import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
 import {
@@ -166,6 +167,7 @@ export function SandboxPaneSlots({
                 id,
                 preview.effectivePort,
               ].join(":")}
+              toolCallParentId={sandboxOwnerParentId(owner)}
               stickyPath={stickyPreviewPath}
               onStickyPathChange={onStickyPreviewPathChange}
               onStartSandbox={onStartSandbox}

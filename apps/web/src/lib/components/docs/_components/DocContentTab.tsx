@@ -3,10 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "@tiptap/markdown";
 import type { Transaction } from "@tiptap/pm/state";
-import { useTiptapSync } from "@convex-dev/prosemirror-sync/tiptap";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -41,6 +38,7 @@ import {
   scrollToAnchor,
 } from "../_utils/docCommentAnchors";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { baseDocEditorExtensions, useDocSync } from "../_utils/useDocSync";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -50,15 +48,6 @@ type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
  * snapshotted at all.
  */
 const VERSION_IDLE_MS = 15_000;
-
-const baseEditorExtensions = [
-  StarterKit.configure({
-    heading: { levels: [1, 2, 3, 4, 5, 6] },
-  }),
-  Markdown.configure({
-    markedOptions: { gfm: true },
-  }),
-];
 
 export function DocContentTab({
   doc,
@@ -83,7 +72,6 @@ export function DocContentTab({
   const [mode] = useQueryState("mode", docModeParser);
   const isPrRecap = doc.kind === "pr-recap";
   const effectiveMode: DocMode = isPrRecap ? "viewing" : mode;
-  const ensureSyncDoc = useMutation(api.docs.ensureSyncDoc);
   const touchDraft = useMutation(api.docVersions.touchDraft);
   const saveVersion = useMutation(api.docVersions.saveVersion);
 
@@ -98,7 +86,7 @@ export function DocContentTab({
   // extension reach the latest handler without recreating the editor.
   const anchorClickRef = useRef<(anchorId: string) => void>(() => undefined);
   const extensions = [
-    ...baseEditorExtensions,
+    ...baseDocEditorExtensions,
     SuggestChangesKit.configure({ getUserId: () => userIdRef.current }),
     DocCommentMark,
     DocCommentHighlight.configure({
@@ -106,7 +94,7 @@ export function DocContentTab({
     }),
   ];
 
-  const sync = useTiptapSync(api.prosemirrorSync, doc._id);
+  const { sync, isLoading: syncLoading } = useDocSync(doc._id);
 
   const [composingAnchorId, setComposingAnchorId] = useState<string | null>(
     null,
@@ -141,20 +129,9 @@ export function DocContentTab({
   const lastTouchDraftRef = useRef<number>(0);
   const editCountRef = useRef<number>(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasMigratedRef = useRef(false);
   const [docSaveState, setDocSaveState] = useState<DocSaveState>({
     status: "idle",
   });
-
-  // Lazy migration: ensure sync doc exists for legacy docs
-  const needsMigration =
-    !sync.isLoading && sync.initialContent === null && "create" in sync;
-  useEffect(() => {
-    if (needsMigration && !hasMigratedRef.current) {
-      hasMigratedRef.current = true;
-      ensureSyncDoc({ id: doc._id });
-    }
-  }, [needsMigration, doc._id, ensureSyncDoc]);
 
   const editor = useEditor(
     {
@@ -386,7 +363,7 @@ export function DocContentTab({
     );
   };
 
-  if (sync.isLoading || (!sync.extension && sync.initialContent === null)) {
+  if (syncLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Spinner size="sm" />

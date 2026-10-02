@@ -19,6 +19,8 @@ import {
   type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
 import { PreviewScreenshotButton } from "./PreviewScreenshotButton";
+import { PreviewSnapshotButton } from "@/lib/components/sandbox/PreviewSnapshotButton";
+import { PreviewWebMcpButton } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import type { PreviewViewport } from "../_utils/previewViewport";
 
 interface PreviewInfo {
@@ -118,6 +120,8 @@ export function PreviewPanelNavBar({
         </WebPreviewNavigationButton>
       ) : null}
       <PreviewScreenshotButton iframeElement={iframeElement ?? null} />
+      <PreviewSnapshotButton iframeElement={iframeElement ?? null} />
+      <PreviewWebMcpButton iframeElement={iframeElement ?? null} />
       {showAnnotationToggle ? (
         <WebPreviewNavigationButton
           tooltip={annotationMode ? "Cancel select element" : "Select element"}

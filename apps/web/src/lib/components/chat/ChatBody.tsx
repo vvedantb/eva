@@ -3,8 +3,6 @@ import {
   ConversationContent,
   ConversationScrollButton,
   motionBase,
-  type ModelOption,
-  type ModelAccount,
 } from "@eva/ui";
 import {
   ChatEmptyState,
@@ -12,9 +10,37 @@ import {
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
+import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
-import { ChatComposer } from "@/lib/components/chat/ChatComposer";
+import {
+  ChatComposer,
+  type ChatModelPicker,
+  type LocalChatDraft,
+} from "@/lib/components/chat/ChatComposer";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
+import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
+import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
+import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
+import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
+import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
+import { collectThreadFindDocuments } from "@/lib/components/chat/threadFind";
+import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import {
+  canForkMessage,
+  collectForkPrefix,
+  forkThreadTitle,
+  formatForkPrompt,
+} from "@eva/shared";
+import { tokenizedToDisplayText } from "@/lib/components/mentions";
+import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
+import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
+import { appendWebMcpToPrompt } from "@/lib/components/sandbox/previewWebMcp";
+import {
+  PendingCitationsProvider,
+  usePendingCitations,
+} from "@/lib/contexts/PendingCitationsContext";
+import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
@@ -23,19 +49,13 @@ import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import {
-  api,
-  type AIModel,
-  type BackgroundAgentEntry,
-  type Id,
-  type StoredModelTraits,
-  type resolveTraitsForDisplay,
-} from "@eva/backend";
+import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildJumpRailTicks,
   buildMessageHistory,
+  findDayBoundaryIds,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findLastAssistantMessageId,
@@ -49,21 +69,36 @@ import {
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
+  type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
 export type { ChatBodyMessage };
 
+/**
+ * Extra context ChatBody hands its surface's send handler. The prompt the
+ * handler receives has the pending citation / preview-snapshot / WebMCP blocks
+ * appended to it, so a failure cannot offer it back to the user to re-edit —
+ * `draftContent` is the text they actually typed, and is what the failure toast
+ * restores.
+ */
+export interface ChatSendOptions {
+  draftContent?: string;
+}
+
 interface ChatBodyProps {
-  repoId: Id<"githubRepos">;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
+  /**
+   * The codebase this chat belongs to. Absent for Manager Ave, which has none:
+   * skills, the prompt stash and repo mentions switch off.
+   */
+  repo?: ChatRepo;
   /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
   /**
    * The same chat, typed as the id its messages hang off. Used to load the
    * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   * Absent (Manager Ave): no panels are loaded.
    */
-  chatParentId: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+  chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -107,23 +142,8 @@ interface ChatBodyProps {
    * gives the empty state its button and the blocked-send toast its action.
    */
   onStartSandbox?: () => void;
-  model: AIModel;
-  setModel: (model: AIModel) => void;
-  modelOptions: ReadonlyArray<ModelOption<AIModel>>;
-  /**
-   * The user's own provider accounts. When non-empty, the model picker nests
-   * Team + account submenus under each provider; the chosen account's
-   * credentials run the turn (see `accountId`/`onAccountChange`).
-   */
-  accounts?: ReadonlyArray<ModelAccount>;
-  accountId?: string | null;
-  onAccountChange?: (accountId: string | null) => void;
-  /**
-   * Model trait controls (reasoning effort, thinking toggle, Fast, 1M context). When
-   * provided, trait pills appear above the model list for capable models.
-   */
-  displayTraits?: ReturnType<typeof resolveTraitsForDisplay>;
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
+  /** Model, account and trait controls. Absent: no picker (fixed model). */
+  modelPicker?: ChatModelPicker;
   /**
    * Called with the tokenized content and any uploaded image attachment storage
    * ids. Caller decides whether to send or enqueue.
@@ -131,6 +151,7 @@ interface ChatBodyProps {
   onSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => Promise<void>;
   onCancel: () => Promise<void>;
   /** Optional slot inserted above the conversation (session summary accordion). */
@@ -153,6 +174,8 @@ interface ChatBodyProps {
    * available. Use `isDraftLoading` to render a placeholder while waiting.
    */
   draft?: ChatDraftSeed;
+  /** localStorage-backed draft, for chats with no Convex draft row (Ave). */
+  localDraft?: LocalChatDraft;
   /**
    * When true, renders a disabled placeholder in place of the real input while
    * the draft query is in flight. This prevents the PromptInputProvider from
@@ -182,11 +205,24 @@ interface ChatBodyProps {
   turnCheckpoint?: TurnCheckpointContext;
   allowEmptySubmit?: boolean;
   afterMessage?: (messageId: string) => ReactNode;
+  /** Sessions: create a new chat from the transcript through this message. */
+  onForkTranscript?: (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => Promise<void>;
 }
 
-export function ChatBody({
-  repoId,
-  repoBasePath,
+export function ChatBody(props: ChatBodyProps) {
+  return (
+    <PendingCitationsProvider>
+      <ChatBodyInner {...props} />
+    </PendingCitationsProvider>
+  );
+}
+
+function ChatBodyInner({
+  repo,
   conversationId,
   chatParentId,
   messages,
@@ -205,14 +241,7 @@ export function ChatBody({
   emptyStateDescription = "",
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
-  model,
-  setModel,
-  modelOptions,
-  accounts,
-  accountId,
-  onAccountChange,
-  displayTraits,
-  onTraitsChange,
+  modelPicker,
   onSend,
   onCancel,
   preConversationContent,
@@ -221,6 +250,7 @@ export function ChatBody({
   emptyStateOverride,
   underCardLeading,
   draft,
+  localDraft,
   isDraftLoading,
   onOpenFile,
   onViewDiff,
@@ -231,7 +261,55 @@ export function ChatBody({
   turnCheckpoint,
   allowEmptySubmit,
   afterMessage,
+  onForkTranscript,
 }: ChatBodyProps) {
+  const citations = usePendingCitations();
+  const snapshots = usePendingPreviewSnapshots();
+  const webmcp = usePendingWebMcp();
+  const sendWithPendingContext = async (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => {
+    const sentCitations = citations?.items ?? [];
+    const sentSnapshots = snapshots?.items ?? [];
+    const sentWebMcp = webmcp?.items ?? [];
+    const withCitations = appendCitationsToPrompt(content, sentCitations);
+    const withSnapshots = appendSnapshotsToPrompt(
+      withCitations,
+      sentSnapshots.map((item) => item.snapshot),
+    );
+    const withWebMcp = appendWebMcpToPrompt(
+      withSnapshots,
+      sentWebMcp.map((item) => item.discovery),
+    );
+    // Settlement is observed, not awaited: the composer only empties once this
+    // resolves, and holding the user's text on screen until the mutation
+    // round-trips would undo the optimistic clear every surface relies on.
+    // Same contract as useSessionSend's `review?.clear()`: the pending context
+    // is consumed only once the send has actually succeeded, so a rejected send
+    // leaves the chips attached for the retry. And only the exact items that
+    // went into this prompt are dropped — `clear()` also threw away anything
+    // cited while the send was in flight, which was never sent.
+    void onSend(withWebMcp, attachmentStorageIds, {
+      draftContent: content,
+    }).then(
+      () => {
+        for (const citation of sentCitations) citations?.remove(citation.id);
+        for (const item of sentSnapshots) snapshots?.remove(item.id);
+        for (const item of sentWebMcp) webmcp?.remove(item.id);
+      },
+      () => {
+        // The send handler already raised the failure toast (with the typed
+        // text behind "Restore draft"); the chips are all we own here, and they
+        // stay so the retry carries the same context.
+      },
+    );
+  };
+  const hasComposerContext =
+    (hasPendingContext ?? false) ||
+    (citations?.items.length ?? 0) > 0 ||
+    (snapshots?.items.length ?? 0) > 0 ||
+    (webmcp?.items.length ?? 0) > 0;
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
@@ -276,6 +354,7 @@ export function ChatBody({
   // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
   // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
+  const [forkThroughId, setForkThroughId] = useState<string | null>(null);
   const pendingQuestionRaw =
     streamingPendingQuestion ??
     streamingTarget?.pendingQuestion ??
@@ -332,6 +411,20 @@ export function ChatBody({
 
   const jumpRailMessages = buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
+  const dayBoundaryIds = findDayBoundaryIds(displayMessages);
+  const findDocuments = collectThreadFindDocuments(
+    displayMessages.map((message) => ({
+      id: message._id,
+      text: tokenizedToDisplayText(
+        message.content.trim().length > 0
+          ? message.content
+          : message._id === streamingTargetId
+            ? (streamingContent ?? "")
+            : "",
+      ),
+      skip: message.isSystemAlert === true,
+    })),
+  );
 
   const currentUserId = useQuery(api.auth.me);
 
@@ -349,9 +442,10 @@ export function ChatBody({
 
   // Agent-composed UI panels (`render_ui`). One query per chat covers all three
   // surfaces, since every one of them renders through this component.
-  const chatUiPanels = useQuery(api.chatUi.listByParent, {
-    parentId: chatParentId,
-  });
+  const chatUiPanels = useQuery(
+    api.chatUi.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const panelPlacement = placeChatUiPanels(
     chatUiPanels ?? [],
     new Set(displayMessages.map((message) => message._id)),
@@ -378,7 +472,10 @@ export function ChatBody({
     isArchived || isExecuting
       ? undefined
       : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
-          void onSend(content, attachmentStorageIds);
+          // `onSend` rejects on a failed send so the composer can keep the
+          // pending chips. The surface has already toasted by then, so swallow
+          // it here rather than leaving an unhandled rejection.
+          void onSend(content, attachmentStorageIds).catch(() => {});
         };
 
   // A panel button sends its text through the normal send path, so it queues
@@ -389,7 +486,8 @@ export function ChatBody({
     isArchived || isInputDisabled
       ? undefined
       : (message: string) => {
-          void onSend(message);
+          // See `handleRetryTurn`: the rejection is already surfaced as a toast.
+          void onSend(message).catch(() => {});
         };
 
   // Undefined rather than an empty array: the caller slots this into a wrapper
@@ -428,10 +526,13 @@ export function ChatBody({
 
     return (
       <div key={message._id} className="flex flex-col gap-3">
+        {dayBoundaryIds.has(message._id) ? (
+          <ChatDayDivider timestamp={message.timestamp} />
+        ) : null}
         <ChatMessage
           message={message}
           animateIn={!isBacklog}
-          repoBasePath={repoBasePath}
+          repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
           {...(expandedByMessageId[message._id] !== undefined
@@ -456,6 +557,12 @@ export function ChatBody({
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
           onRetryTurn={handleRetryTurn}
           precedingUser={precedingUser}
+          citeHighlight={citations?.highlightedMessageId === message._id}
+          onFork={
+            onForkTranscript && canForkMessage(message)
+              ? () => setForkThroughId(message._id)
+              : undefined
+          }
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
           )}
@@ -466,8 +573,9 @@ export function ChatBody({
   };
 
   return (
-    <>
+    <div className="relative flex min-h-0 flex-1 flex-col" data-chat-pane="">
       {preConversationContent}
+      <ThreadFindBar documents={findDocuments} />
       <Conversation className="flex-1 min-h-0">
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
@@ -515,6 +623,7 @@ export function ChatBody({
             array, so binding it before those rows exist would observe nothing
             and never retry. */}
         {backlogReady ? <ChatJumpRail messages={jumpRailMessages} /> : null}
+        {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
       {isArchived ? null : (
         <AnimatePresence mode="wait" initial={false}>
@@ -544,8 +653,7 @@ export function ChatBody({
               transition={motionBase}
             >
               <ChatComposer
-                repoId={repoId}
-                repoBasePath={repoBasePath}
+                repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
                 messageHistory={messageHistory}
@@ -554,30 +662,61 @@ export function ChatBody({
                 disabledReason={disabledReason}
                 onStartSandbox={onStartSandbox}
                 placeholder={placeholder}
-                model={model}
-                setModel={setModel}
-                modelOptions={modelOptions}
-                accounts={accounts}
-                accountId={accountId}
-                onAccountChange={onAccountChange}
-                displayTraits={displayTraits}
-                onTraitsChange={onTraitsChange}
-                onSend={onSend}
+                modelPicker={modelPicker}
+                onSend={sendWithPendingContext}
                 onCancel={onCancel}
                 beforeQueuedContent={beforeQueuedContent}
-                preInputContent={preInputContent}
+                preInputContent={
+                  <>
+                    <PendingCitationChips />
+                    <PendingSnapshotChips />
+                    <PendingWebMcpChips />
+                    {preInputContent}
+                  </>
+                }
                 streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}
                 draft={draft}
+                localDraft={localDraft}
                 isDraftLoading={isDraftLoading}
-                hasPendingContext={hasPendingContext}
+                hasPendingContext={hasComposerContext}
                 allowEmptySubmit={allowEmptySubmit}
               />
             </m.div>
           )}
         </AnimatePresence>
       )}
-    </>
+      <MessageForkDialog
+        prefix={
+          forkThroughId
+            ? collectForkPrefix(
+                displayMessages.map((message) => ({
+                  id: message._id,
+                  role: message.role,
+                  content: message.content,
+                  isSystemAlert: message.isSystemAlert,
+                })),
+                forkThroughId,
+              )
+            : null
+        }
+        open={forkThroughId !== null}
+        onOpenChange={(open) => {
+          if (!open) setForkThroughId(null);
+        }}
+        onConfirm={
+          onForkTranscript
+            ? async (prefix) => {
+                await onForkTranscript({
+                  throughMessageId: prefix.throughMessageId,
+                  title: forkThreadTitle(prefix),
+                  prompt: formatForkPrompt(prefix),
+                });
+              }
+            : undefined
+        }
+      />
+    </div>
   );
 }

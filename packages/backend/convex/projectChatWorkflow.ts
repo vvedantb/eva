@@ -129,6 +129,13 @@ async function buildProjectChatTurnPrompt(
     systemPrompt: repo.systemPrompt,
     devPort: project.devPort ?? repo.devPort,
     readableRepos,
+    runtime: {
+      ownerKey: `project-${args.projectId}`,
+      prUrl: project.prUrl,
+      devCommand: project.devCommand ?? repo.devCommand,
+      startupCommands: repo.startupCommands,
+      backgroundCommands: repo.backgroundCommands,
+    },
   });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
