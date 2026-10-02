@@ -1520,8 +1520,8 @@ export const routedThreadFields = {
   resolvedAt: v.optional(v.number()),
 };
 
-/** One teammate on a routed thread. Denormalises the thread's clock so "my
- *  threads" is one indexed scan rather than a get per thread. */
+/** One teammate on a routed thread. Denormalises the thread's clock so the
+ *  Manager Ave question dock is one indexed scan, newest first. */
 export const routedParticipantFields = {
   threadId: v.id("routedThreads"),
   userId: v.id("users"),

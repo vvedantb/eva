@@ -1142,7 +1142,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
     defineTool({
       name: "ask_teammate",
       description:
-        "Route a clarification to one or more teammates (Messages area) as a group thread that any of them can answer. Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. The first reply is injected back into this session/task/project and wakes the run. Omit userIds and Eva picks the right people automatically; pass userIds from list_work_profiles when you already know who owns the decision, or role to narrow the pool. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
+        "Route a clarification to one or more teammates as a group thread (they answer from Manager Ave) that any of them can answer. Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. The first reply is injected back into this session/task/project and wakes the run. Omit userIds and Eva picks the right people automatically; pass userIds from list_work_profiles when you already know who owns the decision, or role to narrow the pool. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
       mutating: true,
       input: {
         question: z.string().describe("The question for the teammate."),

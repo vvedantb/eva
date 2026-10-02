@@ -11,7 +11,7 @@ import { chatEntityKeys, type SandboxChatSurface } from "./sandboxChatSurface";
 import { UsageLimitRecoveryBanner } from "./UsageLimitRecoveryBanner";
 import { useStopBackgroundAgent } from "./useStopBackgroundAgent";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { RoutedThreadsBanner } from "@/lib/components/messages/RoutedThreadsBanner";
+import { RoutedThreadsBanner } from "@/lib/components/routed/RoutedThreadsBanner";
 
 /**
  * The stack every sandbox chat renders above its composer: the background

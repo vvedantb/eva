@@ -141,7 +141,7 @@ export const notificationTypeValidator = v.union(
   v.literal("system"),
   // Inbox-only: session auto-archived because its GitHub PR closed or merged.
   v.literal("session_archived"),
-  // Eva routed a clarification to a teammate (Messages area).
+  // Eva routed a clarification to a teammate (answered in Manager Ave).
   v.literal("routed_question"),
 );
 

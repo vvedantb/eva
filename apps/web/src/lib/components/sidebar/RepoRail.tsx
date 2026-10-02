@@ -19,7 +19,6 @@ import { IconPencil } from "@tabler/icons-react";
 import {
   AutomationsIcon,
   InboxIcon,
-  MessagesIcon,
   SearchIcon,
   SessionsIcon,
   SidebarCollapseIcon,
@@ -32,7 +31,12 @@ import { RailSettingsMenu } from "@/lib/components/sidebar/RailSettingsMenu";
 import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
+import {
+  CORNER_BADGE_CLASS,
+  CountPop,
+  UnreadCornerBadge,
+  countLabel,
+} from "@/lib/components/ui/CountPop";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
@@ -81,43 +85,15 @@ function railTileActive(active: boolean): string {
     : "border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground";
 }
 
-/**
- * Shape and placement of every count badge on a rail tile; the tone (unread vs
- * live) is the caller's single extra class. Kept in one place so the unread
- * dots, the sessions count and the per-app sandbox count cannot drift apart.
- */
-const RAIL_BADGE_CLASS =
-  "absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none";
-
 /** Green: something is running right now (sessions, sandboxes). */
-const RAIL_BADGE_LIVE_CLASS = cn(RAIL_BADGE_CLASS, "bg-success text-white");
-
-/**
- * The unread dot on a rail tile. One component for both counters — they were two
- * byte-identical copies differing only in the query. The pop itself lives in
- * `CountPop`, shared with the drafts pill and the running-sessions count.
- */
-function RailUnreadBadge({ count }: { count: number | undefined }) {
-  return (
-    <CountPop
-      label={countLabel(count)}
-      className={cn(RAIL_BADGE_CLASS, "bg-primary text-primary-foreground")}
-    />
-  );
-}
+const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");
 
 function InboxUnreadBadge() {
-  return <RailUnreadBadge count={useQuery(api.notifications.countUnread)} />;
-}
-
-function MessagesUnreadBadge() {
-  return (
-    <RailUnreadBadge count={useQuery(api.routedThreads.countWaitingForMe)} />
-  );
+  return <UnreadCornerBadge count={useQuery(api.notifications.countUnread)} />;
 }
 
 function AutomationsUnreadBadge() {
-  return <RailUnreadBadge count={useQuery(api.automations.countUnreadAll)} />;
+  return <UnreadCornerBadge count={useQuery(api.automations.countUnreadAll)} />;
 }
 
 type SandboxCounts = ReadonlyMap<Id<"githubRepos">, number>;
@@ -195,8 +171,6 @@ function RepoRailView({
   const homeActive =
     pathname === "/" || pathname.startsWith("/setup") || isHomePath(pathname);
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
-  const messagesActive =
-    pathname === "/messages" || pathname.startsWith("/messages/");
   const pathParts = pathname.split("/").filter(Boolean);
   const onRepoSessionsPath =
     pathParts.includes("sessions") && pathParts[0] !== "sessions";
@@ -263,26 +237,6 @@ function RepoRailView({
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">Inbox</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              to="/messages"
-              onClick={onNavigate}
-              aria-label="Messages"
-              className={cn(
-                RAIL_TILE_CLASS,
-                "group",
-                railTileActive(messagesActive),
-              )}
-            >
-              <MessagesIcon size={22} filled={messagesActive} className="shrink-0" />
-              <QueryErrorBoundary>
-                <MessagesUnreadBadge />
-              </QueryErrorBoundary>
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">Messages</TooltipContent>
         </Tooltip>
         <div className="h-px w-8 bg-sidebar-border" aria-hidden />
         <Tooltip>

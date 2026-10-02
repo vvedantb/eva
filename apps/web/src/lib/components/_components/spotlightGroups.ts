@@ -13,7 +13,6 @@ import {
   IconHome,
   IconInbox,
   IconLayoutKanban,
-  IconMessage,
   IconPencil,
   IconRobot,
   IconSearch,
@@ -82,8 +81,6 @@ function iconForPageTitle(title: string): SpotlightIcon {
       return IconHome;
     case "Inbox":
       return IconInbox;
-    case "Messages":
-      return IconMessage;
     case "Sessions":
       return IconTerminal2;
     case "Projects":

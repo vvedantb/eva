@@ -1,4 +1,3 @@
-import { cn } from "@eva/ui";
 import type { BadgeProps } from "@eva/ui";
 
 export function statusLabel(status: string): string {
@@ -7,14 +6,6 @@ export function statusLabel(status: string): string {
   if (status === "resolved") return "Resolved";
   if (status === "cancelled") return "Cancelled";
   return "Open";
-}
-
-export function statusClass(status: string): string {
-  return cn(
-    status === "waiting_human" && "text-warning",
-    status === "waiting_eva" && "text-muted-foreground",
-    status === "resolved" && "text-success",
-  );
 }
 
 export function statusBadgeVariant(status: string): BadgeProps["variant"] {
@@ -41,15 +32,18 @@ export function participantNames(
   return participants.map((participant) => participant.name).join(", ");
 }
 
-export function sourceKindLabel(kind: string): string {
+function sourceKindLabel(kind: string): string {
   if (kind === "session") return "Session";
   if (kind === "task") return "Task";
   if (kind === "project") return "Project";
   return "Chat";
 }
 
-export const LIST_STATUS_ORDER = [
-  "waiting_human",
-  "waiting_eva",
-  "open",
-] as const;
+/** "Session 42", or just "Session" when the chat has no number. */
+export function sourceLabel(thread: {
+  sourceKind: string;
+  sourceNumId?: number;
+}): string {
+  const kind = sourceKindLabel(thread.sourceKind);
+  return thread.sourceNumId === undefined ? kind : `${kind} ${thread.sourceNumId}`;
+}

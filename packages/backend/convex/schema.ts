@@ -437,8 +437,11 @@ const schema = defineSchema({
   routedParticipants: defineTable(routedParticipantFields)
     .index("by_thread", ["threadId"])
     .index("by_thread_and_user", ["threadId", "userId"])
-    .index("by_user_and_lastMessage", ["userId", "lastMessageAt"])
-    .index("by_user_and_needsReply", ["userId", "needsReply"]),
+    .index("by_user_and_needsReply_and_lastMessage", [
+      "userId",
+      "needsReply",
+      "lastMessageAt",
+    ]),
 
   routedMessages: defineTable(routedMessageFields)
     .index("by_thread", ["threadId"])

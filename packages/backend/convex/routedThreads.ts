@@ -71,6 +71,9 @@ const messageSummary = v.object({
   createdAt: v.number(),
 });
 
+/** Questions are answered in Manager Ave, which `/ave` opens full screen. */
+const AVE_HREF = "/ave";
+
 function normalizeTopicKey(raw: string): string {
   const slug = raw
     .toLowerCase()
@@ -179,9 +182,20 @@ function sourceHref(
   return `${base}/projects/${numId}`;
 }
 
+/**
+ * The source chat's id with its table still attached. `sourceId` is the same
+ * id as a plain string (how threads store it); `ref` is what writes use, so no
+ * caller has to cast the string back to the right table.
+ */
+type SourceRef =
+  | { kind: "session"; id: Id<"sessions"> }
+  | { kind: "task"; id: Id<"agentTasks"> }
+  | { kind: "project"; id: Id<"projects"> };
+
 type SourceRecord = {
   sourceKind: SourceKind;
   sourceId: string;
+  ref: SourceRef;
   repoId: Id<"githubRepos">;
   numId: number | undefined;
   title: string;
@@ -204,6 +218,7 @@ async function loadSource(
     return {
       sourceKind,
       sourceId: id,
+      ref: { kind: "session", id },
       repoId: session.repoId,
       numId: session.numId,
       title: session.title,
@@ -227,6 +242,7 @@ async function loadSource(
     return {
       sourceKind,
       sourceId: id,
+      ref: { kind: "task", id },
       repoId,
       numId: task.numId,
       title: task.title,
@@ -243,6 +259,7 @@ async function loadSource(
   return {
     sourceKind,
     sourceId: id,
+    ref: { kind: "project", id },
     repoId: project.repoId,
     numId: project.numId,
     title: project.title,
@@ -352,13 +369,9 @@ function notifyEntityArgs(
   taskId?: Id<"agentTasks">;
   projectId?: Id<"projects">;
 } {
-  if (source.sourceKind === "session") {
-    return { sessionId: source.sourceId as Id<"sessions"> };
-  }
-  if (source.sourceKind === "task") {
-    return { taskId: source.sourceId as Id<"agentTasks"> };
-  }
-  return { projectId: source.sourceId as Id<"projects"> };
+  if (source.ref.kind === "session") return { sessionId: source.ref.id };
+  if (source.ref.kind === "task") return { taskId: source.ref.id };
+  return { projectId: source.ref.id };
 }
 
 async function insertSystemAlert(
@@ -366,14 +379,8 @@ async function insertSystemAlert(
   source: SourceRecord,
   content: string,
 ): Promise<Id<"messages"> | undefined> {
-  const parentId =
-    source.sourceKind === "session"
-      ? (source.sourceId as Id<"sessions">)
-      : source.sourceKind === "task"
-        ? (source.sourceId as Id<"agentTasks">)
-        : (source.sourceId as Id<"projects">);
   return await ctx.db.insert("messages", {
-    parentId,
+    parentId: source.ref.id,
     role: "assistant",
     content,
     timestamp: Date.now(),
@@ -389,15 +396,9 @@ async function enqueueSourceWake(
   displayContent: string,
 ): Promise<void> {
   if (source.deleted || source.archived) return;
-  const parentId =
-    source.sourceKind === "session"
-      ? (source.sourceId as Id<"sessions">)
-      : source.sourceKind === "task"
-        ? (source.sourceId as Id<"agentTasks">)
-        : (source.sourceId as Id<"projects">);
   const now = Date.now();
   await ctx.db.insert("queuedMessages", {
-    parentId,
+    parentId: source.ref.id,
     content,
     displayContent,
     createdAt: now,
@@ -405,12 +406,12 @@ async function enqueueSourceWake(
     userId,
     model: source.lastModel ?? DEFAULT_AI_MODEL,
   });
-  if (source.sourceKind === "session") {
-    await startNextQueuedSessionMessage(ctx, parentId as Id<"sessions">);
-  } else if (source.sourceKind === "task") {
-    await startNextQueuedTaskChatMessage(ctx, parentId as Id<"agentTasks">);
+  if (source.ref.kind === "session") {
+    await startNextQueuedSessionMessage(ctx, source.ref.id);
+  } else if (source.ref.kind === "task") {
+    await startNextQueuedTaskChatMessage(ctx, source.ref.id);
   } else {
-    await startNextQueuedProjectChatMessage(ctx, parentId as Id<"projects">);
+    await startNextQueuedProjectChatMessage(ctx, source.ref.id);
   }
 }
 
@@ -526,64 +527,28 @@ async function gateAsk(
   return { ok: true, source, repo, teamId: repo.teamId };
 }
 
-export const listMine = authQuery({
-  args: {
-    status: v.optional(v.union(v.literal("open"), v.literal("all"))),
-  },
+/**
+ * Open threads where Eva is still waiting on the caller, newest first. This is
+ * the Manager Ave question dock: an answered question drops out, and comes back
+ * only if Eva asks again on the same topic.
+ */
+export const listWaitingForMe = authQuery({
+  args: {},
   returns: v.array(threadSummary),
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
     const rows = await ctx.db
       .query("routedParticipants")
-      .withIndex("by_user_and_lastMessage", (q) => q.eq("userId", ctx.userId))
+      .withIndex("by_user_and_needsReply_and_lastMessage", (q) =>
+        q.eq("userId", ctx.userId).eq("needsReply", true),
+      )
       .order("desc")
-      .take(80);
+      .take(50);
     const out = [];
     for (const row of rows) {
       const thread = await ctx.db.get(row.threadId);
-      if (!thread) continue;
+      if (!thread || !OPEN_STATUSES.has(thread.status)) continue;
       if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) continue;
-      if (args.status !== "all" && !OPEN_STATUSES.has(thread.status)) continue;
       out.push(await enrichThread(ctx, thread, ctx.userId));
-    }
-    return out;
-  },
-});
-
-export const listTeam = authQuery({
-  args: {
-    teamId: v.optional(v.id("teams")),
-    status: v.optional(v.union(v.literal("open"), v.literal("all"))),
-  },
-  returns: v.array(threadSummary),
-  handler: async (ctx, args) => {
-    let teamId = args.teamId;
-    if (!teamId) {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-        .collect();
-      // Same rule as routing itself: default to a team with someone else on it.
-      for (const membership of memberships) {
-        if (await teamHasOtherMembers(ctx, membership.teamId, ctx.userId)) {
-          teamId = membership.teamId;
-          break;
-        }
-      }
-      teamId ??= memberships[0]?.teamId;
-    }
-    if (!teamId) return [];
-    if (!(await hasTeamAccess(ctx.db, teamId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const rows = await ctx.db
-      .query("routedThreads")
-      .withIndex("by_team_and_lastMessage", (q) => q.eq("teamId", teamId))
-      .order("desc")
-      .take(80);
-    const out = [];
-    for (const row of rows) {
-      if (args.status !== "all" && !OPEN_STATUSES.has(row.status)) continue;
-      out.push(await enrichThread(ctx, row, ctx.userId));
     }
     return out;
   },
@@ -666,7 +631,7 @@ export const countWaitingForMe = authQuery({
   handler: async (ctx) => {
     const rows = await ctx.db
       .query("routedParticipants")
-      .withIndex("by_user_and_needsReply", (q) =>
+      .withIndex("by_user_and_needsReply_and_lastMessage", (q) =>
         q.eq("userId", ctx.userId).eq("needsReply", true),
       )
       .collect();
@@ -748,12 +713,17 @@ export const reply = authMutation({
         `${name} replied: ${previewOf(body)}`,
       );
       if (source.ownerUserId !== ctx.userId) {
+        // The owner acts in the chat the reply just woke, not in Ave.
+        const repo = await ctx.db.get(thread.repoId);
         await createNotification(ctx, {
           userId: source.ownerUserId,
           type: "routed_question",
           title: `${name} replied about "${thread.title}"`,
           message: previewOf(body),
-          href: `/messages?thread=${thread._id}`,
+          href:
+            (repo
+              ? sourceHref(repo, thread.sourceKind, thread.sourceNumId)
+              : undefined) ?? AVE_HREF,
           repoId: thread.repoId,
           ...notifyEntityArgs(source),
         });
@@ -930,8 +900,8 @@ async function askCore(
     ctx,
     source,
     solo
-      ? `Asked ${solo.name}${roleLabel} about ${quotedTitle(question)}. Their reply will land in Messages and continue this chat.`
-      : `Asked ${participants.map((row) => row.name).join(", ")} about ${quotedTitle(question)}. Replies land in Messages and continue this chat.`,
+      ? `Asked ${solo.name}${roleLabel} about ${quotedTitle(question)}. Their reply comes back to this chat.`
+      : `Asked ${participants.map((row) => row.name).join(", ")} about ${quotedTitle(question)}. Replies come back to this chat.`,
   );
   for (const person of participants) {
     await createNotification(ctx, {
@@ -939,7 +909,7 @@ async function askCore(
       type: "routed_question",
       title: `Eva asked about "${titleOf(question)}"`,
       message: previewOf(context),
-      href: `/messages?thread=${threadId}`,
+      href: AVE_HREF,
       repoId: repo._id,
       ...notifyEntityArgs(source),
     });

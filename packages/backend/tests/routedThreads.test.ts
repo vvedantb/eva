@@ -188,7 +188,7 @@ describe("ask_teammate", () => {
       ]);
       expect(result.created).toBe(true);
 
-      const mine = await f.asDesigner.query(api.routedThreads.listMine, {});
+      const mine = await f.asDesigner.query(api.routedThreads.listWaitingForMe, {});
       expect(mine).toHaveLength(1);
       expect(mine[0].title).toContain("empty-state");
       expect(mine[0].needsMyReply).toBe(true);
@@ -213,7 +213,9 @@ describe("ask_teammate", () => {
       expect(alerts.some((row) => row.isSystemAlert === true)).toBe(true);
 
       const notes = await f.asDesigner.query(api.notifications.list, {});
-      expect(notes.some((row) => row.type === "routed_question")).toBe(true);
+      const question = notes.find((row) => row.type === "routed_question");
+      // Teammates answer in Manager Ave, so the notification opens it.
+      expect(question?.href).toBe("/ave");
     },
     TIMEOUT_MS,
   );
@@ -510,6 +512,15 @@ describe("reply wakes the source", () => {
         .toBe(0);
       expect(await second.as.query(api.routedThreads.countWaitingForMe, {}))
         .toBe(1);
+      // The Ave dock follows the same per-person flag as the badge.
+      expect(
+        await f.asDesigner.query(api.routedThreads.listWaitingForMe, {}),
+      ).toEqual([]);
+      const secondDock = await second.as.query(
+        api.routedThreads.listWaitingForMe,
+        {},
+      );
+      expect(secondDock.map((row) => row._id)).toEqual([asked.threadId]);
 
       const firstWake = await queuedWakes(f);
       expect(firstWake).toHaveLength(1);

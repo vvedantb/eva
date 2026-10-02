@@ -2,6 +2,7 @@
 
 import { Button } from "@eva/ui";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
+import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { useAveLauncher } from "@/lib/components/ave/AveLauncherContext";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
@@ -36,6 +37,7 @@ export function AveHeaderButton() {
       <AveMark size={20} />
       <QueryErrorBoundary>
         <AveActiveDot />
+        <AveQuestionsBadge />
       </QueryErrorBoundary>
     </Button>
   );
