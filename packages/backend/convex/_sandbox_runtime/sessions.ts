@@ -1074,6 +1074,32 @@ async function prepareSessionSandboxInternal(
         repoGroupId: launchSession?.repoGroupId,
       }),
   );
+  // A forked session's first sandbox is a Vercel fork of the source sandbox
+  // (DBs included). A replacement for an expired fork sandbox boots the repo
+  // snapshot instead, since the source may be gone by then.
+  const forkFrom =
+    reuseId === undefined ? launchSession?.forkSourceSandboxId : undefined;
+  const bootsFromImage = Boolean(snapshotName) || forkFrom !== undefined;
+  if (forkFrom) {
+    // Check the source before forking: a create failure is too opaque to tell
+    // "source deleted" from a transient. A gone source can never be forked, so
+    // drop it — the next Start boots the repo snapshot instead of failing
+    // forever — and still restart the source if the fork had stopped it.
+    try {
+      await client.get(forkFrom);
+    } catch (error) {
+      if (isSandboxGoneError(error)) {
+        await ctx.runMutation(internal.sessions.settleForkSource, {
+          sessionId: args.sessionId,
+          sourceGone: true,
+        });
+        throw new Error(
+          "The session this was forked from no longer has a sandbox, so its data can't be copied. Start again to boot without it.",
+        );
+      }
+      throw error;
+    }
+  }
 
   if (reuseId) {
     await emitSessionProgress(
@@ -1101,9 +1127,9 @@ async function prepareSessionSandboxInternal(
   // Snapshot restore is sub-second; the remaining work is what used to make
   // "new session" feel like 10–60s.
   let earlyReadyEmitted = false;
-  const prepared = await runLoggedSessionStep(
+  const preparing = runLoggedSessionStep(
     "createSessionSandboxAndPrepareRepo",
-    `${actionDetails}, snapshot=${snapshotName ?? "none"}`,
+    `${actionDetails}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}`,
     () =>
       createSandboxAndPrepareRepo(
         ctx,
@@ -1125,7 +1151,7 @@ async function prepareSessionSandboxInternal(
             sandboxId: sandbox.id,
             branchName: args.branchName,
             isNew: true,
-            usedSnapshot: Boolean(snapshotName),
+            usedSnapshot: bootsFromImage,
             resumeFellBack: reuseId !== undefined,
             // Snapshot restores keep a stale checkout + baked modules; gate the
             // queued first turn until the base pull + install below finish.
@@ -1134,7 +1160,7 @@ async function prepareSessionSandboxInternal(
             // `sessionSandboxStartupWorkflow`), and the workflow — not this
             // action — clears the gate once they're done.
             markSetupPending:
-              Boolean(snapshotName) || args.hasLinkedRepos === true,
+              bootsFromImage || args.hasLinkedRepos === true,
             // Background + startup commands have not run yet on this fresh VM;
             // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
@@ -1148,8 +1174,22 @@ async function prepareSessionSandboxInternal(
         },
         undefined,
         { mode: "none" },
+        undefined,
+        false,
+        forkFrom,
       ),
   );
+  // The fork has been taken (or has failed) once this settles: only now is it
+  // safe to start the source again. Settled on both outcomes so a failed fork
+  // never leaves the source parked; a retry forks the same source again.
+  const prepared = forkFrom
+    ? await preparing.finally(() =>
+        ctx.runMutation(internal.sessions.settleForkSource, {
+          sessionId: args.sessionId,
+          sourceGone: false,
+        }),
+      )
+    : await preparing;
   const handle = prepared.sandbox;
   const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}, usedSnapshot=${prepared.usedSnapshot ? "true" : "false"}`;
   // Any setup step below (ref sync, branch checkout, config restore, seeded-

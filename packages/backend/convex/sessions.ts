@@ -36,6 +36,7 @@ export {
   startSandbox,
   forcePushBranch,
   stopSandbox,
+  requestStopSandbox,
   sandboxReady,
   clearSandboxSetupPending,
   clearSandboxServicesPending,
@@ -44,6 +45,12 @@ export {
 } from "./_sessions/sandbox";
 
 export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
+
+export {
+  getForkSource,
+  createForkedSession,
+  settleForkSource,
+} from "./_sessions/fork";
 
 export {
   getInternal,

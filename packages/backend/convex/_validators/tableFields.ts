@@ -533,6 +533,21 @@ export const sessionFields = {
   // How many `sessionRepos` rows this session has. Denormalised so list rows
   // and resume paths can tell a multi-repo session apart without a join.
   linkedRepoCount: v.optional(v.number()),
+  /** Session this one was forked from ("Fork session"). Informational. */
+  forkedFromSessionId: v.optional(v.id("sessions")),
+  /**
+   * Source sandbox to Vercel-fork for this session's first sandbox, instead of
+   * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
+   * state) carry over.
+   */
+  forkSourceSandboxId: v.optional(v.string()),
+  /**
+   * Set when the source was running at fork time and had to be stopped. The
+   * fork's first boot starts the source again once the Vercel fork has been
+   * taken (or has failed), never before — forking a mid-resume source is not
+   * something Vercel documents.
+   */
+  forkRestartsSource: v.optional(v.boolean()),
 };
 
 /**

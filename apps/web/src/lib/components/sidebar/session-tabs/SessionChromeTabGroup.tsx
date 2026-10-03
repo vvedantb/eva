@@ -168,7 +168,6 @@ export function SessionChromeTabGroup({
         </div>
       ) : (
         <SessionChromeTabStrip
-          repo={repo}
           baseUrl={baseUrl}
           groupColor={colors}
           tabs={tabs}

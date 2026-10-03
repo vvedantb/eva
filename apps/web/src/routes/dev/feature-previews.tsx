@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button } from "@eva/ui";
+import { Button, WebPreview } from "@eva/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
@@ -24,6 +24,9 @@ import {
   DEMO_THREAD_FIND_MESSAGES,
   DEMO_THREAD_FIND_QUERY,
 } from "@/lib/components/chat/threadFind";
+import { RepoGate, RepoProvider } from "@/lib/contexts/RepoContext";
+import { PreviewPanelNavBar } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPanelNavBar";
+import { FILL_PREVIEW_VIEWPORT } from "@/routes/_repo/$owner/$repo/sessions/_utils/previewViewport";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
 import {
   DEMO_FORK_MESSAGES,
@@ -39,6 +42,7 @@ const FEATURES = [
   "webmcp",
   "thread-find",
   "message-fork",
+  "preview-tools",
 ] as const;
 
 // `.catch` keeps an unknown ?feature= on the default preview instead of
@@ -66,6 +70,7 @@ function FeaturePreviewsPage() {
   if (feature === "webmcp") return <WebMcpPreview />;
   if (feature === "thread-find") return <ThreadFindPreview />;
   if (feature === "message-fork") return <MessageForkPreview />;
+  if (feature === "preview-tools") return <PreviewToolsPreview />;
   return <CitePreview />;
 }
 
@@ -417,5 +422,57 @@ function MessageForkPreview() {
         onConfirm={() => undefined}
       />
     </div>
+  );
+}
+
+function PreviewToolsPreview() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [path, setPath] = useState("/billing");
+  const [contain, setContain] = useState(false);
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [poppedOut, setPoppedOut] = useState(false);
+  // The path input reads repo history, so borrow a real repo's context.
+  return (
+    <RepoProvider owner="vvedantb" repoParam="eva--web" passive>
+      <RepoGate>
+        <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Preview tools menu
+          </p>
+          <h1 className="mt-1 text-xl font-semibold">
+            One menu, not seven buttons
+          </h1>
+          <div className="mt-8 h-96 max-w-3xl overflow-hidden rounded-lg border border-border bg-card">
+            <WebPreview
+              ref={containerRef}
+              className="h-full rounded-none border-0"
+            >
+              <PreviewPanelNavBar
+                previewInfo={{ url: "http://localhost:5173", port: 5173 }}
+                isLoading={false}
+                onRefresh={() => {}}
+                containerRef={containerRef}
+                iframeElement={null}
+                port={5173}
+                onPortChange={() => {}}
+                previewPath={path}
+                onPathChange={setPath}
+                viewport={FILL_PREVIEW_VIEWPORT}
+                onToggleDevice={() => {}}
+                contain={contain}
+                onToggleContain={() => setContain(!contain)}
+                annotationMode={annotationMode}
+                onAnnotationModeChange={setAnnotationMode}
+                showAnnotationToggle
+                popOut={{
+                  active: poppedOut,
+                  onToggle: () => setPoppedOut(!poppedOut),
+                }}
+              />
+            </WebPreview>
+          </div>
+        </div>
+      </RepoGate>
+    </RepoProvider>
   );
 }

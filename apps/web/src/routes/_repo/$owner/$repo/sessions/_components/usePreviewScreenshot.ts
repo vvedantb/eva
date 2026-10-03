@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  CrossfadeIcon,
-  Spinner,
-  toast,
-  WebPreviewNavigationButton,
-} from "@eva/ui";
-import { IconCamera } from "@tabler/icons-react";
+import { toast } from "@eva/ui";
 import {
   downloadPreviewScreenshot,
   parseScreenshotInbound,
@@ -34,11 +28,8 @@ async function copyOrDownloadScreenshot(dataUrl: string): Promise<void> {
   }
 }
 
-export function PreviewScreenshotButton({
-  iframeElement,
-}: {
-  iframeElement: HTMLIFrameElement | null;
-}) {
+/** Captures the preview iframe, then copies (or downloads) the PNG. */
+export function usePreviewScreenshot(iframeElement: HTMLIFrameElement | null) {
   const [capturing, setCapturing] = useState(false);
 
   function capture() {
@@ -84,22 +75,5 @@ export function PreviewScreenshotButton({
     );
   }
 
-  return (
-    <WebPreviewNavigationButton
-      tooltip={capturing ? "Capturing…" : "Screenshot"}
-      className="max-sm:hit-target"
-      disabled={capturing || iframeElement === null}
-      onClick={capture}
-    >
-      <CrossfadeIcon
-        show={capturing}
-        trueKey="loading"
-        falseKey="idle"
-        variant="soft"
-        className="relative flex size-3.5 items-center justify-center"
-        whenTrue={<Spinner size="sm" />}
-        whenFalse={<IconCamera className="h-3.5 w-3.5" />}
-      />
-    </WebPreviewNavigationButton>
-  );
+  return { capturing, capture };
 }
