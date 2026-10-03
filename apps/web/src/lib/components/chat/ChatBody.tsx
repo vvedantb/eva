@@ -69,6 +69,7 @@ import {
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
+  type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
@@ -107,6 +108,8 @@ interface ChatBodyProps {
    */
   isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
@@ -228,6 +231,7 @@ function ChatBodyInner({
   messages,
   isLoadingMessages = false,
   queuedMessages,
+  heldFollowUps,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
@@ -656,6 +660,7 @@ function ChatBodyInner({
                 repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
+                heldFollowUps={heldFollowUps}
                 messageHistory={messageHistory}
                 isExecuting={isExecuting}
                 isInputDisabled={isInputDisabled}
