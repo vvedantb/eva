@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   checksHeadline,
   checksOverallTone,
+  checksWorstFirst,
   countChecks,
   headerBlocker,
   mergeBlocker,
@@ -190,14 +191,36 @@ describe("check roll-up", () => {
     );
     expect(
       checksHeadline(
-        countChecks([check({}), check({ status: "in_progress", conclusion: null })]),
+        countChecks([
+          check({}),
+          check({ status: "in_progress", conclusion: null }),
+        ]),
       ),
     ).toBe("1 in progress · 1 passing");
   });
 
   test("a skipped-only run does not claim everything passed", () => {
-    expect(checksHeadline(countChecks([check({ conclusion: "skipped" })]))).toBe(
-      "1 skipped",
-    );
+    expect(
+      checksHeadline(countChecks([check({ conclusion: "skipped" })])),
+    ).toBe("1 skipped");
+  });
+
+  test("the list puts failures first and keeps GitHub's order within a tone", () => {
+    const sorted = checksWorstFirst([
+      check({ name: "lint" }),
+      check({ name: "skipped", conclusion: "skipped" }),
+      check({ name: "typecheck", conclusion: "failure" }),
+      check({ name: "e2e", status: "in_progress", conclusion: null }),
+      check({ name: "build" }),
+      check({ name: "timeout", conclusion: "timed_out" }),
+    ]);
+    expect(sorted.map((c) => c.name)).toEqual([
+      "typecheck",
+      "timeout",
+      "e2e",
+      "lint",
+      "build",
+      "skipped",
+    ]);
   });
 });

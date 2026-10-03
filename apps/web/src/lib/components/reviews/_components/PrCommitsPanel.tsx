@@ -5,7 +5,11 @@ import { Button, Spinner, Surface, cn } from "@eva/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { usePrCommits } from "../usePrOverview";
 import { PrCommitRow } from "./PrCommitRow";
-import { NOTICE_CLASS, type PrOverview } from "./prOverviewMeta";
+import {
+  NOTICE_CLASS,
+  REVIEW_TAB_COLUMN_CLASS,
+  type PrOverview,
+} from "./prOverviewMeta";
 
 /**
  * The Commits tab: every commit on the branch, newest work reachable, each row
@@ -35,7 +39,7 @@ export function PrCommitsPanel({
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4">
+      <div className={cn(REVIEW_TAB_COLUMN_CLASS, "gap-3")}>
         <Surface density="none" className="overflow-hidden py-1">
           <ul>
             {commits.map((commit, index) => (

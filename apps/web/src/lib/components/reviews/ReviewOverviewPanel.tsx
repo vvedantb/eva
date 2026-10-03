@@ -1,9 +1,10 @@
 "use client";
 
 import type { Id } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, cn } from "@eva/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import type { PrOverviewState } from "./usePrOverview";
+import { REVIEW_TAB_COLUMN_CLASS } from "./_components/prOverviewMeta";
 import { PrCommentComposer } from "./_components/PrCommentComposer";
 import { PrDescriptionSection } from "./_components/PrDescriptionSection";
 import { PrLifecycleEventCard } from "./_components/PrLifecycleEventCard";
@@ -72,7 +73,12 @@ export function ReviewOverviewPanel({
     <div className="@container h-full overflow-auto">
       {/* Capped for measure, not for the viewport: this holds agent-written
           markdown, and a description set across a 1600px page is unreadable. */}
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-4 [@container(min-width:52rem)]:flex-row [@container(min-width:52rem)]:gap-8">
+      <div
+        className={cn(
+          REVIEW_TAB_COLUMN_CLASS,
+          "gap-6 [@container(min-width:52rem)]:flex-row [@container(min-width:52rem)]:gap-8",
+        )}
+      >
         {/* First in the source so the metadata leads when it is a band across
             the top, and ordered back to the right once it is a column. */}
         <PrMetaSidebar

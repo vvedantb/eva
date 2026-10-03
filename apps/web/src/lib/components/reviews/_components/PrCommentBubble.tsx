@@ -21,6 +21,11 @@ interface PrCommentBubbleProps {
   emptyLabel?: string;
   /** Controls for this bubble, e.g. Edit on the description. */
   actions?: ReactNode;
+  /**
+   * False when the line above already names the author, time and link — a
+   * review's verdict line — so the bubble is only the words.
+   */
+  byline?: boolean;
 }
 
 /**
@@ -47,6 +52,7 @@ export function PrCommentBubble({
   line,
   emptyLabel,
   actions,
+  byline = true,
 }: PrCommentBubbleProps) {
   const hasBody = body.trim().length > 0;
 
@@ -54,31 +60,33 @@ export function PrCommentBubble({
     // Plain `group`, not `group/bubble`: `reveal-on-hover transition-opacity` keys off the
     // unnamed group, and nothing else in here needed the name.
     <Surface density="tight" className="group space-y-1.5">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">
-          {authorLogin ?? "unknown"}
-        </span>
-        <span>{action}</span>
-        {path ? (
-          <span className="min-w-0 truncate rounded bg-muted/60 px-1 py-0.5 font-mono">
-            {path}
-            {line === undefined || line === null ? "" : `:${line}`}
+      {byline ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {authorLogin ?? "unknown"}
           </span>
-        ) : null}
-        <span className="ml-auto flex shrink-0 items-center gap-2">
-          {actions}
-          {at ? <RelativeDateTime at={new Date(at).getTime()} /> : null}
-          <a
-            href={htmlUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="reveal-on-hover transition-opacity max-sm:hit-target hover:text-foreground"
-            aria-label="View on GitHub"
-          >
-            <IconExternalLink size={12} aria-hidden />
-          </a>
-        </span>
-      </div>
+          <span>{action}</span>
+          {path ? (
+            <span className="min-w-0 truncate rounded bg-muted/60 px-1 py-0.5 font-mono">
+              {path}
+              {line === undefined || line === null ? "" : `:${line}`}
+            </span>
+          ) : null}
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {actions}
+            {at ? <RelativeDateTime at={new Date(at).getTime()} /> : null}
+            <a
+              href={htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="reveal-on-hover transition-opacity max-sm:hit-target hover:text-foreground"
+              aria-label="View on GitHub"
+            >
+              <IconExternalLink size={12} aria-hidden />
+            </a>
+          </span>
+        </div>
+      ) : null}
 
       {hasBody ? (
         <Markdown className={MARKDOWN_CLASS}>{body}</Markdown>

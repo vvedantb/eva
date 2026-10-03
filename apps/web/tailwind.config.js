@@ -173,8 +173,18 @@ export const themeExtend = {
   // tokens wherever rendered markdown sits next to normal UI text. Both the base
   // and `prose-invert` variable sets point at the same tokens, because the tokens
   // already flip on `.dark` — so `dark:prose-invert` becomes a harmless no-op.
+  //
+  // Upstream also wraps inline `code` in literal backticks via ::before/::after.
+  // Every renderer here already draws inline code as a filled chip, so the
+  // backticks printed twice over — "`VERCEL_TOKEN`" inside its own pill.
   typography: {
-    DEFAULT: { css: proseTokenCss() },
+    DEFAULT: {
+      css: {
+        ...proseTokenCss(),
+        "code::before": { content: "none" },
+        "code::after": { content: "none" },
+      },
+    },
     invert: { css: proseTokenCss() },
   },
 };

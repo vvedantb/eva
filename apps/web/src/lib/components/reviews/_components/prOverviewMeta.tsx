@@ -169,6 +169,14 @@ export function PrStatusPill({
 export const SECTION_LABEL_CLASS =
   "shrink-0 text-xs font-medium text-muted-foreground";
 
+/**
+ * The content column of the Activity, Commits and Checks tabs. Capped for
+ * measure, but left-aligned rather than centred: the header, the tab row and the
+ * Changes tab all start on the same 16px edge, and a centred column sat ~220px
+ * in from it on a wide page, so the eye had two left margins to track.
+ */
+export const REVIEW_TAB_COLUMN_CLASS = "flex max-w-6xl flex-col px-4 py-4";
+
 /** Shared idiom for a quiet, non-blocking notice (truncation, empty states). */
 export const NOTICE_CLASS =
   "rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground";
