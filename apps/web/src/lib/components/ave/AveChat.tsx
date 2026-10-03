@@ -5,6 +5,10 @@ import { Button } from "@eva/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { useAveChat } from "@/lib/components/ave/useAveChat";
+import {
+  RoutedQuestionDock,
+  type RoutedQuestionDockSize,
+} from "@/lib/components/routed/RoutedQuestionDock";
 
 /**
  * Manager Ave's chat. Shared by the launcher popover and the `/ave` page.
@@ -12,9 +16,15 @@ import { useAveChat } from "@/lib/components/ave/useAveChat";
  * Ave runs on the server on a fixed model with no codebase of its own, so the
  * chat has no repo (no skills, stash or repo mentions), no model picker, no
  * render_ui panels and no queue: a message sent mid-run is folded into the
- * next run by the server.
+ * next run by the server. Questions Eva routed to the user dock above the
+ * composer (`RoutedQuestionDock`).
  */
-export function AveChat() {
+export function AveChat({
+  size = "popover",
+}: {
+  /** The full-screen `/ave` page has room for a taller question dock. */
+  size?: RoutedQuestionDockSize;
+}) {
   return (
     <QueryErrorBoundary
       fallback={(retry) => (
@@ -27,12 +37,12 @@ export function AveChat() {
         </div>
       )}
     >
-      <AveChatBody />
+      <AveChatBody size={size} />
     </QueryErrorBoundary>
   );
 }
 
-function AveChatBody() {
+function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
   const chat = useAveChat();
 
   return (
@@ -52,6 +62,11 @@ function AveChatBody() {
         onSend={chat.send}
         onCancel={chat.cancel}
         localDraft={chat.localDraft}
+        preInputContent={
+          <QueryErrorBoundary>
+            <RoutedQuestionDock size={size} />
+          </QueryErrorBoundary>
+        }
       />
     </div>
   );
