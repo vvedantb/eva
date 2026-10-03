@@ -519,7 +519,8 @@ export function Sidebar() {
                     >
                       {isFlatPanel ? (
                         <>
-                          <span className="min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
+                          {/* pl-2 lines the title up with nav row icons (nav px-2 + row px-4). */}
+                          <span className="min-w-0 flex-1 truncate pl-2 text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
                             {flatPanelTitle}
                           </span>
                           <div className="flex shrink-0 items-center gap-0.5">
