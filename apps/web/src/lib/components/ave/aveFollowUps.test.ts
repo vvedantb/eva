@@ -50,6 +50,30 @@ describe("splitAveFollowUps", () => {
     });
   });
 
+  it("anchors on the live reply, not an earlier empty finished one", () => {
+    // An earlier turn that finished with no text must not count as in flight,
+    // or the current ask would vanish from the transcript into the queue.
+    const earlierAsk = row("user", "list my agents");
+    const emptyFinished = row("assistant", "", { finishedAt: 1 });
+    const currentAsk = row("user", "now stop them");
+    const live = row("assistant", "");
+    const first = row("user", "first follow-up");
+    const alert = row("user", "sandbox restarted", { isSystemAlert: true });
+    const second = row("user", "second follow-up");
+    const { transcript, followUps } = splitAveFollowUps(
+      [earlierAsk, emptyFinished, currentAsk, live, first, alert, second],
+      true,
+    );
+    expect(transcript.map((m) => m._id)).toEqual([
+      earlierAsk._id,
+      emptyFinished._id,
+      currentAsk._id,
+      live._id,
+      alert._id,
+    ]);
+    expect(followUps.map((f) => f.id)).toEqual([first._id, second._id]);
+  });
+
   it("holds nothing before the run opens its reply", () => {
     // The run has not claimed yet, so it will read this message itself.
     const messages = [ask, followUp];
