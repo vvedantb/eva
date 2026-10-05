@@ -161,11 +161,7 @@ const schema = defineSchema({
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
   messages: defineTable(messageFields)
-    .index("by_parent", ["parentId"])
-    // Scope verdicts are published to whichever PR contains the turn's commit,
-    // not to the session that produced it: a PR that re-lands those commits on
-    // a fresh branch (an extract) must still carry the warning.
-    .index("by_after_sha", ["afterSha"]),
+    .index("by_parent", ["parentId"]),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",
