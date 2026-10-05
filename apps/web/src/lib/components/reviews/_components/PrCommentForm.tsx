@@ -1,39 +1,35 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { Button, Spinner, Textarea } from "@eva/ui";
 import { prErrorMessage } from "@/lib/prReviewQueries";
-import { prComposerId } from "./prComposerFocus";
 
 /**
- * GitHub's comment box at the foot of the conversation, so a reviewer can reply
- * without leaving eva. Sits outside the timeline's rail: it is not something that
- * happened to the pull request, it is the box for making something happen.
+ * The composer's Comment mode: GitHub's conversation comment box. The draft is
+ * owned by the composer above, so dismissing the popover keeps it.
  *
  * `onPosted` refetches the overview — the comment lives on GitHub, so the
  * timeline only learns about it by asking again.
  */
-export function PrCommentComposer({
+export function PrCommentForm({
   repoId,
   prNumber,
+  body,
+  onBodyChange,
   onPosted,
 }: {
   repoId: Id<"githubRepos">;
   prNumber: number;
+  body: string;
+  onBodyChange: (body: string) => void;
   onPosted: () => void;
 }) {
-  const [body, setBody] = useState("");
   const addComment = useAction(api.github.addPrComment);
-
   const post = useMutation({
     mutationFn: (text: string) => addComment({ repoId, prNumber, body: text }),
-    onSuccess: () => {
-      setBody("");
-      onPosted();
-    },
+    onSuccess: onPosted,
   });
 
   const trimmed = body.trim();
@@ -42,21 +38,14 @@ export function PrCommentComposer({
   };
 
   return (
-    // Aligned with the bubbles above (32px gutter + 12px gap), so the thread
-    // still reads as one column.
-    //
-    // No card and no "Add a comment" heading: the textarea's own border is the
-    // affordance, and its placeholder already says what the box is for. A heading
-    // above it would be the third thing on screen naming the same control.
-    <div className="ml-11 space-y-2">
+    <div className="space-y-2">
       <Textarea
-        // The header's Add comment control puts the cursor here from any tab.
-        id={prComposerId(prNumber)}
-        className="min-h-20 text-sm"
+        autoFocus
+        className="min-h-24 text-sm"
         value={body}
         placeholder="Leave a comment"
         aria-label="Comment on this pull request"
-        onChange={(event) => setBody(event.target.value)}
+        onChange={(event) => onBodyChange(event.target.value)}
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
             event.preventDefault();
@@ -64,19 +53,15 @@ export function PrCommentComposer({
           }
         }}
       />
-
       {post.isError ? (
         <p className="text-xs text-destructive">
           {prErrorMessage(post.error, "Couldn't post the comment")}
         </p>
       ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         {/* eva authenticates as its GitHub App, so the comment carries the
             app's identity rather than the reader's account. */}
-        <p className="text-xs text-muted-foreground">
-          Posted to GitHub as the eva app.
-        </p>
+        <p className="text-xs text-muted-foreground">Posted as the eva app.</p>
         <Button
           size="sm"
           onClick={submit}

@@ -192,24 +192,35 @@ export function isTaskRouteSandboxTab(s: string): s is TaskRouteSandboxTab {
  * (`/reviews/$prNumber/$reviewTab`) and the sandbox Review tab
  * (`…/review/$tab`). One union so the two surfaces cannot drift apart.
  *
- * The ids are URL slugs and outlive their labels: `overview` is presented as
- * "Activity" and `diffs` as "Changes" (see `REVIEW_TAB_META`). Renaming the
- * slugs would break every link anybody has pasted into a task or a PR comment
- * for the sake of two words nothing renders, so the labels moved and the slugs
- * stayed. `canonicalReviewTab` accepts the label-shaped spellings too.
+ * Three tabs, as t3code lays a pull request out: Summary (metadata, recap,
+ * description, checks, comments), Timeline (everything that happened, in
+ * order), and Code. Code keeps the `diffs` slug because its layout segment
+ * (`…/review/diffs/unified|split`) is nested under it on every sandbox surface.
+ *
+ * The five slugs this replaced (`overview`, `commits`, `checks`, `recap`, and
+ * `diffs`) are in links pasted into tasks and PR comments, so
+ * `canonicalReviewTab` still answers to every one of them.
  */
-const reviewTabs = ["overview", "commits", "checks", "diffs", "recap"] as const;
+const reviewTabs = ["summary", "timeline", "diffs"] as const;
 export type ReviewTab = (typeof reviewTabs)[number];
-export const REVIEW_DEFAULT_TAB: ReviewTab = "overview";
+export const REVIEW_DEFAULT_TAB: ReviewTab = "summary";
 
 export function isReviewTab(s: string): s is ReviewTab {
   return reviewTabs.some((tab) => tab === s);
 }
 
-/** Slugs a tab used to answer to, or is labelled as, redirected to canonical. */
+/** Slugs a tab used to answer to, or is labelled as, mapped to canonical. */
 export function canonicalReviewTab(s: string): ReviewTab | undefined {
-  if (s === "diff" || s === "changes") return "diffs";
-  if (s === "activity") return "overview";
+  if (s === "diff" || s === "changes" || s === "code") return "diffs";
+  if (
+    s === "overview" ||
+    s === "activity" ||
+    s === "checks" ||
+    s === "recap"
+  ) {
+    return "summary";
+  }
+  if (s === "commits") return "timeline";
   return isReviewTab(s) ? s : undefined;
 }
 
@@ -221,8 +232,8 @@ export function isDiffView(s: string): s is DiffView {
 }
 
 export type ReviewPathTarget =
-  | { kind: "overview" }
-  | { kind: "recap" }
+  | { kind: "summary" }
+  | { kind: "timeline" }
   | { kind: "diffs"; diffView: DiffView };
 
 /**
@@ -233,10 +244,12 @@ export function reviewPathFromSearch(search: {
   prTab?: unknown;
   diffView?: unknown;
 }): ReviewPathTarget {
-  if (typeof search.prTab === "string" && isReviewTab(search.prTab)) {
-    if (search.prTab === "overview") return { kind: "overview" };
-    if (search.prTab === "recap") return { kind: "recap" };
-  }
+  const tab =
+    typeof search.prTab === "string"
+      ? canonicalReviewTab(search.prTab)
+      : undefined;
+  if (tab === "summary") return { kind: "summary" };
+  if (tab === "timeline") return { kind: "timeline" };
   const diffView =
     typeof search.diffView === "string" && isDiffView(search.diffView)
       ? search.diffView
@@ -303,8 +316,8 @@ export function parseDiffSearchFields(search: {
         ? search.diffView
         : undefined,
     prTab:
-      typeof search.prTab === "string" && isReviewTab(search.prTab)
-        ? search.prTab
+      typeof search.prTab === "string"
+        ? canonicalReviewTab(search.prTab)
         : undefined,
   };
 }
