@@ -97,8 +97,6 @@ import type * as _github_prMeta from "../_github/prMeta.js";
 import type * as _github_prOverview from "../_github/prOverview.js";
 import type * as _github_prRecapService from "../_github/prRecapService.js";
 import type * as _github_prReview from "../_github/prReview.js";
-import type * as _github_prScopeCheck from "../_github/prScopeCheck.js";
-import type * as _github_prScopeSection from "../_github/prScopeSection.js";
 import type * as _github_prTitleSync from "../_github/prTitleSync.js";
 import type * as _github_prUrl from "../_github/prUrl.js";
 import type * as _github_pullRequestDraftState from "../_github/pullRequestDraftState.js";
@@ -583,8 +581,6 @@ declare const fullApi: ApiFromModules<{
   "_github/prOverview": typeof _github_prOverview;
   "_github/prRecapService": typeof _github_prRecapService;
   "_github/prReview": typeof _github_prReview;
-  "_github/prScopeCheck": typeof _github_prScopeCheck;
-  "_github/prScopeSection": typeof _github_prScopeSection;
   "_github/prTitleSync": typeof _github_prTitleSync;
   "_github/prUrl": typeof _github_prUrl;
   "_github/pullRequestDraftState": typeof _github_pullRequestDraftState;
