@@ -35,6 +35,7 @@ import type * as _automations_prompts_dailyStandup from "../_automations/prompts
 import type * as _automations_prompts_findCriticalBugs from "../_automations/prompts/findCriticalBugs.js";
 import type * as _automations_prompts_generateDocs from "../_automations/prompts/generateDocs.js";
 import type * as _automations_prompts_improveCodeStructure from "../_automations/prompts/improveCodeStructure.js";
+import type * as _automations_prompts_memoryDreaming from "../_automations/prompts/memoryDreaming.js";
 import type * as _automations_prompts_thermoNuclearCodeReview from "../_automations/prompts/thermoNuclearCodeReview.js";
 import type * as _automations_runs from "../_automations/runs.js";
 import type * as _automations_systemAutomations from "../_automations/systemAutomations.js";
@@ -519,6 +520,7 @@ declare const fullApi: ApiFromModules<{
   "_automations/prompts/findCriticalBugs": typeof _automations_prompts_findCriticalBugs;
   "_automations/prompts/generateDocs": typeof _automations_prompts_generateDocs;
   "_automations/prompts/improveCodeStructure": typeof _automations_prompts_improveCodeStructure;
+  "_automations/prompts/memoryDreaming": typeof _automations_prompts_memoryDreaming;
   "_automations/prompts/thermoNuclearCodeReview": typeof _automations_prompts_thermoNuclearCodeReview;
   "_automations/runs": typeof _automations_runs;
   "_automations/systemAutomations": typeof _automations_systemAutomations;
