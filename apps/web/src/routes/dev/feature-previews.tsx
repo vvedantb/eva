@@ -191,8 +191,8 @@ function IgnoreWhitespacePreview() {
       </div>
       <div className="mt-8 border-y border-border">
         <DiffsToolbar
-          fileCount={3}
-          viewedCount={1}
+          scopedCommit={null}
+          onClearScope={() => {}}
           diffView="unified"
           onDiffViewChange={() => {}}
           wrapLines={false}

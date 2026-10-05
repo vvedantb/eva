@@ -3,32 +3,33 @@
 import type { ReactNode } from "react";
 import {
   Button,
-  Progress,
-  Tabs,
-  TabsList,
-  TabsTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  RefreshSpinIcon,
   cn,
 } from "@eva/ui";
 import {
   IconChevronsDown,
   IconChevronsUp,
+  IconDots,
   IconLayoutColumns,
   IconLayoutRows,
-  IconListTree,
-  IconPilcrow,
-  IconTextWrap,
+  IconLayoutSidebarRight,
+  IconRefresh,
+  IconX,
 } from "@tabler/icons-react";
-import { isDiffView, type DiffView } from "@/lib/search-params";
+import type { DiffView } from "@/lib/search-params";
 
 interface DiffsToolbarProps {
-  /** The commit-scope dropdown; absent where there is nothing to scope by. */
-  scope?: ReactNode;
-  fileCount: number;
-  viewedCount: number;
+  /** The commit Code is scoped to, shown as a clearable chip; null for all. */
+  scopedCommit: { sha: string; headline: string } | null;
+  onClearScope: () => void;
   diffView: DiffView;
   onDiffViewChange: (view: DiffView) => void;
   wrapLines: boolean;
@@ -45,16 +46,15 @@ interface DiffsToolbarProps {
 }
 
 /**
- * The Code tab's toolbar, laid out as t3code's: one 40px strip with the scope
- * and the reading progress on the left, and the reading controls as icon
- * toggles on the right — whitespace, fold all, stacked/split, wrap, refresh, and
- * the file tree. It lives inside the panel so every review surface gets the
- * same controls.
+ * Code's controls, as few as Cursor shows: a stacked/split toggle and a file
+ * tree toggle beside the tabs. Everything a reader reaches for rarely —
+ * wrapping, whitespace, fold all, refresh — sits behind one overflow menu.
+ * A commit scope set from Timeline shows as a chip that clears back to the
+ * whole change.
  */
 export function DiffsToolbar({
-  scope,
-  fileCount,
-  viewedCount,
+  scopedCommit,
+  onClearScope,
   diffView,
   onDiffViewChange,
   wrapLines,
@@ -69,118 +69,94 @@ export function DiffsToolbar({
   treeOpen,
   onTreeOpenChange,
 }: DiffsToolbarProps) {
-  const viewedShare =
-    fileCount === 0 ? 0 : Math.round((viewedCount / fileCount) * 100);
-
   return (
-    <div className="flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-4 text-xs text-muted-foreground">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {scope}
-        <span className="shrink-0 tabular-nums">
-          {fileCount} {fileCount === 1 ? "file" : "files"}
-        </span>
-        {fileCount > 0 ? (
-          <span className="flex min-w-0 items-center gap-2 tabular-nums max-sm:hidden">
-            <span className="shrink-0">
-              {viewedCount} / {fileCount} viewed
-            </span>
-            {/* `Progress` moves its fill on `transform`, so it stays on the
-                compositor rather than relaying out on every tick. */}
-            <Progress className="h-1 w-12 shrink-0" value={viewedShare} />
+    <>
+      {scopedCommit === null ? null : (
+        <span className="mr-1 flex max-w-64 min-w-0 items-center gap-1 rounded-full bg-muted py-0.5 pr-0.5 pl-2.5 text-xs">
+          <span className="truncate" title={scopedCommit.headline}>
+            <span className="font-mono text-muted-foreground">
+              {scopedCommit.sha.slice(0, 7)}
+            </span>{" "}
+            {scopedCommit.headline}
           </span>
-        ) : null}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-0.5">
-        <IconToggle
-          pressed={ignoreWhitespace}
-          onPressedChange={onIgnoreWhitespaceChange}
-          label={
-            ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
-          }
-          testId="ignore-whitespace-toggle"
-        >
-          <IconPilcrow />
-        </IconToggle>
-        <IconToggle
-          pressed={false}
-          onPressedChange={() => (allExpanded ? onCollapseAll() : onExpandAll())}
-          label={allExpanded ? "Collapse all files" : "Expand all files"}
-        >
-          {allExpanded ? <IconChevronsUp /> : <IconChevronsDown />}
-        </IconToggle>
-        <Tabs
-          value={diffView}
-          onValueChange={(value) => {
-            if (isDiffView(value)) onDiffViewChange(value);
-          }}
-          className="mx-1"
-        >
-          <TabsList size="sm" className="tabs-segmented h-7 p-0.5">
-            <TabsTrigger
-              value="unified"
-              aria-label="Stacked diff view"
-              className="h-6 px-1.5"
-            >
-              <IconLayoutRows className="size-3.5" />
-            </TabsTrigger>
-            {/* Two code columns do not fit a phone; `DiffsPanel` forces
-                unified at the same breakpoint. */}
-            <TabsTrigger
-              value="split"
-              aria-label="Split diff view"
-              className="h-6 px-1.5 max-md:hidden"
-            >
-              <IconLayoutColumns className="size-3.5" />
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <IconToggle
-          pressed={wrapLines}
-          onPressedChange={onWrapLinesChange}
-          label={wrapLines ? "Disable line wrapping" : "Enable line wrapping"}
-        >
-          <IconTextWrap />
-        </IconToggle>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onRefresh}
-              disabled={isLoading}
-              aria-label="Refresh diff"
-            >
-              <RefreshSpinIcon busy={isLoading} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Refresh diff</TooltipContent>
-        </Tooltip>
-        {fileCount > 0 ? (
-          <IconToggle
-            pressed={treeOpen}
-            onPressedChange={onTreeOpenChange}
-            label={treeOpen ? "Hide file tree" : "Show file tree"}
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            className="size-5 rounded-full"
+            aria-label="Show all commits"
+            onClick={onClearScope}
           >
-            <IconListTree />
-          </IconToggle>
-        ) : null}
-      </div>
-    </div>
+            <IconX />
+          </Button>
+        </span>
+      )}
+      <IconToggle
+        pressed={false}
+        onPress={() => onDiffViewChange(diffView === "unified" ? "split" : "unified")}
+        label={diffView === "unified" ? "Switch to split view" : "Switch to stacked view"}
+        className="max-md:hidden"
+      >
+        {diffView === "unified" ? <IconLayoutRows /> : <IconLayoutColumns />}
+      </IconToggle>
+      <IconToggle
+        pressed={treeOpen}
+        onPress={() => onTreeOpenChange(!treeOpen)}
+        label={treeOpen ? "Hide file tree" : "Show file tree"}
+      >
+        <IconLayoutSidebarRight />
+      </IconToggle>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon-sm" variant="ghost" aria-label="More diff options">
+            <IconDots />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuCheckboxItem
+            checked={wrapLines}
+            onCheckedChange={(checked) => onWrapLinesChange(checked === true)}
+          >
+            Wrap lines
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={ignoreWhitespace}
+            onCheckedChange={(checked) =>
+              onIgnoreWhitespaceChange(checked === true)
+            }
+            data-testid="ignore-whitespace-toggle"
+          >
+            Hide whitespace changes
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={allExpanded ? onCollapseAll : onExpandAll}>
+            {allExpanded ? (
+              <IconChevronsUp className="size-4" />
+            ) : (
+              <IconChevronsDown className="size-4" />
+            )}
+            {allExpanded ? "Collapse all files" : "Expand all files"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onRefresh} disabled={isLoading}>
+            <IconRefresh className="size-4" />
+            Refresh diff
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
 function IconToggle({
   pressed,
-  onPressedChange,
+  onPress,
   label,
-  testId,
+  className,
   children,
 }: {
   pressed: boolean;
-  onPressedChange: (pressed: boolean) => void;
+  onPress: () => void;
   label: string;
-  testId?: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -188,14 +164,12 @@ function IconToggle({
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           aria-pressed={pressed}
-          // Radix wires TooltipContent as `aria-describedby` — a description,
-          // not a name — so icon-only controls still need one.
+          // Radix wires TooltipContent as a description, not a name.
           aria-label={label}
-          data-testid={testId}
-          className={cn(pressed && "bg-muted text-foreground")}
-          onClick={() => onPressedChange(!pressed)}
+          className={cn(pressed && "bg-muted text-foreground", className)}
+          onClick={onPress}
         >
           {children}
         </Button>

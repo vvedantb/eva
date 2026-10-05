@@ -12,7 +12,6 @@ import {
   TimelineVerdict,
 } from "./_components/TimelineRows";
 import { buildPrTimeline, groupTimelineRows } from "./_components/prTimelineItems";
-import type { TimelineOrder } from "./_components/ReviewTabNav";
 
 /**
  * The Timeline tab, as t3code draws it: one rail down the left, every event a
@@ -25,12 +24,10 @@ import type { TimelineOrder } from "./_components/ReviewTabNav";
 export function ReviewTimelineTab({
   repoId,
   overview,
-  order,
   onOpenCommit,
 }: {
   repoId: Id<"githubRepos">;
   overview: PrOverview;
-  order: TimelineOrder;
   onOpenCommit: (sha: string) => void;
 }) {
   // The overview carries GitHub's first page of commits, which is the oldest —
@@ -38,7 +35,8 @@ export function ReviewTimelineTab({
   const allCommits = usePrCommits(repoId, overview.number);
   const commits = allCommits.commits ?? overview.commits;
   const events = buildPrTimeline({ ...overview, commits });
-  const rows = groupTimelineRows(order === "newest" ? [...events].reverse() : events);
+  // Newest first: what happened last is what a returning reader came for.
+  const rows = groupTimelineRows([...events].reverse());
   const hiddenCommits = Math.max(0, overview.commitCount - commits.length);
   const canLoadCommits = allCommits.commits === undefined && hiddenCommits > 0;
 
@@ -63,7 +61,7 @@ export function ReviewTimelineTab({
   return (
     <div className="h-full overflow-y-auto px-4 py-5 pb-20">
       <div className="mx-auto max-w-3xl">
-        {order === "newest" ? loadMore : null}
+        {loadMore}
         <div className="relative">
           <span
             aria-hidden
@@ -104,7 +102,6 @@ export function ReviewTimelineTab({
             );
           })}
         </div>
-        {order === "oldest" ? loadMore : null}
         {allCommits.error === null ? null : (
           <p className="ml-12 text-xs text-destructive">{allCommits.error}</p>
         )}

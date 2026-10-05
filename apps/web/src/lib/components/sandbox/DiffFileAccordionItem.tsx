@@ -150,7 +150,7 @@ export function DiffFileAccordionItem({
       value={path}
       className="group/item overflow-clip rounded-xl border border-border bg-card last:border-b"
     >
-      <div className="group/file sticky top-0 z-10 flex items-center gap-3 border-border bg-card/95 pr-3 pl-2 backdrop-blur-sm group-data-[state=open]/item:border-b">
+      <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-card/95 pr-3 pl-2 backdrop-blur-sm group-data-[state=open]/item:border-b">
         <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline [&>svg:last-child]:hidden">
           <span className="flex min-w-0 flex-1 items-start gap-2 text-left">
             <IconChevronRight

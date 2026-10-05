@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useLocalStorage } from "usehooks-ts";
 import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
@@ -18,7 +19,6 @@ import {
   NoPendingReviewComments,
   usePendingReviewComments,
 } from "@/lib/contexts/PendingReviewCommentsContext";
-import { DiffCommitScope } from "./DiffCommitScope";
 import { DiffFileTree } from "./DiffFileTree";
 import { DiffFileAccordionItem } from "./DiffFileAccordionItem";
 import { DiffsToolbar } from "./DiffsToolbar";
@@ -31,11 +31,16 @@ interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
   prUrl?: string;
   repoId: Id<"githubRepos">;
-  /** The pull request's commits, newest last, for the scope dropdown. */
+  /** The pull request's commits, to name the one Code is scoped to. */
   commits: readonly PrCommit[];
   /** A commit to scope the diff to; null for the whole change. */
   commit: string | null;
   onCommitChange: (sha: string | null) => void;
+  /**
+   * Where to render Code's controls — the tab row's right end — or null while
+   * Code is not the open tab.
+   */
+  controlsSlot: HTMLElement | null;
 }
 
 /**
@@ -60,10 +65,10 @@ type DiffSource =
     };
 
 /**
- * The Code tab, as t3code has it: one toolbar strip (scope and progress left,
- * reading controls right), the diff, and a file tree on the right that can be
- * folded away. Each file is a flat row-header with a Viewed tick (persisted per
- * pull request), and checking one folds it, as GitHub does.
+ * The Code tab, as Cursor has it: no toolbar of its own — its few controls
+ * portal into the tab row — then a card per file and a file tree on the right
+ * that can be folded away. Each card has a Viewed tick (persisted per pull
+ * request), and checking one folds it, as GitHub does.
  *
  * Scoped to one commit, the diff is read-only: a line comment is anchored to the
  * whole change, so commenting is switched off until All commits is back.
@@ -74,6 +79,7 @@ export function DiffsPanel({
   commits,
   commit,
   onCommitChange,
+  controlsSlot,
 }: DiffsPanelProps) {
   "use no memo";
   const { resolvedTheme } = useThemeMode();
@@ -153,7 +159,7 @@ export function DiffsPanel({
   const rawEntries = source.status === "ready" ? source.entries : [];
   const fileEntries = ignoreWhitespace ? applyIgnoreWhitespace(rawEntries) : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
-  const viewedCount = filePaths.filter((path) => viewedPaths.includes(path)).length;
+  const scopedCommit = commits.find((entry) => entry.sha === commit);
   const query = fileFilter.trim().toLowerCase();
   const visibleEntries =
     query.length === 0
@@ -299,7 +305,7 @@ export function DiffsPanel({
           onChange={setFileFilter}
           onClear={() => setFileFilter("")}
           placeholder="Search files"
-          className="w-full"
+          className="w-full max-w-none"
           inputClassName="h-9 text-sm"
         />
       </div>
@@ -338,32 +344,41 @@ export function DiffsPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <DiffsToolbar
-        scope={
-          commits.length === 0 ? undefined : (
-            <DiffCommitScope commits={commits} commit={commit} onChange={onCommitChange} />
-          )
-        }
-        fileCount={fileEntries.length}
-        viewedCount={viewedCount}
-        diffView={effectiveDiffView}
-        onDiffViewChange={setDiffView}
-        wrapLines={wrapLines}
-        onWrapLinesChange={setWrapLines}
-        ignoreWhitespace={ignoreWhitespace}
-        onIgnoreWhitespaceChange={handleIgnoreWhitespaceChange}
-        allExpanded={
-          visiblePaths.length > 0 && visiblePaths.every((path) => openPaths.includes(path))
-        }
-        onExpandAll={() => setOpenPaths(filePaths)}
-        onCollapseAll={() => setOpenPaths([])}
-        isLoading={
-          source.status === "loading" || (source.status === "ready" && source.refreshing)
-        }
-        onRefresh={commit === null ? refresh : () => void commitQuery.refetch()}
-        treeOpen={treeOpen}
-        onTreeOpenChange={setTreeOpen}
-      />
+      {controlsSlot === null
+        ? null
+        : createPortal(
+            <DiffsToolbar
+              scopedCommit={
+                scopedCommit === undefined
+                  ? null
+                  : {
+                      sha: scopedCommit.sha,
+                      headline: scopedCommit.message.split("\n")[0] ?? "",
+                    }
+              }
+              onClearScope={() => onCommitChange(null)}
+              diffView={effectiveDiffView}
+              onDiffViewChange={setDiffView}
+              wrapLines={wrapLines}
+              onWrapLinesChange={setWrapLines}
+              ignoreWhitespace={ignoreWhitespace}
+              onIgnoreWhitespaceChange={handleIgnoreWhitespaceChange}
+              allExpanded={
+                visiblePaths.length > 0 &&
+                visiblePaths.every((path) => openPaths.includes(path))
+              }
+              onExpandAll={() => setOpenPaths(filePaths)}
+              onCollapseAll={() => setOpenPaths([])}
+              isLoading={
+                source.status === "loading" ||
+                (source.status === "ready" && source.refreshing)
+              }
+              onRefresh={commit === null ? refresh : () => void commitQuery.refetch()}
+              treeOpen={treeOpen}
+              onTreeOpenChange={setTreeOpen}
+            />,
+            controlsSlot,
+          )}
       <div className="flex min-h-0 flex-1">
         {commit === null ? body : <NoPendingReviewComments>{body}</NoPendingReviewComments>}
       </div>

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, type ReactNode, type UIEvent } from "react";
-import { useLocalStorage } from "usehooks-ts";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
 import { Button, Spinner, cn } from "@eva/ui";
@@ -19,7 +18,7 @@ import { usePrOverview, type PrOverviewState } from "./usePrOverview";
 import type { PrOverview } from "./_components/prOverviewMeta";
 import { PrComposer } from "./_components/PrComposer";
 import { ReviewHeader } from "./_components/ReviewHeader";
-import { ReviewTabNav, type TimelineOrder } from "./_components/ReviewTabNav";
+import { ReviewTabNav } from "./_components/ReviewTabNav";
 import { REVIEW_TAB_ORDER } from "./_components/reviewTabMeta";
 
 interface ReviewTabsPanelProps {
@@ -41,14 +40,12 @@ interface ReviewTabsPanelProps {
   refresh?: { run: () => void; running: boolean };
 }
 
-/** Past this, the header folds away so the tabs and actions keep the pane. */
-const CONDENSE_AT_PX = 48;
-
 /**
  * The pull request review surface, reimplemented on t3code's layout and shared
  * by the standalone Reviews page and the sandbox Review tab:
  *
- * - a header that folds on scroll (`ReviewHeader`), ending in the tab row,
+ * - a two-line header (`ReviewHeader`) — state, branches, actions; then the
+ *   title — ending in the tab row, as Cursor keeps it,
  * - three tabs — Summary, Timeline, Code — each its own scroll box, all kept
  *   mounted so drafts, scroll and expanded files survive a switch,
  * - one floating composer (`PrComposer`) for comments and the review.
@@ -72,33 +69,14 @@ export function ReviewTabsPanel({
   );
   const { state, reload } = usePrOverview(repoId, prNumber);
   const overview = state.status === "ready" ? state.overview : null;
-  const [timelineOrder, setTimelineOrder] = useLocalStorage<TimelineOrder>(
-    "eva:pr-timeline-order",
-    "newest",
-  );
   // The commit Code is scoped to. Owned here because Timeline sets it too: a
   // commit row opens Code on that commit.
   const [codeCommit, setCodeCommit] = useState<string | null>(null);
-  // Per tab, so returning to a tab scrolled past its fold keeps it folded.
-  const [condensedByTab, setCondensedByTab] = useState<
-    Partial<Record<ReviewTab, boolean>>
-  >({});
-  const condensed = condensedByTab[activeTab] === true;
-
-  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
-    const target = event.target;
-    // Only a tab's own vertical scroll box counts: a code line scrolling
-    // sideways, or a list inside a portalled popover, reports scrollTop 0 too.
-    if (!(target instanceof HTMLElement)) return;
-    if (target.scrollHeight <= target.clientHeight) return;
-    if (!target.isConnected || target.closest("[data-radix-popper-content-wrapper]")) return;
-    const top = target.scrollTop;
-    // The hard top reopens it; only scrolling well past the fold closes it.
-    const next = condensed ? top >= 4 : top > CONDENSE_AT_PX;
-    if (next !== condensed) {
-      setCondensedByTab((current) => ({ ...current, [activeTab]: next }));
-    }
-  };
+  // Where Code puts its few controls: the right end of the tab row, as Cursor
+  // keeps layout and tree toggles beside the tabs instead of a second toolbar.
+  const [codeControlsSlot, setCodeControlsSlot] = useState<HTMLElement | null>(
+    null,
+  );
 
   const openCommit = (sha: string) => {
     setCodeCommit(sha);
@@ -109,9 +87,7 @@ export function ReviewTabsPanel({
     <ReviewTabNav
       activeTab={activeTab}
       onTabChange={onTabChange}
-      overview={overview}
-      timelineOrder={timelineOrder}
-      onTimelineOrderChange={setTimelineOrder}
+      controlsRef={setCodeControlsSlot}
     />
   );
 
@@ -135,7 +111,6 @@ export function ReviewTabsPanel({
           <ReviewHeader
             repoId={repoId}
             overview={overview}
-            condensed={condensed}
             refreshing={
               refresh?.running === true ||
               (state.status === "ready" && state.refreshing)
@@ -146,10 +121,7 @@ export function ReviewTabsPanel({
           />
         )}
 
-        <div
-          className="relative min-h-0 flex-1 overflow-hidden"
-          onScrollCapture={handleScroll}
-        >
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           {REVIEW_TAB_ORDER.map((tab) => (
             <div
               key={tab}
@@ -163,6 +135,7 @@ export function ReviewTabsPanel({
                   commits={overview?.commits ?? []}
                   commit={codeCommit}
                   onCommitChange={setCodeCommit}
+                  controlsSlot={activeTab === "diffs" ? codeControlsSlot : null}
                 />
               ) : (
                 <OverviewGate state={state} reload={reload}>
@@ -179,7 +152,6 @@ export function ReviewTabsPanel({
                       <ReviewTimelineTab
                         repoId={repoId}
                         overview={ready}
-                        order={timelineOrder}
                         onOpenCommit={openCommit}
                       />
                     )
