@@ -103,6 +103,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@vedantb/redline": "file:vendor/vedantb-redline-0.1.0.tgz",
     "@vitejs/plugin-react": "^6.1.0",
     "agentation": "^3.0.2",
     "oxc-transform-react": "^0.145.0",
