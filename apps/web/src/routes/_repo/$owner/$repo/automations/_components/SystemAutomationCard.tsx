@@ -9,6 +9,7 @@ import {
   IconClock,
   IconEye,
   IconFileText,
+  IconMoon,
   IconRadioactive,
   IconSitemap,
   IconSparkles,
@@ -28,6 +29,7 @@ const ENTRY_ICONS: Record<string, Icon> = {
   "generate-docs": IconBook,
   "improve-code-structure": IconSitemap,
   "thermo-nuclear-code-review": IconRadioactive,
+  "memory-dreaming": IconMoon,
 };
 
 interface SystemAutomationCardProps {
