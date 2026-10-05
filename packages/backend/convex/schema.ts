@@ -179,7 +179,8 @@ const schema = defineSchema({
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_sandbox", ["sandboxId"])
+    .index("by_forked_from", ["forkedFromSessionId"]),
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
