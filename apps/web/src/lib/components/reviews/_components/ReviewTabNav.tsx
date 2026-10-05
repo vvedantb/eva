@@ -31,7 +31,12 @@ export function ReviewTabNav({
           if (isReviewTab(value)) onTabChange(value);
         }}
       >
-        <TabsList size="sm" className="h-8 shrink-0 gap-0.5 p-0 shadow-none">
+        <TabsList
+          size="sm"
+          // Body size, like the branch line above: the small preset (12px)
+          // made the tabs the smallest text in the header.
+          className="h-8 shrink-0 gap-0.5 p-0 shadow-none [&_.t-tab]:text-sm"
+        >
           {REVIEW_TAB_ORDER.map((tab) => (
             <TabsTrigger key={tab} value={tab}>
               {REVIEW_TAB_LABEL[tab]}
