@@ -4,6 +4,7 @@ export {
   get,
   getByNumId,
   getFirstMessagePreview,
+  getForkLinks,
   countActive,
 } from "./_sessions/queries";
 

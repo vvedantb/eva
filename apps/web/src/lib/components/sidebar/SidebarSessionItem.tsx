@@ -10,7 +10,7 @@ import {
   HoverCardTrigger,
   LoadingState,
 } from "@eva/ui";
-import { IconGitPullRequest } from "@tabler/icons-react";
+import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
@@ -90,6 +90,20 @@ interface SidebarSessionItemProps {
    * whose sidebar this row lives in.
    */
   linkedFrom?: SessionLinkedFrom;
+  /** Set on sessions made by "Fork session"; shows the fork glyph. */
+  forkedFromSessionId?: Id<"sessions">;
+}
+
+/** Fork glyph on rows made by "Fork session"; the hover card names the source. */
+function ForkedGlyph({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <IconGitFork
+      size={12}
+      className="shrink-0 text-muted-foreground"
+      title="Forked session"
+    />
+  );
 }
 
 /** Multi-repo session: `+N` badge for how many repos clone alongside it. */
@@ -197,7 +211,9 @@ export function SidebarSessionItem({
   baseBranch,
   linkedRepoCount,
   linkedFrom,
+  forkedFromSessionId,
 }: SidebarSessionItemProps) {
+  const isFork = forkedFromSessionId !== undefined;
   const { settings } = useSessionsSidebarSettings();
   const isFolder = settings.layout === "folder";
   const displayStatus = sandboxDisplayStatus({ status, sandboxError });
@@ -236,6 +252,7 @@ export function SidebarSessionItem({
             {statusLeading}
             <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
             <TitleRegeneratingHint show={isRegeneratingTitle} />
+            <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
           </div>
           <div className="flex min-w-0 items-center gap-2 pl-4 opacity-60">
@@ -260,6 +277,7 @@ export function SidebarSessionItem({
           {statusLeading}
           <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
           <TitleRegeneratingHint show={isRegeneratingTitle} />
+          <ForkedGlyph show={isFork} />
           <LinkedRepoCountBadge count={linkedRepoCount} />
           <LinkedFromHint linkedFrom={linkedFrom} />
           <SessionPrIcon prUrl={prUrl} prState={prState} />
