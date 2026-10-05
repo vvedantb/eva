@@ -11,10 +11,13 @@ import { cn } from "@eva/ui";
 export function PrDiffStat({
   additions,
   deletions,
+  hideZero = false,
   className,
 }: {
   additions: number;
   deletions: number;
+  /** Drop a side that is zero, so a pure addition reads `+2`, not `+2 −0`. */
+  hideZero?: boolean;
   className?: string;
 }) {
   return (
@@ -22,10 +25,14 @@ export function PrDiffStat({
       className={cn("inline-flex shrink-0 gap-1 font-mono tabular-nums", className)}
       aria-label={`${additions} additions, ${deletions} deletions`}
     >
-      <span className="text-emerald-600 dark:text-emerald-400">
-        +{additions.toLocaleString()}
-      </span>
-      <span className="text-destructive">−{deletions.toLocaleString()}</span>
+      {hideZero && additions === 0 ? null : (
+        <span className="text-emerald-600 dark:text-emerald-400">
+          +{additions.toLocaleString()}
+        </span>
+      )}
+      {hideZero && deletions === 0 ? null : (
+        <span className="text-destructive">−{deletions.toLocaleString()}</span>
+      )}
     </span>
   );
 }

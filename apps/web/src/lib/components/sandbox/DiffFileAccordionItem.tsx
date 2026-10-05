@@ -4,13 +4,12 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-  Button,
   Checkbox,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
   Spinner,
 } from "@eva/ui";
 import type { ThemeTypes } from "@pierre/diffs";
@@ -18,7 +17,6 @@ import {
   IconArrowsDiagonal,
   IconChevronRight,
   IconCopy,
-  IconDots,
   IconExternalLink,
   IconFileText,
   IconMessage,
@@ -106,10 +104,6 @@ export function DiffFileAccordionItem({
   const pendingComments =
     review?.comments.filter((comment) => comment.filePath === path).length ?? 0;
 
-  const fileName = path.includes("/")
-    ? path.slice(path.lastIndexOf("/") + 1)
-    : path;
-
   /**
    * Pulls both ends of the file so the diff can be re-derived from whole files.
    * That is the only way to offer GitHub's "expand unchanged lines": the PR
@@ -148,9 +142,13 @@ export function DiffFileAccordionItem({
     // this hard to read.
     <AccordionItem
       value={path}
-      className="group/item overflow-clip rounded-xl border border-border bg-card last:border-b"
+      className="group/item overflow-clip rounded-lg border border-border bg-background last:border-b"
     >
-      <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-card/95 pr-3 pl-2 backdrop-blur-sm group-data-[state=open]/item:border-b">
+      {/* File actions on right-click, as Cursor keeps the row to path,
+          counts and the tick. */}
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
+      <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-background/95 pr-3 pl-3 backdrop-blur-sm group-data-[state=open]/item:border-b">
         <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline [&>svg:last-child]:hidden">
           <span className="flex min-w-0 flex-1 items-start gap-2 text-left">
             <IconChevronRight
@@ -182,57 +180,14 @@ export function DiffFileAccordionItem({
             </span>
           ) : null}
           {entry.binary ? null : (
-            <PrDiffStat additions={additions} deletions={deletions} className="text-sm" />
+            <PrDiffStat
+              additions={additions}
+              deletions={deletions}
+              hideZero
+              className="font-sans text-sm"
+            />
           )}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Actions for ${fileName}`}
-                className="reveal-on-hover"
-              >
-                <IconDots />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {canExpandContext ? (
-                <DropdownMenuItem
-                  onSelect={loadFullFile}
-                  disabled={fullFile.status === "loading"}
-                >
-                  <IconArrowsDiagonal className="size-4" />
-                  {fullFile.status === "error"
-                    ? "Retry loading full file"
-                    : "Load full file context"}
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                onSelect={() => void navigator.clipboard.writeText(path)}
-              >
-                <IconCopy className="size-4" />
-                Copy path
-              </DropdownMenuItem>
-              {openInFiles ? (
-                <DropdownMenuItem onSelect={openInFiles} data-testid="open-in-files">
-                  <IconFileText className="size-4" />
-                  Open in Files
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a
-                  href={`${repoUrl}/blob/${viewRef}/${path}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <IconExternalLink className="size-4" />
-                  View file on GitHub
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           {/* Outside the trigger so ticking Viewed does not also fold the
               file. The tick alone, as Cursor has it; the label names it. */}
@@ -246,11 +201,49 @@ export function DiffFileAccordionItem({
               onCheckedChange={(checked) => onViewedChange(checked === true)}
               aria-label={`Mark ${path} as viewed`}
               title="Viewed"
-              className="size-4.5 rounded-[5px]"
+              className="size-5 rounded-md border-border bg-muted/60"
             />
           </span>
         </div>
       </div>
+      </ContextMenuTrigger>
+              <ContextMenuContent>
+                {canExpandContext ? (
+                  <ContextMenuItem
+                    onSelect={loadFullFile}
+                    disabled={fullFile.status === "loading"}
+                  >
+                    <IconArrowsDiagonal className="size-4" />
+                    {fullFile.status === "error"
+                      ? "Retry loading full file"
+                      : "Load full file context"}
+                  </ContextMenuItem>
+                ) : null}
+                <ContextMenuItem
+                  onSelect={() => void navigator.clipboard.writeText(path)}
+                >
+                  <IconCopy className="size-4" />
+                  Copy path
+                </ContextMenuItem>
+                {openInFiles ? (
+                  <ContextMenuItem onSelect={openInFiles} data-testid="open-in-files">
+                    <IconFileText className="size-4" />
+                    Open in Files
+                  </ContextMenuItem>
+                ) : null}
+                <ContextMenuSeparator />
+                <ContextMenuItem asChild>
+                  <a
+                    href={`${repoUrl}/blob/${viewRef}/${path}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <IconExternalLink className="size-4" />
+                    View file on GitHub
+                  </a>
+                </ContextMenuItem>
+              </ContextMenuContent>
+      </ContextMenu>
 
       <AccordionContent className="pb-0">
         {entry.binary ? (
