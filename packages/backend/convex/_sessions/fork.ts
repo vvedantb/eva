@@ -28,6 +28,12 @@ export const getForkSource = internalAuthQuery({
   args: { sessionId: v.id("sessions") },
   returns: v.object({
     repoId: v.id("githubRepos"),
+    repo: v.object({
+      owner: v.string(),
+      name: v.string(),
+      installationId: v.number(),
+    }),
+    branchName: v.optional(v.string()),
     sandboxId: v.optional(v.string()),
     status: sessionStatusValidator,
     hasOpenTurn: v.boolean(),
@@ -38,8 +44,16 @@ export const getForkSource = internalAuthQuery({
       args.sessionId,
       ctx.userId,
     );
+    const repo = await ctx.db.get(session.repoId);
+    if (!repo) throw new Error("Repository not found");
     return {
       repoId: session.repoId,
+      repo: {
+        owner: repo.owner,
+        name: repo.name,
+        installationId: repo.installationId,
+      },
+      branchName: session.branchName,
       sandboxId: session.sandboxId,
       status: session.status,
       hasOpenTurn: await sessionHasOpenTurn(ctx.db, args.sessionId),
@@ -48,8 +62,16 @@ export const getForkSource = internalAuthQuery({
 });
 
 /**
- * Creates the fork: same repo, base, linked repos, composer traits and Plan
- * tab as the source, and the source sandbox to fork for its first sandbox.
+ * Creates the fork: same repo, linked repos, composer traits and Plan tab as
+ * the source, and the source sandbox to fork for its first sandbox.
+ *
+ * The fork stacks on the source like a stacked PR: its base is the source's
+ * branch, so its first boot cuts the fork branch from the source branch tip
+ * (the source's commits come along) and its PR targets the source branch.
+ * `stackOnSource` is false when the source branch is not on GitHub — nothing
+ * was ever pushed, or the branch was deleted after its PR merged — and the
+ * fork then uses the source's own base, the only valid PR base left.
+ *
  * The transcript is copied afterwards by `copyForkMessages` pages, so the
  * fork never carries a first message of its own: the forked disk already
  * holds the agent's persisted conversation, which its first turn resumes.
@@ -59,6 +81,7 @@ export const createForkedSession = internalAuthMutation({
     sourceSessionId: v.id("sessions"),
     sourceSandboxId: v.string(),
     restartSource: v.boolean(),
+    stackOnSource: v.boolean(),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
   handler: async (ctx, args) => {
@@ -85,7 +108,10 @@ export const createForkedSession = internalAuthMutation({
         thinkingEnabled: source.lastThinkingEnabled,
         use1mContext: source.lastUse1mContext,
         fastMode: source.lastFastMode,
-        baseBranch: source.baseBranch,
+        baseBranch:
+          args.stackOnSource && source.branchName
+            ? source.branchName
+            : source.baseBranch,
         linkedRepoIds: linkedRepos.map((row) => row.repoId),
         ...(repoGroup ? { repoGroupId: repoGroup._id } : {}),
         installDependencies: linkedRepos.every((row) => row.installDependencies),

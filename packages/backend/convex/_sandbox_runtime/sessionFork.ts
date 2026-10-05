@@ -5,6 +5,8 @@ import type { FunctionReturnType } from "convex/server";
 import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { authAction } from "../functions";
+import { isMissingGithubBranchError } from "../_github/deploymentSnapshot";
+import { getInstallationOctokit } from "../githubAuth";
 import { getSandboxHandle } from "./helpers";
 import { isSandboxGoneError } from "./sandboxErrors";
 
@@ -25,12 +27,38 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * "Fork session": a new session with a copy of the source's transcript whose
- * first sandbox is a Vercel fork (`Sandbox.fork`) of the source sandbox, so
- * local DBs (Supabase volume, Convex local backend), untracked seed files and
- * the agent's own persisted conversation come along. The transcript is copied
- * here, page by page, before the caller navigates: a message sent into the
- * fork can never land in the middle of the copy.
+ * Whether the source branch is on GitHub, which is what makes it a valid PR
+ * base for the fork. A missing branch is a normal answer (never pushed, or
+ * deleted after its PR merged); any other failure is a real error.
+ */
+async function branchExistsOnGitHub(
+  repo: ForkSource["repo"],
+  branch: string,
+): Promise<boolean> {
+  const octokit = await getInstallationOctokit(repo.installationId);
+  try {
+    await octokit.rest.repos.getBranch({
+      owner: repo.owner,
+      repo: repo.name,
+      branch,
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof Error && isMissingGithubBranchError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * "Fork session": a new session stacked on the source — its branch is cut
+ * from the source branch and its PR targets it — with a copy of the source's
+ * transcript, whose first sandbox is a Vercel fork (`Sandbox.fork`) of the
+ * source sandbox, so local DBs (Supabase volume, Convex local backend),
+ * untracked seed files and the agent's own persisted conversation come along.
+ * The transcript is copied here, page by page, before the caller navigates: a
+ * message sent into the fork can never land in the middle of the copy.
  *
  * A Vercel fork restores from the source's current snapshot, not its live
  * disk, and stopping is what writes that snapshot — so a running source is
@@ -78,12 +106,16 @@ export const forkSession = authAction({
         if (isSandboxGoneError(error)) throw new ConvexError(NO_SANDBOX);
         throw error;
       }
+      const stackOnSource =
+        source.branchName !== undefined &&
+        (await branchExistsOnGitHub(source.repo, source.branchName));
       const fork = await ctx.runMutation(
         internal.sessions.createForkedSession,
         {
           sourceSessionId: args.sessionId,
           sourceSandboxId,
           restartSource: wasRunning,
+          stackOnSource,
         },
       );
       const pairs: Array<{ from: Id<"messages">; to: Id<"messages"> }> = [];
