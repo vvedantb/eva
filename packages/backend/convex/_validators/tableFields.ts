@@ -1140,6 +1140,9 @@ export const appSettingsFields = {
   sandboxAutoStopTime: v.string(),
   sandboxAutoStopTimeZone: v.string(),
   sandboxAutoStopLastRunDate: v.optional(v.string()),
+  /** Idle sweep (`sandboxIdleStop.ts`). Absent = on, 60 minutes; see `resolveIdleStopSettings`. */
+  sandboxIdleStopEnabled: v.optional(v.boolean()),
+  sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
 export const sandboxGitCredentialsFields = {

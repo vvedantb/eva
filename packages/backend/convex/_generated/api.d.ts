@@ -193,6 +193,7 @@ import type * as _repoSnapshots_sanitizeSeededApps from "../_repoSnapshots/sanit
 import type * as _sandbox_closingStatus from "../_sandbox/closingStatus.js";
 import type * as _sandbox_factory from "../_sandbox/factory.js";
 import type * as _sandbox_ffmpegInstall from "../_sandbox/ffmpegInstall.js";
+import type * as _sandbox_idleStop from "../_sandbox/idleStop.js";
 import type * as _sandbox_owner from "../_sandbox/owner.js";
 import type * as _sandbox_provider from "../_sandbox/provider.js";
 import type * as _sandbox_resolveExistingSandboxId from "../_sandbox/resolveExistingSandboxId.js";
@@ -443,6 +444,7 @@ import type * as sandboxDaemon from "../sandboxDaemon.js";
 import type * as sandboxGit from "../sandboxGit.js";
 import type * as sandboxGitCredentials from "../sandboxGitCredentials.js";
 import type * as sandboxHeal from "../sandboxHeal.js";
+import type * as sandboxIdleStop from "../sandboxIdleStop.js";
 import type * as sandboxJwt from "../sandboxJwt.js";
 import type * as sandboxPanes from "../sandboxPanes.js";
 import type * as scopeCheck from "../scopeCheck.js";
@@ -677,6 +679,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/closingStatus": typeof _sandbox_closingStatus;
   "_sandbox/factory": typeof _sandbox_factory;
   "_sandbox/ffmpegInstall": typeof _sandbox_ffmpegInstall;
+  "_sandbox/idleStop": typeof _sandbox_idleStop;
   "_sandbox/owner": typeof _sandbox_owner;
   "_sandbox/provider": typeof _sandbox_provider;
   "_sandbox/resolveExistingSandboxId": typeof _sandbox_resolveExistingSandboxId;
@@ -927,6 +930,7 @@ declare const fullApi: ApiFromModules<{
   sandboxGit: typeof sandboxGit;
   sandboxGitCredentials: typeof sandboxGitCredentials;
   sandboxHeal: typeof sandboxHeal;
+  sandboxIdleStop: typeof sandboxIdleStop;
   sandboxJwt: typeof sandboxJwt;
   sandboxPanes: typeof sandboxPanes;
   scopeCheck: typeof scopeCheck;
