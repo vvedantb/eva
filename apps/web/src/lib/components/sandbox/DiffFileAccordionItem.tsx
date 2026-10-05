@@ -30,7 +30,8 @@ import type { DiffView } from "@/lib/search-params";
 import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
 import { useOpenSandboxFile } from "@/lib/contexts/OpenSandboxFileContext";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
-import { DiffCountBar, FileStatusChip } from "./DiffFileBadges";
+import { PrDiffStat } from "@/lib/components/reviews/_components/prReviewParts";
+import { FileStatusChip } from "./DiffFileBadges";
 import { DiffFileLazyBody } from "./DiffFileLazyBody";
 import type { DiffFileEntry } from "./diffFiles";
 import {
@@ -46,11 +47,15 @@ interface DiffFileAccordionItemProps {
   onViewedChange: (viewed: boolean) => void;
   wrapLines: boolean;
   repoId: Id<"githubRepos">;
-  /** Commits the diff was taken between — needed to read whole file contents. */
-  baseSha: string;
-  headSha: string;
+  /**
+   * Commits the diff was taken between — needed to read whole file contents.
+   * Null for a lone commit, whose parent the payload does not carry.
+   */
+  refs: { baseSha: string; headSha: string } | null;
   /** `https://github.com/<owner>/<name>`, for the "View file" link. */
   repoUrl: string;
+  /** The ref the "View file" link opens the file at. */
+  viewRef: string;
   /** Scrolling ancestor, so the diff body can defer until it is near view. */
   scrollRoot: Element | null;
   /** Skip deferral for the file being scrolled to. */
@@ -70,7 +75,7 @@ const UNAVAILABLE_LABEL: Record<"too-large" | "binary", string> = {
 };
 
 /**
- * One collapsible file in the Diffs list. The header mirrors GitHub's file bar:
+ * One collapsible file in the Code tab. The header mirrors GitHub's file bar:
  * status chip, change counts, pending-comment count, a per-file menu, and a
  * Viewed checkbox (the parent also collapses/expands on toggle, as GitHub does).
  * It sticks to the top of the scroll area while its diff is on screen.
@@ -83,9 +88,9 @@ export function DiffFileAccordionItem({
   onViewedChange,
   wrapLines,
   repoId,
-  baseSha,
-  headSha,
+  refs,
   repoUrl,
+  viewRef,
   scrollRoot,
   eager,
 }: DiffFileAccordionItemProps) {
@@ -114,8 +119,9 @@ export function DiffFileAccordionItem({
    * patch itself only carries a few lines of context around each hunk.
    */
   const loadFullFile = () => {
+    if (refs === null) return;
     setFullFile({ status: "loading" });
-    getPrFileContents({ repoId, path, baseSha, headSha })
+    getPrFileContents({ repoId, path, ...refs })
       .then((res) => {
         if (res.skipped !== null) {
           setFullFile({ status: "unavailable", reason: res.skipped });
@@ -133,16 +139,16 @@ export function DiffFileAccordionItem({
   };
 
   const canExpandContext =
-    entry.hasHunks && !entry.binary && fullFile.status !== "ready";
+    refs !== null &&
+    entry.hasHunks &&
+    !entry.binary &&
+    fullFile.status !== "ready";
 
   return (
-    // AccordionItem defaults to `last:border-b-0`; keep `last:border-b` so the
-    // final card still has a full hairline outline.
-    <AccordionItem
-      value={path}
-      className="rounded-md border border-border bg-card last:border-b"
-    >
-      <div className="sticky top-0 z-10 flex items-center gap-2 rounded-t-md border-b border-border bg-muted/95 px-2 backdrop-blur-sm">
+    // Flat, full-width rows as t3code's diff viewer draws them: the header is
+    // the only chrome, and a hairline between files is the only separation.
+    <AccordionItem value={path} className="border-b border-border">
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 pr-2 pl-3 backdrop-blur-sm">
         <AccordionTrigger className="min-w-0 flex-1 py-2 hover:no-underline">
           <span className="mr-2 flex min-w-0 flex-1 items-baseline gap-1.5 text-left font-mono text-xs">
             {renamedFrom ? (
@@ -177,7 +183,7 @@ export function DiffFileAccordionItem({
             </span>
           ) : null}
           {entry.binary ? null : (
-            <DiffCountBar additions={additions} deletions={deletions} />
+            <PrDiffStat additions={additions} deletions={deletions} className="text-xs" />
           )}
 
           {openInFiles ? (
@@ -228,7 +234,7 @@ export function DiffFileAccordionItem({
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a
-                  href={`${repoUrl}/blob/${headSha}/${path}`}
+                  href={`${repoUrl}/blob/${viewRef}/${path}`}
                   target="_blank"
                   rel="noreferrer"
                 >

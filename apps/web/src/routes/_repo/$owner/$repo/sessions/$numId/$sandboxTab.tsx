@@ -5,7 +5,7 @@ import {
   isLegacyDesktopSandboxTab,
   isLegacyDiffsSandboxTab,
   isLegacyPrSandboxTab,
-  isReviewTab,
+  reviewPathFromSearch,
   splitCorruptedSandboxTabParam,
 } from "@/lib/search-params";
 
@@ -122,14 +122,10 @@ export const Route = createFileRoute(
       params.sandboxTab === "review"
     ) {
       const fromSearch =
-        "prTab" in search &&
-        typeof search.prTab === "string" &&
-        isReviewTab(search.prTab)
-          ? search.prTab
-          : "diffs";
-      if (fromSearch === "overview") {
+        reviewPathFromSearch(search).kind;
+      if (fromSearch === "summary") {
         throw redirect({
-          to: "/$owner/$repo/sessions/$numId/review/overview",
+          to: "/$owner/$repo/sessions/$numId/review/summary",
           params: {
             owner: params.owner,
             repo: params.repo,
@@ -139,9 +135,9 @@ export const Route = createFileRoute(
           replace: true,
         });
       }
-      if (fromSearch === "recap") {
+      if (fromSearch === "timeline") {
         throw redirect({
-          to: "/$owner/$repo/sessions/$numId/review/recap",
+          to: "/$owner/$repo/sessions/$numId/review/timeline",
           params: {
             owner: params.owner,
             repo: params.repo,

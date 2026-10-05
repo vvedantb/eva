@@ -2,8 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { CircleSpinner, cn } from "@eva/ui";
-import { AnimatePresence, m } from "motion/react";
+import { CircleSpinner } from "@eva/ui";
 import {
   IconCircleCheck,
   IconCircleX,
@@ -78,20 +77,18 @@ export function ToneIcon({
 }
 
 /**
- * The lifecycle, always stated. Open used to render nothing on the grounds that it
- * is the common case, but the pill sits immediately left of the title now: a slot
- * that is empty nine times in ten reads as a missing thing rather than a saved
- * one, and the title shifted left or right depending on the PR it belonged to.
- * One pill, four states, same position.
+ * The lifecycle in one table — wording, colour, and glyph — so the header's
+ * state-coloured number cannot pair one state's word with another's tone.
  */
-function statusMeta(
+export function statusMeta(
   status: PrOverview["status"],
   draft: boolean,
-): { label: string; className: string; icon: TablerIcon } {
+): { label: string; className: string; textClassName: string; icon: TablerIcon } {
   if (status === "merged") {
     return {
       label: "Merged",
       className: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+      textClassName: "text-violet-700 dark:text-violet-300",
       icon: IconGitMerge,
     };
   }
@@ -99,6 +96,7 @@ function statusMeta(
     return {
       label: "Closed",
       className: "bg-destructive/10 text-destructive",
+      textClassName: "text-destructive",
       icon: IconGitPullRequestClosed,
     };
   }
@@ -106,54 +104,16 @@ function statusMeta(
     return {
       label: "Draft",
       className: "bg-muted/60 text-muted-foreground",
+      textClassName: "text-muted-foreground",
       icon: IconGitPullRequestDraft,
     };
   }
   return {
     label: "Open",
     className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    textClassName: "text-emerald-700 dark:text-emerald-300",
     icon: IconGitPullRequest,
   };
-}
-
-/**
- * The lifecycle pill itself. Rendered from `statusMeta` rather than beside it, so
- * a surface cannot pair one status's wording with another's colour, icon, or tone.
- */
-export function PrStatusPill({
-  status,
-  draft,
-  className,
-}: {
-  status: PrOverview["status"];
-  draft: boolean;
-  className?: string;
-}) {
-  const meta = statusMeta(status, draft);
-  const Icon = meta.icon;
-  return (
-    <AnimatePresence mode="wait" initial={false}>
-      <m.span
-        key={`${status}-${draft}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.075, ease: [0.22, 1, 0.36, 1] }}
-        className="inline-flex"
-      >
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-            meta.className,
-            className,
-          )}
-        >
-          <Icon size={12} aria-hidden />
-          {meta.label}
-        </span>
-      </m.span>
-    </AnimatePresence>
-  );
 }
 
 /**

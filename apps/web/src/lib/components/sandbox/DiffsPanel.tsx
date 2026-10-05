@@ -1,96 +1,135 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
-import type { Id } from "@eva/backend";
+import { useQuery } from "@tanstack/react-query";
+import { useAction } from "convex/react";
+import { api, type Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, Spinner, motionBase, motionStagger, toast } from "@eva/ui";
-import { m } from "motion/react";
+import { Accordion, SearchInput, Spinner, toast } from "@eva/ui";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
+import { useRepo } from "@/lib/contexts/RepoContext";
+import { commitDiffQuery } from "@/lib/prReviewQueries";
+import type { PrCommit } from "@/lib/components/reviews/_components/prOverviewMeta";
+import {
+  NoPendingReviewComments,
+  usePendingReviewComments,
+} from "@/lib/contexts/PendingReviewCommentsContext";
+import { DiffCommitScope } from "./DiffCommitScope";
 import { DiffFileTree } from "./DiffFileTree";
 import { DiffFileAccordionItem } from "./DiffFileAccordionItem";
 import { DiffsToolbar } from "./DiffsToolbar";
-import { SubmitReviewPopover } from "./SubmitReviewPopover";
-import { prNumberFromGithubUrl } from "@/lib/githubPr";
 import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
-import { applyIgnoreWhitespace } from "./diffFiles";
-import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
+import { applyIgnoreWhitespace, type DiffFileEntry } from "./diffFiles";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
   prUrl?: string;
   repoId: Id<"githubRepos">;
+  /** The pull request's commits, newest last, for the scope dropdown. */
+  commits: readonly PrCommit[];
+  /** A commit to scope the diff to; null for the whole change. */
+  commit: string | null;
+  onCommitChange: (sha: string | null) => void;
 }
 
+type DiffSource =
+  | { status: "loading" }
+  | { status: "error" }
+  | {
+      status: "ready";
+      entries: readonly DiffFileEntry[];
+      truncated: boolean;
+      /** Both ends of the diff, for "load full file"; null for a lone commit. */
+      refs: { baseSha: string; headSha: string } | null;
+      refreshing: boolean;
+    };
+
 /**
- * Sandbox "Diffs" tab. Renders the pushed PR diff (from GitHub) with
- * `@pierre/diffs`, in unified or split view, alongside a clickable
- * `@pierre/trees` file tree on the left for jumping straight to a file's diff.
- * Each file sits in a collapsible accordion with a GitHub-style Viewed checkbox
- * (persisted per PR in localStorage). The toolbar above owns the review chrome,
- * so every surface embedding this panel gets the same controls.
+ * The Code tab, as t3code has it: one toolbar strip (scope and progress left,
+ * reading controls right), the diff, and a file tree on the right that can be
+ * folded away. Each file is a flat row-header with a Viewed tick (persisted per
+ * pull request), and checking one folds it, as GitHub does.
+ *
+ * Scoped to one commit, the diff is read-only: a line comment is anchored to the
+ * whole change, so commenting is switched off until All commits is back.
  */
-export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
+export function DiffsPanel({
+  prUrl,
+  repoId,
+  commits,
+  commit,
+  onCommitChange,
+}: DiffsPanelProps) {
   "use no memo";
   const { resolvedTheme } = useThemeMode();
-  const { diffView, setDiffView, diffFile, setDiffFile } =
-    useDiffSearchParams();
-  // Split view puts two code columns into a phone-width pane — roughly twenty
-  // characters each — so below `md` the diff is always unified, whatever the URL
-  // says. `@pierre/diffs` takes the style as a render option rather than a
-  // layout, so a CSS breakpoint cannot express this; the matching Split trigger
-  // is hidden in `DiffsToolbar` at the same breakpoint.
+  const { owner, name } = useRepo();
+  const { diffView, setDiffView, diffFile, setDiffFile } = useDiffSearchParams();
+  // Split view puts two code columns into a phone-width pane, so below `md` the
+  // diff is always unified, whatever the URL says.
   const isNarrow = useMediaQuery("(max-width: 767px)");
   const effectiveDiffView = isNarrow ? "unified" : diffView;
   const { isViewed, setViewed, viewedPaths } = useDiffViewedFiles(prUrl);
-  const { state, refresh } = usePrDiff(prUrl, repoId);
+  const { state: prState, refresh } = usePrDiff(prUrl, repoId);
+  const getCommitDiff = useAction(api.github.getCommitDiff);
+  const commitQuery = useQuery({
+    ...commitDiffQuery(getCommitDiff, repoId, commit ?? ""),
+    enabled: commit !== null,
+  });
 
-  // Wrapping is a reading preference, so it persists across PRs and surfaces.
   const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useLocalStorage(
     "eva:pr-diff-ignore-ws",
     false,
   );
+  const [treeOpen, setTreeOpen] = useLocalStorage("eva:pr-diff-tree-open", true);
   const review = usePendingReviewComments();
 
   const [fileFilter, setFileFilter] = useState("");
-  // Controlled accordion open set — independent of Viewed so a viewed file can
-  // still be expanded to re-read without clearing the checkbox (GitHub UX).
+  // Controlled open set — independent of Viewed, so a viewed file can still be
+  // expanded to re-read without clearing the tick (GitHub UX).
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [showContentSignal, setShowContentSignal] = useState(0);
   const [seededFilesKey, setSeededFilesKey] = useState<string | null>(null);
-
-  // Held in state, not a ref, because each file's body needs the element as its
-  // IntersectionObserver root and has to re-observe once it exists.
+  // State, not a ref: each file body needs it as its IntersectionObserver root.
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
-
-  // Wrapper element for each file's diff, keyed by path, so a tree click can
-  // scroll the matching diff into view.
   const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const setFileRef = useCallback(
-    (path: string) => (el: HTMLDivElement | null) => {
-      const map = fileRefs.current;
-      if (el) map.set(path, el);
-      else map.delete(path);
-    },
-    [],
-  );
+  const setFileRef = (path: string) => (el: HTMLDivElement | null) => {
+    if (el) fileRefs.current.set(path, el);
+    else fileRefs.current.delete(path);
+  };
 
-  // One entry per changed file: patch, path, status, and change counts. Parsed
-  // once when the diff is fetched, not on every render.
-  const rawEntries = state.status === "ready" ? state.entries : [];
+  const source = ((): DiffSource => {
+    if (commit === null) {
+      if (prState.status !== "ready") return prState;
+      return {
+        status: "ready",
+        entries: prState.entries,
+        truncated: prState.truncated,
+        refs: { baseSha: prState.baseSha, headSha: prState.headSha },
+        refreshing: prState.refreshing,
+      };
+    }
+    if (commitQuery.data !== undefined) {
+      return {
+        status: "ready",
+        entries: commitQuery.data.entries,
+        truncated: commitQuery.data.truncated,
+        refs: null,
+        refreshing: commitQuery.isFetching,
+      };
+    }
+    return commitQuery.isError ? { status: "error" } : { status: "loading" };
+  })();
 
   // A drafted review comment is anchored by its position in a walk of the patch
-  // it was drawn on (see `reviewComments.ts`), and ignore-whitespace rewrites
-  // that patch. Flipping the toggle underneath one would silently move it to
-  // another line or drop it, so the toggle is refused while a review is pending.
-  // Refusing in the handler, rather than pinning a copy of the setting in state,
-  // keeps the diff derived from props alone.
+  // it was drawn on, and ignore-whitespace rewrites that patch. Flipping the
+  // toggle underneath one would silently move it, so it is refused instead.
   const hasPendingComments = (review?.comments.length ?? 0) > 0;
   const handleIgnoreWhitespaceChange = (next: boolean) => {
     if (hasPendingComments) {
@@ -102,21 +141,10 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
     setIgnoreWhitespace(next);
   };
 
-  const fileEntries = ignoreWhitespace
-    ? applyIgnoreWhitespace(rawEntries)
-    : rawEntries;
+  const rawEntries = source.status === "ready" ? source.entries : [];
+  const fileEntries = ignoreWhitespace ? applyIgnoreWhitespace(rawEntries) : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
-  const totals = fileEntries.reduce(
-    (sum, entry) => ({
-      additions: sum.additions + entry.additions,
-      deletions: sum.deletions + entry.deletions,
-    }),
-    { additions: 0, deletions: 0 },
-  );
-  const viewedCount = filePaths.filter((path) =>
-    viewedPaths.includes(path),
-  ).length;
-
+  const viewedCount = filePaths.filter((path) => viewedPaths.includes(path)).length;
   const query = fileFilter.trim().toLowerCase();
   const visibleEntries =
     query.length === 0
@@ -124,69 +152,57 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
       : fileEntries.filter((entry) => entry.path.toLowerCase().includes(query));
   const visiblePaths = visibleEntries.map((entry) => entry.path);
   const statuses = Object.fromEntries(
-    visibleEntries.map((entry): [string, GitStatus] => [
-      entry.path,
-      entry.status,
-    ]),
+    fileEntries.map((entry): [string, GitStatus] => [entry.path, entry.status]),
   );
-  // Stable identity for the current file set: remounts the tree (whose model is
-  // created once) whenever the listed files change.
-  const filesKey = filePaths.join("\n");
-  const visibleKey = visiblePaths.join("\n");
+  // Remounts the tree (whose model is created once) when the listed files change.
+  const filesKey = `${commit ?? "all"}\n${filePaths.join("\n")}`;
+  const visibleKey = `${commit ?? "all"}\n${visiblePaths.join("\n")}`;
 
   // Re-seed open files when the changed set changes: open everything not yet
-  // Viewed so returning reviewers land on collapsed progress.
-  if (state.status === "ready" && filesKey !== seededFilesKey) {
+  // Viewed, so a returning reviewer lands on what is left.
+  if (source.status === "ready" && filesKey !== seededFilesKey) {
     setSeededFilesKey(filesKey);
     setOpenPaths(filePaths.filter((path) => !viewedPaths.includes(path)));
   }
 
   const ensureOpen = (path: string) => {
-    setOpenPaths((current) =>
-      current.includes(path) ? current : [...current, path],
-    );
+    setOpenPaths((current) => (current.includes(path) ? current : [...current, path]));
   };
 
-  // Selecting a file in the tree records it in the URL, expands its accordion,
-  // and scrolls its header into view.
   const handleSelect = (path: string) => {
     setDiffFile(path);
     ensureOpen(path);
-    // Below `md` the tree and the diff are separate panes, so picking a file has
-    // to move you to that file's diff.
+    // Below `md` the tree and the diff are separate panes.
     setShowContentSignal((n) => n + 1);
-    // Defer scroll until after the accordion open state commits.
     requestAnimationFrame(() => {
-      fileRefs.current
-        .get(path)
-        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      fileRefs.current.get(path)?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   };
 
   const handleViewedChange = (path: string, viewed: boolean) => {
     setViewed(path, viewed);
-    // GitHub: checking Viewed collapses; unchecking expands.
+    // GitHub: checking Viewed folds the file; unchecking unfolds it.
     setOpenPaths((current) => {
       if (viewed) return current.filter((entry) => entry !== path);
       return current.includes(path) ? current : [...current, path];
     });
   };
 
-  // On first load with a remembered file, expand + scroll to it once.
+  // On first load with a remembered file, expand and scroll to it once.
   const didInitialScrollRef = useRef(false);
   useEffect(() => {
     didInitialScrollRef.current = false;
   }, [filesKey]);
   useEffect(() => {
     if (didInitialScrollRef.current) return;
-    if (state.status !== "ready" || !diffFile) return;
+    if (source.status !== "ready" || !diffFile) return;
     ensureOpen(diffFile);
     const el = fileRefs.current.get(diffFile);
     if (el) {
       el.scrollIntoView({ block: "start" });
       didInitialScrollRef.current = true;
     }
-  }, [state.status, diffFile, filesKey]);
+  }, [source.status, diffFile, filesKey]);
 
   if (!prUrl) {
     return (
@@ -195,93 +211,121 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
         <div className="max-w-md space-y-1">
           <p className="text-sm font-medium">No pull request yet</p>
           <p className="text-sm text-muted-foreground">
-            Once a pull request is opened for this work, its diff will appear
-            here.
+            Once a pull request is opened for this work, its diff will appear here.
           </p>
         </div>
       </div>
     );
   }
 
-  const showTree = visibleEntries.length > 0;
-  const prNumber = prNumberFromGithubUrl(prUrl);
-
+  const repoUrl = `https://github.com/${owner}/${name}`;
   const fileDiffs = (
-    <div ref={setScrollRoot} className="min-h-0 flex-1 overflow-auto">
-      {state.status === "loading" ? (
-        <div className="flex h-full items-center justify-center">
-          <Spinner />
+    <div
+      ref={setScrollRoot}
+      className="min-h-0 flex-1 overflow-auto pb-20 [scrollbar-gutter:stable]"
+    >
+      {source.status === "loading" ? (
+        <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Spinner size="sm" />
+          {commit === null ? "Loading pull request diff…" : "Loading commit diff…"}
         </div>
-      ) : state.status === "error" ? (
+      ) : source.status === "error" ? (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
           <IconAlertTriangle className="h-8 w-8 text-muted-foreground/60" />
-          <p className="text-sm text-muted-foreground">
-            Could not load the pull request diff.
-          </p>
+          <p className="text-sm text-muted-foreground">Could not load the diff.</p>
         </div>
       ) : fileEntries.length === 0 ? (
-        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          No changes in this pull request yet.
+        <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
+          No net changes in this selection.
         </div>
       ) : visibleEntries.length === 0 ? (
-        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
           No files match “{fileFilter}”.
         </div>
       ) : (
-        <div className="flex flex-col gap-3 p-3">
-          {state.truncated ? (
-            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Diff is large and has been truncated.
+        <>
+          {source.truncated ? (
+            <p className="border-b border-border bg-muted/40 px-4 py-1.5 text-[11px] text-muted-foreground">
+              This diff exceeds the size limit. Changes shown are incomplete.
             </p>
           ) : null}
-          <Accordion
-            type="multiple"
-            value={openPaths}
-            onValueChange={setOpenPaths}
-            className="flex flex-col gap-3"
-          >
-            {visibleEntries.map((entry, index) => (
-              <m.div
-                key={entry.path}
-                ref={setFileRef(entry.path)}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ ...motionBase, delay: motionStagger(index) }}
-              >
+          <Accordion type="multiple" value={openPaths} onValueChange={setOpenPaths}>
+            {visibleEntries.map((entry) => (
+              <div key={entry.path} ref={setFileRef(entry.path)}>
                 <DiffFileAccordionItem
                   entry={entry}
                   diffView={effectiveDiffView}
                   resolvedTheme={resolvedTheme}
                   viewed={isViewed(entry.path)}
-                  onViewedChange={(viewed) =>
-                    handleViewedChange(entry.path, viewed)
-                  }
+                  onViewedChange={(viewed) => handleViewedChange(entry.path, viewed)}
                   wrapLines={wrapLines}
                   repoId={repoId}
-                  baseSha={state.baseSha}
-                  headSha={state.headSha}
-                  repoUrl={state.repoUrl}
+                  refs={source.refs}
+                  repoUrl={repoUrl}
+                  viewRef={source.refs?.headSha ?? commit ?? "HEAD"}
                   scrollRoot={scrollRoot}
                   // The scroll target must exist before it can be scrolled to.
                   eager={diffFile === entry.path}
                 />
-              </m.div>
+              </div>
             ))}
           </Accordion>
-        </div>
+        </>
       )}
     </div>
   );
 
+  const tree = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-border p-2">
+        <SearchInput
+          value={fileFilter}
+          onChange={setFileFilter}
+          onClear={() => setFileFilter("")}
+          placeholder="Filter files…"
+          className="w-full"
+          inputClassName="h-7 text-xs"
+        />
+      </div>
+      <div className="min-h-0 flex-1">
+        <DiffFileTree
+          key={visibleKey}
+          files={visiblePaths}
+          statuses={statuses}
+          initialSelectedPath={diffFile || null}
+          onSelect={handleSelect}
+        />
+      </div>
+    </div>
+  );
+
+  const body =
+    treeOpen && fileEntries.length > 0 ? (
+      <ResizableSidebar
+        storageKey="diff-file-tree"
+        side="right"
+        mobilePaneLabels={{ left: "Files", right: "Diff" }}
+        showContentSignal={showContentSignal}
+        minSidebarWidthPx={160}
+        minContentWidthPx={240}
+        sidebar={tree}
+      >
+        {fileDiffs}
+      </ResizableSidebar>
+    ) : (
+      fileDiffs
+    );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <DiffsToolbar
+        scope={
+          commits.length === 0 ? undefined : (
+            <DiffCommitScope commits={commits} commit={commit} onChange={onCommitChange} />
+          )
+        }
         fileCount={fileEntries.length}
-        additions={totals.additions}
-        deletions={totals.deletions}
         viewedCount={viewedCount}
-        filter={fileFilter}
-        onFilterChange={setFileFilter}
         diffView={effectiveDiffView}
         onDiffViewChange={setDiffView}
         wrapLines={wrapLines}
@@ -289,48 +333,19 @@ export function DiffsPanel({ prUrl, repoId }: DiffsPanelProps) {
         ignoreWhitespace={ignoreWhitespace}
         onIgnoreWhitespaceChange={handleIgnoreWhitespaceChange}
         allExpanded={
-          visiblePaths.length > 0 &&
-          visiblePaths.every((path) => openPaths.includes(path))
+          visiblePaths.length > 0 && visiblePaths.every((path) => openPaths.includes(path))
         }
         onExpandAll={() => setOpenPaths(filePaths)}
         onCollapseAll={() => setOpenPaths([])}
         isLoading={
-          state.status === "loading" ||
-          (state.status === "ready" && state.refreshing)
+          source.status === "loading" || (source.status === "ready" && source.refreshing)
         }
-        onRefresh={refresh}
-        reviewAction={
-          prNumber === undefined ? undefined : (
-            <SubmitReviewPopover repoId={repoId} prNumber={prNumber} />
-          )
-        }
+        onRefresh={commit === null ? refresh : () => void commitQuery.refetch()}
+        treeOpen={treeOpen}
+        onTreeOpenChange={setTreeOpen}
       />
-
       <div className="flex min-h-0 flex-1">
-        {showTree ? (
-          <ResizableSidebar
-            storageKey="diff-file-tree"
-            mobilePaneLabels={{ left: "Files", right: "Diff" }}
-            showContentSignal={showContentSignal}
-            // See FilesPanel: the 481px default floor overflows the sandbox
-            // pane on a tablet. The diff body scrolls horizontally itself.
-            minSidebarWidthPx={140}
-            minContentWidthPx={200}
-            sidebar={
-              <DiffFileTree
-                key={visibleKey}
-                files={visiblePaths}
-                statuses={statuses}
-                initialSelectedPath={diffFile || null}
-                onSelect={handleSelect}
-              />
-            }
-          >
-            {fileDiffs}
-          </ResizableSidebar>
-        ) : (
-          fileDiffs
-        )}
+        {commit === null ? body : <NoPendingReviewComments>{body}</NoPendingReviewComments>}
       </div>
     </div>
   );
