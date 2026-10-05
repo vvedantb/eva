@@ -116,10 +116,13 @@ const router = createRouter({
   defaultPreloadDelay: 100,
   // Page swaps fade the content column (`.vt-page` in globals.css). Keyed on
   // the leaf route, so param-only moves — session to session, tab segments,
-  // search filters — stay instant. Returning `false` skips the transition.
+  // search filters — stay instant. Moves inside one entity (a session's
+  // sandbox tabs, its Review sub-tabs) cross leaf routes too, but are tab
+  // switches, not page swaps. Returning `false` skips the transition.
   defaultViewTransition: {
     types: ({ fromLocation, toLocation }) =>
       fromLocation !== undefined &&
+      !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
       leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
         ? ["page"]
         : false,
@@ -137,6 +140,15 @@ const router = createRouter({
     },
   },
 });
+
+/** `/…/sessions/42`, `/…/reviews/884`, … — the entity a path is inside, if any. */
+const ENTITY_PREFIX =
+  /^(.*?\/(?:sessions|quick-tasks|projects|reviews|docs|testing-arena)\/[^/]+)(?:\/|$)/;
+
+function isSameEntity(from: string, to: string): boolean {
+  const entity = ENTITY_PREFIX.exec(from)?.[1];
+  return entity !== undefined && entity === ENTITY_PREFIX.exec(to)?.[1];
+}
 
 function leafRouteId(pathname: string): string | undefined {
   return router.getMatchedRoutes(pathname).foundRoute?.id;
