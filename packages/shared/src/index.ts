@@ -30,7 +30,6 @@ export {
   FORK_PROMPT_CHAR_LIMIT,
   canForkMessage,
   collectForkPrefix,
-  collectSessionForkPrefix,
   forkDialogSummary,
   forkThreadTitle,
   formatForkPrompt,

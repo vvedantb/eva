@@ -55,40 +55,6 @@ export function collectForkPrefix(
   return { throughMessageId, turns };
 }
 
-/**
- * The whole conversation as a fork prefix ("Fork session"), keeping the most
- * recent turns that fit the prompt budget — the end of a long thread is what
- * the forked agent needs, and `formatForkPrompt` clips from the end.
- */
-export function collectSessionForkPrefix(
-  messages: ReadonlyArray<{
-    readonly id: string;
-    readonly role: string;
-    readonly content: string;
-    readonly isSystemAlert?: boolean;
-  }>,
-): ForkTranscriptPrefix | null {
-  const last = [...messages]
-    .reverse()
-    .find(
-      (message) => forkRole(message.role) !== null && canForkMessage(message),
-    );
-  if (!last) return null;
-  const prefix = collectForkPrefix(messages, last.id);
-  if (!prefix) return null;
-  // Headroom for the header, footer and per-turn speaker labels.
-  const budget = FORK_PROMPT_CHAR_LIMIT - 400;
-  const kept: ForkTranscriptTurn[] = [];
-  let used = 0;
-  for (const turn of [...prefix.turns].reverse()) {
-    const size = Math.min(turn.text.length, TURN_CHAR_LIMIT) + 16;
-    if (kept.length > 0 && used + size > budget) break;
-    kept.unshift(turn);
-    used += size;
-  }
-  return { throughMessageId: prefix.throughMessageId, turns: kept };
-}
-
 function escapeForkText(value: string): string {
   return value.replaceAll("<", "\\u003c");
 }
