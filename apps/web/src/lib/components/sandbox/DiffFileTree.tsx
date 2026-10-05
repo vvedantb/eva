@@ -28,7 +28,6 @@ interface DiffFileTreeProps {
 
 const QUIET_TREE_VARS = {
   "--trees-indent-guide-bg-override": "transparent",
-  "--trees-selected-bg-override": "rgb(var(--muted))",
   "--trees-git-lane-width-override": "0px",
   "--trees-font-size-override": "14px",
 };
