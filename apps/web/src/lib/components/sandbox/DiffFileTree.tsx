@@ -18,9 +18,20 @@ interface DiffFileTreeProps {
    * selections are filtered out because they are not in `files`.
    */
   onSelect: (path: string) => void;
-  /** Row height and type scale; the Code tab reads at `relaxed`. */
-  density?: "compact" | "default" | "relaxed";
+  /**
+   * Cursor's plain list: no git-status colours, letters or folder dots, no
+   * indent guides, a lighter selection. The cards beside it already carry the
+   * change counts.
+   */
+  quiet?: boolean;
 }
+
+const QUIET_TREE_VARS = {
+  "--trees-indent-guide-bg-override": "transparent",
+  "--trees-selected-bg-override": "rgb(var(--muted))",
+  "--trees-git-lane-width-override": "0px",
+  "--trees-font-size-override": "14px",
+};
 
 /**
  * Left-hand file tree for the Diffs tab. Renders the changed files as a
@@ -33,7 +44,7 @@ export function DiffFileTree({
   statuses,
   initialSelectedPath,
   onSelect,
-  density = "default",
+  quiet = false,
 }: DiffFileTreeProps) {
   const { resolvedTheme } = useThemeMode();
 
@@ -44,8 +55,7 @@ export function DiffFileTree({
 
   const { model } = useFileTree({
     paths: files,
-    gitStatus,
-    density,
+    ...(quiet ? {} : { gitStatus }),
     flattenEmptyDirectories: true,
     initialExpansion: "open",
     initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],
@@ -60,7 +70,11 @@ export function DiffFileTree({
   return (
     <FileTree
       model={model}
-      style={{ ...treeThemeVars, colorScheme: resolvedTheme }}
+      style={{
+        ...treeThemeVars,
+        ...(quiet ? QUIET_TREE_VARS : {}),
+        colorScheme: resolvedTheme,
+      }}
       className="h-full w-full"
     />
   );

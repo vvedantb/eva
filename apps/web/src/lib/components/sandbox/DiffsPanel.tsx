@@ -299,14 +299,14 @@ export function DiffsPanel({
 
   const tree = (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 p-3 pb-2">
+      <div className="shrink-0 px-2 pt-2 pb-1">
         <SearchInput
           value={fileFilter}
           onChange={setFileFilter}
           onClear={() => setFileFilter("")}
           placeholder="Search files"
           className="w-full max-w-none"
-          inputClassName="h-9 text-sm"
+          inputClassName="h-8 rounded-lg text-sm"
         />
       </div>
       <div className="min-h-0 flex-1">
@@ -316,7 +316,7 @@ export function DiffsPanel({
           statuses={statuses}
           initialSelectedPath={diffFile || null}
           onSelect={handleSelect}
-          density="relaxed"
+          quiet
         />
       </div>
     </div>
