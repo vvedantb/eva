@@ -18,6 +18,8 @@ interface DiffFileTreeProps {
    * selections are filtered out because they are not in `files`.
    */
   onSelect: (path: string) => void;
+  /** Row height and type scale; the Code tab reads at `relaxed`. */
+  density?: "compact" | "default" | "relaxed";
 }
 
 /**
@@ -31,6 +33,7 @@ export function DiffFileTree({
   statuses,
   initialSelectedPath,
   onSelect,
+  density = "default",
 }: DiffFileTreeProps) {
   const { resolvedTheme } = useThemeMode();
 
@@ -42,7 +45,7 @@ export function DiffFileTree({
   const { model } = useFileTree({
     paths: files,
     gitStatus,
-    density: "default",
+    density,
     flattenEmptyDirectories: true,
     initialExpansion: "open",
     initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],

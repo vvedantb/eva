@@ -16,6 +16,7 @@ import {
 import type { ThemeTypes } from "@pierre/diffs";
 import {
   IconArrowsDiagonal,
+  IconChevronRight,
   IconCopy,
   IconDots,
   IconExternalLink,
@@ -31,7 +32,6 @@ import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
 import { useOpenSandboxFile } from "@/lib/contexts/OpenSandboxFileContext";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { PrDiffStat } from "@/lib/components/reviews/_components/prReviewParts";
-import { FileStatusChip } from "./DiffFileBadges";
 import { DiffFileLazyBody } from "./DiffFileLazyBody";
 import type { DiffFileEntry } from "./diffFiles";
 import {
@@ -76,7 +76,7 @@ const UNAVAILABLE_LABEL: Record<"too-large" | "binary", string> = {
 
 /**
  * One collapsible file in the Code tab. The header mirrors GitHub's file bar:
- * status chip, change counts, pending-comment count, a per-file menu, and a
+ * the whole path, change counts, pending-comment count, a per-file menu, and a
  * Viewed checkbox (the parent also collapses/expands on toggle, as GitHub does).
  * It sticks to the top of the scroll area while its diff is on screen.
  */
@@ -94,7 +94,7 @@ export function DiffFileAccordionItem({
   scrollRoot,
   eager,
 }: DiffFileAccordionItemProps) {
-  const { path, patch, status, additions, deletions, renamedFrom } = entry;
+  const { path, patch, additions, deletions, renamedFrom } = entry;
   const getPrFileContents = useAction(api.github.getPrFileContents);
   const review = usePendingReviewComments();
   const openSandboxFile = useOpenSandboxFile();
@@ -109,9 +109,6 @@ export function DiffFileAccordionItem({
   const fileName = path.includes("/")
     ? path.slice(path.lastIndexOf("/") + 1)
     : path;
-  const dirPath = path.includes("/")
-    ? path.slice(0, path.lastIndexOf("/"))
-    : null;
 
   /**
    * Pulls both ends of the file so the diff can be re-derived from whole files.
@@ -145,34 +142,36 @@ export function DiffFileAccordionItem({
     fullFile.status !== "ready";
 
   return (
-    // Flat, full-width rows as t3code's diff viewer draws them: the header is
-    // the only chrome, and a hairline between files is the only separation.
-    <AccordionItem value={path} className="border-b border-border">
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 pr-2 pl-3 backdrop-blur-sm">
-        <AccordionTrigger className="min-w-0 flex-1 py-2 hover:no-underline">
-          <span className="mr-2 flex min-w-0 flex-1 items-baseline gap-1.5 text-left font-mono text-xs">
-            {renamedFrom ? (
-              <span
-                className="truncate text-muted-foreground line-through"
-                title={renamedFrom}
-              >
-                {renamedFrom}
-              </span>
-            ) : null}
-            {renamedFrom ? <span className="shrink-0">→</span> : null}
-            {dirPath ? (
-              <span className="truncate text-muted-foreground" title={path}>
-                {dirPath}/
-              </span>
-            ) : null}
-            <span className="shrink-0 font-medium text-foreground">
-              {fileName}
+    // A card per file, as Cursor's diff viewer draws it: rounded, a gap to the
+    // next, and a header that reads the whole path at body size. The path
+    // wraps rather than truncating — a cut-off name is the thing that made
+    // this hard to read.
+    <AccordionItem
+      value={path}
+      className="group/item overflow-clip rounded-xl border border-border bg-card last:border-b"
+    >
+      <div className="group/file sticky top-0 z-10 flex items-center gap-3 border-border bg-card/95 pr-3 pl-2 backdrop-blur-sm group-data-[state=open]/item:border-b">
+        <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline [&>svg:last-child]:hidden">
+          <span className="flex min-w-0 flex-1 items-start gap-2 text-left">
+            <IconChevronRight
+              aria-hidden
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-base)] group-data-[state=open]:rotate-90"
+            />
+            <span className="min-w-0 flex-1 text-sm font-normal break-words text-foreground">
+              {renamedFrom ? (
+                <>
+                  <span className="text-muted-foreground line-through">
+                    {renamedFrom}
+                  </span>
+                  <span className="text-muted-foreground"> → </span>
+                </>
+              ) : null}
+              <BreakablePath path={path} />
             </span>
           </span>
         </AccordionTrigger>
 
-        <div className="flex shrink-0 items-center gap-2 py-1.5">
-          <FileStatusChip status={status} />
+        <div className="flex shrink-0 items-center gap-2.5">
           {pendingComments > 0 ? (
             <span
               className="flex items-center gap-1 text-xs text-muted-foreground"
@@ -183,28 +182,18 @@ export function DiffFileAccordionItem({
             </span>
           ) : null}
           {entry.binary ? null : (
-            <PrDiffStat additions={additions} deletions={deletions} className="text-xs" />
+            <PrDiffStat additions={additions} deletions={deletions} className="text-sm" />
           )}
-
-          {openInFiles ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Open ${fileName} in Files`}
-              data-testid="open-in-files"
-              onClick={(event) => {
-                event.stopPropagation();
-                openInFiles();
-              }}
-            >
-              <IconFileText className="size-4" />
-            </Button>
-          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="File actions">
-                <IconDots className="size-4" />
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Actions for ${fileName}`}
+                className="reveal-on-hover"
+              >
+                <IconDots />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -226,7 +215,7 @@ export function DiffFileAccordionItem({
                 Copy path
               </DropdownMenuItem>
               {openInFiles ? (
-                <DropdownMenuItem onSelect={openInFiles}>
+                <DropdownMenuItem onSelect={openInFiles} data-testid="open-in-files">
                   <IconFileText className="size-4" />
                   Open in Files
                 </DropdownMenuItem>
@@ -245,10 +234,10 @@ export function DiffFileAccordionItem({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <label
-            className="flex cursor-pointer items-center gap-1.5 pr-1 text-xs text-muted-foreground hover:text-foreground"
-            // Keep the checkbox out of the accordion trigger so checking Viewed
-            // does not fight the expand/collapse control.
+          {/* Outside the trigger so ticking Viewed does not also fold the
+              file. The tick alone, as Cursor has it; the label names it. */}
+          <span
+            className="flex items-center"
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
@@ -256,11 +245,10 @@ export function DiffFileAccordionItem({
               checked={viewed}
               onCheckedChange={(checked) => onViewedChange(checked === true)}
               aria-label={`Mark ${path} as viewed`}
+              title="Viewed"
+              className="size-4.5 rounded-[5px]"
             />
-            {/* The checkbox carries the accessible name, so the word can go on a
-                phone and give the file path back its width. */}
-            <span className="hidden sm:inline">Viewed</span>
-          </label>
+          </span>
         </div>
       </div>
 
@@ -319,4 +307,22 @@ export function DiffFileAccordionItem({
       </AccordionContent>
     </AccordionItem>
   );
+}
+
+/**
+ * A path that may wrap after any `/`, so a long one breaks between folders
+ * instead of mid-name.
+ */
+function BreakablePath({ path }: { path: string }) {
+  const parts = path.split("/");
+  return parts.map((part, index) => (
+    <span key={index}>
+      {part}
+      {index < parts.length - 1 ? (
+        <>
+          /<wbr />
+        </>
+      ) : null}
+    </span>
+  ));
 }

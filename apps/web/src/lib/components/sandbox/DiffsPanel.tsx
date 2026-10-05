@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
@@ -37,6 +37,15 @@ interface DiffsPanelProps {
   commit: string | null;
   onCommitChange: (sha: string | null) => void;
 }
+
+/**
+ * Code reads a size up from the 13/20 the diff renderer defaults to, as Cursor
+ * sets it. Custom properties inherit into the renderer's shadow DOM.
+ */
+const CODE_TYPE_VARS: CSSProperties & Record<`--${string}`, string> = {
+  "--diffs-font-size": "14px",
+  "--diffs-line-height": "22px",
+};
 
 type DiffSource =
   | { status: "loading" }
@@ -82,7 +91,7 @@ export function DiffsPanel({
     enabled: commit !== null,
   });
 
-  const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", false);
+  const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", true);
   const [ignoreWhitespace, setIgnoreWhitespace] = useLocalStorage(
     "eva:pr-diff-ignore-ws",
     false,
@@ -222,6 +231,7 @@ export function DiffsPanel({
   const fileDiffs = (
     <div
       ref={setScrollRoot}
+      style={CODE_TYPE_VARS}
       className="min-h-0 flex-1 overflow-auto pb-20 [scrollbar-gutter:stable]"
     >
       {source.status === "loading" ? (
@@ -245,13 +255,19 @@ export function DiffsPanel({
       ) : (
         <>
           {source.truncated ? (
-            <p className="border-b border-border bg-muted/40 px-4 py-1.5 text-[11px] text-muted-foreground">
+            <p className="mx-4 mt-4 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
               This diff exceeds the size limit. Changes shown are incomplete.
             </p>
           ) : null}
-          <Accordion type="multiple" value={openPaths} onValueChange={setOpenPaths}>
+          {/* One card per file with room between them, as Cursor lays it out. */}
+          <Accordion
+            type="multiple"
+            value={openPaths}
+            onValueChange={setOpenPaths}
+            className="flex flex-col gap-4 p-4"
+          >
             {visibleEntries.map((entry) => (
-              <div key={entry.path} ref={setFileRef(entry.path)}>
+              <div key={entry.path} ref={setFileRef(entry.path)} className="scroll-mt-4">
                 <DiffFileAccordionItem
                   entry={entry}
                   diffView={effectiveDiffView}
@@ -277,14 +293,14 @@ export function DiffsPanel({
 
   const tree = (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-border p-2">
+      <div className="shrink-0 p-3 pb-2">
         <SearchInput
           value={fileFilter}
           onChange={setFileFilter}
           onClear={() => setFileFilter("")}
-          placeholder="Filter files…"
+          placeholder="Search files"
           className="w-full"
-          inputClassName="h-7 text-xs"
+          inputClassName="h-9 text-sm"
         />
       </div>
       <div className="min-h-0 flex-1">
@@ -294,6 +310,7 @@ export function DiffsPanel({
           statuses={statuses}
           initialSelectedPath={diffFile || null}
           onSelect={handleSelect}
+          density="relaxed"
         />
       </div>
     </div>
@@ -302,12 +319,15 @@ export function DiffsPanel({
   const body =
     treeOpen && fileEntries.length > 0 ? (
       <ResizableSidebar
-        storageKey="diff-file-tree"
+        // A new key, so widths remembered from the old narrow tree do not
+        // carry over and cut file names off again.
+        storageKey="diff-file-tree-code"
+        defaultWidth="340px"
         side="right"
         mobilePaneLabels={{ left: "Files", right: "Diff" }}
         showContentSignal={showContentSignal}
-        minSidebarWidthPx={160}
-        minContentWidthPx={240}
+        minSidebarWidthPx={220}
+        minContentWidthPx={320}
         sidebar={tree}
       >
         {fileDiffs}
