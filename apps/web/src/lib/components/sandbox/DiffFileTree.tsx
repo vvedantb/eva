@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { GitStatus, GitStatusEntry } from "@pierre/trees";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { treeThemeVars } from "./treeTheme";
+import { TREE_UNSAFE_CSS, treeThemeVars } from "./treeTheme";
 
 interface DiffFileTreeProps {
   /** Changed file paths, in diff order. */
@@ -56,6 +56,7 @@ export function DiffFileTree({
     paths: files,
     ...(quiet ? {} : { gitStatus }),
     flattenEmptyDirectories: true,
+    unsafeCSS: TREE_UNSAFE_CSS,
     initialExpansion: "open",
     initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],
     // Fires for file and directory rows; ignore paths outside the changed set

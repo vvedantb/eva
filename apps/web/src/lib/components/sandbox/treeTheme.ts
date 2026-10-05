@@ -25,3 +25,16 @@ export const treeThemeVars: CSSProperties & Record<`--${string}`, string> = {
   // it follows the user's theme font like every other surface.
   "--trees-font-family-override": "var(--font-sans)",
 };
+
+/**
+ * Passed as the tree's `unsafeCSS`. Its built-in search field otherwise draws a
+ * hard-coded 2px focus ring; this makes it focus like the app's own inputs —
+ * the 1px border darkens and nothing else.
+ */
+export const TREE_UNSAFE_CSS = `
+  [data-file-tree-search-input]:focus-visible,
+  [data-file-tree-search-input][data-file-tree-search-input-fake-focus="true"] {
+    outline: none;
+    border-color: rgb(var(--ring) / 0.5);
+  }
+`;
