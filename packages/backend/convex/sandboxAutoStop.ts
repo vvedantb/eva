@@ -6,9 +6,13 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { authMutation, authQuery } from "./functions";
-import { scheduleFinalizeStop } from "./_sessions/sandbox";
+import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
-import { scheduleFinalizeStopProject } from "./_projects/sandbox";
+import { requestProjectSandboxStop } from "./_projects/sandbox";
+import {
+  isValidIdleStopMinutes,
+  resolveIdleStopSettings,
+} from "./_sandbox/idleStop";
 
 const DAY_MS = 86_400_000;
 
@@ -54,23 +58,32 @@ function getLocalParts(
   };
 }
 
+const sandboxAutoStopSettingsValidator = v.object({
+  enabled: v.boolean(),
+  time: v.string(),
+  timeZone: v.string(),
+  /** Idle sweep (`sandboxIdleStop.ts`): stop after `idleMinutes` without chat or agent activity. */
+  idleEnabled: v.boolean(),
+  idleMinutes: v.number(),
+});
+
 /**
- * Returns the app-wide sandbox auto-stop settings for the settings UI. Falls
- * back to sensible defaults (disabled, 22:00, UTC) when no row exists yet.
+ * Returns the app-wide sandbox auto-stop settings (daily sweep + idle sweep)
+ * for the settings UI. Falls back to sensible defaults when no row exists yet:
+ * daily sweep disabled at 22:00 UTC, idle sweep on at 60 minutes.
  */
 export const getSandboxAutoStopSettings = authQuery({
   args: {},
-  returns: v.object({
-    enabled: v.boolean(),
-    time: v.string(),
-    timeZone: v.string(),
-  }),
+  returns: sandboxAutoStopSettingsValidator,
   handler: async (ctx) => {
     const doc = await ctx.db.query("appSettings").first();
+    const idle = resolveIdleStopSettings(doc);
     return {
       enabled: doc?.sandboxAutoStopEnabled ?? false,
       time: doc?.sandboxAutoStopTime ?? "22:00",
       timeZone: doc?.sandboxAutoStopTimeZone ?? "UTC",
+      idleEnabled: idle.enabled,
+      idleMinutes: idle.minutes,
     };
   },
 });
@@ -86,9 +99,14 @@ export const setSandboxAutoStopSettings = authMutation({
     enabled: v.boolean(),
     time: v.string(),
     timeZone: v.string(),
+    idleEnabled: v.boolean(),
+    idleMinutes: v.number(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (!isValidIdleStopMinutes(args.idleMinutes)) {
+      throw new Error("Idle time must be a whole number of minutes (5–1440)");
+    }
     const existing = await ctx.db.query("appSettings").first();
     if (existing) {
       await ctx.db.patch(existing._id, {
@@ -96,19 +114,23 @@ export const setSandboxAutoStopSettings = authMutation({
         sandboxAutoStopTime: args.time,
         sandboxAutoStopTimeZone: args.timeZone,
         sandboxAutoStopLastRunDate: undefined,
+        sandboxIdleStopEnabled: args.idleEnabled,
+        sandboxIdleStopMinutes: args.idleMinutes,
       });
     } else {
       await ctx.db.insert("appSettings", {
         sandboxAutoStopEnabled: args.enabled,
         sandboxAutoStopTime: args.time,
         sandboxAutoStopTimeZone: args.timeZone,
+        sandboxIdleStopEnabled: args.idleEnabled,
+        sandboxIdleStopMinutes: args.idleMinutes,
       });
     }
     return null;
   },
 });
 
-/** Internal: reads the full auto-stop config for the cron, or null if unset. */
+/** Internal: reads the full daily auto-stop config for the cron, or null if unset. */
 export const getSettingsInternal = internalQuery({
   args: {},
   returns: v.union(
@@ -147,8 +169,9 @@ export const recordRun = internalMutation({
 
 /**
  * Internal: collects the ids of every sandbox currently in the `active` state
- * across the four user-facing sandbox surfaces. A full scan is fine here — this
- * runs at most once per day and these tables are small.
+ * across the three user-facing sandbox surfaces. Shared by the daily sweep and
+ * the idle sweep (`sandboxIdleStop.ts`). A full scan is fine here — these
+ * tables are small and the sweeps run a handful of times an hour at most.
  */
 export const listActiveSandboxes = internalQuery({
   args: {},
@@ -198,14 +221,10 @@ export const stopProject = internalMutation({
   returns: v.null(),
   handler: async (ctx, { projectId }) => {
     const project = await ctx.db.get(projectId);
-    if (!project || !project.sandboxId) return null;
-    if (project.reviewProjectSandboxStatus !== "active") return null;
-    await scheduleFinalizeStopProject(ctx, {
-      projectId,
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-    });
-    await ctx.db.patch(projectId, { reviewProjectSandboxStatus: "stopping" });
+    if (!project || project.reviewProjectSandboxStatus !== "active") {
+      return null;
+    }
+    await requestProjectSandboxStop(ctx, projectId);
     return null;
   },
 });
@@ -216,18 +235,8 @@ export const stopSession = internalMutation({
   returns: v.null(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
-    if (!session || !session.sandboxId) return null;
-    if (session.status !== "active") return null;
-    await scheduleFinalizeStop(ctx, {
-      sessionId,
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-    });
-    await ctx.db.patch(sessionId, {
-      ptySessionId: undefined,
-      status: "stopping",
-      updatedAt: Date.now(),
-    });
+    if (!session || session.status !== "active") return null;
+    await requestSessionSandboxStop(ctx, sessionId);
     return null;
   },
 });
