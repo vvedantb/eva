@@ -47,20 +47,24 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 ### Phase 0: generalise the turn store (no behaviour change)
 
-1. **Schema:** set `surface` to `v.union(v.literal("session"), v.literal("taskChat"), v.literal("projectChat"))`. The values match `adapter.kind`. A wider union passes the schema-narrowing check.
+1. **Schema: one chat turn, no surface label.** The `entityId` already identifies the table, so `surface` adds no information.
+   - Type `entityId` as `v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects"))`. Today it is `v.string()`, and every existing row holds a session id.
+   - Add an index `by_entity_open: ["entityId", "open"]` and stop reading `surface`.
+   - Make `surface` optional, run a migration that unsets it, then delete the field and the old index. Follow the schema-narrowing check.
+   - Pick the adapter from the id: `chatAdapterForEntity(ctx, entityId)` tries `ctx.db.normalizeId` on each chat table. The surface adapters already hold all per-table behaviour.
 2. **`turnStore.ts`:**
-   - Add `findOpenTurn(ctx, surface, entityId)` and `openTurn(ctx, { surface, entityId, … })`.
+   - Add `findOpenTurn(ctx, entityId)` and `openTurn(ctx, { entityId, … })`.
    - Keep the session functions as thin wrappers.
-3. **`renewTurnLease`:** find the current turn with `findOpenTurn(turn.surface, turn.entityId)`, not the sessions lookup.
-4. **`resolveCompletionTurn`:** make it surface-aware.
+3. **`renewTurnLease`:** find the current turn with `findOpenTurn(turn.entityId)`, not the sessions lookup.
+4. **`resolveCompletionTurn`:** take any chat entity id, not a `sessionId`.
 5. **`surfaceAdapters.ts`:**
-   - Add `surface`, `parseId`, `finalizeOrphanTurn`, and an optional `afterStallFinalize` (for the session retry).
-   - Export a lookup keyed by surface.
+   - Add `parseId`, `finalizeOrphanTurn`, and an optional `afterStallFinalize` (for the early-stall retry).
+   - Export `chatAdapterForEntity(ctx, entityId)`.
 6. **`turns.finalizeExpired`:**
    - Dispatch through the adapter.
    - Move the session-only no-workflow branch and the retry into the session adapter.
-7. **`applyLegacyHeartbeat`:** map the `task-chat-` / `project-chat-` entity id prefixes to a surface before the ownership gate.
-8. **`turnProjection.openSessionIdsForRepo`:** filter on `surface === "session"`.
+7. **`applyLegacyHeartbeat`:** map the `task-chat-` / `project-chat-` streaming ids to their entity id, then apply the ownership gate to all three chats.
+8. **`turnProjection.openSessionIdsForRepo`:** keep only ids that `ctx.db.normalizeId("sessions", …)` accepts.
 
 **Check:** add a hand-inserted `taskChat` turn to `turnLifecycleIntegration.test.ts`. Test renew, the generation fence, reconcile/finalise through the adapter, and the legacy-heartbeat gate.
 
@@ -77,7 +81,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 ### Phase 2: open durable turns for new chat turns
 
 **Stage** (`stageAndStartTaskChatTurn`, `stageAndStartProjectChatTurn`):
-1. Call `openTurn` with surface `taskChat` / `projectChat`, `streamingEntityId: chatStreamEntityId(id)` and the placeholder message id.
+1. Call `openTurn` with the task or project id, `streamingEntityId: chatStreamEntityId(id)` and the placeholder message id.
 2. Write `turnId` into `pendingTurn`.
 3. Call `bindTurnWorkflow` after `workflow.start`.
 4. Pass `turnId` to the workflow as a new **optional** argument.
@@ -120,7 +124,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 ### Phase 4: frontend and other readers
 
-1. Add `turns.getChatStatus({ surface, entityId })`, the generic form of `getSessionStatus`. It bridges legacy rows through `chatTurnLifecycleVersion`.
+1. Add `turns.getChatStatus({ entityId })`, the generic form of `getSessionStatus`. It bridges legacy rows through `chatTurnLifecycleVersion`.
 2. Replace the `activeChatWorkflowId` "is executing" checks in:
    - `TaskSandboxChatPanel.tsx` (~240)
    - `ProjectSandboxChatPanel.tsx` (~188)
@@ -132,7 +136,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
    - `mcp/nodeActions.ts`
    - `turnProjection.taskIsExecuting` and `projectIsExecuting`
 
-   These need an open-turn set per repo and surface. Consider a `by_surface_repo_open` index.
+   These need the open turns for one repo, split by table. `by_repo_open` gives the set; split it with `normalizeId`.
 4. Show synthetic turns in the task and project UIs.
 
 ### Phase 5: cleanup
@@ -159,7 +163,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 
 ### Phase 6 (optional, separate project): quick-task runs
 
-1. Add a `taskRun` surface with `entityId = runId` and `streamingEntityId = getTaskRunStreamingEntityId`.
+1. Add `v.id("agentRuns")` to the `entityId` union, with `entityId = runId` and `streamingEntityId = getTaskRunStreamingEntityId`.
 2. Gate `_taskWorkflow/watchdog.ts:checkStaleRuns` the same way as Phase 3.
 
 `agentRuns` has its own completion path (`RUN_ID`) and its own deadline extension. Plan it on its own.
@@ -173,7 +177,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 | An old daemon in a warm sandbox has no lease support | The `acceptTurn`-gated empty claim plus a prewarm respawn. Check that prewarm runs on every staging path, including the queue drain |
 | Fenced completion rejected | Ship Phase 1 before Phase 2 |
 | Heartbeats return `unknown_turn` and daemons exit | Ship Phase 0 before Phase 2 |
-| Reconcile load | The reconcile batch (25 per tick) now covers three surfaces. Check it against peak open turns |
+| Reconcile load | The reconcile batch (25 per tick) now covers three chat types. Check it against peak open turns |
 | Data migration | None for the cutover. One unset for `pendingTurnClaimedAt` at cleanup |
 
 ## Tests
@@ -181,7 +185,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 **Backend (`packages/backend/tests/`):**
 - Add task and project fixtures to `turnLifecycleIntegration.test.ts`.
 - Update `turnLifecycleContract.test.ts`, `turnLifecycle.test.ts` and `turnUiProjectionContract.test.ts`.
-- Update `chatSurfaceUnificationContract.test.ts` for the adapter `surface` field.
+- Update `chatSurfaceUnificationContract.test.ts` for `chatAdapterForEntity`.
 - Update `sessionStallWatchdogContract.test.ts` and `turnDeadlineExtensionContract.test.ts`.
 - Update `daemonClaimAcceptTurn.test.ts` (durable or empty claim, decided by `acceptTurn`) and `daemonClaimPauseContract.test.ts`.
 - Update `pendingTurnRecovery.test.ts`, `cancelRace.test.ts` and `stallRetry.test.ts`.
@@ -196,10 +200,10 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 **CI:**
 - `scripts/check-schema-narrowing.test.mjs`.
 
-## Open questions
+## Decisions (2026-10-06)
 
-1. For a daemon without `acceptTurn`: return an empty claim and respawn, or create a legacy-owned turn that legacy heartbeats can renew? The empty claim is simpler.
-2. Sessions run both stall systems: the old heartbeat chain and lease reconcile. Retire the old chain for sessions too? If yes, `runStaleChatHeartbeatCheck` and the probe functions can be deleted entirely.
-3. Should the task's main run (`activeWorkflowId`) and its chat turn share one "sandbox busy" projection? The queue already treats them as exclusive.
-4. Extend `retryEmptyStalledSessionTurn` to task and project chats through `afterStallFinalize`?
-5. Surface names: `taskChat` / `projectChat` (as in `adapter.kind`), or the table names?
+1. **Old daemons without `acceptTurn`:** return an empty claim; prewarm restarts the daemon (Phase 2).
+2. **Retire the old heartbeat chain for sessions too.** In Phase 3, stop arming it for sessions as well. In Phase 5, delete `runStaleChatHeartbeatCheck`, `runStaleChatLivenessProbe` and the `checkStale*ChatHeartbeat` handlers for all three chats, behind one release of no-op stubs. The lease reconcile is the only stall authority.
+3. **One "sandbox busy" projection** covers a task's main run (`activeWorkflowId`) and its chat turn (Phase 4). The queue already treats them as exclusive.
+4. **Extend the early-stall retry to all chats.** Move `retryEmptyStalledSessionTurn` behind the adapter hook `afterStallFinalize`, and enable it for task and project chats (Phase 3).
+5. **One chat turn type, no surface label.** The table comes from the `entityId` (see Phase 0). This also means Phase 6 only adds `v.id("agentRuns")` to the union.
