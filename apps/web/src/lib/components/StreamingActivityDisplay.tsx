@@ -21,6 +21,7 @@ import {
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
+import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
   silentStreamDelayMs,
   thinkingHeartbeatLabel,
@@ -188,6 +189,10 @@ export function StreamingActivityDisplay({
         />
       </div>
     );
+  }
+
+  if (startingSandbox && isStreaming) {
+    return <SandboxStartupSteps activity={activity} startedAt={startedAt} />;
   }
 
   const steps = parseActivitySteps(activity);

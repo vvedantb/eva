@@ -162,12 +162,13 @@ interface ChatBodyProps {
   onCancel: () => Promise<void>;
   /** Optional slot inserted above the conversation (session summary accordion). */
   preConversationContent?: React.ReactNode;
-  /** Optional slot inserted above the queued messages panel (session startup streaming). */
-  beforeQueuedContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
-  /** Replaces the default empty-state component when there are zero messages. */
-  emptyStateOverride?: React.ReactNode;
+  /**
+   * Live block at the end of the transcript (session sandbox startup). Takes
+   * the empty state's place when there are no messages yet.
+   */
+  transcriptTail?: React.ReactNode;
   /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
   underCardLeading?: React.ReactNode;
   /**
@@ -253,9 +254,8 @@ function ChatBodyInner({
   onSend,
   onCancel,
   preConversationContent,
-  beforeQueuedContent,
   preInputContent,
-  emptyStateOverride,
+  transcriptTail,
   underCardLeading,
   draft,
   localDraft,
@@ -590,8 +590,7 @@ function ChatBodyInner({
           scrollClassName="[container-type:size]"
         >
           {displayMessages.length === 0 ? (
-            (emptyStateOverride ??
-            (isLoadingMessages ? (
+            transcriptTail ? null : isLoadingMessages ? (
               <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
@@ -606,7 +605,7 @@ function ChatBodyInner({
                     }
                   : {})}
               />
-            )))
+            )
           ) : lastUserMessageIndex < 0 ? (
             displayMessages.map((message) => renderMessage(message))
           ) : (
@@ -623,6 +622,7 @@ function ChatBodyInner({
               </ChatLastTurn>
             </>
           )}
+          {transcriptTail}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
@@ -675,7 +675,6 @@ function ChatBodyInner({
                 modelPicker={modelPicker}
                 onSend={sendWithPendingContext}
                 onCancel={onCancel}
-                beforeQueuedContent={beforeQueuedContent}
                 preInputContent={
                   <>
                     <PendingCitationChips />
