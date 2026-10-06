@@ -185,13 +185,13 @@ export function MultipleChoiceQuestion({
               {q.header && (
                 <Badge
                   variant="secondary"
-                  className="text-[10px] font-semibold"
+                  className="text-3xs font-semibold"
                 >
                   {q.header}
                 </Badge>
               )}
               {isMultiStep && (
-                <span className="text-[11px] text-muted-foreground font-medium">
+                <span className="text-2xs text-muted-foreground font-medium">
                   {currentStep + 1}/{totalSteps}
                 </span>
               )}
@@ -226,7 +226,7 @@ export function MultipleChoiceQuestion({
                     <span
                       className={`
                     w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5
-                    text-[11px] font-bold tracking-wide transition-[background-color,border-color,box-shadow] duration-[var(--motion-fast)]
+                    text-2xs font-bold tracking-wide transition-[background-color,border-color,box-shadow] duration-[var(--motion-fast)]
                     ${
                       isSelected
                         ? "bg-primary text-primary-foreground"

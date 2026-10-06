@@ -217,7 +217,7 @@ export function DraftCard({ model, basePath }: DraftCardProps) {
           <div className="flex items-center gap-2">
             <Badge
               variant="secondary"
-              className="border-none bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+              className="border-none bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
             >
               {label}
             </Badge>

@@ -54,6 +54,7 @@ function FilesRootSelector({
         const rootValue = repo.kind === "primary" ? "" : repo.path;
         const label = repoDisplayLabel(repo);
         const active = activeRoot === rootValue;
+        const tile = repoTileColor(`${repo.owner}/${repo.name}/${label}`);
         return (
           <button
             key={repo.repoId}
@@ -72,8 +73,9 @@ function FilesRootSelector({
               fallback={
                 <span
                   className={cn(
-                    "flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white",
-                    repoTileColor(`${repo.owner}/${repo.name}/${label}`),
+                    "flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold",
+                    tile.bg,
+                    tile.text,
                   )}
                 >
                   {label.charAt(0).toUpperCase()}

@@ -28,7 +28,7 @@ export function DraftsCountBadge({ repoId }: DraftsCountBadgeProps) {
   return (
     <CountPop
       label={countLabel(count)}
-      className="ml-auto inline-flex items-center rounded-md bg-sidebar-accent/50 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+      className="ml-auto inline-flex items-center rounded-md bg-sidebar-accent/50 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
     />
   );
 }

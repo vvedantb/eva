@@ -81,7 +81,7 @@ export function BackgroundAgentsChip({
               >
                 <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
                 <span>{label}</span>
-                <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                <Badge variant="secondary" className="h-4 px-1.5 text-3xs">
                   <CountPop
                     label={String(runningAgents.length)}
                     className="tabular-nums"

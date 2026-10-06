@@ -104,7 +104,7 @@ function CommentEntry({ comment }: { comment: SummaryComment }) {
       action={comment.action}
       badge={
         comment.verdict === null ? null : (
-          <span className="text-[10px] font-medium text-muted-foreground">
+          <span className="text-3xs font-medium text-muted-foreground">
             {comment.verdict}
           </span>
         )
@@ -147,7 +147,7 @@ function BotGroup({ comments }: { comments: readonly SummaryComment[] }) {
           <span className="block text-xs font-medium">
             {comments.length} bot {comments.length === 1 ? "comment" : "comments"}
           </span>
-          <span className="flex flex-wrap gap-x-1.5 text-[11px] text-muted-foreground">
+          <span className="flex flex-wrap gap-x-1.5 text-2xs text-muted-foreground">
             {authors.length} {authors.length === 1 ? "author" : "authors"}
             {latest === null ? null : (
               <>

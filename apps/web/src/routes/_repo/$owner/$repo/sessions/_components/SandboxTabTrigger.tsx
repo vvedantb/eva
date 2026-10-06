@@ -157,7 +157,7 @@ export function SandboxTabTrigger({
       {layout === "stacked" ? (
         /* One line, clipped: a rail that reflows per tab name would make the
            whole column ragged, and the tooltip is gone at this width. */
-        <span className="w-full truncate text-[10px] leading-3">
+        <span className="w-full truncate text-3xs leading-3">
           {tab.label}
         </span>
       ) : null}

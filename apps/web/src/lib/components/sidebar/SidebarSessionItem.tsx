@@ -111,7 +111,7 @@ function LinkedRepoCountBadge({ count }: { count?: number }) {
   if (!count) return null;
   return (
     <span
-      className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground"
+      className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-3xs font-medium tabular-nums text-muted-foreground"
       title={`${count} linked ${count === 1 ? "repository" : "repositories"}`}
     >
       +{count}
@@ -123,7 +123,7 @@ function LinkedRepoCountBadge({ count }: { count?: number }) {
 function LinkedFromHint({ linkedFrom }: { linkedFrom?: SessionLinkedFrom }) {
   if (!linkedFrom) return null;
   return (
-    <span className="shrink-0 truncate text-[10px] text-muted-foreground/70">
+    <span className="shrink-0 truncate text-3xs text-muted-foreground/70">
       via {repoDisplayLabel(linkedFrom)}
     </span>
   );
@@ -186,7 +186,7 @@ export function TitleRegeneratingHint({
   if (!show) return null;
   return (
     <span
-      className={cn("shrink-0 text-[11px] text-muted-foreground", className)}
+      className={cn("shrink-0 text-2xs text-muted-foreground", className)}
     >
       Regenerating…
     </span>
@@ -244,7 +244,7 @@ export function SidebarSessionItem({
     <DynamicLink
       to={href}
       onClick={onNavigate}
-      className="block rounded-menu-item px-4 py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+      className="block rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
     >
       {isFolder ? (
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -267,7 +267,7 @@ export function SidebarSessionItem({
               <SessionPrIcon prUrl={prUrl} prState={prState} />
               <RelativeDateTime
                 at={activityAt}
-                className="shrink-0 text-[11px] text-muted-foreground"
+                className="shrink-0 text-2xs text-muted-foreground"
               />
             </div>
           </div>
@@ -283,7 +283,7 @@ export function SidebarSessionItem({
           <SessionPrIcon prUrl={prUrl} prState={prState} />
           <RelativeDateTime
             at={activityAt}
-            className="shrink-0 text-[11px] text-muted-foreground"
+            className="shrink-0 text-2xs text-muted-foreground"
           />
         </div>
       )}

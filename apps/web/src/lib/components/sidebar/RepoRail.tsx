@@ -86,7 +86,7 @@ function railTileActive(active: boolean): string {
  * dots, the sessions count and the per-app sandbox count cannot drift apart.
  */
 const RAIL_BADGE_CLASS =
-  "absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none";
+  "absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-3xs font-semibold leading-none";
 
 /** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(RAIL_BADGE_CLASS, "bg-success text-white");
@@ -310,6 +310,9 @@ function RepoRailView({
             : `${displayName} · ${row.owner}/${row.name}`;
           const sandboxCount = activeSandboxCounts.get(row._id);
           const sandboxLabel = countLabel(sandboxCount);
+          const tileColor = repoTileColor(
+            `${row.owner}/${row.name}/${displayName}`,
+          );
 
           return (
             <ContextMenu key={row._id}>
@@ -339,10 +342,9 @@ function RepoRailView({
                         fallback={
                           <span
                             className={cn(
-                              "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold text-white",
-                              repoTileColor(
-                                `${row.owner}/${row.name}/${displayName}`,
-                              ),
+                              "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold",
+                              tileColor.bg,
+                              tileColor.text,
                             )}
                           >
                             {displayName.charAt(0).toUpperCase()}
