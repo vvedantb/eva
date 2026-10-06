@@ -368,7 +368,7 @@ export async function scheduleFinalizeStop(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._sessions.sandbox.recoverStuckStopping,
-    { sessionId: args.sessionId },
+    { sessionId: args.sessionId, stopReason: args.stopReason },
   );
 }
 
@@ -407,10 +407,12 @@ export const finalizeStopSandbox = internalAction({
 /**
  * Re-issues finalizeStopSandbox if the session is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished.
+ * leave the UI wedged; no-ops if stop already finished. Carries the original
+ * stop reason so the divider matches the request even when this finalize wins
+ * the race against a slow provider stop.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: { sessionId: v.id("sessions"), stopReason: stopReasonValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -424,6 +426,7 @@ export const recoverStuckStopping = internalMutation({
         sessionId: args.sessionId,
         sandboxId: session.sandboxId,
         repoId: session.repoId,
+        stopReason: args.stopReason,
       },
     );
     return null;

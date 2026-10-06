@@ -92,8 +92,6 @@ import {
 } from "@/lib/confirm";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { shouldAutoWake } from "@/lib/components/sandbox/idleWake";
-import { isSandboxVmTab } from "@/lib/search-params";
 
 export function ProjectDetailClient({
   projectId,
@@ -173,57 +171,12 @@ export function ProjectDetailClient({
   const prewarmChatDaemon = useMutation(
     api.projectChatWorkflow.prewarmChatDaemon,
   );
-  const isSandboxSurface = surface === "sandbox";
-
-  // Idle pause (app setting): with it fully on, landing on a sandbox tab of a
-  // paused project wakes the sandbox instead of showing "Wake up Eva". One
-  // wake per closed episode so a failed start is never retried by itself.
-  const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
-  const idlePauseMode = idlePause?.mode;
-  const sandboxStatus = project?.reviewProjectSandboxStatus;
-  const sandboxTabOpen =
-    isSandboxSurface && isSandboxVmTab(sandboxTab ?? "preview");
-  const projectBusy =
-    project?.activeBuildWorkflowId !== undefined ||
-    project?.activeChatWorkflowId !== undefined;
-  const autoWakeRef = useRef<"idle" | "requested">("idle");
-  /* eslint-disable no-effect/no-event-handler --
-     Prewarm and auto-wake follow navigation plus live sandbox status, not a
-     click (same shape as SessionDetailClient). */
   useEffect(() => {
-    if (sandboxStatus !== "closed") autoWakeRef.current = "idle";
-    if (
-      autoWakeRef.current === "idle" &&
-      canStartSandbox &&
-      shouldAutoWake({
-        mode: idlePauseMode,
-        status: sandboxStatus,
-        hasSandbox: projectSandboxId !== undefined,
-        sandboxError: undefined,
-        tabOpen: sandboxTabOpen,
-        readOnly: false,
-        busy: projectBusy,
-      })
-    ) {
-      autoWakeRef.current = "requested";
-      void handleStartSandbox();
-      return;
-    }
     if (!isSandboxActive || !projectSandboxId) return;
     void prewarmChatDaemon({ projectId });
-  }, [
-    projectId,
-    isSandboxActive,
-    projectSandboxId,
-    sandboxStatus,
-    sandboxTabOpen,
-    canStartSandbox,
-    projectBusy,
-    idlePauseMode,
-    prewarmChatDaemon,
-    handleStartSandbox,
-  ]);
-  /* eslint-enable no-effect/no-event-handler */
+  }, [projectId, isSandboxActive, projectSandboxId, prewarmChatDaemon]);
+
+  const isSandboxSurface = surface === "sandbox";
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
@@ -413,6 +366,13 @@ export function ProjectDetailClient({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          project.reviewProjectSandboxStatus === "closed" &&
+          projectSandboxId !== undefined &&
+          canStartSandbox &&
+          project.activeBuildWorkflowId === undefined &&
+          project.activeChatWorkflowId === undefined
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />

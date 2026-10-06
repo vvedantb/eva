@@ -406,17 +406,19 @@ export async function scheduleFinalizeStopTask(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._agentTasks.sandbox.recoverStuckStopping,
-    { taskId: args.taskId },
+    { taskId: args.taskId, stopReason: args.stopReason },
   );
 }
 
 /**
  * Re-issues finalizeStopTaskSandbox if the task is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished.
+ * leave the UI wedged; no-ops if stop already finished. Carries the original
+ * stop reason so the divider matches the request even when this finalize wins
+ * the race against a slow provider stop.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { taskId: v.id("agentTasks") },
+  args: { taskId: v.id("agentTasks"), stopReason: stopReasonValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -435,6 +437,7 @@ export const recoverStuckStopping = internalMutation({
         taskId: args.taskId,
         sandboxId: task.sandboxId,
         repoId: task.repoId,
+        stopReason: args.stopReason,
       },
     );
     return null;

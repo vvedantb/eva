@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useConvex, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@eva/backend";
 import { Button, Spinner } from "@eva/ui";
@@ -28,6 +28,11 @@ function isWakeKind(value: string): value is PreviewWakeKind {
  * sandbox up through the same Start mutation the UI button uses, waits for the
  * dev server to answer, then hands off to the sandbox's own domain with a fresh
  * preview grant — the handshake `/preview-auth` does for cold links.
+ *
+ * The handshake runs once per attempt and reads the entity imperatively
+ * (`convex.query`) on every poll. It deliberately does not depend on the live
+ * `useQuery` document: status/updatedAt churn during the wake would otherwise
+ * re-run the effect, cancel the in-flight poll, and hang the page.
  */
 export const Route = createFileRoute("/p/$kind/$id")({
   validateSearch: (search: Record<string, unknown>) =>
@@ -50,42 +55,54 @@ function PreviewWake() {
   const wakeKind: PreviewWakeKind = isWakeKind(kind) ? kind : "session";
   const ensureActive = useAction(api.sandboxWake.ensureEntitySandboxActive);
   const getPreviewUrl = useAction(api.sandbox.getPreviewUrl);
+  const convex = useConvex();
   const [phase, setPhase] = useState<Phase>({ kind: "waking" });
   const [attempt, setAttempt] = useState(0);
   const ran = useRef<number>(-1);
 
-  // Live status for the progress copy and the sandbox id to poll. The id can
-  // change if a dead sandbox had to be recreated, so it is read live, not at
-  // mount.
+  // Live document for the progress copy and to know whether the link resolves.
+  // The handshake below does NOT depend on it — see the component doc.
   const target = useQuery(
     api.sandboxWake.getWakeTarget,
     isSignedIn ? { kind: wakeKind, id } : "skip",
   );
-  const sandboxId = target?.sandboxId;
-  const repoId = target?.repoId;
-  const devPort = target?.devPort;
+  const targetLoaded = target !== undefined;
+  const targetMissing = target === null;
   const sandboxStatus = target?.status;
 
   /* eslint-disable no-effect/no-event-handler --
      Page-level handshake like /preview-auth: the trigger is landing on the
      route (plus sign-in settling), not a click. One run per attempt. */
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || ran.current === attempt) return;
-    if (target === undefined) return;
-    if (target === null) {
+    if (!isLoaded || !isSignedIn || !targetLoaded) return;
+    if (targetMissing) {
       setPhase({
         kind: "error",
         message: "This preview link points to a chat you cannot see.",
       });
       return;
     }
+    if (ran.current === attempt) return;
     ran.current = attempt;
     let cancelled = false;
     const deadline = Date.now() + WAKE_TIMEOUT_MS;
-    const port = search.port ?? devPort ?? DEFAULT_PREVIEW_PORT;
+    const readTarget = () =>
+      convex.query(api.sandboxWake.getWakeTarget, { kind: wakeKind, id });
 
     const waitForDevServer = async (): Promise<void> => {
       while (!cancelled && Date.now() < deadline) {
+        // Fresh read each poll: the sandbox id changes if a dead sandbox is
+        // recreated during the wake.
+        const fresh = await readTarget();
+        if (cancelled) return;
+        if (fresh === null) {
+          setPhase({
+            kind: "error",
+            message: "This preview link points to a chat you cannot see.",
+          });
+          return;
+        }
+        const { sandboxId, repoId } = fresh;
         if (!sandboxId || !repoId) {
           setPhase({
             kind: "error",
@@ -96,9 +113,10 @@ function PreviewWake() {
         const preview = await getPreviewUrl({
           sandboxId,
           repoId,
-          port,
+          port: search.port ?? fresh.devPort ?? DEFAULT_PREVIEW_PORT,
           checkReady: true,
         });
+        if (cancelled) return;
         if (preview.ready && preview.url.length > 0) {
           setPhase({ kind: "serving" });
           // Cross-origin navigation to the sandbox origin — the full-page
@@ -138,16 +156,15 @@ function PreviewWake() {
     isLoaded,
     isSignedIn,
     attempt,
-    target,
+    targetLoaded,
+    targetMissing,
     wakeKind,
     id,
-    sandboxId,
-    repoId,
-    devPort,
     search.port,
     search.path,
     ensureActive,
     getPreviewUrl,
+    convex,
   ]);
   /* eslint-enable no-effect/no-event-handler */
 

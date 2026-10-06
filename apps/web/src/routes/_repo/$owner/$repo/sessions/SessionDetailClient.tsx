@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@eva/ui";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -19,8 +19,6 @@ import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { shouldAutoWake } from "@/lib/components/sandbox/idleWake";
-import { isSandboxVmTab } from "@/lib/search-params";
 
 export function SessionDetailClient({
   sessionId,
@@ -94,15 +92,6 @@ export function SessionDetailClient({
   // state…), and a burst of prewarms can race the server's alive-check into
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
   const sessionPrState = session?.prState;
-  const sessionArchived = session?.archived === true;
-  const sandboxError = session?.sandboxError;
-  // Idle pause (app setting). With it fully on, landing on a sandbox tab of a
-  // paused session wakes the sandbox instead of showing "Wake up Eva".
-  const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
-  const idlePauseMode = idlePause?.mode;
-  // One auto-wake per closed episode: a failed start lands back on `closed`
-  // and must not be retried until the user acts or the status moves on.
-  const autoWakeRef = useRef<"idle" | "requested">("idle");
   /* eslint-disable no-effect/no-event-handler --
      Prewarms the sandbox daemon for the session the route landed on; the
      trigger is navigation plus server-side status, not a click. */
@@ -110,27 +99,6 @@ export function SessionDetailClient({
     // A hidden cached shell must not resume a VM the user is not looking at.
     if (!isRouteActive) return;
     if (!sandboxId) return;
-    if (sandboxStatus !== "closed") autoWakeRef.current = "idle";
-    if (
-      autoWakeRef.current === "idle" &&
-      shouldAutoWake({
-        mode: idlePauseMode,
-        status: sandboxStatus,
-        hasSandbox: true,
-        sandboxError,
-        tabOpen: isSandboxVmTab(activeSandboxTab),
-        readOnly: sessionArchived || isSessionPrReadOnly(sessionPrState),
-        busy: false,
-      })
-    ) {
-      autoWakeRef.current = "requested";
-      void catchMutationError(
-        startSandboxMutation({ sessionId }),
-        "Couldn't start sandbox",
-        "session-sandbox-start",
-      );
-      return;
-    }
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
     // Don't prewarm (which resumes the VM) when the PR is already terminal —
     // auto-stop below owns teardown for merged/closed sessions.
@@ -142,12 +110,7 @@ export function SessionDetailClient({
     sandboxId,
     sandboxStatus,
     sessionPrState,
-    sessionArchived,
-    sandboxError,
-    idlePauseMode,
-    activeSandboxTab,
     prewarmDaemon,
-    startSandboxMutation,
   ]);
   /* eslint-enable no-effect/no-event-handler */
 
@@ -344,6 +307,12 @@ export function SessionDetailClient({
                             }
                       }
                       isSandboxStarting={isSandboxStarting}
+                      autoWakeEligible={
+                        session.status === "closed" &&
+                        session.sandboxId !== undefined &&
+                        session.sandboxError === undefined &&
+                        !isReadOnly
+                      }
                       collapsed={rightPanelCollapsed}
                       onToggle={onToggleRightPanel}
                       miniPlayer={

@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest";
 import {
   ACTIVITY_TOUCH_MIN_INTERVAL_MS,
   IDLE_PAUSE_DEFAULTS,
+  STREAMING_BUSY_WINDOW_MS,
   decideIdlePause,
   fallbackLastActivity,
+  isStreamingRowFresh,
   resolveIdleThresholds,
   shouldTouchActivity,
 } from "../convex/_sandbox/idlePolicy";
@@ -174,5 +176,46 @@ describe("activity helpers", () => {
   test("fallbackLastActivity takes the first defined candidate, else creation", () => {
     expect(fallbackLastActivity([undefined, 5, 9], 1)).toBe(5);
     expect(fallbackLastActivity([undefined, undefined], 1)).toBe(1);
+  });
+});
+
+describe("isStreamingRowFresh", () => {
+  const DAY = 24 * 60 * MIN;
+
+  test("a row updated 1 min ago is a live turn", () => {
+    expect(
+      isStreamingRowFresh(
+        { lastUpdatedAt: NOW - MIN, _creationTime: NOW - 10 * MIN },
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  test("a row created 1 min ago with no lastUpdatedAt is a live turn", () => {
+    expect(isStreamingRowFresh({ _creationTime: NOW - MIN }, NOW)).toBe(true);
+  });
+
+  test("a 48-day-old row with no lastUpdatedAt is a leftover", () => {
+    expect(isStreamingRowFresh({ _creationTime: NOW - 48 * DAY }, NOW)).toBe(
+      false,
+    );
+  });
+
+  test("an old row updated 2 min ago is a live turn", () => {
+    expect(
+      isStreamingRowFresh(
+        { lastUpdatedAt: NOW - 2 * MIN, _creationTime: NOW - 48 * DAY },
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  test("exactly at the window counts as stale", () => {
+    expect(
+      isStreamingRowFresh(
+        { _creationTime: NOW - STREAMING_BUSY_WINDOW_MS },
+        NOW,
+      ),
+    ).toBe(false);
   });
 });

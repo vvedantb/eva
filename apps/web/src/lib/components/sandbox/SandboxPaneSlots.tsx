@@ -7,6 +7,7 @@ import { previewWakePath } from "@eva/shared";
 import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { SandboxPresenceBeacon } from "./SandboxPresenceBeacon";
+import { SandboxAutoWake } from "./SandboxAutoWake";
 import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
 import { CustomTabPanel } from "./CustomTabPanel";
 import { TerminalPanel } from "@/routes/_repo/$owner/$repo/sessions/TerminalPanel";
@@ -76,10 +77,16 @@ interface SandboxPaneSlotsProps {
   onStickyTerminalHistoryTailChange?: (tail: string) => void;
   /**
    * Whether this host is the one on screen. Sessions keep up to three shells
-   * mounted and may collapse the rail; only a visible host may hold the
-   * idle-pause presence beacon. Defaults to true (tasks, projects).
+   * mounted and every host may collapse its rail; only a visible host may hold the
+   * idle-pause presence beacon or auto-wake. Defaults to true.
    */
   presenceEnabled?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined
+   * here with the setting and tab visibility to auto-wake.
+   */
+  autoWakeEligible?: boolean;
 }
 
 /**
@@ -112,6 +119,7 @@ export function SandboxPaneSlots({
   stickyTerminalHistoryTail,
   onStickyTerminalHistoryTailChange,
   presenceEnabled = true,
+  autoWakeEligible,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
   const resolvedTab =
@@ -120,8 +128,9 @@ export function SandboxPaneSlots({
       : activeTab;
   const entityId = sandboxOwnerParentId(owner);
   // Idle pause: a VM tab in the foreground keeps the sandbox awake (presence
-  // beacon, always on), and with the setting fully on the external links
-  // become Eva wake links so they outlive a pause.
+  // beacon, always on). With the setting fully on, the same visible tab wakes
+  // a paused sandbox, and the external links become Eva wake links so they
+  // outlive a pause.
   const currentUserId = useQuery(api.auth.me);
   const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
   const beaconActive =
@@ -225,6 +234,15 @@ export function SandboxPaneSlots({
           entityId={String(entityId)}
           userId={currentUserId}
         />
+      ) : null}
+      {idlePause?.mode === "on" &&
+      autoWakeEligible &&
+      presenceEnabled &&
+      !isActive &&
+      !isSandboxStarting &&
+      onStartSandbox &&
+      isSandboxVmTab(resolvedTab) ? (
+        <SandboxAutoWake wakeKey={String(entityId)} onWake={onStartSandbox} />
       ) : null}
       <div
         className={

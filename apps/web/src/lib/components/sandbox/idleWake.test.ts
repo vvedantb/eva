@@ -1,55 +1,40 @@
-import { describe, expect, test } from "vitest";
-import { shouldAutoWake, type AutoWakeInput } from "./idleWake";
+import { beforeEach, describe, expect, test } from "vitest";
+import {
+  AUTO_WAKE_COOLDOWN_MS,
+  resetAutoWakeHistory,
+  shouldFireAutoWake,
+} from "./idleWake";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { isSandboxLifecycleAlert } from "@/lib/components/chat/chatBodyUtils";
 import { sandboxPausedAlertText } from "@eva/shared";
 
 /**
- * Wake-on-tab-open is the user-facing half of idle pause. Getting it wrong in
- * either direction is costly: waking on the chat tab resumes VMs nobody asked
- * for, while not waking on the Preview tab leaves people staring at a dead
- * iframe. The predicate is pure so every gate is pinned here.
+ * Auto-wake fires when a visible sandbox tab of a paused sandbox mounts. A
+ * failed start lands back on `closed` and remounts it, so the cooldown is what
+ * stops a start that keeps failing from looping.
  */
-
-function input(overrides: Partial<AutoWakeInput> = {}): AutoWakeInput {
-  return {
-    mode: "on",
-    status: "closed",
-    hasSandbox: true,
-    sandboxError: undefined,
-    tabOpen: true,
-    readOnly: false,
-    busy: false,
-    ...overrides,
-  };
-}
-
-describe("shouldAutoWake", () => {
-  test("wakes a paused sandbox when a VM tab is open and the setting is on", () => {
-    expect(shouldAutoWake(input())).toBe(true);
+describe("shouldFireAutoWake", () => {
+  beforeEach(() => {
+    resetAutoWakeHistory();
   });
 
-  test("the setting off or in dry-run keeps today's explicit button", () => {
-    expect(shouldAutoWake(input({ mode: "off" }))).toBe(false);
-    expect(shouldAutoWake(input({ mode: "dry-run" }))).toBe(false);
-    expect(shouldAutoWake(input({ mode: undefined }))).toBe(false);
+  test("the first wake for an entity fires", () => {
+    expect(shouldFireAutoWake("a", 0)).toBe(true);
   });
 
-  test("only a closed sandbox is woken", () => {
-    for (const status of ["active", "starting", "stopping", undefined]) {
-      expect(shouldAutoWake(input({ status }))).toBe(false);
-    }
+  test("a second wake inside the cooldown is refused", () => {
+    expect(shouldFireAutoWake("a", 0)).toBe(true);
+    expect(shouldFireAutoWake("a", AUTO_WAKE_COOLDOWN_MS - 1)).toBe(false);
   });
 
-  test("chat-only views never wake", () => {
-    expect(shouldAutoWake(input({ tabOpen: false }))).toBe(false);
+  test("a wake after the cooldown fires again", () => {
+    expect(shouldFireAutoWake("a", 0)).toBe(true);
+    expect(shouldFireAutoWake("a", AUTO_WAKE_COOLDOWN_MS)).toBe(true);
   });
 
-  test("a failed last start, a read-only surface, or a busy run block the wake", () => {
-    expect(shouldAutoWake(input({ sandboxError: "boom" }))).toBe(false);
-    expect(shouldAutoWake(input({ readOnly: true }))).toBe(false);
-    expect(shouldAutoWake(input({ busy: true }))).toBe(false);
-    expect(shouldAutoWake(input({ hasSandbox: false }))).toBe(false);
+  test("entities have independent cooldowns", () => {
+    expect(shouldFireAutoWake("a", 0)).toBe(true);
+    expect(shouldFireAutoWake("b", 1)).toBe(true);
   });
 });
 

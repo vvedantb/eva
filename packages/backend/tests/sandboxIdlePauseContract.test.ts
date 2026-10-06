@@ -6,8 +6,8 @@ import { describe, expect, test } from "vitest";
 /**
  * Source contracts for the idle-pause feature. Each pins a wiring decision a
  * refactor could silently undo: the cron entry, the stop-reason divider in
- * every surface's close path, the auto-wake predicate in every surface's
- * prewarm effect, and the MCP tool's dual URL shape.
+ * every surface's close path, auto-wake gated on the visible sandbox pane in
+ * every surface, and the MCP tool's dual URL shape.
  */
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -33,6 +33,9 @@ describe("idle pause wiring", () => {
       const text = source(file);
       expect(text, file).toContain("stopAlertText(args.stopReason)");
       expect(text, file).not.toContain('content: "Sandbox stopped"');
+      expect(text, file).toMatch(
+        /export const recoverStuckStopping = internalMutation\(\{\s*args: \{[^}]*stopReason: stopReasonValidator/,
+      );
     }
   });
 
@@ -52,16 +55,24 @@ describe("idle pause wiring", () => {
     expect(sweep).toContain("requestProjectSandboxStop(");
   });
 
-  test("auto-wake lives inside each surface's existing prewarm effect", () => {
+  test("auto-wake mounts beside the presence beacon, not in prewarm effects", () => {
+    const web = "../apps/web/src";
+    const slots = source(`${web}/lib/components/sandbox/SandboxPaneSlots.tsx`);
+    expect(slots).toContain("<SandboxAutoWake");
+    expect(slots).toContain("autoWakeEligible");
     for (const file of [
-      "../apps/web/src/routes/_repo/$owner/$repo/sessions/SessionDetailClient.tsx",
-      "../apps/web/src/lib/components/tasks/TaskDetailInline.tsx",
-      "../apps/web/src/routes/_repo/$owner/$repo/projects/ProjectDetailClient.tsx",
+      `${web}/routes/_repo/$owner/$repo/sessions/SandboxPanel.tsx`,
+      `${web}/lib/components/tasks/TaskSandboxPanel.tsx`,
+      `${web}/lib/components/projects/ProjectSandboxPanel.tsx`,
     ]) {
-      const text = source(file);
-      expect(text, file).toContain("shouldAutoWake(");
-      expect(text, file).toContain("autoWakeRef");
-      expect(text, file).toContain("prewarm");
+      expect(source(file), file).toContain("autoWakeEligible");
+    }
+    for (const file of [
+      `${web}/routes/_repo/$owner/$repo/sessions/SessionDetailClient.tsx`,
+      `${web}/lib/components/tasks/TaskDetailInline.tsx`,
+      `${web}/routes/_repo/$owner/$repo/projects/ProjectDetailClient.tsx`,
+    ]) {
+      expect(source(file), file).not.toContain("autoWakeRef");
     }
   });
 

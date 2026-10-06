@@ -33,6 +33,20 @@ export function shouldTouchActivity(
   );
 }
 
+/** A streaming row older than this is a leftover, not a live turn. */
+export const STREAMING_BUSY_WINDOW_MS = 15 * 60_000;
+
+/** True when a streamingActivity row is recent enough to mean "agent is working now". */
+export function isStreamingRowFresh(
+  row: { lastUpdatedAt?: number; _creationTime: number },
+  now: number,
+): boolean {
+  return (
+    now - Math.max(row.lastUpdatedAt ?? 0, row._creationTime) <
+    STREAMING_BUSY_WINDOW_MS
+  );
+}
+
 export interface IdleThresholds {
   mode: SandboxIdlePauseMode;
   afterAgentMs: number;

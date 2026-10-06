@@ -22,6 +22,7 @@ import {
 import {
   decideIdlePause,
   fallbackLastActivity,
+  isStreamingRowFresh,
   resolveIdleThresholds,
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
@@ -136,13 +137,19 @@ type Candidate = {
   lastAgentFinishedAt: number | undefined;
 };
 
-/** True when a streaming row or a queued follow-up exists for the entity. */
+/**
+ * True when a fresh streaming row or a queued follow-up exists for the entity.
+ * A stale streaming row (see `isStreamingRowFresh`) does not count: leftover
+ * rows from crashed turns or old data must not pin a sandbox awake forever.
+ * Open turns, runs and workflows are the authoritative busy signals and are
+ * checked separately by the callers.
+ */
 async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean> {
   const streaming = await ctx.db
     .query("streamingActivity")
     .withIndex("by_entity", (q) => q.eq("entityId", entityId))
     .first();
-  if (streaming) return true;
+  if (streaming && isStreamingRowFresh(streaming, Date.now())) return true;
   const sessionId = ctx.db.normalizeId("sessions", entityId);
   const taskId = ctx.db.normalizeId("agentTasks", entityId);
   const projectId = ctx.db.normalizeId("projects", entityId);

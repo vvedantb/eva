@@ -177,6 +177,28 @@ describe("idle pause sweep", () => {
   );
 
   test(
+    "a fresh streaming row makes a session busy",
+    async () => {
+      const { t, sessionId } = await fixture();
+      await setMode(t, "on");
+      await t.run(async (ctx) => {
+        await ctx.db.insert("streamingActivity", {
+          entityId: String(sessionId),
+          currentActivity: "[]",
+        });
+      });
+      const candidate = await t.query(
+        internal.sandboxIdlePause.inspectCandidate,
+        { kind: "session", entityId: String(sessionId) },
+      );
+      expect(candidate?.busy).toBe(true);
+      await t.action(internal.sandboxIdlePause.run, {});
+      expect(await sessionStatus(t, sessionId)).toBe("active");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a queued run makes a task busy",
     async () => {
       const { t, taskId } = await fixture();

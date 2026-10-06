@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
 import { Badge, CircleSpinner, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -51,8 +51,6 @@ import type { UseTaskDetailRouting } from "./useTaskDetail";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { shouldAutoWake } from "@/lib/components/sandbox/idleWake";
-import { isSandboxVmTab } from "@/lib/search-params";
 
 interface TaskDetailInlineProps {
   onClose: () => void;
@@ -141,57 +139,10 @@ export function TaskDetailInline({
   } = useTaskDetail(taskId, routing);
   const altHeld = useAltHeld();
 
-  // Idle pause (app setting): with it fully on, landing on a sandbox tab of a
-  // paused task wakes the sandbox instead of showing "Wake up Eva". One wake
-  // per closed episode so a failed start is never retried by itself.
-  const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
-  const idlePauseMode = idlePause?.mode;
-  const sandboxStatus = task?.reviewTaskSandboxStatus;
-  const sandboxTabOpen =
-    showSandbox &&
-    isSandboxVmTab(
-      routing?.mode === "quick-sandbox"
-        ? routing.quick.sandboxTab
-        : embeddedSandboxTab,
-    );
-  const autoWakeRef = useRef<"idle" | "requested">("idle");
-  /* eslint-disable no-effect/no-event-handler --
-     Prewarm and auto-wake follow navigation plus live sandbox status, not a
-     click (same shape as SessionDetailClient). */
   useEffect(() => {
-    if (sandboxStatus !== "closed") autoWakeRef.current = "idle";
-    if (
-      autoWakeRef.current === "idle" &&
-      canStartSandbox &&
-      shouldAutoWake({
-        mode: idlePauseMode,
-        status: sandboxStatus,
-        hasSandbox: sandboxId !== undefined,
-        sandboxError: undefined,
-        tabOpen: sandboxTabOpen,
-        readOnly: false,
-        busy: hasActiveRun,
-      })
-    ) {
-      autoWakeRef.current = "requested";
-      void handleStartSandbox();
-      return;
-    }
     if (!isSandboxActive || !sandboxId) return;
     void prewarmChatDaemon({ taskId });
-  }, [
-    taskId,
-    isSandboxActive,
-    sandboxId,
-    sandboxStatus,
-    sandboxTabOpen,
-    canStartSandbox,
-    hasActiveRun,
-    idlePauseMode,
-    prewarmChatDaemon,
-    handleStartSandbox,
-  ]);
-  /* eslint-enable no-effect/no-event-handler */
+  }, [taskId, isSandboxActive, sandboxId, prewarmChatDaemon]);
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
@@ -321,6 +272,12 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          task.reviewTaskSandboxStatus === "closed" &&
+          sandboxId !== undefined &&
+          canStartSandbox &&
+          !hasActiveRun
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />
