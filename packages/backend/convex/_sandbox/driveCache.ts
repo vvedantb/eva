@@ -62,15 +62,34 @@ export const TOOLCHAIN_MOUNT_PATH = "/eva-toolchain";
  */
 export const TOOLCHAIN_DRIVE_NAME = "eva-toolchain";
 
+/** One directory redirected onto the toolchain Drive. */
+interface ToolchainShare {
+  /** Normal on-disk location; the Drive copy is mounted over it. */
+  localPath: string;
+  /** Directory name on the toolchain Drive. */
+  driveDir: string;
+  /**
+   * Whether the local copy may be deleted before a snapshot once the Drive
+   * holds it. Only true for a pure download cache the tool refills on demand.
+   * An installed program must say false: if a later sandbox's Drive fails to
+   * attach, the local copy is the only one, and deleting it breaks the tool
+   * rather than making it re-download.
+   */
+  pruneLocalWhenOnDrive: boolean;
+}
+
 /**
- * Directories redirected onto the toolchain Drive, as `[local path, name on
- * the Drive]`. Each is bind-mounted over its normal location, so the tools
- * themselves need no configuration and keep working if the Drive is absent.
+ * Directories redirected onto the toolchain Drive. Each is mounted over its
+ * normal location, so the tools need no configuration and keep working if the
+ * Drive is absent.
  *
- * Both entries are version-keyed download caches: the tool writes a new
- * directory per release and reads it back on every later start, which is
- * exactly the access pattern a Drive suits. Together they are ~410 MB that is
- * currently duplicated into the seeded snapshot of every repo.
+ * - Convex local backend: a download cache. The CLI fetches a missing build on
+ *   demand, so the local copy is pruned once the Drive holds it.
+ * - cursor-agent: the INSTALLED program. `~/.local/bin/cursor-agent` is a
+ *   symlink into `versions/<v>/cursor-agent` (checked on a seeded sandbox,
+ *   2026-10-06), so the local copy must stay or the command breaks whenever
+ *   the Drive is missing. It still gains from the Drive for upgrades, but it
+ *   saves no snapshot space.
  *
  * Chrome (~416 MB in /opt/google) is deliberately NOT here despite being the
  * single largest candidate: it is installed by `dnf` and owned by the RPM
@@ -79,9 +98,17 @@ export const TOOLCHAIN_DRIVE_NAME = "eva-toolchain";
  * 400 MB. Anything added here must be plain downloaded files that no package
  * manager tracks.
  */
-export const TOOLCHAIN_SHARES: ReadonlyArray<readonly [string, string]> = [
-  ["/home/vercel-sandbox/.cache/convex/binaries", "convex-binaries"],
-  ["/home/eva/.local/share/cursor-agent/versions", "cursor-agent"],
+export const TOOLCHAIN_SHARES: ReadonlyArray<ToolchainShare> = [
+  {
+    localPath: "/home/vercel-sandbox/.cache/convex/binaries",
+    driveDir: "convex-binaries",
+    pruneLocalWhenOnDrive: true,
+  },
+  {
+    localPath: "/home/eva/.local/share/cursor-agent/versions",
+    driveDir: "cursor-agent",
+    pruneLocalWhenOnDrive: false,
+  },
 ];
 
 /**
@@ -99,7 +126,7 @@ export function toolchainSetupScript(): string {
     `if [ ! -d ${TOOLCHAIN_MOUNT_PATH} ]; then exit 0; fi`,
     `TC_RW=0`,
     `if sudo touch ${probe} 2>/dev/null; then sudo rm -f ${probe} 2>/dev/null || true; TC_RW=1; fi`,
-    ...TOOLCHAIN_SHARES.flatMap(([localPath, driveDir]) => {
+    ...TOOLCHAIN_SHARES.flatMap(({ localPath, driveDir }) => {
       const src = `${TOOLCHAIN_MOUNT_PATH}/${driveDir}`;
       return [
         `if mountpoint -q ${localPath} 2>/dev/null; then :;`,
@@ -128,8 +155,55 @@ export function toolchainSetupScript(): string {
 /** Releases the {@link TOOLCHAIN_SHARES} bind mounts before a snapshot capture. */
 function toolchainTeardownLines(): string[] {
   return TOOLCHAIN_SHARES.map(
-    ([localPath]) => `sudo umount -l ${localPath} 2>/dev/null || true`,
+    ({ localPath }) => `sudo umount -l ${localPath} 2>/dev/null || true`,
   );
+}
+
+/**
+ * Local cache directories made redundant by the Drives, per home directory.
+ * Every sandbox created with this code points package managers at
+ * {@link DRIVE_CACHE_ROOT} (see DRIVE_CACHE_ENV), so these defaults are never
+ * written again — but a seeded snapshot built before the switch still carries
+ * them (2.2 GB pnpm store + 1.4 GB npm cache + 187 MB pnpm metadata on the
+ * sandbox measured 2026-09-23). Pure caches: deleting them never breaks an
+ * existing `node_modules`, because pnpm and npm copy, hard-link or reflink
+ * files out of the cache and the installed copy keeps its own data.
+ */
+const LOCAL_CACHES_REPLACED_BY_DRIVE: ReadonlyArray<string> = [
+  ".local/share/pnpm/store",
+  ".cache/pnpm",
+  ".npm/_cacache",
+];
+
+/**
+ * Snapshot-time deletion of every local copy the Drives have made redundant.
+ * Runs AFTER {@link driveCacheTeardownScript}: the mounts must be down first,
+ * or `rm` would empty the Drive itself instead of the local disk under it.
+ *
+ * Toolchain shares are only pruned when marked safe AND when every local
+ * version is confirmed present on the Drive, so a failed Drive seed can never
+ * leave a snapshot with no copy at all. The Drive itself stays mounted at
+ * {@link TOOLCHAIN_MOUNT_PATH} during capture, which is what lets that check
+ * see it.
+ */
+export function driveRedundantLocalPruneLines(
+  homes: ReadonlyArray<string>,
+): string[] {
+  return [
+    ...homes.flatMap((home) =>
+      LOCAL_CACHES_REPLACED_BY_DRIVE.map(
+        (dir) => `sudo rm -rf ${home}/${dir} 2>/dev/null || true`,
+      ),
+    ),
+    ...TOOLCHAIN_SHARES.filter((share) => share.pruneLocalWhenOnDrive).map(
+      ({ localPath, driveDir }) => {
+        const src = `${TOOLCHAIN_MOUNT_PATH}/${driveDir}`;
+        // One version directory at a time, and only when the Drive has that
+        // exact version — never a blanket `rm` of the parent.
+        return `if [ -d ${src} ] && [ -d ${localPath} ] && ! mountpoint -q ${localPath} 2>/dev/null; then for v in ${localPath}/*/; do n=$(basename "$v"); [ -d "${src}/$n" ] && sudo rm -rf "$v" 2>/dev/null || true; done; fi`;
+      },
+    ),
+  ];
 }
 
 /**

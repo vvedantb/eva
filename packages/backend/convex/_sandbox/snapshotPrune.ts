@@ -9,7 +9,11 @@
  * waste: superseded copies of a 189 MB binary, a spent 195 MB installer, and
  * package-manager metadata.
  *
- * This is deliberately a prune and NOT a Drive. Moving these to persistent
+ * It also deletes the local cache copies the Drives replaced (~3.8 GB of pnpm
+ * store, npm cache and pnpm metadata, plus the Convex build once the toolchain
+ * Drive holds it). See driveRedundantLocalPruneLines for the safety rules.
+ *
+ * The junk above is deliberately pruned and NOT moved to a Drive. Moving it to persistent
  * storage would relocate the garbage to something billed per GB-month plus
  * per-GB reads — strictly worse than deleting it. Drives are for content that
  * is re-read (see ./driveCache.ts); this is content nothing reads again.
@@ -22,6 +26,8 @@
  * is best-effort throughout and always exits 0 — losing a snapshot to a failed
  * `rm` would cost far more than the space it saves.
  */
+
+import { driveRedundantLocalPruneLines } from "./driveCache";
 
 /** Home directories that may hold tool caches. Both users exist on the image. */
 const HOME_DIRS = ["/home/vercel-sandbox", "/home/eva", "/root"];
@@ -61,6 +67,9 @@ export function snapshotPruneScript(): string {
   return [
     ...HOME_DIRS.map(pruneConvexBinaries),
     ...HOME_DIRS.map(pruneSpentInstallers),
+    // Local caches the Drives now hold. Without this the Drives only ADD
+    // storage: the old copies stay baked into every seeded snapshot.
+    ...driveRedundantLocalPruneLines(HOME_DIRS),
     // dnf's metadata cache: 167 MB, rebuilt automatically on the next install.
     `sudo dnf clean all >/dev/null 2>&1 || true`,
     `sudo rm -rf /var/cache/dnf/* 2>/dev/null || true`,

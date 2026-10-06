@@ -399,27 +399,49 @@ function describeMounts(mounts: SandboxMounts | undefined): string {
     .join(",");
 }
 
+/** Copy of `mounts` with the read-write mounts at `paths` demoted to snapshots. */
+function demoteMounts(
+  mounts: SandboxMounts,
+  paths: ReadonlySet<string>,
+): SandboxMounts {
+  const out: SandboxMounts = {};
+  for (const [path, value] of Object.entries(mounts)) {
+    out[path] =
+      value instanceof Drive && paths.has(path) ? value.snapshot() : value;
+  }
+  return out;
+}
+
 /**
  * Progressively weaker mount sets to try at create, most capable first:
- * as requested → read-write demoted to read-only snapshots → nothing. Stages
- * that would repeat the previous one are skipped, so a request with no
- * read-write mounts yields two entries rather than three.
+ * as requested → each read-write mount demoted ON ITS OWN → all demoted →
+ * nothing.
+ *
+ * The one-at-a-time stages exist because the API does not say which Drive's
+ * write lock was taken. Demoting everything together meant a lock on the
+ * shared toolchain Drive (held by any repo's build) also demoted this repo's
+ * own cache, so it was never filled. Demotes later-listed mounts first: callers
+ * list the mount they care most about first, and the later ones are the shared
+ * Drives most likely to be locked.
  */
 function mountFallbackLadder(
   mounts: SandboxMounts | undefined,
 ): ReadonlyArray<SandboxMounts | undefined> {
   if (!mounts) return [undefined];
-  const demoted: SandboxMounts = {};
-  let changed = false;
-  for (const [path, value] of Object.entries(mounts)) {
-    if (value instanceof Drive) {
-      demoted[path] = value.snapshot();
-      changed = true;
-    } else {
-      demoted[path] = value;
+  const readWritePaths = Object.entries(mounts)
+    .filter(([, value]) => value instanceof Drive)
+    .map(([path]) => path);
+  const stages: Array<SandboxMounts | undefined> = [mounts];
+  if (readWritePaths.length > 1) {
+    for (const path of [...readWritePaths].reverse()) {
+      stages.push(demoteMounts(mounts, new Set([path])));
     }
   }
-  return changed ? [mounts, demoted, undefined] : [mounts, undefined];
+  if (readWritePaths.length > 0) {
+    stages.push(demoteMounts(mounts, new Set(readWritePaths)));
+  }
+  stages.push(undefined);
+  return stages;
 }
 
 /** A handle to one Vercel sandbox, exposing the neutral {@link SandboxHandle}. */
