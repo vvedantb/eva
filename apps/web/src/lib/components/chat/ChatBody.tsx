@@ -590,7 +590,13 @@ function ChatBodyInner({
           scrollClassName="[container-type:size]"
         >
           {displayMessages.length === 0 ? (
-            transcriptTail ? null : isLoadingMessages ? (
+            transcriptTail ? (
+              // Bottom-anchored like a live last turn, so the tail sits in the
+              // same spot above the composer whether or not messages exist.
+              <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
+                {transcriptTail}
+              </div>
+            ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
@@ -622,7 +628,7 @@ function ChatBodyInner({
               </ChatLastTurn>
             </>
           )}
-          {transcriptTail}
+          {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
