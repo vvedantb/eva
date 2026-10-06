@@ -15,6 +15,7 @@ import {
 } from "@/lib/components/chat/chatBodyUtils";
 import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
@@ -220,6 +221,14 @@ export function ChatPanel({
     }
   };
 
+  const queueGate = useChatQueueGate({
+    parentId: sessionId,
+    messages,
+    queuedMessages,
+    model,
+    isSandboxActive,
+    setModel,
+  });
   const { isExecuting, handleSend, handleCancel } = useSessionSend({
     sessionId,
     model,
@@ -229,6 +238,9 @@ export function ChatPanel({
     resolveAccountId,
     accounts,
     messages,
+    // A running turn queues regardless, so this is `composer.queuesSends`
+    // without the `isExecuting` it cannot know before this hook returns.
+    queuesSends: !isSandboxActive || queueGate.isUsageLimitHeld,
     isRouteActive,
   });
   const proposedPlans = useHeldQuery(
@@ -430,6 +442,7 @@ export function ChatPanel({
     isSandboxActive,
     isSwitchingAccount,
     isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
   });
 
   const readOnlyMessage = getSessionReadOnlyMessage({
@@ -450,6 +463,7 @@ export function ChatPanel({
         chatParentId={sessionId}
         messages={messages}
         queuedMessages={queuedMessages}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streamingActivity}
         streamingContent={streamingContent}
         streamingPendingQuestion={streamingPendingQuestion}
@@ -485,7 +499,7 @@ export function ChatPanel({
         }
         modelPicker={{
           model,
-          setModel,
+          setModel: queueGate.setModel,
           modelOptions,
           accounts,
           accountId: providerAccountId,
@@ -575,6 +589,7 @@ export function ChatPanel({
         open={showReviewModal}
         onClose={() => setShowReviewModal(false)}
       />
+      {queueGate.switchDialog}
     </ChatPageWrapper>
   );
 }

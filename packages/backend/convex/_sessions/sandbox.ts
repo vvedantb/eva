@@ -18,7 +18,7 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
-import { startNextQueuedSessionMessageAfterSandboxReady } from "../_queues/helpers";
+import { drainChatQueueQuietly } from "../_queues/helpers";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
@@ -557,7 +557,7 @@ export const sandboxReady = internalMutation({
     // Early + final ready both call this; second no-ops while activeWorkflowId is set.
     // Starting a sandbox is not a turn ending, so this drain must not wake a
     // watching orchestrator when the queue turns out to be empty.
-    await startNextQueuedSessionMessageAfterSandboxReady(ctx, args.sessionId);
+    await drainChatQueueQuietly(ctx, args.sessionId);
     return null;
   },
 });

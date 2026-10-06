@@ -101,6 +101,8 @@ interface ChatComposerProps {
   repo?: ChatRepo;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something; default "Queued". */
+  queueLabel?: string;
   /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
   heldFollowUps?: ChatHeldFollowUp[];
   messageHistory: string[];
@@ -141,6 +143,7 @@ export function ChatComposer({
   repo,
   conversationId,
   queuedMessages,
+  queueLabel,
   heldFollowUps = [],
   messageHistory,
   isExecuting,
@@ -304,6 +307,7 @@ export function ChatComposer({
       />
       <QueuedMessagesPanel
         items={queuedMessageItems}
+        {...(queueLabel !== undefined ? { label: queueLabel } : {})}
         renderContent={renderQueuedContent}
         onEdit={async (id, content) => {
           await updateQueuedMessage({ id, content });
