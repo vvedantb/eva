@@ -217,6 +217,12 @@
       "skillPath": "skills/brutalist-skill/SKILL.md",
       "computedHash": "e66e5a2a8b73cef79ab6546459c665e8b983645689c5f3772f7eed8b9f1e8e0e"
     },
+    "libraries-dev": {
+      "source": "Jakubantalik/Libraries.dev",
+      "sourceType": "github",
+      "skillPath": "skills/libraries-dev/SKILL.md",
+      "computedHash": "7ba03e3884bd75a45a08b734f9629e172c1917744d9fb81506d434b8d7fe1372"
+    },
     "make-interfaces-feel-better": {
       "source": "jakubkrehel/make-interfaces-feel-better",
       "sourceType": "github",
@@ -294,6 +300,12 @@
       "sourceType": "github",
       "skillPath": "svg-animations/SKILL.md",
       "computedHash": "f25711af04ba7a0f8e662f41cdf707423102eef303dfd3dc7d48d35bb83c7ec4"
+    },
+    "test-audit": {
+      "source": "openclaw/openclaw",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/test-audit/SKILL.md",
+      "computedHash": "01c421239797a8950fe1287f293d2e05f127e69ac457d1b9cdf9b296ac77eacd"
     },
     "to-spec": {
       "source": "mattpocock/skills",
