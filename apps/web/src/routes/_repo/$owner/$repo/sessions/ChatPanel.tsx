@@ -267,7 +267,6 @@ export function ChatPanel({
     isExecuting,
     isReadOnly,
     // A stopped session sandbox still gets the offer: sending wakes it.
-    compactionReadOnly: isReadOnly,
     backgroundAgents,
     usageLimitRecovery: isReadOnly
       ? undefined
@@ -281,12 +280,6 @@ export function ChatPanel({
         },
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
-    onSendCommand: (command) => {
-      // Rejects on a failed send; the failure is already toasted.
-      void handleSend(command, undefined, { skipReviewComments: true }).catch(
-        () => {},
-      );
-    },
   };
 
   const activeQuestion = useHeldQuery(
