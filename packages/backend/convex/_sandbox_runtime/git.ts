@@ -1000,28 +1000,36 @@ export async function copySandboxConfigFilesToWorkspace(
   );
 }
 
+/** Shell for a non-interactive dependency install of `dir` with package manager `pm`. */
+export function dependencyInstallCommand(pm: string, dir: string): string {
+  if (pm === "pnpm") {
+    // DRIVE_CACHE_ENV moves the pnpm store to the Drive cache, so snapshots baked
+    // with the old local store make pnpm purge and rebuild node_modules. Without
+    // a TTY its confirm prompt aborts (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+    // Only the CLI flag works: pnpm 10 reads "false" from .npmrc/env as truthy.
+    // CI=true is rejected because it also implies --frozen-lockfile.
+    return `npm install -g pnpm && cd ${dir} && pnpm install --config.confirm-modules-purge=false`;
+  }
+  if (pm === "yarn") {
+    // Bare node24 has no yarn shim — mirror the pnpm branch's global install.
+    return `npm install -g yarn && cd ${dir} && yarn install`;
+  }
+  return `cd ${dir} && npm install`;
+}
+
 /** Installs project dependencies using the detected package manager. */
 export async function installDependencies(
   sandbox: SandboxHandle,
   pm: string,
   dir: string = WORKSPACE_DIR,
 ): Promise<void> {
-  if (pm === "pnpm") {
-    await execHandle(
-      sandbox,
-      `npm install -g pnpm && cd ${dir} && pnpm install`,
-      PNPM_INSTALL_TIMEOUT_SECONDS,
-    );
-  } else if (pm === "yarn") {
-    // Bare node24 has no yarn shim — mirror the pnpm branch's global install.
-    await execHandle(
-      sandbox,
-      `npm install -g yarn && cd ${dir} && yarn install`,
-      YARN_INSTALL_TIMEOUT_SECONDS,
-    );
-  } else {
-    await execHandle(sandbox, `cd ${dir} && npm install`, NPM_INSTALL_TIMEOUT_SECONDS);
-  }
+  const timeoutSeconds =
+    pm === "pnpm"
+      ? PNPM_INSTALL_TIMEOUT_SECONDS
+      : pm === "yarn"
+        ? YARN_INSTALL_TIMEOUT_SECONDS
+        : NPM_INSTALL_TIMEOUT_SECONDS;
+  await execHandle(sandbox, dependencyInstallCommand(pm, dir), timeoutSeconds);
 }
 
 /** Best-effort pip for `dir`'s requirements.txt / pyproject.toml (never throws). */
