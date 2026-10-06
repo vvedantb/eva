@@ -191,12 +191,8 @@ function IgnoreWhitespacePreview() {
       </div>
       <div className="mt-8 border-y border-border">
         <DiffsToolbar
-          fileCount={3}
-          additions={4}
-          deletions={1}
-          viewedCount={1}
-          filter=""
-          onFilterChange={() => {}}
+          scopedCommit={null}
+          onClearScope={() => {}}
           diffView="unified"
           onDiffViewChange={() => {}}
           wrapLines={false}
@@ -208,6 +204,8 @@ function IgnoreWhitespacePreview() {
           onCollapseAll={() => {}}
           isLoading={false}
           onRefresh={() => {}}
+          treeOpen
+          onTreeOpenChange={() => {}}
         />
       </div>
       <div className="mx-10 mt-6 max-w-2xl rounded-lg border border-border bg-card p-4">

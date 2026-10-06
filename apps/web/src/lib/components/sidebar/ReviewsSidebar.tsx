@@ -124,7 +124,7 @@ export function ReviewsSidebar({
                     <ReviewsSidebarRow
                       key={pr.number}
                       pr={pr}
-                      href={`${basePath}/reviews/${pr.number}/overview`}
+                      href={`${basePath}/reviews/${pr.number}/summary`}
                       isActive={activePrNumber === pr.number}
                       onNavigate={onNavigate}
                       onPrefetch={() =>

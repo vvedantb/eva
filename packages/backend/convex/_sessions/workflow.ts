@@ -209,6 +209,7 @@ export async function buildSessionPrompt(
       devCommand: session.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
     },
   );
   if (prefixBlock) {
