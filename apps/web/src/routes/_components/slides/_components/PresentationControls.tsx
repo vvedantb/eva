@@ -1,9 +1,8 @@
 import { useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { Button, cn } from "@eva/ui";
+import { Button, CircleSpinner, cn } from "@eva/ui";
 import {
   IconShare2,
-  IconLoader2,
   IconEye,
   IconArrowBackUp,
   IconNotes,
@@ -65,7 +64,7 @@ export function PresentationControls({
         disabled={sync.isStarting}
       >
         {sync.isStarting ? (
-          <IconLoader2 size={15} className="animate-spin" />
+          <CircleSpinner size="sm" />
         ) : (
           <IconShare2 size={15} />
         )}

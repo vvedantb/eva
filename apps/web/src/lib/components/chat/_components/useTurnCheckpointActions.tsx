@@ -82,6 +82,9 @@ export function useTurnCheckpointActions({
 }): { items: ChatMessageActionItem[]; dialogs: ReactNode } {
   const [diffOpen, setDiffOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  // Latches on first open and never clears, so closing keeps its exit
+  // animation. See `dialogs` below for why they are not mounted up front.
+  const [dialogsMounted, setDialogsMounted] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const revert = useAction(api.sandbox.revertSessionToTurn);
 
@@ -109,7 +112,10 @@ export function useTurnCheckpointActions({
       key: "turn-diff",
       label: "Diff this turn",
       icon: <IconGitCompare />,
-      onClick: () => setDiffOpen(true),
+      onClick: () => {
+        setDialogsMounted(true);
+        setDiffOpen(true);
+      },
     },
     {
       key: "turn-restore",
@@ -117,12 +123,18 @@ export function useTurnCheckpointActions({
         ? "Restore to before this turn"
         : "Restore to before this turn (start the sandbox first)",
       icon: <IconArrowBackUp />,
-      onClick: () => setRestoreOpen(true),
+      onClick: () => {
+        setDialogsMounted(true);
+        setRestoreOpen(true);
+      },
       disabled: !sandboxRunning,
     },
   ];
 
-  const dialogs = (
+  // Every code-changing turn owns two Radix dialog roots, so opening a long
+  // transcript mounted hundreds of them to show none. Built on first open
+  // instead; the row's actions are what pay for them.
+  const dialogs = !dialogsMounted ? null : (
     <>
       <TurnDiffDialog
         open={diffOpen}

@@ -17,14 +17,11 @@ import {
   IconListCheck,
   IconInfoCircle,
   IconAnchor,
-  IconLoader2,
 } from "@tabler/icons-react";
+import { CircleSpinner } from "../ui/spinner";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import {
-  quantizedSnapshot,
-  subscribeQuantized,
-} from "../utils/sharedClock";
+import { quantizedSnapshot, subscribeQuantized } from "../utils/sharedClock";
 
 /** One item in a todo checklist step (type "todos"). */
 export interface TodoItem {
@@ -107,6 +104,12 @@ export interface ActivityStep {
   questions?: ActivityQuestion[];
   /** AskUserQuestion answers keyed by question text. Absent when the turn ended without a structured answer. */
   answers?: Record<string, string>;
+  /**
+   * The transcript query stripped this step's expanded-only fields (`output`,
+   * `edits`, `contentPreview`) to keep the chat subscription small. The row
+   * still opens; the body fills in once the full payload is fetched.
+   */
+  hasHiddenDetail?: boolean;
 }
 
 /** True when the step has expandable rich detail to show. */
@@ -116,7 +119,8 @@ export function stepHasRichDetail(step: ActivityStep): boolean {
     step.output ||
     (step.edits && step.edits.length > 0) ||
     (step.files && step.files.length > 0) ||
-    step.contentPreview,
+    step.contentPreview ||
+    step.hasHiddenDetail,
   );
 }
 
@@ -151,7 +155,7 @@ export const stepConfig = {
   tool: { icon: IconTool, defaultLabel: "Used tool" },
   notice: { icon: IconInfoCircle, defaultLabel: "Notice" },
   hook: { icon: IconAnchor, defaultLabel: "Hook" },
-  status: { icon: IconLoader2, defaultLabel: "Status" },
+  status: { icon: CircleSpinner, defaultLabel: "Status" },
 };
 
 const SPINNER_VERBS = [

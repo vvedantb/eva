@@ -3,7 +3,7 @@ import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { motionBase } from "@eva/ui";
+import { CenteredSpinner, motionBase } from "@eva/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -27,12 +27,7 @@ import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
 import { IconChecklist } from "@tabler/icons-react";
 import { TASK_STATUSES } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
-import {
-  QuickTaskDetailSkeleton,
-  QuickTasksListSkeleton,
-} from "./_components/QuickTasksSkeletons";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
-import { KanbanBoardSkeleton } from "@/lib/components/kanban/KanbanBoardSkeleton";
 import {
   QuickTasksBulkBar,
   type BulkAction,
@@ -362,7 +357,7 @@ export function QuickTasksClient() {
   ) {
     return (
       <PageWrapper title="Quick Tasks" fillHeight childPadding={false}>
-        <QuickTaskDetailSkeleton />
+        <CenteredSpinner label="Loading task" />
       </PageWrapper>
     );
   }
@@ -463,18 +458,7 @@ export function QuickTasksClient() {
                 exit={{ opacity: 0, y: 8 }}
                 transition={motionBase}
               >
-                {view === "list" ? (
-                  <QuickTasksListSkeleton />
-                ) : (
-                  <KanbanBoardSkeleton
-                    columns={
-                      statuses.length > 0
-                        ? statuses.length
-                        : TASK_STATUSES.length
-                    }
-                    aria-label="Loading quick tasks"
-                  />
-                )}
+                <CenteredSpinner label="Loading quick tasks" />
               </m.div>
             ) : !hasQuickTasks &&
             !(view === "list" && numIdParam !== undefined) ? (

@@ -156,7 +156,10 @@ export function TaskCardMenuItems({
     createdBy !== undefined &&
     currentUserId === createdBy;
 
-  const canRun = status === "todo" || status === "in_progress";
+  // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
+  const canRun =
+    (status === "todo" && runs !== undefined && runs.length === 0) ||
+    status === "in_progress";
   const StatusIcon = statusConfig[status].icon;
 
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;

@@ -41,7 +41,7 @@ export function usePresentationSync({
   );
 
   useSyncExternalStore(
-    (onStoreChange) => {
+    () => {
       if (typeof window === "undefined" || !sessionCode) {
         setHostKey(null);
         return () => {};

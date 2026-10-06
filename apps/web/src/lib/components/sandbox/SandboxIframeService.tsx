@@ -250,6 +250,9 @@ export function SandboxIframeService({
     }
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     Reads sessionStorage and kicks off a readiness poll against the sandbox;
+     the sandbox can also go down without any local event. */
   // Hydrate from sessionStorage cache when the sandbox is up; clear on stop.
   // Desktop (ensureStartedBeforeReady) must NOT paint a cached URL immediately —
   // a stale noVNC URL loads the HTML chrome while the RFB WebSocket is dead
@@ -293,6 +296,7 @@ export function SandboxIframeService({
     start,
     autoStartKey,
   ]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;

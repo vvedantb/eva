@@ -7,7 +7,7 @@ import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useTeamLogoUpload } from "@/lib/hooks/useTeamLogoUpload";
 import { useTeamBackgroundUpload } from "@/lib/hooks/useTeamBackgroundUpload";
-import { Tabs, TabsList, TabsTrigger, Button, Skeleton } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger, Button, CenteredSpinner } from "@eva/ui";
 import { IconUsers, IconPhoto, IconPhotoOff } from "@tabler/icons-react";
 import { TeamActivityTab } from "./_components/TeamActivityTab";
 import { TeamMembersTab } from "./_components/TeamMembersTab";
@@ -62,11 +62,7 @@ export function TeamDetailClient({
   if (team === undefined) {
     return (
       <PageWrapper title="Team">
-        <div aria-busy className="space-y-3">
-          <Skeleton className="h-9 w-56" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-48 w-full" />
-        </div>
+        <CenteredSpinner label="Loading team" />
       </PageWrapper>
     );
   }

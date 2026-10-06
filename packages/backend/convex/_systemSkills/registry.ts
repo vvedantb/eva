@@ -1,6 +1,5 @@
 import { buildEvaCaptureContent } from "./evaCapture";
 import { buildEvaAuditContent } from "./evaAudit";
-import { buildEvaOrchestratorContent } from "./evaOrchestrator";
 import { buildEvaPlanContent } from "./evaPlan";
 import { buildEvaDesignContent } from "./evaDesign";
 import { buildEvaAskContent } from "./evaAsk";
@@ -13,7 +12,6 @@ import { buildEvaAskContent } from "./evaAsk";
 export const SYSTEM_SKILL_NAMES = [
   "eva-capture",
   "eva-audit",
-  "eva-orchestrator",
   "eva-plan",
   "eva-design",
   "eva-ask",
@@ -58,14 +56,6 @@ export const SYSTEM_SKILLS: Record<SystemSkillName, SystemSkillDefinition> = {
     description:
       "Audit this branch against Eva's standard review categories and report the findings in chat. Use when the user asks for a code audit, a review of this branch, or a quality check before shipping.",
     buildContent: buildEvaAuditContent,
-  },
-  // Delivered to the master session by the launch path, not by a repo install:
-  // being the orchestrator is a property of the session, not of its repo.
-  "eva-orchestrator": {
-    name: "eva-orchestrator",
-    description:
-      "Supervise the other Eva agents running under this user: check what they are doing, message them, start new ones, and report their status. Use when acting as the master session coordinating other agents.",
-    buildContent: buildEvaOrchestratorContent,
   },
   "eva-plan": {
     name: "eva-plan",

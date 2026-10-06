@@ -21,26 +21,26 @@ async function resolveRepoId(
 ): Promise<Id<"githubRepos"> | null> {
   const sessionId = ctx.db.normalizeId("sessions", parentId);
   if (sessionId !== null) {
-    const session = await ctx.db.get(sessionId);
-    return session ? session.repoId : null;
+    return (await ctx.db.get(sessionId))?.repoId ?? null;
   }
   const projectId = ctx.db.normalizeId("projects", parentId);
   if (projectId !== null) {
-    const project = await ctx.db.get(projectId);
-    return project ? project.repoId : null;
+    return (await ctx.db.get(projectId))?.repoId ?? null;
   }
   const taskId = ctx.db.normalizeId("agentTasks", parentId);
   if (taskId !== null) {
-    const task = await ctx.db.get(taskId);
-    return task?.repoId ?? null;
+    return (await ctx.db.get(taskId))?.repoId ?? null;
   }
   return null;
 }
 
 /**
- * The turn's checkpoint shas, its repo and the prompt it answered — or null
- * when there is nothing to judge (no code changed, no prompt to judge against,
- * or a verdict already landed).
+ * The turn's checkpoint shas, its repo, the prompt it answered and the reply it
+ * gave — or null when there is nothing to judge (no code changed, no prompt to
+ * judge against, or a verdict already landed).
+ *
+ * The reply is what the mention question reads: a change the user was told
+ * about is reviewable, one they were not is a surprise in production.
  */
 export const getTurnContext = internalQuery({
   args: { messageId: v.id("messages") },
@@ -51,6 +51,7 @@ export const getTurnContext = internalQuery({
       beforeSha: v.string(),
       afterSha: v.string(),
       prompt: v.string(),
+      reply: v.string(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -80,6 +81,12 @@ export const getTurnContext = internalQuery({
       .find((row) => row.role === "user" && row.isSystemAlert !== true);
     if (!prompt) return null;
 
-    return { repoId, beforeSha, afterSha, prompt: prompt.content };
+    return {
+      repoId,
+      beforeSha,
+      afterSha,
+      prompt: prompt.content,
+      reply: message.content,
+    };
   },
 });

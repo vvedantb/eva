@@ -6,12 +6,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  CircleSpinner,
 } from "@eva/ui";
-import {
-  IconBrandVercel,
-  IconGitPullRequest,
-  IconLoader2,
-} from "@tabler/icons-react";
+import { IconBrandVercel, IconGitPullRequest } from "@tabler/icons-react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 import { prStateIconClass } from "./prStateIconClass";
@@ -59,7 +56,7 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
             disabled={createPr.isCreating}
           >
             {createPr.isCreating ? (
-              <IconLoader2 size={14} className="animate-spin" />
+              <CircleSpinner size="sm" className="size-3.5" />
             ) : (
               <IconGitPullRequest size={14} />
             )}

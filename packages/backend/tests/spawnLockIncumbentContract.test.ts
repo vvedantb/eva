@@ -17,7 +17,9 @@ const launchSource = readFileSync(
  */
 const waitForRunnerReadyBody = (() => {
   const startAt = launchSource.indexOf("async function waitForRunnerReady(");
-  expect(startAt, "waitForRunnerReady moved or was renamed").toBeGreaterThan(-1);
+  expect(startAt, "waitForRunnerReady moved or was renamed").toBeGreaterThan(
+    -1,
+  );
   const nextAt = launchSource.indexOf("\nasync function ", startAt + 1);
   return launchSource
     .slice(startAt, nextAt < 0 ? undefined : nextAt)
@@ -138,8 +140,12 @@ describe("a held spawn lock is only success when the incumbent matches", () => {
     expect(probe).toContain("daemonPaths.pid");
     expect(
       probe,
-      "without kill -0 a stale inherited lock fd reads as a live runner",
-    ).toContain("kill -0");
+      "without a liveness check a stale inherited lock fd reads as a live runner",
+    ).toContain("eva_pid_live");
+    expect(
+      probe,
+      "a bare kill -0 accepts a pid the reboot re-issued after a stop/resume",
+    ).toContain("DAEMON_PID_LIVE_FN");
     expect(probe).toContain("daemonPaths.opts");
     expect(
       probe,

@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import { Skeleton, motionBase, motionStagger } from "@eva/ui";
+import { CenteredSpinner, motionBase, motionStagger } from "@eva/ui";
 import { m } from "motion/react";
 import { CountPop } from "@/lib/components/ui/CountPop";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -97,15 +97,7 @@ function AutomationsHubPage() {
         </div>
 
         {systemAutomations === undefined ? (
-          <div
-            className="grid gap-3 sm:grid-cols-2"
-            aria-busy="true"
-            aria-label="Loading automations"
-          >
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-[164px] border border-border" />
-            ))}
-          </div>
+          <CenteredSpinner label="Loading automations" />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {systemAutomations.map((entry, index) => (

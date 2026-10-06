@@ -67,8 +67,6 @@ const createSessionArgs = v.object({
   ),
   baseBranch: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** Marks the user's persistent master session. Set only at creation. */
-  isOrchestrator: v.optional(v.boolean()),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
   /**
@@ -84,17 +82,26 @@ const createSessionArgs = v.object({
 
 type CreateSessionArgs = Infer<typeof createSessionArgs>;
 
+/** Internal-only: never accepted from clients, so nobody boots a chosen snapshot. */
+export interface CreateSessionFork {
+  sourceSessionId: Id<"sessions">;
+  sourceSandboxId: string;
+  /** Start the source again after this fork's first sandbox is taken. */
+  restartSource: boolean;
+}
+
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
  * (optionally) the first queued message. Used by the `create` mutation and by
- * `_sessions/orchestrator.ts` so the master session takes the same path.
+ * the MCP `create_session` tool.
  */
 export async function createSession(
   ctx: AuthMutationCtx,
   args: CreateSessionArgs,
+  fork?: CreateSessionFork,
 ): Promise<{ sessionId: Id<"sessions">; numId: number }> {
   if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
     throw new Error("Not authorized");
@@ -167,8 +174,12 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
-    ...(args.isOrchestrator !== undefined
-      ? { isOrchestrator: args.isOrchestrator }
+    ...(fork
+      ? {
+          forkedFromSessionId: fork.sourceSessionId,
+          forkSourceSandboxId: fork.sourceSandboxId,
+          ...(fork.restartSource ? { forkRestartsSource: true } : {}),
+        }
       : {}),
   });
   const branchName = `eva/session-${sessionId}`;
@@ -492,7 +503,7 @@ export const updateSummary = authMutation({
  * master — retire it through exactly this path instead of a second copy.
  */
 export async function archiveSessionDoc(
-  ctx: AuthMutationCtx,
+  ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
   // Archive the sandbox (stops it first, then moves to cold storage)

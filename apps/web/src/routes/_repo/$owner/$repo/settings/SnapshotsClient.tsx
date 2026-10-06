@@ -14,7 +14,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import {
   Button,
-  Skeleton,
+  CenteredSpinner,
   Spinner,
   Switch,
   Tabs,
@@ -232,15 +232,7 @@ export function SnapshotsClient({
           </Tabs>
         }
       >
-        <div
-          className="flex min-h-112 flex-col gap-4"
-          aria-busy="true"
-          aria-label="Loading snapshots"
-        >
-          <Skeleton className="h-9 w-80 max-w-full" />
-          <Skeleton className="h-48 border border-border" />
-          <Skeleton className="h-32 border border-border" />
-        </div>
+        <CenteredSpinner label="Loading snapshots" className="min-h-112" />
       </SettingsPage>
     );
   }

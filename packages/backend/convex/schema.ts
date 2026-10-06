@@ -8,6 +8,8 @@ import {
   teamMemberRoleValidator,
   webhookEventStatusValidator,
   messageFields,
+  aveThreadFields,
+  aveMessageFields,
   automationFields,
   automationRunFields,
   agentTaskFields,
@@ -56,6 +58,7 @@ import {
   sessionDaemonStateFields,
   turnFields,
   chatUiPanelFields,
+  previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
@@ -159,7 +162,13 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
+  messages: defineTable(messageFields)
+    .index("by_parent", ["parentId"]),
+  aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
+    "userId",
+    "archivedAt",
+  ]),
+  aveMessages: defineTable(aveMessageFields).index("by_thread", ["threadId"]),
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
     .index("by_parent_and_order", ["parentId", "order"]),
@@ -172,7 +181,8 @@ const schema = defineSchema({
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_sandbox", ["sandboxId"])
+    .index("by_forked_from", ["forkedFromSessionId"]),
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
@@ -195,6 +205,12 @@ const schema = defineSchema({
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
+  // tab. Short-lived: cleared when the entity's sandbox stops.
+  previewToolCalls: defineTable(previewToolCallFields).index(
+    "by_parent_status",
+    ["parentId", "status"],
+  ),
   proposedPlans: defineTable(proposedPlanFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_capture_key", ["sessionId", "captureKey"])

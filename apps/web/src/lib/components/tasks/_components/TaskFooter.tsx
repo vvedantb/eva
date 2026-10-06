@@ -15,12 +15,12 @@ import {
   DropdownMenuSeparator,
   motionFast,
   CrossfadeIconSlot,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
   IconPlayerPlay,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -45,6 +45,7 @@ interface TaskFooterProps {
   task: Doc<"agentTasks"> | undefined;
   status: TaskStatus | undefined;
   hasActiveRun: boolean;
+  hasRuns: boolean;
   latestPrUrl: string | undefined;
   latestPrError: string | undefined;
   latestDeployment: RunDoc | undefined;
@@ -75,6 +76,7 @@ export function TaskFooter({
   task,
   status,
   hasActiveRun,
+  hasRuns,
   latestPrUrl,
   latestPrError,
   latestDeployment,
@@ -103,9 +105,12 @@ export function TaskFooter({
   const isHeader = variant === "header";
   const buttonSize = isHeader ? "sm" : "default";
   const iconSize = isHeader ? 16 : 18;
+  // `todo` only offers a first run; once it has run, the sandbox toggle takes
+  // its place (`canStartSandbox` covers that case).
   const showRunButton =
     !task?.projectId &&
-    (status === "todo" || (status === "in_progress" && !hasActiveRun));
+    ((status === "todo" && !hasRuns) ||
+      (status === "in_progress" && !hasActiveRun));
   // One control for both directions, on every surface: the sandbox chat header
   // no longer carries a start/stop pair, so a header that only knew how to stop
   // left a slept sandbox with no way back. Held open through both transitions
@@ -236,7 +241,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -254,7 +259,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -269,7 +274,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -283,7 +288,7 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -381,7 +386,10 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <IconLoader2 size={iconSize} className="animate-spin" />
+                  <CircleSpinner
+                    size="sm"
+                    style={{ width: iconSize, height: iconSize }}
+                  />
                 ) : isScheduled ? (
                   <IconCalendarClock size={iconSize} />
                 ) : (

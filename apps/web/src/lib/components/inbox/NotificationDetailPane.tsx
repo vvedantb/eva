@@ -6,10 +6,7 @@ import { AnimatePresence, m } from "motion/react";
 import { IconArrowUpRight, IconInbox } from "@tabler/icons-react";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { embedReadyMessage } from "@/lib/embed/embedded";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -29,6 +26,9 @@ function NotificationPagePreview({ href }: { href: string }) {
   // The src only seeds the first document; later hrefs arrive via postMessage.
   const [initialHref] = useState(href);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     Drives an iframe: either postMessage into the embedded document or swap its
+     `src`. Both are writes to another window, not state this component owns. */
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
@@ -44,6 +44,7 @@ function NotificationPagePreview({ href }: { href: string }) {
       frame.setAttribute("src", href);
     }
   }, [href]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -161,7 +162,7 @@ export function NotificationDetailPane({
                   )}
                   repoId={notification.repoId}
                   atKind="user"
-                  className={MARKDOWN_PROSE_CLASS}
+                  className="text-sm"
                 />
               ) : (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">

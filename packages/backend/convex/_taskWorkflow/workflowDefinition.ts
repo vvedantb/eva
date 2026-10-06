@@ -333,10 +333,14 @@ export const taskExecutionWorkflow = workflow.define({
       });
       runFinalized = true;
 
-      // Diff-derived PR description runs on the same sandbox, so it must go
-      // before the quick-task sandbox stop below. Best-effort: the static body
-      // is already in place and stays if this fails.
-      if (completionPrUrl && sandboxId) {
+      // Project tasks only. A quick task lands in business_review here, so its
+      // diff is not final yet — its description is written when the reviewer
+      // moves the task to code_review (`agentTasks.updateStatus`), the same
+      // point a session writes one on "Send for review". Project tasks share
+      // one PR across many tasks and never make that transition, so they keep
+      // writing it per run, on the still-running sandbox. Best-effort: the
+      // static body stays if this fails.
+      if (args.projectId && completionPrUrl && sandboxId) {
         try {
           await step.runAction(internal.github.generatePrDescription, {
             installationId: args.installationId,

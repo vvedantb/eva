@@ -21,6 +21,17 @@ crons.interval(
   {},
 );
 
+// Stop any active sandbox with no chat or agent activity for the configured
+// idle time (settings → Sandboxes, default 60 minutes). Vercel bills memory for
+// every running minute and never idle-stops on its own; without this a
+// forgotten session ran until its 24h cap.
+crons.interval(
+  "sandbox idle-stop sweep",
+  { minutes: 5 },
+  internal.sandboxIdleStop.run,
+  {},
+);
+
 // Rescan supported skill roots on every connected codebase every 6 hours. Push
 // webhooks also trigger an immediate sync when the base branch changes skills;
 // this cron is the backup when push events are not subscribed or a sync fails.
