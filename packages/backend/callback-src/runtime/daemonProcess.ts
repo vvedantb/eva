@@ -49,13 +49,31 @@ export function pidAlive(pid: number): boolean {
 }
 
 /**
+ * True when `pid` is a live CALLBACK RUNNER, not merely a live process.
+ *
+ * Marker files under /tmp outlive a Vercel stop/resume, but the VM reboots and
+ * pid allocation restarts from 1, so a pidfile written before the stop routinely
+ * names one of the services the resume spawned. `pidAlive` alone then reports a
+ * rival that does not exist and this daemon exits at boot, leaving the entity
+ * with no daemon at all. argv is the one thing a recycled pid cannot fake; an
+ * unreadable procfs falls back to the `kill -0` verdict.
+ */
+export function isCallbackRunnerPid(pid: number): boolean {
+  if (!pidAlive(pid)) return false;
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes(
+      "run-design.mjs",
+    );
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Best-effort `/proc/.../oom_score_adj` write. Callers choose the score;
  * missing procfs or privilege just no-ops.
  */
-export function writeOomScoreAdj(
-  target: "self" | number,
-  score: string,
-): void {
+export function writeOomScoreAdj(target: "self" | number, score: string): void {
   if (target !== "self" && !target) return;
   const path =
     target === "self"
@@ -112,20 +130,23 @@ export type DaemonPidfileClaim =
 /**
  * First-writer-wins pidfile claim. A dead pid is overwritten; a live rival
  * is left untouched. Callers decide whether to exit on `rival_alive`.
+ *
+ * "Live rival" means a live callback runner ({@link isCallbackRunnerPid}), not
+ * any live pid — a pidfile that survived a stop/resume names a pid the reboot
+ * gave to something else.
  */
 export function claimDaemonPidfileBoot(params: {
   paths: DaemonPaths;
   entityId: string;
   optsSig: string;
   currentPid?: number;
+  /** Seam for tests; production always identifies the rival by its argv. */
+  isRival?: (pid: number) => boolean;
 }): DaemonPidfileClaim {
   const currentPid = params.currentPid ?? process.pid;
+  const isRival = params.isRival ?? isCallbackRunnerPid;
   const rivalPid = readPidFromFile(params.paths.pid);
-  if (
-    !Number.isNaN(rivalPid) &&
-    rivalPid !== currentPid &&
-    pidAlive(rivalPid)
-  ) {
+  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
     return { status: "rival_alive", rivalPid };
   }
   writeFileSync(params.paths.pid, String(currentPid));

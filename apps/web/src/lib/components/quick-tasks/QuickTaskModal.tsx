@@ -7,6 +7,7 @@ import {
   DialogFooter,
   Button,
   Input,
+  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -57,7 +58,6 @@ import {
   IconInfoCircle,
   IconMicrophone,
   IconPlayerStop,
-  IconLoader2,
 } from "@tabler/icons-react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
@@ -533,7 +533,7 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (

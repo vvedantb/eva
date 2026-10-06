@@ -48,8 +48,8 @@ export function RepoGroup({
                     suppressing the initial pass meant that stagger only ever ran
                     when a codebase was added or removed later — never on the
                     first paint of the home grid it was written for. Home resolves
-                    from a skeleton, so the cards are replacing placeholders
-                    rather than appearing over nothing. */}
+                    from a spinner, so the cards are replacing it rather than
+                    appearing over nothing. */}
                 <AnimatePresence>
                   {items.map((repo, index) => (
                     <RepoCard

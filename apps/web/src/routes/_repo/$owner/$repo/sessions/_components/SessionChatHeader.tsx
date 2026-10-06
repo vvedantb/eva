@@ -8,12 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@eva/ui";
-import {
-  IconDots,
-  IconEye,
-  IconMessagePlus,
-  IconSparkles,
-} from "@tabler/icons-react";
+import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
@@ -43,16 +38,6 @@ interface SessionChatHeaderArgs {
   /** True while the assistant holds the turn — hides the sleep button. */
   isAssistantResponding: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
-  /** Canonical link to this session; omitted when the URL already is one. */
-  permalinkPath?: string;
-  /**
-   * Chat-only surface (Manager Ave). It supervises other agents instead of
-   * building on its own branch, so "Send for Review" would open a PR with no
-   * commits against base — a guaranteed failure, hidden rather than offered.
-   */
-  chatOnly?: boolean;
-  /** Popover already titles the surface — omit the duplicate "Manager Ave". */
-  hideTitle?: boolean;
   /**
    * Hides Send for Review — git/PR plumbing simple view does not surface. The
    * PR links hide themselves (see `usePrLinkMenuItems`).
@@ -65,8 +50,6 @@ interface SessionChatHeaderArgs {
   onSandboxToggle: (action: "start" | "stop") => void;
   onOpenSummaryModal: () => void;
   onOpenReviewModal: () => void;
-  /** Manager Ave only: offers "Start new chat". Absent on ordinary sessions. */
-  onOpenResetChatDialog?: () => void;
 }
 
 /**
@@ -87,9 +70,6 @@ export function useSessionChatHeader({
   isSandboxToggling,
   isAssistantResponding,
   deploymentStatus,
-  permalinkPath,
-  chatOnly = false,
-  hideTitle = false,
   simpleView,
   model,
   providerAccountId,
@@ -97,16 +77,9 @@ export function useSessionChatHeader({
   onSandboxToggle,
   onOpenSummaryModal,
   onOpenReviewModal,
-  onOpenResetChatDialog,
 }: SessionChatHeaderArgs) {
-  // `chatOnly` is Manager Ave, i.e. `session.isOrchestrator`.
   const showSendForReview =
-    !simpleView &&
-    canSendSessionForReview({
-      branchName,
-      prState,
-      isOrchestrator: chatOnly,
-    });
+    !simpleView && canSendSessionForReview({ branchName, prState });
   // A start that failed leaves the session `closed`, which the header would
   // otherwise render as an ordinary sleeping sandbox. The hook reads the row
   // itself because nothing upstream hands this header the failure.
@@ -117,18 +90,7 @@ export function useSessionChatHeader({
     hasDeployment: Boolean(deploymentStatus),
   });
 
-  // Manager Ave is one fixed session at its own URL, so there is nothing to
-  // switch to and no repo to navigate up into — the switcher's dropdown would
-  // list other repos' sessions and its crumb would imply this chat belongs to
-  // the home repo, which is only where its sandbox happens to live. The
-  // popover already paints that title in its own chrome, so hide it there.
-  const headerLeft = chatOnly ? (
-    hideTitle ? undefined : (
-      <span className="truncate text-sm font-medium text-foreground">
-        {title}
-      </span>
-    )
-  ) : (
+  const headerLeft = (
     <>
       <SessionSwitcher sessionId={sessionId} title={title} />
       <SessionRepoBadges sessionId={sessionId} />
@@ -164,23 +126,6 @@ export function useSessionChatHeader({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {onOpenResetChatDialog && (
-            <>
-              {/* Disabled mid-turn: the reset retires this session, and the
-                  in-flight turn would finish writing into a chat the user can
-                  no longer reach. */}
-              <DropdownMenuItem
-                onClick={onOpenResetChatDialog}
-                disabled={isAssistantResponding}
-                title={skipConfirmTitle("Start new chat")}
-              >
-                <IconMessagePlus size={14} />
-                Start new chat
-                <ConfirmSkipHint />
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
           <DropdownMenuItem
             onClick={onOpenSummaryModal}
             disabled={!isSandboxActive || messageCount === 0}
@@ -205,7 +150,7 @@ export function useSessionChatHeader({
           )}
           {prLinks.items}
           <DropdownMenuSeparator />
-          <CopyLinkMenuItem path={permalinkPath} />
+          <CopyLinkMenuItem />
         </DropdownMenuContent>
       </DropdownMenu>
     </>

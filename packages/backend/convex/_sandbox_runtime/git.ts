@@ -40,7 +40,10 @@ import {
   rewrittenBranchPublishError,
 } from "./divergedPublish";
 import { ensureSwapFile } from "./swap";
-import { COREPACK_SANDBOX_ENV } from "../_sandbox/vercelEnvFile";
+import {
+  AGENT_CLI_PATH_LINE,
+  COREPACK_SANDBOX_ENV,
+} from "../_sandbox/vercelEnvFile";
 import {
   DRIVE_CACHE_ENV,
   DRIVE_CACHE_READER,
@@ -324,15 +327,9 @@ export async function createSandbox(
   // Those post-create steps absorb Vercel's first-command boot penalty
   // (seconds–tens of seconds); session UI should not wait on them.
   onSandboxAcquired?: (sandbox: SandboxHandle) => Promise<void>,
-  // Boot from a Vercel Container Registry image instead of the legacy runtime.
-  // Only read when there is no snapshot — a restore carries its own image.
-  image?: string,
-  /**
-   * Manager Ave never runs repo services, so installing and polling dockerd
-   * on the Ubuntu universal image is pure wait (dnf is missing, then 90s+60s
-   * of `docker info` loops). Skip it.
-   */
-  skipDocker = false,
+  // "Fork session": fork this sandbox (provider-side) instead of booting
+  // `snapshotName`.
+  forkFrom?: string,
   /**
    * How this sandbox uses the repo's shared package cache Drive. Defaults to
    * the read-only reader role; only the seed-prep and group-builder sandboxes
@@ -348,15 +345,15 @@ export async function createSandbox(
     driveCacheRole === DRIVE_CACHE_WRITER ? "read-write" : "snapshot";
   const details = [
     `installation=${installationId}`,
+    forkFrom ? `forkFrom=${forkFrom}` : "forkFrom=none",
     snapshotName ? `snapshot=${snapshotName}` : "snapshot=none",
-    image ? `image=${image}` : "image=none",
     lifecycle.ephemeral ? "ephemeral=true" : "ephemeral=false",
     `driveCache=${repoId ? driveCacheRole : "none"}`,
   ].join(", ");
   return await runLoggedGitStep("createSandbox", details, async () => {
     const timeoutSeconds =
       readyTimeoutSeconds ??
-      (snapshotName
+      (snapshotName || forkFrom
         ? SNAPSHOT_SANDBOX_READY_TIMEOUT_SECONDS
         : DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS);
 
@@ -368,7 +365,7 @@ export async function createSandbox(
 
     const sandbox = await client.create({
       snapshot: snapshotName,
-      image,
+      ...(forkFrom ? { forkFrom } : {}),
       ports: [...VERCEL_DEFAULT_EXPOSED_PORTS],
       envVars: {
         // VNC_RESOLUTION is read by the snapshot's ComputerUse plugin at startup
@@ -428,7 +425,7 @@ export async function createSandbox(
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),
-          }),
+          }) + AGENT_CLI_PATH_LINE,
         ),
       );
       // Must run before any install: it turns the raw Drive mount into the
@@ -509,15 +506,11 @@ export async function createSandbox(
       // since dockerd doesn't survive auto-stop. Already fast-paths on an
       // already-running daemon (`docker info` check first); the timing
       // wrapper just makes that fast path visible in logs instead of assumed.
-      // Orchestrator: no containers, and the universal image has no docker
-      // binary — the bootstrap would sit in a 90s poll then another 60s.
-      if (!skipDocker) {
-        await runLoggedGitStep(
-          "createSandbox.bootstrapDocker",
-          sandbox.id,
-          () => bootstrapVercelDocker(sandbox),
-        );
-      }
+      await runLoggedGitStep(
+        "createSandbox.bootstrapDocker",
+        sandbox.id,
+        () => bootstrapVercelDocker(sandbox),
+      );
 
       return sandbox;
     } catch (error) {
@@ -1628,17 +1621,16 @@ export async function createSandboxAndPrepareRepo(
   // and reliably trips Convex's 600s per-action ceiling on providers (Vercel)
   // that don't have it pre-baked into their base snapshot.
   skipInstallDeps = false,
-  // VCR image to boot from when there is no snapshot (orchestrator sessions use
-  // the Vercel-managed universal image). Threaded straight to createSandbox.
-  image?: string,
-  // Orchestrator: skip dockerd. See createSandbox.skipDocker.
-  skipDocker = false,
+  // "Fork session": fork this sandbox instead of booting `snapshotName`. The
+  // fork carries the repo checkout, so it takes the snapshot path below. No
+  // fallback on failure — the source's data is the point of a fork.
+  forkFrom?: string,
   // Shared package-cache Drive role. See createSandbox.driveCacheRole.
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
   let sandbox: SandboxHandle | undefined;
   try {
-    const details = `${owner}/${name}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, syncStrategy=${syncStrategy.mode}`;
+    const details = `${owner}/${name}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
     return await runLoggedGitStep(
       "createSandboxAndPrepareRepo",
       details,
@@ -1654,12 +1646,11 @@ export async function createSandboxAndPrepareRepo(
             effectiveSnapshot,
             readyTimeoutSeconds,
             onSandboxAcquired,
-            image,
-            skipDocker,
+            forkFrom,
             driveCacheRole,
           );
         } catch (err) {
-          if (effectiveSnapshot && isSnapshotUnusableError(err)) {
+          if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
             logGit(
               `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${err instanceof Error ? err.message : String(err)})`,
             );
@@ -1674,15 +1665,14 @@ export async function createSandboxAndPrepareRepo(
               undefined,
               readyTimeoutSeconds,
               onSandboxAcquired,
-              image,
-              skipDocker,
+              undefined, // forkFrom — the fallback is a fresh boot
               driveCacheRole,
             );
           } else {
             throw err;
           }
         }
-        if (effectiveSnapshot) {
+        if (effectiveSnapshot || forkFrom) {
           // Deliberately no `installDependencies`/pnpm install on this path:
           // a seeded/base snapshot already carries node_modules from the seed
           // build (launchSeedRun's buildCommands), and normalizeSnapshotWorktree
@@ -1759,17 +1749,12 @@ export async function getOrCreateSandbox(
   snapshotName?: string,
   onProgress?: (label: string) => Promise<void>,
   syncStrategy: RepoSyncStrategy = { mode: "all" },
-  // Both only matter on the create fallback below — a resume reuses whatever the
-  // existing sandbox was built from. See createSandboxAndPrepareRepo.
-  skipInstallDeps = false,
-  image?: string,
-  skipDocker = false,
 ): Promise<{
   sandbox: SandboxHandle;
   isNew: boolean;
   resumeFellBack: boolean;
 }> {
-  const details = `${owner}/${name}, existingSandboxId=${existingSandboxId ?? "none"}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, syncStrategy=${syncStrategy.mode}`;
+  const details = `${owner}/${name}, existingSandboxId=${existingSandboxId ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
   return await runLoggedGitStep("getOrCreateSandbox", details, async () => {
     if (existingSandboxId) {
       const resumed = await tryResumeSandbox(
@@ -1801,10 +1786,6 @@ export async function getOrCreateSandbox(
       undefined,
       onProgress,
       syncStrategy,
-      undefined,
-      skipInstallDeps,
-      image,
-      skipDocker,
     );
     return {
       sandbox,

@@ -62,6 +62,7 @@ import {
 import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import { latestTaskPrUrl } from "./_agentTasks/prUrl";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -134,6 +135,14 @@ async function buildTaskChatTurnPrompt(
     systemPrompt: repo.systemPrompt,
     devPort: task.devPort ?? repo.devPort,
     readableRepos,
+    runtime: {
+      ownerKey: `task-${args.taskId}`,
+      prUrl: await latestTaskPrUrl(ctx, task._id),
+      devCommand: task.devCommand ?? repo.devCommand,
+      startupCommands: repo.startupCommands,
+      backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
+    },
   });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;

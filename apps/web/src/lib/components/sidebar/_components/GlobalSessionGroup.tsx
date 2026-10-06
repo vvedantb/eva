@@ -32,7 +32,6 @@ import {
   type SessionSortOrder,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
-  catchMutationError,
   mutationError,
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
@@ -84,10 +83,13 @@ export function GlobalSessionGroup({
     api.sessions.listArchived,
     listMode === "archived" ? { repoId: repo._id } : "skip",
   );
-  const createSession = useMutation(api.sessions.create);
   const unarchiveSession = useMutation(api.sessions.unarchive);
   const label = repoDisplayLabel(repo);
   const baseUrl = `${repoBasePaths(repo)[0]}/sessions`;
+  const openFork = (segment: string) => {
+    navigate({ to: `${baseUrl}/${segment}` });
+    onNavigate?.();
+  };
 
   const sourceSessions =
     listMode === "archived" ? archivedSessions : activeSessions;
@@ -216,6 +218,7 @@ export function GlobalSessionGroup({
                         isSelected={isSelected}
                         repo={repo}
                         onNavigate={onNavigate}
+                        onForkNavigate={openFork}
                         onUnarchive={async (s) => {
                           try {
                             await unarchiveSession({ id: s._id });
@@ -241,23 +244,9 @@ export function GlobalSessionGroup({
                       repo={repo}
                       onNavigate={onNavigate}
                       onRename={async () => {}}
-                      onDuplicate={async (s) => {
-                        const { numId } = await catchMutationError(
-                          createSession({
-                            repoId: repo._id,
-                            title: `${s.title} (copy)`,
-                          }),
-                          "Couldn't duplicate session",
-                          "session-duplicate",
-                        );
-                        return String(numId);
-                      }}
                       onRenameRequest={(s) => onRenameRequest(s, repo)}
                       onArchiveRequest={(s) => onArchiveRequest(s, repo)}
-                      onDuplicateNavigate={(segment) => {
-                        navigate({ to: `${baseUrl}/${segment}` });
-                        onNavigate?.();
-                      }}
+                      onForkNavigate={openFork}
                     />
                   );
                 })}

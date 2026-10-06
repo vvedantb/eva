@@ -449,7 +449,7 @@ const sessionQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: (session, id) =>
-    session.watchedByOrchestrator === undefined
+    session.watchedByAve === undefined
       ? undefined
       : { kind: "session", sessionId: id },
   defaultStartErrorMessage: "Failed to start queued message.",
@@ -560,9 +560,10 @@ const projectChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  // Project chat has no orchestrator watch — only sessions and tasks are
-  // spawned as child agents.
-  orchestratorNotifyChild: () => undefined,
+  orchestratorNotifyChild: (project, id) =>
+    project.watchedByAve === undefined
+      ? undefined
+      : { kind: "project", projectId: id },
   defaultStartErrorMessage: "Failed to start queued chat message.",
 };
 
@@ -572,7 +573,12 @@ const taskChatQueueConfig: ChatQueueConfig<
   ChatQueuePrepared
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
-  hasActiveWorkflow: (task) => task.activeChatWorkflowId !== undefined,
+  // `activeWorkflowId` counts too: the task's own run owns the sandbox, and a
+  // follow-up may now be queued while that first run is still going. Starting
+  // a chat turn on top of it would have two agents in one sandbox.
+  hasActiveWorkflow: (task) =>
+    task.activeChatWorkflowId !== undefined ||
+    task.activeWorkflowId !== undefined,
   backgroundAgents: (task) => task.backgroundAgents,
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
@@ -652,7 +658,7 @@ const taskChatQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: (task, id) =>
-    task.watchedByOrchestrator === undefined
+    task.watchedByAve === undefined
       ? undefined
       : { kind: "task", taskId: id },
   defaultStartErrorMessage: "Failed to start queued chat message.",

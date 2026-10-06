@@ -15,6 +15,7 @@ import {
   previewContainedLayout,
   resolveMiniPlayerLogicalSize,
 } from "./previewContain";
+import { setPreviewDocumentLoading } from "./previewDocumentLoading";
 
 /**
  * Global preview-iframe keep-alive.
@@ -258,7 +259,9 @@ function remeasureAll(): void {
   let changed = false;
   for (const [key, entry] of entries) {
     if (entry.anchor === null) continue;
-    if (!anchorNeedsLayoutTracking(entry.anchor)) continue;
+    // Measure 0×0 anchors too: a sandbox tab switch hides the pane with
+    // `display: none` without unmounting it, and skipping it here left the
+    // overlay painted at the last visible rect. A 0×0 rect hides the overlay.
     const rect = measure(entry.anchor);
     if (!sameRect(rect, entry.rect)) {
       entries.set(key, { ...entry, rect });
@@ -402,6 +405,8 @@ function iframeRefFor(key: string): (el: HTMLIFrameElement | null) => void {
   const callback = (el: HTMLIFrameElement | null) => {
     const entry = entries.get(key);
     if (entry === undefined || entry.element === el) return;
+    // A fresh element is a fresh document: it spins until its first `load`.
+    if (el !== null) setPreviewDocumentLoading(el, true);
     entries.set(key, { ...entry, element: el });
     onElementByKey.get(key)?.(el);
     notify();
@@ -504,6 +509,15 @@ export function PreviewIframeHost() {
               ref={iframeRefFor(entry.key)}
               src={entry.src}
               title="Preview"
+              // The preview is cross-origin, and Chrome's native WebMCP
+              // (`navigator.modelContext`) refuses to run in a cross-origin
+              // frame unless the embedder delegates the `tools` feature. Without
+              // it every agent `call_preview_tool` fails with a permissions
+              // policy error.
+              allow="tools"
+              onLoad={(event) => {
+                setPreviewDocumentLoading(event.currentTarget, false);
+              }}
               className={
                 logical ? "block border-0" : "block size-full border-0"
               }

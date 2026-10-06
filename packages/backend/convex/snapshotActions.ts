@@ -42,6 +42,7 @@ import {
   resolveSwapConfig,
 } from "./_sandbox_runtime/swap";
 import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
+import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
 
@@ -91,7 +92,7 @@ const OPENCODE_VERSION = "1.18.16";
 // (SDK_VERSION): the callback's stream parsers match one SDK release's message
 // shapes exactly. Bump CLAUDE_CODE_VERSION (_sandbox_runtime/claudeCliVersion)
 // alongside the agent SDK — 0.3.X ships the CLI it spawns, 2.1.X.
-const CLAUDE_AGENT_SDK_VERSION = "0.3.258";
+const CLAUDE_AGENT_SDK_VERSION = "0.3.282";
 const CURSOR_SDK_VERSION = "1.0.28";
 
 /**
@@ -400,7 +401,7 @@ export const launchSeedRun = internalAction({
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
-      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@0.146.0 agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
+      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
       `command -v code-server >/dev/null 2>&1 || { github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm && sudo rpm -Uvh /tmp/code-server.rpm && rm -f /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
       'command -v websockify >/dev/null 2>&1 || python3 -m pip install --user --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1 || { echo "SEEDRUN-FAILED:websockify"; exit 1; }',
@@ -668,7 +669,7 @@ export const fetchSeedDiagnostics = internalAction({
           // repo pin, else its Last Known Good, else (DEFAULT_TO_LATEST) npm
           // `latest`. The pnpm 12 incident was invisible without these lines.
           'echo "== toolchain =="',
-          "( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo \"pnpm $(pnpm --version 2>&1 | tail -n 1)\"; grep -o '\"packageManager\": *\"[^\"]*\"' package.json 2>/dev/null || echo 'packageManager: (none)'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d ' \\n') )",
+          '( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo "pnpm $(pnpm --version 2>&1 | tail -n 1)"; grep -o \'"packageManager": *"[^"]*"\' package.json 2>/dev/null || echo \'packageManager: (none)\'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d \' \\n\') )',
           // Install warnings pnpm prints and then forgets (ignored build
           // scripts, peer/engine warnings). Written by the install stage.
           'echo "== install log (warnings) =="',
@@ -807,8 +808,7 @@ export const createSeedPrepSandbox = internalAction({
       // 600s per-action ceiling on providers (Vercel) that don't have deps
       // pre-baked into their base snapshot.
       true,
-      undefined, // image
-      false, // skipDocker
+      undefined, // forkFrom
       // Cache WRITER: this is the sandbox where the seed run's `pnpm install`
       // actually downloads the repo's dependency tree, and the snapshot
       // workflow runs at most one per repo at a time — so it takes the Drive's

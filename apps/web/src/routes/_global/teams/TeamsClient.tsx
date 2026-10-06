@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Skeleton,
+  CenteredSpinner,
 } from "@eva/ui";
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
@@ -127,11 +127,7 @@ export function TeamsClient() {
       }
     >
       {teams === undefined ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-36 border border-border" />
-          ))}
-        </div>
+        <CenteredSpinner label="Loading teams" />
       ) : teams.length === 0 ? (
         <EmptyState
           icon={<IconUsers size={24} />}

@@ -145,9 +145,7 @@ http.route({
     return Response.json({
       ok: true,
       accepted,
-      lease: accepted
-        ? null
-        : { status: "terminal", reason: "superseded" },
+      lease: accepted ? null : { status: "terminal", reason: "superseded" },
     });
   }),
 });

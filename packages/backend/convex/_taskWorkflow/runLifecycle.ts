@@ -207,32 +207,18 @@ export const saveTaskSandboxId = internalMutation({
   },
 });
 
-/** Marks a quick task's sandbox as active once its run winds down — the run
- * leaves the sandbox up, and this is what the reviewer UI and the idle
- * auto-stop sweep read. Skips tasks whose sandbox is already being torn down
- * (watchdog recovery, a user Stop mid-run) so it never resurrects a dead one
- * in the UI, and skips a task that has since moved to a newer sandbox. */
-export const markTaskSandboxActive = internalMutation({
+/** Marks a quick task's sandbox as stopped (e.g. after agent run completion).
+ * Keeps `sandboxId` so the reviewer can resume the same paused filesystem. */
+export const markTaskSandboxStopped = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
-    sandboxId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
-    if (task.sandboxId !== undefined && task.sandboxId !== args.sandboxId) {
-      return null;
-    }
-    if (
-      task.reviewTaskSandboxStatus === "stopping" ||
-      task.reviewTaskSandboxStatus === "closed"
-    ) {
-      return null;
-    }
     await ctx.db.patch(args.taskId, {
-      sandboxId: args.sandboxId,
-      reviewTaskSandboxStatus: "active",
+      reviewTaskSandboxStatus: "closed",
       updatedAt: Date.now(),
     });
     return null;

@@ -5,6 +5,8 @@ packages:
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - prettier
+  # @vvedantb/redline 0.1.1 published 2026-10-05; 7-day soak would block this PR.
+  - "@vvedantb/redline"
   # Native (Rust) React Compiler landed 2026-08-18 and is what the web build
   # runs; the 7-day soak would block installs until it ages in.
   - "@vitejs/plugin-react"

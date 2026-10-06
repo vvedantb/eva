@@ -11,6 +11,7 @@ import {
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
 import { isSandboxGoneError } from "./sandboxErrors";
+import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -26,14 +27,6 @@ const STOP_SANDBOX_BUDGET_MS = 480_000;
 const REFRESH_BUDGET_MS = 30_000;
 /** Bound on the pre-stop swap release (script exec timeout is 120s). */
 const SWAP_RELEASE_BUDGET_MS = 150_000;
-const CALLBACK_LIVENESS_COMMAND = [
-  "test -f /tmp/run-design.pid",
-  "test ! -f /tmp/run-design.done",
-  'pid="$(cat /tmp/run-design.pid)"',
-  'kill -0 "$pid" 2>/dev/null',
-  'state="$(ps -p "$pid" -o stat= 2>/dev/null | tr -d " ")"',
-  'case "$state" in Z*) exit 1 ;; *) exit 0 ;; esac',
-].join(" && ");
 /** Agent still running even if callback PID bookkeeping is stale. Cursor and
  * OpenCode drive their turns from inside the callback (run-design.mjs) since
  * the SDK migrations, so the callback process itself counts as agent liveness;

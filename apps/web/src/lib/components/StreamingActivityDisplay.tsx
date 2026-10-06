@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@eva/backend";
 import {
   ActivityTasks,
   Reasoning,
@@ -13,10 +15,12 @@ import {
 } from "@eva/ui";
 import {
   isEmptyActivityPayload,
+  isSandboxStartupActivity,
   parseActivitySteps,
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
 import {
   silentStreamDelayMs,
   thinkingHeartbeatLabel,
@@ -145,6 +149,7 @@ export function StreamingActivityDisplay({
   thinkingLabel = "Working...",
   startedAt,
   onOpenFile,
+  isSandboxStartup = false,
 }: {
   activity: string | undefined;
   isStreaming?: boolean;
@@ -153,6 +158,12 @@ export function StreamingActivityDisplay({
   thinkingLabel?: string;
   startedAt?: number;
   onOpenFile?: (path: string) => void;
+  /**
+   * The stream is a sandbox startup run. Set it where the caller already knows
+   * (the session chat reads the startup stream directly); elsewhere the steps
+   * themselves give it away.
+   */
+  isSandboxStartup?: boolean;
 }) {
   const simpleView = useSimpleView();
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
@@ -161,8 +172,12 @@ export function StreamingActivityDisplay({
     isStreaming,
     startedAt,
   );
+  const startingSandbox =
+    isSandboxStartup || isSandboxStartupActivity(activity);
+
   if (simpleView) {
     if (!isStreaming) return null;
+    if (startingSandbox) return <SandboxStartupIndicator />;
     return (
       <div className="space-y-1.5">
         <SimpleViewWorkingStatus startedAt={startedAt} />
@@ -199,8 +214,31 @@ export function StreamingActivityDisplay({
   );
 }
 
+/**
+ * The untrimmed activity payload for a transcript message, fetched only once a
+ * reader opens a fold that could show the stripped step detail.
+ *
+ * `messages.listByParent` ships steps without their `output`/`edits`/
+ * `contentPreview` — roughly half the activity bytes on a heavy session, none
+ * of it on screen until a disclosure opens. Deliberately the uncached
+ * `useQuery`: the subscription should die with the chat rather than keep the
+ * bytes this whole change exists to avoid.
+ */
+function useFullActivityLog(messageId: string | undefined) {
+  const [requested, setRequested] = useState(false);
+  const fullLog = useQuery(
+    api.messages.activityLogById,
+    requested && messageId ? { messageId } : "skip",
+  );
+  return {
+    fullLog: fullLog ?? undefined,
+    request: messageId ? () => setRequested(true) : undefined,
+  };
+}
+
 export function ActivityLogDisplay({
   activityLog,
+  messageId,
   name,
   icon,
   startedAt,
@@ -209,6 +247,12 @@ export function ActivityLogDisplay({
   onOpenFile,
 }: {
   activityLog: string;
+  /**
+   * Transcript messages only. Enables on-demand loading of the step detail
+   * `messages.listByParent` trimmed; surfaces with an inline log (project and
+   * doc interviews) leave it unset and render what they were given.
+   */
+  messageId?: string;
   name?: string;
   icon?: ReactNode;
   startedAt?: number;
@@ -217,6 +261,7 @@ export function ActivityLogDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
+  const { fullLog, request } = useFullActivityLog(messageId);
   const duration =
     startedAt && finishedAt ? formatDuration(startedAt, finishedAt) : undefined;
 
@@ -224,7 +269,7 @@ export function ActivityLogDisplay({
     return null;
   }
 
-  const steps = parseActivitySteps(activityLog);
+  const steps = parseActivitySteps(fullLog ?? activityLog);
 
   if (steps) {
     return (
@@ -235,6 +280,7 @@ export function ActivityLogDisplay({
         duration={duration}
         finalText={finalText}
         onOpenFile={onOpenFile}
+        onRequestFullDetail={request}
       />
     );
   }

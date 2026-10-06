@@ -15,13 +15,10 @@ import {
   QueueSectionTrigger,
   toast,
   motionBase,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
-import {
-  IconLoader2,
-  IconPlayerStop,
-  IconTerminal2,
-} from "@tabler/icons-react";
+import { IconPlayerStop, IconTerminal2 } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -181,7 +178,10 @@ export function BackgroundProcessesPanel({
                                 }}
                               >
                                 {isKilling ? (
-                                  <IconLoader2 className="size-3.5 animate-spin" />
+                                  <CircleSpinner
+                                    size="sm"
+                                    className="size-3.5"
+                                  />
                                 ) : (
                                   <IconPlayerStop className="size-3.5" />
                                 )}

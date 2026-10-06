@@ -1,4 +1,4 @@
-import dayjs from "@eva/shared/dates";
+import { formatDayLabel } from "@eva/shared/dates";
 import type { Id } from "@eva/backend";
 import {
   getNotificationAppearance,
@@ -54,16 +54,6 @@ export interface NotificationGroup {
   items: Notification[];
 }
 
-/** Today / Yesterday / weekday / date, the way the inbox has always read. */
-function dayLabel(createdAt: number): string {
-  const at = dayjs(createdAt);
-  const now = dayjs();
-  if (at.isSame(now, "day")) return "Today";
-  if (at.isSame(now.subtract(1, "day"), "day")) return "Yesterday";
-  if (at.isSame(now, "week")) return at.format("dddd");
-  return at.format("MMMM D, YYYY");
-}
-
 /**
  * Sections a notification list. `day` keeps the original date headers; `repo`
  * uses the repo's display label ("Other" for notifications with no repo);
@@ -87,7 +77,7 @@ export function groupNotifications(
   repoById: ReadonlyMap<Id<"githubRepos">, RepoLabelFields>,
 ): NotificationGroup[] {
   const labelOf = (notification: Notification): string => {
-    if (group === "day") return dayLabel(notification.createdAt);
+    if (group === "day") return formatDayLabel(notification.createdAt);
     if (group === "type") return getNotificationAppearance(notification).label;
     if (group === "urgency") return urgencyLabel(notification);
     const repo = notification.repoId

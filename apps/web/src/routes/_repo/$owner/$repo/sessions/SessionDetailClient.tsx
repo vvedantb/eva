@@ -1,4 +1,5 @@
 import { useMutation } from "convex/react";
+import { CenteredSpinner } from "@eva/ui";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
@@ -6,13 +7,15 @@ import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
-import { SessionDetailSkeleton } from "./_components/SessionDetailSkeleton";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -24,7 +27,6 @@ export function SessionDetailClient({
   onOpenFile,
   onViewDiff,
   isRouteActive = true,
-  hideTitle = false,
 }: {
   sessionId: Id<"sessions">;
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
@@ -39,8 +41,6 @@ export function SessionDetailClient({
    * shown — Preview must not clear/refetch from sibling URL churn.
    */
   isRouteActive?: boolean;
-  /** Popover already titles the surface — omit the session-chat title. */
-  hideTitle?: boolean;
 }) {
   const { basePath, repo } = useRepo();
   const sandboxRailWidthPx = useSandboxRailWidthPx();
@@ -143,11 +143,6 @@ export function SessionDetailClient({
   const isSandboxStopping = session?.status === "stopping";
   const [isStopPending, setIsStopPending] = useState(false);
   const simpleView = useSimpleView();
-  // The Eva session drives other agents rather than editing its own checkout,
-  // so it gets the chat with no sandbox panel (no preview / computer / review
-  // tabs) — same tab-gating idea as simple view, one step further. This branch
-  // is what makes the session renderable inline at `/eva`.
-  const chatOnly = session?.isOrchestrator === true;
   const handleSandboxToggle = async (action: "start" | "stop") => {
     if (action === "start") {
       await catchMutationError(
@@ -173,15 +168,13 @@ export function SessionDetailClient({
 
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Don't fight the user if they switch away mid-lock.
-  // Skipped for chatOnly: there is no sandbox panel to switch, and the tab
-  // change is a navigation — it would bounce Eva off its own `/eva` URL.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Must stay above loading/null early returns — Phase 3 review comments
   // introduced this hook after them and tripped React #310 on session resolve.
   const handleViewDiff = (repoRelativePath?: string) => {
-    if (simpleView || chatOnly) return;
+    if (simpleView) return;
     if (onViewDiff) {
       onViewDiff(repoRelativePath);
     } else {
@@ -200,15 +193,15 @@ export function SessionDetailClient({
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
-    if (!isRouteActive || chatOnly) return;
+    if (!isRouteActive) return;
     if (agentBrowsingAt === undefined || prev !== undefined) return;
     onSandboxTabChange("browser");
     setExpandRightSignal((n) => n + 1);
-  }, [agentBrowsingAt, onSandboxTabChange, isRouteActive, chatOnly]);
+  }, [agentBrowsingAt, onSandboxTabChange, isRouteActive]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   if (session === undefined) {
-    return <SessionDetailSkeleton />;
+    return <CenteredSpinner label="Loading session" />;
   }
 
   if (session === null) {
@@ -249,116 +242,97 @@ export function SessionDetailClient({
       isReadOnly={isReadOnly}
       deploymentStatus={session.deploymentStatus}
       sandboxCollapsed={sandboxCollapsed}
-      // chatOnly mounts inline at the per-user `/orchestrator`, so the current
-      // URL is not a link to *this* session — hand the header a real permalink.
-      permalinkPath={
-        chatOnly && session.numId !== undefined
-          ? `${basePath}/sessions/${session.numId}`
-          : undefined
-      }
-      chatOnly={chatOnly}
-      hideTitle={hideTitle}
       isRouteActive={isRouteActive}
-      onOpenFile={chatOnly ? undefined : onOpenFile}
-      onViewDiff={chatOnly ? undefined : handleViewDiff}
-      onOpenPrdTab={
-        chatOnly
-          ? undefined
-          : () => {
-              onSandboxTabChange("prd");
-              setExpandRightSignal((n) => n + 1);
-            }
-      }
-      onOpenAgentsTab={
-        chatOnly
-          ? undefined
-          : () => {
-              onSandboxTabChange("agents");
-              setExpandRightSignal((n) => n + 1);
-            }
-      }
+      onOpenFile={onOpenFile}
+      onViewDiff={handleViewDiff}
+      onOpenPrdTab={() => {
+        onSandboxTabChange("prd");
+        setExpandRightSignal((n) => n + 1);
+      }}
+      onOpenAgentsTab={() => {
+        onSandboxTabChange("agents");
+        setExpandRightSignal((n) => n + 1);
+      }}
       backgroundAgents={session.backgroundAgents}
     />
   );
 
-  if (chatOnly) {
-    return (
-      <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
-        <div className="flex min-h-0 flex-1">{chatPanel()}</div>
-      </PendingReviewCommentsProvider>
-    );
-  }
-
   return (
     <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
-      <SandboxWorkspace
-        ownerKind="session"
-        ownerId={sessionId}
-        storageScope={`session:${sessionId}`}
-        sandboxId={session.sandboxId}
-        isActive={isSandboxActive}
-        terminalPanes={session.terminalPanes}
-        hotkeyEnabled={isRouteActive}
-      >
-        {(panes, owner, terminalPanel) => (
-          <ResizablePanelLayout
-            leftPanel={({ rightPanelCollapsed }) =>
-              chatPanel(rightPanelCollapsed)
-            }
-            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
-              <SandboxPanel
-                sessionId={sessionId}
-                sandboxId={session.sandboxId}
-                isActive={isSandboxActive}
-                isRouteActive={isRouteActive}
-                repoId={session.repoId}
-                prUrl={session.prUrl}
-                // Prefer session (set after services start); fall back to app
-                // settings so preview doesn't default to 3000 before that lands.
-                devPort={session.devPort ?? repo.devPort}
-                devCommand={session.devCommand ?? repo.devCommand}
-                owner={owner}
-                panes={panes}
-                terminalPanel={terminalPanel}
-                planContent={session.planContent}
-                messages={messages ?? []}
-                backgroundAgents={session.backgroundAgents}
-                streamingActivity={streaming?.currentActivity}
-                isArchived={isReadOnly}
-                activeTab={activeSandboxTab}
-                onTabChange={onSandboxTabChange}
-                agentBrowsingAt={session.agentBrowsingAt}
-                onStartSandbox={
-                  isReadOnly || isSandboxStopping || isStopPending
-                    ? undefined
-                    : () => {
-                        void handleSandboxToggle("start");
+      <PendingPreviewSnapshotsProvider>
+        <PendingWebMcpProvider>
+          <OpenSandboxFileProvider onOpenFile={onOpenFile}>
+            <SandboxWorkspace
+              ownerKind="session"
+              ownerId={sessionId}
+              storageScope={`session:${sessionId}`}
+              sandboxId={session.sandboxId}
+              isActive={isSandboxActive}
+              terminalPanes={session.terminalPanes}
+              hotkeyEnabled={isRouteActive}
+            >
+              {(panes, owner, terminalPanel) => (
+                <ResizablePanelLayout
+                  leftPanel={({ rightPanelCollapsed }) =>
+                    chatPanel(rightPanelCollapsed)
+                  }
+                  rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
+                    <SandboxPanel
+                      sessionId={sessionId}
+                      sandboxId={session.sandboxId}
+                      isActive={isSandboxActive}
+                      isRouteActive={isRouteActive}
+                      repoId={session.repoId}
+                      prUrl={session.prUrl}
+                      // Prefer session (set after services start); fall back to app
+                      // settings so preview doesn't default to 3000 before that lands.
+                      devPort={session.devPort ?? repo.devPort}
+                      devCommand={session.devCommand ?? repo.devCommand}
+                      owner={owner}
+                      panes={panes}
+                      terminalPanel={terminalPanel}
+                      planContent={session.planContent}
+                      messages={messages ?? []}
+                      backgroundAgents={session.backgroundAgents}
+                      streamingActivity={streaming?.currentActivity}
+                      isArchived={isReadOnly}
+                      activeTab={activeSandboxTab}
+                      onTabChange={onSandboxTabChange}
+                      agentBrowsingAt={session.agentBrowsingAt}
+                      onStartSandbox={
+                        isReadOnly || isSandboxStopping || isStopPending
+                          ? undefined
+                          : () => {
+                              void handleSandboxToggle("start");
+                            }
                       }
-                }
-                isSandboxStarting={isSandboxStarting}
-                collapsed={rightPanelCollapsed}
-                onToggle={onToggleRightPanel}
-                miniPlayer={
-                  session.numId !== undefined
-                    ? {
-                        returnTo: `${basePath}/sessions/${session.numId}/preview`,
-                        title: session.title,
+                      isSandboxStarting={isSandboxStarting}
+                      collapsed={rightPanelCollapsed}
+                      onToggle={onToggleRightPanel}
+                      miniPlayer={
+                        session.numId !== undefined
+                          ? {
+                              returnTo: `${basePath}/sessions/${session.numId}/preview`,
+                              title: session.title,
+                            }
+                          : undefined
                       }
-                    : undefined
-                }
-              />
-            )}
-            leftDefaultSize="40%"
-            leftMinWidthPx={350}
-            rightMinWidthPx={300}
-            rightCollapsedSizePx={sandboxRailWidthPx}
-            storageKey="sandbox-collapsed"
-            expandRightSignal={expandRightSignal}
-            hotkeyEnabled={isRouteActive}
-            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          />
-        )}
-      </SandboxWorkspace>
+                    />
+                  )}
+                  leftDefaultSize="40%"
+                  leftMinWidthPx={350}
+                  rightMinWidthPx={300}
+                  rightCollapsedSizePx={sandboxRailWidthPx}
+                  storageKey="sandbox-collapsed"
+                  expandRightSignal={expandRightSignal}
+                  hotkeyEnabled={isRouteActive}
+                  mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                />
+              )}
+            </SandboxWorkspace>
+          </OpenSandboxFileProvider>
+        </PendingWebMcpProvider>
+      </PendingPreviewSnapshotsProvider>
     </PendingReviewCommentsProvider>
   );
 }

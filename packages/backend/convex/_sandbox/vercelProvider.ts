@@ -1262,7 +1262,12 @@ class VercelSandboxClient implements SandboxClient {
     };
     const attempt = (withMounts: SandboxMounts | undefined) => {
       const opts = { ...base, ...(withMounts ? { mounts: withMounts } : {}) };
-      return params.snapshot
+      return params.forkFrom
+        ? // Server-side fork: restores from the source's current snapshot.
+          // `opts` overrides the config the fork would otherwise copy,
+          // including mounts — a fork mounts the Drive like any create.
+          Sandbox.fork({ ...opts, sourceSandbox: params.forkFrom })
+        : params.snapshot
         ? Sandbox.create({
             ...opts,
             source: { type: "snapshot", snapshotId: params.snapshot },
@@ -1298,7 +1303,7 @@ class VercelSandboxClient implements SandboxClient {
         throw lastError;
       });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"} mounts=${describeMounts(used)}`,
+        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1309,7 +1314,7 @@ class VercelSandboxClient implements SandboxClient {
       // exists. Pre-create it here so git config / ensureDockerDaemon calls in
       // createSandbox succeed. Snapshot-restored sandboxes already have the
       // directory baked in, so this is only needed for fresh ones.
-      if (!params.snapshot) {
+      if (!params.snapshot && !params.forkFrom) {
         await sandbox.mkDir("/tmp/repo");
       }
       return new VercelSandboxHandle(sandbox, this.creds);
@@ -1321,7 +1326,7 @@ class VercelSandboxClient implements SandboxClient {
         // requestedMounts is what the ladder STARTED from: by the time this
         // throws every weaker stage (including no mounts at all) has already
         // failed too, so mounts are never the remaining suspect.
-        `vercel create failed (snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
+        `vercel create failed (forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }

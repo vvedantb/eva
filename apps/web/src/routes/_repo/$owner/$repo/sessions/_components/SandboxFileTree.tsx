@@ -2,18 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
-import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import {
+  Button,
+  cn,
+  RefreshSpinIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@eva/ui";
 import {
   IconFoldDown,
   IconFoldUp,
   IconFolder,
   IconLayoutSidebar,
   IconLayoutSidebarRight,
-  IconRefresh,
   IconSearch,
 } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { treeThemeVars } from "@/lib/components/sandbox/treeTheme";
+import {
+  TREE_UNSAFE_CSS,
+  treeThemeVars,
+} from "@/lib/components/sandbox/treeTheme";
 
 interface SandboxFileTreeProps {
   paths: string[];
@@ -83,6 +92,7 @@ export function SandboxFileTree({
     initialExpansion: 1,
     search: true,
     fileTreeSearchMode: "hide-non-matches",
+    unsafeCSS: TREE_UNSAFE_CSS,
     initialSelectedPaths: selectedPath ? [selectedPath] : [],
     onSelectionChange: (selectedPaths) => {
       const path = selectedPaths[0];
@@ -225,9 +235,7 @@ export function SandboxFileTree({
               disabled={isRefreshing}
               aria-label="Refresh file list"
             >
-              <IconRefresh
-                className={cn("size-3.5", isRefreshing && "animate-spin")}
-              />
+              <RefreshSpinIcon busy={isRefreshing} className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent className="text-xs">Refresh</TooltipContent>

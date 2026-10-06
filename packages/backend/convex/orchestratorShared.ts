@@ -13,12 +13,14 @@ import type { Id } from "./_generated/dataModel";
 export const orchestratorNotifyChildValidator = v.union(
   v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
   v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
 );
 
 /** The `child` payload of `notifyOrchestratorOfChild`, for hook call sites. */
 export type OrchestratorNotifyChild =
   | { kind: "session"; sessionId: Id<"sessions"> }
-  | { kind: "task"; taskId: Id<"agentTasks"> };
+  | { kind: "task"; taskId: Id<"agentTasks"> }
+  | { kind: "project"; projectId: Id<"projects"> };
 
 /**
  * Schedules a master wake-up for a finished quick-task run. No-op when the task
@@ -30,7 +32,7 @@ export async function scheduleTaskOrchestratorNotify(
   status: string,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (!task || task.watchedByOrchestrator === undefined) return;
+  if (!task || task.watchedByAve === undefined) return;
   await ctx.scheduler.runAfter(
     0,
     internal.orchestratorNotify.notifyOrchestratorOfChild,

@@ -23,6 +23,18 @@ export const COREPACK_SANDBOX_ENV: Record<string, string> = {
   COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
 };
 
+/** Where each launch installs the registry-latest Claude / Codex CLI (see launch.ts). */
+export const CLAUDE_CLI_INSTALL_DIR = "/tmp/claude-cli";
+export const CODEX_CLI_INSTALL_DIR = "/tmp/codex-cli";
+
+/**
+ * Puts the launch-installed CLIs ahead of the image's copies, so `claude` /
+ * `codex` typed in a terminal runs the same latest build the agent does rather
+ * than the version the snapshot was seeded with. Raw line, not an
+ * `renderEvaEnvFile` entry: `$PATH` must expand when sourced.
+ */
+export const AGENT_CLI_PATH_LINE = `export PATH="${CLAUDE_CLI_INSTALL_DIR}/bin:${CODEX_CLI_INSTALL_DIR}/bin:$PATH"\n`;
+
 /** Renders env vars as sourceable `export K='V'` lines (single-quote-escaped). */
 export function renderEvaEnvFile(env: Record<string, string>): string {
   return (

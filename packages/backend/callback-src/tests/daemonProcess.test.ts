@@ -8,6 +8,7 @@ import {
   callbackBundleWentStale,
   claimDaemonPidfileBoot,
   cleanOwnedDaemonMarkers,
+  isCallbackRunnerPid,
   pidAlive,
   readPidFromFile,
   selectClaimPollIntervalMs,
@@ -83,10 +84,44 @@ test("claimDaemonPidfileBoot leaves a live rival untouched", () => {
     entityId: "e",
     optsSig: "sig",
     currentPid: process.pid + 1,
+    isRival: () => true,
   });
   expect(claim).toEqual({ status: "rival_alive", rivalPid: process.pid });
   expect(readPidFromFile(paths.pid)).toBe(process.pid);
   rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * A pidfile that outlived a Vercel stop/resume names a pid the reboot re-issued
+ * to one of the services the resume spawned. Deferring to it leaves the entity
+ * with no daemon at all, which is how session 238 lost three turns.
+ */
+test("claimDaemonPidfileBoot claims over a recycled pid", () => {
+  const dir = join(tmpdir(), `eva-daemon-recycled-${process.pid}`);
+  mkdirSync(dir, { recursive: true });
+  const paths = {
+    pid: join(dir, "d.pid"),
+    entity: join(dir, "d.entity"),
+    opts: join(dir, "d.opts"),
+  };
+  writeFileSync(paths.pid, String(process.pid));
+  const claim = claimDaemonPidfileBoot({
+    paths,
+    entityId: "e",
+    optsSig: "sig",
+    currentPid: process.pid + 1,
+    // Live, but its argv is not the callback runner.
+    isRival: () => false,
+  });
+  expect(claim).toEqual({ status: "claimed" });
+  expect(readPidFromFile(paths.pid)).toBe(process.pid + 1);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("isCallbackRunnerPid rejects a live process that is not the runner", () => {
+  expect(pidAlive(process.pid)).toBe(true);
+  expect(isCallbackRunnerPid(process.pid)).toBe(false);
+  expect(isCallbackRunnerPid(2 ** 30)).toBe(false);
 });
 
 test("cleanOwnedDaemonMarkers only unlinks when this pid owns the file", () => {

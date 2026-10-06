@@ -9,12 +9,12 @@ import {
 } from "@/lib/components/mentions";
 import { AtMentionChip } from "@/lib/components/chat/MarkdownMentionText";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
-import { useRepo } from "@/lib/contexts/RepoContext";
+import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 
 interface MessageMentionTextProps {
   text: string;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
+  /** Absent (Manager Ave): tokens render as inert chips. */
+  repo?: ChatRepo;
   className?: string;
   /** Root element — `"span"` for inline single-line contexts (see MentionText). */
   as?: "p" | "span";
@@ -22,13 +22,14 @@ interface MessageMentionTextProps {
 
 export function MessageMentionText({
   text,
-  repoBasePath,
+  repo,
   className,
   as,
 }: MessageMentionTextProps) {
   const navigate = useNavigate();
-  const { repo } = useRepo();
-  const navigateToData = useDataMentionNavigate(repoBasePath, repo._id);
+  const navigateToData = useDataMentionNavigate(repo?.basePath ?? "", repo?.id);
+
+  if (!repo) return <MentionText text={text} className={className} as={as} />;
 
   return (
     <MentionText
@@ -47,7 +48,7 @@ export function MessageMentionText({
             key={key}
             id={match.id}
             label={match.label}
-            repoId={repo._id}
+            repoId={repo.id}
             onNavigateToData={onClick}
           />
         );
@@ -55,7 +56,7 @@ export function MessageMentionText({
       renderSkill={(match, key) => {
         const navigateToSkills = (e: MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
-          navigate({ to: `${repoBasePath}/settings/skills` });
+          navigate({ to: `${repo.basePath}/settings/skills` });
         };
         if (isHarnessSkillTokenId(match.id)) {
           return (

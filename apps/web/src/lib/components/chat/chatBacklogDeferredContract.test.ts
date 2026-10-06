@@ -25,7 +25,7 @@ describe("a long transcript commits its backlog off the first paint", () => {
     const expression = derivation?.[1] ?? "";
     // Deferring "the transcript has rows", not mount: a chat whose messages
     // arrive after mount would otherwise spend its deferred pass on the
-    // skeleton and commit the whole backlog in the render that first has data.
+    // spinner and commit the whole backlog in the render that first has data.
     expect(expression).toContain("displayMessages.length > 0");
     expect(
       expression,
