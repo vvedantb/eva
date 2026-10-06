@@ -377,9 +377,13 @@ function InputCard({
     status === "business_review" ||
     status === "code_review";
 
+  /* eslint-disable no-effect/no-event-handler --
+     Moves DOM focus into the textarea once the card is unlocked; the lock can
+     lift from a server status change, not a click in this card. */
   useEffect(() => {
     if (!locked) textareaRef.current?.focus();
   }, [locked]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -958,6 +962,9 @@ export function AnnotationOverlay() {
     [persistAnnotations],
   );
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     Binds the page-wide pointer listeners and the body cursor that make the
+     annotation mode work; the host page's DOM is the external system. */
   useEffect(() => {
     if (!ext.active) {
       hoveredRef.current = null;
@@ -1112,6 +1119,7 @@ export function AnnotationOverlay() {
       document.body.style.cursor = "";
     };
   }, [ext.active]);
+  /* eslint-enable no-effect/no-external-store-subscription */
 
   useEffect(() => {
     if (pins.size === 0 && !ext.active) return;

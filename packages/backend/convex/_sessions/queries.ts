@@ -59,8 +59,6 @@ const sessionListItemValidator = v.object({
   lastFastMode: v.optional(v.boolean()),
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
-  /** True for the user's persistent master session (badged in the sidebar). */
-  isOrchestrator: v.optional(v.boolean()),
   /**
    * True while a turn is in flight — either a tracked chat workflow, or a
    * daemon-minted continuation (`/loop`), which never gets an
@@ -77,6 +75,8 @@ const sessionListItemValidator = v.object({
   linkedFrom: v.optional(linkedFromValidator),
   /** Number of linked repos cloned beside the primary (sidebar `+N` badge). */
   linkedRepoCount: v.optional(v.number()),
+  /** Source session when this one came from "Fork session" (sidebar fork glyph). */
+  forkedFromSessionId: v.optional(v.id("sessions")),
 });
 
 /** Maps a full session doc to the slim list payload. */
@@ -88,6 +88,7 @@ function toSessionListItem(
   return {
     linkedFrom,
     linkedRepoCount: session.linkedRepoCount,
+    forkedFromSessionId: session.forkedFromSessionId,
     _id: session._id,
     _creationTime: session._creationTime,
     numId: session.numId,
@@ -113,7 +114,6 @@ function toSessionListItem(
     lastFastMode: session.lastFastMode,
     deploymentStatus: session.deploymentStatus,
     deploymentUrl: session.deploymentUrl,
-    isOrchestrator: session.isOrchestrator,
     isExecuting: sessionIsExecuting(session, openSessionIds),
   };
 }
@@ -302,6 +302,77 @@ export const getFirstMessagePreview = authQuery({
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
     return await firstUserMessagePreview(ctx.db, args.id);
+  },
+});
+
+/** A session on the other end of a fork, with what the hover card needs to link it. */
+const forkLinkValidator = v.object({
+  _id: v.id("sessions"),
+  title: v.string(),
+  numId: v.optional(v.number()),
+  repo: linkedFromValidator,
+});
+
+/** Visible fork end as a link, or null when deleted or the viewer lacks access. */
+async function toForkLink(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  session: Doc<"sessions"> | null,
+) {
+  const visible = entityVisible(session);
+  if (!visible) return null;
+  if (!(await hasRepoAccess(db, visible.repoId, userId))) return null;
+  const repo = await db.get(visible.repoId);
+  if (!repo) return null;
+  return {
+    _id: visible._id,
+    title: visible.title,
+    numId: visible.numId,
+    repo: {
+      owner: repo.owner,
+      name: repo.name,
+      rootDirectory: repo.rootDirectory,
+    },
+  };
+}
+
+/**
+ * Both ends of a session's fork lineage for hover cards: the session it was
+ * forked from and the sessions forked from it. Fetched on hover, like the
+ * first-message preview, so list subscriptions stay join-free.
+ */
+export const getForkLinks = authQuery({
+  args: { id: v.id("sessions") },
+  returns: v.object({
+    forkedFrom: v.union(forkLinkValidator, v.null()),
+    forks: v.array(forkLinkValidator),
+  }),
+  handler: async (ctx, args) => {
+    const empty = { forkedFrom: null, forks: [] };
+    const session = await ctx.db.get(args.id);
+    if (!session) return empty;
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      return empty;
+    }
+    const forkedFrom = session.forkedFromSessionId
+      ? await toForkLink(
+          ctx.db,
+          ctx.userId,
+          await ctx.db.get(session.forkedFromSessionId),
+        )
+      : null;
+    const children = await ctx.db
+      .query("sessions")
+      .withIndex("by_forked_from", (q) =>
+        q.eq("forkedFromSessionId", args.id),
+      )
+      .take(20);
+    const forks = (
+      await Promise.all(
+        children.map((child) => toForkLink(ctx.db, ctx.userId, child)),
+      )
+    ).filter((link) => link !== null);
+    return { forkedFrom, forks };
   },
 });
 

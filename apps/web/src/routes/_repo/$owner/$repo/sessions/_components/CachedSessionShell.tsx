@@ -22,11 +22,6 @@ interface CachedSessionShellProps {
   repoParam: string;
   /** True when this shell matches the URL `$numId` (visible). */
   isActiveRoute: boolean;
-  /**
-   * Mounted inside Manager Ave's popover, which already titles the surface.
-   * Hides the session-chat title so "Manager Ave" is not painted twice.
-   */
-  embedded?: boolean;
 }
 
 /**
@@ -40,7 +35,6 @@ export function CachedSessionShell({
   owner,
   repoParam,
   isActiveRoute,
-  embedded = false,
 }: CachedSessionShellProps) {
   return (
     <RepoProvider owner={owner} repoParam={repoParam} passive>
@@ -50,7 +44,6 @@ export function CachedSessionShell({
           owner={owner}
           repoParam={repoParam}
           isActiveRoute={isActiveRoute}
-          embedded={embedded}
         />
       </RepoGate>
     </RepoProvider>
@@ -62,7 +55,6 @@ function CachedSessionShellInner({
   owner,
   repoParam,
   isActiveRoute,
-  embedded = false,
 }: CachedSessionShellProps) {
   const navigate = useNavigate();
   const { basePath, repoId } = useRepo();
@@ -71,10 +63,14 @@ function CachedSessionShellInner({
   const urlSandboxTab = useSessionRouteSandboxTab();
   const [sandboxTab, setSandboxTab] = useState(urlSandboxTab);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     Cached shells stay mounted while hidden: only the one on the live route may
+     follow the URL, so this cannot just mirror the prop during render. */
   useEffect(() => {
     if (!isActiveRoute) return;
     setSandboxTab(urlSandboxTab);
   }, [isActiveRoute, urlSandboxTab]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
   // `basePath`. `navigate({ to })` matches the route tree before the
@@ -149,7 +145,6 @@ function CachedSessionShellInner({
             onOpenFile={openFile}
             onViewDiff={simpleView ? undefined : openDiffs}
             isRouteActive={isActiveRoute}
-            hideTitle={embedded}
           />
         )}
       </EntityNumIdGate>

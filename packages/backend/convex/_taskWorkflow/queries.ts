@@ -264,6 +264,7 @@ export const getTaskData = internalQuery({
             repo.systemPrompt,
             previousRunSummary,
             readableRepos,
+            repo.agentMemoryEnabled === true,
           );
 
     return {

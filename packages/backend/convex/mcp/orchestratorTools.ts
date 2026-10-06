@@ -8,6 +8,7 @@ import {
   mcpGetContext,
   mcpListUserRepos,
   repoRefLabel,
+  resolveAveThreadId,
   textResult,
   MCP_CLAUDE_MODELS,
   type McpCredentials,
@@ -16,9 +17,9 @@ import {
 import { defineTool, type EvaTool } from "./registry";
 
 const agentKindArg = z
-  .enum(["session", "task"])
+  .enum(["session", "task", "project"])
   .describe(
-    'Which kind of agent: "session" (interactive chat session) or "task" (quick task).',
+    'Which kind of agent: "session" (interactive chat session), "task" (quick task) or "project" (a project\'s sandbox chat).',
   );
 
 const agentIdArg = z
@@ -40,10 +41,7 @@ const modelArg = z
  * user can already reach in Eva.
  */
 function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
-  const { clerkUserId, entityId, entityKind } = credentials;
-
-  /** The master's own session id, carried on its sandbox token when present. */
-  const tokenMasterSessionId = entityKind === "session" ? entityId : undefined;
+  const { clerkUserId, aveThreadId } = credentials;
 
   async function resolveRepoScope(
     repoName: string | undefined,
@@ -58,53 +56,43 @@ function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
   }
 
   /**
-   * Watch needs a live Manager Ave session to wake. The orchestrator sandbox
-   * token carries that id; a user OAuth token does not, so we look the user's
-   * Ave up instead. There is no way to wake the OAuth MCP client itself.
+   * Watch needs a live Manager Ave thread to wake. Ave's own run carries its
+   * id; any other MCP caller registers against the user's live thread. There
+   * is no way to wake an OAuth MCP client itself.
    */
-  async function resolveWatchMasterSessionId(): Promise<
+  async function resolveWatchThreadId(): Promise<
     string | ReturnType<typeof errorResult>
   > {
-    if (tokenMasterSessionId !== undefined) return tokenMasterSessionId;
-    const { userId } = await mcpGetContext(ctx, clerkUserId);
-    const masterSessionId = await ctx.runQuery(
-      internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-      { userId },
-    );
-    if (masterSessionId === null) {
+    const threadId = await resolveAveThreadId(ctx, credentials);
+    if (threadId === undefined) {
       return errorResult(
-        "No Manager Ave session to wake when this agent finishes. Open Manager Ave in Eva first, then retry — or poll get_agent_state. An OAuth MCP client cannot be woken the way the master sandbox can.",
+        "No Manager Ave chat to wake when this agent finishes. Send Manager Ave a message in Eva first, then retry — or poll get_agent_state. An MCP client cannot be woken itself.",
       );
     }
-    return masterSessionId;
+    return threadId;
   }
 
   return {
     clerkUserId,
-    entityId,
-    tokenMasterSessionId,
+    aveThreadId,
     resolveRepoScope,
-    resolveWatchMasterSessionId,
+    resolveWatchThreadId,
   };
 }
 
 /**
  * Fleet tools every MCP caller gets: list/inspect/stop/create-session/watch.
- * send_agent_message stays behind the orchestrator gate — it is the one tool
- * that is defined as speaking *as the master session*.
+ * send_agent_message stays behind the Ave gate — it is the one tool defined as
+ * speaking *as Manager Ave*.
  */
 export function fleetTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
 ): EvaTool[] {
   const tools: EvaTool[] = [];
-  const {
-    clerkUserId,
-    entityId,
-    tokenMasterSessionId,
-    resolveRepoScope,
-    resolveWatchMasterSessionId,
-  } = fleetHelpers(credentials, ctx);
+  const { clerkUserId, aveThreadId, resolveRepoScope, resolveWatchThreadId } =
+    fleetHelpers(credentials, ctx);
+  const { entityId } = credentials;
 
   // ───────────────────────────────────────────────────────────────────────────
   // list_agents
@@ -169,7 +157,7 @@ export function fleetTools(
     defineTool({
       name: "get_agent_state",
       description:
-        "Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated.",
+        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight.',
       mutating: false,
       input: {
         kind: agentKindArg,
@@ -200,7 +188,7 @@ export function fleetTools(
     defineTool({
       name: "stop_agent",
       description:
-        "Cancel the agent's in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again.",
+        'Cancel the agent\'s in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again. For a project this stops only its sandbox chat; a running build keeps going and the reply says so with "buildRunning" (use cancel_project_build to stop it).',
       mutating: true,
       input: {
         kind: agentKindArg,
@@ -208,12 +196,21 @@ export function fleetTools(
       },
       handler: async ({ kind, id }) => {
         await mcpGetContext(ctx, clerkUserId);
-        await ctx.runAction(internal.mcp.nodeActions.orchestratorStopAgent, {
-          clerkUserId,
+        const { buildRunning } = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorStopAgent,
+          { clerkUserId, kind, id },
+        );
+        return textResult({
           kind,
           id,
+          status: "cancel_requested",
+          ...(buildRunning
+            ? {
+                buildRunning,
+                note: "The project build is still running. Only its sandbox chat was cancelled; call cancel_project_build if the user wants the build stopped too.",
+              }
+            : {}),
         });
-        return textResult({ kind, id, status: "cancel_requested" });
       },
     }),
   );
@@ -346,7 +343,7 @@ export function fleetTools(
             title,
             message,
             baseBranch,
-            masterSessionId: tokenMasterSessionId,
+            aveThreadId,
             linkedRepoIds,
             repoGroupId,
             installDependencies,
@@ -379,21 +376,21 @@ export function fleetTools(
     defineTool({
       name: "watch_agent",
       description:
-        "Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From a user MCP token this registers against your Manager Ave session, not the MCP client (which cannot be woken).",
+        'Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From any other MCP client this registers against your Manager Ave chat, not the client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.',
       mutating: true,
       input: {
         kind: agentKindArg,
         id: agentIdArg,
       },
       handler: async ({ kind, id }) => {
-        const master = await resolveWatchMasterSessionId();
-        if (typeof master !== "string") return master;
+        const threadId = await resolveWatchThreadId();
+        if (typeof threadId !== "string") return threadId;
         await mcpGetContext(ctx, clerkUserId);
         await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
           clerkUserId,
           kind,
           id,
-          masterSessionId: master,
+          aveThreadId: threadId,
         });
         return textResult({ kind, id, watched: true });
       },
@@ -415,7 +412,7 @@ export function fleetTools(
           clerkUserId,
           kind,
           id,
-          masterSessionId: undefined,
+          aveThreadId: undefined,
         });
         return textResult({ kind, id, watched: false });
       },
@@ -426,15 +423,15 @@ export function fleetTools(
 }
 
 /**
- * Tools that only the user's master ("orchestrator") session gets.
- * send_agent_message stays here because it is defined as the master speaking.
+ * Tools only Manager Ave's own run gets. send_agent_message stays here because
+ * it is defined as Ave speaking.
  */
 export function orchestratorTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
 ): EvaTool[] {
   const tools: EvaTool[] = [];
-  const { clerkUserId, tokenMasterSessionId } = fleetHelpers(credentials, ctx);
+  const { clerkUserId, aveThreadId } = fleetHelpers(credentials, ctx);
 
   // ───────────────────────────────────────────────────────────────────────────
   // send_agent_message
@@ -463,7 +460,7 @@ The message is marked as sent via MCP, and the agent is registered so you are no
             id,
             message,
             model,
-            masterSessionId: tokenMasterSessionId,
+            aveThreadId,
             sentViaOrchestrator: true,
           },
         );

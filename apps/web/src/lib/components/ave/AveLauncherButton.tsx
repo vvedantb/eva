@@ -66,7 +66,7 @@ export function AveLauncherButton({
             // Nudging the button under the cursor while it is being dragged
             // reads as the drag lagging, so hover growth is dropped mid-drag.
             isDragging ? "cursor-grabbing" : "cursor-grab hover:scale-[1.03]",
-            // AveMark clips the star. The sandbox pip hangs off the corner
+            // AveMark clips the star. The working pip hangs off the corner
             // like a rail tile, so this circle must not clip descendants.
             isOpen
               ? "bg-popover/95 text-popover-foreground backdrop-blur-md"

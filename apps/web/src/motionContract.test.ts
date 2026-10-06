@@ -298,18 +298,15 @@ describe("bars animate transform, not geometry", () => {
   );
 
   /**
-   * The diffs toolbar's bar was a hand-rolled duplicate of `Progress` and had to
-   * be fixed separately from it. Reusing the primitive is what keeps it fixed.
+   * The diffs toolbar's bar was a hand-rolled duplicate of `Progress` that
+   * animated `width`. The bar is gone; a width-animated one must not return.
    */
-  it("the diffs toolbar reuses the Progress primitive", () => {
+  it("the diffs toolbar does not hand-roll a width-animated bar", () => {
     const source = stripComments(
       readFileSync(
         join(webSrc, "lib/components/sandbox/DiffsToolbar.tsx"),
         "utf8",
       ),
-    );
-    expect(source, "a hand-rolled bar drifts from the primitive").toContain(
-      "<Progress",
     );
     expect(source).not.toMatch(/style=\{\{[^}]*\bwidth\s*:/);
   });

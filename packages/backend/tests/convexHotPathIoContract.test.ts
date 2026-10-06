@@ -104,6 +104,15 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     expect(messages).toContain("messages.some(messageNeedsUrlResolution)");
   });
 
+  test("listByParent ships activity steps without their expanded-only detail", () => {
+    expect(source("_messages/activityLog.ts")).toContain(
+      "export function trimActivityLogForTranscript",
+    );
+    const list = definitionBody("messages.ts", "listByParent");
+    expect(list).toContain("trimActivityLogForTranscript");
+    expect(source("messages.ts")).toContain("export const activityLogById");
+  });
+
   test("users.getMany reads only the requested docs", () => {
     const body = definitionBody("users.ts", "getMany");
     expect(body).toContain("ctx.db.get(id)");

@@ -28,6 +28,7 @@ export {
   watchConvexReadiness,
   runStopCommands,
   getPreviewUrl,
+  previewUrlForAuthorizedSandbox,
   prepareSandbox,
   createOrResumeSandbox,
   fetchBaseBranch,
@@ -75,3 +76,5 @@ export {
 } from "./_sandbox_runtime/sessions";
 
 export { prepareLinkedRepo } from "./_sandbox_runtime/linkedRepos";
+
+export { forkSession } from "./_sandbox_runtime/sessionFork";

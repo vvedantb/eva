@@ -143,11 +143,19 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     const patch: {
       activeWorkflowId: undefined;
       syntheticTurnMessageId: undefined;
+      pendingTurn: undefined;
       updatedAt: number;
       status?: "closed";
     } = {
       activeWorkflowId: undefined,
       syntheticTurnMessageId: undefined,
+      // The dead turn's prompt is still sitting in the handoff slot whenever no
+      // daemon claimed it, and nothing else ever empties that slot: claim and
+      // saveResult are both paths this turn never reached. Left behind, the
+      // orphan blocks `ensurePendingTurn` for every later turn, so the session
+      // opens turns no daemon can claim and stalls each one out forever.
+      // Cleared before `drainQueue` restages the next message.
+      pendingTurn: undefined,
       updatedAt: Date.now(),
     };
     if (opts.sandboxStopped) {
@@ -158,6 +166,12 @@ const sessionChatAdapter: ChatSurfaceAdapter<
       patch.status = "closed";
     }
     await ctx.db.patch(id, patch);
+    // The daemon polls the mirror row, not the session, so an uncleared copy
+    // there hands a dead turn's prompt to the next warm process.
+    const session = await ctx.db.get(id);
+    if (session) {
+      await syncSessionDaemonState(ctx, session, { pendingTurn: undefined });
+    }
   },
   drainQueue: (ctx, id) => startNextQueuedSessionMessage(ctx, id),
   scheduleCheck: (ctx, id, delayMs, args) =>

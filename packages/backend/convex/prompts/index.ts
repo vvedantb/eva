@@ -1,4 +1,7 @@
 export {
+  AGENT_MEMORY_DIR,
+  AGENT_MEMORY_FORMAT,
+  buildAgentMemoryBlock,
   buildRootDirectoryInstruction,
   buildCustomInstructionsBlock,
   buildReadableReposBlock,
@@ -6,6 +9,7 @@ export {
   buildLinkedReposSection,
   CHAT_UI_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
+  VISUAL_CHANGE_INSTRUCTION,
 } from "./shared";
 export type { LinkedRepoPromptRow } from "./shared";
 export { PARSE_PROMPT, INTERVIEW_PROMPT, GENERATE_PROMPT } from "./doc";
