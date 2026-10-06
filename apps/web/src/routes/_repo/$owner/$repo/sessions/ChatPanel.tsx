@@ -13,7 +13,7 @@ import {
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
-import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -359,12 +359,10 @@ export function ChatPanel({
       ),
   });
 
-  const transcriptTail = isStartupStreaming ? (
-    <StreamingActivityDisplay
-      activity={startupStreamingActivity}
-      isSandboxStartup
-    />
-  ) : null;
+  const transcriptTail = sandboxStartupTail(
+    startupStreamingActivity,
+    isStartupStreaming,
+  );
 
   const capturedPlans = proposedPlans ?? [];
   const lastAssistantMessageId = [...messages]

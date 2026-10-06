@@ -220,6 +220,20 @@ export function StreamingActivityDisplay({
 }
 
 /**
+ * Live sandbox startup block for a chat's `transcriptTail`. Null when hidden
+ * so the transcript's empty state shows instead. Shared by the session,
+ * quick task and project chats so startup renders in one place everywhere.
+ */
+export function sandboxStartupTail(
+  activity: string | undefined,
+  show: boolean,
+): ReactNode {
+  return show ? (
+    <StreamingActivityDisplay activity={activity} isSandboxStartup />
+  ) : null;
+}
+
+/**
  * The untrimmed activity payload for a transcript message, fetched only once a
  * reader opens a fold that could show the stripped step detail.
  *

@@ -407,6 +407,7 @@ export function ProjectDetailClient({
                     projectId={projectId}
                     isSandboxActive={isSandboxActive}
                     isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
                     onOpenAgentsTab={openAgentsTab}
