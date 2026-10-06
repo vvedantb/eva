@@ -6,7 +6,11 @@ import { formatDurationMsShort } from "@eva/shared/duration";
 import { getInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
-import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
+import type {
+  SandboxClient,
+  SandboxHandle,
+  SandboxMount,
+} from "../_sandbox/provider";
 import {
   execHandle,
   LEGACY_WORKSPACE_DIR,
@@ -40,6 +44,15 @@ import {
   AGENT_CLI_PATH_LINE,
   COREPACK_SANDBOX_ENV,
 } from "../_sandbox/vercelEnvFile";
+import {
+  DRIVE_CACHE_ENV,
+  DRIVE_CACHE_READER,
+  DRIVE_CACHE_WRITER,
+  DRIVE_MOUNT_PATH,
+  driveCacheName,
+  driveCacheSetupScript,
+  type DriveCacheRole,
+} from "../_sandbox/driveCache";
 import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
@@ -317,12 +330,25 @@ export async function createSandbox(
   // "Fork session": fork this sandbox (provider-side) instead of booting
   // `snapshotName`.
   forkFrom?: string,
+  /**
+   * How this sandbox uses the repo's shared package cache Drive. Defaults to
+   * the read-only reader role; only the seed-prep and group-builder sandboxes
+   * pass `writer`, since a Drive allows one read-write mount at a time.
+   * See ../_sandbox/driveCache.ts.
+   */
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<SandboxHandle> {
+  // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
+  // only on paths that never resolve a repo, which then get no mount at all.
+  const repoId = sandboxEnvVars.REPO_ID;
+  const driveMountMode: SandboxMount["mode"] =
+    driveCacheRole === DRIVE_CACHE_WRITER ? "read-write" : "snapshot";
   const details = [
     `installation=${installationId}`,
     forkFrom ? `forkFrom=${forkFrom}` : "forkFrom=none",
     snapshotName ? `snapshot=${snapshotName}` : "snapshot=none",
     lifecycle.ephemeral ? "ephemeral=true" : "ephemeral=false",
+    `driveCache=${repoId ? driveCacheRole : "none"}`,
   ].join(", ");
   return await runLoggedGitStep("createSandbox", details, async () => {
     const timeoutSeconds =
@@ -364,6 +390,15 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
+      mounts: repoId
+        ? [
+            {
+              path: DRIVE_MOUNT_PATH,
+              volumeName: driveCacheName(repoId),
+              mode: driveMountMode,
+            },
+          ]
+        : undefined,
     });
     logGit(
       `createSandbox: created id=${sandbox.id}, cpu=${sandbox.cpu}, memory=${sandbox.memory}, disk=${sandbox.disk}`,
@@ -383,11 +418,21 @@ export async function createSandbox(
           renderEvaEnvFile({
             VNC_RESOLUTION: "1920x1080",
             ...COREPACK_SANDBOX_ENV,
+            // Safe to set unconditionally: driveCacheSetupScript guarantees the
+            // cache root exists and is writable even when no Drive attached, so
+            // the worst case is an ordinary empty local cache.
+            ...DRIVE_CACHE_ENV,
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),
           }) + AGENT_CLI_PATH_LINE,
         ),
+      );
+      // Must run before any install: it turns the raw Drive mount into the
+      // writable cache root the env above points at. Never fails a create —
+      // the script itself soft-fails to a plain directory.
+      await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
+        execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources
       // eva-env. Never fail create over this hook.
@@ -1580,6 +1625,8 @@ export async function createSandboxAndPrepareRepo(
   // fork carries the repo checkout, so it takes the snapshot path below. No
   // fallback on failure — the source's data is the point of a fork.
   forkFrom?: string,
+  // Shared package-cache Drive role. See createSandbox.driveCacheRole.
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
   let sandbox: SandboxHandle | undefined;
   try {
@@ -1600,6 +1647,7 @@ export async function createSandboxAndPrepareRepo(
             readyTimeoutSeconds,
             onSandboxAcquired,
             forkFrom,
+            driveCacheRole,
           );
         } catch (err) {
           if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
@@ -1617,6 +1665,8 @@ export async function createSandboxAndPrepareRepo(
               undefined,
               readyTimeoutSeconds,
               onSandboxAcquired,
+              undefined, // forkFrom — the fallback is a fresh boot
+              driveCacheRole,
             );
           } else {
             throw err;
