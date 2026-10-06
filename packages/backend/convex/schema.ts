@@ -58,6 +58,7 @@ import {
   sessionDaemonStateFields,
   turnFields,
   chatUiPanelFields,
+  envVarRequestFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -162,8 +163,7 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields)
-    .index("by_parent", ["parentId"]),
+  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",
@@ -205,6 +205,11 @@ const schema = defineSchema({
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Secret requests the agent posts as an inline card (`request_env_var`).
+  // Status only: the value goes to the encrypted env var stores.
+  envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
+    "parentId",
+  ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
   // tab. Short-lived: cleared when the entity's sandbox stops.
   previewToolCalls: defineTable(previewToolCallFields).index(

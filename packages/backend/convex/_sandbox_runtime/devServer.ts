@@ -10,6 +10,7 @@ import {
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { ensureSwapFile } from "./swap";
+import { EVA_ENV_FILE } from "../_sandbox/vercelEnvFile";
 
 const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
@@ -285,8 +286,6 @@ async function restoreSeededSupabaseDump(
     600,
   );
 }
-
-const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 
 const DEVSERVER_LOCK = "/tmp/eva-devserver.lock";
 const DEVSERVER_LAST_LAUNCH = "/tmp/eva-devserver-last-launch";

@@ -46,10 +46,16 @@ import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
+import {
+  api,
+  type BackgroundAgentEntry,
+  type Doc,
+  type Id,
+} from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
@@ -84,6 +90,16 @@ export type { ChatBodyMessage };
  */
 export interface ChatSendOptions {
   draftContent?: string;
+}
+
+/** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
+interface InlineCard {
+  _id: string;
+  messageId?: string;
+  createdAt: number;
+  card:
+    | { kind: "panel"; spec: string }
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
 }
 
 interface ChatBodyProps {
@@ -448,14 +464,36 @@ function ChatBodyInner({
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
 
-  // Agent-composed UI panels (`render_ui`). One query per chat covers all three
+  // Agent-posted inline cards: composed panels (`render_ui`) and secret
+  // requests (`request_env_var`). One query each per chat covers all three
   // surfaces, since every one of them renders through this component.
   const chatUiPanels = useQuery(
     api.chatUi.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const envVarRequests = useQuery(
+    api.envVarRequests.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const panelPlacement = placeChatUiPanels(
-    chatUiPanels ?? [],
+    [
+      ...(chatUiPanels ?? []).map(
+        (panel): InlineCard => ({
+          _id: panel._id,
+          messageId: panel.messageId,
+          createdAt: panel.createdAt,
+          card: { kind: "panel", spec: panel.spec },
+        }),
+      ),
+      ...(envVarRequests ?? []).map(
+        (request): InlineCard => ({
+          _id: request._id,
+          messageId: request.messageId,
+          createdAt: request.createdAt,
+          card: { kind: "envVarRequest", request },
+        }),
+      ),
+    ],
     new Set(displayMessages.map((message) => message._id)),
   );
 
@@ -503,13 +541,21 @@ function ChatBodyInner({
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
     panels.length === 0
       ? undefined
-      : panels.map((panel) => (
-          <ChatUiPanel
-            key={panel._id}
-            spec={panel.spec}
-            onReply={handlePanelReply}
-          />
-        ));
+      : panels.map(({ _id, card }) =>
+          card.kind === "panel" ? (
+            <ChatUiPanel
+              key={_id}
+              spec={card.spec}
+              onReply={handlePanelReply}
+            />
+          ) : (
+            <EnvVarRequestCard
+              key={_id}
+              request={card.request}
+              onReply={handlePanelReply}
+            />
+          ),
+        );
 
   /**
    * `isBacklog` marks a row the chat opened already scrolled past, which skips

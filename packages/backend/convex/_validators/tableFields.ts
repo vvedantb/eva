@@ -1540,6 +1540,38 @@ export const chatUiPanelFields = {
   createdAt: v.number(),
 };
 
+export const envVarRequestScopeValidator = v.union(
+  v.literal("repo"),
+  v.literal("team"),
+);
+
+/**
+ * One agent request (`request_env_var`) for a secret the user types into an
+ * inline card. The value never touches this row: saving writes it encrypted to
+ * the repo or team env vars and into the live sandbox, and only the status
+ * lands here.
+ */
+export const envVarRequestFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the card appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  key: v.string(),
+  reason: v.string(),
+  scope: envVarRequestScopeValidator,
+  repoId: v.id("githubRepos"),
+  /** Set when `scope` is "team": the repo's team at request time. */
+  teamId: v.optional(v.id("teams")),
+  /** The chat's sandbox at request time, for the live write. */
+  sandboxId: v.optional(v.string()),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("saved"),
+    v.literal("declined"),
+  ),
+  createdAt: v.number(),
+  answeredAt: v.optional(v.number()),
+};
+
 /**
  * One agent request to run a WebMCP tool inside the chat's live preview. The
  * sandbox cannot reach the page, so the request is relayed through the user's
