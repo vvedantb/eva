@@ -108,6 +108,8 @@ interface ChatBodyProps {
    */
   isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
+  queueLabel?: string;
   /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
   heldFollowUps?: ChatHeldFollowUp[];
   streamingActivity?: string;
@@ -142,7 +144,8 @@ interface ChatBodyProps {
   disabledReason?: string;
   /**
    * Wakes the sandbox. Set only when it is stopped and not already toggling;
-   * gives the empty state its button and the blocked-send toast its action.
+   * gives the empty state its button. Sending also wakes it (the message
+   * queues until Eva is up), so this is the explicit alternative.
    */
   onStartSandbox?: () => void;
   /** Model, account and trait controls. Absent: no picker (fixed model). */
@@ -231,6 +234,7 @@ function ChatBodyInner({
   messages,
   isLoadingMessages = false,
   queuedMessages,
+  queueLabel,
   heldFollowUps,
   streamingActivity,
   streamingContent,
@@ -593,7 +597,7 @@ function ChatBodyInner({
               <ChatEmptyState
                 title={emptyStateTitle}
                 description={emptyStateDescription}
-                {...(isInputDisabled && onStartSandbox
+                {...(onStartSandbox
                   ? {
                       action: {
                         label: SANDBOX_CHAT_COPY.wakeAction,
@@ -660,6 +664,7 @@ function ChatBodyInner({
                 repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
+                queueLabel={queueLabel}
                 heldFollowUps={heldFollowUps}
                 messageHistory={messageHistory}
                 isExecuting={isExecuting}

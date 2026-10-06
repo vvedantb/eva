@@ -31,6 +31,13 @@ import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import type { OrchestratorNotifyChild } from "../orchestratorShared";
 import {
+  findUsageLimitHold,
+  type UsageLimitHold,
+} from "../_taskWorkflow/usageLimitReset";
+import { requestSessionSandboxStart } from "../_sessions/sandbox";
+import { wakeTaskSandboxForQueue } from "../_agentTasks/sandbox";
+import { wakeProjectSandboxForQueue } from "../_projects/sandbox";
+import {
   bindTurnWorkflow,
   closeTurn,
   findOpenSessionTurn,
@@ -48,6 +55,22 @@ const QUEUE_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
  * the turn's own completion drains the queue instead.
  */
 const BACKGROUND_AGENT_DRAIN_DELAY_MS = 15 * 1000;
+
+/** Where a chat's sandbox is, as the queue sees it. */
+type QueueSandboxState = "awake" | "asleep" | "transitioning";
+
+/**
+ * One mapping for all three surfaces' sandbox status. Unset (a task or project
+ * that never previewed) is asleep. Stopping counts as transitioning: a start
+ * now would race the stop, so the message waits for the next wake.
+ */
+function sandboxStateFromStatus(
+  status: "active" | "starting" | "stopping" | "closed" | undefined,
+): QueueSandboxState {
+  if (status === "active") return "awake";
+  if (status === "starting" || status === "stopping") return "transitioning";
+  return "asleep";
+}
 
 /** Outcome of a queue config's pre-start guard: `ok: false` aborts before anything is cleared or inserted. */
 type ChatQueueGuardResult<TPrepared> =
@@ -69,6 +92,13 @@ type ChatQueueConfig<
 > = {
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
   hasActiveWorkflow: (entity: TEntity) => boolean;
+  /**
+   * Where the chat's sandbox is. Only quiet drains read it: a message queued
+   * while Eva sleeps wakes her, and the sandbox-ready drain sends it.
+   */
+  sandboxState: (entity: TEntity) => QueueSandboxState;
+  /** Starts the sleeping sandbox (`sandboxState` returned "asleep"). */
+  wakeSandbox: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
   /** Backgrounded Agent/Task subagents, which outlive the turn that spawned them. */
   backgroundAgents: (entity: TEntity) => BackgroundAgentEntry[] | undefined;
   /** The daemon-minted continuation turn, if one is open. */
@@ -203,10 +233,46 @@ async function scheduleDrainAtBackgroundAgentExpiry<
 }
 
 /**
+ * The usage-limit hold on `next`, if any: the chat's newest turn ran out of
+ * usage on the same provider `next` would run on. A message moved to another
+ * provider is not held — that is how switching provider sends the queue now.
+ */
+export async function usageLimitHoldFor(
+  ctx: MutationCtx,
+  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  next: Doc<"queuedMessages">,
+): Promise<UsageLimitHold | null> {
+  const recent = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .order("desc")
+    .take(20);
+  const hold = findUsageLimitHold(recent, Date.now());
+  if (hold === null) return null;
+  if (hold.model === undefined) return hold;
+  const heldProvider = getAIModelProvider(normalizeAIModel(hold.model));
+  const nextProvider = getAIModelProvider(
+    normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+  );
+  return heldProvider === nextProvider ? hold : null;
+}
+
+/**
  * Dequeues and starts the next pending message for one chat surface. Single
  * implementation shared by sessions, project chat, and task chat — the three
  * exported `startNextQueuedX` functions below are thin `config` bindings so a
  * fix here reaches all three surfaces by construction.
+ *
+ * `trigger: "quiet"` is for the drains that are NOT a turn ending (sandbox
+ * ready, enqueue, a usage-limit resume, a provider switch):
+ * - they never wake a watching orchestrator. An empty queue there means
+ *   "nothing was waiting", not "the child just went idle"; notifying, merely
+ *   starting a watched chat's sandbox woke its master with a spurious
+ *   "finished: completed" carrying the tail of an older reply.
+ * - they only start a turn on an awake sandbox. A sleeping one is woken
+ *   instead, and its sandbox-ready drain sends the message. A turn-ended drain
+ *   skips this: the turn just ran there, and the task chat workflow starts its
+ *   own sandbox when a follow-up outlives the first run.
  */
 async function startNextQueuedChatMessage<
   TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
@@ -216,6 +282,7 @@ async function startNextQueuedChatMessage<
   ctx: MutationCtx,
   id: TId,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
+  trigger: "turn-ended" | "quiet",
 ): Promise<boolean> {
   const entity = await config.getEntity(ctx, id);
   if (!entity) return false;
@@ -232,7 +299,10 @@ async function startNextQueuedChatMessage<
    * child went idle". Hooking that single fact keeps mid-queue turns silent
    * without every completion mutation remembering to check.
    */
-  const watchedChild = config.orchestratorNotifyChild(entity, id);
+  const watchedChild =
+    trigger === "turn-ended"
+      ? config.orchestratorNotifyChild(entity, id)
+      : undefined;
   async function notifyWatchingOrchestrator(status: string): Promise<void> {
     if (!watchedChild) return;
     await ctx.scheduler.runAfter(
@@ -250,6 +320,28 @@ async function startNextQueuedChatMessage<
   if (!nextMessage) {
     await notifyWatchingOrchestrator("completed");
     return false;
+  }
+
+  // The last turn ran out of usage: sending now would only fail again, so the
+  // queue waits for the reset. Every drain that lands here books the resume —
+  // duplicates are harmless, since the first to run starts the turn and makes
+  // the rest find the surface busy.
+  const hold = await usageLimitHoldFor(ctx, id, nextMessage);
+  if (hold !== null) {
+    await ctx.scheduler.runAt(
+      hold.resumeAt,
+      internal._queues.helpers.drainQueueQuietly,
+      { parentId: id },
+    );
+    // The turn that hit the limit failed and nothing runs until the reset.
+    await notifyWatchingOrchestrator("error");
+    return false;
+  }
+
+  if (trigger === "quiet") {
+    const sandbox = config.sandboxState(entity);
+    if (sandbox === "asleep") await config.wakeSandbox(ctx, entity);
+    if (sandbox !== "awake") return false;
   }
 
   await ctx.db.delete(nextMessage._id);
@@ -337,6 +429,8 @@ const sessionQueueConfig: ChatQueueConfig<
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
   hasActiveWorkflow: (session) => session.activeWorkflowId !== undefined,
+  sandboxState: (session) => sandboxStateFromStatus(session.status),
+  wakeSandbox: (ctx, session) => requestSessionSandboxStart(ctx, session),
   backgroundAgents: (session) => session.backgroundAgents,
   syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
   streamingEntityId: (id) => String(id),
@@ -455,23 +549,6 @@ const sessionQueueConfig: ChatQueueConfig<
   defaultStartErrorMessage: "Failed to start queued message.",
 };
 
-/**
- * `sessionQueueConfig` with the orchestrator wake-up suppressed, for the one
- * drain that is NOT a turn ending: `sandboxReady` (`_sessions/sandbox.ts`)
- * drains after a sandbox start/resume, where an empty queue means "nothing was
- * waiting" rather than "the child just went idle". Left on the notifying config,
- * merely starting a watched session's sandbox woke its master with a spurious
- * "finished: completed" carrying the tail of an older reply.
- */
-const sessionSandboxReadyQueueConfig: ChatQueueConfig<
-  Id<"sessions">,
-  Doc<"sessions">,
-  SessionQueuePrepared
-> = {
-  ...sessionQueueConfig,
-  orchestratorNotifyChild: () => undefined,
-};
-
 type ChatQueuePrepared = {
   providerAccountId: Id<"userProviderAccounts"> | undefined;
 };
@@ -483,6 +560,9 @@ const projectChatQueueConfig: ChatQueueConfig<
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
   hasActiveWorkflow: (project) => project.activeChatWorkflowId !== undefined,
+  sandboxState: (project) =>
+    sandboxStateFromStatus(project.reviewProjectSandboxStatus),
+  wakeSandbox: wakeProjectSandboxForQueue,
   backgroundAgents: (project) => project.backgroundAgents,
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
   streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
@@ -579,6 +659,8 @@ const taskChatQueueConfig: ChatQueueConfig<
   hasActiveWorkflow: (task) =>
     task.activeChatWorkflowId !== undefined ||
     task.activeWorkflowId !== undefined,
+  sandboxState: (task) => sandboxStateFromStatus(task.reviewTaskSandboxStatus),
+  wakeSandbox: wakeTaskSandboxForQueue,
   backgroundAgents: (task) => task.backgroundAgents,
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
@@ -669,23 +751,7 @@ export function startNextQueuedSessionMessage(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
 ): Promise<boolean> {
-  return startNextQueuedChatMessage(ctx, sessionId, sessionQueueConfig);
-}
-
-/**
- * Dequeues after a sandbox start/resume. Identical to
- * `startNextQueuedSessionMessage` except it never wakes a watching orchestrator
- * — see `sessionSandboxReadyQueueConfig`.
- */
-export function startNextQueuedSessionMessageAfterSandboxReady(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-): Promise<boolean> {
-  return startNextQueuedChatMessage(
-    ctx,
-    sessionId,
-    sessionSandboxReadyQueueConfig,
-  );
+  return startNextQueuedChatMessage(ctx, sessionId, sessionQueueConfig, "turn-ended");
 }
 
 /** Dequeues and starts the next pending chat message for a project. */
@@ -693,7 +759,7 @@ export function startNextQueuedProjectChatMessage(
   ctx: MutationCtx,
   projectId: Id<"projects">,
 ): Promise<boolean> {
-  return startNextQueuedChatMessage(ctx, projectId, projectChatQueueConfig);
+  return startNextQueuedChatMessage(ctx, projectId, projectChatQueueConfig, "turn-ended");
 }
 
 /** Dequeues and starts the next pending chat message for an agent task. */
@@ -701,8 +767,53 @@ export function startNextQueuedTaskChatMessage(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<boolean> {
-  return startNextQueuedChatMessage(ctx, taskId, taskChatQueueConfig);
+  return startNextQueuedChatMessage(ctx, taskId, taskChatQueueConfig, "turn-ended");
 }
+
+/**
+ * A drain that is not a turn ending — sandbox ready, a fresh enqueue, a
+ * usage-limit resume, a provider switch. Never wakes a watching orchestrator,
+ * and wakes a sleeping sandbox rather than starting a turn on it (see
+ * `startNextQueuedChatMessage`).
+ */
+export async function drainChatQueueQuietly(
+  ctx: MutationCtx,
+  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+): Promise<boolean> {
+  const sessionId = ctx.db.normalizeId("sessions", parentId);
+  if (sessionId) {
+    return startNextQueuedChatMessage(
+      ctx,
+      sessionId,
+      sessionQueueConfig,
+      "quiet",
+    );
+  }
+  const taskId = ctx.db.normalizeId("agentTasks", parentId);
+  if (taskId) {
+    return startNextQueuedChatMessage(ctx, taskId, taskChatQueueConfig, "quiet");
+  }
+  const projectId = ctx.db.normalizeId("projects", parentId);
+  if (projectId) {
+    return startNextQueuedChatMessage(
+      ctx,
+      projectId,
+      projectChatQueueConfig,
+      "quiet",
+    );
+  }
+  return false;
+}
+
+/** Scheduled resume for a queue held by a usage limit (`usageLimitHoldFor`). */
+export const drainQueueQuietly = internalMutation({
+  args: { parentId: queuedMessageFields.parentId },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await drainChatQueueQuietly(ctx, args.parentId);
+    return null;
+  },
+});
 
 /**
  * Retry drain for the releases the surfaces cannot signal themselves: the last

@@ -22,6 +22,7 @@ import {
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
+import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -188,6 +189,21 @@ export function ProjectSandboxChatPanel({
     Boolean(project?.activeChatWorkflowId) ||
     isAssistantTurnInProgress(messages ?? []);
 
+  const queueGate = useChatQueueGate({
+    parentId: projectId,
+    messages: messages ?? [],
+    queuedMessages: queuedMessages ?? [],
+    model,
+    isSandboxActive,
+    setModel,
+  });
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
+  });
+
   // A thrown send rolls the whole turn back (no placeholder, no workflow) and
   // the composer has already cleared, so the prompt only exists here. The toast
   // owns the failure and hands the text back through the same `drafts` row the
@@ -221,7 +237,7 @@ export function ProjectSandboxChatPanel({
     // meets expression-level control flow inside one (eva/no-value-block-in-try).
     const enqueueReasoningLevel =
       displayTraits.effortLevel ?? executionTraits.reasoningLevel;
-    if (isExecuting) {
+    if (isExecuting || composer.queuesSends) {
       try {
         await enqueueMessage({
           projectId,
@@ -270,12 +286,6 @@ export function ProjectSandboxChatPanel({
       throw error;
     }
   };
-
-  const composer = sandboxComposerState({
-    isSandboxActive,
-    isSwitchingAccount,
-    isExecuting,
-  });
 
   const handleCancel = async () => {
     await cancelExecution({ projectId });
@@ -327,6 +337,7 @@ export function ProjectSandboxChatPanel({
         messages={messages ?? []}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streaming?.currentActivity}
         streamingContent={streaming?.currentContent}
         streamingPendingQuestion={streaming?.pendingQuestion}
@@ -353,7 +364,7 @@ export function ProjectSandboxChatPanel({
         }
         modelPicker={{
           model,
-          setModel,
+          setModel: queueGate.setModel,
           modelOptions,
           accounts: displayAccounts,
           accountId: providerAccountId,
@@ -379,6 +390,7 @@ export function ProjectSandboxChatPanel({
         backgroundAgents={project?.backgroundAgents}
         sandboxRunning={isSandboxActive}
       />
+      {queueGate.switchDialog}
     </div>
   );
 }

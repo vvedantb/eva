@@ -19,7 +19,10 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
-import { startNextQueuedSessionMessage } from "../_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedSessionMessage,
+} from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
@@ -569,6 +572,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.sessionId);
     return null;
   },
 });

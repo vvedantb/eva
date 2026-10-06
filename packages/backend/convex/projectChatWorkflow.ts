@@ -24,7 +24,10 @@ import {
   clearStreamingActivity,
 } from "./_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "./streaming";
-import { startNextQueuedProjectChatMessage } from "./_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedProjectChatMessage,
+} from "./_queues/helpers";
 import {
   trackProjectChatWorkflow,
   PROJECT_CHAT_STREAM_PREFIX,
@@ -552,6 +555,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.projectId);
     return null;
   },
 });

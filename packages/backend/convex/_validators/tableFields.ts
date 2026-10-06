@@ -1037,6 +1037,9 @@ export const messageFields = {
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
   // stamped today; unclassified failures leave it unset.
   errorType: v.optional(errorTypeValidator),
+  // Usage-limit failures: when the provider said the window resets (ms). Holds
+  // the chat's queue until just after it — see `findUsageLimitHold`.
+  limitResetAt: v.optional(v.number()),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),

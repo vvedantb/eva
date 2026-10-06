@@ -15,6 +15,7 @@ import {
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
+import { usageLimitHoldFor } from "./_queues/helpers";
 
 /**
  * Idle sandbox sweep.
@@ -52,7 +53,7 @@ export const getSettingsInternal = internalQuery({
  * inserts when its sandbox comes up — so a fresh start always gets the full
  * idle window). Busy = the surface-specific "work in flight" flags the caller
  * passes, plus any queued follow-up, which will open a turn as soon as the
- * current one ends.
+ * current one ends — unless a usage limit holds it.
  */
 async function decideIdle(
   ctx: MutationCtx,
@@ -71,14 +72,18 @@ async function decideIdle(
     .first();
   const queued = await ctx.db
     .query("queuedMessages")
-    .withIndex("by_parent_and_created", (q) =>
-      q.eq("parentId", args.parentId),
-    )
+    .withIndex("by_parent_and_order", (q) => q.eq("parentId", args.parentId))
+    .order("asc")
     .first();
+  // A queue waiting out a usage limit sends nothing for hours, so it must not
+  // keep the VM billing; its resume drain wakes the sandbox again.
+  const queueWillSend =
+    queued !== null &&
+    (await usageLimitHoldFor(ctx, args.parentId, queued)) === null;
   return idleStopDecision({
     now: Date.now(),
     lastActivityAt: lastMessage?.timestamp ?? args.fallbackActivityAt,
-    busy: args.busy || queued !== null,
+    busy: args.busy || queueWillSend,
     idleMs: args.idleMinutes * MINUTE_MS,
   });
 }

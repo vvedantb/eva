@@ -75,3 +75,55 @@ export function parseUsageLimitResetTime(errorMsg: string): number | null {
   // Add 2-minute buffer so the limit is definitely cleared
   return resetDate.getTime() + 2 * 60 * 1000;
 }
+
+/**
+ * Extra wait on top of `parseUsageLimitResetTime`'s 2-minute margin before a
+ * held chat queue sends: ~10 minutes after the provider's stated reset, so a
+ * window that clears a little late does not fail the queued turn too.
+ */
+export const USAGE_LIMIT_QUEUE_RESUME_DELAY_MS = 8 * 60 * 1000;
+
+/** A chat queue waiting out a usage limit. */
+export interface UsageLimitHold {
+  /** When the held queue sends (ms since epoch). */
+  resumeAt: number;
+  /** Model stamp of the turn that ran out; undefined on a legacy turn. */
+  model: string | undefined;
+}
+
+/**
+ * Whether a chat's queue is waiting out a usage limit: the newest real turn
+ * failed on one and its reset (plus the resume delay) is still ahead. Returns
+ * the failed turn's model so callers only hold messages on that provider — a
+ * message moved to another provider has no reason to wait.
+ */
+export function findUsageLimitHold(
+  messagesNewestFirst: ReadonlyArray<{
+    role: string;
+    isSystemAlert?: boolean;
+    errorType?: string;
+    limitResetAt?: number;
+    model?: string;
+  }>,
+  now: number,
+): UsageLimitHold | null {
+  let resumeAt: number | undefined;
+  for (const message of messagesNewestFirst) {
+    if (message.isSystemAlert === true) continue;
+    if (resumeAt === undefined) {
+      if (
+        message.role !== "assistant" ||
+        message.errorType !== "rate_limit" ||
+        message.limitResetAt === undefined
+      ) {
+        return null;
+      }
+      resumeAt = message.limitResetAt + USAGE_LIMIT_QUEUE_RESUME_DELAY_MS;
+      if (resumeAt <= now) return null;
+      continue;
+    }
+    if (message.role === "user") return { resumeAt, model: message.model };
+    break;
+  }
+  return resumeAt === undefined ? null : { resumeAt, model: undefined };
+}
