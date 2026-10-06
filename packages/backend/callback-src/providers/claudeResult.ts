@@ -5,9 +5,7 @@ import type { JsonObject } from "../types.js";
  * a race with a user prompt on the same warm query. It is a stream boundary,
  * not an answer to the active turn, so finalizing it would discard the prompt.
  */
-export function isZeroWorkTaskNotificationResult(
-  message: JsonObject,
-): boolean {
+export function isZeroWorkTaskNotificationResult(message: JsonObject): boolean {
   const origin = message.origin;
   return (
     message.type === "result" &&

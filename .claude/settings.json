@@ -6,7 +6,9 @@
       "mcp__axiom__queryApl",
       "mcp__axiom__getSavedQueries",
       "mcp__axiom__checkMonitors",
-      "mcp__axiom__getMonitorHistory"
+      "mcp__axiom__getMonitorHistory",
+      "mcp__effect-docs__effect_docs_search",
+      "mcp__effect-docs__get_effect_doc"
     ],
     "deny": [
       "mcp__axiom__createDashboard",

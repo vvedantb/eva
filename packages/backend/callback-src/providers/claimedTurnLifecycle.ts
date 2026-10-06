@@ -53,7 +53,9 @@ export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
     throw new Error("Durable claimed turn did not include a lease identity");
   }
   if (lifecycle === "legacy" && turnLease !== null) {
-    throw new Error("Legacy claimed turn unexpectedly included a lease identity");
+    throw new Error(
+      "Legacy claimed turn unexpectedly included a lease identity",
+    );
   }
   if (turnLease !== null) {
     return {
@@ -80,7 +82,9 @@ export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
  */
 export function startClaimedTurn(turn: ClaimedTurn): void {
   if (claimedTurnLifecycleStatus() === "active") {
-    throw new Error("Cannot start a claimed turn while another claim is active");
+    throw new Error(
+      "Cannot start a claimed turn while another claim is active",
+    );
   }
   beginTurnOwnership("claim", turn.turnLease);
   beginTurnCheckpoint();

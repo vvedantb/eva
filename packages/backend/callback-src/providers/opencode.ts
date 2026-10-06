@@ -1,5 +1,12 @@
+import { Option, Schema } from "effect";
+import { NonEmptyText, lenient } from "../parse/schemaHelpers.js";
 import { opencodeToolToStep } from "../parse/toolSteps.js";
-import { probeOpencodeStateResult } from "../parse/toolResultCapture.js";
+import {
+  probeOpencodeStateResult,
+  readObject,
+  readString,
+  readTrimmedString,
+} from "../parse/toolResultCapture.js";
 import {
   syncOpencodeStateToPersist,
   writeOpencodeSessionState,
@@ -8,48 +15,64 @@ import { callbackState as S } from "../runtime/state.js";
 import type { CanonicalEvent, JsonObject, StreamLineResult } from "../types.js";
 import type { ProviderAdapter } from "./types.js";
 
+/** The `type` every translated OpenCode line is dispatched on. */
+const OpencodeEnvelope = Schema.Struct({
+  type: Schema.optional(lenient(Schema.String)),
+});
+
+/** A `reasoning` or `text` line, carrying its delta on `part.text`. */
+const TextPart = Schema.Struct({
+  part: Schema.Struct({ text: NonEmptyText }),
+});
+
+/**
+ * A step that finished because the model stopped. `messageID` is only read on
+ * a stopping step, and is lenient so a malformed id still ends the turn.
+ */
+const StepFinishStop = Schema.Struct({
+  part: Schema.Struct({
+    reason: Schema.Literal("stop"),
+    messageID: Schema.optional(lenient(NonEmptyText)),
+  }),
+});
+
+const decodeEnvelope = Schema.decodeUnknownOption(OpencodeEnvelope);
+const decodeTextPart = Schema.decodeUnknownOption(TextPart);
+const decodeStepFinishStop = Schema.decodeUnknownOption(StepFinishStop);
+
+/** The event type, or `undefined` when the field is missing or not a string. */
+function readEventType(event: JsonObject): string | undefined {
+  return Option.getOrUndefined(decodeEnvelope(event))?.type;
+}
+
 export function opencodeParseLine(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
+  const type = readEventType(event);
   // Reasoning parts carry the model's actual thinking text (reasoning-capable
   // models only); previously these events were ignored.
-  if (
-    event.type === "reasoning" &&
-    event.part &&
-    typeof event.part === "object" &&
-    !Array.isArray(event.part) &&
-    typeof event.part.text === "string" &&
-    event.part.text
-  ) {
-    events.push({ kind: "update_reasoning", text: event.part.text });
+  if (type === "reasoning") {
+    const part = decodeTextPart(event);
+    if (Option.isSome(part)) {
+      events.push({ kind: "update_reasoning", text: part.value.part.text });
+    }
     return events;
   }
-  if (
-    event.type === "text" &&
-    event.part &&
-    typeof event.part === "object" &&
-    !Array.isArray(event.part) &&
-    typeof event.part.text === "string" &&
-    event.part.text
-  ) {
-    events.push({ kind: "append_text", text: event.part.text });
+  if (type === "text") {
+    const part = decodeTextPart(event);
+    if (Option.isSome(part)) {
+      events.push({ kind: "append_text", text: part.value.part.text });
+    }
     return events;
   }
-  if (
-    event.type === "tool_use" &&
-    event.part &&
-    typeof event.part === "object" &&
-    !Array.isArray(event.part)
-  ) {
-    const state =
-      "state" in event.part &&
-      event.part.state &&
-      typeof event.part.state === "object" &&
-      !Array.isArray(event.part.state)
-        ? event.part.state
-        : {};
-    const status = typeof state.status === "string" ? state.status : "";
+  if (type === "tool_use") {
+    // The part and its state stay raw JsonObjects: both are handed on whole to
+    // helpers that read freeform tool input and result keys.
+    const part = readObject(event, ["part"]);
+    if (!part) return events;
+    const state = readObject(part, ["state"]) ?? {};
+    const status = readString(state, ["status"]) ?? "";
     if (status === "running") {
-      const step = opencodeToolToStep(event.part);
+      const step = opencodeToolToStep(part);
       const trackingId = step.toolUseId;
       events.push(
         trackingId
@@ -59,7 +82,7 @@ export function opencodeParseLine(event: JsonObject): CanonicalEvent[] {
       return events;
     }
     if (status === "completed" || status === "error") {
-      const step = opencodeToolToStep(event.part);
+      const step = opencodeToolToStep(part);
       const result = probeOpencodeStateResult(state);
       events.push(
         result
@@ -74,15 +97,8 @@ export function opencodeParseLine(event: JsonObject): CanonicalEvent[] {
     }
     return events;
   }
-  if (event.type === "step_finish") {
-    const reason =
-      event.part &&
-      typeof event.part === "object" &&
-      !Array.isArray(event.part) &&
-      typeof event.part.reason === "string"
-        ? event.part.reason
-        : "";
-    if (reason === "stop") {
+  if (type === "step_finish") {
+    if (Option.isSome(decodeStepFinishStop(event))) {
       events.push({ kind: "mark_last_complete" });
     }
     return events;
@@ -91,46 +107,34 @@ export function opencodeParseLine(event: JsonObject): CanonicalEvent[] {
 }
 
 function onStreamLine(parsed: JsonObject): StreamLineResult {
-  const sessionID =
-    typeof parsed.sessionID === "string" && parsed.sessionID.trim()
-      ? parsed.sessionID.trim()
-      : "";
+  const sessionID = readTrimmedString(parsed, ["sessionID"]) ?? "";
   let needsHeartbeat = false;
   if (sessionID && sessionID !== S.activeOpencodeSessionId) {
     S.activeOpencodeSessionId = sessionID;
     writeOpencodeSessionState();
     needsHeartbeat = true;
   }
-  if (parsed.type === "step_start") {
+  const type = readEventType(parsed);
+  if (type === "step_start") {
     if (S.firstAssistantEventAt === 0) {
       S.firstAssistantEventAt = Date.now();
     }
   }
-  if (
-    parsed.type === "text" &&
-    parsed.part &&
-    typeof parsed.part === "object" &&
-    !Array.isArray(parsed.part) &&
-    typeof parsed.part.text === "string" &&
-    parsed.part.text
-  ) {
+  if (type === "text" && Option.isSome(decodeTextPart(parsed))) {
     if (S.firstTextBlockAt === 0) {
       S.firstTextBlockAt = Date.now();
     }
   }
-  if (
-    parsed.type === "step_finish" &&
-    parsed.part &&
-    typeof parsed.part === "object" &&
-    !Array.isArray(parsed.part) &&
-    parsed.part.reason === "stop" &&
-    !S.resultEventSeen
-  ) {
-    if (typeof parsed.part.messageID === "string" && parsed.part.messageID) {
-      S.opencodeFinalMessageId = parsed.part.messageID;
+  if (type === "step_finish" && !S.resultEventSeen) {
+    const stop = decodeStepFinishStop(parsed);
+    if (Option.isSome(stop)) {
+      const messageId = stop.value.part.messageID;
+      if (messageId !== undefined) {
+        S.opencodeFinalMessageId = messageId;
+      }
+      S.resultEventSeen = true;
+      syncOpencodeStateToPersist();
     }
-    S.resultEventSeen = true;
-    syncOpencodeStateToPersist();
   }
   return needsHeartbeat ? { needsHeartbeat: true } : {};
 }

@@ -1,10 +1,14 @@
 "use node";
 
 import { v } from "convex/values";
+import { Effect } from "effect";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
+import { runActionEffect } from "../_effect/action";
+import { githubRequest } from "./githubErrors";
+import { classifyPrActionFailure } from "./prErrors";
 
 const reviewSideValidator = v.union(v.literal("LEFT"), v.literal("RIGHT"));
 
@@ -26,8 +30,15 @@ const reviewCommentInputValidator = v.object({
 /**
  * Posts a pull request review — an overall body plus inline comments — as the
  * eva GitHub App. GitHub validates the anchors and the event (it refuses to
- * approve a PR the app itself opened, for instance), so failures are thrown
- * with GitHub's own message rather than being second-guessed here.
+ * approve a PR the app itself opened, for instance), so failures carry GitHub's
+ * own message rather than being second-guessed here.
+ *
+ * That message is the whole point of the review dialog's error line, and
+ * production Convex redacts a plain `Error` to "Server Error" — so the call
+ * runs behind {@link githubRequest} and {@link classifyPrActionFailure}, the
+ * same pair the manual "Create PR" actions use, and `runActionEffect` puts the
+ * result on `ConvexError.data`. Everything around the call (auth, repo access,
+ * the repo row, the installation token) stays a defect and stays redacted.
  */
 export const submitPrReview = action({
   args: {
@@ -50,43 +61,55 @@ export const submitPrReview = action({
   handler: async (
     ctx,
     args,
-  ): Promise<{ reviewId: number; htmlUrl: string; state: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
+  ): Promise<{ reviewId: number; htmlUrl: string; state: string }> =>
+    runActionEffect(
+      Effect.promise(async () => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
+        await getActionRepoWithAccess(ctx, args.repoId);
 
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+        const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+          id: args.repoId,
+        });
+        if (!repo) throw new Error("Repo not found");
 
-    const body = args.body.trim();
-    const octokit = await getInstallationOctokit(repo.installationId);
-    const { data } = await octokit.rest.pulls.createReview({
-      owner: repo.owner,
-      repo: repo.name,
-      pull_number: args.prNumber,
-      event: args.event,
-      body: body.length > 0 ? body : undefined,
-      comments:
-        args.comments.length > 0
-          ? args.comments.map((comment) => ({
-              path: comment.path,
-              body: comment.body,
-              line: comment.line,
-              side: comment.side,
-              start_line: comment.startLine ?? undefined,
-              start_side: comment.startSide ?? undefined,
-            }))
-          : undefined,
-    });
-
-    return {
-      reviewId: data.id,
-      htmlUrl: data.html_url,
-      state: data.state,
-    };
-  },
+        return {
+          repo,
+          octokit: await getInstallationOctokit(repo.installationId),
+        };
+      }).pipe(
+        Effect.flatMap(({ repo, octokit }) => {
+          const body = args.body.trim();
+          return githubRequest(() =>
+            octokit.rest.pulls.createReview({
+              owner: repo.owner,
+              repo: repo.name,
+              pull_number: args.prNumber,
+              event: args.event,
+              body: body.length > 0 ? body : undefined,
+              comments:
+                args.comments.length > 0
+                  ? args.comments.map((comment) => ({
+                      path: comment.path,
+                      body: comment.body,
+                      line: comment.line,
+                      side: comment.side,
+                      start_line: comment.startLine ?? undefined,
+                      start_side: comment.startSide ?? undefined,
+                    }))
+                  : undefined,
+            }),
+          );
+        }),
+        Effect.mapError(classifyPrActionFailure),
+        Effect.map(({ data }) => ({
+          reviewId: data.id,
+          htmlUrl: data.html_url,
+          state: data.state,
+        })),
+      ),
+      `github.submitPrReview repo=${args.repoId} pr=${args.prNumber}`,
+    ),
 });
 
 /**
