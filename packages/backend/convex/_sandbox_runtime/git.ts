@@ -46,11 +46,8 @@ import {
   DRIVE_CACHE_READER,
   DRIVE_CACHE_WRITER,
   DRIVE_MOUNT_PATH,
-  TOOLCHAIN_DRIVE_NAME,
-  TOOLCHAIN_MOUNT_PATH,
   driveCacheName,
   driveCacheSetupScript,
-  toolchainSetupScript,
   type DriveCacheRole,
 } from "../_sandbox/driveCache";
 import {
@@ -345,8 +342,7 @@ export async function createSandbox(
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<SandboxHandle> {
   // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
-  // only on paths that never resolve a repo, which then get the project-wide
-  // toolchain Drive but no package cache.
+  // only on paths that never resolve a repo, which then get no mount at all.
   const repoId = sandboxEnvVars.REPO_ID;
   const driveMountMode: SandboxMount["mode"] =
     driveCacheRole === DRIVE_CACHE_WRITER ? "read-write" : "snapshot";
@@ -397,25 +393,15 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
-      // Two Drives, both following driveCacheRole: the per-repo package cache
-      // and the project-wide toolchain share. Vercel allows four per sandbox.
-      // The toolchain Drive needs no repoId — it is identical for every repo.
-      mounts: [
-        ...(repoId
-          ? [
-              {
-                path: DRIVE_MOUNT_PATH,
-                volumeName: driveCacheName(repoId),
-                mode: driveMountMode,
-              },
-            ]
-          : []),
-        {
-          path: TOOLCHAIN_MOUNT_PATH,
-          volumeName: TOOLCHAIN_DRIVE_NAME,
-          mode: driveMountMode,
-        },
-      ],
+      mounts: repoId
+        ? [
+            {
+              path: DRIVE_MOUNT_PATH,
+              volumeName: driveCacheName(repoId),
+              mode: driveMountMode,
+            },
+          ]
+        : undefined,
     });
     logGit(
       `createSandbox: created id=${sandbox.id}, cpu=${sandbox.cpu}, memory=${sandbox.memory}, disk=${sandbox.disk}`,
@@ -450,12 +436,6 @@ export async function createSandbox(
       // the script itself soft-fails to a plain directory.
       await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
         execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
-      );
-      // Separate step: the toolchain Drive seeds itself from local disk on the
-      // writer, so it can take noticeably longer than the package cache and
-      // deserves its own timing line in the logs.
-      await runLoggedGitStep("createSandbox.toolchainDrive", sandbox.id, () =>
-        execHandle(sandbox, toolchainSetupScript(), 180, "/"),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources
       // eva-env. Never fail create over this hook.

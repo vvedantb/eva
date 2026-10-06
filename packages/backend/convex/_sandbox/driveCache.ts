@@ -52,115 +52,8 @@ export const DRIVE_MOUNT_PATH = "/eva-drive";
  */
 export const DRIVE_CACHE_ROOT = "/eva-cache";
 
-/** Where Vercel attaches the shared toolchain Drive. See TOOLCHAIN_SHARES. */
-export const TOOLCHAIN_MOUNT_PATH = "/eva-toolchain";
-
 /**
- * One Drive for the whole Vercel project, holding toolchain artefacts that are
- * byte-identical for every repo — unlike the per-repo package cache, there is
- * nothing repo-specific about a Convex backend build or a cursor-agent release.
- */
-export const TOOLCHAIN_DRIVE_NAME = "eva-toolchain";
-
-/** One directory redirected onto the toolchain Drive. */
-interface ToolchainShare {
-  /** Normal on-disk location; the Drive copy is mounted over it. */
-  localPath: string;
-  /** Directory name on the toolchain Drive. */
-  driveDir: string;
-  /**
-   * Whether the local copy may be deleted before a snapshot once the Drive
-   * holds it. Only true for a pure download cache the tool refills on demand.
-   * An installed program must say false: if a later sandbox's Drive fails to
-   * attach, the local copy is the only one, and deleting it breaks the tool
-   * rather than making it re-download.
-   */
-  pruneLocalWhenOnDrive: boolean;
-}
-
-/**
- * Directories redirected onto the toolchain Drive. Each is mounted over its
- * normal location, so the tools need no configuration and keep working if the
- * Drive is absent.
- *
- * - Convex local backend: a download cache. The CLI fetches a missing build on
- *   demand, so the local copy is pruned once the Drive holds it.
- * - cursor-agent: the INSTALLED program. `~/.local/bin/cursor-agent` is a
- *   symlink into `versions/<v>/cursor-agent` (checked on a seeded sandbox,
- *   2026-10-06), so the local copy must stay or the command breaks whenever
- *   the Drive is missing. It still gains from the Drive for upgrades, but it
- *   saves no snapshot space.
- *
- * Chrome (~416 MB in /opt/google) is deliberately NOT here despite being the
- * single largest candidate: it is installed by `dnf` and owned by the RPM
- * database, so bind-mounting over its directory would leave rpm describing
- * files that are no longer visible — a broken package manager is not worth
- * 400 MB. Anything added here must be plain downloaded files that no package
- * manager tracks.
- */
-export const TOOLCHAIN_SHARES: ReadonlyArray<ToolchainShare> = [
-  {
-    localPath: "/home/vercel-sandbox/.cache/convex/binaries",
-    driveDir: "convex-binaries",
-    pruneLocalWhenOnDrive: true,
-  },
-  {
-    localPath: "/home/eva/.local/share/cursor-agent/versions",
-    driveDir: "cursor-agent",
-    pruneLocalWhenOnDrive: false,
-  },
-];
-
-/**
- * Shell that redirects {@link TOOLCHAIN_SHARES} onto the toolchain Drive.
- *
- * Same three-way degradation as {@link driveCacheSetupScript}, and the same
- * writability probe rather than a trusted role. One extra rule: a share is only
- * redirected if the Drive actually has content for it OR the Drive is writable.
- * Bind-mounting an empty read-only directory over a populated local cache would
- * HIDE a working toolchain and force a re-download — worse than doing nothing.
- */
-export function toolchainSetupScript(): string {
-  const probe = `${TOOLCHAIN_MOUNT_PATH}/.eva-write-probe`;
-  return [
-    `if [ ! -d ${TOOLCHAIN_MOUNT_PATH} ]; then exit 0; fi`,
-    `TC_RW=0`,
-    `if sudo touch ${probe} 2>/dev/null; then sudo rm -f ${probe} 2>/dev/null || true; TC_RW=1; fi`,
-    ...TOOLCHAIN_SHARES.flatMap(({ localPath, driveDir }) => {
-      const src = `${TOOLCHAIN_MOUNT_PATH}/${driveDir}`;
-      return [
-        `if mountpoint -q ${localPath} 2>/dev/null; then :;`,
-        // Writable Drive: seed it from whatever is already on local disk, then
-        // take it over. `cp -an` never clobbers a newer copy on the Drive.
-        `elif [ "$TC_RW" = "1" ]; then`,
-        `  sudo mkdir -p ${src} ${localPath} 2>/dev/null || true`,
-        `  sudo cp -an ${localPath}/. ${src}/ 2>/dev/null || true`,
-        `  sudo mount --bind ${src} ${localPath} 2>/dev/null || true`,
-        `  sudo chmod 777 ${localPath} 2>/dev/null || true`,
-        // Read-only Drive: only take over when the Drive has something to
-        // give, and overlay rather than bind — these tools write a new version
-        // directory into their own cache, and a read-only bind would turn that
-        // into a hard failure instead of a re-download.
-        `elif [ -d ${src} ] && [ -n "$(ls -A ${src} 2>/dev/null)" ]; then`,
-        `  sudo mkdir -p ${localPath} ${OVERLAY_UPPER}/${driveDir} ${OVERLAY_WORK}/${driveDir} 2>/dev/null || true`,
-        `  sudo mount -t overlay overlay -o lowerdir=${src},upperdir=${OVERLAY_UPPER}/${driveDir},workdir=${OVERLAY_WORK}/${driveDir} ${localPath} 2>/dev/null || true`,
-        `  sudo chmod 777 ${localPath} 2>/dev/null || true`,
-        `fi`,
-      ];
-    }),
-    `exit 0`,
-  ].join("\n");
-}
-
-/** Releases the {@link TOOLCHAIN_SHARES} bind mounts before a snapshot capture. */
-function toolchainTeardownLines(): string[] {
-  return TOOLCHAIN_SHARES.map(
-    ({ localPath }) => `sudo umount -l ${localPath} 2>/dev/null || true`,
-  );
-}
-
-/**
- * Local cache directories made redundant by the Drives, per home directory.
+ * Local cache directories made redundant by the Drive, per home directory.
  * Every sandbox created with this code points package managers at
  * {@link DRIVE_CACHE_ROOT} (see DRIVE_CACHE_ENV), so these defaults are never
  * written again — but a seeded snapshot built before the switch still carries
@@ -176,34 +69,18 @@ const LOCAL_CACHES_REPLACED_BY_DRIVE: ReadonlyArray<string> = [
 ];
 
 /**
- * Snapshot-time deletion of every local copy the Drives have made redundant.
- * Runs AFTER {@link driveCacheTeardownScript}: the mounts must be down first,
+ * Snapshot-time deletion of the local caches the Drive has made redundant.
+ * Runs AFTER {@link driveCacheTeardownScript}: the mount must be down first,
  * or `rm` would empty the Drive itself instead of the local disk under it.
- *
- * Toolchain shares are only pruned when marked safe AND when every local
- * version is confirmed present on the Drive, so a failed Drive seed can never
- * leave a snapshot with no copy at all. The Drive itself stays mounted at
- * {@link TOOLCHAIN_MOUNT_PATH} during capture, which is what lets that check
- * see it.
  */
 export function driveRedundantLocalPruneLines(
   homes: ReadonlyArray<string>,
 ): string[] {
-  return [
-    ...homes.flatMap((home) =>
-      LOCAL_CACHES_REPLACED_BY_DRIVE.map(
-        (dir) => `sudo rm -rf ${home}/${dir} 2>/dev/null || true`,
-      ),
+  return homes.flatMap((home) =>
+    LOCAL_CACHES_REPLACED_BY_DRIVE.map(
+      (dir) => `sudo rm -rf ${home}/${dir} 2>/dev/null || true`,
     ),
-    ...TOOLCHAIN_SHARES.filter((share) => share.pruneLocalWhenOnDrive).map(
-      ({ localPath, driveDir }) => {
-        const src = `${TOOLCHAIN_MOUNT_PATH}/${driveDir}`;
-        // One version directory at a time, and only when the Drive has that
-        // exact version — never a blanket `rm` of the parent.
-        return `if [ -d ${src} ] && [ -d ${localPath} ] && ! mountpoint -q ${localPath} 2>/dev/null; then for v in ${localPath}/*/; do n=$(basename "$v"); [ -d "${src}/$n" ] && sudo rm -rf "$v" 2>/dev/null || true; done; fi`;
-      },
-    ),
-  ];
+  );
 }
 
 /**
@@ -218,10 +95,6 @@ export function driveRedundantLocalPruneLines(
 export function driveCacheTeardownScript(): string {
   return [
     `sudo umount -l ${DRIVE_CACHE_ROOT} 2>/dev/null || true`,
-    // Toolchain binds first-class here rather than as a separate script: both
-    // must come down before the same capture, and two scripts joined by the
-    // caller would put an `exit 0` between them and silently skip the second.
-    ...toolchainTeardownLines(),
     `sudo rm -rf ${OVERLAY_UPPER} ${OVERLAY_WORK} 2>/dev/null || true`,
     `exit 0`,
   ].join("\n");
@@ -246,8 +119,6 @@ export type DriveCacheRole =
  * Drive name for a repo's cache. Names are unique per Vercel project, and
  * `repoId` is a stable Convex id, so this is the natural key. Prefixed so the
  * drives are identifiable in the Vercel dashboard alongside non-eva drives.
- * Cannot collide with {@link TOOLCHAIN_DRIVE_NAME}: Convex ids are 32-char
- * base32 strings, never the word "toolchain".
  */
 export function driveCacheName(repoId: string): string {
   return `eva-${repoId}`;

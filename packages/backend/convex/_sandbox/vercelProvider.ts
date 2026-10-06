@@ -418,11 +418,11 @@ function demoteMounts(
  * nothing.
  *
  * The one-at-a-time stages exist because the API does not say which Drive's
- * write lock was taken. Demoting everything together meant a lock on the
- * shared toolchain Drive (held by any repo's build) also demoted this repo's
- * own cache, so it was never filled. Demotes later-listed mounts first: callers
- * list the mount they care most about first, and the later ones are the shared
- * Drives most likely to be locked.
+ * write lock was taken: demoting everything together would let a lock on one
+ * Drive needlessly cost write access to all the others. Demotes later-listed
+ * mounts first, so callers list the mount they care most about first. With a
+ * single read-write mount (all callers today) this is just as requested →
+ * read-only → nothing.
  */
 function mountFallbackLadder(
   mounts: SandboxMounts | undefined,
