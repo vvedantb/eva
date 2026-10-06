@@ -84,6 +84,16 @@ export function findDayBoundaryIds(
 
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
 
+/**
+ * A follow-up the server already holds for the next turn, so it cannot be
+ * edited, removed or reordered (Manager Ave). Shown in the same queue panel.
+ */
+export interface ChatHeldFollowUp {
+  id: string;
+  content: string;
+  userId?: Id<"users">;
+}
+
 const SANDBOX_LIFECYCLE_ALERTS = new Set([
   "Sandbox started",
   "Sandbox stopped",

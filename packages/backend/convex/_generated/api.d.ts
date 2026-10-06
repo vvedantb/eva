@@ -42,6 +42,7 @@ import type * as _automations_prompts_eventPresets from "../_automations/prompts
 import type * as _automations_prompts_findCriticalBugs from "../_automations/prompts/findCriticalBugs.js";
 import type * as _automations_prompts_generateDocs from "../_automations/prompts/generateDocs.js";
 import type * as _automations_prompts_improveCodeStructure from "../_automations/prompts/improveCodeStructure.js";
+import type * as _automations_prompts_memoryDreaming from "../_automations/prompts/memoryDreaming.js";
 import type * as _automations_prompts_thermoNuclearCodeReview from "../_automations/prompts/thermoNuclearCodeReview.js";
 import type * as _automations_runs from "../_automations/runs.js";
 import type * as _automations_systemAutomations from "../_automations/systemAutomations.js";
@@ -104,8 +105,6 @@ import type * as _github_prMeta from "../_github/prMeta.js";
 import type * as _github_prOverview from "../_github/prOverview.js";
 import type * as _github_prRecapService from "../_github/prRecapService.js";
 import type * as _github_prReview from "../_github/prReview.js";
-import type * as _github_prScopeCheck from "../_github/prScopeCheck.js";
-import type * as _github_prScopeSection from "../_github/prScopeSection.js";
 import type * as _github_prTitleSync from "../_github/prTitleSync.js";
 import type * as _github_prUrl from "../_github/prUrl.js";
 import type * as _github_pullRequestDraftState from "../_github/pullRequestDraftState.js";
@@ -200,6 +199,7 @@ import type * as _repoSnapshots_sanitizeSeededApps from "../_repoSnapshots/sanit
 import type * as _sandbox_closingStatus from "../_sandbox/closingStatus.js";
 import type * as _sandbox_factory from "../_sandbox/factory.js";
 import type * as _sandbox_ffmpegInstall from "../_sandbox/ffmpegInstall.js";
+import type * as _sandbox_idleStop from "../_sandbox/idleStop.js";
 import type * as _sandbox_owner from "../_sandbox/owner.js";
 import type * as _sandbox_provider from "../_sandbox/provider.js";
 import type * as _sandbox_resolveExistingSandboxId from "../_sandbox/resolveExistingSandboxId.js";
@@ -450,6 +450,7 @@ import type * as sandboxDaemon from "../sandboxDaemon.js";
 import type * as sandboxGit from "../sandboxGit.js";
 import type * as sandboxGitCredentials from "../sandboxGitCredentials.js";
 import type * as sandboxHeal from "../sandboxHeal.js";
+import type * as sandboxIdleStop from "../sandboxIdleStop.js";
 import type * as sandboxJwt from "../sandboxJwt.js";
 import type * as sandboxPanes from "../sandboxPanes.js";
 import type * as scopeCheck from "../scopeCheck.js";
@@ -533,6 +534,7 @@ declare const fullApi: ApiFromModules<{
   "_automations/prompts/findCriticalBugs": typeof _automations_prompts_findCriticalBugs;
   "_automations/prompts/generateDocs": typeof _automations_prompts_generateDocs;
   "_automations/prompts/improveCodeStructure": typeof _automations_prompts_improveCodeStructure;
+  "_automations/prompts/memoryDreaming": typeof _automations_prompts_memoryDreaming;
   "_automations/prompts/thermoNuclearCodeReview": typeof _automations_prompts_thermoNuclearCodeReview;
   "_automations/runs": typeof _automations_runs;
   "_automations/systemAutomations": typeof _automations_systemAutomations;
@@ -595,8 +597,6 @@ declare const fullApi: ApiFromModules<{
   "_github/prOverview": typeof _github_prOverview;
   "_github/prRecapService": typeof _github_prRecapService;
   "_github/prReview": typeof _github_prReview;
-  "_github/prScopeCheck": typeof _github_prScopeCheck;
-  "_github/prScopeSection": typeof _github_prScopeSection;
   "_github/prTitleSync": typeof _github_prTitleSync;
   "_github/prUrl": typeof _github_prUrl;
   "_github/pullRequestDraftState": typeof _github_pullRequestDraftState;
@@ -691,6 +691,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/closingStatus": typeof _sandbox_closingStatus;
   "_sandbox/factory": typeof _sandbox_factory;
   "_sandbox/ffmpegInstall": typeof _sandbox_ffmpegInstall;
+  "_sandbox/idleStop": typeof _sandbox_idleStop;
   "_sandbox/owner": typeof _sandbox_owner;
   "_sandbox/provider": typeof _sandbox_provider;
   "_sandbox/resolveExistingSandboxId": typeof _sandbox_resolveExistingSandboxId;
@@ -941,6 +942,7 @@ declare const fullApi: ApiFromModules<{
   sandboxGit: typeof sandboxGit;
   sandboxGitCredentials: typeof sandboxGitCredentials;
   sandboxHeal: typeof sandboxHeal;
+  sandboxIdleStop: typeof sandboxIdleStop;
   sandboxJwt: typeof sandboxJwt;
   sandboxPanes: typeof sandboxPanes;
   scopeCheck: typeof scopeCheck;

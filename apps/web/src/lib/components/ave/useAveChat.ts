@@ -12,6 +12,7 @@ import {
 } from "@/lib/components/chat/chatBodyUtils";
 import type { LocalChatDraft } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";
+import { splitAveFollowUps } from "@/lib/components/ave/aveFollowUps";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 /** One Manager Ave per user, so one draft per browser. */
@@ -52,10 +53,12 @@ export function useAveChat() {
     ),
   ];
 
+  const { transcript, followUps } = splitAveFollowUps(withPending, isExecuting);
+
   // The run streams into `getStreaming`, which ChatBody paints onto the oldest
   // unfinished assistant row. If the run has not written one yet, a local
   // "Working" row stands in so the live activity has somewhere to render.
-  const lastMessage = withPending[withPending.length - 1];
+  const lastMessage = transcript[transcript.length - 1];
   const workingPlaceholder: ChatBodyMessage = {
     _id: "ave-working",
     _creationTime: (lastMessage?._creationTime ?? 0) + 1,
@@ -64,9 +67,9 @@ export function useAveChat() {
     timestamp: (lastMessage?.timestamp ?? 0) + 1,
   };
   const messages =
-    isExecuting && findStreamingTargetMessage(withPending) === undefined
-      ? [...withPending, workingPlaceholder]
-      : withPending;
+    isExecuting && findStreamingTargetMessage(transcript) === undefined
+      ? [...transcript, workingPlaceholder]
+      : transcript;
 
   const dropPending = (clientId: string) => {
     setPendingSends((current) =>
@@ -137,6 +140,8 @@ export function useAveChat() {
     /** Scopes typing presence and scroll state; stable before the first send. */
     conversationId: thread?._id ?? "ave",
     messages,
+    /** Sent mid-run; the next run reads them. */
+    followUps,
     isLoadingMessages: serverMessages === undefined,
     streamingActivity: streaming?.currentActivity,
     streamingContent: streaming?.currentContent,

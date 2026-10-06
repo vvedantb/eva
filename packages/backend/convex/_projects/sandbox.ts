@@ -330,45 +330,55 @@ export const stopProjectSandbox = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-
-    if (!project.sandboxId) {
-      // Nothing to stop — close immediately.
-      await ctx.db.patch(args.projectId, {
-        reviewProjectSandboxStatus: "closed",
-      });
-      return null;
-    }
-
-    await scheduleFinalizeStopProject(ctx, {
-      projectId: args.projectId,
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-    });
-
-    // Clear leftover start steps so stop does not re-show startup activity.
-    await clearSandboxStartupActivity(
-      ctx.db,
-      `project-sandbox-startup-${args.projectId}`,
-    );
-
-    // Stopping kills the paused turn, so any blocking AskUserQuestion can
-    // never be claimed — clear it or it hides the composer forever.
-    await clearPendingQuestionsForEntity(ctx.db, String(args.projectId));
-    await clearPreviewToolCallsForParent(ctx.db, args.projectId);
-
-    // Keep sandboxId so we can resume the stopped sandbox later.
-    await ctx.db.patch(args.projectId, {
-      reviewProjectSandboxStatus: "stopping",
-    });
-
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    await requestProjectSandboxStop(ctx, args.projectId);
     return null;
   },
 });
+
+/**
+ * Shared stop path for a project sandbox: the Stop button, the daily auto-stop
+ * sweep and the idle sweep all go through here (mirrors
+ * `requestSessionSandboxStop` / `requestTaskSandboxStop`), so every stop clears
+ * the same leftover UI state. Callers own the auth check.
+ */
+export async function requestProjectSandboxStop(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+): Promise<void> {
+  const project = await ctx.db.get(projectId);
+  if (!project) return;
+
+  if (!project.sandboxId) {
+    // Nothing to stop — close immediately.
+    await ctx.db.patch(projectId, {
+      reviewProjectSandboxStatus: "closed",
+    });
+    return;
+  }
+
+  await scheduleFinalizeStopProject(ctx, {
+    projectId,
+    sandboxId: project.sandboxId,
+    repoId: project.repoId,
+  });
+
+  // Clear leftover start steps so stop does not re-show startup activity.
+  await clearSandboxStartupActivity(
+    ctx.db,
+    `project-sandbox-startup-${projectId}`,
+  );
+
+  // Stopping kills the paused turn, so any blocking AskUserQuestion can
+  // never be claimed — clear it or it hides the composer forever.
+  await clearPendingQuestionsForEntity(ctx.db, String(projectId));
+  await clearPreviewToolCallsForParent(ctx.db, projectId);
+
+  // Keep sandboxId so we can resume the stopped sandbox later.
+  await ctx.db.patch(projectId, {
+    reviewProjectSandboxStatus: "stopping",
+  });
+}
 
 /**
  * Schedules project sandbox teardown. Every path that flips a project to

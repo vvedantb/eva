@@ -735,6 +735,9 @@ export const githubRepoFields = {
   // Opt-out: when true, other sandboxes may not mint read tokens for this
   // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
   sandboxReadExcluded: v.optional(v.boolean()),
+  // Opt-in: agents read and update `.eva/memory/` in the repo (Agent Memory
+  // Repo spec). Shared across sibling app rows.
+  agentMemoryEnabled: v.optional(v.boolean()),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -1178,6 +1181,9 @@ export const appSettingsFields = {
   sandboxAutoStopTime: v.string(),
   sandboxAutoStopTimeZone: v.string(),
   sandboxAutoStopLastRunDate: v.optional(v.string()),
+  /** Idle sweep (`sandboxIdleStop.ts`). Absent = on, 60 minutes; see `resolveIdleStopSettings`. */
+  sandboxIdleStopEnabled: v.optional(v.boolean()),
+  sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
 export const sandboxGitCredentialsFields = {

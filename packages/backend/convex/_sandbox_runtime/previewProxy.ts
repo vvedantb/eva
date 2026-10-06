@@ -609,6 +609,12 @@ const injectedScript = "(" + function () {
   window.addEventListener("hashchange", scheduleLocationSend);
   window.addEventListener("pageshow", scheduleLocationSend);
   window.addEventListener("load", scheduleLocationSend);
+  // Cross-document navigation starting: Eva spins its reload button until the
+  // iframe's next load, like a browser tab. beforeunload fires at the start
+  // (an SSR route compiling server-side is the slow part); pagehide is late.
+  window.addEventListener("beforeunload", function () {
+    window.parent.postMessage({ type: "eva-preview-unload" }, parentOrigin);
+  });
   document.addEventListener("click", function () {
     window.setTimeout(sendLocation, 0);
   }, true);

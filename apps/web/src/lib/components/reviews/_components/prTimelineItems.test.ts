@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildPrTimeline } from "./prTimelineItems";
+import { buildPrTimeline, groupTimelineRows } from "./prTimelineItems";
 import { overview } from "./prOverviewFixture";
 import type { PrComment, PrCommit, PrReviewEvent } from "./prOverviewMeta";
 
@@ -50,7 +50,7 @@ function at(ms: number): string {
 }
 
 describe("buildPrTimeline", () => {
-  test("orders commits, reviews and comments ascending, tying on commit-review-comment", () => {
+  test("orders events ascending, opening first, ties on commit-verdict-remark", () => {
     const commitAtOne = commit({ sha: "commitB", committedAt: at(1000) });
     const reviewAtOne = reviewEvent({
       id: 1,
@@ -58,11 +58,7 @@ describe("buildPrTimeline", () => {
       state: "COMMENTED",
       body: "nice",
     });
-    const commentAtOne = comment({
-      id: 50,
-      kind: "issue",
-      createdAt: at(1000),
-    });
+    const commentAtOne = comment({ id: 50, kind: "issue", createdAt: at(1000) });
     const reviewAtTwo = reviewEvent({
       id: 2,
       submittedAt: at(2000),
@@ -70,148 +66,95 @@ describe("buildPrTimeline", () => {
       body: "",
     });
     const commitAtThree = commit({ sha: "commitA", committedAt: at(3000) });
-    const commentAtFour = comment({
-      id: 60,
-      kind: "review",
-      reviewId: null,
-      createdAt: at(4000),
-    });
 
     const timeline = buildPrTimeline(
       overview({
+        createdAt: at(500),
         commits: [commitAtThree, commitAtOne],
         reviewEvents: [reviewAtTwo, reviewAtOne],
-        comments: [commentAtFour, commentAtOne],
+        comments: [commentAtOne],
       }),
     );
 
-    expect(timeline.map((item) => item.key)).toEqual([
-      "commits-commitB",
+    expect(timeline.map((event) => event.key)).toEqual([
+      "opened",
+      "commit-commitB",
       "review-1",
       "comment-issue-50",
       "review-2",
-      "commits-commitA",
-      "comment-review-60",
+      "commit-commitA",
     ]);
   });
 
-  test("groups adjacent commits, and splits the run on anything said between", () => {
-    const first = commit({ sha: "one", committedAt: at(1000) });
-    const second = commit({ sha: "two", committedAt: at(2000) });
-    const spoken = comment({ id: 70, kind: "issue", createdAt: at(3000) });
-    const third = commit({ sha: "three", committedAt: at(4000) });
-
+  test("a verdict is its own event and goes stale once commits land after it", () => {
     const timeline = buildPrTimeline(
       overview({
-        commits: [first, second, third],
-        comments: [spoken],
-      }),
-    );
-
-    expect(timeline.map((item) => item.kind)).toEqual([
-      "commits",
-      "comment",
-      "commits",
-    ]);
-
-    const [group] = timeline;
-    if (group?.kind !== "commits") throw new Error("Expected a commits group");
-    expect(group.commits).toEqual([first, second]);
-  });
-
-  test("nests a review comment under its review; an unmatched reviewId stands alone", () => {
-    const attachedReview = reviewEvent({
-      id: 10,
-      submittedAt: at(1000),
-      state: "APPROVED",
-      body: "lgtm",
-    });
-    const attachedComment = comment({
-      id: 200,
-      kind: "review",
-      createdAt: at(999),
-      reviewId: 10,
-    });
-    const standaloneNullReview = comment({
-      id: 201,
-      kind: "issue",
-      createdAt: at(1500),
-      reviewId: null,
-    });
-    const standaloneUnmatchedReview = comment({
-      id: 202,
-      kind: "review",
-      createdAt: at(1600),
-      reviewId: 999,
-    });
-
-    const timeline = buildPrTimeline(
-      overview({
-        reviewEvents: [attachedReview],
-        comments: [
-          attachedComment,
-          standaloneNullReview,
-          standaloneUnmatchedReview,
+        commits: [commit({ sha: "late", committedAt: at(3000) })],
+        reviewEvents: [
+          reviewEvent({ id: 5, state: "APPROVED", submittedAt: at(2000) }),
         ],
       }),
     );
-
-    const reviewItem = timeline.find((item) => item.kind === "review");
-    expect(reviewItem?.kind).toBe("review");
-    if (reviewItem?.kind !== "review") {
-      throw new Error("Expected a review item");
-    }
-    expect(reviewItem.comments).toEqual([attachedComment]);
-
-    const commentItems = timeline.filter((item) => item.kind === "comment");
-    expect(commentItems.map((item) => item.key)).toEqual([
-      "comment-issue-201",
-      "comment-review-202",
-    ]);
-    // The attached comment is nested under the review, never standalone.
-    expect(
-      commentItems.some(
-        (item) => item.kind === "comment" && item.comment.id === 200,
-      ),
-    ).toBe(false);
+    const verdict = timeline.find((event) => event.kind === "verdict");
+    if (verdict?.kind !== "verdict") throw new Error("Expected a verdict");
+    expect(verdict.stale).toBe(true);
   });
 
-  test("drops an empty COMMENTED shell but keeps one with a comment or a body", () => {
-    const emptyShell = reviewEvent({
-      id: 1,
-      submittedAt: at(500),
-      state: "COMMENTED",
-      body: "",
-    });
-    const emptyBodyWithComment = reviewEvent({
-      id: 2,
-      submittedAt: at(1000),
-      state: "COMMENTED",
-      body: "",
-    });
-    const attachedComment = comment({
-      id: 300,
-      kind: "review",
-      createdAt: at(900),
-      reviewId: 2,
-    });
-    const nonBlankBody = reviewEvent({
-      id: 3,
-      submittedAt: at(2000),
-      state: "COMMENTED",
-      body: "looks fine",
-    });
-
+  test("drops the empty shell a COMMENTED review leaves behind", () => {
     const timeline = buildPrTimeline(
       overview({
-        reviewEvents: [emptyShell, emptyBodyWithComment, nonBlankBody],
-        comments: [attachedComment],
+        reviewEvents: [reviewEvent({ id: 9, state: "COMMENTED", body: " " })],
       }),
     );
+    expect(timeline.map((event) => event.kind)).toEqual(["opened"]);
+  });
 
-    expect(timeline.map((item) => item.key)).toEqual([
-      "review-2",
-      "review-3",
+  test("a merged pull request ends on the merge", () => {
+    const timeline = buildPrTimeline(
+      overview({
+        status: "merged",
+        createdAt: at(0),
+        mergedAt: at(9000),
+        mergedByLogin: "maintainer",
+        commits: [commit({ committedAt: at(1000) })],
+      }),
+    );
+    expect(timeline[timeline.length - 1]).toEqual({
+      kind: "merged",
+      key: "merged",
+      at: 9000,
+      actor: "maintainer",
+    });
+  });
+});
+
+describe("groupTimelineRows", () => {
+  test("folds adjacent remarks into one conversation, split by anything else", () => {
+    const rows = groupTimelineRows(
+      buildPrTimeline(
+        overview({
+          createdAt: at(0),
+          comments: [
+            comment({ id: 1, createdAt: at(1000) }),
+            comment({ id: 2, createdAt: at(2000) }),
+            comment({ id: 3, createdAt: at(4000) }),
+          ],
+          commits: [commit({ sha: "mid", committedAt: at(3000) })],
+        }),
+      ),
+    );
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "event",
+      "conversation",
+      "event",
+      "conversation",
+    ]);
+    const [, first] = rows;
+    if (first?.kind !== "conversation") throw new Error("Expected a conversation");
+    expect(first.events.map((event) => event.key)).toEqual([
+      "comment-issue-1",
+      "comment-issue-2",
     ]);
   });
 });

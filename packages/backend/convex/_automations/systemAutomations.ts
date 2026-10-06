@@ -10,6 +10,7 @@ import { DAILY_STANDUP_PROMPT } from "./prompts/dailyStandup";
 import { FIND_CRITICAL_BUGS_PROMPT } from "./prompts/findCriticalBugs";
 import { GENERATE_DOCS_PROMPT } from "./prompts/generateDocs";
 import { IMPROVE_CODE_STRUCTURE_PROMPT } from "./prompts/improveCodeStructure";
+import { MEMORY_DREAMING_PROMPT } from "./prompts/memoryDreaming";
 import { THERMO_NUCLEAR_CODE_REVIEW_PROMPT } from "./prompts/thermoNuclearCodeReview";
 
 /**
@@ -169,6 +170,18 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     actionsEnabled: false,
     trigger: { kind: "event", event: "issue_labeled" },
     action: "create_task",
+  },
+  {
+    key: "memory-dreaming",
+    title: "Memory dreaming",
+    blurb:
+      "Weekly tidy of agent memory: merges duplicates, fixes stale notes, and strips sensitive data.",
+    description: MEMORY_DREAMING_PROMPT,
+    defaultCronSchedule: "30 5 * * 0",
+    readOnly: false,
+    actionsEnabled: false,
+    trigger: CRON,
+    action: "run",
   },
 ];
 

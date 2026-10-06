@@ -141,6 +141,7 @@ async function buildTaskChatTurnPrompt(
       devCommand: task.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
     },
   });
   if (prefixBlock) {

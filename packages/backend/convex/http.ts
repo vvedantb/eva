@@ -657,24 +657,6 @@ http.route({
         );
       }
 
-      // Publish the scope-check warning onto a PR Eva did not open. Eva's own
-      // PRs get it when each verdict lands (`_scopeCheck/mutations.ts`); this
-      // covers a PR someone opened by hand over commits Eva wrote, which is
-      // how the change that motivated the feature reached production.
-      const repoOwnerLogin = parsed.data.repository?.owner?.login ?? null;
-      const repoName = parsed.data.repository?.name ?? null;
-      if (
-        (action === "opened" || action === "reopened") &&
-        repoOwnerLogin !== null &&
-        repoName !== null
-      ) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.github.publishScopeSectionForPr,
-          { prUrl, owner: repoOwnerLogin, name: repoName },
-        );
-      }
-
       // agentTasks/projects path stays as-is (close-only).
       if (action === "closed" && merged !== null) {
         await ctx.scheduler.runAfter(0, internal.githubWebhook.handlePrClosed, {

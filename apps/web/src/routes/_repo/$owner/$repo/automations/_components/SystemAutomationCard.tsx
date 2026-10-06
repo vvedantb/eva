@@ -11,6 +11,7 @@ import {
   IconEye,
   IconFileText,
   IconMessageCircle,
+  IconMoon,
   IconRadioactive,
   IconSitemap,
   IconSparkles,
@@ -37,6 +38,7 @@ const ENTRY_ICONS: Record<string, Icon> = {
   "ci-autofix": IconTool,
   "review-responder": IconMessageCircle,
   "issue-to-task": IconTicket,
+  "memory-dreaming": IconMoon,
 };
 
 interface SystemAutomationCardProps {
