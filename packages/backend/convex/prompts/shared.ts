@@ -75,6 +75,14 @@ export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
 
 /**
+ * Writing style for every chat reply: ASD-STE100 Simplified Technical English,
+ * applied loosely. Full STE bans non-dictionary words, which would strip the
+ * domain terms (workflow, lease, commit) a dev reader needs, so those stay.
+ */
+export const COMMUNICATION_STYLE_INSTRUCTION =
+  "\n\nWriting style: follow ASD-STE100 Simplified Technical English about 80% of the way. One idea per sentence, about 20 words or fewer. Active voice, simple present or past tense. One word for one meaning; literal verbs, no idioms. Numbered steps for sequences, bullets for conditions. Keep technical names and domain terms, and keep the reason behind each decision.";
+
+/**
  * Ask before inventing a visual, and name every visual you changed.
  *
  * A trophy icon and a `green.1` alert wash nobody requested rode along inside a
