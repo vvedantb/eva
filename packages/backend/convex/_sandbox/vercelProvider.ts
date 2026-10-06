@@ -47,7 +47,10 @@ import {
   KEEP_LAST_SNAPSHOTS,
   vercelSnapshotCreateOptions,
 } from "./vercelSnapshotOptions";
-import { driveCacheTeardownScript } from "./driveCache";
+import {
+  driveCacheSetupScript,
+  driveCacheTeardownScript,
+} from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
@@ -381,6 +384,44 @@ class VercelDesktop implements SandboxDesktop {
         "pkill -f '[X]vfb :0' 2>/dev/null || true",
       ].join("; "),
       { timeoutSeconds: 30 },
+    );
+  }
+}
+
+/**
+ * Re-runs the drive cache setup after a stopped sandbox resumes.
+ *
+ * The bind/overlay that turns the raw Drive mount into the writable cache root
+ * is kernel state, so it does not survive a stop: a resumed session's
+ * `/eva-cache` is a plain local directory again, and every install re-downloads
+ * even though the env still points there. createSandbox runs the setup only
+ * once, at create, so without this the cache lasts only until the first stop.
+ *
+ * Wired as the SDK's `onResume`, which fires on BOTH resume paths: the explicit
+ * `Sandbox.get({ resume: true })` in start(), and the lazy resume `withResume`
+ * performs when a command hits a stopped session. The SDK holds the callback
+ * per Sandbox object rather than on the server, so it is passed at every
+ * `Sandbox.get`/`Sandbox.create` in this file.
+ *
+ * Must never throw: the SDK awaits it inside the resume, so a failure here
+ * would fail the resume itself. The script is idempotent (it exits early when
+ * the cache root is already a mount) and falls back to a plain directory when
+ * no Drive is attached. The `runCommand` inside does not re-enter the resume —
+ * the SDK sets the new session before calling this.
+ */
+async function rewireDriveCacheOnResume(sandbox: Sandbox): Promise<void> {
+  try {
+    const finished = await sandbox.runCommand({
+      cmd: "bash",
+      args: ["-lc", driveCacheSetupScript()],
+      timeoutMs: 60_000,
+    });
+    console.log(
+      `[vercel] drive cache re-wired after resume sandbox=${sandbox.name} exit=${finished.exitCode}`,
+    );
+  } catch (e) {
+    console.warn(
+      `[vercel] drive cache re-wire after resume failed sandbox=${sandbox.name} (continuing, cache cold): ${extractApiErrorDetail(e)}`,
     );
   }
 }
@@ -848,6 +889,7 @@ class VercelSandboxHandle implements SandboxHandle {
       try {
         this.sandbox = await Sandbox.get({
           ...this.creds,
+          onResume: rewireDriveCacheOnResume,
           name: this.sandbox.name,
           resume: true,
         });
@@ -1061,6 +1103,7 @@ class VercelSandboxHandle implements SandboxHandle {
     // must be side-effect free; only start() resumes explicitly.
     this.sandbox = await Sandbox.get({
       ...this.creds,
+      onResume: rewireDriveCacheOnResume,
       name: this.sandbox.name,
       resume: false,
     });
@@ -1203,6 +1246,7 @@ class VercelSandboxClient implements SandboxClient {
       : undefined;
     const base = {
       ...this.creds,
+      onResume: rewireDriveCacheOnResume,
       region: SANDBOX_REGION,
       // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
@@ -1289,6 +1333,7 @@ class VercelSandboxClient implements SandboxClient {
     // on the first exec (the SDK's withResume).
     const sandbox = await Sandbox.get({
       ...this.creds,
+      onResume: rewireDriveCacheOnResume,
       name: sandboxId,
       resume: false,
     });
