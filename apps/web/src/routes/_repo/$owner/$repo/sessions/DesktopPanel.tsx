@@ -8,6 +8,7 @@ import {
   SandboxIframeService,
   type StartResult,
 } from "@/lib/components/sandbox/SandboxIframeService";
+import type { SandboxWake } from "@/lib/components/sandbox/SandboxAsleepState";
 
 const AGENT_BROWSING_LOCK_TTL_MS = 30 * 60 * 1000;
 
@@ -25,6 +26,7 @@ interface DesktopPanelProps {
    * mutation, provided by the caller). Takeover overlay only renders when set.
    */
   onReleaseLock?: () => void;
+  wake?: SandboxWake;
 }
 
 const SURFACE_COPY = {
@@ -90,6 +92,7 @@ export function DesktopPanel({
   surface = "desktop",
   agentBrowsingAt,
   onReleaseLock,
+  wake,
 }: DesktopPanelProps) {
   const copy = SURFACE_COPY[surface];
   const toggleDesktopServer = useAction(api.sandbox.toggleDesktopServer);
@@ -150,6 +153,7 @@ export function DesktopPanel({
         loadFailedError={copy.loadFailedError}
         iframeAllow="clipboard-read; clipboard-write"
         autoStartKey={autoStartKey}
+        wake={wake}
       />
       {showLockOverlay ? (
         <>

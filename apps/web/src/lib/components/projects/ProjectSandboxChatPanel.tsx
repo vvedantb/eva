@@ -13,6 +13,7 @@ import {
   type Id,
 } from "@eva/backend";
 import { toast } from "@eva/ui";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
@@ -39,6 +40,8 @@ interface ProjectSandboxChatPanelProps {
   projectId: Id<"projects">;
   isSandboxActive: boolean;
   isSandboxToggling?: boolean;
+  /** Startup steps while the preview sandbox wakes; undefined otherwise. */
+  sandboxStartupActivity?: string;
   /** Opens the Files tab and loads this sandbox path in the file viewer. */
   onOpenFile?: (path: string) => void;
   /** Opens Review diffs; optional repo-relative path scrolls to that file. */
@@ -52,6 +55,7 @@ export function ProjectSandboxChatPanel({
   projectId,
   isSandboxActive,
   isSandboxToggling = false,
+  sandboxStartupActivity,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -389,6 +393,12 @@ export function ProjectSandboxChatPanel({
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={project?.backgroundAgents}
         sandboxRunning={isSandboxActive}
+        transcriptTail={sandboxStartupTail(
+          sandboxStartupActivity,
+          sandboxStartupActivity !== undefined &&
+            !isSandboxActive &&
+            !isExecuting,
+        )}
       />
       {queueGate.switchDialog}
     </div>

@@ -359,6 +359,7 @@ export function SandboxPanel({
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
             repos={sessionRepos}
             activeRoot={filesRoot}
             onRootChange={setFilesRoot}

@@ -13,7 +13,7 @@ import {
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
-import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -359,27 +359,10 @@ export function ChatPanel({
       ),
   });
 
-  const startupStreamingNode = (
-    <div className="rounded-surface bg-secondary p-4">
-      <StreamingActivityDisplay
-        activity={startupStreamingActivity}
-        thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
-        isSandboxStartup
-      />
-    </div>
+  const transcriptTail = sandboxStartupTail(
+    startupStreamingActivity,
+    isStartupStreaming,
   );
-
-  const emptyStateOverride = isStartupStreaming ? (
-    <div className="flex flex-col items-center justify-center py-8">
-      <StreamingActivityDisplay
-        activity={startupStreamingActivity}
-        thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
-        isSandboxStartup
-      />
-    </div>
-  ) : null;
-
-  const beforeQueuedContent = isStartupStreaming ? startupStreamingNode : null;
 
   const capturedPlans = proposedPlans ?? [];
   const lastAssistantMessageId = [...messages]
@@ -481,7 +464,7 @@ export function ChatPanel({
             ? () => onSandboxToggle("start")
             : undefined
         }
-        emptyStateOverride={emptyStateOverride}
+        transcriptTail={transcriptTail}
         underCardLeading={
           <SandboxBranchChip
             branch={sandboxBranch}
@@ -489,7 +472,6 @@ export function ChatPanel({
             intendedBranch={branchName}
           />
         }
-        beforeQueuedContent={beforeQueuedContent}
         preInputContent={preInputContent}
         preConversationContent={
           <SessionSummaryAccordion

@@ -103,6 +103,7 @@ export function SandboxPaneSlots({
   onStickyTerminalHistoryTailChange,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
+  const wake = { onStartSandbox, isSandboxStarting };
   const resolvedTab =
     simpleView && isSimpleViewHiddenSandboxTab(activeTab)
       ? "preview"
@@ -231,6 +232,7 @@ export function SandboxPaneSlots({
             sandboxId={sandboxId}
             isActive={isActive}
             repoId={repoId}
+            wake={wake}
           />
         </SandboxPaneBoundary>
       </div>
@@ -252,6 +254,7 @@ export function SandboxPaneSlots({
             surface={resolvedTab === "browser" ? "browser" : "desktop"}
             agentBrowsingAt={agentBrowsingAt}
             onReleaseLock={onReleaseBrowserLock}
+            wake={wake}
           />
         </SandboxPaneBoundary>
       </div>
@@ -282,6 +285,7 @@ export function SandboxPaneSlots({
                     isForeground={resolvedTab === slug}
                     previewPort={preview.effectivePort}
                     repoId={repoId}
+                    wake={wake}
                   />
                 </SandboxPaneBoundary>
               </div>
