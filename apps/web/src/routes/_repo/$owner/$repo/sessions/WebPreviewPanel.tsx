@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import type { Id } from "@eva/backend";
 import { cn, Spinner, Button, WebPreview } from "@eva/ui";
 import { useSessionStorage } from "usehooks-ts";
-import { IconPlayerPlay, IconRefresh, IconWorld } from "@tabler/icons-react";
+import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
+import { IconRefresh, IconWorld } from "@tabler/icons-react";
 import {
   buildUrlWithPath,
   normalizePreviewPath,
@@ -213,27 +214,15 @@ export function WebPreviewPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
-          <IconWorld className="w-12 h-12 opacity-50" />
-          <p className="text-sm">
-            {!isActive
-              ? "Wake Eva up to preview your app"
-              : "Waiting for sandbox..."}
-          </p>
-          {!isActive && onStartSandbox ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onStartSandbox}
-              disabled={isSandboxStarting}
-            >
-              <IconPlayerPlay size={14} />
-              {isSandboxStarting ? "Starting..." : "Wake up Eva"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      <SandboxAsleepState
+        icon={IconWorld}
+        label={
+          !isActive
+            ? "Wake Eva up to preview your app"
+            : "Waiting for sandbox..."
+        }
+        wake={!isActive ? { onStartSandbox, isSandboxStarting } : undefined}
+      />
     );
   }
 

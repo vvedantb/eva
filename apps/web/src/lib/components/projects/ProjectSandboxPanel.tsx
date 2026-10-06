@@ -209,6 +209,7 @@ export function ProjectSandboxPanel({
               repoId={repoId}
               isActive={isActive}
               fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
             />
           </div>
           <div
