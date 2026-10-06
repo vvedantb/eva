@@ -16,9 +16,9 @@ interface PrPanelProps {
 
 /**
  * Sandbox Review tab. Owns only what is specific to this surface — reading the
- * active tab from the path (`…/review/overview`, `…/review/diffs/…`,
- * `…/review/recap`, with `?prTab=` as a fallback) and defaulting to Recap when
- * a ready recap exists. The tabs themselves come from `ReviewTabsPanel`, shared
+ * active tab from the path (`…/review/summary`, `…/review/timeline`,
+ * `…/review/diffs/…`, with `?prTab=` as a fallback) and defaulting to Summary,
+ * where the recap leads, when a ready recap exists. The tabs themselves come from `ReviewTabsPanel`, shared
  * with the standalone Reviews page.
  */
 export function PrPanel({ prUrl, repoId, isActive }: PrPanelProps) {
@@ -39,10 +39,10 @@ export function PrPanel({ prUrl, repoId, isActive }: PrPanelProps) {
     if (!prUrl) {
       setResolvedDefault("diffs");
     } else if (recapDoc !== undefined) {
-      // Only open on Recap when there is a walkthrough to show: a "ready" doc
-      // with no html would land the reader on an empty tab.
+      // Only open on Summary when there is a walkthrough to lead it: otherwise
+      // the code is what a reader opens a session's review for.
       setResolvedDefault(
-        recapDoc !== null && isViewableRecap(recapDoc) ? "recap" : "diffs",
+        recapDoc !== null && isViewableRecap(recapDoc) ? "summary" : "diffs",
       );
     }
   }
@@ -54,7 +54,6 @@ export function PrPanel({ prUrl, repoId, isActive }: PrPanelProps) {
       prNumber={prNumber}
       activeTab={prTab ?? resolvedDefault ?? "diffs"}
       onTabChange={setPrTab}
-      compact
     />
   );
 }

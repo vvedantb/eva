@@ -1,4 +1,7 @@
 export {
+  AGENT_MEMORY_DIR,
+  AGENT_MEMORY_FORMAT,
+  buildAgentMemoryBlock,
   buildRootDirectoryInstruction,
   buildCustomInstructionsBlock,
   buildReadableReposBlock,

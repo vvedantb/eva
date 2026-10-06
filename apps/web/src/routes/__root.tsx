@@ -35,7 +35,7 @@ const DevAgentation = import.meta.env.DEV
     )
   : null;
 
-/** Lazy so @vedantb/redline stays out of the production bundle. */
+/** Lazy so @vvedantb/redline stays out of the production bundle. */
 const DevRedline = import.meta.env.DEV
   ? lazy(() =>
       import("@/lib/components/DevRedline").then((m) => ({

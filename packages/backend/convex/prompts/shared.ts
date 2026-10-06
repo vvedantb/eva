@@ -27,6 +27,27 @@ export function buildSystemPromptBlock(
   return `\n\n## System Prompt\n${systemPrompt}`;
 }
 
+/** Repo-relative folder holding agent memory when the repo opts in. */
+export const AGENT_MEMORY_DIR = ".eva/memory";
+
+/**
+ * How a memory entry is written, after the Agent Memory Repo spec
+ * (github.com/AgentMemoryRepo/agentmemoryrepo). Shared by the per-turn block
+ * and the dreaming automation so both enforce the same format and rules.
+ */
+export const AGENT_MEMORY_FORMAT = `- \`${AGENT_MEMORY_DIR}/MEMORY.md\` is the short entry point: one-line bullets plus \`[[path]]\` links to topic files in the same folder (e.g. \`[[billing/pricing.md]]\`). Keep it under ~100 lines.
+- One fact per bullet, stated once and linked from elsewhere, with metadata: \`- Fact. [source: <PR, file or chat>, added: YYYY-MM-DD]\`.
+- Worth saving: non-obvious lessons, gotchas, decisions and the reason for them, user preferences, useful queries or commands. Not worth saving: anything the code, git history or CLAUDE.md already records.
+- Never save secrets, tokens, credentials, customer or client data, or anything that identifies a person. Describe the pattern instead.`;
+
+/** Per-turn memory instructions; empty unless the repo opted in. */
+export function buildAgentMemoryBlock(enabled: boolean | undefined): string {
+  if (enabled !== true) return "";
+  return `\n\n## Agent memory (this repo opted in):
+Notes from earlier sessions live in \`${AGENT_MEMORY_DIR}/\` at the repo root. Read \`MEMORY.md\` before starting work and grep the folder or follow links for anything relevant. When you learn something a later session would need, or find an entry is wrong, update the folder in the same turn and commit it with your other changes.
+${AGENT_MEMORY_FORMAT}`;
+}
+
 /** Lists sibling repositories the sandbox's git credentials can read; empty when there are none. */
 export function buildReadableReposBlock(
   repos: ReadonlyArray<{ owner: string; name: string }>,

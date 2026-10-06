@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { playNotificationChime } from "@/lib/utils/notificationChime";
+import { playReplyChime } from "@/lib/utils/notificationChime";
 
 /**
- * Plays the inbox notification chime once when the agent finishes a turn,
+ * Plays the reply chime once when the agent finishes a turn,
  * behind the `replyChime` experimental flag (off until opted in).
  *
  * Lives in ChatBody so every chat surface (session, quick task, project) gets
@@ -52,7 +52,7 @@ export function useAgentReplyChime({
     if (!isOwnTurn || !isEnabled) {
       return;
     }
-    playNotificationChime();
+    playReplyChime();
     // The edge is tracked even while the flag is off, so turning it on mid-turn
     // chimes on the next finish rather than replaying a stale one.
   }, [conversationId, isExecuting, isOwnTurn, isEnabled]);

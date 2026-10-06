@@ -13,6 +13,10 @@ import {
   useFullscreenElement,
   usePreviewIframeElement,
 } from "@/lib/components/sandbox/previewIframeHost";
+import {
+  PreviewToolCallExecutor,
+  type PreviewToolCallParentId,
+} from "@/lib/components/sandbox/PreviewToolCallExecutor";
 import { resolveMiniPlayerLogicalSize } from "@/lib/components/sandbox/previewContain";
 import {
   closePreviewMiniPlayer,
@@ -57,6 +61,8 @@ interface WebPreviewPanelProps {
   /** Multi-repo sessions: one dev-server port per checked-out repo. */
   portOptions?: readonly PreviewPortOption[];
   pathStorageKey: string;
+  /** The chat that owns this sandbox: agent page-tool calls are queued on it. */
+  toolCallParentId: PreviewToolCallParentId;
   /**
    * When set (sessions), Preview path is sticky on Convex. `undefined` while
    * the session query loads — falls back to sessionStorage until then.
@@ -94,6 +100,7 @@ export function WebPreviewPanel({
   onPortChange,
   portOptions,
   pathStorageKey,
+  toolCallParentId,
   stickyPath,
   onStickyPathChange,
   onStartSandbox,
@@ -316,6 +323,10 @@ export function WebPreviewPanel({
         onAnnotationModeChange={setAnnotationMode}
         showAnnotationToggle={Boolean(onAnnotationSubmit)}
         popOut={popOut}
+      />
+      <PreviewToolCallExecutor
+        parentId={toolCallParentId}
+        iframeElement={iframeElement}
       />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar

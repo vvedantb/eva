@@ -1,7 +1,6 @@
 "use client";
 
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { motionFast, useDragSensors } from "@eva/ui";
@@ -15,8 +14,6 @@ import {
 import { TAB_PREFERRED_WIDTH_REM } from "@/lib/components/sidebar/session-tabs/SessionChromeTab";
 import { SortableSessionTab } from "@/lib/components/sidebar/session-tabs/SortableSessionTab";
 import type { TabGroupColor } from "@/lib/components/sidebar/session-tabs/tabGroupColors";
-import { catchMutationError } from "@/lib/utils/mutationToast";
-import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 
@@ -27,7 +24,6 @@ export interface ChromeTabEntry {
 }
 
 interface SessionChromeTabStripProps {
-  repo: RepoWithLogo;
   baseUrl: string;
   groupColor: TabGroupColor;
   /** Every tab in the group, including the closed ones, in strip order. */
@@ -49,7 +45,6 @@ interface SessionChromeTabStripProps {
  * sized by its own contents.
  */
 export function SessionChromeTabStrip({
-  repo,
   baseUrl,
   groupColor,
   tabs,
@@ -60,7 +55,6 @@ export function SessionChromeTabStrip({
   onClose,
 }: SessionChromeTabStripProps) {
   const navigate = useNavigate();
-  const createSession = useMutation(api.sessions.create);
   const sensors = useDragSensors({ sortable: true });
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -120,18 +114,7 @@ export function SessionChromeTabStrip({
                   onRenameRequest={() => onRenameRequest(entry.session)}
                   onArchiveRequest={() => onArchiveRequest(entry.session)}
                   onClose={() => onClose(entry)}
-                  onDuplicate={async () => {
-                    const { numId } = await catchMutationError(
-                      createSession({
-                        repoId: repo._id,
-                        title: `${entry.session.title} (copy)`,
-                      }),
-                      "Couldn't duplicate session",
-                      "session-duplicate",
-                    );
-                    return String(numId);
-                  }}
-                  onDuplicateNavigate={(segment) => {
+                  onForkNavigate={(segment) => {
                     navigate({ to: `${baseUrl}/${segment}` });
                   }}
                 />

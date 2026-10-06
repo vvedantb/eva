@@ -26,3 +26,13 @@ export {
   type ComposerTraits,
   type StoredComposerTraits,
 } from "./composerTraits";
+export {
+  FORK_PROMPT_CHAR_LIMIT,
+  canForkMessage,
+  collectForkPrefix,
+  forkDialogSummary,
+  forkThreadTitle,
+  formatForkPrompt,
+  type ForkTranscriptPrefix,
+  type ForkTranscriptTurn,
+} from "./messageFork";

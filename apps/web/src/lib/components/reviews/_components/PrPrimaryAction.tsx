@@ -127,7 +127,7 @@ function MergeAction({
     <>
       <ButtonGroup>
         <Button
-          size="sm"
+          size="xs"
           disabled={!canMerge}
           onClick={(event) =>
             requestConfirm(
@@ -148,7 +148,7 @@ function MergeAction({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              size="sm"
+              size="xs"
               disabled={!canMerge}
               className="px-1.5"
               aria-label="Choose a merge method"
@@ -238,7 +238,7 @@ function ReopenAction({
   };
 
   return (
-    <Button size="sm" disabled={working} onClick={() => void reopen()}>
+    <Button size="xs" disabled={working} onClick={() => void reopen()}>
       <CrossfadeIcon
         show={working}
         trueKey="loading"
@@ -297,7 +297,7 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   return (
     <>
       <Button
-        size="sm"
+        size="xs"
         title={skipConfirmTitle("Revert")}
         onClick={(event) =>
           requestConfirm(

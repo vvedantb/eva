@@ -3,22 +3,13 @@
 import type { Sandbox } from "@vercel/sandbox";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { ensureEvaEnvInteractiveHookScript } from "../_sandbox/vercelEnvFile";
+import { tmuxSessionName } from "./consoleSessionName";
 
 /** Browser WebSockets cannot set headers — pass the interactive token as a query param. */
 function buildVercelInteractiveWsUrl(url: string, token: string): string {
   const parsed = new URL(url);
   parsed.searchParams.set("token", token);
   return parsed.toString();
-}
-
-/** Stable tmux session name for a Console/terminal pane id. */
-export function tmuxSessionName(ptyInstanceId: string | undefined): string {
-  const source =
-    ptyInstanceId !== undefined && ptyInstanceId.length > 0
-      ? ptyInstanceId
-      : "terminal";
-  const safe = source.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80);
-  return `eva_${safe}`;
 }
 
 /** Ensures Vercel browser terminals attach to one shared pane process. */

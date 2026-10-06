@@ -12,7 +12,7 @@ function convexSource(path: string): string {
 test("request_local_computer is registered for every MCP caller", () => {
   const tools = convexSource("mcp/tools.ts");
   const registered = tools.indexOf('"request_local_computer"');
-  const gate = tools.indexOf("if (isOrchestrator) {");
+  const gate = tools.indexOf("if (isAve) {");
   expect(registered).toBeGreaterThan(-1);
   expect(gate).toBeGreaterThan(registered);
 });

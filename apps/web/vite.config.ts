@@ -8,7 +8,7 @@ import { tablerDeepImports } from "./vite/deepImports";
 import { tablerIconData } from "./vite/tablerIconData";
 import { originHints } from "./vite/originHints";
 import { convexDevProxy } from "./vite/convexDevProxy";
-import { redline } from "@vedantb/redline/vite";
+import { redline } from "@vvedantb/redline/vite";
 
 function agentLoginPlugin(): Plugin {
   let env: Record<string, string>;

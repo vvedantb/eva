@@ -38,6 +38,11 @@ describe("resolveModelPricing", () => {
     expect(resolveModelPricing("claude-fable-5")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5"],
     );
+    // opus-5-5 is cheaper than opus-5; a miss would bill it at opus-5 rates.
+    expect(resolveModelPricing("claude-opus-5-5")?.inputPerMillion).toBe(4);
+    expect(resolveModelPricing("claude-sonnet-5-5")).toBe(
+      CLAUDE_PRICING_PER_MILLION["claude-sonnet-5-5"],
+    );
   });
 
   test("a prefix must end at a segment boundary", () => {

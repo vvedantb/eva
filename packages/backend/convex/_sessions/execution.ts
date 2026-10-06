@@ -20,7 +20,7 @@ import { finalizeCancelledAssistantMessage } from "../streaming";
 import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
 import { startNextQueuedSessionMessage } from "../_queues/helpers";
-import { buildSessionPrompt, sessionTurnTools } from "./workflow";
+import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
@@ -136,7 +136,7 @@ async function stageAndStartSessionTurn(
       userId: params.actingUserId,
       model: normalizedModel,
       ...launchTraits,
-      ...sessionTurnTools(params.session.isOrchestrator),
+      allowedTools: SESSION_TOOLS,
       providerAccountId: stickyProviderAccountId,
       credentialOwnerUserId,
       sessionPersistenceId: params.session._id,
@@ -414,7 +414,7 @@ export const prewarmDaemon = authMutation({
         use1mContext: session.lastUse1mContext,
         fastMode: session.lastFastMode,
       }),
-      ...sessionTurnTools(session.isOrchestrator),
+      allowedTools: SESSION_TOOLS,
       providerAccountId: session.providerAccountId,
       credentialOwnerUserId,
       sessionPersistenceId: args.sessionId,
@@ -447,7 +447,7 @@ export const prewarmDaemonNow = authAction({
       thinkingEnabled: data.thinkingEnabled,
       use1mContext: data.use1mContext,
       fastMode: data.fastMode,
-      ...sessionTurnTools(data.isOrchestrator),
+      allowedTools: SESSION_TOOLS,
       providerAccountId: data.providerAccountId,
       credentialOwnerUserId: data.credentialOwnerUserId,
       sessionPersistenceId: args.sessionId,
@@ -474,8 +474,6 @@ export const getDaemonPrewarmData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
       providerAccountId: v.optional(v.id("userProviderAccounts")),
-      /** Selects the master's reduced tool set — see `sessionTurnTools`. */
-      isOrchestrator: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -504,7 +502,6 @@ export const getDaemonPrewarmData = internalQuery({
         fastMode: session.lastFastMode,
       }),
       providerAccountId: session.providerAccountId,
-      isOrchestrator: session.isOrchestrator,
     };
   },
 });

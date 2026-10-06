@@ -103,17 +103,17 @@ describe("parseDiffSearchFields", () => {
     ).toEqual({
       diffFile: "apps/web/foo.tsx",
       diffView: "split",
-      prTab: "recap",
+      prTab: "summary",
     });
 
     expect(
       parseDiffSearchFields({
-        prTab: "overview",
+        prTab: "commits",
       }),
     ).toEqual({
       diffFile: undefined,
       diffView: undefined,
-      prTab: "overview",
+      prTab: "timeline",
     });
 
     expect(parseDiffSearchFields({ diffView: "nope", prTab: "junk" })).toEqual({

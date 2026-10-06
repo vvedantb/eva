@@ -247,7 +247,7 @@ function RepoRailView({
                 railTileActive(inboxActive),
               )}
             >
-              <InboxIcon size={22} className="shrink-0" />
+              <InboxIcon size={22} filled={inboxActive} className="shrink-0" />
               <QueryErrorBoundary>
                 <InboxUnreadBadge />
               </QueryErrorBoundary>
@@ -273,7 +273,11 @@ function RepoRailView({
                 railTileActive(sessionsActive),
               )}
             >
-              <SessionsIcon size={22} className="shrink-0" />
+              <SessionsIcon
+                size={22}
+                filled={sessionsActive}
+                className="shrink-0"
+              />
               <CountPop
                 label={sessionsLabel}
                 className={RAIL_BADGE_LIVE_CLASS}
@@ -397,7 +401,11 @@ function RepoRailView({
                   railTileActive(automationsActive),
                 )}
               >
-                <AutomationsIcon size={22} className="shrink-0" />
+                <AutomationsIcon
+                  size={22}
+                  filled={automationsActive}
+                  className="shrink-0"
+                />
                 <QueryErrorBoundary>
                   <AutomationsUnreadBadge />
                 </QueryErrorBoundary>

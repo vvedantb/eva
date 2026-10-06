@@ -3,13 +3,13 @@ import {
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  MessageResponse,
   motionFast,
   ProviderIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -28,6 +28,7 @@ import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
 import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
+import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { ChatMessageContextMenu } from "@/lib/components/chat/ChatMessageContextMenu";
 import {
   useTurnCheckpointActions,
@@ -41,9 +42,13 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
+import { IconGitFork } from "@tabler/icons-react";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
-import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
+import type {
+  ChatBodyMessage,
+  ChatRepo,
+} from "@/lib/components/chat/chatBodyUtils";
 import {
   collectQuestionSteps,
   getAssistantTurnState,
@@ -107,7 +112,8 @@ interface ChatMessageProps {
    * wrong (nothing arrived) and the most expensive part of that commit.
    */
   animateIn?: boolean;
-  repoBasePath: string;
+  /** Absent (Manager Ave): user turns render as plain markdown. */
+  repo?: ChatRepo;
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
@@ -144,6 +150,10 @@ interface ChatMessageProps {
    * on assistant turns that carry checkpoint shas.
    */
   turnCheckpoint?: TurnCheckpointContext;
+  /** Flash the row after a citation chip jumps here. */
+  citeHighlight?: boolean;
+  /** Sessions: start a new chat with the transcript through this message. */
+  onFork?: () => void;
   /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
@@ -170,7 +180,7 @@ interface ChatMessageProps {
 export const ChatMessage = memo(function ChatMessage({
   message,
   animateIn = true,
-  repoBasePath,
+  repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
   changedFilesExpanded,
@@ -189,6 +199,8 @@ export const ChatMessage = memo(function ChatMessage({
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
+  citeHighlight = false,
+  onFork,
   onRetryTurn,
   precedingUser,
   belowContent,
@@ -222,6 +234,15 @@ export const ChatMessage = memo(function ChatMessage({
       ? message.content
       : (streamingContent ?? "");
   const copyPlain = copySource ? tokenizedToDisplayText(copySource) : undefined;
+  const forkAction: ChatMessageActionItem | undefined = onFork
+    ? {
+        key: "fork",
+        label: "Fork from here",
+        icon: <IconGitFork className="size-4" />,
+        onClick: onFork,
+      }
+    : undefined;
+  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
 
   // Two MCP provenances, never both on one row: a child chat shows the turns
   // posted from outside the composer, Eva shows the wake-ups its children fired.
@@ -263,11 +284,7 @@ export const ChatMessage = memo(function ChatMessage({
     message.content.trim().length > 0;
   /* wrap-anywhere: without it a long unbreakable token is silently clipped by
      MessageContent's overflow-hidden. */
-  const turnProse = (
-    <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-      {message.content}
-    </MessageResponse>
-  );
+  const turnProse = <Markdown>{message.content}</Markdown>;
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
@@ -284,15 +301,15 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <>
-      <ChatMessageContextMenu
-        content={copySource}
-        extraItems={checkpoint.items}
-      >
+      <ChatMessageContextMenu content={copySource} extraItems={rowActions}>
         <m.div
           data-message-id={message._id}
           initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={motionFast}
+          className={
+            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
+          }
         >
           <AIMessage
             from={message.role}
@@ -357,7 +374,7 @@ export const ChatMessage = memo(function ChatMessage({
                   >
                     <UserMessageBody
                       message={message}
-                      repoBasePath={repoBasePath}
+                      repo={repo}
                     />
                   </MessageContent>
                 </div>
@@ -375,6 +392,7 @@ export const ChatMessage = memo(function ChatMessage({
                 <UserMessageMeta
                   align={isOtherUser ? "start" : "end"}
                   copyPlain={copyPlain}
+                  actions={forkAction ? [forkAction] : []}
                   timestamp={message.timestamp}
                   className={isOtherUser ? "pl-6" : undefined}
                 />
@@ -393,9 +411,11 @@ export const ChatMessage = memo(function ChatMessage({
                       {agentSpawnRow}
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent ? (
-                        <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
-                          {streamingContent}
-                        </MessageResponse>
+                        <div data-assistant-cite-source={message._id}>
+                          <Markdown className="mt-2">
+                            {streamingContent}
+                          </Markdown>
+                        </div>
                       ) : null}
                     </>
                   ) : (
@@ -432,6 +452,7 @@ export const ChatMessage = memo(function ChatMessage({
                         ) : (
                           <m.div
                             key="turn-content"
+                            data-assistant-cite-source={message._id}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -490,7 +511,7 @@ export const ChatMessage = memo(function ChatMessage({
                 {belowContent && !panelTabs ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}
-                {turnModel || copyPlain || checkpoint.items.length > 0 ? (
+                {turnModel || copyPlain || rowActions.length > 0 ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
                       <MessageModelIcon
@@ -499,11 +520,11 @@ export const ChatMessage = memo(function ChatMessage({
                         credentialSourceLabel={turnCredentialSourceLabel}
                       />
                     ) : null}
-                    {copyPlain || checkpoint.items.length > 0 ? (
+                    {copyPlain || rowActions.length > 0 ? (
                       <>
                         <ChatMessageActions
                           copyText={copyPlain}
-                          actions={checkpoint.items}
+                          actions={rowActions}
                           className="ml-0.5"
                           revealOnHover={false}
                         />
@@ -535,10 +556,10 @@ export const ChatMessage = memo(function ChatMessage({
 
 function UserMessageBody({
   message,
-  repoBasePath,
+  repo,
 }: {
   message: ChatBodyMessage;
-  repoBasePath: string;
+  repo?: ChatRepo;
 }) {
   return (
     <>
@@ -555,7 +576,7 @@ function UserMessageBody({
         <CollapsibleUserMessageBody text={message.content}>
           <ReviewCommentMessage
             text={message.content}
-            repoBasePath={repoBasePath}
+            repo={repo}
           />
         </CollapsibleUserMessageBody>
       ) : null}
@@ -595,11 +616,13 @@ function HandoffModelChip({
 function UserMessageMeta({
   align,
   copyPlain,
+  actions = [],
   timestamp,
   className,
 }: {
   align: "start" | "end";
   copyPlain?: string;
+  actions?: ChatMessageActionItem[];
   timestamp?: number;
   className?: string;
 }) {
@@ -611,8 +634,12 @@ function UserMessageMeta({
         className,
       )}
     >
-      {copyPlain ? (
-        <ChatMessageActions copyText={copyPlain} revealOnHover={false} />
+      {copyPlain || actions.length > 0 ? (
+        <ChatMessageActions
+          copyText={copyPlain}
+          actions={actions}
+          revealOnHover={false}
+        />
       ) : null}
       {timestamp ? (
         <span className="text-[11px] text-muted-foreground/60">

@@ -1,9 +1,11 @@
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
@@ -40,10 +42,6 @@ import {
 } from "@/lib/hooks/useAvailableAiModels";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { PendingReviewCommentChips } from "@/lib/components/chat/PendingReviewCommentChips";
-import {
-  AveResetChatDialog,
-  useResetOrchestratorChat,
-} from "@/lib/components/ave/AveResetChatDialog";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { toast } from "@eva/ui";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
@@ -84,12 +82,6 @@ interface ChatPanelProps {
   isReadOnly?: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
   sandboxCollapsed?: boolean;
-  /** Canonical link to this session; omitted when the URL already is one. */
-  permalinkPath?: string;
-  /** Chat-only surface (the orchestrator): hides branch/PR affordances. */
-  chatOnly?: boolean;
-  /** Popover already titles the surface — omit the session-chat title. */
-  hideTitle?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
@@ -129,9 +121,6 @@ export function ChatPanel({
   isArchived = false,
   isReadOnly = false,
   deploymentStatus,
-  permalinkPath,
-  chatOnly,
-  hideTitle = false,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -139,14 +128,14 @@ export function ChatPanel({
   isRouteActive = true,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
+  const navigate = useNavigate();
+  const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [showResetChatDialog, setShowResetChatDialog] = useState(false);
   const altHeld = useAltHeld();
   const { sendForReview } = useSendSessionForReview(sessionId);
   const { startSummary } = useStartSessionSummary(sessionId);
-  const { reset: resetOrchestratorChat } = useResetOrchestratorChat();
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // The picker lists the session owner's accounts, not the viewer's — the turn
@@ -201,6 +190,36 @@ export function ChatPanel({
   const review = usePendingReviewComments();
   const hasPendingReviewComments = (review?.comments.length ?? 0) > 0;
 
+  const handleForkTranscript = async (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => {
+    const accountId = resolveAccountId(providerAccountId) ?? null;
+    try {
+      const { numId } = await createSession({
+        repoId: repo._id,
+        title: input.title,
+        message: input.prompt,
+        model,
+        ...executionTraits,
+        reasoningLevel: displayTraits.effortLevel,
+        thinkingEnabled: displayTraits.thinkingEnabled,
+        use1mContext: displayTraits.use1mContext,
+        fastMode: displayTraits.fastMode,
+        providerAccountId: accountId,
+      });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Couldn't fork this chat";
+      toast.error(message);
+      throw error;
+    }
+  };
+
   const { isExecuting, handleSend, handleCancel } = useSessionSend({
     sessionId,
     model,
@@ -251,7 +270,10 @@ export function ChatPanel({
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
     onSendCommand: (command) => {
-      void handleSend(command, undefined, { skipReviewComments: true });
+      // Rejects on a failed send; the failure is already toasted.
+      void handleSend(command, undefined, { skipReviewComments: true }).catch(
+        () => {},
+      );
     },
   };
 
@@ -300,9 +322,6 @@ export function ChatPanel({
     isSandboxToggling,
     isAssistantResponding: isExecuting,
     deploymentStatus,
-    permalinkPath,
-    chatOnly,
-    hideTitle,
     simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
@@ -326,18 +345,6 @@ export function ChatPanel({
           });
         },
       ),
-    // Only Manager Ave can be reset: it is the one chat the user cannot simply
-    // replace by opening a new session.
-    onOpenResetChatDialog: chatOnly
-      ? () =>
-          requestConfirm(
-            altHeld,
-            () => setShowResetChatDialog(true),
-            () => {
-              void resetOrchestratorChat();
-            },
-          )
-      : undefined,
   });
 
   const startupStreamingNode = (
@@ -438,8 +445,7 @@ export function ChatPanel({
       headerRight={headerRight}
     >
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={sessionId}
         chatParentId={sessionId}
         messages={messages}
@@ -463,14 +469,11 @@ export function ChatPanel({
         }
         emptyStateOverride={emptyStateOverride}
         underCardLeading={
-          // The orchestrator chat carries no branch affordances at all.
-          chatOnly ? undefined : (
-            <SandboxBranchChip
-              branch={sandboxBranch}
-              isSandboxActive={isSandboxActive}
-              intendedBranch={branchName}
-            />
-          )
+          <SandboxBranchChip
+            branch={sandboxBranch}
+            isSandboxActive={isSandboxActive}
+            intendedBranch={branchName}
+          />
         }
         beforeQueuedContent={beforeQueuedContent}
         preInputContent={preInputContent}
@@ -480,16 +483,19 @@ export function ChatPanel({
             summaryStreamingActivity={summaryStreamingActivity}
           />
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={accounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={onTraitsChange}
+        modelPicker={{
+          model,
+          setModel,
+          modelOptions,
+          accounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
+        onForkTranscript={handleForkTranscript}
         afterMessage={(messageId) => {
           const plan = proposedPlanForMessage(capturedPlans, messageId);
           if (plan) {
@@ -569,12 +575,6 @@ export function ChatPanel({
         open={showReviewModal}
         onClose={() => setShowReviewModal(false)}
       />
-      {chatOnly && (
-        <AveResetChatDialog
-          open={showResetChatDialog}
-          onOpenChange={setShowResetChatDialog}
-        />
-      )}
     </ChatPageWrapper>
   );
 }

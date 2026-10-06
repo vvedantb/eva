@@ -1,8 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/** Legacy review tab, folded into Summary when the tabs became three. */
 export const Route = createFileRoute(
   "/_repo/$owner/$repo/sessions/$numId/review/overview",
 )({
-  // Shell is rendered by the `$numId` layout so Preview/Console stay mounted.
-  component: () => null,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: "/$owner/$repo/sessions/$numId/review/summary",
+      params,
+      search,
+      replace: true,
+    });
+  },
 });

@@ -19,7 +19,10 @@ import {
   IconSearch,
 } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { treeThemeVars } from "@/lib/components/sandbox/treeTheme";
+import {
+  TREE_UNSAFE_CSS,
+  treeThemeVars,
+} from "@/lib/components/sandbox/treeTheme";
 
 interface SandboxFileTreeProps {
   paths: string[];
@@ -89,6 +92,7 @@ export function SandboxFileTree({
     initialExpansion: 1,
     search: true,
     fileTreeSearchMode: "hide-non-matches",
+    unsafeCSS: TREE_UNSAFE_CSS,
     initialSelectedPaths: selectedPath ? [selectedPath] : [],
     onSelectionChange: (selectedPaths) => {
       const path = selectedPaths[0];

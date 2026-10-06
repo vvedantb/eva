@@ -39,21 +39,6 @@ export const MODEL =
   process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 export const ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
 /**
- * This turn may not modify the workspace (set for Manager Ave, the master
- * session, which supervises agents and never implements).
- *
- * Provider-agnostic on purpose: `ALLOWED_TOOLS` above is Claude's tool
- * vocabulary and only `claudeSdk.ts` can read it, so every other adapter keys
- * off this boolean and applies its own restriction — Cursor `disallowedTools`,
- * Codex `sandboxMode: "read-only"`. On Claude and Cursor, shell and MCP stay
- * fully available: the master reads production logs through the shell and
- * orchestrates the fleet through MCP. Codex restricts at the sandbox instead of
- * per tool, so see `codexSdk.ts` for what that does and does not guarantee.
- * OpenCode has no restriction — its SDK is fetched at runtime and exposes no
- * verified tool-permission option, so there the prompt is the only gate.
- */
-export const NO_WRITES = process.env.EVA_NO_WRITES === "1";
-/**
  * Surfaces whose chat panel renders a blocking question and writes the answer
  * back: session `ChatPanel.tsx`, `TaskSandboxChatPanel.tsx` and
  * `ProjectSandboxChatPanel.tsx` all query `pendingQuestions.getActive` on the

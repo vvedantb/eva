@@ -22,8 +22,14 @@ type SandboxTabIndicator = "activity" | "content";
  * instead of asking the builder to wrap the name in a fresh component per
  * render, which would remount the icon on every keystroke elsewhere in the tree.
  */
+type TabIconComponent = ComponentType<{ className?: string }>;
+
+/**
+ * `ActiveIcon` is the filled Tabler variant shown while the tab is selected.
+ * Not every icon has one; those fall back to a bolder outline stroke.
+ */
 type SandboxTabIcon =
-  | { kind: "component"; Icon: ComponentType<{ className?: string }> }
+  | { kind: "component"; Icon: TabIconComponent; ActiveIcon?: TabIconComponent }
   | { kind: "name"; name: string };
 
 export interface SandboxTabDescriptor {
@@ -58,7 +64,7 @@ export type SandboxTabLayout = "row" | "icon" | "stacked";
    sits under the comfortable-tap floor. `hit-target` is the wrong tool here —
    its 8px bleed would overlap the neighbouring chip across the 4px gap. */
 const TAB_CLASS =
-  "h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
+  "group/tab h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
 
 /* Geometry only — the `md:` prefixes hold because the two rail layouts are
    chosen off the same 768px breakpoint the media query reads. */
@@ -71,6 +77,22 @@ const TAB_LAYOUT_CLASS: Record<SandboxTabLayout, string> = {
 
 const ICON_CLASS = "size-4 shrink-0";
 
+/* Selection lives in Radix's `data-state` on the trigger, so the outline/filled
+   swap is pure CSS — the trigger never needs to know which tab is active. */
+const OUTLINE_WHEN_IDLE_CLASS = cn(
+  ICON_CLASS,
+  "group-data-[state=active]/tab:hidden",
+);
+const FILLED_WHEN_ACTIVE_CLASS = cn(
+  ICON_CLASS,
+  "hidden group-data-[state=active]/tab:block",
+);
+/* No filled variant: thicken the outline instead (Tabler's default is 2). */
+const BOLD_WHEN_ACTIVE_CLASS = cn(
+  ICON_CLASS,
+  "group-data-[state=active]/tab:stroke-[2.75]",
+);
+
 /* Two-digit counts still fit: the pill grows from a 14px circle via `px-1`
    rather than being fixed-width, and `tabular-nums` keeps it from twitching as
    the number changes. */
@@ -79,10 +101,28 @@ const COUNT_BADGE_CLASS =
 
 function TabIcon({ icon }: { icon: SandboxTabIcon }) {
   if (icon.kind === "name") {
-    return <TablerIconByName name={icon.name} className={ICON_CLASS} />;
+    return (
+      <>
+        <TablerIconByName
+          name={icon.name}
+          className={OUTLINE_WHEN_IDLE_CLASS}
+        />
+        <TablerIconByName
+          name={icon.name}
+          variant="filled"
+          className={FILLED_WHEN_ACTIVE_CLASS}
+        />
+      </>
+    );
   }
-  const { Icon } = icon;
-  return <Icon className={ICON_CLASS} />;
+  const { Icon, ActiveIcon } = icon;
+  if (!ActiveIcon) return <Icon className={BOLD_WHEN_ACTIVE_CLASS} />;
+  return (
+    <>
+      <Icon className={OUTLINE_WHEN_IDLE_CLASS} />
+      <ActiveIcon className={FILLED_WHEN_ACTIVE_CLASS} />
+    </>
+  );
 }
 
 interface SandboxTabTriggerProps {
@@ -103,7 +143,8 @@ export function SandboxTabTrigger({
   onReselect,
 }: SandboxTabTriggerProps) {
   const labelHidden = layout === "icon";
-  const count = tab.count !== undefined && tab.count > 0 ? tab.count : undefined;
+  const count =
+    tab.count !== undefined && tab.count > 0 ? tab.count : undefined;
   const trigger = (
     <TabsTrigger
       value={tab.value}

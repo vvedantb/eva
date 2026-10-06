@@ -5,6 +5,7 @@ import { listAutomationsForRepo } from "../_automations/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { prStateValidator } from "../validators";
+import { latestTaskPrUrl } from "../_agentTasks/prUrl";
 import {
   openSessionIdsForRepo,
   projectIsExecuting,
@@ -362,9 +363,6 @@ const MAX_ENTITY_PAGE = 50;
  */
 const ENTITY_SCAN_BUDGET = 300;
 
-/** Runs looked at per task when finding the PR that task opened. */
-const TASK_PR_RUN_LOOKBACK = 3;
-
 const listedEntityValidator = v.object({
   kind: chatTargetKindValidator,
   id: v.string(),
@@ -531,19 +529,6 @@ async function scanProjects(
     )
     .order("desc")
     .take(take);
-}
-
-/** The PR a quick task opened. It lives on the run, never on the task row. */
-async function latestTaskPrUrl(
-  ctx: QueryCtx,
-  taskId: Id<"agentTasks">,
-): Promise<string | undefined> {
-  const runs = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .order("desc")
-    .take(TASK_PR_RUN_LOOKBACK);
-  return runs.find((run) => run.prUrl)?.prUrl;
 }
 
 type RepoRow = Pick<
@@ -926,26 +911,6 @@ export const getDocument = internalQuery({
     }
 
     return null;
-  },
-});
-
-/**
- * The user's live Manager Ave session, if they have one. User-MCP watch_agent
- * uses this so a watch can still wake Ave without the master sandbox token.
- */
-export const getLiveOrchestratorSessionIdForUser = internalQuery({
-  args: { userId: v.string() },
-  returns: v.union(v.id("sessions"), v.null()),
-  handler: async (ctx, { userId }) => {
-    const uid = ctx.db.normalizeId("users", userId);
-    if (!uid) return null;
-    const user = await ctx.db.get(uid);
-    if (!user?.orchestratorSessionId) return null;
-    const session = entityVisible(await ctx.db.get(user.orchestratorSessionId));
-    if (!session || session.archived === true) return null;
-    if (session.isOrchestrator !== true) return null;
-    if (session.userId !== uid) return null;
-    return session._id;
   },
 });
 

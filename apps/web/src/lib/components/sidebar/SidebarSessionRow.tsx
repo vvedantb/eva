@@ -39,7 +39,6 @@ interface SessionItem {
   /** Set when the last wake attempt failed; the row's dot reads as an error. */
   sandboxError?: string;
   isExecuting?: boolean;
-  isOrchestrator?: boolean;
   updatedAt?: number;
   sandboxId?: string;
   branchName?: string;
@@ -53,6 +52,8 @@ interface SessionItem {
   linkedFrom?: RepoPathParts;
   /** Linked repos cloned beside the primary; drives the `+N` badge. */
   linkedRepoCount?: number;
+  /** Source of a "Fork session" fork; drives the row's fork glyph. */
+  forkedFromSessionId?: Id<"sessions">;
 }
 
 interface SidebarSessionRowProps<T extends SessionItem> {
@@ -62,18 +63,18 @@ interface SidebarSessionRowProps<T extends SessionItem> {
   repo: RepoPathParts;
   onNavigate?: () => void;
   onRename?: (session: T, newTitle: string) => Promise<void>;
-  onDuplicate?: (session: T) => Promise<string>;
   /** Active list: archive. Omit in archived list. */
   onArchiveRequest?: (session: T) => void;
   /** Archived list: unarchive. */
   onUnarchive?: (session: T) => Promise<void>;
-  onDuplicateNavigate?: (pathSegment: string) => void;
+  /** Shows Fork session (active and archived lists); opens the fork. */
+  onForkNavigate?: (pathSegment: string) => void;
   onRenameRequest?: (session: T) => void;
 }
 
 /**
- * One session row plus context menu. Active list gets rename/duplicate/archive;
- * archived list gets unarchive.
+ * One session row plus context menu. Active list gets rename/archive; archived
+ * list gets unarchive. Both can fork.
  */
 export function SidebarSessionRow<T extends SessionItem>({
   session,
@@ -81,10 +82,9 @@ export function SidebarSessionRow<T extends SessionItem>({
   repo,
   onNavigate,
   onRename,
-  onDuplicate,
   onArchiveRequest,
   onUnarchive,
-  onDuplicateNavigate,
+  onForkNavigate,
   onRenameRequest,
 }: SidebarSessionRowProps<T>) {
   const href = sessionHrefForRow(repo, session);
@@ -125,7 +125,6 @@ export function SidebarSessionRow<T extends SessionItem>({
                 status={session.status}
                 sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
-                isOrchestrator={session.isOrchestrator === true}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
                 prUrl={session.prUrl}
@@ -133,6 +132,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 baseBranch={session.baseBranch}
                 linkedFrom={session.linkedFrom}
                 linkedRepoCount={session.linkedRepoCount}
+                forkedFromSessionId={session.forkedFromSessionId}
               />
             </SharedLayoutNavSurface>
           </m.div>
@@ -147,12 +147,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 ? () => onRenameRequest(session)
                 : undefined
             }
-            onDuplicate={
-              !isArchivedList && onDuplicate
-                ? () => onDuplicate(session)
-                : undefined
-            }
-            onDuplicateNavigate={onDuplicateNavigate}
+            onForkNavigate={onForkNavigate}
             onSendForReview={
               canSendForReview
                 ? () =>
