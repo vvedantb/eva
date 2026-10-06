@@ -7,6 +7,7 @@ export type ExperimentalFlagKey =
   | "composerAutocomplete"
   | "simpleView"
   | "replyChime"
+  | "notificationBell"
   | "disablePageMotion"
   | "viewVercelDeployment";
 
@@ -17,6 +18,7 @@ export type ResolvedExperimentalFlags = {
   composerAutocomplete: boolean;
   simpleView: boolean;
   replyChime: boolean;
+  notificationBell: boolean;
   disablePageMotion: boolean;
   viewVercelDeployment: boolean;
 };
@@ -33,6 +35,7 @@ export function resolveExperimentalFlags(
     composerAutocomplete: flags?.composerAutocomplete ?? false,
     simpleView: flags?.simpleView ?? false,
     replyChime: flags?.replyChime ?? false,
+    notificationBell: flags?.notificationBell ?? false,
     disablePageMotion: flags?.disablePageMotion ?? false,
     viewVercelDeployment: flags?.viewVercelDeployment ?? false,
   };

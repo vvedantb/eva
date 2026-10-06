@@ -449,7 +449,7 @@ const sessionQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: (session, id) =>
-    session.watchedByOrchestrator === undefined
+    session.watchedByAve === undefined
       ? undefined
       : { kind: "session", sessionId: id },
   defaultStartErrorMessage: "Failed to start queued message.",
@@ -560,9 +560,10 @@ const projectChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  // Project chat has no orchestrator watch — only sessions and tasks are
-  // spawned as child agents.
-  orchestratorNotifyChild: () => undefined,
+  orchestratorNotifyChild: (project, id) =>
+    project.watchedByAve === undefined
+      ? undefined
+      : { kind: "project", projectId: id },
   defaultStartErrorMessage: "Failed to start queued chat message.",
 };
 
@@ -657,7 +658,7 @@ const taskChatQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: (task, id) =>
-    task.watchedByOrchestrator === undefined
+    task.watchedByAve === undefined
       ? undefined
       : { kind: "task", taskId: id },
   defaultStartErrorMessage: "Failed to start queued chat message.",

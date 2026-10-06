@@ -1079,7 +1079,11 @@ class VercelSandboxClient implements SandboxClient {
       ...(params.lifecycle.labels ? { tags: params.lifecycle.labels } : {}),
     };
     try {
-      const sandbox = params.snapshot
+      const sandbox = params.forkFrom
+        ? // Server-side fork: restores from the source's current snapshot.
+          // `base` overrides the config the fork would otherwise copy.
+          await Sandbox.fork({ ...base, sourceSandbox: params.forkFrom })
+        : params.snapshot
         ? await Sandbox.create({
             ...base,
             source: { type: "snapshot", snapshotId: params.snapshot },
@@ -1090,7 +1094,7 @@ class VercelSandboxClient implements SandboxClient {
             await Sandbox.create({ ...base, image: params.image })
           : await Sandbox.create({ ...base, runtime: "node24" });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"}`,
+        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1101,7 +1105,7 @@ class VercelSandboxClient implements SandboxClient {
       // exists. Pre-create it here so git config / ensureDockerDaemon calls in
       // createSandbox succeed. Snapshot-restored sandboxes already have the
       // directory baked in, so this is only needed for fresh ones.
-      if (!params.snapshot) {
+      if (!params.snapshot && !params.forkFrom) {
         await sandbox.mkDir("/tmp/repo");
       }
       return new VercelSandboxHandle(sandbox, this.creds);
@@ -1110,7 +1114,7 @@ class VercelSandboxClient implements SandboxClient {
       // params we sent (env values redacted) so a create failure is diagnosable.
       const detail = extractApiErrorDetail(e);
       throw new Error(
-        `vercel create failed (snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}): ${detail}`,
+        `vercel create failed (forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}): ${detail}`,
       );
     }
   }

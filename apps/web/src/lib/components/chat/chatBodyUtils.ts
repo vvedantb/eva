@@ -1,4 +1,4 @@
-import { getAIModelProvider, type Doc } from "@eva/backend";
+import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel, type ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -9,11 +9,22 @@ import {
 } from "@/lib/components/chat/ChangedFilesCard";
 import { z } from "zod";
 
+/**
+ * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
+ * skill slash items, the prompt stash and repo mentions all switch off.
+ */
+export interface ChatRepo {
+  id: Id<"githubRepos">;
+  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
+  basePath: string;
+}
+
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without
 // forging a branded id. Real docs stay assignable; nothing in the chat tree
-// feeds `_id` back into Convex.
-export type ChatBodyMessage = Omit<Doc<"messages">, "_id"> & {
+// feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
+// `aveMessages` rows (keyed by thread, not by chat entity) fit too.
+export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
   /** @deprecated Prefer `attachments` — kept for optimistic/local messages. */
@@ -54,7 +65,34 @@ export function findHandoffBoundaryIds(
   return boundaries;
 }
 
+/**
+ * Turns that open a new local calendar day — the first turn of the transcript
+ * included — so ChatBody can head each day with an iMessage-style date label.
+ */
+export function findDayBoundaryIds(
+  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
+): Set<string> {
+  const boundaries = new Set<string>();
+  let previousDay: string | undefined;
+  for (const message of messages) {
+    const day = new Date(message.timestamp).toDateString();
+    if (day !== previousDay) boundaries.add(message._id);
+    previousDay = day;
+  }
+  return boundaries;
+}
+
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
+
+/**
+ * A follow-up the server already holds for the next turn, so it cannot be
+ * edited, removed or reordered (Manager Ave). Shown in the same queue panel.
+ */
+export interface ChatHeldFollowUp {
+  id: string;
+  content: string;
+  userId?: Id<"users">;
+}
 
 const SANDBOX_LIFECYCLE_ALERTS = new Set([
   "Sandbox started",

@@ -17,3 +17,6 @@ eva-staging-backup.zip
 
 # TanStack Router temp cache
 apps/web/.tanstack/
+
+# Redline local baseline pin
+.redline/

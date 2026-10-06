@@ -47,7 +47,7 @@ import {
   type CommandVisualKind,
 } from "./activity-step-label";
 import { ActivityStepDetail } from "./activity-step-detail";
-import { MessageResponse } from "./message";
+import { Markdown } from "../markdown/Markdown";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
 import { Task, TaskContent, TaskItem, TaskItemFile, TaskTrigger } from "./task";
 
@@ -409,9 +409,9 @@ function ActivityReasoningBlock({ step }: { step: ActivityStep }) {
   const thoughts = step.detail?.trim();
   if (!thoughts) return null;
   return (
-    <MessageResponse className="my-1 text-foreground text-sm leading-relaxed">
+    <Markdown className="my-1 text-foreground text-sm leading-relaxed">
       {thoughts}
-    </MessageResponse>
+    </Markdown>
   );
 }
 

@@ -9,8 +9,8 @@ import {
   entityRefArgs,
   entitySummary,
   repoRefArgs,
+  withSelfDefault,
   type EntityLocation,
-  type EntityRef,
 } from "./entityRef";
 import {
   errorResult,
@@ -82,7 +82,7 @@ export function entityTools(
   ctx: ActionCtx,
 ): EvaTool[] {
   const tools: EvaTool[] = [];
-  const { clerkUserId, entityId, entityKind } = credentials;
+  const { clerkUserId } = credentials;
   // Chat tools use the per-user check only: every chat the user can open in
   // Eva is reachable, whichever repo minted the token (see entityAccess).
   const { assertUserRepoAccess, resolveRepoRef, resolveEntityTarget } =
@@ -184,7 +184,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
       name: "start_sandbox",
       description: `Start the preview sandbox for a session, quick task or project — the same Start button the Eva UI has. Returns only once the VM is genuinely active, or fails saying why; it never leaves you guessing at "resuming sandbox".
 
-Already-active sandboxes are left alone. Each surface has its own gate: a quick task must be in code_review, business_review or done, and a project must be in in_progress, business_review or code_review, before a preview sandbox will start.`,
+Already-active sandboxes are left alone. Each surface has its own gate: a quick task must be in code_review, business_review or done (or in todo after it has already run), and a project must be in in_progress, business_review or code_review, before a preview sandbox will start.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -239,20 +239,6 @@ If a turn is in flight this is REJECTED rather than killing that turn: wait for 
   // get_preview_url
   // ───────────────────────────────────────────────────────────────────────────
 
-  /**
-   * An agent asked "what is my preview link?" has no id for itself, and used to
-   * answer that no link existed. Naming no chat therefore means "the one I am
-   * running in", which the sandbox token already states.
-   */
-  const withSelfDefault = (ref: EntityRef): EntityRef => {
-    const named =
-      ref.id !== undefined ||
-      ref.prUrl !== undefined ||
-      ref.numId !== undefined;
-    if (named || entityId === undefined || entityKind === undefined) return ref;
-    return { ...ref, id: entityId, kind: entityKind };
-  };
-
   tools.push(
     defineTool({
       name: "get_preview_url",
@@ -273,7 +259,7 @@ The returned "previewUrl" is served straight from the sandbox, so it only works 
       },
       handler: async ({ path, ...ref }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const chatRef = withSelfDefault(ref);
+        const chatRef = withSelfDefault(ref, credentials);
         const resolved = await resolveEntityTarget(chatRef, userId);
         if ("isError" in resolved) return resolved;
         const { target } = resolved;

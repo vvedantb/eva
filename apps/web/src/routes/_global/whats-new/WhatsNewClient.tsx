@@ -5,22 +5,15 @@ import { api } from "@eva/backend";
 import {
   CenteredSpinner,
   cn,
-  STREAMDOWN_TABLE_RADIUS_CLASS,
   motionBase,
   motionStagger,
 } from "@eva/ui";
 import { m } from "motion/react";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { Markdown } from "@eva/ui/markdown";
 import { IconSparkles } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
-
-/** Same plugin set as `ChangelogDialog`, so both surfaces render identically. */
-const whatsNewPlugins = { cjk, math, mermaid };
 
 /**
  * Every published entry of the "Eva Weekly Changelog" automation as a timeline.
@@ -70,15 +63,7 @@ export function WhatsNewClient() {
                   ) : null}
                 </header>
                 <div className="px-4 py-3">
-                  <Streamdown
-                    className={cn(
-                      "text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-                      STREAMDOWN_TABLE_RADIUS_CLASS,
-                    )}
-                    plugins={whatsNewPlugins}
-                  >
-                    {entry.content}
-                  </Streamdown>
+                  <Markdown className="text-sm">{entry.content}</Markdown>
                 </div>
               </article>
             </m.li>

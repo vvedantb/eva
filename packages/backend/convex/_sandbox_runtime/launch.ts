@@ -16,6 +16,10 @@ import { DAEMON_PID_LIVE_FN, entityDaemonPaths } from "./daemonPaths";
 import { CLAUDE_CODE_VERSION } from "./claudeCliVersion";
 import { CODEX_CLI_VERSION } from "./codexCliVersion";
 import type { SandboxHandle } from "../_sandbox/provider";
+import {
+  CLAUDE_CLI_INSTALL_DIR,
+  CODEX_CLI_INSTALL_DIR,
+} from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
@@ -35,13 +39,13 @@ export const CURSOR_RUNTIME_HOME_DIR = "/tmp/cursor-home";
 export const CURSOR_PERSIST_VOLUME_MOUNT_PATH = "/home/eva/.cursor-persist";
 
 const CLAUDE_INSTALL_TIMEOUT_SECONDS = 300;
-const CLAUDE_FALLBACK_INSTALL_DIR = "/tmp/claude-cli";
+const CLAUDE_FALLBACK_INSTALL_DIR = CLAUDE_CLI_INSTALL_DIR;
 export const CLAUDE_FALLBACK_BIN_PATH = `${CLAUDE_FALLBACK_INSTALL_DIR}/bin/claude`;
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
 /** Where `npm install -g --prefix CLAUDE_FALLBACK_INSTALL_DIR` places the package. */
 const CLAUDE_FALLBACK_PACKAGE_ROOT = `${CLAUDE_FALLBACK_INSTALL_DIR}/lib/node_modules/${CLAUDE_CODE_PACKAGE}`;
 const CODEX_INSTALL_TIMEOUT_SECONDS = 300;
-const CODEX_FALLBACK_INSTALL_DIR = "/tmp/codex-cli";
+const CODEX_FALLBACK_INSTALL_DIR = CODEX_CLI_INSTALL_DIR;
 const CODEX_FALLBACK_BIN_PATH = `${CODEX_FALLBACK_INSTALL_DIR}/bin/codex`;
 const CODEX_CLI_PACKAGE = "@openai/codex";
 /** Where `npm install -g --prefix CODEX_FALLBACK_INSTALL_DIR` places the package. */
@@ -260,7 +264,7 @@ export async function ensureClaudeCliAvailable(
  * the user's npm prefix, behind the image's copy on PATH; probing that root
  * skipped this install and left the agent on the image's stale CLI.
  */
-function pinnedCliInstallCommand(cli: {
+export function pinnedCliInstallCommand(cli: {
   binName: string;
   packageName: string;
   fallbackInstallDir: string;
@@ -344,8 +348,8 @@ function ensureProviderCliAvailable(
  * installs: `/home/eva` (every provider-SDK self-install targets
  * `/home/eva/.eva-agent-sdk`) plus the agent-browser CLI, which agents invoke
  * by name off PATH — hence a global install, not the `--prefix` form the
- * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted from
- * the Vercel managed image (orchestrator sessions) have none of it. Both
+ * provider CLIs use with an explicit *_BIN_PATH env var. Sandboxes booted
+ * without a seeded snapshot have none of it. Both
  * halves are gated on the artifact already being present, so a snapshot boot
  * pays one probe and installs nothing.
  *
@@ -355,8 +359,8 @@ function ensureProviderCliAvailable(
  * agent-browser availability is eventually-consistent instead — a session
  * without browser tooling still chats and edits code. agentation-mcp is
  * deliberately NOT installed here: it exists for the preview annotation
- * widget (which image-booted orchestrator sandboxes never serve) and its
- * better-sqlite3 build needs gcc/make, which the managed image lacks — that
+ * widget and its better-sqlite3 build needs gcc/make, which a bare image may
+ * lack — that
  * compile is what blew the old synchronous install past its timeout.
  *
  * Nothing in here may throw: losing the SDK-fallback directory or the browser
@@ -439,8 +443,6 @@ export async function launchScript(
   opts: {
     model?: string;
     allowedTools?: string;
-    /** Read-only turn: each provider SDK translates this into its own option. */
-    noWrites?: boolean;
     systemPrompt?: string;
     extraEnvVars?: Record<string, string>;
     claudeSessionId?: string;
@@ -576,14 +578,6 @@ export async function launchScript(
       `HARNESS_CATALOG_TOKEN=${quote([opts.harnessCatalogToken])}`,
       `HARNESS_CATALOG_SANDBOX_ID=${quote([sandbox.id])}`,
     );
-  }
-  // One provider-agnostic read-only signal. Deliberately not derived from
-  // ALLOWED_TOOLS: that list is Claude's tool vocabulary, and teaching Cursor,
-  // Codex and OpenCode to parse Claude tool names would put four translations
-  // of the same decision in four SDK adapters. Each adapter reads this flag and
-  // applies its own restriction instead.
-  if (opts.noWrites) {
-    envParts.push("EVA_NO_WRITES=1");
   }
   if (opts.claudeSessionId) {
     envParts.push(`CLAUDE_SESSION_ID=${quote([opts.claudeSessionId])}`);
