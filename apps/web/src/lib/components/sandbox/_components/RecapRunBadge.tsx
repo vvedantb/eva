@@ -32,7 +32,7 @@ export function RecapRunBadge({
   if (!display.thinkingEnabled) chips.push("No thinking");
 
   return (
-    <Badge variant="outline" className="gap-1 font-normal text-[11px]">
+    <Badge variant="outline" className="gap-1 font-normal text-2xs">
       <ProviderIcon provider={option.provider} size={11} />
       {formatModelDisplayLabel(option.provider, option.label)}
       {chips.length > 0 ? (

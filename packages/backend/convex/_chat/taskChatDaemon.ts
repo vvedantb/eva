@@ -24,8 +24,19 @@ import { TASK_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
 import { pendingTurnAlreadyClaimed } from "./pendingTurnRestage";
 import { resolveStorageUrls } from "./storageUrls";
+import { isPendingTurnLive } from "../_sessions/pendingTurnRecovery";
 import { assistantReplyContent } from "../_sessions/resultTarget";
 import { isStreamingActivityStale } from "./turnLease";
+import {
+  advanceTurn,
+  claimStagedTurn,
+  closeTurn,
+  findOpenTurn,
+  leaseSyntheticTurn,
+  openChatTurn,
+  resolveCompletionTurn,
+  type TurnLeaseIdentity,
+} from "./turnStore";
 
 function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
   return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
@@ -144,6 +155,34 @@ export const claimPendingTurn = authMutation({
       }
     }
 
+    let turnLease: TurnLeaseIdentity | null = null;
+    const pendingTurnId = task.pendingTurn.turnId;
+    if (pendingTurnId !== undefined) {
+      // A daemon built before `acceptTurn` cannot hold a lease. Leave the turn
+      // staged: prewarm replaces the stale daemon, and the new one claims it.
+      if (args.acceptTurn === undefined) {
+        return {
+          ...emptyClaimReturn,
+          stopTaskToolUseIds,
+          cancelRequested,
+          usageRefreshRequested,
+        };
+      }
+      const claim = await claimStagedTurn(ctx, pendingTurnId);
+      if (claim.status === "drop") {
+        await ctx.db.patch(args.taskId, { pendingTurn: undefined });
+      }
+      if (claim.status !== "leased") {
+        return {
+          ...emptyClaimReturn,
+          stopTaskToolUseIds,
+          cancelRequested,
+          usageRefreshRequested,
+        };
+      }
+      turnLease = claim.lease;
+    }
+
     const prompt = task.pendingTurn.prompt;
     const attachmentUrls = await resolveStorageUrls(
       (id) => ctx.storage.getUrl(id),
@@ -156,15 +195,19 @@ export const claimPendingTurn = authMutation({
       pendingTurn: undefined,
       pendingTurnClaimedAt: Date.now(),
     });
-    const turnLifecycle = "legacy" as const;
-    return {
+    const claimedTurn = {
       prompt,
-      turnLifecycle,
       attachmentUrls,
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
     };
+    if (turnLease === null) {
+      const turnLifecycle = "legacy" as const;
+      return { ...claimedTurn, turnLifecycle };
+    }
+    const turnLifecycle = "durable" as const;
+    return { ...claimedTurn, turnLifecycle, ...turnLease };
   },
 });
 
@@ -236,7 +279,11 @@ export const openSyntheticTurn = authMutation({
     // move mid-flight and may therefore mis-attribute the checkpoint.
     model: v.optional(aiModelValidator),
   },
-  returns: v.object({ messageId: v.id("messages") }),
+  returns: v.object({
+    messageId: v.id("messages"),
+    turnId: v.id("turns"),
+    leaseGeneration: v.number(),
+  }),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
@@ -246,6 +293,9 @@ export const openSyntheticTurn = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    const turnModel = normalizeAIModel(
+      args.model ?? task.lastChatModel ?? task.model,
+    );
     const messageId = await ctx.db.insert("messages", {
       parentId: args.taskId,
       role: "assistant",
@@ -256,8 +306,18 @@ export const openSyntheticTurn = authMutation({
       // Stamped at open time because the daemon protocol carries no model on
       // completion. Not yet a checkpoint — that needs `finishedAt` too — and
       // `completeSyntheticTurn` clears it again if the turn fails.
-      model: normalizeAIModel(args.model ?? task.lastChatModel ?? task.model),
+      model: turnModel,
     });
+    const turnId = await openChatTurn(ctx, {
+      entityId: args.taskId,
+      streamingEntityId: taskChatStreamEntityId(args.taskId),
+      placeholderMessageId: messageId,
+      prompt: "[synthetic continuation]",
+      model: turnModel,
+      sandboxId: task.sandboxId,
+      repoId: task.repoId,
+    });
+    const lease = await leaseSyntheticTurn(ctx, turnId);
     await ctx.db.patch(args.taskId, {
       syntheticTurnMessageId: messageId,
       updatedAt: Date.now(),
@@ -267,7 +327,7 @@ export const openSyntheticTurn = authMutation({
       internal.agentTaskChatWorkflow.handleStaleSyntheticTurn,
       { taskId: args.taskId, messageId },
     );
-    return { messageId };
+    return { messageId, ...lease };
   },
 });
 
@@ -280,13 +340,21 @@ export const completeSyntheticTurn = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     pendingQuestion: v.optional(v.string()),
-    // Accepted for daemons that hold a durable lease; unused until task and
-    // project chats open durable turns.
     ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const turnResolution = await resolveCompletionTurn(ctx, {
+      entityId: args.taskId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+      placeholderMessageId: args.messageId,
+    });
+    if (turnResolution.status === "stale") return null;
+    if (turnResolution.status === "current") {
+      await advanceTurn(ctx, turnResolution.turn, "finalizing");
+    }
     await clearStreamingActivity(ctx, taskChatStreamEntityId(args.taskId));
 
     const message = await ctx.db.get(args.messageId);
@@ -299,6 +367,11 @@ export const completeSyntheticTurn = authMutation({
         syntheticTurnMessageId: undefined,
         updatedAt: Date.now(),
       });
+      if (turnResolution.status === "current") {
+        await closeTurn(ctx, turnResolution.turn, "error", {
+          error: "Synthetic turn placeholder was no longer available",
+        });
+      }
       await startNextQueuedTaskChatMessage(ctx, args.taskId);
       return null;
     }
@@ -347,6 +420,14 @@ export const completeSyntheticTurn = authMutation({
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
     });
+    if (turnResolution.status === "current") {
+      await closeTurn(
+        ctx,
+        turnResolution.turn,
+        args.success ? "done" : "error",
+        args.error ? { error: args.error } : {},
+      );
+    }
     await startNextQueuedTaskChatMessage(ctx, args.taskId);
     return null;
   },
@@ -386,6 +467,12 @@ export const handleStaleSyntheticTurn = internalMutation({
       return null;
     }
     await finalizeCancelledAssistantMessage(ctx, message, streaming);
+    const openTurn = await findOpenTurn(ctx, args.taskId);
+    if (openTurn?.placeholderMessageId === args.messageId) {
+      await closeTurn(ctx, openTurn, "error", {
+        error: "Synthetic turn stopped reporting activity",
+      });
+    }
     await clearStreamingActivity(ctx, streamingEntityId);
     await ctx.db.patch(args.taskId, {
       syntheticTurnMessageId: undefined,
@@ -407,7 +494,20 @@ export const ensurePendingTurn = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
-    if (!task || task.pendingTurn) return null;
+    if (!task) return null;
+    // A running durable turn has a daemon on it; restaging would run it twice.
+    const openTurn = await findOpenTurn(ctx, args.taskId);
+    if (openTurn && openTurn.state === "running") return null;
+    // A slot staged for an already-closed turn is an orphan, not a live turn:
+    // leaving it would block this turn's restage until the lease expires.
+    if (
+      isPendingTurnLive({
+        pendingTurn: task.pendingTurn,
+        openTurnId: openTurn?._id,
+      })
+    ) {
+      return null;
+    }
     if (
       args.model !== undefined &&
       !usesChatDaemon(normalizeAIModel(args.model))
@@ -442,6 +542,9 @@ export const ensurePendingTurn = internalMutation({
       pendingTurn: {
         prompt: args.prompt,
         requestedAt: Date.now(),
+        // Without the id the restaged prompt is claimed without a lease, and
+        // its completion is then rejected against the open turn.
+        ...(openTurn ? { turnId: openTurn._id } : {}),
         attachmentStorageIds: args.attachmentStorageIds,
         ...(args.model !== undefined
           ? { model: normalizeAIModel(args.model) }

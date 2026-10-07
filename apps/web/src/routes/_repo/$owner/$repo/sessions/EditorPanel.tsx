@@ -13,6 +13,8 @@ interface EditorPanelProps {
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
+  externalHref?: string;
   wake?: SandboxWake;
 }
 
@@ -26,6 +28,7 @@ export function EditorPanel({
   sandboxId,
   isActive,
   repoId,
+  externalHref,
   wake,
 }: EditorPanelProps) {
   const toggleCodeServer = useAction(api.sandbox.toggleCodeServer);
@@ -60,6 +63,7 @@ export function EditorPanel({
       startFailedError="Failed to start editor"
       loadFailedError="Failed to load editor"
       iframeAllow="clipboard-read; clipboard-write"
+      externalHref={externalHref}
       wake={wake}
     />
   );

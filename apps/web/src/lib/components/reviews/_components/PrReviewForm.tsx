@@ -146,7 +146,7 @@ export function PrReviewForm({
               )}
               {option.label}
             </span>
-            <span className="pl-5 text-[11px] text-muted-foreground">
+            <span className="pl-5 text-2xs text-muted-foreground">
               {option.hint}
             </span>
           </button>

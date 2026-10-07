@@ -321,7 +321,7 @@ export function DocsSidebar({
                                 </span>
                               ) : null}
                             </span>
-                            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
                               {compactRelativeTime(doc.updatedAt)}
                             </span>
                           </Link>

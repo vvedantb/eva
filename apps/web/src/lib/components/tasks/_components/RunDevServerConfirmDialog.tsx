@@ -43,7 +43,7 @@ export function RunDevServerConfirmDialog({
             <p className="mt-1 font-mono text-xs break-all">
               {devCommandLabel}
             </p>
-            <p className="mt-2 text-[11px]">
+            <p className="mt-2 text-2xs">
               From App settings (Dev server). Empty override uses auto-detection
               from package.json.
             </p>

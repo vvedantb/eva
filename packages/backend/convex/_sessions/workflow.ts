@@ -60,10 +60,11 @@ import {
   syncSessionDaemonState,
 } from "./daemonState";
 import {
-  acquireTurnLease,
   advanceTurn,
+  claimStagedTurn,
   closeTurn,
   findOpenSessionTurn,
+  leaseSyntheticTurn,
   openSessionTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
@@ -79,7 +80,8 @@ export const sessionCompleteEvent = defineEvent({
 
 /**
  * Tools every session turn may use. Skill is required so the harness can invoke
- * Eva's system skills (eva-plan, eva-design, eva-ask, eva-capture, eva-audit), which is
+ * Eva's system skills (eva-plan, eva-design, eva-ask, eva-capture, eva-audit, eva-grab-proof,
+ * eva-resolve-conflicts), which is
  * how planning and design work now that turn modes are gone.
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
@@ -1221,10 +1223,12 @@ export const claimPendingTurn = authMutation({
       null;
     const pendingTurnId = daemonState.pendingTurn.turnId;
     if (pendingTurnId !== undefined) {
-      const turn = await ctx.db.get(pendingTurnId);
-      if (!turn || !turn.open || turn.state === "running") {
+      const claim = await claimStagedTurn(ctx, pendingTurnId);
+      if (claim.status === "drop") {
         await ctx.db.patch(daemonState._id, { pendingTurn: undefined });
         await ctx.db.patch(args.sessionId, { pendingTurn: undefined });
+      }
+      if (claim.status !== "leased") {
         return {
           ...emptyClaim,
           stopTaskToolUseIds,
@@ -1232,15 +1236,7 @@ export const claimPendingTurn = authMutation({
           usageRefreshRequested,
         };
       }
-      turnLease = await acquireTurnLease(ctx, turn, "running");
-      if (turnLease === null) {
-        return {
-          ...emptyClaim,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
-      }
+      turnLease = claim.lease;
     }
     await ctx.db.patch(daemonState._id, { pendingTurn: undefined });
     await ctx.db.patch(args.sessionId, { pendingTurn: undefined });
@@ -1528,10 +1524,7 @@ export const openSyntheticTurn = authMutation({
       sandboxId: session.sandboxId,
       repoId: session.repoId,
     });
-    const turn = await ctx.db.get(turnId);
-    if (!turn) throw new Error("Synthetic turn was not created");
-    const lease = await acquireTurnLease(ctx, turn, "running");
-    if (!lease) throw new Error("Synthetic turn lease was not acquired");
+    const lease = await leaseSyntheticTurn(ctx, turnId);
     await ctx.db.patch(args.sessionId, {
       syntheticTurnMessageId: messageId,
       updatedAt: Date.now(),

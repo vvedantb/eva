@@ -40,7 +40,7 @@ describe("synthetic turn checkpoint stamping", () => {
       "normalizeAIModel(args.model ?? session.lastModel)",
     );
     expect(taskDaemonSource).toContain(
-      "normalizeAIModel(args.model ?? task.lastChatModel ?? task.model)",
+      "args.model ?? task.lastChatModel ?? task.model",
     );
     expect(projectDaemonSource).toContain(
       "args.model ?? project.lastChatModel ?? project.model",

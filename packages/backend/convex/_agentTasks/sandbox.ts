@@ -16,6 +16,12 @@ import {
 } from "../_sandbox/startupActivity";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
+import {
+  stopAlertText,
+  stopReasonValidator,
+  type StopReason,
+} from "../_sandbox/stopReason";
+import { touchUserActivity } from "../_sandbox/activity";
 import { drainChatQueueQuietly } from "../_queues/helpers";
 
 const PREVIEW_ALLOWED_STATUSES = [
@@ -326,9 +332,11 @@ export const patchTaskDevServer = internalMutation({
 export async function requestTaskSandboxStop(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
+  options: { stopReason?: StopReason } = {},
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || !task.repoId) return;
+  const { stopReason } = options;
 
   if (!task.sandboxId) {
     // Nothing to stop — close immediately.
@@ -348,6 +356,7 @@ export async function requestTaskSandboxStop(
       taskId,
       sandboxId: task.sandboxId,
       repoId: task.repoId,
+      stopReason,
     });
     return;
   }
@@ -356,6 +365,7 @@ export async function requestTaskSandboxStop(
     taskId,
     sandboxId: task.sandboxId,
     repoId: task.repoId,
+    stopReason,
   });
 
   // Clear leftover start steps so stop does not re-show startup activity.
@@ -412,6 +422,7 @@ export async function scheduleFinalizeStopTask(
     taskId: Id<"agentTasks">;
     sandboxId: string;
     repoId: Id<"githubRepos">;
+    stopReason?: StopReason;
   },
 ): Promise<void> {
   await ctx.scheduler.runAfter(
@@ -422,17 +433,19 @@ export async function scheduleFinalizeStopTask(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._agentTasks.sandbox.recoverStuckStopping,
-    { taskId: args.taskId },
+    { taskId: args.taskId, stopReason: args.stopReason },
   );
 }
 
 /**
  * Re-issues finalizeStopTaskSandbox if the task is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished.
+ * leave the UI wedged; no-ops if stop already finished. Carries the original
+ * stop reason so the divider matches the request even when this finalize wins
+ * the race against a slow provider stop.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { taskId: v.id("agentTasks") },
+  args: { taskId: v.id("agentTasks"), stopReason: stopReasonValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -451,6 +464,7 @@ export const recoverStuckStopping = internalMutation({
         taskId: args.taskId,
         sandboxId: task.sandboxId,
         repoId: task.repoId,
+        stopReason: args.stopReason,
       },
     );
     return null;
@@ -467,6 +481,7 @@ export const finalizeStopTaskSandbox = internalAction({
     taskId: v.id("agentTasks"),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -482,6 +497,7 @@ export const finalizeStopTaskSandbox = internalAction({
     await ctx.runMutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
       taskId: args.taskId,
       error: stopError,
+      stopReason: args.stopReason,
     });
     return null;
   },
@@ -495,6 +511,7 @@ export const markTaskSandboxClosed = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
     error: v.optional(v.string()),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -531,7 +548,7 @@ export const markTaskSandboxClosed = internalMutation({
     await ctx.db.insert("messages", {
       parentId: args.taskId,
       role: "assistant",
-      content: "Sandbox stopped",
+      content: stopAlertText(args.stopReason),
       timestamp: Date.now(),
       isSystemAlert: true,
     });
@@ -597,6 +614,11 @@ export const taskSandboxReady = internalMutation({
       updatedAt: Date.now(),
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
+    });
+    // A wake is an interaction: the idle sweep grants a full grace window.
+    await touchUserActivity(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
     });
     // Sends what was queued while Eva slept. Early + final ready both land
     // here; the second no-ops once the first turn is running.

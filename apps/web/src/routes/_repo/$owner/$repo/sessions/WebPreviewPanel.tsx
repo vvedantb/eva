@@ -87,6 +87,8 @@ interface WebPreviewPanelProps {
     returnTo: string;
     title: string;
   };
+  /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
+  externalHrefForPath?: (path: string) => string;
 }
 
 export function WebPreviewPanel({
@@ -108,6 +110,7 @@ export function WebPreviewPanel({
   isSandboxStarting = false,
   onAnnotationSubmit,
   miniPlayer,
+  externalHrefForPath,
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
@@ -302,6 +305,7 @@ export function WebPreviewPanel({
         port={port}
         onPortChange={onPortChange}
         portOptions={portOptions}
+        externalHrefForPath={externalHrefForPath}
         previewPath={previewPath}
         onPathChange={handlePathChange}
         viewport={viewport}

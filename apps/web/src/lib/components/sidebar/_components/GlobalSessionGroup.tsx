@@ -129,7 +129,7 @@ export function GlobalSessionGroup({
               logoUrl={repo.logoUrl}
               size={18}
               fallback={
-                <span className="flex size-[18px] items-center justify-center rounded-sm bg-muted text-[10px] font-semibold text-muted-foreground">
+                <span className="flex size-[18px] items-center justify-center rounded-sm bg-muted text-3xs font-semibold text-muted-foreground">
                   {label.charAt(0).toUpperCase()}
                 </span>
               }
@@ -148,7 +148,7 @@ export function GlobalSessionGroup({
                 className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0"
               >
                 <span className="size-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                <span className="text-2xs font-medium tabular-nums text-muted-foreground">
                   {runningCount}
                 </span>
               </CountPop>
@@ -192,7 +192,7 @@ export function GlobalSessionGroup({
                   ? "No archived sessions"
                   : "No sessions yet"}
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-2xs text-muted-foreground">
                 {listMode === "archived"
                   ? "Archive a thread from its menu."
                   : "Press + to start one."}
