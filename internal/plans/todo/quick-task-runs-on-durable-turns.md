@@ -1,6 +1,10 @@
 # Move quick-task runs and one-shot agents onto the durable `turns` table (durable-turns Phases 6–7)
 
-Status: todo. Written 2026-10-07. Phase 6.0 (groundwork) done 2026-10-07. Phase 7 (one-shot agents) added 2026-10-07. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5).
+Status: implemented in two pull requests, not yet deployed. Written 2026-10-07. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5).
+- **PR A (#914):** Phase 6.0–6.3 and Phase 7.0–7.2. Every new run and one-shot agent runs on a turn, and the lease is its stall check. Work in flight at deploy keeps its old path.
+- **PR B (stacked on A):** Phase 6.4, Phase 7.3, the session legacy branches and the old heartbeat path. Merge it only after the deploy check below.
+
+See "Implementation (2026-10-07)" for what changed from the phase text.
 
 ## Goal
 
@@ -210,6 +214,42 @@ The same method as Phase 6.2, per workflow:
 
 `sandboxIdlePause` keeps reading `streamingActivity` freshness. Fenced heartbeats still write that row.
 
+## Implementation (2026-10-07)
+
+The owner asked for every phase at once, in two deploys (Decision 8). The phase text above is the design; these notes record where the code differs.
+
+**PR A: every new run and one-shot agent on a turn.**
+- Phases 6.1–6.3 shipped together. There is no parallel phase: a run started after the deploy is watched by its lease only. `updateRunToRunning` arms `checkStaleRuns` only when the run has no open turn, so runs in flight at the deploy keep the old chain.
+- `startTaskRunWorkflow` (`_taskWorkflow/startRun.ts`) is the one start path for the seven start sites. It opens the run turn, starts the workflow with `turnId`, binds the turn and records `task.activeWorkflowId`.
+- Run stop: `finalizeExpiredAgentTurn` → `finalizeStalledRun` → `cleanUpStaleRun`, with the old texts (`stalledRunStop`). `cleanUpStaleRun` now closes the run turn, so every stop path (old chain, lease, 2-hour backstop, cancel) leaves no open turn.
+- One-shot agents open their turn at launch, not at workflow start: `launchAgentStep` → `sandbox.launchAgentTurn` opens the turn already leased, binds the calling workflow and launches with the lease. A launch that throws closes the turn. Sandbox preparation before the launch stays on the 2-hour backstop, as before.
+- The gate for in-flight one-shot workflows is a new optional `durableTurns` argument, set by all 11 start sites. Replay compares step name and arguments (`Journal entry mismatch`), so the old `launchOnExistingSandbox` step stays for workflows without it.
+- One-shot completions run `settleAgentTurnCompletion` first: a stale fence is dropped, a current turn closes `done` / `error`. The workflow's own steps after the agent (PR recap upsert, automation PR) are on the 2-hour backstop, as before.
+- One-shot stall teardown reuses the backstop code, now extracted as `tearDownStale{Session,Doc,Project,Evaluation}Workflow` (`workflowWatchdog.ts`). Automations had no teardown; `tearDownStaleAutomationRun` (`_automations/runs.ts`) marks the run failed and deletes its ephemeral sandbox.
+- Owner dispatch: `turnAdapterForEntity(db, turn, { chat, agent })`. `AgentTurnOwner` covers `run`, `automation`, `doc`, `evaluation`, `summary` (session lane) and `interview` (project lane).
+- `turns.lane` and `by_entity_open: ["entityId", "lane", "open"]`. Chat readers query lane unset; `openChatEntityIdsForRepo` skips lane turns.
+- `turnOwnerFromStream` maps every agent stream id to its owner, so the old heartbeat gate also covers agent turns while PR B is pending. It checks agent prefixes before chat ids.
+- Stream-id prefixes live in `_chat/agentStreamIds.ts`. `getTaskRunStreamingEntityId` uses `TASK_RUN_STREAM_PREFIX`; the web drift test pins both.
+- `closeTurn` re-reads the turn, so a second close in one mutation is a no-op. A closed run turn touches its task's idle-pause activity.
+
+**PR B: clean-up.**
+- `taskExecutionWorkflow.turnId` is required; the gated steps are unconditional. A run completion without a current lease is ignored.
+- `checkStaleRuns` and `probeStaleRunLiveness` are no-op stubs for one release. The backend staleness helpers are deleted (the web keeps its own copy in `@eva/shared`); `staleness.ts` keeps only `RUN_TIMEOUT_MS`.
+- `durableTurns` is gone: every one-shot agent launches under a turn. A one-shot completion without a current lease is dropped.
+- Sessions: `sessionExecuteWorkflow.turnId` and `saveResult.turnId` are required. A claim of a staged prompt without a turn id drops it. `ensurePendingTurn` and `restageOpenTurn` restage only for an open turn. The session journal is unchanged for workflows with a turn and is pinned in `turnLifecycleContract.test.ts`.
+- Old heartbeat path deleted: `turns.legacyHeartbeat`, `legacyHeartbeatFromCallback`, `applyLegacyHeartbeat`, `turnOwnerFromStream`, and the raw-`entityId` HMAC fallback. `/api/streaming/heartbeat` answers a heartbeat without `turnId` with `terminal: unknown_turn`.
+- Callback: a claim without a lease is no claim; turn ownership always carries a lease; a process with no lease sends no heartbeat; the Cursor worker and synthetic turns require a lease. The empty claim keeps its `legacy` tag so every daemon bundle parses it.
+
+### Deploy steps
+
+1. Deploy PR A.
+2. Wait at least 2 hours plus one release, or run this production check (paged reads):
+   - `agentRuns` with status `queued` or `running` and no open `turns` row for the run id: must be 0.
+   - Open one-shot workflows without a turn: `docs`, `projects`, `evaluationReports`, `automationRuns` and `sessions` (summary) whose `activeWorkflowId` is set and that have no open turn row: must be 0.
+   - `sessions` / `sessionDaemonStates` with a `pendingTurn` that has no `turnId`: must be 0.
+3. Merge and deploy PR B.
+4. On or after one release after PR B: delete the `checkStaleRuns` and `probeStaleRunLiveness` stubs. On or after 2026-10-14: delete the chat stubs (chat plan follow-up 1).
+
 ## Risks
 
 | Risk | Control |
@@ -245,3 +285,4 @@ The same method as Phase 6.2, per workflow:
 5. **Close the run turn at the end of the workflow, not at completion.** Push and PR creation are part of the run. The `finalizing` lease covers them, as `finalizingAt` does today.
 6. **Move every one-shot agent onto turns (owner, 2026-10-07).** One stall model for all sandbox agents, and the old heartbeat path can go (Phase 7).
 7. **An optional `lane` keeps one-shot turns apart from chat turns on the same row (owner, 2026-10-07).** Rejected: a new table with one row per one-shot job. It needs writes at every start site and adds a table for one field of information. This partly reverses chat decision 5 (no surface label), but only for the two owners that share a row.
+8. **All phases now, in two deploys (owner, 2026-10-07).** PR A holds every change that is safe for work in flight. PR B holds the clean-up and merges only after the deploy check. Rejected: one deploy, which fails every run, one-shot agent and legacy session claim in flight at that moment.
