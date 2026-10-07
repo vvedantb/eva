@@ -337,10 +337,11 @@ export const addMessage = authMutation({
     });
     await ctx.db.patch(args.id, { updatedAt: Date.now() });
     if (args.role === "user") {
-      await touchUserActivity(ctx, {
-        kind: "session",
-        entityId: String(args.id),
-      });
+      await touchUserActivity(
+        ctx,
+        { kind: "session", entityId: String(args.id) },
+        { source: "chat", userId: ctx.userId },
+      );
     }
     return null;
   },

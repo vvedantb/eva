@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { extractFunctionSource } from "./_helpers/previewProxySource";
 
 /**
  * Source contracts for the idle-pause feature. Each pins a wiring decision a
@@ -84,11 +85,55 @@ describe("idle pause wiring", () => {
     expect(tools).toContain("internal.sandboxIdlePause.getSettingsInternal");
   });
 
-  test("the proxy heartbeat only counts external traffic", () => {
+  test("requests and upgrades both go through the counting rule", () => {
     const proxy = source("backend/convex/_sandbox_runtime/previewProxy.ts");
     expect(proxy).toContain(
-      "if (!isLoopbackRequest(clientReq)) noteExternalActivity();",
+      "if (countsAsActivity(clientReq)) {\n    noteExternalActivity(requestSubject(clientReq));",
     );
-    expect(proxy).toContain("if (!isLoopbackRequest(req)) noteExternalActivity();");
+    expect(proxy).toContain(
+      "if (countsAsActivity(req)) noteExternalActivity(requestSubject(req));",
+    );
+  });
+});
+
+type Req = { headers: Record<string, string>; socket: { remoteAddress: string } };
+
+const countsAsActivityFactory = new Function(
+  "ACTIVITY_PING_PAGES",
+  [
+    extractFunctionSource("function isLoopbackRequest(req) {"),
+    extractFunctionSource("function isBrowserRequest(req) {"),
+    extractFunctionSource("function countsAsActivity(req) {"),
+    "return countsAsActivity;",
+  ].join("\n\n"),
+);
+
+function request(headers: Record<string, string>, remoteAddress = "10.0.0.1"): Req {
+  return { headers, socket: { remoteAddress } };
+}
+
+/**
+ * Task 262 stayed awake for hours with nobody present: a hidden tab's polls
+ * counted as a human. Browser traffic now counts only through the on-screen
+ * ping, except where pages cannot carry it (desktop / editor proxies).
+ */
+describe("which proxy traffic resets the idle clock", () => {
+  const counts = (pingPages: boolean, req: Req): boolean =>
+    countsAsActivityFactory(pingPages)(req);
+
+  test("browser traffic does not count when pages carry the ping", () => {
+    expect(counts(true, request({ "sec-fetch-mode": "cors" }))).toBe(false);
+  });
+
+  test("non-browser clients (API calls, webhooks) still count", () => {
+    expect(counts(true, request({}))).toBe(true);
+  });
+
+  test("desktop and editor proxies keep counting browser traffic", () => {
+    expect(counts(false, request({ "sec-fetch-mode": "navigate" }))).toBe(true);
+  });
+
+  test("the agent's own loopback browser never counts", () => {
+    expect(counts(false, request({}, "127.0.0.1"))).toBe(false);
   });
 });

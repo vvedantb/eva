@@ -56,10 +56,12 @@ async function fixture() {
       sandboxId: "sbx-project",
       reviewProjectSandboxStatus: "active",
     });
-    return { sessionId, taskId, projectId };
+    return { userId, sessionId, taskId, projectId };
   });
   return { t, ...ids };
 }
+
+const CHAT = { source: "chat" as const };
 
 describe("sandbox activity record", () => {
   test(
@@ -68,15 +70,20 @@ describe("sandbox activity record", () => {
       const { t, sessionId } = await fixture();
       const ref = { kind: "session" as const, entityId: String(sessionId) };
       const first = 1_000_000;
-      await t.run((ctx) => touchUserActivity(ctx, ref, first));
+      await t.run((ctx) => touchUserActivity(ctx, ref, CHAT, first));
       await t.run((ctx) =>
-        touchUserActivity(ctx, ref, first + ACTIVITY_TOUCH_MIN_INTERVAL_MS - 1),
+        touchUserActivity(
+          ctx,
+          ref,
+          CHAT,
+          first + ACTIVITY_TOUCH_MIN_INTERVAL_MS - 1,
+        ),
       );
       const held = await t.run((ctx) => getSandboxActivity(ctx.db, ref));
       expect(held?.lastUserActivityAt).toBe(first);
 
       await t.run((ctx) =>
-        touchUserActivity(ctx, ref, first + ACTIVITY_TOUCH_MIN_INTERVAL_MS),
+        touchUserActivity(ctx, ref, CHAT, first + ACTIVITY_TOUCH_MIN_INTERVAL_MS),
       );
       const advanced = await t.run((ctx) => getSandboxActivity(ctx.db, ref));
       expect(advanced?.lastUserActivityAt).toBe(
@@ -91,7 +98,7 @@ describe("sandbox activity record", () => {
     async () => {
       const { t, taskId } = await fixture();
       const ref = { kind: "task" as const, entityId: String(taskId) };
-      await t.run((ctx) => touchUserActivity(ctx, ref, 10));
+      await t.run((ctx) => touchUserActivity(ctx, ref, CHAT, 10));
       await t.run((ctx) => touchAgentFinished(ctx, ref, 20));
       const rows = await t.run((ctx) =>
         ctx.db.query("sandboxActivity").collect(),
@@ -110,6 +117,7 @@ describe("sandbox activity record", () => {
       for (const sandboxId of ["sbx-session", "sbx-task", "sbx-project"]) {
         await t.mutation(internal._sandbox.activity.touchBySandbox, {
           sandboxId,
+          source: "terminal",
         });
       }
       const rows = await t.run((ctx) =>
@@ -124,11 +132,50 @@ describe("sandbox activity record", () => {
   );
 
   test(
+    "a different source or user is recorded even inside the throttle window",
+    async () => {
+      const { t, sessionId, userId } = await fixture();
+      const ref = { kind: "session" as const, entityId: String(sessionId) };
+      await t.run((ctx) =>
+        touchUserActivity(ctx, ref, { source: "preview-page" }, 1_000),
+      );
+      // A chat message right after preview traffic must not be hidden by it.
+      await t.run((ctx) =>
+        touchUserActivity(ctx, ref, { source: "chat", userId }, 1_001),
+      );
+      const row = await t.run((ctx) => getSandboxActivity(ctx.db, ref));
+      expect(row?.lastUserActivityAt).toBe(1_001);
+      expect(row?.lastUserActivitySource).toBe("chat");
+      expect(row?.lastUserActivityUserId).toBe(userId);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "touchBySandbox credits the user behind a Clerk subject",
+    async () => {
+      const { t, taskId, userId } = await fixture();
+      await t.mutation(internal._sandbox.activity.touchBySandbox, {
+        sandboxId: "sbx-task",
+        source: "preview-page",
+        clerkUserId: "clerk|idle",
+      });
+      const row = await t.run((ctx) =>
+        getSandboxActivity(ctx.db, { kind: "task", entityId: String(taskId) }),
+      );
+      expect(row?.lastUserActivitySource).toBe("preview-page");
+      expect(row?.lastUserActivityUserId).toBe(userId);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "an unknown sandbox id writes nothing",
     async () => {
       const { t } = await fixture();
       await t.mutation(internal._sandbox.activity.touchBySandbox, {
         sandboxId: "sbx-gone",
+        source: "terminal",
       });
       const rows = await t.run((ctx) =>
         ctx.db.query("sandboxActivity").collect(),

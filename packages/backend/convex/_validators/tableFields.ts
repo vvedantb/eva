@@ -1301,11 +1301,35 @@ export const sandboxActivityKindValidator = v.union(
   v.literal("project"),
 );
 
+/** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
+export const sandboxActivitySourceValidator = v.union(
+  /** A chat message was sent or a queued one landed. */
+  v.literal("chat"),
+  /** The sandbox was started or woken. */
+  v.literal("start"),
+  /** An Eva sandbox tab was on screen at sweep time. */
+  v.literal("viewing"),
+  /** Eva's Preview / custom tab loaded or polled the preview URL. */
+  v.literal("preview-tab"),
+  /** The preview page was on screen, or a non-browser client hit the proxy. */
+  v.literal("preview-page"),
+  v.literal("terminal"),
+  v.literal("files"),
+  v.literal("services"),
+);
+export type SandboxActivitySource = Infer<
+  typeof sandboxActivitySourceValidator
+>;
+
 export const sandboxActivityFields = {
   kind: sandboxActivityKindValidator,
   entityId: v.string(),
   /** Last human interaction: message sent, tab opened, preview traffic, presence. */
   lastUserActivityAt: v.optional(v.number()),
+  /** How the last interaction arrived. Unset on rows written before attribution. */
+  lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
+  /** Who made it, when known (chat, preview, terminal…; not system wakes). */
+  lastUserActivityUserId: v.optional(v.id("users")),
   /** Last time an agent turn or run finished for this entity. */
   lastAgentFinishedAt: v.optional(v.number()),
 };
