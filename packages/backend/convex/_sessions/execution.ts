@@ -19,7 +19,10 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
-import { startNextQueuedSessionMessage } from "../_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedSessionMessage,
+} from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
@@ -30,16 +33,14 @@ import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { detectCancelSupersession } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
+import { touchUserActivity } from "../_sandbox/activity";
 import {
   bindTurnWorkflow,
-  closeOpenSessionTurn,
+  closeOpenTurn,
   closeTurnForWorkflow,
   openSessionTurn,
 } from "../_chat/turnStore";
-import {
-  countStallAlertsAfterLastUser,
-  shouldRetryEmptyStall,
-} from "../_chat/stallRetry";
+import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 
 async function stageAndStartSessionTurn(
   ctx: MutationCtx,
@@ -183,25 +184,12 @@ export const retryEmptyStalledSessionTurn = internalMutation({
     const turn = await ctx.db.get(args.turnId);
     if (!session || !turn) return null;
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .order("desc")
-      .take(20);
-    const counted = countStallAlertsAfterLastUser(messages);
-    if (
-      !shouldRetryEmptyStall({
-        sandboxStopped: args.sandboxStopped,
-        hasActiveWorkflow: session.activeWorkflowId !== undefined,
-        stallAlertsAfterLastUser: counted.stallAlertsAfterLastUser,
-        lastUserContent: counted.lastUserContent,
-        hasSalvagedOutput: counted.hasSalvagedOutput,
-      })
-    ) {
-      return null;
-    }
-    const lastUserContent = counted.lastUserContent;
-    if (lastUserContent === undefined) return null;
+    const lastUserContent = await emptyStallRetryPrompt(ctx.db, {
+      parentId: args.sessionId,
+      sandboxStopped: args.sandboxStopped,
+      hasActiveWorkflow: session.activeWorkflowId !== undefined,
+    });
+    if (lastUserContent === null) return null;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return null;
@@ -317,6 +305,10 @@ export const startExecute = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
+    await touchUserActivity(ctx, {
+      kind: "session",
+      entityId: String(args.sessionId),
+    });
 
     // Notify before the turn runs or queues so a mention fires either way.
     await notifyChatMentions(ctx, {
@@ -533,6 +525,10 @@ export const enqueueMessage = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
+    await touchUserActivity(ctx, {
+      kind: "session",
+      entityId: String(args.sessionId),
+    });
 
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: args.providerAccountId,
@@ -569,6 +565,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.sessionId);
     return null;
   },
 });
@@ -654,7 +654,7 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
-      await closeOpenSessionTurn(ctx, args.sessionId, "cancelled", {
+      await closeOpenTurn(ctx, args.sessionId, "cancelled", {
         error: "Cancelled by the user",
       });
     }

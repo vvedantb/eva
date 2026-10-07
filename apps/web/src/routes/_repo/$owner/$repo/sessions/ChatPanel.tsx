@@ -13,8 +13,9 @@ import {
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
-import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
@@ -220,6 +221,14 @@ export function ChatPanel({
     }
   };
 
+  const queueGate = useChatQueueGate({
+    parentId: sessionId,
+    messages,
+    queuedMessages,
+    model,
+    isSandboxActive,
+    setModel,
+  });
   const { isExecuting, handleSend, handleCancel } = useSessionSend({
     sessionId,
     model,
@@ -229,6 +238,9 @@ export function ChatPanel({
     resolveAccountId,
     accounts,
     messages,
+    // A running turn queues regardless, so this is `composer.queuesSends`
+    // without the `isExecuting` it cannot know before this hook returns.
+    queuesSends: !isSandboxActive || queueGate.isUsageLimitHeld,
     isRouteActive,
   });
   const proposedPlans = useHeldQuery(
@@ -255,7 +267,6 @@ export function ChatPanel({
     isExecuting,
     isReadOnly,
     // A stopped session sandbox still gets the offer: sending wakes it.
-    compactionReadOnly: isReadOnly,
     backgroundAgents,
     usageLimitRecovery: isReadOnly
       ? undefined
@@ -269,12 +280,6 @@ export function ChatPanel({
         },
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
-    onSendCommand: (command) => {
-      // Rejects on a failed send; the failure is already toasted.
-      void handleSend(command, undefined, { skipReviewComments: true }).catch(
-        () => {},
-      );
-    },
   };
 
   const activeQuestion = useHeldQuery(
@@ -347,27 +352,10 @@ export function ChatPanel({
       ),
   });
 
-  const startupStreamingNode = (
-    <div className="rounded-surface bg-secondary p-4">
-      <StreamingActivityDisplay
-        activity={startupStreamingActivity}
-        thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
-        isSandboxStartup
-      />
-    </div>
+  const transcriptTail = sandboxStartupTail(
+    startupStreamingActivity,
+    isStartupStreaming,
   );
-
-  const emptyStateOverride = isStartupStreaming ? (
-    <div className="flex flex-col items-center justify-center py-8">
-      <StreamingActivityDisplay
-        activity={startupStreamingActivity}
-        thinkingLabel={SANDBOX_CHAT_COPY.startingTitle}
-        isSandboxStartup
-      />
-    </div>
-  ) : null;
-
-  const beforeQueuedContent = isStartupStreaming ? startupStreamingNode : null;
 
   const capturedPlans = proposedPlans ?? [];
   const lastAssistantMessageId = [...messages]
@@ -430,6 +418,7 @@ export function ChatPanel({
     isSandboxActive,
     isSwitchingAccount,
     isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
   });
 
   const readOnlyMessage = getSessionReadOnlyMessage({
@@ -450,6 +439,7 @@ export function ChatPanel({
         chatParentId={sessionId}
         messages={messages}
         queuedMessages={queuedMessages}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streamingActivity}
         streamingContent={streamingContent}
         streamingPendingQuestion={streamingPendingQuestion}
@@ -467,7 +457,7 @@ export function ChatPanel({
             ? () => onSandboxToggle("start")
             : undefined
         }
-        emptyStateOverride={emptyStateOverride}
+        transcriptTail={transcriptTail}
         underCardLeading={
           <SandboxBranchChip
             branch={sandboxBranch}
@@ -475,7 +465,6 @@ export function ChatPanel({
             intendedBranch={branchName}
           />
         }
-        beforeQueuedContent={beforeQueuedContent}
         preInputContent={preInputContent}
         preConversationContent={
           <SessionSummaryAccordion
@@ -485,7 +474,7 @@ export function ChatPanel({
         }
         modelPicker={{
           model,
-          setModel,
+          setModel: queueGate.setModel,
           modelOptions,
           accounts,
           accountId: providerAccountId,
@@ -575,6 +564,7 @@ export function ChatPanel({
         open={showReviewModal}
         onClose={() => setShowReviewModal(false)}
       />
+      {queueGate.switchDialog}
     </ChatPageWrapper>
   );
 }

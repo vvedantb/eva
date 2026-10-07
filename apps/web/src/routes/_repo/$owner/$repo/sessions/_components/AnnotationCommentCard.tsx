@@ -129,7 +129,7 @@ export function AnnotationCommentCard({
         </div>
 
         {context.accessibility ? (
-          <p className="mb-2 truncate text-[11px] text-muted-foreground">
+          <p className="mb-2 truncate text-2xs text-muted-foreground">
             {context.accessibility}
           </p>
         ) : null}

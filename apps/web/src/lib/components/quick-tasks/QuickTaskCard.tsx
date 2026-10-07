@@ -24,8 +24,10 @@ import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
 import {
   SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { IconClock, IconDots, IconFolder, IconTag } from "@tabler/icons-react";
 import {
   statusConfig,
@@ -150,6 +152,7 @@ export function QuickTaskCard({
   // A live turn gets the same pixel grid the session rows use instead.
   const isInProgress = !hasError && status === "in_progress";
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
+  const simpleView = useSimpleView();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
@@ -260,7 +263,7 @@ export function QuickTaskCard({
         ) : null}
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
           <EntityNumLabel numId={numId} projectNumId={projectNumId} />
-          <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+          <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
             {title}
           </MarqueeOnHover>
         </div>
@@ -293,7 +296,8 @@ export function QuickTaskCard({
               </TooltipTrigger>
               <TooltipContent>Eva is replying</TooltipContent>
             </Tooltip>
-          ) : sandboxStatus ? (
+          ) : sandboxStatus &&
+            showsSandboxStatusDot(sandboxStatus, simpleView) ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -332,7 +336,7 @@ export function QuickTaskCard({
               <TooltipTrigger asChild>
                 <Badge
                   variant="default"
-                  className="max-w-full px-1.5 py-0 text-[10px] font-medium leading-4"
+                  className="max-w-full px-1.5 py-0 text-3xs font-medium leading-4"
                 >
                   <span className="flex min-w-0 items-center gap-0.5">
                     <IconFolder className="size-2.5 shrink-0" />
@@ -347,7 +351,7 @@ export function QuickTaskCard({
             <Badge
               key={tag}
               variant="secondary"
-              className="max-w-28 px-1.5 py-0 text-[10px] font-medium leading-4"
+              className="max-w-28 px-1.5 py-0 text-3xs font-medium leading-4"
             >
               <span className="flex min-w-0 items-center gap-0.5">
                 <IconTag className="size-2.5 shrink-0" />
@@ -364,7 +368,7 @@ export function QuickTaskCard({
             <>
               <UserInitials user={createdByUser} size="sm" />
               {creatorFirstName ? (
-                <MarqueeOnHover className="min-w-0 text-[11px] text-muted-foreground/75">
+                <MarqueeOnHover className="min-w-0 text-2xs text-muted-foreground/75">
                   <span data-pii>{creatorFirstName}</span>
                 </MarqueeOnHover>
               ) : null}
@@ -372,7 +376,7 @@ export function QuickTaskCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="text-[11px] tabular-nums text-muted-foreground/70">
+          <span className="text-2xs tabular-nums text-muted-foreground/70">
             {compactRelativeTime(createdAt)}
           </span>
           <DropdownMenu>

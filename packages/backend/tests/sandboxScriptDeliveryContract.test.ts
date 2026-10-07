@@ -123,9 +123,7 @@ describe("sandbox script delivery", () => {
       executable: true,
     });
 
-    expect(writes).toEqual([
-      { path: "/tmp/eva-big.mjs", bytes: 200 * 1024 },
-    ]);
+    expect(writes).toEqual([{ path: "/tmp/eva-big.mjs", bytes: 200 * 1024 }]);
     for (const arg of execArgs) {
       expect(Buffer.byteLength(arg, "utf8")).toBeLessThan(
         MAX_INLINE_EXEC_CONTENT_BYTES,
@@ -208,9 +206,11 @@ describe("no inline payload transports", () => {
       2,
     ],
     [
-      // Fixed 4-line yum repo stanza in the Chrome install command. No
-      // interpolation, ~200 bytes, cannot grow.
-      "_sandbox/vercelProvider.ts",
+      // Fixed 4-line yum repo stanza in eva_pkg_install_chrome's dnf branch. No
+      // interpolation, ~200 bytes, cannot grow. (Moved here from
+      // _sandbox/vercelProvider.ts when the Chrome install was centralised so
+      // the seed run and desktop start could share one distro-aware copy.)
+      "_sandbox_runtime/packageManager.ts",
       1,
     ],
   ]);

@@ -35,6 +35,7 @@ import {
   mutationError,
   mutationSuccess,
 } from "@/lib/utils/mutationToast";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { isSessionSidebarActive } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
 
@@ -111,10 +112,14 @@ export function GlobalSessionGroup({
     selectedId: selectedSessionId,
     limit: sessionPreviewCount,
   });
+  const simpleView = useSimpleView();
   const runningCount =
     activeSessions?.filter(
       (s) => s.status === "active" && isSessionSidebarActive(s),
     ).length ?? 0;
+  // Simple view wakes sandboxes from the Preview tab, so it shows no awake count.
+  const runningLabel =
+    listMode === "active" && !simpleView ? countLabel(runningCount) : null;
   const hasNoResults = !isLoading && sortedSessions.length === 0;
 
   return (
@@ -129,7 +134,7 @@ export function GlobalSessionGroup({
               logoUrl={repo.logoUrl}
               size={18}
               fallback={
-                <span className="flex size-[18px] items-center justify-center rounded-sm bg-muted text-[10px] font-semibold text-muted-foreground">
+                <span className="flex size-[18px] items-center justify-center rounded-sm bg-muted text-3xs font-semibold text-muted-foreground">
                   {label.charAt(0).toUpperCase()}
                 </span>
               }
@@ -144,11 +149,11 @@ export function GlobalSessionGroup({
                   unread dots, and now the same entrance. `children` rather than
                   a bare label because the badge is a dot plus a number. */}
               <CountPop
-                label={listMode === "active" ? countLabel(runningCount) : null}
+                label={runningLabel}
                 className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0"
               >
                 <span className="size-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                <span className="text-2xs font-medium tabular-nums text-muted-foreground">
                   {runningCount}
                 </span>
               </CountPop>
@@ -192,7 +197,7 @@ export function GlobalSessionGroup({
                   ? "No archived sessions"
                   : "No sessions yet"}
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-2xs text-muted-foreground">
                 {listMode === "archived"
                   ? "Archive a thread from its menu."
                   : "Press + to start one."}

@@ -9,62 +9,19 @@ const workflowWatchdog = readSource("convex/workflowWatchdog.ts");
 const stallWatchdog = readSource("convex/_chat/stallWatchdog.ts");
 const surfaceAdapters = readSource("convex/_chat/surfaceAdapters.ts");
 
-const RUN_STALE_CHECK_HEADER =
-  "export async function runStaleChatHeartbeatCheck<TId extends ChatId, TEntity>(";
-const RUN_STALE_PROBE_HEADER =
-  "export async function runStaleChatLivenessProbe<TId extends ChatId, TEntity>(";
 const FINALIZE_HEADER =
   "export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(";
 
 /**
- * A session/task-chat/project-chat turn whose agent process dies silently
- * (OOM) stops heartbeating streamingActivity within seconds, but the chat
- * used to sit on "Working…" until the 2-hour handleStaleX backstop. The
- * heartbeat chain below turns that into a clear failure within minutes.
- *
- * The chain is one implementation (`_chat/stallWatchdog.ts`) shared by all
- * three chat surfaces; only the entity-specific details (field names, alert
- * wording, interrupt mechanics, the sandbox-status field) come from each
- * surface's `ChatSurfaceAdapter` (`_chat/surfaceAdapters.ts`). These rules pin
- * the shared safety properties once, then pin each adapter's own specifics
- * separately (see staleTurnDecision.test.ts for the threshold values).
+ * A stalled chat turn is torn down by one implementation
+ * (`finalizeStaleChatTurn` in `_chat/stallWatchdog.ts`), reached from the
+ * lease reconciler (`turns.finalizeExpired`) and the 2-hour backstop. Only the
+ * entity-specific details (field names, alert wording, interrupt mechanics,
+ * the sandbox-status field) come from each surface's `ChatSurfaceAdapter`
+ * (`_chat/surfaceAdapters.ts`). These rules pin the shared safety properties
+ * once, then pin each adapter's own specifics separately.
  */
 describe("shared chat stall watchdog implementation (_chat/stallWatchdog.ts)", () => {
-  test("the heartbeat check only ever acts on the workflow it was armed for", () => {
-    const body = functionBody(stallWatchdog, RUN_STALE_CHECK_HEADER);
-    const guardAt = body.indexOf(
-      "adapter.activeWorkflowId(entity) !== args.workflowId",
-    );
-    const finalizeAt = body.indexOf("finalizeStaleChatTurn(");
-    expect(guardAt, "the workflow guard moved").toBeGreaterThan(-1);
-    expect(finalizeAt, "the finalize call moved").toBeGreaterThan(-1);
-    expect(guardAt).toBeLessThan(finalizeAt);
-  });
-
-  test("a stale turn is probed for liveness before it is killed", () => {
-    const body = functionBody(stallWatchdog, RUN_STALE_CHECK_HEADER);
-    const probeAt = body.indexOf("adapter.scheduleProbe(");
-    const finalizeAt = body.indexOf("finalizeStaleChatTurn(");
-    expect(probeAt, "the liveness probe moved").toBeGreaterThan(-1);
-    expect(probeAt).toBeLessThan(finalizeAt);
-
-    const probe = functionBody(stallWatchdog, RUN_STALE_PROBE_HEADER);
-    expect(probe).toContain("verifySandboxLiveness");
-    // An alive probe must reset the clock, not kill.
-    expect(probe).toContain("internalTouch");
-  });
-
-  test("the probe distinguishes a gone sandbox VM from a dead process on a live one", () => {
-    // The Vercel runtime limit stops the VM mid-turn: the chat froze on
-    // "Working…" with no indication, and only the provider dashboard showed
-    // why. "sandbox_not_started" means the VM itself is gone; the kill must
-    // not exec on it (exec lazily resumes it — see prewarmNeverResurrects).
-    const probe = functionBody(stallWatchdog, RUN_STALE_PROBE_HEADER);
-    expect(probe).toContain(
-      'sandboxStopped: liveness.reason === "sandbox_not_started"',
-    );
-  });
-
   test("the salvage reads the streaming row before the clear wipes it", () => {
     const body = functionBody(stallWatchdog, FINALIZE_HEADER);
     const readAt = body.indexOf('query("streamingActivity")');
@@ -94,40 +51,66 @@ describe("shared chat stall watchdog implementation (_chat/stallWatchdog.ts)", (
 });
 
 /**
+ * The durable turn's lease is the only stall check (decision 2 of the
+ * durable-turns plan). The old heartbeat chain is retired; its scheduled entry
+ * points stay as no-op stubs for one release, because jobs scheduled before the
+ * deploy still call them.
+ */
+const RETIRED_STALL_CHECKS = [
+  "checkStaleSessionHeartbeat",
+  "probeStaleSessionLiveness",
+  "checkStaleAgentTaskChatHeartbeat",
+  "probeStaleAgentTaskChatLiveness",
+  "checkStaleProjectChatHeartbeat",
+  "probeStaleProjectChatLiveness",
+];
+
+describe("the lease is the only chat stall check", () => {
+  test.each(RETIRED_STALL_CHECKS)("%s is a no-op stub", (name) => {
+    expect(definitionBody(workflowWatchdog, name)).toContain(
+      "handler: async () => null",
+    );
+  });
+
+  test("no adapter or tracker schedules a retired stall check", () => {
+    for (const name of RETIRED_STALL_CHECKS) {
+      expect(surfaceAdapters).not.toContain(
+        `internal.workflowWatchdog.${name}`,
+      );
+    }
+  });
+});
+
+/**
  * Everything below pins one adapter's own specifics: which field tracks the
- * active workflow, how a live process gets interrupted, which sandbox-status
- * field a stopped sandbox closes, and that the thin wrappers in
- * workflowWatchdog.ts still wire to the shared implementation with the right
- * adapter constant.
+ * active workflow, how a live process gets interrupted, and which
+ * sandbox-status field a stopped sandbox closes.
  */
 describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
-  test("every tracked session workflow arms the heartbeat chain", () => {
+  test("a tracked session workflow arms only the 2-hour backstop", () => {
     const body = functionBody(
       surfaceAdapters,
       "export async function trackSessionWorkflow(",
     );
-    expect(body).toContain("checkStaleSessionHeartbeat");
-  });
-
-  test("checkStaleSessionHeartbeat and probeStaleSessionLiveness wire to the shared implementation with sessionChatAdapter", () => {
-    const check = definitionBody(
-      workflowWatchdog,
-      "checkStaleSessionHeartbeat",
-    );
-    expect(check).toContain(
-      "runStaleChatHeartbeatCheck(ctx, sessionChatAdapter,",
-    );
-
-    const probe = definitionBody(workflowWatchdog, "probeStaleSessionLiveness");
-    expect(probe).toContain(
-      "runStaleChatLivenessProbe(ctx, sessionChatAdapter,",
-    );
+    expect(body).toContain("handleStale");
+    expect(body).not.toContain("scheduleCheck");
   });
 
   test("handleStaleSession finalizes via the shared implementation with the session's own timeout alert", () => {
     const handler = definitionBody(workflowWatchdog, "handleStaleSession");
-    expect(handler).toContain("finalizeStaleChatTurn(");
+    expect(handler).toContain("tearDownStaleSessionWorkflow(");
     expect(handler).toContain("sessionChatAdapter.alerts.timeout");
+    // The lease reconciler reuses the same teardown for a stalled summary.
+    const teardownAt = workflowWatchdog.indexOf(
+      "export async function tearDownStaleSessionWorkflow(",
+    );
+    expect(teardownAt).toBeGreaterThan(-1);
+    expect(
+      workflowWatchdog.slice(
+        teardownAt,
+        workflowWatchdog.indexOf("\n}", teardownAt),
+      ),
+    ).toContain("finalizeStaleChatTurn(");
   });
 
   test("a stopped sandbox closes the session and skips the interrupt via a direct kill", () => {
@@ -154,32 +137,19 @@ describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
     expect(adapter).toContain("startNextQueuedSessionMessage(ctx, id)");
     // Only sessions carry a separate summary streaming row alongside the
     // turn's own.
-    expect(adapter).toContain("`summary:${String(id)}`");
+    expect(adapter).toContain("sessionSummaryStreamingEntityId(id)");
   });
 });
 
 /** Task chat mirror of the session adapter checks above. */
 describe("task chat adapter (_chat/surfaceAdapters.ts)", () => {
-  test("every tracked task chat workflow arms the heartbeat chain", () => {
+  test("a tracked task chat workflow arms only the 2-hour backstop", () => {
     const body = functionBody(
       surfaceAdapters,
       "export async function trackAgentTaskChatWorkflow(",
     );
-    expect(body).toContain("checkStaleAgentTaskChatHeartbeat");
-  });
-
-  test("checkStaleAgentTaskChatHeartbeat and probeStaleAgentTaskChatLiveness wire to the shared implementation with taskChatAdapter", () => {
-    const check = definitionBody(
-      workflowWatchdog,
-      "checkStaleAgentTaskChatHeartbeat",
-    );
-    expect(check).toContain("runStaleChatHeartbeatCheck(ctx, taskChatAdapter,");
-
-    const probe = definitionBody(
-      workflowWatchdog,
-      "probeStaleAgentTaskChatLiveness",
-    );
-    expect(probe).toContain("runStaleChatLivenessProbe(ctx, taskChatAdapter,");
+    expect(body).toContain("handleStale");
+    expect(body).not.toContain("scheduleCheck");
   });
 
   test("handleStaleAgentTaskChat finalizes via the shared implementation with the task's own timeout alert", () => {
@@ -219,30 +189,13 @@ describe("task chat adapter (_chat/surfaceAdapters.ts)", () => {
 
 /** Project chat mirror of the session adapter checks above. */
 describe("project chat adapter (_chat/surfaceAdapters.ts)", () => {
-  test("every tracked project chat workflow arms the heartbeat chain", () => {
+  test("a tracked project chat workflow arms only the 2-hour backstop", () => {
     const body = functionBody(
       surfaceAdapters,
       "export async function trackProjectChatWorkflow(",
     );
-    expect(body).toContain("checkStaleProjectChatHeartbeat");
-  });
-
-  test("checkStaleProjectChatHeartbeat and probeStaleProjectChatLiveness wire to the shared implementation with projectChatAdapter", () => {
-    const check = definitionBody(
-      workflowWatchdog,
-      "checkStaleProjectChatHeartbeat",
-    );
-    expect(check).toContain(
-      "runStaleChatHeartbeatCheck(ctx, projectChatAdapter,",
-    );
-
-    const probe = definitionBody(
-      workflowWatchdog,
-      "probeStaleProjectChatLiveness",
-    );
-    expect(probe).toContain(
-      "runStaleChatLivenessProbe(ctx, projectChatAdapter,",
-    );
+    expect(body).toContain("handleStale");
+    expect(body).not.toContain("scheduleCheck");
   });
 
   test("handleStaleProjectChat finalizes via the shared implementation with the project's own timeout alert", () => {

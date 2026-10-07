@@ -4,7 +4,11 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
-import { streamingHeartbeatHmacMessage } from "./_sandbox_runtime/callbackAuth";
+import {
+  previewActivityHmacMessage,
+  streamingHeartbeatHmacMessage,
+} from "./_sandbox_runtime/callbackAuth";
+import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
 
 const http = httpRouter();
 
@@ -102,51 +106,67 @@ http.route({
         status: 500,
       });
     }
-    const validCurrent = timingSafeEqual(hmac, expected);
-    // Warm callbacks launched before domain separation still sign their raw
-    // entity id. Keep that narrow compatibility path, but never for the old
-    // catalog namespace whose credential caused the cross-route collision.
-    const legacyExpected = validCurrent
-      ? null
-      : await computeScopedHmac(entityId);
-    const validLegacy =
-      !entityId.startsWith("harness-catalog:") &&
-      legacyExpected !== null &&
-      timingSafeEqual(hmac, legacyExpected);
-    if (!validCurrent && !validLegacy) {
+    if (!timingSafeEqual(hmac, expected)) {
       return new Response("Invalid heartbeat signature", { status: 401 });
     }
 
+    // Every agent turn holds a durable lease. A heartbeat without one comes
+    // from a process no turn owns, so it is told to stop.
     const turnId = params.get("turnId");
-    if (turnId !== null) {
-      const leaseGeneration = Number(params.get("leaseGeneration"));
-      if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
-        return new Response("Invalid turn lease generation", { status: 400 });
-      }
-      const lease = await ctx.runMutation(internal.turns.heartbeat, {
-        turnId,
-        leaseGeneration,
-        entityId,
-        touchOnly,
-        currentActivity: currentActivity ?? undefined,
-        currentContent: params.get("currentContent") ?? "",
-        pendingQuestion: params.get("pendingQuestion") ?? undefined,
+    if (turnId === null) {
+      return Response.json({
+        ok: true,
+        lease: { status: "terminal", reason: "unknown_turn" },
       });
-      return Response.json({ ok: true, lease });
     }
-
-    const accepted = await ctx.runMutation(internal.turns.legacyHeartbeat, {
+    const leaseGeneration = Number(params.get("leaseGeneration"));
+    if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
+      return new Response("Invalid turn lease generation", { status: 400 });
+    }
+    const lease = await ctx.runMutation(internal.turns.heartbeat, {
+      turnId,
+      leaseGeneration,
       entityId,
       touchOnly,
       currentActivity: currentActivity ?? undefined,
       currentContent: params.get("currentContent") ?? "",
       pendingQuestion: params.get("pendingQuestion") ?? undefined,
     });
-    return Response.json({
-      ok: true,
-      accepted,
-      lease: accepted ? null : { status: "terminal", reason: "superseded" },
+    return Response.json({ ok: true, lease });
+  }),
+});
+
+/**
+ * Traffic heartbeat from the in-sandbox preview proxy (idle pause). The proxy
+ * posts at most once a minute while external requests flow through it, so a
+ * saved preview link or a polling app keeps its sandbox awake, as Amp's portal
+ * does. The HMAC is scoped per sandbox (`previewActivityHmacMessage`).
+ */
+http.route({
+  path: "/api/preview/activity",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const params = new URLSearchParams(await request.text());
+    const sandboxId = requiredFormValue(params, "sandboxId");
+    const hmac = requiredFormValue(params, "hmac");
+    if (!sandboxId || !hmac) {
+      return new Response("Missing required activity fields", { status: 400 });
+    }
+    const expected = await computeScopedHmac(
+      previewActivityHmacMessage(sandboxId),
+    );
+    if (!expected) {
+      return new Response("ENCRYPTION_KEY is not configured", {
+        status: 500,
+      });
+    }
+    if (!timingSafeEqual(hmac, expected)) {
+      return new Response("Invalid activity signature", { status: 401 });
+    }
+    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+      sandboxId,
     });
+    return Response.json({ ok: true });
   }),
 });
 
@@ -584,6 +604,23 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
+    // Event-triggered automations (CI auto-fix, review responder, issue to
+    // task, user automations). Independent of the state sync below.
+    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.dispatch,
+        { event: repoEvent },
+      );
+    }
+    for (const passed of parseCiPassed(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.noteCiPassed,
+        { passed },
+      );
+    }
+
     if (event === "pull_request") {
       const parsed = prWebhookSchema.safeParse(JSON.parse(body));
       if (!parsed.success) {
@@ -743,6 +780,61 @@ http.route({
     }
 
     return Response.redirect(githubAuthReturnUrl(claim.installationId), 302);
+  }),
+});
+
+function connectorAuthReturnUrl(returnPath: string | null): string {
+  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const path =
+    returnPath &&
+    returnPath.startsWith("/settings") &&
+    !returnPath.includes("//")
+      ? returnPath
+      : "/settings/connections";
+  return `${webAppUrl}${path}`;
+}
+
+http.route({
+  path: "/api/connectors/oauth/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const requestUrl = new URL(request.url);
+    const params = requestUrl.searchParams;
+    const state = params.get("state");
+    if (!state) {
+      return new Response("Missing state", { status: 400 });
+    }
+
+    const claim = await ctx.runMutation(
+      internal._connectors.tokens.consumeOauthState,
+      { nonce: state },
+    );
+    if (!claim) {
+      return new Response("Authorization request expired. Start again.", {
+        status: 400,
+      });
+    }
+
+    const code = params.get("code");
+    if (!code) {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    const siteUrl = (process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
+    try {
+      await ctx.runAction(internal._connectors.oauth.completeAuthorization, {
+        userId: claim.userId,
+        provider: claim.provider,
+        actor: claim.actor,
+        code,
+        redirectUri: `${siteUrl}/api/connectors/oauth/callback`,
+        codeVerifier: claim.codeVerifier,
+      });
+    } catch {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
   }),
 });
 

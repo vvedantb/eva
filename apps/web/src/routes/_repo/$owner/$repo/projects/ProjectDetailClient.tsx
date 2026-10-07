@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { useAction, useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
@@ -141,6 +142,7 @@ export function ProjectDetailClient({
   );
 
   const project = useQuery(api.projects.get, { id: projectId });
+  const chatTurnOpen = useChatTurnOpen(projectId);
   useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
@@ -366,6 +368,14 @@ export function ProjectDetailClient({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          project.reviewProjectSandboxStatus === "closed" &&
+          projectSandboxId !== undefined &&
+          canStartSandbox &&
+          project.activeBuildWorkflowId === undefined &&
+          // Still loading counts as busy: never wake under a live turn.
+          chatTurnOpen === false
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />
@@ -407,6 +417,7 @@ export function ProjectDetailClient({
                     projectId={projectId}
                     isSandboxActive={isSandboxActive}
                     isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
                     onOpenAgentsTab={openAgentsTab}
@@ -572,7 +583,7 @@ export function ProjectDetailClient({
                     if (action === "start") void handleStartSandbox();
                     else void handleStopSandbox();
                   }}
-                  isAssistantResponding={Boolean(project?.activeChatWorkflowId)}
+                  isAssistantResponding={chatTurnOpen === true}
                 />
               ) : null}
               {canBuildProject ? (

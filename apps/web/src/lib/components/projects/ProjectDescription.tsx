@@ -38,7 +38,7 @@ export function ProjectDescription({
 
   return (
     <div className={cn("px-3 pt-3 pb-2", className)}>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+      <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
         Project context
       </div>
       <div

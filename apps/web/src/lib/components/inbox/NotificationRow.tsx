@@ -180,7 +180,7 @@ export function NotificationRow({
                 {notification.urgency === "high" ? (
                   <Badge
                     variant="warning"
-                    className="h-4 shrink-0 px-1.5 text-[10px]"
+                    className="h-4 shrink-0 px-1.5 text-3xs"
                   >
                     Needs reply
                   </Badge>

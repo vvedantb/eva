@@ -108,6 +108,7 @@ function LinkedRepoChip({
   onRemove: () => void;
 }) {
   const label = repoDisplayLabel(repo);
+  const tile = repoTileColor(`${repo.owner}/${repo.name}/${label}`);
   return (
     <span className="inline-flex min-w-0 max-w-40 items-center gap-1 rounded-full bg-muted py-0.5 pl-1 pr-1.5 text-sm text-foreground">
       <RepoLogo
@@ -116,8 +117,9 @@ function LinkedRepoChip({
         fallback={
           <span
             className={cn(
-              "flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white",
-              repoTileColor(`${repo.owner}/${repo.name}/${label}`),
+              "flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold",
+              tile.bg,
+              tile.text,
             )}
           >
             {label.charAt(0).toUpperCase()}

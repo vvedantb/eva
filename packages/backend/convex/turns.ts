@@ -5,23 +5,42 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
-import { sessionChatAdapter } from "./_chat/surfaceAdapters";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { startNextQueuedSessionMessage } from "./_queues/helpers";
 import {
-  touchStreamingEntity,
-  upsertStreamingActivity,
-} from "./streaming";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+  stalledAlert,
+  turnAdapterForEntity,
+  type AgentTurnOwner,
+  type ChatEntityId,
+  type ChatSurfaceAdapter,
+} from "./_chat/surfaceAdapters";
+import {
+  tearDownStaleDocWorkflow,
+  tearDownStaleEvaluationWorkflow,
+  tearDownStaleProjectWorkflow,
+  tearDownStaleSessionWorkflow,
+} from "./workflowWatchdog";
+import { tearDownStaleAutomationRun } from "./_automations/runs";
+import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
+import { clearStreamingActivity } from "./_taskWorkflow/helpers";
+import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
+import {
+  authMutation,
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+} from "./functions";
 import {
   acquireTurnLease,
   advanceTurn,
+  bindTurnWorkflow,
   closeTurn,
-  findOpenSessionTurn,
+  findOpenTurn,
   graceExpiredTurnLease,
+  openTurn,
   renewTurnLease,
+  type ChatTurnEntityId,
 } from "./_chat/turnStore";
 import {
   expiredTurnLeaseDecision,
@@ -29,10 +48,19 @@ import {
   type ExpiredTurnLeaseCause,
 } from "./_chat/turnLease";
 import type { ChatAlert } from "./_chat/surfaceAdapters";
-import { turnStateValidator } from "./_validators/tableFields";
-import { isLegacySessionExecuting } from "./_chat/turnProjection";
+import {
+  chatTurnEntityIdValidator,
+  turnEntityIdValidator,
+  turnLaneValidator,
+  turnStateValidator,
+} from "./_validators/tableFields";
+import { normalizeAIModel } from "./_validators/aiModels";
+import {
+  isLegacyChatExecuting,
+  isLegacySessionExecuting,
+} from "./_chat/turnProjection";
 
-const sessionTurnStatusValidator = v.union(
+const chatTurnStatusValidator = v.union(
   v.object({
     source: v.literal("durable"),
     turnId: v.id("turns"),
@@ -43,31 +71,76 @@ const sessionTurnStatusValidator = v.union(
   }),
   v.object({ source: v.literal("legacy") }),
 );
+type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
-/** Canonical UI projection for whether one session turn is open. */
+/**
+ * Whether one chat has a turn open, for a reader who may see it. The open
+ * durable turn is canonical, synthetic turns included. Entities that never
+ * opened one fall back to their workflow fields until the lifecycle marker
+ * (`turnLifecycleVersion` / `chatTurnLifecycleVersion`) says otherwise.
+ */
+async function readChatStatus(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  entityId: ChatTurnEntityId,
+): Promise<ChatTurnStatus | null> {
+  const legacyExecuting = await readLegacyExecuting(ctx, userId, entityId);
+  if (legacyExecuting === null) return null;
+  const turn = await findOpenTurn(ctx, entityId);
+  if (!turn) return legacyExecuting ? { source: "legacy" } : null;
+  return {
+    source: "durable",
+    turnId: turn._id,
+    state: turn.state,
+    startedAt: turn.turnStartedAt,
+    leaseExpiresAt: turn.leaseExpiresAt,
+    placeholderMessageId: turn.placeholderMessageId,
+  };
+}
+
+/** The legacy bridge for one entity; null when the reader may not see it. */
+async function readLegacyExecuting(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  entityId: ChatTurnEntityId,
+): Promise<boolean | null> {
+  const sessionId = ctx.db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    const session = await ctx.db.get(sessionId);
+    if (!session || !(await hasRepoAccess(ctx.db, session.repoId, userId))) {
+      return null;
+    }
+    return isLegacySessionExecuting(session);
+  }
+  const taskId = ctx.db.normalizeId("agentTasks", entityId);
+  if (taskId) {
+    const task = await ctx.db.get(taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, userId))) return null;
+    return isLegacyChatExecuting(task);
+  }
+  const projectId = ctx.db.normalizeId("projects", entityId);
+  if (!projectId) return null;
+  const project = await ctx.db.get(projectId);
+  if (!project || !(await hasRepoAccess(ctx.db, project.repoId, userId))) {
+    return null;
+  }
+  return isLegacyChatExecuting(project);
+}
+
+/** Canonical UI projection for whether one chat (session, task or project) has a turn open. */
+export const getChatStatus = authQuery({
+  args: { entityId: chatTurnEntityIdValidator },
+  returns: v.union(chatTurnStatusValidator, v.null()),
+  handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
+    await readChatStatus(ctx, ctx.userId, args.entityId),
+});
+
+/** Session form of {@link getChatStatus}, kept for the session UI. */
 export const getSessionStatus = authQuery({
   args: { sessionId: v.id("sessions") },
-  returns: v.union(sessionTurnStatusValidator, v.null()),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof sessionTurnStatusValidator> | null> => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    const turn = await findOpenSessionTurn(ctx, args.sessionId);
-    if (!turn) {
-      return isLegacySessionExecuting(session) ? { source: "legacy" } : null;
-    }
-    return {
-      source: "durable",
-      turnId: turn._id,
-      state: turn.state,
-      startedAt: turn.turnStartedAt,
-      leaseExpiresAt: turn.leaseExpiresAt,
-      placeholderMessageId: turn.placeholderMessageId,
-    };
-  },
+  returns: v.union(chatTurnStatusValidator, v.null()),
+  handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
+    await readChatStatus(ctx, ctx.userId, args.sessionId),
 });
 
 const leaseIdentityValidator = v.object({
@@ -127,34 +200,6 @@ async function applyFencedHeartbeat(
   return lease;
 }
 
-const legacyHeartbeatArgs = {
-  entityId: v.string(),
-  touchOnly: v.boolean(),
-  currentActivity: v.optional(v.string()),
-  currentContent: v.optional(v.string()),
-  pendingQuestion: v.optional(v.string()),
-};
-const legacyHeartbeatArgsValidator = v.object(legacyHeartbeatArgs);
-
-async function applyLegacyHeartbeat(
-  ctx: MutationCtx,
-  args: Infer<typeof legacyHeartbeatArgsValidator>,
-): Promise<boolean> {
-  const sessionId = ctx.db.normalizeId("sessions", args.entityId);
-  if (sessionId && (await findOpenSessionTurn(ctx, sessionId))) return false;
-  if (args.touchOnly) {
-    await touchStreamingEntity(ctx, args.entityId);
-  } else {
-    await upsertStreamingActivity(ctx, {
-      entityId: args.entityId,
-      currentActivity: args.currentActivity ?? "[]",
-      currentContent: args.currentContent,
-      pendingQuestion: args.pendingQuestion,
-    });
-  }
-  return true;
-}
-
 /** Renews the exact lease generation presented by a sandbox runner. */
 export const renew = internalMutation({
   args: {
@@ -182,36 +227,6 @@ export const heartbeatFromCallback = authMutation({
   }),
 });
 
-/** Legacy callbacks may write only while no durable Turn owns the session. */
-export const legacyHeartbeat = internalMutation({
-  args: legacyHeartbeatArgs,
-  returns: v.boolean(),
-  handler: applyLegacyHeartbeat,
-});
-
-/** Authenticated legacy fallback with the same durable ownership gate. */
-const legacyHeartbeatResultValidator = v.object({
-  accepted: v.boolean(),
-  lease: v.union(leaseVerdictValidator, v.null()),
-});
-
-export const legacyHeartbeatFromCallback = authMutation({
-  args: legacyHeartbeatArgs,
-  returns: legacyHeartbeatResultValidator,
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof legacyHeartbeatResultValidator>> => {
-    const accepted = await applyLegacyHeartbeat(ctx, args);
-    return {
-      accepted,
-      lease: accepted
-        ? null
-        : { status: "terminal", reason: "superseded" },
-    };
-  },
-});
-
 /** Records that durable sandbox preparation has reached the launch phase. */
 export const markLaunching = internalMutation({
   args: {
@@ -222,6 +237,54 @@ export const markLaunching = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (turn) await advanceTurn(ctx, turn, "launching", args);
+    return null;
+  },
+});
+
+/**
+ * Opens a one-shot agent's turn already leased: the launch that follows starts
+ * the process that owns it. Binds the calling workflow so the reconciler can
+ * tear that workflow down if the agent stalls.
+ */
+export const openAgentTurnLease = internalMutation({
+  args: {
+    entityId: turnEntityIdValidator,
+    lane: v.optional(turnLaneValidator),
+    streamingEntityId: v.string(),
+    model: v.optional(v.string()),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    workflowId: v.string(),
+  },
+  returns: leaseIdentityValidator,
+  handler: async (ctx, args) => {
+    const turnId = await openTurn(ctx, {
+      entityId: args.entityId,
+      lane: args.lane,
+      streamingEntityId: args.streamingEntityId,
+      model: normalizeAIModel(args.model),
+      sandboxId: args.sandboxId,
+      repoId: args.repoId,
+    });
+    await bindTurnWorkflow(ctx, turnId, args.workflowId);
+    const turn = await ctx.db.get(turnId);
+    const lease = turn
+      ? await acquireTurnLease(ctx, turn, "running", {
+          sandboxId: args.sandboxId,
+        })
+      : null;
+    if (!lease) throw new Error("Agent turn lease was not acquired");
+    return lease;
+  },
+});
+
+/** Closes one agent turn, e.g. when its process failed to launch. */
+export const closeAgentTurn = internalMutation({
+  args: { turnId: v.id("turns"), error: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) await closeTurn(ctx, turn, "error", { error: args.error });
     return null;
   },
 });
@@ -300,6 +363,139 @@ export const graceExpired = internalMutation({
   },
 });
 
+/**
+ * Finalises one expired turn for any chat surface. A turn with a workflow
+ * gets the full stale-turn teardown; a turn without one (a synthetic turn)
+ * only closes its placeholder and frees the entity's synthetic slot.
+ */
+async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
+  ctx: MutationCtx,
+  adapter: ChatSurfaceAdapter<TId, TEntity>,
+  id: TId,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  const sandboxStopped = cause === "sandbox_stopped";
+  const entity = await adapter.getEntity(ctx, id);
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - lastLeaseWriteAt) / 1000),
+  );
+  const thresholdSeconds = Math.max(1, Math.round(leaseDurationMs / 1000));
+  const alert = sandboxStopped
+    ? adapter.alerts.sandboxStopped(staleSeconds)
+    : withCauseDetail(
+        adapter.alerts.stalled(staleSeconds, turn.state, thresholdSeconds),
+        cause,
+        turn.silentSince ?? lastLeaseWriteAt,
+      );
+  if (entity && turn.workflowId !== undefined) {
+    await finalizeStaleChatTurn(
+      ctx,
+      adapter,
+      id,
+      entity,
+      turn.workflowId,
+      alert,
+      { sandboxStopped },
+    );
+  } else if (entity && turn.placeholderMessageId !== undefined) {
+    const message = await ctx.db.get(turn.placeholderMessageId);
+    if (message && message.finishedAt === undefined) {
+      await ctx.db.patch(message._id, {
+        content: alert.text,
+        finishedAt: Date.now(),
+      });
+    }
+    await clearStreamingActivity(ctx, turn.streamingEntityId);
+    await adapter.finalizeOrphanTurn(ctx, id);
+    await adapter.drainQueue(ctx, id);
+  }
+  await closeTurn(ctx, turn, "error", { error: alert.text });
+  if (!sandboxStopped) {
+    await adapter.afterStallFinalize(ctx, id, turn._id);
+  }
+}
+
+/**
+ * Finalises one expired agent turn (a quick-task run or a one-shot agent)
+ * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
+ * teardown the 2-hour backstop uses for the others.
+ */
+async function finalizeExpiredAgentTurn(
+  ctx: MutationCtx,
+  owner: AgentTurnOwner,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - (turn.leaseExpiresAt - leaseDurationMs)) / 1000),
+  );
+  const error = `Agent stalled: no heartbeat for ${staleSeconds}s (${cause})`;
+  console.log(
+    `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
+  );
+  const workflowId = turn.workflowId;
+  switch (owner.kind) {
+    case "run":
+      await finalizeStalledRun(ctx, owner.id, {
+        ...stalledRunStop({
+          state: turn.state,
+          hasSandbox: turn.sandboxId !== undefined,
+          staleSeconds,
+        }),
+        sandboxId: turn.sandboxId,
+      });
+      break;
+    case "automation":
+      if (workflowId !== undefined) {
+        await tearDownStaleAutomationRun(
+          ctx,
+          owner.id,
+          workflowId,
+          { sandboxId: turn.sandboxId, repoId: turn.repoId },
+          error,
+        );
+      }
+      break;
+    case "doc":
+      if (workflowId !== undefined) {
+        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "evaluation":
+      if (workflowId !== undefined) {
+        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "summary":
+      if (workflowId !== undefined) {
+        await tearDownStaleSessionWorkflow(
+          ctx,
+          owner.id,
+          workflowId,
+          stalledAlert(
+            staleSeconds,
+            turn.state,
+            Math.round(leaseDurationMs / 1000),
+          ),
+        );
+      }
+      break;
+    case "interview":
+      if (workflowId !== undefined) {
+        await tearDownStaleProjectWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+  }
+  await clearStreamingActivity(ctx, turn.streamingEntityId);
+  await closeTurn(ctx, turn, "error", { error });
+}
+
 /** Re-reads and converges one expired lease; a concurrent renewal always wins. */
 export const finalizeExpired = internalMutation({
   args: {
@@ -314,64 +510,11 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    const sandboxStopped = args.cause === "sandbox_stopped";
-    const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-    const session = sessionId ? await ctx.db.get(sessionId) : null;
-    const leaseDurationMs = turnLeaseDurationMs(turn.state);
-    const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
-    const staleSeconds = Math.max(
-      1,
-      Math.round((Date.now() - lastLeaseWriteAt) / 1000),
-    );
-    const thresholdSeconds = Math.max(1, Math.round(leaseDurationMs / 1000));
-    const alert = sandboxStopped
-      ? sessionChatAdapter.alerts.sandboxStopped(staleSeconds)
-      : withCauseDetail(
-          sessionChatAdapter.alerts.stalled(
-            staleSeconds,
-            turn.state,
-            thresholdSeconds,
-          ),
-          args.cause,
-          turn.silentSince ?? lastLeaseWriteAt,
-        );
-    if (sessionId && session && turn.workflowId !== undefined) {
-      await finalizeStaleChatTurn(
-        ctx,
-        sessionChatAdapter,
-        sessionId,
-        session,
-        turn.workflowId,
-        alert,
-        { sandboxStopped },
-      );
-    } else if (sessionId && session && turn.placeholderMessageId !== undefined) {
-      const message = await ctx.db.get(turn.placeholderMessageId);
-      if (message && message.finishedAt === undefined) {
-        await ctx.db.patch(message._id, {
-          content: alert.text,
-          finishedAt: Date.now(),
-        });
-      }
-      await clearStreamingActivity(ctx, turn.streamingEntityId);
-      await ctx.db.patch(sessionId, {
-        syntheticTurnMessageId: undefined,
-        updatedAt: Date.now(),
-      });
-      await startNextQueuedSessionMessage(ctx, sessionId);
-    }
-    await closeTurn(ctx, turn, "error", { error: alert.text });
-    if (sessionId && !sandboxStopped) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal._sessions.execution.retryEmptyStalledSessionTurn,
-        {
-          sessionId,
-          turnId: args.turnId,
-          sandboxStopped,
-        },
-      );
-    }
+    await turnAdapterForEntity(ctx.db, turn, {
+      chat: (adapter, id) =>
+        finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
+      agent: (owner) => finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
+    });
     return null;
   },
 });

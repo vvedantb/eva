@@ -13,7 +13,6 @@ import {
   motionSpring,
 } from "@eva/ui";
 import { AveMark } from "@/lib/components/ave/AveMark";
-import { AveNewChatButton } from "@/lib/components/ave/AveResetChatDialog";
 import { AVE_HEADER_BUTTON_CLASS } from "@/lib/components/ave/aveHeaderButton";
 import { PANEL_POSITION_STYLE } from "@/lib/components/ave/useAveLauncherPosition";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
@@ -90,7 +89,6 @@ export function AvePanel({
         <span className="flex-1 truncate text-sm font-semibold">
           Manager Ave
         </span>
-        <AveNewChatButton />
         <Tooltip>
           <TooltipTrigger asChild>
             <Link

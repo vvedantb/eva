@@ -9,7 +9,7 @@ const source = (path: string): string =>
 
 test("the schema supports one indexed open turn and lease reconciliation", () => {
   const schema = source("../convex/schema.ts");
-  expect(schema).toContain('turns: defineTable(turnFields)');
+  expect(schema).toContain("turns: defineTable(turnFields)");
   expect(schema).toContain('.index("by_entity_open"');
   expect(schema).toContain('.index("by_open_lease"');
 });
@@ -25,14 +25,176 @@ test("a turn is persisted before its workflow is launched", () => {
   expect(openAt).toBeLessThan(startAt);
 });
 
-test("pre-cutover workflow replays keep the V1 journal and argument shape", () => {
-  const workflow = source("../convex/_sessions/workflow.ts");
-  expect(workflow).toContain('turnId: v.optional(v.id("turns"))');
-  expect(workflow).toContain("if (args.turnId !== undefined)");
-  expect(workflow).toContain("args.turnId === undefined\n            ? null");
-  expect(workflow).toContain(
-    "...(args.turnId !== undefined ? { turnId: args.turnId } : {})",
+/**
+ * Every session workflow has held a turn since the session cutover, so the
+ * V1 journal is gone. This is the journal those workflows already record;
+ * steps replay by position, so it must not move.
+ */
+test("the session workflow requires a turn and keeps its journal", () => {
+  const file = source("../convex/_sessions/workflow.ts");
+  const start = file.indexOf(
+    "export const sessionExecuteWorkflow = workflow.define(",
   );
+  const body = file.slice(start, file.indexOf("\nexport const ", start + 1));
+  expect(body).toContain('turnId: v.id("turns")');
+  expect(body).not.toContain("args.turnId !== undefined");
+  expect(body).not.toContain("args.turnId === undefined");
+  expect(
+    [
+      ...body.matchAll(
+        /step\.(?:run\w+|awaitEvent)\(\s*(internal\.[\w.]+|\w+)/g,
+      ),
+    ].map((match) => match[1]),
+  ).toEqual([
+    "internal.sessionWorkflow.addAssistantPlaceholder",
+    "internal.sessionWorkflow.getSessionData",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sandbox.validateSandbox",
+    "internal.sandbox.prepareSessionSandbox",
+    "internal.sessionWorkflow.updateSandboxId",
+    "internal.turns.markLaunching",
+    "internal.sessionWorkflow.clearSessionClosedStatus",
+    "internal.sessionWorkflow.ensurePendingTurn",
+    "internal.sandbox.prewarmSessionDaemon",
+    "internal.turns.acquireOneShotLease",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sandbox.launchOnExistingSandbox",
+    "internal.sessionWorkflow.saveResult",
+    "sessionCompleteEvent",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sandbox.pushSandboxBranch",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sessionWorkflow.scheduleSessionDeploymentTracking",
+    "internal.github.createDraftSessionPr",
+    "internal.sessionWorkflow.postSystemAlert",
+    "internal.sandbox.pushLinkedRepoBranches",
+    "internal.sessionWorkflow.postSystemAlert",
+    "internal.github.createDraftSessionRepoPr",
+    "internal.sessionWorkflow.postSystemAlert",
+  ]);
+});
+
+/**
+ * The journal of each chat workflow, in source order (every branch). Steps
+ * replay by position, so an in-flight workflow strands if one call is added,
+ * removed or moved. Every workflow running since the Phase 5 deploy has a
+ * turn, so this is the only journal; it matches what Phase 2 workflows with a
+ * `turnId` already recorded.
+ */
+const chatWorkflowSteps = {
+  "../convex/agentTaskChatWorkflow.ts": [
+    "internal.agentTaskChatWorkflow.addAssistantPlaceholder",
+    "internal.agentTaskChatWorkflow.getChatData",
+    "internal.agentTaskChatWorkflow.markTaskSandboxStartingForChat",
+    "internal.sandbox.startTaskPreviewSandbox",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal._agentTasks.sandbox.waitForTaskPreviewSandboxActive",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.agentTaskChatWorkflow.getChatData",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.sandbox.validateSandbox",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.turns.markLaunching",
+    "internal.agentTaskChatWorkflow.ensurePendingTurn",
+    "internal.sandbox.prewarmEntityDaemon",
+    "internal.turns.acquireOneShotLease",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.sandbox.launchOnExistingSandbox",
+    "agentTaskChatCompleteEvent",
+    "internal.agentTaskChatWorkflow.saveResult",
+    "internal.sandbox.pushSandboxBranch",
+    "internal.agentTaskChatWorkflow.saveResult",
+  ],
+  "../convex/projectChatWorkflow.ts": [
+    "internal.projectChatWorkflow.saveResult",
+    "internal.projectChatWorkflow.addAssistantPlaceholder",
+    "internal.projectChatWorkflow.getChatData",
+    "internal.sandbox.validateSandbox",
+    "internal.turns.markLaunching",
+    "internal.projectChatWorkflow.ensurePendingTurn",
+    "internal.sandbox.prewarmEntityDaemon",
+    "internal.turns.acquireOneShotLease",
+    "internal.projectChatWorkflow.saveResult",
+    "internal.sandbox.launchOnExistingSandbox",
+    "projectChatCompleteEvent",
+    "internal.projectChatWorkflow.saveResult",
+    "internal.sandbox.pushSandboxBranch",
+    "internal.projectChatWorkflow.saveResult",
+  ],
+};
+
+/** The workflow handler body, from `workflow.define(` to the next export. */
+function workflowBody(path: string): string {
+  const file = source(path);
+  const start = file.indexOf("workflow.define(");
+  const end = file.indexOf("\nexport const ", start);
+  return file.slice(start, end);
+}
+
+test.each(Object.entries(chatWorkflowSteps))(
+  "%s requires a turn and keeps its journal",
+  (path, journal) => {
+    const body = workflowBody(path);
+    expect(body).toContain('turnId: v.id("turns")');
+    expect(body).not.toContain("args.turnId !== undefined");
+    expect(body).not.toContain("args.turnId === undefined");
+    const steps = [
+      ...body.matchAll(
+        /step\.(?:run\w+|awaitEvent)\(\s*(internal\.[\w.]+|\w+)/g,
+      ),
+    ].map((match) => match[1]);
+    expect(steps).toEqual(journal);
+    // Every saveResult closes the turn, so each one carries the turn id.
+    const saveResults = body.match(/\.saveResult, \{/g) ?? [];
+    const withTurn =
+      body.match(
+        /\.saveResult, \{\s*\w+: args\.\w+,\s*turnId: args\.turnId,/g,
+      ) ?? [];
+    expect(withTurn.length).toBe(saveResults.length);
+  },
+);
+
+test.each([
+  [
+    "../convex/agentTaskChatWorkflow.ts",
+    "internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow",
+  ],
+  [
+    "../convex/projectChatWorkflow.ts",
+    "internal.projectChatWorkflow.projectChatExecuteWorkflow",
+  ],
+])(
+  "%s persists a chat turn before its workflow starts",
+  (path, workflowRef) => {
+    const file = source(path);
+    const openAt = file.indexOf("await openChatTurn(");
+    const startAt = file.indexOf(workflowRef);
+    const bindAt = file.indexOf("await bindTurnWorkflow(", startAt);
+    expect(openAt).toBeGreaterThan(-1);
+    expect(openAt).toBeLessThan(startAt);
+    expect(bindAt).toBeGreaterThan(startAt);
+  },
+);
+
+test("queued task and project chat turns open a durable turn too", () => {
+  const queues = source("../convex/_queues/helpers.ts");
+  for (const workflowRef of [
+    "internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow",
+    "internal.projectChatWorkflow.projectChatExecuteWorkflow",
+  ]) {
+    const startAt = queues.indexOf(workflowRef);
+    const openAt = queues.lastIndexOf("startQueuedEntityChatTurn(", startAt);
+    expect(openAt).toBeGreaterThan(-1);
+    expect(queues.indexOf("turnId,", startAt)).toBeGreaterThan(startAt);
+  }
+  const helperAt = queues.indexOf("async function startQueuedEntityChatTurn");
+  const openAt = queues.indexOf("await openChatTurn(", helperAt);
+  const rollbackAt = queues.indexOf("await rollbackQueuedChatStart(", openAt);
+  expect(openAt).toBeGreaterThan(helperAt);
+  expect(rollbackAt).toBeGreaterThan(openAt);
 });
 
 test("fatal completion uses the same fenced payload helper as normal completion", () => {
@@ -41,7 +203,10 @@ test("fatal completion uses the same fenced payload helper as normal completion"
     "../convex/_sandbox_runtime/callbackScript.generated.ts",
   );
   const fatalAt = callback.indexOf('syncProviderStateToPersist("fatal-error")');
-  const appendAt = callback.indexOf("appendCurrentTurnLease(errorArgs)", fatalAt);
+  const appendAt = callback.indexOf(
+    "appendCurrentTurnLease(errorArgs)",
+    fatalAt,
+  );
   const deliverAt = callback.indexOf("callConvexWithRetry", fatalAt);
   expect(appendAt).toBeGreaterThan(fatalAt);
   expect(deliverAt).toBeGreaterThan(appendAt);
@@ -50,8 +215,11 @@ test("fatal completion uses the same fenced payload helper as normal completion"
 
 test("queued workflow start failures invoke durable rollback before surfacing", () => {
   const queues = source("../convex/_queues/helpers.ts");
-  const catchAt = queues.indexOf("} catch (error) {", queues.indexOf("turnId,"));
-  const rollbackAt = queues.indexOf("rollbackQueuedSessionStart", catchAt);
+  const catchAt = queues.indexOf(
+    "} catch (error) {",
+    queues.indexOf("turnId,"),
+  );
+  const rollbackAt = queues.indexOf("rollbackQueuedChatStart", catchAt);
   const throwAt = queues.indexOf("throw error", catchAt);
   expect(rollbackAt).toBeGreaterThan(catchAt);
   expect(throwAt).toBeGreaterThan(rollbackAt);
@@ -68,12 +236,19 @@ test("the heartbeat fences stale writers before changing streaming state", () =>
   expect(renewAt).toBeGreaterThan(-1);
   expect(terminalAt).toBeGreaterThan(renewAt);
   expect(streamAt).toBeGreaterThan(terminalAt);
-  expect(http).toContain("internal.turns.legacyHeartbeat");
-  expect(turns).toContain("await findOpenSessionTurn(ctx, sessionId)");
+  // A heartbeat without a lease belongs to no turn: it is told to stop and
+  // writes nothing.
+  const noLeaseAt = http.indexOf("if (turnId === null)");
+  expect(noLeaseAt).toBeGreaterThan(-1);
+  expect(http.indexOf('reason: "unknown_turn"', noLeaseAt)).toBeGreaterThan(
+    noLeaseAt,
+  );
+  expect(http).not.toContain("legacyHeartbeat");
+  expect(turns).not.toContain("legacyHeartbeat");
   const bundle = source(
     "../convex/_sandbox_runtime/callbackScript.generated.ts",
   );
-  expect(bundle).toContain("turns:legacyHeartbeatFromCallback");
+  expect(bundle).not.toContain("turns:legacyHeartbeatFromCallback");
   expect(bundle).toContain("turns:heartbeatFromCallback");
   expect(bundle).not.toContain('"streaming:touch"');
   expect(bundle).not.toContain('"streaming:set"');
@@ -93,7 +268,19 @@ test("expired leases are reconciled by a level-triggered cron", () => {
   const crons = source("../convex/crons.ts");
   expect(turns).toContain("turn.leaseExpiresAt >= Date.now()");
   expect(turns).toContain("internal.turns.finalizeExpired");
-  expect(turns).toContain("retryEmptyStalledSessionTurn");
+  expect(turns).toContain("adapter.afterStallFinalize");
+  // Decision 4: every chat retries an empty stall once, not only sessions.
+  const adapters = source("../convex/_chat/surfaceAdapters.ts");
+  for (const retry of [
+    "internal._sessions.execution.retryEmptyStalledSessionTurn",
+    "internal.agentTaskChatWorkflow.retryEmptyStalledTurn",
+    "internal.projectChatWorkflow.retryEmptyStalledTurn",
+  ]) {
+    expect(adapters).toContain(retry);
+  }
+  expect(adapters, "the hook is required on every adapter").not.toContain(
+    "afterStallFinalize?:",
+  );
   expect(turns).toContain("lastLeaseWriteAt");
   expect(crons).toContain('"session turn lease reconcile"');
   expect(crons).toContain("internal.turns.reconcile");
@@ -111,9 +298,7 @@ test("every warm daemon uses the shared claimed-turn lifecycle", () => {
     expect(daemon).toContain("appendClaimedTurnCompletion");
     expect(daemon).toContain("finishClaimedTurn()");
   }
-  const lifecycle = source(
-    "../callback-src/providers/claimedTurnLifecycle.ts",
-  );
+  const lifecycle = source("../callback-src/providers/claimedTurnLifecycle.ts");
   expect(lifecycle).toContain("readTurnLeaseIdentity(result)");
   expect(lifecycle).toContain('beginTurnOwnership("claim", turn.turnLease)');
 });
@@ -139,9 +324,7 @@ test("every heartbeat emitter is gated on claimed turn ownership", () => {
     expect(guardAt, emitter + " lost its ownership guard").toBeGreaterThan(-1);
     expect(guardAt).toBeLessThan(bodyEndAt);
   }
-  expect(heartbeats).toContain(
-    "ownership: getTurnOwnership()",
-  );
+  expect(heartbeats).toContain("canSendTurnHeartbeat(getTurnOwnership())");
 });
 
 test("one ownership state answers both the lease and the heartbeat gate", () => {
@@ -151,9 +334,7 @@ test("one ownership state answers both the lease and the heartbeat gate", () => 
     "let turnOwnership",
     "let terminalReason",
   ]);
-  const lifecycle = source(
-    "../callback-src/providers/claimedTurnLifecycle.ts",
-  );
+  const lifecycle = source("../callback-src/providers/claimedTurnLifecycle.ts");
   expect(lifecycle).not.toContain("let activeClaimState");
 });
 
@@ -171,8 +352,10 @@ test("a lease-terminal exit persists the turn's work before exiting", () => {
   const body = heartbeats.slice(startAt, heartbeats.indexOf("\n}", startAt));
   const persistAt = body.indexOf("persistTurnWork();");
   const exitAt = body.indexOf("process.exit(0)");
-  expect(persistAt, "the lease-terminal exit lost its durability push")
-    .toBeGreaterThan(-1);
+  expect(
+    persistAt,
+    "the lease-terminal exit lost its durability push",
+  ).toBeGreaterThan(-1);
   expect(exitAt, "the lease-terminal exit moved").toBeGreaterThan(-1);
   expect(persistAt).toBeLessThan(exitAt);
   // A superseded daemon shares the worktree with its winner; its commit races.
@@ -213,8 +396,14 @@ test("every completion releases the turn lease before the closing mutation is se
   ]) {
     const startAt = daemon.indexOf(fn);
     expect(startAt, fn + " moved or was renamed").toBeGreaterThan(-1);
-    const releaseAt = daemon.indexOf("releaseTurnLeaseForCompletion();", startAt);
-    const sendAt = daemon.indexOf("COMPLETE_SYNTHETIC_TURN_MUTATION ?? \"\"", startAt);
+    const releaseAt = daemon.indexOf(
+      "releaseTurnLeaseForCompletion();",
+      startAt,
+    );
+    const sendAt = daemon.indexOf(
+      'COMPLETE_SYNTHETIC_TURN_MUTATION ?? ""',
+      startAt,
+    );
     expect(releaseAt, fn + " lost its lease release").toBeGreaterThan(-1);
     expect(releaseAt).toBeLessThan(sendAt);
   }

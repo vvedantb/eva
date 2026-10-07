@@ -9,6 +9,8 @@ import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
+import { touchAgentFinished } from "../_sandbox/activity";
+import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
 
@@ -45,7 +47,7 @@ export async function resolveTaskSandboxIdForRun(
 
 /** Returns the streaming entity ID used for a task run's activity stream. */
 export function getTaskRunStreamingEntityId(runId: Id<"agentRuns">): string {
-  return `task-run-${String(runId)}`;
+  return `${TASK_RUN_STREAM_PREFIX}${String(runId)}`;
 }
 
 /** Deletes the streaming activity record for a given entity ID. */
@@ -179,6 +181,10 @@ export async function finalizeRunStatus(
     exitReason: params.exitReason ?? (params.success ? "completed" : "error"),
     errorType: isRateLimit ? ("rate_limit" as const) : undefined,
     limitResetAt,
+  });
+  await touchAgentFinished(ctx, {
+    kind: "task",
+    entityId: String(run.taskId),
   });
 
   // Single terminal-status choke point for a run, and it is guarded above

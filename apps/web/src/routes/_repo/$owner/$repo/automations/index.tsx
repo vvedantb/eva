@@ -88,7 +88,7 @@ function AutomationsHubPage() {
             {systemAutomations !== undefined && (
               <CountPop
                 label={`${installedCount}/${systemAutomations.length}`}
-                className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+                className="shrink-0 text-2xs tabular-nums text-muted-foreground"
               >
                 {installedCount} of {systemAutomations.length} installed
               </CountPop>
@@ -113,6 +113,7 @@ function AutomationsHubPage() {
                 title={entry.title}
                 blurb={entry.blurb}
                 cronSchedule={entry.cronSchedule}
+                trigger={entry.trigger}
                 installed={entry.installed}
                 numId={entry.numId}
                 basePath={basePath}

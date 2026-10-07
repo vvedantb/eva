@@ -1,11 +1,8 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { ActionCtx, MutationCtx } from "../_generated/server";
+import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
-import {
-  RUN_TIMEOUT_MS,
-  STALE_CHECK_DELAY_MS,
-} from "../_taskWorkflow/staleness";
+import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import {
   startNextQueuedProjectChatMessage,
   startNextQueuedSessionMessage,
@@ -14,6 +11,8 @@ import {
 import type { WorkflowId } from "@convex-dev/workflow";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import { sessionSummaryStreamingEntityId } from "./agentStreamIds";
+import type { TurnLane } from "../validators";
 
 /** Streaming entityId prefix for project chat workflows. */
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
@@ -22,6 +21,9 @@ export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
 
 /** A standalone system-alert message surfaced when a stale turn is torn down. */
 export type ChatAlert = { text: string; detail?: string };
+
+/** Every chat entity id. The table, not a label, decides the surface. */
+export type ChatEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
 
 /**
  * Everything the shared stall-watchdog logic (`_chat/stallWatchdog.ts`) needs
@@ -32,19 +34,23 @@ export type ChatAlert = { text: string; detail?: string };
  * adapter, so the generic shared code only ever calls opaque functions
  * instead of writing table-specific patches itself.
  */
-export type ChatSurfaceAdapter<
-  TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
-  TEntity,
-> = {
+export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
   kind: "session" | "taskChat" | "projectChat";
   /** Console-log prefix, e.g. "session", "task-chat", "project-chat". */
   logLabel: string;
   /** Console-log key for the id, e.g. "sessionId". */
   idLogLabel: string;
+  /** This surface's id when `raw` names a row of its table, else null. */
+  parseId: (db: DatabaseReader, raw: string) => TId | null;
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
   activeWorkflowId: (entity: TEntity) => string | undefined;
   /** Entity id used for the turn's own streamingActivity row. */
   streamingEntityId: (id: TId) => string;
+  /** Inverse of `streamingEntityId`: null when the row is not this surface's turn row. */
+  parseStreamingEntityId: (
+    db: DatabaseReader,
+    streamingEntityId: string,
+  ) => TId | null;
   /** Any additional streamingActivity rows to clear alongside the turn's own (sessions also clear their summary row). */
   extraStreamingClears: (id: TId) => string[];
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
@@ -60,29 +66,20 @@ export type ChatSurfaceAdapter<
   ) => Promise<void>;
   /** Starts the next queued message for this entity, if any. */
   drainQueue: (ctx: MutationCtx, id: TId) => Promise<boolean>;
-  /** Schedules (or re-schedules) this surface's own heartbeat-check Convex function. */
-  scheduleCheck: (
-    ctx: MutationCtx | ActionCtx,
-    id: TId,
-    delayMs: number,
-    args: {
-      workflowId: string;
-      turnStartedAt: number;
-      skipLivenessProbe?: boolean;
-      sandboxStopped?: boolean;
-    },
-  ) => Promise<void>;
-  /** Schedules this surface's own pre-kill liveness probe. */
-  scheduleProbe: (
+  /**
+   * Entity side of an expired turn that never bound a workflow (a synthetic
+   * turn): frees the synthetic slot. The caller has already closed the
+   * placeholder and the streaming row, and drains the queue after.
+   */
+  finalizeOrphanTurn: (ctx: MutationCtx, id: TId) => Promise<void>;
+  /**
+   * Runs after the lease reconciler finalises a stalled (not sandbox-stopped)
+   * turn. Every chat schedules its one-shot empty-stall retry here.
+   */
+  afterStallFinalize: (
     ctx: MutationCtx,
     id: TId,
-    args: {
-      workflowId: string;
-      turnStartedAt: number;
-      sandboxId: string;
-      repoId: Id<"githubRepos">;
-      streamingAgeMs: number;
-    },
+    turnId: Id<"turns">,
   ) => Promise<void>;
   alerts: {
     timeout: ChatAlert;
@@ -96,7 +93,7 @@ export type ChatSurfaceAdapter<
 };
 
 /** Alert text shared by every surface when the agent process itself has gone silent (not the sandbox VM). */
-function stalledAlert(
+export function stalledAlert(
   staleSeconds: number,
   phase: string,
   thresholdSeconds: number,
@@ -120,10 +117,13 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   kind: "session",
   logLabel: "session",
   idLogLabel: "sessionId",
+  parseId: (db, raw) => db.normalizeId("sessions", raw),
   getEntity: (ctx, id) => ctx.db.get(id),
   activeWorkflowId: (session) => session.activeWorkflowId,
   streamingEntityId: (id) => String(id),
-  extraStreamingClears: (id) => [`summary:${String(id)}`],
+  parseStreamingEntityId: (db, streamingEntityId) =>
+    db.normalizeId("sessions", streamingEntityId),
+  extraStreamingClears: (id) => [sessionSummaryStreamingEntityId(id)],
   syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
   sandboxId: (session) => session.sandboxId,
   repoId: (session) => session.repoId,
@@ -174,27 +174,19 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     }
   },
   drainQueue: (ctx, id) => startNextQueuedSessionMessage(ctx, id),
-  scheduleCheck: (ctx, id, delayMs, args) =>
-    ctx.scheduler
-      .runAfter(delayMs, internal.workflowWatchdog.checkStaleSessionHeartbeat, {
-        sessionId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        skipLivenessProbe: args.skipLivenessProbe,
-        sandboxStopped: args.sandboxStopped,
-      })
-      .then(() => undefined),
-  scheduleProbe: (ctx, id, args) =>
-    ctx.scheduler
-      .runAfter(0, internal.workflowWatchdog.probeStaleSessionLiveness, {
-        sessionId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-        streamingAgeMs: args.streamingAgeMs,
-      })
-      .then(() => undefined),
+  finalizeOrphanTurn: async (ctx, id) => {
+    await ctx.db.patch(id, {
+      syntheticTurnMessageId: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+  afterStallFinalize: async (ctx, id, turnId) => {
+    await ctx.scheduler.runAfter(
+      0,
+      internal._sessions.execution.retryEmptyStalledSessionTurn,
+      { sessionId: id, turnId, sandboxStopped: false },
+    );
+  },
   alerts: {
     timeout: timeoutAlert,
     sandboxStopped: (staleSeconds) => ({
@@ -212,9 +204,17 @@ const taskChatAdapter: ChatSurfaceAdapter<
   kind: "taskChat",
   logLabel: "task-chat",
   idLogLabel: "taskId",
+  parseId: (db, raw) => db.normalizeId("agentTasks", raw),
   getEntity: (ctx, id) => ctx.db.get(id),
   activeWorkflowId: (task) => task.activeChatWorkflowId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+  parseStreamingEntityId: (db, streamingEntityId) =>
+    streamingEntityId.startsWith(TASK_CHAT_STREAM_PREFIX)
+      ? db.normalizeId(
+          "agentTasks",
+          streamingEntityId.slice(TASK_CHAT_STREAM_PREFIX.length),
+        )
+      : null,
   extraStreamingClears: () => [],
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   sandboxId: (task) => task.sandboxId,
@@ -261,31 +261,19 @@ const taskChatAdapter: ChatSurfaceAdapter<
     await ctx.db.patch(id, patch);
   },
   drainQueue: (ctx, id) => startNextQueuedTaskChatMessage(ctx, id),
-  scheduleCheck: (ctx, id, delayMs, args) =>
-    ctx.scheduler
-      .runAfter(
-        delayMs,
-        internal.workflowWatchdog.checkStaleAgentTaskChatHeartbeat,
-        {
-          taskId: id,
-          workflowId: args.workflowId,
-          turnStartedAt: args.turnStartedAt,
-          skipLivenessProbe: args.skipLivenessProbe,
-          sandboxStopped: args.sandboxStopped,
-        },
-      )
-      .then(() => undefined),
-  scheduleProbe: (ctx, id, args) =>
-    ctx.scheduler
-      .runAfter(0, internal.workflowWatchdog.probeStaleAgentTaskChatLiveness, {
-        taskId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-        streamingAgeMs: args.streamingAgeMs,
-      })
-      .then(() => undefined),
+  finalizeOrphanTurn: async (ctx, id) => {
+    await ctx.db.patch(id, {
+      syntheticTurnMessageId: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+  afterStallFinalize: async (ctx, id, turnId) => {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.agentTaskChatWorkflow.retryEmptyStalledTurn,
+      { taskId: id, turnId },
+    );
+  },
   alerts: {
     timeout: timeoutAlert,
     sandboxStopped: (staleSeconds) => ({
@@ -303,9 +291,17 @@ const projectChatAdapter: ChatSurfaceAdapter<
   kind: "projectChat",
   logLabel: "project-chat",
   idLogLabel: "projectId",
+  parseId: (db, raw) => db.normalizeId("projects", raw),
   getEntity: (ctx, id) => ctx.db.get(id),
   activeWorkflowId: (project) => project.activeChatWorkflowId,
   streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+  parseStreamingEntityId: (db, streamingEntityId) =>
+    streamingEntityId.startsWith(PROJECT_CHAT_STREAM_PREFIX)
+      ? db.normalizeId(
+          "projects",
+          streamingEntityId.slice(PROJECT_CHAT_STREAM_PREFIX.length),
+        )
+      : null,
   extraStreamingClears: () => [],
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
   sandboxId: (project) => project.sandboxId,
@@ -353,31 +349,19 @@ const projectChatAdapter: ChatSurfaceAdapter<
     await ctx.db.patch(id, patch);
   },
   drainQueue: (ctx, id) => startNextQueuedProjectChatMessage(ctx, id),
-  scheduleCheck: (ctx, id, delayMs, args) =>
-    ctx.scheduler
-      .runAfter(
-        delayMs,
-        internal.workflowWatchdog.checkStaleProjectChatHeartbeat,
-        {
-          projectId: id,
-          workflowId: args.workflowId,
-          turnStartedAt: args.turnStartedAt,
-          skipLivenessProbe: args.skipLivenessProbe,
-          sandboxStopped: args.sandboxStopped,
-        },
-      )
-      .then(() => undefined),
-  scheduleProbe: (ctx, id, args) =>
-    ctx.scheduler
-      .runAfter(0, internal.workflowWatchdog.probeStaleProjectChatLiveness, {
-        projectId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-        streamingAgeMs: args.streamingAgeMs,
-      })
-      .then(() => undefined),
+  finalizeOrphanTurn: async (ctx, id) => {
+    await ctx.db.patch(id, {
+      syntheticTurnMessageId: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+  afterStallFinalize: async (ctx, id, turnId) => {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.projectChatWorkflow.retryEmptyStalledTurn,
+      { projectId: id, turnId },
+    );
+  },
   alerts: {
     timeout: timeoutAlert,
     sandboxStopped: (staleSeconds) => ({
@@ -401,7 +385,88 @@ export const chatSurfaceAdapters = [
 
 export { sessionChatAdapter, taskChatAdapter, projectChatAdapter };
 
-/** Records a workflow as the active workflow for a session and schedules a stale handler. */
+/** Generic over the surface, so one body serves every adapter type-safely. */
+export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
+  adapter: ChatSurfaceAdapter<TId, TEntity>,
+  id: TId,
+) => R;
+
+/**
+ * A turn owner that is not a chat: a quick-task run or a one-shot agent. It
+ * has no placeholder, queue or synthetic turn, so it does not fit
+ * `ChatSurfaceAdapter`. `summary` and `interview` work on a chat row and are
+ * told apart from its chat turns by the turn's lane.
+ */
+export type AgentTurnOwner =
+  | { kind: "run"; id: Id<"agentRuns"> }
+  | { kind: "automation"; id: Id<"automationRuns"> }
+  | { kind: "doc"; id: Id<"docs"> }
+  | { kind: "evaluation"; id: Id<"evaluationReports"> }
+  | { kind: "summary"; id: Id<"sessions"> }
+  | { kind: "interview"; id: Id<"projects"> };
+
+/** One handler per kind of turn owner. */
+export type TurnAdapterVisitor<R> = {
+  chat: ChatAdapterVisitor<R>;
+  agent: (owner: AgentTurnOwner) => R;
+};
+
+function laneOwner(
+  db: DatabaseReader,
+  entityId: string,
+  lane: TurnLane,
+): AgentTurnOwner | null {
+  if (lane === "summary") {
+    const id = db.normalizeId("sessions", entityId);
+    return id ? { kind: "summary", id } : null;
+  }
+  const id = db.normalizeId("projects", entityId);
+  return id ? { kind: "interview", id } : null;
+}
+
+function laneFreeAgentOwner(
+  db: DatabaseReader,
+  entityId: string,
+): AgentTurnOwner | null {
+  const runId = db.normalizeId("agentRuns", entityId);
+  if (runId) return { kind: "run", id: runId };
+  const automationRunId = db.normalizeId("automationRuns", entityId);
+  if (automationRunId) return { kind: "automation", id: automationRunId };
+  const docId = db.normalizeId("docs", entityId);
+  if (docId) return { kind: "doc", id: docId };
+  const reportId = db.normalizeId("evaluationReports", entityId);
+  if (reportId) return { kind: "evaluation", id: reportId };
+  return null;
+}
+
+/**
+ * Picks the adapter for a durable turn by its `entityId` table and lane, then
+ * hands it and the parsed id to the matching handler. Null when no turn owner
+ * table holds the id.
+ */
+export function turnAdapterForEntity<R>(
+  db: DatabaseReader,
+  turn: { entityId: string; lane?: TurnLane },
+  visit: TurnAdapterVisitor<R>,
+): R | null {
+  if (turn.lane !== undefined) {
+    const owner = laneOwner(db, turn.entityId, turn.lane);
+    return owner ? visit.agent(owner) : null;
+  }
+  const sessionId = sessionChatAdapter.parseId(db, turn.entityId);
+  if (sessionId) return visit.chat(sessionChatAdapter, sessionId);
+  const taskId = taskChatAdapter.parseId(db, turn.entityId);
+  if (taskId) return visit.chat(taskChatAdapter, taskId);
+  const projectId = projectChatAdapter.parseId(db, turn.entityId);
+  if (projectId) return visit.chat(projectChatAdapter, projectId);
+  const owner = laneFreeAgentOwner(db, turn.entityId);
+  return owner ? visit.agent(owner) : null;
+}
+
+/**
+ * Records a workflow as the active workflow for a session and schedules the
+ * 2-hour backstop. The turn lease (`turns.reconcile`) is the stall check.
+ */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
@@ -415,18 +480,9 @@ export async function trackSessionWorkflow(
     internal.workflowWatchdog.handleStaleSession,
     { sessionId, workflowId: id },
   );
-  // No-heartbeat watchdog: the in-sandbox callback touches streamingActivity
-  // at least every ~15s while a turn runs, so a silently dead agent process
-  // (OOM) shows up as a stale row within minutes. Without this chain the chat
-  // sat on "Working…" until the 2h handleStaleSession backstop above.
-  await ctx.scheduler.runAfter(
-    STALE_CHECK_DELAY_MS,
-    internal.workflowWatchdog.checkStaleSessionHeartbeat,
-    { sessionId, workflowId: id, turnStartedAt: Date.now() },
-  );
 }
 
-/** Records a workflow as the active chat workflow for a project and schedules a stale handler. */
+/** Records the active chat workflow for a project; see `trackSessionWorkflow`. */
 export async function trackProjectChatWorkflow(
   ctx: MutationCtx,
   projectId: Id<"projects">,
@@ -440,15 +496,9 @@ export async function trackProjectChatWorkflow(
     internal.workflowWatchdog.handleStaleProjectChat,
     { projectId, workflowId: id },
   );
-  // No-heartbeat watchdog — same rationale as trackSessionWorkflow above.
-  await ctx.scheduler.runAfter(
-    STALE_CHECK_DELAY_MS,
-    internal.workflowWatchdog.checkStaleProjectChatHeartbeat,
-    { projectId, workflowId: id, turnStartedAt: Date.now() },
-  );
 }
 
-/** Records a workflow as the active chat workflow for an agent task and schedules a stale handler. */
+/** Records the active chat workflow for an agent task; see `trackSessionWorkflow`. */
 export async function trackAgentTaskChatWorkflow(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -461,11 +511,5 @@ export async function trackAgentTaskChatWorkflow(
     timeoutMs,
     internal.workflowWatchdog.handleStaleAgentTaskChat,
     { taskId, workflowId: id },
-  );
-  // No-heartbeat watchdog — same rationale as trackSessionWorkflow above.
-  await ctx.scheduler.runAfter(
-    STALE_CHECK_DELAY_MS,
-    internal.workflowWatchdog.checkStaleAgentTaskChatHeartbeat,
-    { taskId, workflowId: id, turnStartedAt: Date.now() },
   );
 }

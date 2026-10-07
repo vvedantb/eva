@@ -14,13 +14,12 @@ import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
 import {
+  awaitSandboxActive,
   buildChatMessageCalls,
-  decideSandboxStartPlan,
   resolveAgentDelivery,
   SANDBOX_STOP_SETTLE_TIMEOUT_MS,
   SANDBOX_SURFACES,
   TASK_PREVIEW_SANDBOX_READY_POLL_MS,
-  TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS,
   type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
@@ -1309,9 +1308,20 @@ const agentTaskSchema = z.object({
   updatedAt: z.number(),
   model: z.string().optional(),
   lastChatModel: z.string().optional(),
-  activeWorkflowId: z.string().optional(),
-  activeChatWorkflowId: z.string().optional(),
   reviewTaskSandboxStatus: z.string().optional(),
+});
+
+/** One row of `getActiveTasksSlim`: the busy state is computed server-side. */
+const agentTaskListItemSchema = z.object({
+  _id: z.string(),
+  numId: z.number().optional(),
+  repoId: z.string().optional(),
+  title: z.string(),
+  status: z.string(),
+  updatedAt: z.number(),
+  model: z.string().optional(),
+  lastChatModel: z.string().optional(),
+  isExecuting: z.boolean(),
 });
 
 /** Slim projection of a `projects` document (its chat mirrors a task's). */
@@ -1472,7 +1482,7 @@ export const orchestratorListAgents = internalAction({
         });
       }
     }
-    for (const task of z.array(agentTaskSchema).parse(rawTasks)) {
+    for (const task of z.array(agentTaskListItemSchema).parse(rawTasks)) {
       // Keep tasks inside the requested repo scope (all repos, or one).
       if (task.repoId === undefined) continue;
       const repoName = repoNameById.get(task.repoId);
@@ -1484,9 +1494,7 @@ export const orchestratorListAgents = internalAction({
         repo: repoName,
         title: task.title,
         status: task.status,
-        isExecuting:
-          task.activeWorkflowId !== undefined ||
-          task.activeChatWorkflowId !== undefined,
+        isExecuting: task.isExecuting,
         model: task.lastChatModel ?? task.model,
         updatedAt: task.updatedAt,
       });
@@ -1718,64 +1726,38 @@ async function ensureEntitySandboxActive(
   kind: ChatTargetKind,
   id: string,
 ): Promise<{ startRequested: boolean }> {
-  const plan = decideSandboxStartPlan(
-    await readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
-  );
-  if (plan === "run") return { startRequested: false };
-
   const surface = SANDBOX_SURFACES[kind];
-  let started = false;
-  const start = async () => {
-    await runMutationAsUser(convexUrl, clerkUserId, surface.start, {
-      [surface.idArg]: id,
-    });
-    started = true;
-  };
-
-  // `wait` is a start/stop already in flight. If that settles to `closed`,
-  // start once rather than failing on a teardown race.
-  if (plan === "start") {
-    await start();
-  }
-  const deadline = Date.now() + TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const next = decideSandboxStartPlan(
-      await readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
-    );
-    if (next === "run") return { startRequested: started };
-    if (next === "start") {
-      if (started) {
-        throw new Error(
-          `The ${kind} sandbox did not become ready. Start it from the sandbox panel and retry.`,
-        );
-      }
-      await start();
-    }
-    await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
-  }
-  throw new Error(
-    `Timed out waiting for the ${kind} sandbox to start. Start it from the sandbox panel and retry.`,
-  );
+  return await awaitSandboxActive({
+    kind,
+    readStatus: () => readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
+    start: async () => {
+      await runMutationAsUser(convexUrl, clerkUserId, surface.start, {
+        [surface.idArg]: id,
+      });
+    },
+    sleep: delay,
+  });
 }
 
 /**
- * Decides how a chat surface's own workflow slot answers "is this busy", and
- * which model the turn falls back to. Each surface has a different slot: a
- * session's single workflow, a task's chat slot (separate from its run), a
- * project's chat slot (separate from build and spec workflows).
+ * Decides whether a message starts a turn or joins the queue, and which model
+ * the turn falls back to. `isExecuting` is `entityIsExecuting`: the open
+ * durable turn (synthetic turns included), plus a task's main run or a
+ * project's build. A busy answer is always safe — the queue drain starts the
+ * message at once when the chat itself is free.
  */
 function chatDelivery(
   kind: ChatTargetKind,
   rawDoc: unknown,
   queuedAhead: number,
   requestedModel: string | undefined,
-  sessionIsExecuting: boolean,
+  isExecuting: boolean,
 ): AgentDelivery {
+  const isBusy = isExecuting || queuedAhead > 0;
   if (kind === "session") {
     const session = sessionDocSchema.parse(rawDoc);
     return resolveAgentDelivery({
-      // Durable `/loop` turns never set `activeWorkflowId`.
-      isBusy: sessionIsExecuting || queuedAhead > 0,
+      isBusy,
       requestedModel,
       storedModel: session.lastModel,
     });
@@ -1783,15 +1765,14 @@ function chatDelivery(
   if (kind === "task") {
     const task = agentTaskSchema.parse(rawDoc);
     return resolveAgentDelivery({
-      // A quick task's run and its sandbox chat are independent slots.
-      isBusy: task.activeChatWorkflowId !== undefined || queuedAhead > 0,
+      isBusy,
       requestedModel,
       storedModel: task.lastChatModel ?? task.model,
     });
   }
   const project = projectDocSchema.parse(rawDoc);
   return resolveAgentDelivery({
-    isBusy: project.activeChatWorkflowId !== undefined || queuedAhead > 0,
+    isBusy,
     requestedModel,
     storedModel: project.lastChatModel ?? project.model,
   });
@@ -1859,20 +1840,11 @@ export const orchestratorSendMessage = internalAction({
         ),
       ).length;
 
-    const sessionIsExecuting: boolean =
-      kind === "session"
-        ? await ctx.runQuery(internal.mcp.queries.entityIsExecuting, {
-            kind,
-            id,
-          })
-        : false;
-    const delivery = chatDelivery(
-      kind,
-      rawDoc,
-      queuedAhead,
-      model,
-      sessionIsExecuting,
+    const isExecuting: boolean = await ctx.runQuery(
+      internal.mcp.queries.entityIsExecuting,
+      { kind, id },
     );
+    const delivery = chatDelivery(kind, rawDoc, queuedAhead, model, isExecuting);
     for (const call of buildChatMessageCalls({
       kind,
       id,

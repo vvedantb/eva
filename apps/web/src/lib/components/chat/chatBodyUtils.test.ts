@@ -429,34 +429,45 @@ test("ChatBody looks up other senders, not the whole user table", () => {
 /**
  * The bug this covers: quick task chat locked its composer whenever the
  * sandbox was not marked active, and a quick task's first run only marks it
- * active once the run winds down. So the whole time there was something to
- * queue behind, there was no way to type it — while sessions queued fine.
+ * active once the run winds down. Now nothing but an account swap locks it:
+ * a sleeping sandbox or a usage limit queues the message instead.
  */
 describe("sandboxComposerState", () => {
+  const base = {
+    isSandboxActive: true,
+    isSwitchingAccount: false,
+    isExecuting: false,
+    isUsageLimitHeld: false,
+  };
+
   test("a running turn takes a follow-up even before the sandbox is active", () => {
     const state = sandboxComposerState({
+      ...base,
       isSandboxActive: false,
-      isSwitchingAccount: false,
       isExecuting: true,
     });
     expect(state.isInputDisabled).toBe(false);
+    expect(state.queuesSends).toBe(false);
     expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.activePlaceholder);
   });
 
-  test("an idle chat with no sandbox still says to wake Eva", () => {
-    const state = sandboxComposerState({
-      isSandboxActive: false,
-      isSwitchingAccount: false,
-      isExecuting: false,
-    });
-    expect(state.isInputDisabled).toBe(true);
+  test("an idle chat with no sandbox queues the send and wakes Eva", () => {
+    const state = sandboxComposerState({ ...base, isSandboxActive: false });
+    expect(state.isInputDisabled).toBe(false);
+    expect(state.queuesSends).toBe(true);
     expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.asleepPlaceholder);
-    expect(state.disabledReason).toBe(SANDBOX_CHAT_COPY.asleepDisabledReason);
+  });
+
+  test("a usage limit queues the send until the reset", () => {
+    const state = sandboxComposerState({ ...base, isUsageLimitHeld: true });
+    expect(state.isInputDisabled).toBe(false);
+    expect(state.queuesSends).toBe(true);
+    expect(state.placeholder).toBe(SANDBOX_CHAT_COPY.usageLimitPlaceholder);
   });
 
   test("an account swap blocks the composer even mid-turn", () => {
     const state = sandboxComposerState({
-      isSandboxActive: true,
+      ...base,
       isSwitchingAccount: true,
       isExecuting: true,
     });
@@ -467,16 +478,11 @@ describe("sandboxComposerState", () => {
   });
 
   test("an awake, idle chat is open for a normal send", () => {
-    expect(
-      sandboxComposerState({
-        isSandboxActive: true,
-        isSwitchingAccount: false,
-        isExecuting: false,
-      }),
-    ).toEqual({
+    expect(sandboxComposerState(base)).toEqual({
       isInputDisabled: false,
+      queuesSends: false,
       placeholder: SANDBOX_CHAT_COPY.activePlaceholder,
-      disabledReason: SANDBOX_CHAT_COPY.asleepDisabledReason,
+      disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
     });
   });
 });

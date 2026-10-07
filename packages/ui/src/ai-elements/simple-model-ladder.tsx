@@ -87,7 +87,7 @@ export function SimpleModelLadder<TModel extends string>({
       </Slider>
       <div className="flex min-h-5 items-center">
         {dragging ? (
-          <div className="flex w-full justify-between text-[11px] font-medium text-muted-foreground">
+          <div className="flex w-full justify-between text-2xs font-medium text-muted-foreground">
             <span>Faster</span>
             <span>Smarter</span>
           </div>

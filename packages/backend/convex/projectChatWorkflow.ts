@@ -16,6 +16,7 @@ import {
   roleValidator,
   taskSandboxStatusValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
 import {
@@ -24,7 +25,10 @@ import {
   clearStreamingActivity,
 } from "./_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "./streaming";
-import { startNextQueuedProjectChatMessage } from "./_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedProjectChatMessage,
+} from "./_queues/helpers";
 import {
   trackProjectChatWorkflow,
   PROJECT_CHAT_STREAM_PREFIX,
@@ -61,7 +65,18 @@ import {
 } from "./_shared/modelHandoff";
 import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
+import { emptyStallRetryPrompt } from "./_chat/stallRetry";
+import {
+  advanceTurn,
+  bindTurnWorkflow,
+  closeOpenTurn,
+  closeTurn,
+  closeTurnForWorkflow,
+  openChatTurn,
+  resolveCompletionTurn,
+} from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -183,6 +198,7 @@ async function stageAndStartProjectChatTurn(
 ): Promise<void> {
   const project = params.project;
   const projectId = project._id;
+  const repoId = project.repoId;
   const normalizedModel = normalizeAIModel(params.model);
   // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
   // in `prewarmChatDaemon` below): the composer can send a model default
@@ -196,7 +212,7 @@ async function stageAndStartProjectChatTurn(
     fastMode: params.fastMode,
   });
 
-  await ctx.db.insert("messages", {
+  const placeholderMessageId = await ctx.db.insert("messages", {
     parentId: projectId,
     role: "assistant",
     content: "",
@@ -215,12 +231,23 @@ async function stageAndStartProjectChatTurn(
   );
 
   const usesDaemonPull = usesChatDaemon(normalizedModel);
+  const turnId = await openChatTurn(ctx, {
+    entityId: projectId,
+    streamingEntityId: chatStreamEntityId(projectId),
+    placeholderMessageId,
+    prompt,
+    attachmentStorageIds,
+    model: normalizedModel,
+    sandboxId: project.sandboxId,
+    repoId,
+  });
   await ctx.db.patch(projectId, {
     ...(usesDaemonPull
       ? {
           pendingTurn: {
             prompt,
             requestedAt: Date.now(),
+            turnId,
             attachmentStorageIds,
             model: normalizedModel,
           },
@@ -267,8 +294,11 @@ async function stageAndStartProjectChatTurn(
       providerAccountId: params.providerAccountId,
       credentialOwnerUserId: project.userId,
       userId: params.actingUserId,
+      turnId,
     },
   );
+
+  await bindTurnWorkflow(ctx, turnId, String(workflowId));
 
   await trackProjectChatWorkflow(ctx, projectId, workflowId);
 }
@@ -335,6 +365,12 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.projectId, { updatedAt: Date.now() });
+    if (role === "user") {
+      await touchUserActivity(ctx, {
+        kind: "project",
+        entityId: String(args.projectId),
+      });
+    }
     return null;
   },
 });
@@ -358,6 +394,10 @@ export const startExecute = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -488,6 +528,49 @@ export const retryLastTurnWithAccount = authMutation({
   },
 });
 
+/**
+ * Restages the last user prompt once after an empty stall, so the question is
+ * not lost. Scheduled by the lease reconciler through the adapter's
+ * `afterStallFinalize`; same rule as `retryEmptyStalledSessionTurn`.
+ */
+export const retryEmptyStalledTurn = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    turnId: v.id("turns"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    const turn = await ctx.db.get(args.turnId);
+    if (!project || !turn) return null;
+    const message = await emptyStallRetryPrompt(ctx.db, {
+      parentId: args.projectId,
+      sandboxStopped: false,
+      hasActiveWorkflow:
+        project.activeChatWorkflowId !== undefined ||
+        project.pendingTurn !== undefined,
+    });
+    if (message === null) return null;
+    // No attachment handling needed: the prompt build reads the newest user
+    // message's attachments itself.
+    await stageAndStartProjectChatTurn(ctx, {
+      project,
+      actingUserId: project.userId,
+      message,
+      model: turn.model,
+      reasoningLevel: project.lastReasoningLevel,
+      thinkingEnabled: project.lastThinkingEnabled,
+      use1mContext: project.lastUse1mContext,
+      fastMode: project.lastFastMode,
+      providerAccountId: project.providerAccountId,
+    });
+    console.log(
+      `[project-chat] retryEmptyStalledTurn projectId=${args.projectId} turnId=${args.turnId}`,
+    );
+    return null;
+  },
+});
+
 /** Queues a chat message to run after the current workflow finishes. */
 export const enqueueMessage = authMutation({
   args: {
@@ -511,6 +594,10 @@ export const enqueueMessage = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -552,6 +639,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.projectId);
     return null;
   },
 });
@@ -597,6 +688,16 @@ export const cancelExecution = authMutation({
       }
     }
 
+    if (workflowIdToCancel !== undefined) {
+      await closeTurnForWorkflow(
+        ctx,
+        args.projectId,
+        workflowIdToCancel,
+        "cancelled",
+        { error: "Cancelled by the user" },
+      );
+    }
+
     const streamingEntityId = chatStreamEntityId(args.projectId);
     const streaming = await ctx.db
       .query("streamingActivity")
@@ -633,6 +734,9 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
+      await closeOpenTurn(ctx, args.projectId, "cancelled", {
+        error: "Cancelled by the user",
+      });
     }
 
     await clearStreamingActivity(ctx, streamingEntityId);
@@ -640,7 +744,6 @@ export const cancelExecution = authMutation({
     const projectPatch: {
       activeChatWorkflowId?: undefined;
       pendingTurn?: undefined;
-      pendingTurnClaimedAt?: undefined;
       syntheticTurnMessageId?: undefined;
       updatedAt: number;
     } = { updatedAt: Date.now() };
@@ -659,9 +762,6 @@ export const cancelExecution = authMutation({
     }
     if (cancelOwnsCurrentTurn) {
       projectPatch.syntheticTurnMessageId = undefined;
-      // This cancel owns the current turn and nothing newer has arrived, so the
-      // claim stamp is spent. See `_chat/pendingTurnRestage.ts`.
-      projectPatch.pendingTurnClaimedAt = undefined;
     }
 
     await ctx.db.patch(args.projectId, projectPatch);
@@ -686,11 +786,13 @@ export const projectChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
     const saveFailure = (error: string) =>
       step.runMutation(internal.projectChatWorkflow.saveResult, {
         projectId: args.projectId,
+        turnId: args.turnId,
         success: false,
         result: null,
         error,
@@ -761,6 +863,11 @@ export const projectChatExecuteWorkflow = workflow.define({
       return;
     }
 
+    await step.runMutation(internal.turns.markLaunching, {
+      turnId: args.turnId,
+      sandboxId: activeSandboxId,
+    });
+
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.projectChatWorkflow.ensurePendingTurn, {
         projectId: args.projectId,
@@ -792,6 +899,21 @@ export const projectChatExecuteWorkflow = workflow.define({
         entityTable: "projects",
       });
     } else {
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId: activeSandboxId },
+      );
+      if (turnLease === null) {
+        await step.runMutation(internal.projectChatWorkflow.saveResult, {
+          projectId: args.projectId,
+          turnId: args.turnId,
+          success: false,
+          result: null,
+          error: "The turn no longer owns this project chat. Please retry.",
+          activityLog: null,
+        });
+        return;
+      }
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
         sandboxId: activeSandboxId,
         entityId: args.projectId,
@@ -811,6 +933,8 @@ export const projectChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.projectId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
     }
 
@@ -818,6 +942,7 @@ export const projectChatExecuteWorkflow = workflow.define({
 
     await step.runMutation(internal.projectChatWorkflow.saveResult, {
       projectId: args.projectId,
+      turnId: args.turnId,
       success: result.success,
       result: result.result,
       error: result.error,
@@ -847,6 +972,7 @@ export const projectChatExecuteWorkflow = workflow.define({
         );
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,
+          turnId: args.turnId,
           success: false,
           result: result.result,
           error: publishError,
@@ -937,6 +1063,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     projectId: v.id("projects"),
+    /** The durable turn this result closes. */
+    turnId: v.id("turns"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -988,12 +1116,23 @@ export const saveResult = internalMutation({
 
     await ctx.db.patch(args.projectId, {
       activeChatWorkflowId: undefined,
-      // The turn is over, so the claim stamp has nothing left to vouch for.
-      // See `_chat/pendingTurnRestage.ts`.
-      pendingTurnClaimedAt: undefined,
       updatedAt: Date.now(),
       lastSandboxActivity: Date.now(),
     });
+    await touchAgentFinished(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
+    });
+
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) {
+      await closeTurn(
+        ctx,
+        turn,
+        args.success ? "done" : "error",
+        args.error ? { error: args.error } : {},
+      );
+    }
 
     await startNextQueuedProjectChatMessage(ctx, args.projectId);
     return null;
@@ -1010,6 +1149,7 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
@@ -1020,14 +1160,18 @@ export const handleCompletion = authMutation({
       throw new Error("Not authorized");
     }
 
-    if (
-      project.pendingTurn !== undefined ||
-      project.pendingTurnClaimedAt !== undefined
-    ) {
-      await ctx.db.patch(args.projectId, {
-        pendingTurn: undefined,
-        pendingTurnClaimedAt: undefined,
-      });
+    const turnResolution = await resolveCompletionTurn(ctx, {
+      entityId: args.projectId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+    });
+    if (turnResolution.status === "stale") return null;
+    if (turnResolution.status === "current") {
+      await advanceTurn(ctx, turnResolution.turn, "finalizing");
+    }
+
+    if (project.pendingTurn !== undefined) {
+      await ctx.db.patch(args.projectId, { pendingTurn: undefined });
     }
 
     await sendCompletionEvent(

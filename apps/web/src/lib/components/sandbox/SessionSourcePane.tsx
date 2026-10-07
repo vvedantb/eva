@@ -51,11 +51,11 @@ export function SessionSourcePane({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-balance text-foreground">
+          <p className="truncate text-2sm font-medium tracking-[-0.01em] text-balance text-foreground">
             {title}
           </p>
           {count !== undefined ? (
-            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
               {count}
             </span>
           ) : null}
@@ -138,7 +138,7 @@ export function SessionSourceDetail({
 
 /** Read-only title text for `SessionSourceDetail`. */
 export const sessionSourceDetailTitleClass =
-  "min-w-0 flex-1 truncate px-1.5 py-1 text-[13px] font-medium tracking-[-0.01em] text-foreground";
+  "min-w-0 flex-1 truncate px-1.5 py-1 text-2sm font-medium tracking-[-0.01em] text-foreground";
 
 export const sessionSourceViewAllClass =
   "hit-target motion-press inline-flex shrink-0 items-center gap-0.5 rounded-md py-1 pl-2 pr-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.96]";
@@ -157,7 +157,7 @@ export function SessionSourceEmpty({
       <span className="mb-3 flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
         {icon}
       </span>
-      <p className="text-[13px] font-medium tracking-[-0.01em] text-balance text-foreground">
+      <p className="text-2sm font-medium tracking-[-0.01em] text-balance text-foreground">
         {title}
       </p>
       <p className="mt-1 max-w-[16rem] text-pretty text-xs leading-relaxed text-muted-foreground">
@@ -210,10 +210,10 @@ export const SessionSourceRow = forwardRef<
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground">
+            <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground">
               {title}
             </MarqueeOnHover>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
               {timeLabel}
             </span>
             {trailing}

@@ -39,8 +39,10 @@ import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import {
   SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
@@ -102,6 +104,7 @@ export function ProjectCard({
   onClick,
   onDelete,
 }: ProjectCardProps) {
+  const simpleView = useSimpleView();
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(title);
   const [editDescription, setEditDescription] = useState(description ?? "");
@@ -238,7 +241,7 @@ export function ProjectCard({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-baseline gap-1.5">
             <EntityNumLabel numId={numId} />
-            <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+            <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
               {title}
             </MarqueeOnHover>
           </div>
@@ -255,7 +258,7 @@ export function ProjectCard({
             </p>
           ) : null}
         </div>
-        {sandboxStatus ? (
+        {sandboxStatus && showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -277,7 +280,7 @@ export function ProjectCard({
           <TooltipTrigger asChild>
             <Badge
               variant="secondary"
-              className="gap-0.5 px-1.5 py-0 text-[10px] font-medium leading-4"
+              className="gap-0.5 px-1.5 py-0 text-3xs font-medium leading-4"
             >
               {planningMode === "interview" ? (
                 <IconSparkles className="size-2.5 shrink-0" />
@@ -308,7 +311,7 @@ export function ProjectCard({
               ))}
             </AvatarStack>
             {hiddenCount > 0 ? (
-              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+              <span className="text-2xs font-medium tabular-nums text-muted-foreground">
                 +{hiddenCount}
               </span>
             ) : null}

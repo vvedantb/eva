@@ -26,7 +26,6 @@ import {
   useDragSensors,
 } from "@eva/ui";
 import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
-import { isTaskAgentActive } from "@/lib/components/tasks/taskAgentActivity";
 import {
   statusConfig,
   TASK_STATUSES,
@@ -92,7 +91,7 @@ function SortableTaskWrapper({
           title={task.title}
           description={task.description}
           status={task.status}
-          isAgentActive={isTaskAgentActive(task)}
+          isAgentActive={task.isExecuting}
           hasError={hasError}
           sandboxStatus={task.reviewTaskSandboxStatus}
           numId={task.numId}
@@ -352,7 +351,7 @@ export function ProjectTaskListPanel({
                             title={task.title}
                             description={task.description}
                             status={task.status}
-                            isAgentActive={isTaskAgentActive(task)}
+                            isAgentActive={task.isExecuting}
                             hasError={errorTaskIdSet.has(task._id)}
                             sandboxStatus={task.reviewTaskSandboxStatus}
                             numId={task.numId}

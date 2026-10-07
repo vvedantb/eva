@@ -5,6 +5,7 @@ import { assertMessageParentAccess, authQuery } from "../functions";
 import { chatUiPanelFields, messageFields } from "../validators";
 import {
   chatEntityKindValidator,
+  latestChatMessageId,
   resolveChatParent,
 } from "../_chat/chatParent";
 
@@ -21,9 +22,8 @@ const panelValidator = v.object({
  * composition; the sandbox token has already been checked by the MCP layer, so
  * this stays internal.
  *
- * The panel is anchored to the newest message in the chat, which during a turn
- * is the assistant placeholder the agent is filling in. That is what makes it
- * appear under the reply that created it rather than at the end of history.
+ * The panel is anchored to the newest message in the chat (see
+ * `latestChatMessageId`).
  */
 export const create = internalMutation({
   args: {
@@ -38,14 +38,10 @@ export const create = internalMutation({
   handler: async (ctx, args): Promise<Id<"chatUiPanels"> | null> => {
     const parentId = resolveChatParent(ctx.db, args.entityKind, args.entityId);
     if (!parentId) return null;
-    const latestMessage = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", parentId))
-      .order("desc")
-      .first();
+    const messageId = await latestChatMessageId(ctx.db, parentId);
     return await ctx.db.insert("chatUiPanels", {
       parentId,
-      ...(latestMessage ? { messageId: latestMessage._id } : {}),
+      ...(messageId ? { messageId } : {}),
       ...(args.title !== undefined ? { title: args.title } : {}),
       prompt: args.prompt,
       spec: args.spec,

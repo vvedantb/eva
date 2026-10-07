@@ -14,7 +14,7 @@ import {
 } from "../validators";
 import { sessionValidator } from "./helpers";
 import {
-  openSessionIdsForRepo,
+  openChatEntityIdsForRepo,
   sessionIsExecuting,
 } from "../_chat/turnProjection";
 
@@ -194,7 +194,7 @@ async function openIdsIncludingLinked(
     repoIds.set(String(row.session.repoId), row.session.repoId);
   }
   const sets = await Promise.all(
-    [...repoIds.values()].map((id) => openSessionIdsForRepo(db, id)),
+    [...repoIds.values()].map((id) => openChatEntityIdsForRepo(db, id)),
   );
   const merged = new Set<string>(ownOpenIds);
   for (const set of sets) {
@@ -231,7 +231,7 @@ export const list = authQuery({
     );
     const openSessionIds = await openIdsIncludingLinked(
       ctx.db,
-      await openSessionIdsForRepo(ctx.db, args.repoId),
+      await openChatEntityIdsForRepo(ctx.db, args.repoId),
       linked,
     );
     const linkedFromBySession = new Map(
@@ -272,7 +272,7 @@ export const listArchived = authQuery({
     );
     const openSessionIds = await openIdsIncludingLinked(
       ctx.db,
-      await openSessionIdsForRepo(ctx.db, args.repoId),
+      await openChatEntityIdsForRepo(ctx.db, args.repoId),
       linked,
     );
     const linkedFromBySession = new Map(

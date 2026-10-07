@@ -100,6 +100,9 @@ window.addEventListener("unhandledrejection", (event) => {
 
 const router = createRouter({
   routeTree,
+  // Redline history builds serve the app under `/__redline/h/<sha>/`; Vite
+  // sets BASE_URL from `--base`, so routes resolve inside that prefix. "/" in dev.
+  basepath: import.meta.env.BASE_URL,
   history: createAppHistory(),
   context: { isSignedIn: false },
   defaultErrorComponent: DeploymentErrorFallback,

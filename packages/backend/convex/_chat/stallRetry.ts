@@ -1,5 +1,8 @@
+import type { Doc } from "../_generated/dataModel";
+import type { DatabaseReader } from "../_generated/server";
+
 /**
- * Whether a stalled session turn should be restaged without a new user bubble.
+ * Whether a stalled chat turn should be restaged without a new user bubble.
  *
  * claimPendingTurn acquires the 2-minute running lease before the daemon has
  * started heartbeating it. If the process then dies (huge Claude resume after
@@ -84,4 +87,37 @@ export function countStallAlertsAfterLastUser(
     lastUserContent: undefined,
     hasSalvagedOutput,
   };
+}
+
+/**
+ * The last user prompt to restage after an empty stall, or null when the stall
+ * must stay failed. Shared by the session, task-chat and project-chat retries,
+ * which each run it from their adapter's `afterStallFinalize`.
+ */
+export async function emptyStallRetryPrompt(
+  db: DatabaseReader,
+  params: {
+    parentId: Doc<"messages">["parentId"];
+    sandboxStopped: boolean;
+    hasActiveWorkflow: boolean;
+  },
+): Promise<string | null> {
+  const messages = await db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", params.parentId))
+    .order("desc")
+    .take(20);
+  const counted = countStallAlertsAfterLastUser(messages);
+  if (
+    !shouldRetryEmptyStall({
+      sandboxStopped: params.sandboxStopped,
+      hasActiveWorkflow: params.hasActiveWorkflow,
+      stallAlertsAfterLastUser: counted.stallAlertsAfterLastUser,
+      lastUserContent: counted.lastUserContent,
+      hasSalvagedOutput: counted.hasSalvagedOutput,
+    })
+  ) {
+    return null;
+  }
+  return counted.lastUserContent ?? null;
 }

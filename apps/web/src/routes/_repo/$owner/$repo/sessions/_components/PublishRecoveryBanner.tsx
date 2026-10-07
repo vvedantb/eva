@@ -189,7 +189,7 @@ export function PublishRecoveryBanner({
             <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5">
               <Badge
                 variant="destructive"
-                className="shrink-0 rounded-md px-1.5 py-0 text-[10px] font-semibold tracking-wide uppercase"
+                className="shrink-0 rounded-md px-1.5 py-0 text-3xs font-semibold tracking-wide uppercase"
               >
                 Publish blocked
               </Badge>

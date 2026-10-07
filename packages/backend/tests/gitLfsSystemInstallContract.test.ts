@@ -56,7 +56,7 @@ describe("seed run registers git-lfs system filters", () => {
   });
 
   /**
-   * Two registrations, not one: /opt/git's git and the dnf-installed
+   * Two registrations, not one: /opt/git's git and the package-manager-installed
    * /usr/bin/git read different system configs, and a checkout run by either
    * has to resolve LFS pointers.
    */

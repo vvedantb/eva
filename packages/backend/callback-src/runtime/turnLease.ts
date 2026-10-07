@@ -23,17 +23,15 @@ export type LeaseTerminalReason =
 export type TurnOwner = "claim" | "provider";
 
 /**
- * The single fact behind "does this process own a turn": ownership plus, for
- * durable turns, the lease that fences its writes. A legacy claim owns a turn
- * with no lease at all, so ownership cannot be inferred from the lease alone —
- * doing that is what silenced legacy daemons (fix 56530596d).
+ * The single fact behind "does this process own a turn": ownership plus the
+ * durable lease that fences its writes. Every agent turn holds a lease.
  */
 export type TurnOwnership =
   | { status: "idle" }
   | {
       status: "owned";
       owner: TurnOwner;
-      turnLease: TurnLeaseIdentity | null;
+      turnLease: TurnLeaseIdentity;
     };
 
 let turnOwnership: TurnOwnership =
@@ -53,7 +51,7 @@ export function getTurnOwnership(): TurnOwnership {
 /** Installs ownership before execution or heartbeat emission begins. */
 export function beginTurnOwnership(
   owner: TurnOwner,
-  turnLease: TurnLeaseIdentity | null,
+  turnLease: TurnLeaseIdentity,
 ): void {
   turnOwnership = { status: "owned", owner, turnLease };
   terminalReason = null;
@@ -81,14 +79,13 @@ export function getCurrentTurnLease(): TurnLeaseIdentity | null {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
 
-/** Daemons must not heartbeat until a claim grants turn ownership. */
-export function canSendTurnHeartbeat(input: {
-  claimMutation: string | undefined;
-  ownership: TurnOwnership;
-}): boolean {
-  return (
-    input.claimMutation === undefined || input.ownership.status === "owned"
-  );
+/**
+ * Only an owned turn heartbeats: the server answers a heartbeat without a
+ * lease with a terminal verdict. A daemon owns one once a claim grants it; a
+ * one-shot runner owns one from launch (`TURN_ID`).
+ */
+export function canSendTurnHeartbeat(ownership: TurnOwnership): boolean {
+  return ownership.status === "owned";
 }
 
 /** Adds the current fence to any callback mutation payload when one is owned. */

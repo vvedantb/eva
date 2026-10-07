@@ -13,7 +13,7 @@ import type { ActivityQuestion } from "./activity-shared";
 const OPTION_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 const CHIP_CLASS =
-  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-bold tracking-wide";
+  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-3xs font-bold tracking-wide";
 
 function OptionRow({
   chip,
@@ -101,7 +101,7 @@ export function ActivityQuestionCard({
               {question.header ? (
                 <Badge
                   variant="secondary"
-                  className="shrink-0 text-[10px] font-semibold"
+                  className="shrink-0 text-3xs font-semibold"
                 >
                   {question.header}
                 </Badge>

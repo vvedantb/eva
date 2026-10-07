@@ -9,10 +9,6 @@ import { authMutation, authQuery } from "./functions";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
-import {
-  isValidIdleStopMinutes,
-  resolveIdleStopSettings,
-} from "./_sandbox/idleStop";
 
 const DAY_MS = 86_400_000;
 
@@ -62,28 +58,22 @@ const sandboxAutoStopSettingsValidator = v.object({
   enabled: v.boolean(),
   time: v.string(),
   timeZone: v.string(),
-  /** Idle sweep (`sandboxIdleStop.ts`): stop after `idleMinutes` without chat or agent activity. */
-  idleEnabled: v.boolean(),
-  idleMinutes: v.number(),
 });
 
 /**
- * Returns the app-wide sandbox auto-stop settings (daily sweep + idle sweep)
- * for the settings UI. Falls back to sensible defaults when no row exists yet:
- * daily sweep disabled at 22:00 UTC, idle sweep on at 60 minutes.
+ * Returns the app-wide daily auto-stop settings for the settings UI. Falls
+ * back to sensible defaults when no row exists yet: disabled at 22:00 UTC.
+ * The idle sweep's settings live in `sandboxIdlePause.ts`.
  */
 export const getSandboxAutoStopSettings = authQuery({
   args: {},
   returns: sandboxAutoStopSettingsValidator,
   handler: async (ctx) => {
     const doc = await ctx.db.query("appSettings").first();
-    const idle = resolveIdleStopSettings(doc);
     return {
       enabled: doc?.sandboxAutoStopEnabled ?? false,
       time: doc?.sandboxAutoStopTime ?? "22:00",
       timeZone: doc?.sandboxAutoStopTimeZone ?? "UTC",
-      idleEnabled: idle.enabled,
-      idleMinutes: idle.minutes,
     };
   },
 });
@@ -99,14 +89,9 @@ export const setSandboxAutoStopSettings = authMutation({
     enabled: v.boolean(),
     time: v.string(),
     timeZone: v.string(),
-    idleEnabled: v.boolean(),
-    idleMinutes: v.number(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!isValidIdleStopMinutes(args.idleMinutes)) {
-      throw new Error("Idle time must be a whole number of minutes (5–1440)");
-    }
     const existing = await ctx.db.query("appSettings").first();
     if (existing) {
       await ctx.db.patch(existing._id, {
@@ -114,16 +99,12 @@ export const setSandboxAutoStopSettings = authMutation({
         sandboxAutoStopTime: args.time,
         sandboxAutoStopTimeZone: args.timeZone,
         sandboxAutoStopLastRunDate: undefined,
-        sandboxIdleStopEnabled: args.idleEnabled,
-        sandboxIdleStopMinutes: args.idleMinutes,
       });
     } else {
       await ctx.db.insert("appSettings", {
         sandboxAutoStopEnabled: args.enabled,
         sandboxAutoStopTime: args.time,
         sandboxAutoStopTimeZone: args.timeZone,
-        sandboxIdleStopEnabled: args.idleEnabled,
-        sandboxIdleStopMinutes: args.idleMinutes,
       });
     }
     return null;
@@ -170,7 +151,7 @@ export const recordRun = internalMutation({
 /**
  * Internal: collects the ids of every sandbox currently in the `active` state
  * across the three user-facing sandbox surfaces. Shared by the daily sweep and
- * the idle sweep (`sandboxIdleStop.ts`). A full scan is fine here — these
+ * the idle sweep (`sandboxIdlePause.ts`). A full scan is fine here — these
  * tables are small and the sweeps run a handful of times an hour at most.
  */
 export const listActiveSandboxes = internalQuery({

@@ -36,7 +36,7 @@ export function ReviewsPreview() {
     <MockWindow
       title="acme/web · pull request #142"
       trailing={
-        <span className="flex items-center gap-2 font-mono text-[10px]">
+        <span className="flex items-center gap-2 font-mono text-3xs">
           <span className="text-success">+142</span>
           <span className="text-destructive">−38</span>
         </span>
@@ -140,7 +140,7 @@ export function ArenaPreview() {
               <p className="truncate text-[11.5px] font-medium text-foreground">
                 {gap.title}
               </p>
-              <p className="truncate text-[10px] text-muted-foreground">
+              <p className="truncate text-3xs text-muted-foreground">
                 {gap.where}
               </p>
             </div>

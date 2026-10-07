@@ -6,7 +6,7 @@ import { useQueryState } from "nuqs";
 import { useLocalStorage } from "usehooks-ts";
 import type { Id } from "@eva/backend";
 import { Button, Spinner, cn } from "@eva/ui";
-import { IconRefresh } from "@tabler/icons-react";
+import { IconFileText, IconRefresh } from "@tabler/icons-react";
 import { toRepoRelativePath } from "@/lib/components/chat/ChangedFilesCard";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
@@ -19,6 +19,10 @@ import { SandboxFileTree } from "./_components/SandboxFileTree";
 import { ViewerNotice } from "./_components/ViewerNotice";
 import type { SessionRepoListItem } from "./_utils";
 import { fileTreeSideFromStorage } from "./_utils/-fileTreeSide";
+import {
+  SandboxAsleepState,
+  type SandboxWake,
+} from "@/lib/components/sandbox/SandboxAsleepState";
 
 interface FilesPanelProps {
   sandboxId: string | undefined;
@@ -34,6 +38,8 @@ interface FilesPanelProps {
   /** Currently selected root path ("" = primary); see `filesRootParser`. */
   activeRoot?: string;
   onRootChange?: (root: string | null) => void;
+  /** Wakes the sandbox from the asleep state (same button as Preview). */
+  wake?: SandboxWake;
 }
 
 /** Root selector shown above the tree once a session has linked repos. */
@@ -54,6 +60,7 @@ function FilesRootSelector({
         const rootValue = repo.kind === "primary" ? "" : repo.path;
         const label = repoDisplayLabel(repo);
         const active = activeRoot === rootValue;
+        const tile = repoTileColor(`${repo.owner}/${repo.name}/${label}`);
         return (
           <button
             key={repo.repoId}
@@ -72,8 +79,9 @@ function FilesRootSelector({
               fallback={
                 <span
                   className={cn(
-                    "flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white",
-                    repoTileColor(`${repo.owner}/${repo.name}/${label}`),
+                    "flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold",
+                    tile.bg,
+                    tile.text,
                   )}
                 >
                   {label.charAt(0).toUpperCase()}
@@ -108,6 +116,7 @@ export function FilesPanel({
   repos,
   activeRoot,
   onRootChange,
+  wake,
 }: FilesPanelProps) {
   const [file] = useQueryState("file", fileViewerPathParser);
   const navigate = useNavigate();
@@ -154,7 +163,13 @@ export function FilesPanel({
   };
 
   if (!sandboxId || !isActive) {
-    return <ViewerNotice message="Wake Eva up to browse files" />;
+    return (
+      <SandboxAsleepState
+        icon={IconFileText}
+        label="Wake Eva up to browse files"
+        wake={isActive ? undefined : wake}
+      />
+    );
   }
 
   const showRootSelector = repos !== undefined && repos.length > 1;
