@@ -10,7 +10,12 @@ import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasActiveRun } from "./functions";
 import { sandboxPresenceRoomId } from "@eva/shared";
 import { isAnyonePresentInRoom } from "./presence";
-import { findOpenSessionTurn } from "./_chat/turnStore";
+import {
+  openChatEntityIdsFor,
+  projectIsExecuting,
+  sessionIsExecuting,
+  taskIsExecuting,
+} from "./_chat/turnProjection";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
@@ -173,17 +178,15 @@ async function inspectSession(
 ): Promise<Candidate | null> {
   const session = await ctx.db.get(sessionId);
   if (!session) return null;
-  const openTurn = await findOpenSessionTurn(ctx, sessionId);
-  const legacyWorkflow =
-    session.turnLifecycleVersion === undefined &&
-    session.activeWorkflowId !== undefined;
   const daemonState = await ctx.db
     .query("sessionDaemonStates")
     .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
     .first();
   const busy =
-    openTurn !== null ||
-    legacyWorkflow ||
+    sessionIsExecuting(
+      session,
+      await openChatEntityIdsFor(ctx.db, sessionId),
+    ) ||
     daemonState?.pendingTurn !== undefined ||
     (await hasPendingWork(ctx, String(sessionId)));
   return await finishCandidate(
@@ -204,8 +207,7 @@ async function inspectTask(
   if (!task) return null;
   const busy =
     (await hasActiveRun(ctx.db, taskId)) ||
-    task.activeWorkflowId !== undefined ||
-    task.activeChatWorkflowId !== undefined ||
+    taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId)) ||
     (await hasPendingWork(ctx, String(taskId)));
   return await finishCandidate(
     ctx,
@@ -224,10 +226,10 @@ async function inspectProject(
   const project = await ctx.db.get(projectId);
   if (!project) return null;
   const busy =
-    project.activeBuildWorkflowId !== undefined ||
-    project.activeWorkflowId !== undefined ||
-    project.activeChatWorkflowId !== undefined ||
-    (await hasPendingWork(ctx, String(projectId)));
+    projectIsExecuting(
+      project,
+      await openChatEntityIdsFor(ctx.db, projectId),
+    ) || (await hasPendingWork(ctx, String(projectId)));
   return await finishCandidate(
     ctx,
     { kind: "project", entityId: String(projectId) },

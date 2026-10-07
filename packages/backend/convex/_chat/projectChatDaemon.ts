@@ -22,9 +22,12 @@ import {
 } from "../_queues/helpers";
 import { PROJECT_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
-import { pendingTurnAlreadyClaimed } from "./pendingTurnRestage";
 import { resolveStorageUrls } from "./storageUrls";
-import { isPendingTurnLive } from "../_sessions/pendingTurnRecovery";
+import {
+  isPendingTurnLive,
+  isTurnClaimed,
+  isUnclaimedOpenTurn,
+} from "../_sessions/pendingTurnRecovery";
 import { assistantReplyContent } from "../_sessions/resultTarget";
 import { isStreamingActivityStale } from "./turnLease";
 import {
@@ -187,13 +190,7 @@ export const claimPendingTurn = authMutation({
       (id) => ctx.storage.getUrl(id),
       project.pendingTurn.attachmentStorageIds,
     );
-    // The stamp is what tells `ensurePendingTurn` this prompt left
-    // `pendingTurn` via a claim rather than a cancel. See
-    // `pendingTurnRestage.ts` for the duplicate-run incident it prevents.
-    await ctx.db.patch(args.projectId, {
-      pendingTurn: undefined,
-      pendingTurnClaimedAt: Date.now(),
-    });
+    await ctx.db.patch(args.projectId, { pendingTurn: undefined });
     const claimedTurn = {
       prompt,
       attachmentUrls,
@@ -490,45 +487,30 @@ export const ensurePendingTurn = internalMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
-    // A running durable turn has a daemon on it; restaging would run it twice.
-    const openTurn = await findOpenTurn(ctx, args.projectId);
-    if (openTurn && openTurn.state === "running") return null;
-    // A slot staged for an already-closed turn is an orphan, not a live turn:
-    // leaving it would block this turn's restage until the lease expires.
-    if (
-      isPendingTurnLive({
-        pendingTurn: project.pendingTurn,
-        openTurnId: openTurn?._id,
-      })
-    ) {
-      return null;
-    }
     if (
       args.model !== undefined &&
       !usesChatDaemon(normalizeAIModel(args.model))
     ) {
       return null;
     }
+    // The lease decides: a claimed turn has a daemon on it, and restaging
+    // would run it twice. Same rule as the session `ensurePendingTurn`.
+    const openTurn = await findOpenTurn(ctx, args.projectId);
+    if (isTurnClaimed(openTurn)) return null;
     const last = await ctx.db
       .query("messages")
       .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
       .order("desc")
       .first();
     if (
-      !last ||
-      last.role !== "assistant" ||
-      last.finishedAt !== undefined ||
-      last.isSyntheticTurn === true
-    ) {
-      return null;
-    }
-    // An open placeholder also describes a turn the daemon has already claimed
-    // and is running. Re-staging there parks a duplicate prompt for the whole
-    // turn, which a prewarm-respawned daemon then runs a second time.
-    if (
-      pendingTurnAlreadyClaimed({
-        pendingTurnClaimedAt: project.pendingTurnClaimedAt,
-        placeholderTimestamp: last.timestamp,
+      !isUnclaimedOpenTurn({
+        // A slot staged for an already-closed turn is an orphan, not a live
+        // turn: leaving it would block this restage until the lease expires.
+        hasPendingTurn: isPendingTurnLive({
+          pendingTurn: project.pendingTurn,
+          openTurnId: openTurn?._id,
+        }),
+        lastAssistant: last,
       })
     ) {
       return null;

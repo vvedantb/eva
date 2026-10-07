@@ -7,9 +7,9 @@ import { entityVisible, filterActiveEntities } from "../numId";
 import { prStateValidator } from "../validators";
 import { latestTaskPrUrl } from "../_agentTasks/prUrl";
 import {
-  openSessionIdsForRepo,
+  openChatEntityIdsFor,
+  openChatEntityIdsForRepo,
   projectIsExecuting,
-  sessionHasOpenTurn,
   sessionIsExecuting,
   taskIsExecuting,
 } from "../_chat/turnProjection";
@@ -595,13 +595,11 @@ export const listEntitiesForUser = internalQuery({
       const repo = await ctx.db.get(repoId);
       if (!repo) continue;
       const columns = repoColumns(repo);
+      const openChatEntityIds = await openChatEntityIdsForRepo(ctx.db, repoId);
 
       for (const kind of kinds) {
         if (kind === "session") {
-          const [docs, openSessionIds] = await Promise.all([
-            scanSessions(ctx, repoId, args.status, take),
-            openSessionIdsForRepo(ctx.db, repoId),
-          ]);
+          const docs = await scanSessions(ctx, repoId, args.status, take);
           for (const doc of docs) {
             rows.push({
               kind,
@@ -612,7 +610,7 @@ export const listEntitiesForUser = internalQuery({
               // columns read the same field rather than inventing a second.
               status: doc.status,
               sandboxStatus: doc.status,
-              isExecuting: sessionIsExecuting(doc, openSessionIds),
+              isExecuting: sessionIsExecuting(doc, openChatEntityIds),
               archived: doc.archived,
               prUrl: doc.prUrl,
               branchName: doc.branchName,
@@ -634,7 +632,7 @@ export const listEntitiesForUser = internalQuery({
               title: doc.title,
               status: doc.status,
               sandboxStatus: doc.reviewTaskSandboxStatus ?? "closed",
-              isExecuting: taskIsExecuting(doc),
+              isExecuting: taskIsExecuting(doc, openChatEntityIds),
               updatedAt: doc.updatedAt,
               ...columns,
             });
@@ -651,7 +649,7 @@ export const listEntitiesForUser = internalQuery({
             title: doc.title,
             status: doc.phase,
             sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
-            isExecuting: projectIsExecuting(doc),
+            isExecuting: projectIsExecuting(doc, openChatEntityIds),
             prUrl: doc.prUrl,
             branchName: doc.branchName,
             updatedAt: doc.updatedAt ?? doc._creationTime,
@@ -699,23 +697,20 @@ export const entityIsExecuting = internalQuery({
       if (!sessionId) return false;
       const session = await ctx.db.get(sessionId);
       if (!session) return false;
-      return sessionIsExecuting(
-        session,
-        (await sessionHasOpenTurn(ctx.db, sessionId))
-          ? new Set([String(sessionId)])
-          : new Set(),
-      );
+      return sessionIsExecuting(session, await openChatEntityIdsFor(ctx.db, sessionId));
     }
     if (kind === "task") {
       const taskId = ctx.db.normalizeId("agentTasks", id);
       if (!taskId) return false;
       const task = await ctx.db.get(taskId);
-      return task ? taskIsExecuting(task) : false;
+      return task ? taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId)) : false;
     }
     const projectId = ctx.db.normalizeId("projects", id);
     if (!projectId) return false;
     const project = await ctx.db.get(projectId);
-    return project ? projectIsExecuting(project) : false;
+    return project
+      ? projectIsExecuting(project, await openChatEntityIdsFor(ctx.db, projectId))
+      : false;
   },
 });
 

@@ -7,7 +7,7 @@ import {
   internalAuthQuery,
 } from "../functions";
 import { sessionStatusValidator } from "../validators";
-import { sessionHasOpenTurn } from "../_chat/turnProjection";
+import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
 
@@ -56,7 +56,7 @@ export const getForkSource = internalAuthQuery({
       branchName: session.branchName,
       sandboxId: session.sandboxId,
       status: session.status,
-      hasOpenTurn: await sessionHasOpenTurn(ctx.db, args.sessionId),
+      hasOpenTurn: await hasOpenChatTurn(ctx.db, args.sessionId),
     };
   },
 });

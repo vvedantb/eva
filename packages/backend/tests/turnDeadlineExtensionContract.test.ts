@@ -10,6 +10,7 @@ function convexSource(path: string): string {
 }
 
 const chatWatchdog = convexSource("_chat/stallWatchdog.ts");
+const turnStore = convexSource("_chat/turnStore.ts");
 const taskWatchdog = convexSource("_taskWorkflow/watchdog.ts");
 const staleness = convexSource("_taskWorkflow/staleness.ts");
 const execution = convexSource("_sandbox_runtime/execution.ts");
@@ -25,7 +26,9 @@ const vercelProvider = convexSource("_sandbox/vercelProvider.ts");
  *
  * The guard is that both watchdogs slide the deadline forward on every tick of
  * a live turn. It is invisible until a turn runs long, which is exactly when it
- * is most expensive to get wrong, so the arithmetic is pinned here.
+ * is most expensive to get wrong, so the arithmetic is pinned here. The chat
+ * watchdog now only runs for workflows no durable turn owns; a durable turn
+ * slides the deadline from its lease renewal (see the next block).
  */
 describe("a live turn keeps its sandbox deadline ahead of the watchdog tick", () => {
   const watchdogs = [
@@ -140,6 +143,49 @@ describe("a live turn keeps its sandbox deadline ahead of the watchdog tick", ()
       body,
       "a near-deadline failure is the one worth reading, so it must carry the API body",
     ).toContain("extractApiErrorDetail(e)");
+  });
+});
+
+/**
+ * A durable turn's lease is its only stall check (decision 2), so the lease
+ * renewal is also what keeps a live turn's sandbox deadline ahead of it.
+ * Renewals are throttled to one write per half lease; the extension rides on
+ * that write, so it costs one scheduled action per minute of a live turn.
+ */
+describe("a durable turn slides its sandbox deadline from the lease", () => {
+  const renewAt = turnStore.indexOf("export async function renewTurnLease(");
+  const renew = turnStore.slice(
+    renewAt,
+    turnStore.indexOf("\nexport ", renewAt + 1),
+  );
+
+  test("only a written renewal extends the deadline", () => {
+    expect(renewAt, "renewTurnLease moved or was renamed").toBeGreaterThan(-1);
+    const throttleAt = renew.indexOf("shouldWriteTurnLeaseRenewal(");
+    const writeAt = renew.indexOf("await ctx.db.patch(turn._id,");
+    const extendAt = renew.indexOf("internal.sandbox.extendSandboxDeadline");
+    expect(throttleAt, "the renewal throttle moved").toBeGreaterThan(-1);
+    expect(
+      extendAt,
+      "a live durable turn must push the provider's hard runtime cap out",
+    ).toBeGreaterThan(writeAt);
+    expect(writeAt).toBeGreaterThan(throttleAt);
+  });
+
+  test("the extension covers more than one renewal interval", () => {
+    const args = renew.slice(
+      renew.indexOf("internal.sandbox.extendSandboxDeadline"),
+    );
+    const duration = args.slice(0, args.indexOf("}")).match(
+      /durationMs:\s*durationMs\s*\*\s*(\d+)/,
+    );
+    expect(
+      duration,
+      "the extension must be expressed in lease lengths, so retuning the lease cannot outrun it",
+    ).not.toBeNull();
+    expect(Number(duration?.[1]), "one lease of slack is none").toBeGreaterThan(
+      1,
+    );
   });
 });
 

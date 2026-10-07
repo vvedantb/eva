@@ -43,6 +43,8 @@ type RunDoc = NonNullable<
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
+  /** Main run or chat turn: `useTaskAgentActive`. */
+  isAgentActive: boolean;
   status: TaskStatus | undefined;
   hasActiveRun: boolean;
   hasRuns: boolean;
@@ -74,6 +76,7 @@ interface TaskFooterProps {
 export function TaskFooter({
   taskId,
   task,
+  isAgentActive,
   status,
   hasActiveRun,
   hasRuns,
@@ -116,11 +119,11 @@ export function TaskFooter({
   // left a slept sandbox with no way back. Held open through both transitions
   // rather than popping out, so the row does not jump while it wakes or sleeps.
   const showSandboxToggle = isSandboxActive || canStartSandbox;
-  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the chat
-  // turn only, not `hasActiveRun`: that also counts *queued* runs, and a task
-  // waiting in the queue is no reason to refuse to sleep it. A main run has its
-  // own confirmed Stop; blocking this during one is a separate call.
-  const sleepBlockedMidTurn = Boolean(task?.activeChatWorkflowId);
+  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the one
+  // "sandbox busy" status (main run or chat turn, synthetic turns included),
+  // not `hasActiveRun`: that also counts *queued* runs, and a task waiting in
+  // the queue is no reason to refuse to sleep it.
+  const sleepBlockedMidTurn = isAgentActive;
   // Simple view hides the git/sandbox plumbing: conflict resolution and the
   // startup/dev/background command runners. The footer menu then has nothing
   // left and drops out entirely; the header menu stays for Copy link.

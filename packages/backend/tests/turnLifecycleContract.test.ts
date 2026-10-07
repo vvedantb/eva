@@ -232,8 +232,17 @@ test("expired leases are reconciled by a level-triggered cron", () => {
   expect(turns).toContain("turn.leaseExpiresAt >= Date.now()");
   expect(turns).toContain("internal.turns.finalizeExpired");
   expect(turns).toContain("adapter.afterStallFinalize");
-  expect(source("../convex/_chat/surfaceAdapters.ts")).toContain(
-    "retryEmptyStalledSessionTurn",
+  // Decision 4: every chat retries an empty stall once, not only sessions.
+  const adapters = source("../convex/_chat/surfaceAdapters.ts");
+  for (const retry of [
+    "internal._sessions.execution.retryEmptyStalledSessionTurn",
+    "internal.agentTaskChatWorkflow.retryEmptyStalledTurn",
+    "internal.projectChatWorkflow.retryEmptyStalledTurn",
+  ]) {
+    expect(adapters).toContain(retry);
+  }
+  expect(adapters, "the hook is required on every adapter").not.toContain(
+    "afterStallFinalize?:",
   );
   expect(turns).toContain("lastLeaseWriteAt");
   expect(crons).toContain('"session turn lease reconcile"');

@@ -38,7 +38,6 @@ import {
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import { QuickTaskCard } from "./QuickTaskCard";
-import { isTaskAgentActive } from "@/lib/components/tasks/taskAgentActivity";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
@@ -323,7 +322,7 @@ export function QuickTasksListView({
                                     title={task.title}
                                     description={task.description}
                                     status={task.status}
-                                    isAgentActive={isTaskAgentActive(task)}
+                                    isAgentActive={task.isExecuting}
                                     priority={task.priority}
                                     numId={task.numId}
                                     projectNumId={

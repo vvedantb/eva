@@ -2133,8 +2133,9 @@ export const prewarmEntityDaemon = internalAction({
  * Pushes the sandbox's hard session deadline out by `durationMs`. Vercel's
  * `timeout` is a hard per-session runtime cap — turns that outlive it are
  * killed mid-work with no snapshot (filesystem rolls back to the pre-turn
- * snapshot on the next resume). The stall watchdog schedules this on every
- * not-stale tick of an active turn. Best-effort: a failed extension must
+ * snapshot on the next resume). A durable turn's lease renewal schedules
+ * this (`renewTurnLease`); the legacy stall watchdog still does for workflows
+ * no turn owns. Best-effort: a failed extension must
  * never fail the turn, and it must not resume a stopped sandbox (getting a
  * handle does not exec; extendTimeout on a stopped sandbox errors harmlessly).
  */

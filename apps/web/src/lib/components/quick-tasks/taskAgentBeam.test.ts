@@ -34,18 +34,21 @@ function componentFiles(): string[] {
  * and nothing else; a live turn shows the pixel grid the session rows use.
  */
 describe("a working agent marks the card without moving it", () => {
-  it("agent activity is read from either live workflow", () => {
-    const startAt = activitySource.indexOf("export function isTaskAgentActive");
-    expect(startAt, "isTaskAgentActive moved or was renamed").toBeGreaterThan(
+  /**
+   * A synthetic turn (a daemon-minted continuation) never sets
+   * `activeChatWorkflowId`, so a card keyed off that field showed the task as
+   * idle while eva worked on it. The open durable turn is the answer now: list rows carry
+   * it from the server as `isExecuting`, and a single task reads its status.
+   */
+  it("agent activity is the one sandbox-busy status, not a workflow id", () => {
+    const startAt = activitySource.indexOf("export function useTaskAgentActive");
+    expect(startAt, "useTaskAgentActive moved or was renamed").toBeGreaterThan(
       -1,
     );
-    // A chat turn and a main run are separate ids; either one means live.
-    expect(activitySource).toContain("task.activeChatWorkflowId !== undefined");
-    expect(activitySource).toContain("task.activeWorkflowId !== undefined");
-    expect(
-      activitySource,
-      "one missing id is one surface that stops marking",
-    ).toContain("||");
+    // A main run and a chat turn share one sandbox; either one means live.
+    expect(activitySource).toContain("task?.activeWorkflowId !== undefined");
+    expect(activitySource).toContain("useChatTurnOpen(taskId)");
+    expect(activitySource).not.toContain("activeChatWorkflowId");
   });
 
   it("the beam is the in-progress column, not the live workflow", () => {
@@ -119,7 +122,7 @@ describe("a working agent marks the card without moving it", () => {
       let at = source.indexOf("<QuickTaskCard");
       while (at > -1) {
         const props = source.slice(at, source.indexOf("/>", at));
-        if (props.includes("isAgentActive={isTaskAgentActive(")) wired.push(path);
+        if (props.includes("isAgentActive={task.isExecuting}")) wired.push(path);
         else bare.push(`${path}:${at}`);
         at = source.indexOf("<QuickTaskCard", at + 1);
       }

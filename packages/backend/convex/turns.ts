@@ -5,8 +5,8 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import {
   chatAdapterForEntity,
@@ -19,15 +19,20 @@ import {
   touchStreamingEntity,
   upsertStreamingActivity,
 } from "./streaming";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+} from "./functions";
 import {
   acquireTurnLease,
   advanceTurn,
   closeTurn,
-  findOpenSessionTurn,
   findOpenTurn,
   graceExpiredTurnLease,
   renewTurnLease,
+  type ChatTurnEntityId,
 } from "./_chat/turnStore";
 import {
   expiredTurnLeaseDecision,
@@ -35,10 +40,16 @@ import {
   type ExpiredTurnLeaseCause,
 } from "./_chat/turnLease";
 import type { ChatAlert } from "./_chat/surfaceAdapters";
-import { turnStateValidator } from "./_validators/tableFields";
-import { isLegacySessionExecuting } from "./_chat/turnProjection";
+import {
+  chatTurnEntityIdValidator,
+  turnStateValidator,
+} from "./_validators/tableFields";
+import {
+  isLegacyChatExecuting,
+  isLegacySessionExecuting,
+} from "./_chat/turnProjection";
 
-const sessionTurnStatusValidator = v.union(
+const chatTurnStatusValidator = v.union(
   v.object({
     source: v.literal("durable"),
     turnId: v.id("turns"),
@@ -49,31 +60,76 @@ const sessionTurnStatusValidator = v.union(
   }),
   v.object({ source: v.literal("legacy") }),
 );
+type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
-/** Canonical UI projection for whether one session turn is open. */
+/**
+ * Whether one chat has a turn open, for a reader who may see it. The open
+ * durable turn is canonical, synthetic turns included. Entities that never
+ * opened one fall back to their workflow fields until the lifecycle marker
+ * (`turnLifecycleVersion` / `chatTurnLifecycleVersion`) says otherwise.
+ */
+async function readChatStatus(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  entityId: ChatTurnEntityId,
+): Promise<ChatTurnStatus | null> {
+  const legacyExecuting = await readLegacyExecuting(ctx, userId, entityId);
+  if (legacyExecuting === null) return null;
+  const turn = await findOpenTurn(ctx, entityId);
+  if (!turn) return legacyExecuting ? { source: "legacy" } : null;
+  return {
+    source: "durable",
+    turnId: turn._id,
+    state: turn.state,
+    startedAt: turn.turnStartedAt,
+    leaseExpiresAt: turn.leaseExpiresAt,
+    placeholderMessageId: turn.placeholderMessageId,
+  };
+}
+
+/** The legacy bridge for one entity; null when the reader may not see it. */
+async function readLegacyExecuting(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  entityId: ChatTurnEntityId,
+): Promise<boolean | null> {
+  const sessionId = ctx.db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    const session = await ctx.db.get(sessionId);
+    if (!session || !(await hasRepoAccess(ctx.db, session.repoId, userId))) {
+      return null;
+    }
+    return isLegacySessionExecuting(session);
+  }
+  const taskId = ctx.db.normalizeId("agentTasks", entityId);
+  if (taskId) {
+    const task = await ctx.db.get(taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, userId))) return null;
+    return isLegacyChatExecuting(task);
+  }
+  const projectId = ctx.db.normalizeId("projects", entityId);
+  if (!projectId) return null;
+  const project = await ctx.db.get(projectId);
+  if (!project || !(await hasRepoAccess(ctx.db, project.repoId, userId))) {
+    return null;
+  }
+  return isLegacyChatExecuting(project);
+}
+
+/** Canonical UI projection for whether one chat (session, task or project) has a turn open. */
+export const getChatStatus = authQuery({
+  args: { entityId: chatTurnEntityIdValidator },
+  returns: v.union(chatTurnStatusValidator, v.null()),
+  handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
+    await readChatStatus(ctx, ctx.userId, args.entityId),
+});
+
+/** Session form of {@link getChatStatus}, kept for the session UI. */
 export const getSessionStatus = authQuery({
   args: { sessionId: v.id("sessions") },
-  returns: v.union(sessionTurnStatusValidator, v.null()),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof sessionTurnStatusValidator> | null> => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    const turn = await findOpenSessionTurn(ctx, args.sessionId);
-    if (!turn) {
-      return isLegacySessionExecuting(session) ? { source: "legacy" } : null;
-    }
-    return {
-      source: "durable",
-      turnId: turn._id,
-      state: turn.state,
-      startedAt: turn.turnStartedAt,
-      leaseExpiresAt: turn.leaseExpiresAt,
-      placeholderMessageId: turn.placeholderMessageId,
-    };
-  },
+  returns: v.union(chatTurnStatusValidator, v.null()),
+  handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
+    await readChatStatus(ctx, ctx.userId, args.sessionId),
 });
 
 const leaseIdentityValidator = v.object({
@@ -357,7 +413,7 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
     await adapter.drainQueue(ctx, id);
   }
   await closeTurn(ctx, turn, "error", { error: alert.text });
-  if (!sandboxStopped && adapter.afterStallFinalize) {
+  if (!sandboxStopped) {
     await adapter.afterStallFinalize(ctx, id, turn._id);
   }
 }

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
   isPendingTurnLive,
+  isTurnClaimed,
   isUnclaimedOpenTurn,
 } from "../convex/_sessions/pendingTurnRecovery";
 
@@ -162,6 +163,59 @@ describe("the workflow re-stages before it waits", () => {
     expect(body).toContain("isUnclaimedOpenTurn(");
     expect(body).toContain('lastAssistant.content !== ""');
   });
+});
+
+
+/**
+ * A restage while a daemon runs the turn parks a duplicate prompt, and a
+ * prewarm-respawned daemon then runs it a second time (task
+ * m57bzd0wbdtnm57e2g4jfb17718b5yty, 2026-09-02). The durable turn's lease is
+ * the proof of a claim for every chat, so no entity-side stamp is needed.
+ */
+describe("isTurnClaimed", () => {
+  test.each(["running", "finalizing"] as const)(
+    "a %s turn has a daemon on it",
+    (state) => {
+      expect(isTurnClaimed({ state })).toBe(true);
+    },
+  );
+
+  test.each(["staged", "launching"] as const)(
+    "a %s turn is still waiting for a claim",
+    (state) => {
+      expect(isTurnClaimed({ state })).toBe(false);
+    },
+  );
+
+  test("no open turn is no claim", () => {
+    expect(isTurnClaimed(null)).toBe(false);
+  });
+});
+
+describe("every chat restages only when the lease says the turn is unclaimed", () => {
+  test.each([
+    ["session", "_sessions/workflow.ts"],
+    ["task chat", "_chat/taskChatDaemon.ts"],
+    ["project chat", "_chat/projectChatDaemon.ts"],
+  ])("%s ensurePendingTurn consults the lease first", (_, path) => {
+    const restage = definitionBody(readSource(path), "ensurePendingTurn");
+    const guardAt = restage.indexOf("if (isTurnClaimed(openTurn)) return null;");
+    expect(guardAt, `${path} no longer asks the lease`).toBeGreaterThan(-1);
+    // The guard has to precede the restage decision to be worth anything.
+    expect(guardAt).toBeLessThan(restage.indexOf("isUnclaimedOpenTurn({"));
+    expect(restage, "the retired claim stamp is back").not.toContain(
+      "pendingTurnClaimedAt",
+    );
+  });
+
+  test.each(["_chat/taskChatDaemon.ts", "_chat/projectChatDaemon.ts"])(
+    "%s claim no longer stamps the entity",
+    (path) => {
+      expect(
+        definitionBody(readSource(path), "claimPendingTurn"),
+      ).not.toContain("pendingTurnClaimedAt");
+    },
+  );
 });
 
 /** Comments name the very calls these rules rule out, so they have to go first. */

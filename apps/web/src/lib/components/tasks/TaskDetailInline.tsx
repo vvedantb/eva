@@ -28,7 +28,7 @@ import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
-import { isTaskAgentActive } from "./taskAgentActivity";
+import { useTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
   SandboxWorkspace,
@@ -138,6 +138,7 @@ export function TaskDetailInline({
     isCreatingPr,
     handleCreatePr,
   } = useTaskDetail(taskId, routing);
+  const isAgentActive = useTaskAgentActive(taskId, task);
   const altHeld = useAltHeld();
 
   useEffect(() => {
@@ -494,6 +495,7 @@ export function TaskDetailInline({
         variant="header"
         taskId={taskId}
         task={task}
+        isAgentActive={isAgentActive}
         status={status}
         hasActiveRun={hasActiveRun}
         hasRuns={hasRuns}
@@ -550,7 +552,7 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
-        isAgentActive={isTaskAgentActive(task)}
+        isAgentActive={isAgentActive}
         onSurfaceChange={handleSelectSurface}
       />
     ) : null;

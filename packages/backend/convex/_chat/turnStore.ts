@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { TurnState } from "../validators";
@@ -285,6 +286,17 @@ export async function renewTurnLease(
     leaseExpiresAt,
     silentSince: undefined,
   });
+  // A live turn keeps the sandbox's hard runtime cap ahead of it, or the
+  // provider kills it mid-work with no snapshot. Only on a written renewal
+  // (the throttle above), so at most once per half lease; two lease lengths
+  // keep the deadline ahead through a delayed renewal.
+  if (turn.sandboxId !== undefined) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.extendSandboxDeadline, {
+      sandboxId: turn.sandboxId,
+      repoId: turn.repoId,
+      durationMs: durationMs * 2,
+    });
+  }
   return { status: "renewed", leaseExpiresAt, durationMs };
 }
 
