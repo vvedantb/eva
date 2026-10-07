@@ -39,8 +39,10 @@ import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import {
   SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
@@ -102,6 +104,7 @@ export function ProjectCard({
   onClick,
   onDelete,
 }: ProjectCardProps) {
+  const simpleView = useSimpleView();
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(title);
   const [editDescription, setEditDescription] = useState(description ?? "");
@@ -255,7 +258,7 @@ export function ProjectCard({
             </p>
           ) : null}
         </div>
-        {sandboxStatus ? (
+        {sandboxStatus && showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span

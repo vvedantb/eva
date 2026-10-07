@@ -3,7 +3,11 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { SANDBOX_STATUS_STYLES } from "@/lib/components/sandbox/sandboxStatusStyles";
+import {
+  SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
+} from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /** Primary project tabs. `work` is the index route, so it owns every deep link. */
 export type ProjectMainTab = "overview" | "work" | "sandbox";
@@ -33,16 +37,21 @@ export function ProjectMainTabs({
   isSandboxStopping?: boolean;
 }) {
   const navigate = useNavigate();
+  const simpleView = useSimpleView();
 
   // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
   // can still read true while the sandbox is on its way up or down.
-  const sandboxStatus = isSandboxStopping
+  const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
       ? "starting"
       : isSandboxActive
         ? "active"
         : null;
+  const sandboxStatus =
+    liveStatus && showsSandboxStatusDot(liveStatus, simpleView)
+      ? liveStatus
+      : null;
 
   return (
     <Tabs
