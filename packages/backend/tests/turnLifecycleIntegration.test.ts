@@ -12,7 +12,9 @@ import {
 import {
   chatAdapterForEntity,
   TASK_CHAT_STREAM_PREFIX,
+  taskChatAdapter,
 } from "../convex/_chat/surfaceAdapters";
+import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
 import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
@@ -20,7 +22,7 @@ import {
   isLegacySessionExecuting,
   openSessionIdsForRepo,
 } from "../convex/_chat/turnProjection";
-import { rollbackQueuedSessionStart } from "../convex/_queues/helpers";
+import { rollbackQueuedChatStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,
   beginTurnOwnership,
@@ -91,7 +93,9 @@ async function createTaskChatFixture() {
       content: "",
       timestamp: now,
     });
-    await ctx.db.patch(taskId, { syntheticTurnMessageId: placeholderMessageId });
+    await ctx.db.patch(taskId, {
+      syntheticTurnMessageId: placeholderMessageId,
+    });
     const streamingEntityId = `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
     const turnId = await openTurn(ctx, {
       entityId: taskId,
@@ -132,11 +136,12 @@ describe("turn lifecycle integration", () => {
     });
 
     expect(accepted).toBe(false);
-    const streaming = await t.run(async (ctx) =>
-      await ctx.db
-        .query("streamingActivity")
-        .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
-        .unique(),
+    const streaming = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("streamingActivity")
+          .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
+          .unique(),
     );
     expect(streaming?.currentActivity).toBe("old activity");
     expect(streaming?.currentContent).toBe("old content");
@@ -149,8 +154,8 @@ describe("turn lifecycle integration", () => {
 
     await t.run(
       async (ctx) =>
-        await rollbackQueuedSessionStart(ctx, {
-          sessionId,
+        await rollbackQueuedChatStart(ctx, {
+          entityId: sessionId,
           turnId,
           placeholderMessageId,
         }),
@@ -481,7 +486,10 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(await claim()).toBe(1);
     expect(await renew(1)).toMatchObject({ status: "renewed" });
     expect(await claim()).toBe(2);
-    expect(await renew(1)).toEqual({ status: "terminal", reason: "superseded" });
+    expect(await renew(1)).toEqual({
+      status: "terminal",
+      reason: "superseded",
+    });
     expect(await renew(2)).toMatchObject({ status: "renewed" });
   });
 
@@ -528,6 +536,32 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(rows.task?.syntheticTurnMessageId).toBeUndefined();
     // The empty-stall retry is still session-only until Phase 3.
     expect(rows.scheduled).toEqual([]);
+  });
+
+  test("the legacy heartbeat teardown closes the turn it tears down", async () => {
+    // Both stall systems run until Phase 3. Whichever fires first must leave
+    // nothing for the other, or the chat gets a second stall alert.
+    const { t, taskId, turnId } = await createTaskChatFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, { workflowId: "chat-workflow" });
+      await ctx.db.patch(taskId, { activeChatWorkflowId: "chat-workflow" });
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new Error("missing task");
+      await finalizeStaleChatTurn(
+        ctx,
+        taskChatAdapter,
+        taskId,
+        task,
+        "chat-workflow",
+        { text: STALL_ALERT_TEXT },
+        { sandboxStopped: true },
+      );
+    });
+
+    const turn = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(turn?.open).toBe(false);
+    expect(turn?.state).toBe("error");
+    expect(turn?.error).toBe(STALL_ALERT_TEXT);
   });
 
   test("a task turn never shows up as an open session", async () => {

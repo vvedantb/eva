@@ -65,6 +65,15 @@ import {
 } from "./_shared/modelHandoff";
 import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
+import {
+  advanceTurn,
+  bindTurnWorkflow,
+  closeOpenTurn,
+  closeTurn,
+  closeTurnForWorkflow,
+  openChatTurn,
+  resolveCompletionTurn,
+} from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
@@ -188,6 +197,7 @@ async function stageAndStartProjectChatTurn(
 ): Promise<void> {
   const project = params.project;
   const projectId = project._id;
+  const repoId = project.repoId;
   const normalizedModel = normalizeAIModel(params.model);
   // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
   // in `prewarmChatDaemon` below): the composer can send a model default
@@ -201,7 +211,7 @@ async function stageAndStartProjectChatTurn(
     fastMode: params.fastMode,
   });
 
-  await ctx.db.insert("messages", {
+  const placeholderMessageId = await ctx.db.insert("messages", {
     parentId: projectId,
     role: "assistant",
     content: "",
@@ -220,12 +230,23 @@ async function stageAndStartProjectChatTurn(
   );
 
   const usesDaemonPull = usesChatDaemon(normalizedModel);
+  const turnId = await openChatTurn(ctx, {
+    entityId: projectId,
+    streamingEntityId: chatStreamEntityId(projectId),
+    placeholderMessageId,
+    prompt,
+    attachmentStorageIds,
+    model: normalizedModel,
+    sandboxId: project.sandboxId,
+    repoId,
+  });
   await ctx.db.patch(projectId, {
     ...(usesDaemonPull
       ? {
           pendingTurn: {
             prompt,
             requestedAt: Date.now(),
+            turnId,
             attachmentStorageIds,
             model: normalizedModel,
           },
@@ -272,8 +293,11 @@ async function stageAndStartProjectChatTurn(
       providerAccountId: params.providerAccountId,
       credentialOwnerUserId: project.userId,
       userId: params.actingUserId,
+      turnId,
     },
   );
+
+  await bindTurnWorkflow(ctx, turnId, String(workflowId));
 
   await trackProjectChatWorkflow(ctx, projectId, workflowId);
 }
@@ -620,6 +644,16 @@ export const cancelExecution = authMutation({
       }
     }
 
+    if (workflowIdToCancel !== undefined) {
+      await closeTurnForWorkflow(
+        ctx,
+        args.projectId,
+        workflowIdToCancel,
+        "cancelled",
+        { error: "Cancelled by the user" },
+      );
+    }
+
     const streamingEntityId = chatStreamEntityId(args.projectId);
     const streaming = await ctx.db
       .query("streamingActivity")
@@ -656,6 +690,9 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
+      await closeOpenTurn(ctx, args.projectId, "cancelled", {
+        error: "Cancelled by the user",
+      });
     }
 
     await clearStreamingActivity(ctx, streamingEntityId);
@@ -709,11 +746,18 @@ export const projectChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
+    // Set for turns staged after the durable-turn cutover. Optional so
+    // workflows started before it still replay.
+    turnId: v.optional(v.id("turns")),
   },
   handler: async (step, args): Promise<void> => {
+    // Every new durable-turn step is gated on `args.turnId`: steps replay by
+    // order, so a workflow started before the cutover must keep its journal.
+    const turnArgs = args.turnId !== undefined ? { turnId: args.turnId } : {};
     const saveFailure = (error: string) =>
       step.runMutation(internal.projectChatWorkflow.saveResult, {
         projectId: args.projectId,
+        ...turnArgs,
         success: false,
         result: null,
         error,
@@ -784,6 +828,13 @@ export const projectChatExecuteWorkflow = workflow.define({
       return;
     }
 
+    if (args.turnId !== undefined) {
+      await step.runMutation(internal.turns.markLaunching, {
+        turnId: args.turnId,
+        sandboxId: activeSandboxId,
+      });
+    }
+
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.projectChatWorkflow.ensurePendingTurn, {
         projectId: args.projectId,
@@ -815,6 +866,24 @@ export const projectChatExecuteWorkflow = workflow.define({
         entityTable: "projects",
       });
     } else {
+      const turnLease =
+        args.turnId === undefined
+          ? null
+          : await step.runMutation(internal.turns.acquireOneShotLease, {
+              turnId: args.turnId,
+              sandboxId: activeSandboxId,
+            });
+      if (args.turnId !== undefined && turnLease === null) {
+        await step.runMutation(internal.projectChatWorkflow.saveResult, {
+          projectId: args.projectId,
+          ...turnArgs,
+          success: false,
+          result: null,
+          error: "The turn no longer owns this project chat. Please retry.",
+          activityLog: null,
+        });
+        return;
+      }
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
         sandboxId: activeSandboxId,
         entityId: args.projectId,
@@ -834,6 +903,12 @@ export const projectChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.projectId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
+        ...(turnLease !== null
+          ? {
+              turnId: turnLease.turnId,
+              turnLeaseGeneration: turnLease.leaseGeneration,
+            }
+          : {}),
       });
     }
 
@@ -841,6 +916,7 @@ export const projectChatExecuteWorkflow = workflow.define({
 
     await step.runMutation(internal.projectChatWorkflow.saveResult, {
       projectId: args.projectId,
+      ...turnArgs,
       success: result.success,
       result: result.result,
       error: result.error,
@@ -870,6 +946,7 @@ export const projectChatExecuteWorkflow = workflow.define({
         );
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,
+          ...turnArgs,
           success: false,
           result: result.result,
           error: publishError,
@@ -960,6 +1037,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     projectId: v.id("projects"),
+    /** The durable turn this result closes; absent on pre-cutover workflows. */
+    turnId: v.optional(v.id("turns")),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -1022,6 +1101,18 @@ export const saveResult = internalMutation({
       entityId: String(args.projectId),
     });
 
+    if (args.turnId !== undefined) {
+      const turn = await ctx.db.get(args.turnId);
+      if (turn) {
+        await closeTurn(
+          ctx,
+          turn,
+          args.success ? "done" : "error",
+          args.error ? { error: args.error } : {},
+        );
+      }
+    }
+
     await startNextQueuedProjectChatMessage(ctx, args.projectId);
     return null;
   },
@@ -1037,8 +1128,6 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
-    // Accepted for daemons that hold a durable lease; unused until task and
-    // project chats open durable turns.
     ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
@@ -1048,6 +1137,16 @@ export const handleCompletion = authMutation({
     if (!project || !project.activeChatWorkflowId) return null;
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
+    }
+
+    const turnResolution = await resolveCompletionTurn(ctx, {
+      entityId: args.projectId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+    });
+    if (turnResolution.status === "stale") return null;
+    if (turnResolution.status === "current") {
+      await advanceTurn(ctx, turnResolution.turn, "finalizing");
     }
 
     if (

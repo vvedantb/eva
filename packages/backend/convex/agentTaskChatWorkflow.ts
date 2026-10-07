@@ -65,6 +65,15 @@ import {
 } from "./_shared/modelHandoff";
 import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
+import {
+  advanceTurn,
+  bindTurnWorkflow,
+  closeOpenTurn,
+  closeTurn,
+  closeTurnForWorkflow,
+  openChatTurn,
+  resolveCompletionTurn,
+} from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { latestTaskPrUrl } from "./_agentTasks/prUrl";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
@@ -189,6 +198,9 @@ async function stageAndStartTaskChatTurn(
 ): Promise<void> {
   const task = params.task;
   const taskId = task._id;
+  // The prompt build rejects a repo-less task too; this narrows for the turn.
+  const repoId = task.repoId;
+  if (!repoId) throw new Error("Task is not associated with a repo");
   const normalizedModel = normalizeAIModel(params.model);
   // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
   // in `prewarmChatDaemon` below): the composer can send a model default
@@ -202,7 +214,7 @@ async function stageAndStartTaskChatTurn(
     fastMode: params.fastMode,
   });
 
-  await ctx.db.insert("messages", {
+  const placeholderMessageId = await ctx.db.insert("messages", {
     parentId: taskId,
     role: "assistant",
     content: "",
@@ -218,12 +230,23 @@ async function stageAndStartTaskChatTurn(
   });
 
   const usesDaemonPull = usesChatDaemon(normalizedModel);
+  const turnId = await openChatTurn(ctx, {
+    entityId: taskId,
+    streamingEntityId: chatStreamEntityId(taskId),
+    placeholderMessageId,
+    prompt,
+    attachmentStorageIds,
+    model: normalizedModel,
+    sandboxId: task.sandboxId,
+    repoId,
+  });
   await ctx.db.patch(taskId, {
     ...(usesDaemonPull
       ? {
           pendingTurn: {
             prompt,
             requestedAt: Date.now(),
+            turnId,
             attachmentStorageIds,
             model: normalizedModel,
           },
@@ -276,8 +299,11 @@ async function stageAndStartTaskChatTurn(
       providerAccountId: params.providerAccountId,
       credentialOwnerUserId: task.createdBy,
       userId: params.actingUserId,
+      turnId,
     },
   );
+
+  await bindTurnWorkflow(ctx, turnId, String(workflowId));
 
   await trackAgentTaskChatWorkflow(ctx, taskId, workflowId);
 }
@@ -644,6 +670,16 @@ export const cancelExecution = authMutation({
       }
     }
 
+    if (workflowIdToCancel !== undefined) {
+      await closeTurnForWorkflow(
+        ctx,
+        args.taskId,
+        workflowIdToCancel,
+        "cancelled",
+        { error: "Cancelled by the user" },
+      );
+    }
+
     const streamingEntityId = chatStreamEntityId(args.taskId);
     const streaming = await ctx.db
       .query("streamingActivity")
@@ -680,6 +716,9 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
+      await closeOpenTurn(ctx, args.taskId, "cancelled", {
+        error: "Cancelled by the user",
+      });
     }
 
     await clearStreamingActivity(ctx, streamingEntityId);
@@ -733,8 +772,14 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
+    // Set for turns staged after the durable-turn cutover. Optional so
+    // workflows started before it still replay.
+    turnId: v.optional(v.id("turns")),
   },
   handler: async (step, args): Promise<void> => {
+    // Every new durable-turn step is gated on `args.turnId`: steps replay by
+    // order, so a workflow started before the cutover must keep its journal.
+    const turnArgs = args.turnId !== undefined ? { turnId: args.turnId } : {};
     await step.runMutation(
       internal.agentTaskChatWorkflow.addAssistantPlaceholder,
       { taskId: args.taskId },
@@ -768,6 +813,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         } catch (error) {
           await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
             taskId: args.taskId,
+            ...turnArgs,
             success: false,
             result: null,
             error:
@@ -786,6 +832,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         if (!waited.ready) {
           await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
             taskId: args.taskId,
+            ...turnArgs,
             success: false,
             result: null,
             error:
@@ -804,6 +851,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       if (decideSandboxStartPlan(data.sandboxStatus) !== "run") {
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
+          ...turnArgs,
           success: false,
           result: null,
           error:
@@ -817,6 +865,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!data.sandboxId) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        ...turnArgs,
         success: false,
         result: null,
         error:
@@ -842,6 +891,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     } catch (error) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        ...turnArgs,
         success: false,
         result: null,
         error:
@@ -857,6 +907,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!activeSandboxId) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        ...turnArgs,
         success: false,
         result: null,
         error:
@@ -875,6 +926,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!validation.healthy) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        ...turnArgs,
         success: false,
         result: null,
         error:
@@ -882,6 +934,13 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         activityLog: null,
       });
       return;
+    }
+
+    if (args.turnId !== undefined) {
+      await step.runMutation(internal.turns.markLaunching, {
+        turnId: args.turnId,
+        sandboxId: activeSandboxId,
+      });
     }
 
     if (usesChatDaemon(data.model)) {
@@ -915,6 +974,24 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         entityTable: "agentTasks",
       });
     } else {
+      const turnLease =
+        args.turnId === undefined
+          ? null
+          : await step.runMutation(internal.turns.acquireOneShotLease, {
+              turnId: args.turnId,
+              sandboxId: activeSandboxId,
+            });
+      if (args.turnId !== undefined && turnLease === null) {
+        await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
+          taskId: args.taskId,
+          ...turnArgs,
+          success: false,
+          result: null,
+          error: "The turn no longer owns this task chat. Please retry.",
+          activityLog: null,
+        });
+        return;
+      }
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
         sandboxId: activeSandboxId,
         entityId: args.taskId,
@@ -934,6 +1011,12 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.taskId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
+        ...(turnLease !== null
+          ? {
+              turnId: turnLease.turnId,
+              turnLeaseGeneration: turnLease.leaseGeneration,
+            }
+          : {}),
       });
     }
 
@@ -945,6 +1028,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     // failures become their own alert below.
     await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
       taskId: args.taskId,
+      ...turnArgs,
       success: result.success,
       result: result.result,
       error: result.error,
@@ -974,6 +1058,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         );
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
+          ...turnArgs,
           success: false,
           result: result.result,
           error: publishError,
@@ -1095,6 +1180,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
+    /** The durable turn this result closes; absent on pre-cutover workflows. */
+    turnId: v.optional(v.id("turns")),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -1156,6 +1243,18 @@ export const saveResult = internalMutation({
       entityId: String(args.taskId),
     });
 
+    if (args.turnId !== undefined) {
+      const turn = await ctx.db.get(args.turnId);
+      if (turn) {
+        await closeTurn(
+          ctx,
+          turn,
+          args.success ? "done" : "error",
+          args.error ? { error: args.error } : {},
+        );
+      }
+    }
+
     await startNextQueuedTaskChatMessage(ctx, args.taskId);
     return null;
   },
@@ -1171,8 +1270,6 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
-    // Accepted for daemons that hold a durable lease; unused until task and
-    // project chats open durable turns.
     ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
@@ -1183,6 +1280,16 @@ export const handleCompletion = authMutation({
     if (!task.repoId) return null;
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
       throw new Error("Not authorized");
+    }
+
+    const turnResolution = await resolveCompletionTurn(ctx, {
+      entityId: args.taskId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+    });
+    if (turnResolution.status === "stale") return null;
+    if (turnResolution.status === "current") {
+      await advanceTurn(ctx, turnResolution.turn, "finalizing");
     }
 
     if (

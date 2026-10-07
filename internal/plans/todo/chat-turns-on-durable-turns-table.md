@@ -1,6 +1,6 @@
 # Move task and project chats onto the durable `turns` table
 
-Status: todo. Written 2026-10-06.
+Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 implemented 2026-10-07; waiting for the production check before Phase 3.
 
 ## Goal
 
@@ -45,12 +45,14 @@ Quick-task autonomous runs (`agentRuns`) are out of scope. See Phase 6.
 
 Ship each phase on its own. Each phase ends in a state you can check.
 
-### Phase 0: generalise the turn store (no behaviour change)
+### Phase 0: generalise the turn store (no behaviour change) — done 2026-10-07
 
 1. **Schema: one chat turn, no surface label.** The `entityId` already identifies the table, so `surface` adds no information.
    - Type `entityId` as `v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects"))`. Today it is `v.string()`, and every existing row holds a session id.
    - Add an index `by_entity_open: ["entityId", "open"]` and stop reading `surface`.
-   - Make `surface` optional, run a migration that unsets it, then delete the field and the old index. Follow the schema-narrowing check.
+     - **Finding:** `by_entity_open` already existed as `["surface", "entityId", "open"]`. Phase 0 changed it in place to `["entityId", "open"]`. No second index was added, so there is no old index to delete.
+   - Make `surface` optional, run a migration that unsets it, then delete the field. Follow the schema-narrowing check.
+     - **Finding:** the field delete needs its own deploy after `dataMigrations:clearTurnSurface` has run. `surface` is still optional in the schema. The delete moved to Phase 5.
    - Pick the adapter from the id: `chatAdapterForEntity(ctx, entityId)` tries `ctx.db.normalizeId` on each chat table. The surface adapters already hold all per-table behaviour.
 2. **`turnStore.ts`:**
    - Add `findOpenTurn(ctx, entityId)` and `openTurn(ctx, { entityId, … })`.
@@ -68,7 +70,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 **Check:** add a hand-inserted task-chat turn (an `agentTasks` id) to `turnLifecycleIntegration.test.ts`. Test renew, the generation fence, reconcile/finalise through the adapter, and the legacy-heartbeat gate.
 
-### Phase 1: accept fence arguments (compatibility)
+### Phase 1: accept fence arguments (compatibility) — done 2026-10-07
 
 1. Add optional `turnId` and `leaseGeneration` to `handleCompletion` and `completeSyntheticTurn` on both surfaces. Ignore the values for now.
 2. Widen the `claimPendingTurn` return validator to the session union (`legacy` or `durable`).
@@ -110,6 +112,11 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 **Watchdogs:** keep the old `checkStale*ChatHeartbeat` chain armed. Both systems run together until Phase 3.
 
+**Added during implementation:**
+- The queue drain (`startNextQueuedTaskChatMessage` / `ProjectChat`) opens a turn too, through `startQueuedEntityChatTurn`.
+- `ensurePendingTurn` carries the open turn id and treats a slot for a closed turn as an orphan (`isPendingTurnLive`).
+- `finalizeStaleChatTurn` closes the durable turn, so the two stall systems cannot both alert on one turn.
+
 **Check:**
 - Run a task chat and a project chat turn in a sandbox.
 - Confirm that a `turns` row moves `staged → running → finalizing → done`.
@@ -145,6 +152,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 
 **Delete:**
 - `_chat/pendingTurnRestage.ts` and its test.
+- `turnFields.surface`. `dataMigrations:clearTurnSurface` ran in production on 2026-10-07. Delete the field and the migration, and follow the schema-narrowing check.
 - `pendingTurnClaimedAt`. It is in the shared field spread, so this needs a schema-narrowing marker and a `dataMigrations.ts` unset across all three tables.
 - The task/project `handleStaleSyntheticTurn` 10-minute timers.
 - The `checkStale*ChatHeartbeat` and `probeStale*ChatLiveness` handlers for all three chats (decision 2). Leave no-op stubs for one release, because already-scheduled jobs call them.

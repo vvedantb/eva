@@ -81,6 +81,42 @@ describe("the shared claimed-turn lifecycle", () => {
     ).toBe(false);
   });
 
+  test.each([
+    "agentTaskChatWorkflow:claimPendingTurn",
+    "projectChatWorkflow:claimPendingTurn",
+  ])(
+    "a durable %s claim heartbeats and fences its completion",
+    (claimMutation) => {
+      // Task and project chats now hand out the same durable claim as sessions.
+      const turn = readClaimedTurn({
+        prompt: "Fix it",
+        turnLifecycle: "durable",
+        turnId: "task-turn-1",
+        leaseGeneration: 1,
+        attachmentUrls: [],
+        stopTaskToolUseIds: [],
+        cancelRequested: false,
+        usageRefreshRequested: false,
+      });
+      expect(turn).not.toBeNull();
+      if (turn === null) return;
+
+      startClaimedTurn(turn);
+
+      expect(
+        canSendTurnHeartbeat({ claimMutation, ownership: getTurnOwnership() }),
+      ).toBe(true);
+      const completion: JsonObject = { taskId: "task-1", success: true };
+      appendClaimedTurnCompletion(completion);
+      expect(completion).toEqual({
+        taskId: "task-1",
+        success: true,
+        turnId: "task-turn-1",
+        leaseGeneration: 1,
+      });
+    },
+  );
+
   test("claimed turns always run as build", () => {
     expect(
       readClaimedTurn({

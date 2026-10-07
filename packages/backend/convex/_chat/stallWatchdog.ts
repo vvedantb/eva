@@ -10,6 +10,7 @@ import {
 } from "../_taskWorkflow/staleness";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
+import { closeTurnForWorkflow } from "./turnStore";
 
 /**
  * Cancels a workflow by ID and clears streaming activity for associated
@@ -105,6 +106,13 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
   if (opts.sandboxStopped !== true) {
     await adapter.interrupt(ctx, entity);
   }
+
+  // The legacy heartbeat chain and the lease reconciler both finalise stalls
+  // until the lease is the only authority. Closing the durable turn here stops
+  // the reconciler from tearing the same turn down a second time.
+  await closeTurnForWorkflow(ctx, id, workflowId, "error", {
+    error: alert.text,
+  });
 
   await adapter.release(ctx, id, {
     sandboxStopped: opts.sandboxStopped === true,
