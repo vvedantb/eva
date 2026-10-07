@@ -1,5 +1,6 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { findPullRequestByUrl } from "../_pullRequests/store";
 
 const EVA_BRANCH_PREFIXES = [
   "eva/task-",
@@ -43,71 +44,49 @@ export type PrChat =
   | ({ kind: "project"; id: Id<"projects"> } & PrChatOwner);
 
 /**
- * Finds the session, quick task or project whose PR this is. A session's
- * linked repos carry their own PR, and a quick task's PR lives on its run.
+ * Finds the session, quick task or project whose PR this is, through its
+ * `pullRequests` row. A linked repo's PR belongs to the session, but its code
+ * to the linked repo, so `repoId` is the row's own repo.
  */
 export async function findChatForPrUrl(
   ctx: MutationCtx | QueryCtx,
   prUrl: string,
 ): Promise<PrChat | null> {
-  const session = await ctx.db
-    .query("sessions")
-    .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-    .first();
-  if (session) {
+  const row = await findPullRequestByUrl(ctx.db, prUrl);
+  if (!row) return null;
+  const owner = row.owner;
+
+  if (owner.kind === "session") {
+    const session = await ctx.db.get(owner.sessionId);
+    if (!session) return null;
     return {
       kind: "session",
       id: session._id,
       numId: session.numId,
       userId: session.userId,
-      repoId: session.repoId,
+      repoId: row.repoId,
     };
   }
 
-  // A linked repo's PR belongs to the session, but its code to the linked repo.
-  const linked = await ctx.db
-    .query("sessionRepos")
-    .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-    .first();
-  const linkedSession = linked ? await ctx.db.get(linked.sessionId) : null;
-  if (linked && linkedSession) {
-    return {
-      kind: "session",
-      id: linkedSession._id,
-      numId: linkedSession.numId,
-      userId: linkedSession.userId,
-      repoId: linked.repoId,
-    };
-  }
-
-  const project = await ctx.db
-    .query("projects")
-    .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-    .first();
-  if (project) {
+  if (owner.kind === "project") {
+    const project = await ctx.db.get(owner.projectId);
+    if (!project) return null;
     return {
       kind: "project",
       id: project._id,
       numId: project.numId,
       userId: project.userId,
-      repoId: project.repoId,
+      repoId: row.repoId,
     };
   }
 
-  const run = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-    .first();
-  const task = run ? await ctx.db.get(run.taskId) : null;
-  if (task) {
-    return {
-      kind: "task",
-      id: task._id,
-      numId: task.numId,
-      userId: task.createdBy,
-      repoId: task.repoId,
-    };
-  }
-
-  return null;
+  const task = await ctx.db.get(owner.taskId);
+  if (!task) return null;
+  return {
+    kind: "task",
+    id: task._id,
+    numId: task.numId,
+    userId: task.createdBy,
+    repoId: row.repoId,
+  };
 }

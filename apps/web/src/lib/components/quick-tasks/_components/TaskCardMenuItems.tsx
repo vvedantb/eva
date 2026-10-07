@@ -145,11 +145,16 @@ export function TaskCardMenuItems({
   const { options: accounts, resolveId: resolveAccountId } =
     useTaskOwnerProviderAccounts(id);
 
-  // The PR lives on the task's runs, not the task, and a card only needs it
-  // once the menu is open — Radix mounts menu content on demand, so this stays
-  // one query per opened menu rather than one per card on the board.
+  // A card only needs runs and PRs once the menu is open — Radix mounts menu
+  // content on demand, so these stay per opened menu rather than per card on
+  // the board. PRs come primary first; a project task links its project's.
   const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
-  const latestPrUrl = runs?.find((run) => run.prUrl)?.prUrl;
+  const taskPrs = useQuery(api.pullRequests.listForOwner, {
+    owner: { kind: "task", taskId: id },
+  });
+  const latestPrUrl =
+    taskPrs?.[0]?.prUrl ??
+    projects?.find((project) => project._id === projectId)?.prUrl;
 
   const isOwner =
     currentUserId !== undefined &&

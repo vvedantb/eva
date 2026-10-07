@@ -1,12 +1,7 @@
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { extractPrNumberFromUrl } from "../_github/prUrl";
-import {
-  schedulePrLifecycleActions,
-  selectPrLifecycleTransition,
-} from "../_github/prLifecycleActions";
-
-export { extractPrNumberFromUrl };
+import { selectPrLifecycleTransition } from "../_github/prLifecycleActions";
+import { applyPrLifecycleTransition } from "../_pullRequests/store";
 
 type ProjectPhase = Doc<"projects">["phase"];
 
@@ -16,8 +11,8 @@ const REVIEW_PHASES: ReadonlySet<ProjectPhase> = new Set([
 ]);
 
 /**
- * Mirrors quick-task PR sync for the single project PR: business_review ↔ draft,
- * code_review ↔ ready for review.
+ * Mirrors quick-task PR sync for a project's PRs: business_review ↔ draft and
+ * code_review ↔ ready on the primary PR; cancelling closes every live PR.
  */
 export async function scheduleProjectPrSync(
   ctx: MutationCtx,
@@ -25,8 +20,6 @@ export async function scheduleProjectPrSync(
   previousPhase: ProjectPhase,
   newPhase: ProjectPhase,
 ): Promise<void> {
-  if (!project.prUrl) return;
-
   const enteringCodeReview =
     newPhase === "code_review" && previousPhase !== "code_review";
   const enteringCancelled =
@@ -59,20 +52,9 @@ export async function scheduleProjectPrSync(
   });
   if (!transition) return;
 
-  const prNumber = extractPrNumberFromUrl(project.prUrl);
-  if (!prNumber) return;
-
-  const repo = await ctx.db.get(project.repoId);
-  if (!repo) return;
-
-  await schedulePrLifecycleActions(
+  await applyPrLifecycleTransition(
     ctx,
-    {
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      prNumber,
-    },
+    { kind: "project", projectId: project._id },
     transition,
   );
 }

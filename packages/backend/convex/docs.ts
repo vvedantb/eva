@@ -14,7 +14,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { components, internal } from "./_generated/api";
-import { extractPrNumberFromUrl } from "./_projects/prSync";
+import { extractPrNumberFromUrl } from "./_github/prUrl";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,

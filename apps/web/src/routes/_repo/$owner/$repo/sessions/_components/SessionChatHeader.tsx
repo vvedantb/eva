@@ -87,6 +87,7 @@ export function useSessionChatHeader({
   const prLinks = usePrLinkMenuItems({
     prUrl,
     prState,
+    owner: { kind: "session", sessionId },
     hasDeployment: Boolean(deploymentStatus),
   });
 

@@ -364,6 +364,87 @@ export const chatDaemonEntityFields = {
   // schema-narrowing-ok: clearProjectPendingTurnClaimedAt
 };
 
+/** Lifecycle of a pull request Eva tracks, shared by every surface that owns one. */
+export const prStateValidator = v.union(
+  v.literal("draft"),
+  v.literal("open"),
+  v.literal("merged"),
+  v.literal("closed"),
+);
+
+/**
+ * Who a `pullRequests` row belongs to. A session's linked-repo PR carries the
+ * `sessionRepos` row it came from; a task or project PR carries the run (and,
+ * for a project, the task) that opened it. Several rows may share one owner.
+ */
+export const prOwnerValidator = v.union(
+  v.object({
+    kind: v.literal("session"),
+    sessionId: v.id("sessions"),
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+  }),
+  v.object({
+    kind: v.literal("task"),
+    taskId: v.id("agentTasks"),
+    runId: v.optional(v.id("agentRuns")),
+  }),
+  v.object({
+    kind: v.literal("project"),
+    projectId: v.id("projects"),
+    taskId: v.optional(v.id("agentTasks")),
+    runId: v.optional(v.id("agentRuns")),
+  }),
+);
+
+/** How a tracked PR came to be linked to its owner. */
+export const prOriginValidator = v.union(
+  // Opened by an Eva workflow through the GitHub API.
+  v.literal("eva"),
+  // Opened inside the sandbox (or by hand) on an Eva branch, attached from the
+  // pull_request webhook by parsing the head branch.
+  v.literal("agent"),
+);
+
+/**
+ * One pull request linked to a session, quick task or project. The single
+ * source of truth for every PR Eva tracks: an owner may hold many. All writes
+ * go through `_github/pullRequests.ts`, which also refreshes the owner's
+ * `prUrl` / `prState` / `prCount` summary.
+ */
+export const pullRequestFields = {
+  repoId: v.id("githubRepos"),
+  /** Canonical GitHub `html_url`. Unique across the table. */
+  prUrl: v.string(),
+  prNumber: v.number(),
+  headBranch: v.optional(v.string()),
+  baseBranch: v.optional(v.string()),
+  title: v.optional(v.string()),
+  state: prStateValidator,
+  /** Live state Eva closed when archiving or cancelling the owner. Undoing it reopens the PR. */
+  stateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
+  /**
+   * The PR the owner's chrome keys off: the one Eva's own flow opened for the
+   * owner's current branch. At most one per owner; a newer Eva PR demotes it.
+   */
+  primary: v.boolean(),
+  origin: prOriginValidator,
+  owner: prOwnerValidator,
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+/**
+ * Denormalised summary of an owner's `pullRequests` rows so list queries can
+ * draw PR chrome without a join. Written only by `syncOwnerPrSummary`.
+ * `prUrl` is the primary PR (else the newest); `prState` rolls every row up:
+ * live while any PR is live, otherwise merged if any merged, else closed.
+ */
+const prSummaryFields = {
+  prUrl: v.optional(v.string()),
+  prState: v.optional(prStateValidator),
+  prCount: v.optional(v.number()),
+};
+
 export const agentTaskFields = {
   ...entityNumIdFields,
   title: v.string(),
@@ -455,6 +536,7 @@ export const agentTaskFields = {
    * where the checkout really is. Detached HEAD is reported as the short sha.
    */
   sandboxBranch: v.optional(v.string()),
+  ...prSummaryFields,
 };
 
 export const agentRunFields = {
@@ -465,6 +547,7 @@ export const agentRunFields = {
   finishedAt: v.optional(v.number()),
   finalizingAt: v.optional(v.number()),
   resultSummary: v.optional(v.string()),
+  /** @deprecated Moved to `pullRequests` (`owner.runId`); cleared by `backfillPullRequests`. */
   prUrl: v.optional(v.string()),
   error: v.optional(v.string()),
   prError: v.optional(v.string()),
@@ -497,14 +580,6 @@ export const agentRunFields = {
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
 };
 
-/** Lifecycle of a pull request Eva opened, shared by every surface that tracks one. */
-export const prStateValidator = v.union(
-  v.literal("draft"),
-  v.literal("open"),
-  v.literal("merged"),
-  v.literal("closed"),
-);
-
 export const sessionFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -520,9 +595,11 @@ export const sessionFields = {
   // restarts/restores rebuild the session branch from the same base instead of
   // silently falling back to the repo default.
   baseBranch: v.optional(v.string()),
+  /** Summary of the session's `pullRequests` rows (see `prSummaryFields`). */
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
-  /** Live PR status (open/draft) Eva closed when archiving. Unarchive reopens it. */
+  prCount: v.optional(v.number()),
+  /** @deprecated Moved to `pullRequests.stateOnArchive`; cleared by `backfillPullRequests`. */
   prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
   sandboxId: v.optional(v.string()),
   /**
@@ -643,7 +720,7 @@ export const sessionFields = {
  * One extra GitHub repo cloned into a session's sandbox alongside the primary.
  * The primary stays at `/tmp/repo` (symlinked into the workspace); every linked
  * repo is a whole checkout at `/tmp/workspace/<name>` on the same branch name as
- * the primary, with its own optional pull request.
+ * the primary. Its pull request, when it has one, is a `pullRequests` row.
  *
  * A row is always the entire repository — monorepo sibling app rows share one
  * checkout, so `rootDirectory` has no meaning here and is deliberately absent.
@@ -659,7 +736,9 @@ export const sessionRepoFields = {
   /** The session branch, identical to the primary's `eva/session-<id>`. */
   branchName: v.string(),
   baseBranch: v.string(),
+  /** @deprecated Moved to `pullRequests` (`owner.sessionRepoId`); cleared by `backfillPullRequests`. */
   prUrl: v.optional(v.string()),
+  /** @deprecated See `prUrl`. */
   prState: v.optional(prStateValidator),
   installDependencies: v.boolean(),
   /** Set once the sandbox has finished cloning this repo. */
@@ -879,7 +958,7 @@ export const projectFields = {
   description: v.optional(v.string()),
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
-  prUrl: v.optional(v.string()),
+  ...prSummaryFields,
   sandboxId: v.optional(v.string()),
   lastSandboxActivity: v.optional(v.number()),
   // UI state for the project-level Start/Stop preview sandbox button.

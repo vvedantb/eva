@@ -33,9 +33,11 @@ import {
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
-import { extractPrNumber } from "../_github/prUrl";
 import {
-  schedulePrLifecycleActions,
+  applyPrLifecycleTransition,
+  findPrimaryPullRequest,
+} from "../_pullRequests/store";
+import {
   selectPrLifecycleTransition,
 } from "../_github/prLifecycleActions";
 import {
@@ -165,25 +167,19 @@ export const update = authMutation({
         task.title,
         args.title,
       );
-      if (task.repoId) {
-        const runs = await ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", args.id))
-          .collect();
-        const prUrl = runs
-          .sort(
-            (a, b) =>
-              (b.startedAt ?? b._creationTime) -
-              (a.startedAt ?? a._creationTime),
-          )
-          .find((run) => run.prUrl)?.prUrl;
-        if (prUrl) {
-          await schedulePrTitleSync(ctx, {
-            repoId: task.repoId,
-            prUrl,
-            title: args.title,
+      // A project task's PR carries the project's title, not the task's.
+      const primaryPr = task.projectId
+        ? null
+        : await findPrimaryPullRequest(ctx.db, {
+            kind: "task",
+            taskId: args.id,
           });
-        }
+      if (primaryPr) {
+        await schedulePrTitleSync(ctx, {
+          repoId: primaryPr.repoId,
+          prUrl: primaryPr.prUrl,
+          title: args.title,
+        });
       }
     }
     if (
@@ -383,14 +379,10 @@ export const updateStatus = authMutation({
         enteringCancelled ||
         leavingCancelled)
     ) {
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", args.id))
-        .order("desc")
-        .first();
-      const prUrl = run?.prUrl;
-      const prNumber = prUrl ? extractPrNumber(prUrl) : null;
-      const repo = prNumber ? await ctx.db.get(task.repoId) : null;
+      const owner = { kind: "task" as const, taskId: args.id };
+      const primaryPr = await findPrimaryPullRequest(ctx.db, owner);
+      const prUrl = primaryPr?.prUrl;
+      const repo = await ctx.db.get(task.repoId);
       const transition = selectPrLifecycleTransition({
         enteringCancelled,
         leavingCancelled,
@@ -398,17 +390,8 @@ export const updateStatus = authMutation({
         leavingCodeReview,
         asReadyOnReopen: args.status === "code_review",
       });
-      if (prNumber && repo && transition) {
-        await schedulePrLifecycleActions(
-          ctx,
-          {
-            installationId: repo.installationId,
-            repoOwner: repo.owner,
-            repoName: repo.name,
-            prNumber,
-          },
-          transition,
-        );
+      if (transition) {
+        await applyPrLifecycleTransition(ctx, owner, transition);
       }
 
       // Write the reviewer-facing description here rather than at the end of

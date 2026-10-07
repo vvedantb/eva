@@ -2,6 +2,13 @@ import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import { prStateValidator } from "../validators";
+import { mcpPullRequestValidator, toMcpPullRequests } from "./queries";
+import {
+  listOwnerPullRequests,
+  sessionRepoPullRequest,
+  taskPrUrl,
+  type PrOwnerRef,
+} from "../_pullRequests/store";
 import { slugifyAppTabName } from "../appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 
@@ -14,9 +21,6 @@ const chatKindValidator = v.union(
   v.literal("task"),
   v.literal("project"),
 );
-
-/** Runs looked at when finding the PR a quick task opened (mirrors list_entities). */
-const TASK_PR_RUN_LOOKBACK = 3;
 
 const chatDetailsValidator = v.object({
   baseBranch: v.optional(v.string()),
@@ -42,6 +46,8 @@ const chatDetailsValidator = v.object({
       enabled: v.boolean(),
     }),
   ),
+  /** Every PR linked to the chat, primary first, then newest first. */
+  pullRequests: v.array(mcpPullRequestValidator),
   linkedRepos: v.array(
     v.object({
       repo: v.string(),
@@ -61,7 +67,7 @@ export type ChatDetails = Infer<typeof chatDetailsValidator>;
 type ChatOwnerFields = Pick<
   ChatDetails,
   "baseBranch" | "prUrl" | "prState" | "devPort" | "devCommand" | "previewPath"
-> & { ownerKey: string };
+> & { ownerKey: string; owner: PrOwnerRef };
 
 /** The per-surface fields; everything else is shared repo config. */
 async function ownerFields(
@@ -74,6 +80,7 @@ async function ownerFields(
     const session = sessionId ? await ctx.db.get(sessionId) : null;
     if (!session) return null;
     return {
+      owner: { kind: "session", sessionId: session._id },
       ownerKey: `session-${session._id}`,
       baseBranch: session.baseBranch,
       prUrl: session.prUrl,
@@ -87,16 +94,12 @@ async function ownerFields(
     const taskId = ctx.db.normalizeId("agentTasks", id);
     const task = taskId ? await ctx.db.get(taskId) : null;
     if (!task) return null;
-    // A quick task's PR lives on the run that opened it, never on the task.
-    const runs = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .order("desc")
-      .take(TASK_PR_RUN_LOOKBACK);
     return {
+      owner: { kind: "task", taskId: task._id },
       ownerKey: `task-${task._id}`,
       baseBranch: task.baseBranch,
-      prUrl: runs.find((run) => run.prUrl)?.prUrl,
+      prUrl: await taskPrUrl(ctx.db, task),
+      prState: task.prState,
       devPort: task.devPort,
       devCommand: task.devCommand,
       previewPath: task.previewPath,
@@ -106,23 +109,29 @@ async function ownerFields(
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (!project) return null;
   return {
+    owner: { kind: "project", projectId: project._id },
     ownerKey: `project-${project._id}`,
     baseBranch: project.baseBranch,
     prUrl: project.prUrl,
+    prState: project.prState,
     devPort: project.devPort,
     devCommand: project.devCommand,
     previewPath: project.previewPath,
   };
 }
 
-function linkedRepoRow(link: Doc<"sessionRepos">) {
+function linkedRepoRow(
+  link: Doc<"sessionRepos">,
+  prs: readonly Doc<"pullRequests">[],
+) {
+  const pr = sessionRepoPullRequest(prs, link._id);
   return {
     repo: `${link.owner}/${link.name}`,
     path: link.path,
     branch: link.branchName,
     baseBranch: link.baseBranch,
-    prUrl: link.prUrl,
-    prState: link.prState,
+    prUrl: pr?.prUrl,
+    prState: pr?.state,
     devPort: link.devPort,
     devCommand: link.devCommand,
   };
@@ -143,8 +152,10 @@ export const getChatDetails = internalQuery({
   },
   returns: v.union(v.null(), chatDetailsValidator),
   handler: async (ctx, { kind, id, repoId }): Promise<ChatDetails | null> => {
-    const owner = await ownerFields(ctx, kind, id);
-    if (!owner) return null;
+    const fields = await ownerFields(ctx, kind, id);
+    if (!fields) return null;
+    const { owner: prOwner, ...owner } = fields;
+    const prs = await listOwnerPullRequests(ctx.db, prOwner);
     const repo = await ctx.db.get(repoId);
     if (!repo) return null;
 
@@ -180,7 +191,8 @@ export const getChatDetails = internalQuery({
           port: tab.port,
           enabled: tab.enabled,
         })),
-      linkedRepos: links.map(linkedRepoRow),
+      pullRequests: toMcpPullRequests(prs),
+      linkedRepos: links.map((link) => linkedRepoRow(link, prs)),
     };
   },
 });

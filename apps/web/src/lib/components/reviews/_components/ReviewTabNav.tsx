@@ -2,7 +2,7 @@
 
 import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
 import { isReviewTab, type ReviewTab } from "@/lib/search-params";
-import { REVIEW_TAB_LABEL, REVIEW_TAB_ORDER } from "./reviewTabMeta";
+import { REVIEW_TAB_LABEL } from "./reviewTabMeta";
 
 /**
  * The tab row, as Cursor keeps it: the tabs on the left and, on the right, an
@@ -11,10 +11,13 @@ import { REVIEW_TAB_LABEL, REVIEW_TAB_ORDER } from "./reviewTabMeta";
  * live in the tabs themselves.
  */
 export function ReviewTabNav({
+  tabs,
   activeTab,
   onTabChange,
   controlsRef,
 }: {
+  /** The surface's tabs, in `REVIEW_TAB_ORDER`. */
+  tabs: readonly ReviewTab[];
   activeTab: ReviewTab;
   onTabChange: (tab: ReviewTab) => void;
   /** Receives the right-hand slot element, for a tab to portal into. */
@@ -37,7 +40,7 @@ export function ReviewTabNav({
           // made the tabs the smallest text in the header.
           className="h-8 shrink-0 gap-0.5 p-0 shadow-none [&_.t-tab]:text-sm"
         >
-          {REVIEW_TAB_ORDER.map((tab) => (
+          {tabs.map((tab) => (
             <TabsTrigger key={tab} value={tab}>
               {REVIEW_TAB_LABEL[tab]}
             </TabsTrigger>

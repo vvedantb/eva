@@ -144,6 +144,7 @@ export function TaskFooter({
       onCreate: onCreatePr,
     },
     prUrl: latestPrUrl,
+    owner: { kind: "task", taskId },
     hasDeployment: Boolean(latestDeployment?.deploymentStatus),
   });
   const showMoreMenu =

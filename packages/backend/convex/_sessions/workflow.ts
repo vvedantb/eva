@@ -56,6 +56,7 @@ import { mergeBackgroundAgents } from "./backgroundAgents";
 import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { isDaemonClaimPaused } from "../_chat/daemonClaimPause";
 import { isStreamingActivityStale } from "../_chat/turnLease";
+import { findPrimaryPullRequest } from "../_pullRequests/store";
 import {
   ensureSessionDaemonState,
   syncSessionDaemonState,
@@ -597,7 +598,7 @@ export const sessionExecuteWorkflow = workflow.define({
       // missing PR when it confirms the session branch already contains HEAD.
       // A chat-only first turn has no remote session branch, so `published` is
       // false and still avoids the old compare-404 alerts.
-      if (pushedCommits || (branchPublished && data.prUrl === undefined)) {
+      if (pushedCommits || (branchPublished && data.primaryPrUrl === undefined)) {
         try {
           await step.runAction(internal.github.createDraftSessionPr, {
             sessionId: args.sessionId,
@@ -828,7 +829,7 @@ export const getSessionData = internalQuery({
     repoId: v.id("githubRepos"),
     prompt: v.string(),
     branchName: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
+    primaryPrUrl: v.optional(v.string()),
     baseBranch: v.string(),
     model: aiModelValidator,
     deploymentProjectName: v.optional(v.string()),
@@ -870,7 +871,14 @@ export const getSessionData = internalQuery({
       repoId: session.repoId,
       prompt,
       branchName,
-      prUrl: session.prUrl,
+      // The primary repo's own PR: a side-branch PR the agent opened must not
+      // stop Eva from opening the session's draft.
+      primaryPrUrl: (
+        await findPrimaryPullRequest(ctx.db, {
+          kind: "session",
+          sessionId: session._id,
+        })
+      )?.prUrl,
       baseBranch: resolveSessionBaseBranch(session, repo),
       model: normalizeAIModel(args.model),
       deploymentProjectName: repo.deploymentProjectName,

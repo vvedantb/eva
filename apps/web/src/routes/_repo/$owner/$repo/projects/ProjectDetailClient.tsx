@@ -5,6 +5,7 @@ import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useAction, useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
+import { isLivePrState } from "@/lib/githubPr";
 import {
   Tooltip,
   TooltipTrigger,
@@ -277,8 +278,9 @@ export function ProjectDetailClient({
   const hasDeployedPreview =
     latestDeployment?.deploymentStatus === "deployed" &&
     Boolean(latestDeployment.deploymentUrl);
+  // A merged PR stays linked as history, so only a live one blocks a new PR.
   const canCreatePr =
-    !project?.prUrl &&
+    !isLivePrState(project?.prState) &&
     !project?.activeBuildWorkflowId &&
     (project?.phase === "business_review" || project?.phase === "in_progress");
   const prLinks = usePrLinkMenuItems({
@@ -288,6 +290,7 @@ export function ProjectDetailClient({
       onCreate: handleCreatePr,
     },
     prUrl: project?.prUrl,
+    owner: { kind: "project", projectId },
     hasDeployment: hasDeployedPreview,
   });
 
@@ -322,7 +325,7 @@ export function ProjectDetailClient({
     canStartSandbox && !isSandboxStarting && !isSandboxStopping;
   const showRunBackgroundCommands = isSandboxActive;
   const showResolveConflicts =
-    Boolean(project.prUrl) &&
+    isLivePrState(project.prState) &&
     !project.activeBuildWorkflowId &&
     (project.phase === "business_review" || project.phase === "code_review");
   const parsedSpec = (() => {

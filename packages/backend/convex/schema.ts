@@ -14,6 +14,7 @@ import {
   automationRunFields,
   agentTaskFields,
   agentRunFields,
+  pullRequestFields,
   sessionFields,
   sessionRepoFields,
   repoGroupFields,
@@ -88,7 +89,6 @@ const schema = defineSchema({
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
-    .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_repo_and_sandbox_status", [
       "repoId",
@@ -114,8 +114,16 @@ const schema = defineSchema({
   agentRuns: defineTable(agentRunFields)
     .index("by_task", ["taskId"])
     .index("by_task_and_status", ["taskId", "status"])
-    .index("by_status", ["status"])
-    .index("by_pr_url", ["prUrl"]),
+    .index("by_status", ["status"]),
+
+  // Every pull request linked to a session, quick task or project. An owner
+  // may hold many; `owner.*` indexes list them, `by_pr_url` resolves webhooks.
+  pullRequests: defineTable(pullRequestFields)
+    .index("by_pr_url", ["prUrl"])
+    .index("by_session", ["owner.sessionId"])
+    .index("by_task", ["owner.taskId"])
+    .index("by_project", ["owner.projectId"])
+    .index("by_repo_and_head_branch", ["repoId", "headBranch"]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),
@@ -187,7 +195,6 @@ const schema = defineSchema({
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_repo_and_archived", ["repoId", "archived"])
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
-    .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"]),
@@ -199,8 +206,7 @@ const schema = defineSchema({
   // on `sessions.repoId`). One row per linked repo per session.
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
-    .index("by_repo", ["repoId"])
-    .index("by_pr_url", ["prUrl"]),
+    .index("by_repo", ["repoId"]),
   // Saved codebase groups that prefill a new session's repo selection.
   repoGroups: defineTable(repoGroupFields)
     .index("by_created_by", ["createdBy"])

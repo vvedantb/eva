@@ -157,7 +157,7 @@ export function fleetTools(
     defineTool({
       name: "get_agent_state",
       description:
-        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, and its preview deployment. Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight.',
+        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight.',
       mutating: false,
       input: {
         kind: agentKindArg,

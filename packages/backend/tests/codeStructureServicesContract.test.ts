@@ -93,9 +93,7 @@ test("PR number parsing lives only in prUrl.ts", () => {
   const service = read("convex/_github/prUrl.ts");
   expect(service).toContain("export function extractPrNumber(");
   for (const path of [
-    "convex/_projects/prSync.ts",
-    "convex/_agentTasks/mutations.ts",
-    "convex/_sessions/prArchive.ts",
+    "convex/_pullRequests/store.ts",
     "convex/taskWorkflowActions.ts",
   ] as const) {
     const source = read(path);
@@ -112,14 +110,19 @@ test("PR lifecycle scheduling is shared", () => {
   const service = read("convex/_github/prLifecycleActions.ts");
   expect(service).toContain("export async function schedulePrLifecycleActions(");
   expect(service).toContain("export function selectPrLifecycleTransition(");
+  // Every tracked PR's GitHub action goes through the pullRequests store, which
+  // is the one caller of the scheduler.
+  const store = read("convex/_pullRequests/store.ts");
+  expect(store).toContain("schedulePrLifecycleActions(");
+  expect(store).toContain("export async function applyPrLifecycleTransition(");
   for (const path of [
     "convex/_projects/prSync.ts",
     "convex/_agentTasks/mutations.ts",
-    "convex/_sessions/prArchive.ts",
+    "convex/_sessions/mutations.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should call the shared scheduler`).toContain(
-      "schedulePrLifecycleActions(",
+    expect(source, `${path} should go through the pullRequests store`).toMatch(
+      /applyPrLifecycleTransition\(|closeLivePullRequests\(/,
     );
     expect(
       source,

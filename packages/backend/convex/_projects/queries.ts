@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
@@ -237,7 +238,16 @@ export const getProjectPrCreationData = internalQuery({
       projectTitle: project.title,
       projectDescription: project.description,
       rootDirectory: repo.rootDirectory ?? "",
-      existingPrUrl: project.prUrl ?? null,
+      // Only a live PR on the current branch counts: a merged one belongs to
+      // an earlier branch version, and the next cycle needs its own PR.
+      existingPrUrl:
+        (
+          await findLivePullRequestOnBranch(
+            ctx.db,
+            project.repoId,
+            branchName,
+          )
+        )?.prUrl ?? null,
       completedTasks,
     };
   },

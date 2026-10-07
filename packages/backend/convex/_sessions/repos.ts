@@ -4,6 +4,10 @@ import { authQuery, hasRepoAccess } from "../functions";
 import { prStateValidator, sessionRepoFields } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { PRIMARY_REPO_DIR } from "../_sandbox_runtime/workspaceLayout";
+import {
+  listOwnerPullRequests,
+  sessionRepoPullRequest,
+} from "../_pullRequests/store";
 
 /**
  * The repos checked out in one session's sandbox: the primary (`sessions.repoId`,
@@ -55,6 +59,11 @@ export const listRepos = authQuery({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return [];
     const branchName = session.branchName ?? `eva/session-${session._id}`;
+    const prs = await listOwnerPullRequests(ctx.db, {
+      kind: "session",
+      sessionId: session._id,
+    });
+    const primaryPr = sessionRepoPullRequest(prs, undefined);
     const primary = {
       kind: "primary" as const,
       repoId: repo._id,
@@ -68,8 +77,8 @@ export const listRepos = authQuery({
       path: PRIMARY_REPO_DIR,
       branchName,
       baseBranch: resolveSessionBaseBranch(session, repo),
-      prUrl: session.prUrl,
-      prState: session.prState,
+      prUrl: primaryPr?.prUrl,
+      prState: primaryPr?.state,
     };
 
     const links = await ctx.db
@@ -81,6 +90,7 @@ export const listRepos = authQuery({
         // The repo row may have been deleted under the session; the link still
         // knows its own owner/name, so only presentation fields are lost.
         const linkedRepo = await ctx.db.get(link.repoId);
+        const linkedPr = sessionRepoPullRequest(prs, link._id);
         return {
           kind: "linked" as const,
           sessionRepoId: link._id,
@@ -95,8 +105,8 @@ export const listRepos = authQuery({
           path: link.path,
           branchName: link.branchName,
           baseBranch: link.baseBranch,
-          prUrl: link.prUrl,
-          prState: link.prState,
+          prUrl: linkedPr?.prUrl,
+          prState: linkedPr?.state,
           installDependencies: link.installDependencies,
           clonedAt: link.clonedAt,
           devPort: link.devPort,
@@ -126,32 +136,15 @@ export const listLinkedReposInternal = internalQuery({
       .collect(),
 });
 
-/** Records clone completion or PR state for one linked repo. */
+/** Records clone completion for one linked repo. */
 export const patchSessionRepo = internalMutation({
   args: {
     id: v.id("sessionRepos"),
-    clonedAt: v.optional(v.number()),
-    prUrl: v.optional(v.string()),
-    prState: v.optional(prStateValidator),
+    clonedAt: v.number(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
-      ...(args.clonedAt !== undefined ? { clonedAt: args.clonedAt } : {}),
-      ...(args.prUrl !== undefined ? { prUrl: args.prUrl } : {}),
-      ...(args.prState !== undefined ? { prState: args.prState } : {}),
-    });
+    await ctx.db.patch(args.id, { clonedAt: args.clonedAt });
     return null;
   },
-});
-
-/** Resolves a linked repo from a PR URL (GitHub webhook fan-out). */
-export const findSessionRepoByPrUrl = internalQuery({
-  args: { prUrl: v.string() },
-  returns: v.union(sessionRepoValidator, v.null()),
-  handler: async (ctx, args) =>
-    await ctx.db
-      .query("sessionRepos")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first(),
 });
