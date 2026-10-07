@@ -160,6 +160,41 @@ export const readDaemonEntitySnapshot = internalQuery({
   },
 });
 
+/**
+ * True once the entity's sandbox is stopping/closed (or the entity is gone).
+ * Background work that can outlive a Stop (prewarm waits up to a lease window)
+ * polls this before any exec, because a Vercel exec lazily resumes a stopped
+ * VM and would leave it running, unseen by the idle sweep.
+ */
+export const isEntitySandboxStopRequested = internalQuery({
+  args: {
+    entityTable: v.union(
+      v.literal("sessions"),
+      v.literal("agentTasks"),
+      v.literal("projects"),
+    ),
+    entityId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const isStopped = (status: string | undefined) =>
+      status === "stopping" || status === "closed";
+    if (args.entityTable === "sessions") {
+      const id = ctx.db.normalizeId("sessions", args.entityId);
+      const doc = id ? await ctx.db.get(id) : null;
+      return !doc || isStopped(doc.status);
+    }
+    if (args.entityTable === "agentTasks") {
+      const id = ctx.db.normalizeId("agentTasks", args.entityId);
+      const doc = id ? await ctx.db.get(id) : null;
+      return !doc || isStopped(doc.reviewTaskSandboxStatus);
+    }
+    const id = ctx.db.normalizeId("projects", args.entityId);
+    const doc = id ? await ctx.db.get(id) : null;
+    return !doc || isStopped(doc.reviewProjectSandboxStatus);
+  },
+});
+
 const activeSandboxEntityValidator = v.object({
   entityTable: v.union(
     v.literal("sessions"),

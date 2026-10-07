@@ -378,10 +378,11 @@ export const addMessage = authMutation({
     });
     await ctx.db.patch(args.taskId, { updatedAt: Date.now() });
     if (role === "user") {
-      await touchUserActivity(ctx, {
-        kind: "task",
-        entityId: String(args.taskId),
-      });
+      await touchUserActivity(
+        ctx,
+        { kind: "task", entityId: String(args.taskId) },
+        { source: "chat", userId: ctx.userId },
+      );
     }
     return null;
   },
@@ -409,10 +410,11 @@ export const startExecute = authMutation({
     ) {
       throw new Error("Not authorized");
     }
-    await touchUserActivity(ctx, {
-      kind: "task",
-      entityId: String(args.taskId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "task", entityId: String(args.taskId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -619,10 +621,11 @@ export const enqueueMessage = authMutation({
     ) {
       throw new Error("Not authorized");
     }
-    await touchUserActivity(ctx, {
-      kind: "task",
-      entityId: String(args.taskId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "task", entityId: String(args.taskId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {

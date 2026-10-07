@@ -105,6 +105,7 @@ describe("idle pause sweep", () => {
       await t.mutation(internal._sandbox.activity.touchUser, {
         kind: "task",
         entityId: String(taskId),
+        source: "chat",
       });
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("stopping");
@@ -165,6 +166,7 @@ describe("idle pause sweep", () => {
       await t.mutation(internal._sandbox.activity.touchUser, {
         kind: "session",
         entityId: String(sessionId),
+        source: "chat",
       });
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("active");

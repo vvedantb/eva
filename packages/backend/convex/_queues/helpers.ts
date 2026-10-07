@@ -373,7 +373,14 @@ async function startNextQueuedChatMessage<
   await config.insertUserMessage(ctx, id, entity, nextMessage, guard.data, now);
   // A dequeued follow-up is the user's message landing: restart the idle clock.
   const activityRef = activityRefForParentId(ctx.db, String(id));
-  if (activityRef) await touchUserActivity(ctx, activityRef, now);
+  if (activityRef) {
+    await touchUserActivity(
+      ctx,
+      activityRef,
+      { source: "chat", userId: nextMessage.userId },
+      now,
+    );
+  }
   // After the user row exists, so detection sees the turn it is deciding about.
   await maybeInsertModelHandoffAlert(
     ctx,

@@ -137,10 +137,14 @@ http.route({
 });
 
 /**
- * Traffic heartbeat from the in-sandbox preview proxy (idle pause). The proxy
- * posts at most once a minute while external requests flow through it, so a
- * saved preview link or a polling app keeps its sandbox awake, as Amp's portal
- * does. The HMAC is scoped per sandbox (`previewActivityHmacMessage`).
+ * Activity heartbeat from the in-sandbox preview proxy (idle pause). The proxy
+ * posts at most once a minute while a preview page is on screen (its injected
+ * visibility ping) or a non-browser client calls the app, so a saved preview
+ * link or an API client keeps its sandbox awake, as Amp's portal does. A
+ * hidden tab does not. The HMAC is scoped per sandbox
+ * (`previewActivityHmacMessage`). `subject` is the Clerk user from the proxy's
+ * session cookie; it is outside the HMAC, so treat it as a diagnostic label
+ * for "who kept this awake", never as authorization.
  */
 http.route({
   path: "/api/preview/activity",
@@ -165,6 +169,8 @@ http.route({
     }
     await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
       sandboxId,
+      source: "preview-page",
+      clerkUserId: params.get("subject") || undefined,
     });
     return Response.json({ ok: true });
   }),

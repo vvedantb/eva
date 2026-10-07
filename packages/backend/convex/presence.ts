@@ -13,15 +13,16 @@ import {
 const presence = new Presence(components.presence);
 
 /**
- * True when at least one user is online in `roomId`. Server-side helper for
- * sweeps (no room token needed); never expose it directly to clients.
+ * The presence user id of one user online in `roomId`, or null when nobody is.
+ * Server-side helper for sweeps (no room token needed); never expose it
+ * directly to clients.
  */
-export async function isAnyonePresentInRoom(
+export async function firstPresentUserInRoom(
   ctx: QueryCtx,
   roomId: string,
-): Promise<boolean> {
+): Promise<string | null> {
   const members = await presence.listRoom(ctx, roomId, true, 1);
-  return members.length > 0;
+  return members[0]?.userId ?? null;
 }
 
 /** Must match ClientProvider's usePresence room — the only heartbeat that owns lastSeenAt. */

@@ -568,10 +568,11 @@ export const sandboxReady = internalMutation({
     }
     // A wake is an interaction: the idle sweep must grant a full grace window
     // before it can pause the sandbox it just brought back.
-    await touchUserActivity(ctx, {
-      kind: "session",
-      entityId: String(args.sessionId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "session", entityId: String(args.sessionId) },
+      { source: "start" },
+    );
     // Drain first-message (and any other) queued turns now that chat can run.
     // Early + final ready both call this; second no-ops while activeWorkflowId is set.
     // Starting a sandbox is not a turn ending, so this drain must not wake a

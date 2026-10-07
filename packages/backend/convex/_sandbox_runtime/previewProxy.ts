@@ -35,7 +35,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v25";
+const SCRIPT_VERSION = "stream-v26";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -58,9 +58,10 @@ interface PreviewProxyAuthParams {
    */
   authPort?: number;
   /**
-   * Traffic heartbeat for the idle-pause sweep: the proxy POSTs
-   * `sandboxId` + `hmac` to `activityUrl` at most once a minute while it has
-   * served any non-loopback request. Either value empty disables it.
+   * Activity heartbeat for the idle-pause sweep: the proxy POSTs
+   * `sandboxId` + `hmac` (+ the session's Clerk `subject`) to `activityUrl`
+   * at most once a minute while a preview page is on screen or a non-browser
+   * client calls it. Either value empty disables it.
    */
   activityUrl?: string;
   activityHmac?: string;
@@ -164,6 +165,8 @@ const targetPort = Number(process.env.EVA_PREVIEW_TARGET_PORT || "0");
 const proxyPort = Number(process.env.EVA_PREVIEW_PROXY_PORT || "0");
 const healthPath = "/__eva_preview_proxy/health";
 const html2canvasPath = "/__eva_preview_proxy/html2canvas.js";
+// The injected on-screen ping (idle pause) posts here; see visibilityPingScript.
+const activityPingPath = "/__eva_preview_proxy/active";
 const HTML2CANVAS_SCRIPT = ${JSON.stringify(PREVIEW_HTML2CANVAS_SCRIPT).replace(/`/g, "\\`")};
 
 if (!Number.isInteger(targetPort) || targetPort <= 0 || targetPort > 65535) {
@@ -191,21 +194,27 @@ const GRANT_PARAM = ${JSON.stringify(PREVIEW_GRANT_PARAM)};
 const SESSION_TTL_SECONDS = ${PREVIEW_SESSION_TTL_SECONDS};
 const INJECT_ENABLED = ${params.inject ? "true" : "false"};
 const SCRIPT_VERSION = ${JSON.stringify(SCRIPT_VERSION)};
-// Traffic heartbeat (idle pause). Only external (non-loopback) requests count:
+// Activity heartbeat (idle pause). Only external (non-loopback) requests count:
 // the agent's own in-sandbox browser is covered by its open turn, and must not
-// keep a sandbox awake after the turn ends.
+// keep a sandbox awake after the turn ends. Browser traffic to pages that carry
+// the on-screen ping does not count by itself: a hidden tab still polls and
+// reconnects, which kept task 262 awake for hours with nobody watching.
 const ACTIVITY_URL = ${JSON.stringify(params.activityUrl ?? "")};
 const ACTIVITY_HMAC = ${JSON.stringify(params.activityHmac ?? "")};
 const ACTIVITY_INTERVAL_MS = ${ACTIVITY_HEARTBEAT_INTERVAL_MS};
 const ACTIVITY_ENABLED = ACTIVITY_URL.length > 0 && ACTIVITY_HMAC.length > 0;
 let activityPending = false;
 let activityLastSentAt = 0;
+// Clerk user of the latest counted request (from the proxy session cookie), so
+// Eva can show who kept the sandbox awake. Empty for anonymous API clients.
+let activitySubject = "";
 
 function postActivityHeartbeat() {
   activityLastSentAt = Date.now();
   const body = new URLSearchParams();
   body.set("sandboxId", SANDBOX_ID);
   body.set("hmac", ACTIVITY_HMAC);
+  if (activitySubject) body.set("subject", activitySubject);
   fetch(ACTIVITY_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -215,11 +224,12 @@ function postActivityHeartbeat() {
   });
 }
 
-// Called for every authorized external request. Sends immediately when the
+// Called for every counted external request. Sends immediately when the
 // last heartbeat is older than the interval, otherwise marks the interval
 // tick to send one — so steady traffic costs one POST a minute.
-function noteExternalActivity() {
+function noteExternalActivity(subject) {
   if (!ACTIVITY_ENABLED) return;
+  if (subject) activitySubject = subject;
   if (Date.now() - activityLastSentAt >= ACTIVITY_INTERVAL_MS) {
     activityPending = false;
     postActivityHeartbeat();
@@ -247,6 +257,10 @@ const AUTH_PORT = ${params.authPort ?? "targetPort"};
 const BUFFER_WHOLE_HTML =
   targetPort === ${VERCEL_DESKTOP_INTERNAL_PORT} ||
   targetPort === ${VERCEL_EDITOR_INTERNAL_PORT};
+// Dev-server and custom-tab documents get the on-screen ping. Desktop (noVNC)
+// and editor (code-server) pages do not (code-server's CSP blocks inline
+// scripts), so their browser traffic keeps counting directly.
+const ACTIVITY_PING_PAGES = ACTIVITY_ENABLED && !BUFFER_WHOLE_HTML;
 
 let PUBLIC_KEY = null;
 if (GATE_ENABLED) {
@@ -387,6 +401,32 @@ function isLoopbackRequest(req) {
     addr === "::1" ||
     addr === "::ffff:127.0.0.1"
   );
+}
+
+// Fetch metadata headers are sent by every current browser and by no plain
+// HTTP client (curl, webhooks, SDKs), so they split "a tab" from "a caller".
+function isBrowserRequest(req) {
+  return Boolean(req.headers["sec-fetch-mode"]);
+}
+
+// Only top-level and iframe documents get the ping — never an HTML fragment an
+// app fetches and parses itself.
+function isDocumentRequest(req) {
+  const dest = req.headers["sec-fetch-dest"];
+  return dest === "document" || dest === "iframe";
+}
+
+// Whether an authorized external request resets the idle clock by itself.
+function countsAsActivity(req) {
+  if (isLoopbackRequest(req)) return false;
+  return !ACTIVITY_PING_PAGES || !isBrowserRequest(req);
+}
+
+// Clerk user behind the request's proxy session cookie, or "" when none.
+function requestSubject(req) {
+  const session = parseCookies(req.headers["cookie"])[SESSION_COOKIE];
+  const payload = session ? verifySession(session) : null;
+  return payload && typeof payload.sub === "string" ? payload.sub : "";
 }
 
 function authorize(clientReq, clientRes) {
@@ -869,6 +909,42 @@ const PARENT_ORIGIN_SCRIPT =
   JSON.stringify(annotationParentOrigin()) +
   ";";
 
+// On-screen ping (idle pause): while the page is visible, POST to the proxy at
+// most once per heartbeat interval. A hidden tab sends nothing, so it no longer
+// keeps the sandbox awake. Loopback pages are the agent's own browser.
+const visibilityPingScript = "(" + function () {
+  const flag = "__evaPreviewVisibilityPing";
+  if (window[flag]) return;
+  window[flag] = true;
+  const host = window.location.hostname;
+  if (host === "127.0.0.1" || host === "localhost" || host === "[::1]") return;
+
+  let lastSentAt = 0;
+  function ping() {
+    if (document.visibilityState !== "visible") return;
+    const now = Date.now();
+    if (now - lastSentAt < ${ACTIVITY_HEARTBEAT_INTERVAL_MS}) return;
+    lastSentAt = now;
+    fetch("/__eva_preview_proxy/active", {
+      method: "POST",
+      credentials: "include",
+      keepalive: true,
+    }).catch(function () {});
+  }
+  document.addEventListener("visibilitychange", ping);
+  window.setInterval(ping, ${ACTIVITY_HEARTBEAT_INTERVAL_MS});
+  ping();
+}.toString() + ")();";
+
+function injectVisibilityPing(html) {
+  if (html.includes("data-eva-preview-activity")) return html;
+  const tag =
+    "<script data-eva-preview-activity>" + visibilityPingScript + "</scr" + "ipt>";
+  if (html.includes("</head>")) return html.replace("</head>", tag + "</head>");
+  if (html.includes("</body>")) return html.replace("</body>", tag + "</body>");
+  return tag + html;
+}
+
 function buildInjectionTag() {
   const combined =
     cookiePatchScript +
@@ -963,7 +1039,7 @@ function rewriteTabHtml(html, tabPrefix) {
   );
 }
 
-function rewriteHtml(html, injects, tabPrefix) {
+function rewriteHtml(html, injects, tabPrefix, pings) {
   let out = stripModuleCrossorigin(html);
   out = rewriteNovncModuleImports(out);
   if (tabPrefix) {
@@ -971,6 +1047,9 @@ function rewriteHtml(html, injects, tabPrefix) {
   }
   if (injects) {
     out = injectHtml(out);
+  }
+  if (pings) {
+    out = injectVisibilityPing(out);
   }
   return out;
 }
@@ -1104,7 +1183,17 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
   }
 
   if (!authorize(clientReq, clientRes)) return;
-  if (!isLoopbackRequest(clientReq)) noteExternalActivity();
+  if (path.split("?")[0] === activityPingPath) {
+    if (!isLoopbackRequest(clientReq)) {
+      noteExternalActivity(requestSubject(clientReq));
+    }
+    clientRes.writeHead(204, { "cache-control": "no-store" });
+    clientRes.end();
+    return;
+  }
+  if (countsAsActivity(clientReq)) {
+    noteExternalActivity(requestSubject(clientReq));
+  }
 
   // Strip a (consumed/stale) grant param before forwarding so it never leaks
   // to the dev server's own request logs.
@@ -1135,6 +1224,8 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
       const isHtml =
         contentType.toLowerCase().includes("text/html") && !contentEncoding;
       const injectsHtml = route.injects && isHtml;
+      const pingsHtml =
+        ACTIVITY_PING_PAGES && isHtml && isDocumentRequest(clientReq);
       // Always rewrite HTML so noVNC module scripts lose crossorigin=.
       const rewriteHtmlBody = isHtml;
       let pathname = route.path;
@@ -1173,7 +1264,9 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
         });
         upstreamRes.on("end", function handleEnd() {
           const html = Buffer.concat(chunks).toString("utf8");
-          clientRes.end(rewriteHtml(html, injectsHtml, route.tabPrefix));
+          clientRes.end(
+            rewriteHtml(html, injectsHtml, route.tabPrefix, pingsHtml),
+          );
         });
         return;
       }
@@ -1211,7 +1304,12 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
         // bytes and never decoded.
         const headEnd = idx + HEAD_CLOSE.length;
         clientRes.write(
-          rewriteHtml(pending.slice(0, headEnd).toString("utf8"), injectsHtml, null),
+          rewriteHtml(
+            pending.slice(0, headEnd).toString("utf8"),
+            injectsHtml,
+            null,
+            pingsHtml,
+          ),
         );
         const rest = pending.slice(headEnd);
         pending = Buffer.alloc(0);
@@ -1227,7 +1325,9 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
         // No </head> in the document: fall back to the whole-document rewrite
         // (injectHtml handles </body> and prepend). Everything is already
         // buffered in "pending", so nothing was lost by waiting.
-        clientRes.end(rewriteHtml(pending.toString("utf8"), injectsHtml, null));
+        clientRes.end(
+          rewriteHtml(pending.toString("utf8"), injectsHtml, null, pingsHtml),
+        );
       });
     },
   );
@@ -1270,7 +1370,7 @@ server.on("upgrade", function handleUpgrade(req, socket, head) {
       return;
     }
   }
-  if (!isLoopbackRequest(req)) noteExternalActivity();
+  if (countsAsActivity(req)) noteExternalActivity(requestSubject(req));
   // Strip grant from the upstream path so websockify sees a clean /websockify.
   let upgradeUrl = req.url || "/";
   if (GATE_ENABLED && upgradeUrl.indexOf(GRANT_PARAM) !== -1) {

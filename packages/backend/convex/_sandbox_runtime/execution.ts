@@ -1099,6 +1099,8 @@ export const getPreviewUrl = action({
     if (args.checkReady || args.navigationSync) {
       await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
         sandboxId: args.sandboxId,
+        source: "preview-tab",
+        clerkUserId: identity.subject,
       });
     }
     return await buildPreviewUrl(ctx, args, identity.subject);
@@ -1947,6 +1949,24 @@ async function runPrewarmEntityDaemon(
       return null;
     };
 
+    // The alive classification above is a point-in-time read. A Stop can land
+    // while this prewarm waits on the launch lease (up to minutes), and every
+    // later exec — or ensureSandboxRunning — would lazily resume the stopped VM
+    // (task 262: stopped 12:47:11, prewarm resumed it 8s later). Poll the
+    // user's stop intent before each step that can wake the sandbox.
+    const stopRequested = () =>
+      ctx.runQuery(internal.sandboxDaemon.isEntitySandboxStopRequested, {
+        entityTable: args.entityTable,
+        entityId: entityIdStr,
+      });
+    const skipIfStopped = async (): Promise<boolean> => {
+      if (!(await stopRequested())) return false;
+      console.log(
+        `[sandbox][execution] prewarmEntityDaemon: stop requested — skipping entityId=${entityIdStr} after ${Date.now() - startedAt}ms`,
+      );
+      return true;
+    };
+
     const initialReady = await settleIfReady(await probeAliveState());
     if (initialReady !== null) return initialReady;
 
@@ -1972,6 +1992,7 @@ async function runPrewarmEntityDaemon(
       const waitDeadline = Date.now() + PREWARM_LAUNCH_LEASE_WAIT_MS;
       while (!leased && Date.now() < waitDeadline) {
         await sleep(PREWARM_LAUNCH_LEASE_POLL_MS);
+        if (await skipIfStopped()) return { prewarmed: false };
         const waitedReady = await settleIfReady(await probeAliveState());
         if (waitedReady !== null) return waitedReady;
         leased = await claimLease();
@@ -2029,6 +2050,7 @@ async function runPrewarmEntityDaemon(
         if (deferred !== null) return deferred;
       }
 
+      if (await skipIfStopped()) return { prewarmed: false };
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
       });
