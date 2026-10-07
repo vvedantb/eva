@@ -35,7 +35,7 @@ import { detectCancelSupersession } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   bindTurnWorkflow,
-  closeOpenSessionTurn,
+  closeOpenTurn,
   closeTurnForWorkflow,
   openSessionTurn,
 } from "../_chat/turnStore";
@@ -661,7 +661,7 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
-      await closeOpenSessionTurn(ctx, args.sessionId, "cancelled", {
+      await closeOpenTurn(ctx, args.sessionId, "cancelled", {
         error: "Cancelled by the user",
       });
     }

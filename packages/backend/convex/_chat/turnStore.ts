@@ -112,6 +112,55 @@ export async function openSessionTurn(
   return turnId;
 }
 
+/**
+ * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
+ * user (`chatTurnLifecycleVersion`), as `openSessionTurn` does for sessions.
+ */
+export async function openChatTurn(
+  ctx: MutationCtx,
+  params: OpenTurnFields & { entityId: Id<"agentTasks"> | Id<"projects"> },
+): Promise<Id<"turns">> {
+  const turnId = await openTurn(ctx, params);
+  await ctx.db.patch(params.entityId, { chatTurnLifecycleVersion: 2 });
+  return turnId;
+}
+
+/**
+ * Leases a just-opened daemon-minted (synthetic) turn: the daemon that asked
+ * for it is already running, so it owns the lease from the first heartbeat.
+ */
+export async function leaseSyntheticTurn(
+  ctx: MutationCtx,
+  turnId: Id<"turns">,
+): Promise<TurnLeaseIdentity> {
+  const turn = await ctx.db.get(turnId);
+  if (!turn) throw new Error("Synthetic turn was not created");
+  const lease = await acquireTurnLease(ctx, turn, "running");
+  if (!lease) throw new Error("Synthetic turn lease was not acquired");
+  return lease;
+}
+
+/**
+ * The durable side of a daemon claim for a staged turn. `drop`: the turn is
+ * closed or another daemon already runs it, so the caller clears the stale
+ * `pendingTurn`. `busy`: the turn cannot take a lease now; leave it staged.
+ */
+export async function claimStagedTurn(
+  ctx: MutationCtx,
+  turnId: Id<"turns">,
+): Promise<
+  | { status: "leased"; lease: TurnLeaseIdentity }
+  | { status: "drop" }
+  | { status: "busy" }
+> {
+  const turn = await ctx.db.get(turnId);
+  if (!turn || !turn.open || turn.state === "running") {
+    return { status: "drop" };
+  }
+  const lease = await acquireTurnLease(ctx, turn, "running");
+  return lease === null ? { status: "busy" } : { status: "leased", lease };
+}
+
 export async function bindTurnWorkflow(
   ctx: MutationCtx,
   turnId: Id<"turns">,
@@ -310,13 +359,13 @@ export async function closeTurn(
   });
 }
 
-export async function closeOpenSessionTurn(
+export async function closeOpenTurn(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  entityId: ChatTurnEntityId,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, entityId);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
