@@ -93,13 +93,18 @@ export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
 /**
  * Region for both sandboxes and Drives. Drives are region-pinned and a sandbox
  * can only mount one created in its own region, so the two must be set from a
- * single value — `iad1` is the SDK default for both, making this a no-op pin
- * that stops the pair drifting apart if either default ever moves.
+ * single value.
  */
-const SANDBOX_REGION: SandboxRegion = "iad1";
+const SANDBOX_REGION: SandboxRegion = "cdg1";
+/**
+ * Regions a sandbox may land in when {@link SANDBOX_REGION} has no capacity.
+ * Drives are region-pinned, so a failed-over sandbox cannot mount the cdg1
+ * Drive; if that fails the create, the mount fallback ladder retries without it.
+ */
+const SANDBOX_FAILOVER_REGIONS: SandboxRegion[] = ["iad1"];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
- * bytes ($0.05/GB-month in iad1), so the cap only bounds a runaway cache. The
+ * bytes ($0.05/GB-month), so the cap only bounds a runaway cache. The
  * SDK default is 1 TiB, which is far more headroom than a package store needs.
  */
 const DRIVE_MAX_SIZE_BYTES =
@@ -1248,6 +1253,7 @@ class VercelSandboxClient implements SandboxClient {
       ...this.creds,
       onResume: rewireDriveCacheOnResume,
       region: SANDBOX_REGION,
+      failoverRegions: SANDBOX_FAILOVER_REGIONS,
       // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
       // hard-kill a long seed build or agent turn mid-run. Floor it to the Pro
