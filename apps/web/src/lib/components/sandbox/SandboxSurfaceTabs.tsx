@@ -1,5 +1,9 @@
 import { LoadingState, Tabs, TabsList, TabsTrigger } from "@eva/ui";
-import { SANDBOX_STATUS_STYLES } from "./sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
+} from "./sandboxStatusStyles";
 
 /**
  * Which half of an entity a surface-owning page is showing: its own detail view
@@ -36,15 +40,20 @@ export function SandboxSurfaceTabs({
   isAgentActive?: boolean;
   onSurfaceChange: (surface: SandboxSurface) => void;
 }) {
+  const simpleView = useSimpleView();
   // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
   // can still read true while the sandbox is on its way up or down.
-  const status = isSandboxStopping
+  const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
       ? "starting"
       : isSandboxActive
         ? "active"
         : null;
+  const status =
+    liveStatus && showsSandboxStatusDot(liveStatus, simpleView)
+      ? liveStatus
+      : null;
 
   return (
     <Tabs

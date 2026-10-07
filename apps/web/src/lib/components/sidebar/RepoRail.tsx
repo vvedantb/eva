@@ -145,19 +145,21 @@ function RepoRailLiveData(props: RepoRailProps) {
  * App tiles are real Links (not buttons) so middle-click / cmd-click open a new tab.
  *
  * Live session/sandbox indicators sit behind QueryErrorBoundary so a missing
- * Convex function cannot swap the whole shell.
+ * Convex function cannot swap the whole shell. Simple view wakes sandboxes from
+ * the Preview tab, so it shows no awake counts and skips both queries.
  */
 export function RepoRail(props: RepoRailProps) {
+  const simpleView = useSimpleView();
+  const withoutCounts = (
+    <RepoRailView
+      {...props}
+      activeSessionCount={undefined}
+      activeSandboxCounts={EMPTY_SANDBOX_COUNTS}
+    />
+  );
+  if (simpleView) return withoutCounts;
   return (
-    <QueryErrorBoundary
-      fallback={
-        <RepoRailView
-          {...props}
-          activeSessionCount={undefined}
-          activeSandboxCounts={EMPTY_SANDBOX_COUNTS}
-        />
-      }
-    >
+    <QueryErrorBoundary fallback={withoutCounts}>
       <RepoRailLiveData {...props} />
     </QueryErrorBoundary>
   );
