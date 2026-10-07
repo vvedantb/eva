@@ -1,6 +1,6 @@
 # Unread indicator for session, quick-task and project chats
 
-Status: planned. Written 2026-10-07.
+Status: implemented (Phases 0–3). Written and implemented 2026-10-07 (PR #916). Phase 4 (rail and favicon counts, optimistic update) stays open.
 
 ## Goal
 
