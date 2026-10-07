@@ -126,6 +126,8 @@ When a chat opens with unread replies, a divider marks where they start, Discord
 ```
 `ChatDayDivider` is text only under the no-decorative-hairline rule. This one keeps the lines because they mark a boundary in the thread, which the mock-up asks for, and because a label alone does not read as "everything below is new". `design-check.mjs` does not flag `bg-*/30` rules.
 
+**Colour (decided 2026-10-07).** Label and lines use the `primary` token only (`text-primary`, `bg-primary/30`). `--primary` is the accent the user picks in theme settings (`docs/eva-ui.md`, "Surfaces"), so the divider follows their theme. No hex, no `text-blue-*`, no `--chart-*`. The row dots use the same token, so unread has one colour everywhere.
+
 **Lifecycle.** The divider stays until the user leaves the chat. It does not vanish when `markRead` fires. New replies that finish while the user is looking fall below the divider, which is correct: they are also new since open.
 
 **Scroll.** The chat keeps opening at the bottom (today's behaviour via `Conversation`). The unread reply is usually the last message, so the divider is on screen. If several turns are unread the divider can sit above the fold. Follow-up, not v1: scroll to the divider on open, or mark it on the jump rail.
