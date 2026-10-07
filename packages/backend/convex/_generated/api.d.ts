@@ -352,6 +352,7 @@ import type * as backgroundProcesses from "../backgroundProcesses.js";
 import type * as buildWorkflow from "../buildWorkflow.js";
 import type * as changelog from "../changelog.js";
 import type * as chatHtml from "../chatHtml.js";
+import type * as chatReads from "../chatReads.js";
 import type * as chatUi from "../chatUi.js";
 import type * as connectedAccounts from "../connectedAccounts.js";
 import type * as cronManager from "../cronManager.js";
@@ -864,6 +865,7 @@ declare const fullApi: ApiFromModules<{
   buildWorkflow: typeof buildWorkflow;
   changelog: typeof changelog;
   chatHtml: typeof chatHtml;
+  chatReads: typeof chatReads;
   chatUi: typeof chatUi;
   connectedAccounts: typeof connectedAccounts;
   cronManager: typeof cronManager;

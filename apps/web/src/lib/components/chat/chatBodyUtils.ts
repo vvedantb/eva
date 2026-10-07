@@ -20,6 +20,9 @@ export interface ChatRepo {
   basePath: string;
 }
 
+/** The id a chat's messages hang off: session, quick task or project. */
+export type ChatParentId = Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without
 // forging a branded id. Real docs stay assignable; nothing in the chat tree
@@ -81,6 +84,30 @@ export function findDayBoundaryIds(
     previousDay = day;
   }
   return boundaries;
+}
+
+/**
+ * First message of the "new since you last read" block, for the NEW divider.
+ * Uses `finishedAt` when set (a reply counts from when it finished), else
+ * `timestamp` (a reply still streaming). Only agent replies and teammate turns
+ * start the block: your own messages and system alerts never do.
+ */
+export function findNewBoundaryId(
+  messages: ReadonlyArray<
+    Pick<ChatBodyMessage, "_id" | "timestamp" | "finishedAt"> &
+      ChatUserAttribution
+  >,
+  newSinceAt: number | undefined,
+  currentUserId: string | undefined,
+): string | undefined {
+  if (newSinceAt === undefined) return undefined;
+  return messages.find(
+    (message) =>
+      !message.isSystemAlert &&
+      (message.finishedAt ?? message.timestamp) > newSinceAt &&
+      (message.role === "assistant" ||
+        isOtherUserChatMessage(message, currentUserId)),
+  )?._id;
 }
 
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;

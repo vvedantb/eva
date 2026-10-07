@@ -374,6 +374,11 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
+  // The unread watermark read by `chatReads.ts`. Lease sweeps can close a
+  // turn after its task or session was hard-deleted, and `patch` throws then.
+  if (await ctx.db.get(turn.entityId)) {
+    await ctx.db.patch(turn.entityId, { lastTurnFinishedAt: finishedAt });
+  }
   // Every durable turn ends here, so this is the one place the idle-pause
   // sweep learns "the agent finished". The id's table names the surface.
   const activityRef = activityRefForParentId(ctx.db, turn.entityId);

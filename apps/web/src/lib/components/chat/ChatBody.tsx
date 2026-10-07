@@ -11,6 +11,7 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
+import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
   ChatComposer,
@@ -45,6 +46,7 @@ import type { TurnCheckpointContext } from "@/lib/components/chat/_components/us
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
+import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
@@ -63,6 +65,8 @@ import {
   buildJumpRailTicks,
   buildMessageHistory,
   findDayBoundaryIds,
+  findNewBoundaryId,
+  type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findLastAssistantMessageId,
@@ -118,7 +122,12 @@ interface ChatBodyProps {
    * that belong to this transcript.
    * Absent (Manager Ave): no panels are loaded.
    */
-  chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+  chatParentId?: ChatParentId;
+  /**
+   * Cached session shells stay mounted but hidden. False stops mark-read and
+   * the "NEW" divider anchor, so a hidden chat never clears its own dot.
+   */
+  isRouteActive?: boolean;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -253,6 +262,7 @@ function ChatBodyInner({
   repo,
   conversationId,
   chatParentId,
+  isRouteActive = true,
   messages,
   isLoadingMessages = false,
   queuedMessages,
@@ -471,6 +481,15 @@ function ChatBodyInner({
       lastUserMessage === undefined ||
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
+  const { newSinceAt } = useChatReadState({
+    parentId: chatParentId,
+    active: isRouteActive,
+  });
+  const newBoundaryId = findNewBoundaryId(
+    displayMessages,
+    newSinceAt,
+    currentUserId,
+  );
 
   // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
   // (`render_html`) and secret requests (`request_env_var`). One query each
@@ -611,6 +630,7 @@ function ChatBodyInner({
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
         ) : null}
+        {message._id === newBoundaryId ? <ChatNewDivider /> : null}
         <ChatMessage
           message={message}
           animateIn={!isBacklog}

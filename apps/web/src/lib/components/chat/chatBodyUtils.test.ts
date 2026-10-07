@@ -7,6 +7,7 @@ import {
   collectQuestionSteps,
   findDayBoundaryIds,
   findHandoffBoundaryIds,
+  findNewBoundaryId,
   findStreamingTargetMessage,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
@@ -181,6 +182,75 @@ describe("findHandoffBoundaryIds", () => {
     ]);
 
     expect([...boundaries]).toEqual([]);
+  });
+});
+
+const me = "user-me";
+const mine = (_id: string, timestamp: number) => ({
+  _id,
+  role: "user" as const,
+  timestamp,
+  userId: me,
+});
+const timedReply = (_id: string, timestamp: number, finishedAt?: number) => ({
+  _id,
+  role: "assistant" as const,
+  timestamp,
+  finishedAt,
+});
+
+describe("findNewBoundaryId", () => {
+  test("returns undefined without an anchor", () => {
+    expect(findNewBoundaryId([timedReply("a", 10, 20)], undefined, me)).toBe(
+      undefined,
+    );
+  });
+
+  test("skips own user messages after the anchor and picks the reply", () => {
+    expect(
+      findNewBoundaryId(
+        [timedReply("a", 1, 2), mine("b", 10), timedReply("c", 11, 30)],
+        5,
+        me,
+      ),
+    ).toBe("c");
+  });
+
+  test("picks a teammate's message after the anchor", () => {
+    expect(
+      findNewBoundaryId(
+        [{ _id: "a", role: "user", timestamp: 10, userId: "user-other" }],
+        5,
+        me,
+      ),
+    ).toBe("a");
+  });
+
+  test("counts a reply by its finish time", () => {
+    // Started before the anchor, finished after it: still new.
+    expect(findNewBoundaryId([timedReply("a", 3, 9)], 5, me)).toBe("a");
+  });
+
+  test("picks a streaming placeholder by its timestamp", () => {
+    expect(
+      findNewBoundaryId([timedReply("a", 1, 2), timedReply("b", 8)], 5, me),
+    ).toBe("b");
+  });
+
+  test("skips system alerts", () => {
+    expect(
+      findNewBoundaryId(
+        [{ ...timedReply("a", 8, 8), isSystemAlert: true }],
+        5,
+        me,
+      ),
+    ).toBe(undefined);
+  });
+
+  test("returns undefined when nothing is after the anchor", () => {
+    expect(
+      findNewBoundaryId([timedReply("a", 1, 2), mine("b", 3)], 5, me),
+    ).toBe(undefined);
   });
 });
 
