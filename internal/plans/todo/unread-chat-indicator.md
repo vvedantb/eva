@@ -4,7 +4,7 @@ Status: planned. Written 2026-10-07.
 
 ## Goal
 
-Show which chats have a new agent reply the current user has not seen yet. One dot, same meaning, on all three surfaces: sessions, quick tasks and projects.
+Show which chats have a new agent reply the current user has not seen yet. One dot, same meaning, on all three surfaces: sessions, quick tasks and projects. Inside the chat, a "NEW" divider marks where the unseen replies start.
 
 **Why:**
 - Today the only "something happened" signal is the "Working" animation while a turn runs. Once the turn ends, the row looks the same as every other row.
@@ -104,6 +104,32 @@ useMarkChatRead({ parentId: chatParentId, active: isRouteActive && documentVisib
 
 No server-side mark on send is needed. The user's own message starts a turn; the dot only appears when that turn ends, which is after they sent it.
 
+### Client: "NEW" divider in the thread
+
+When a chat opens with unread replies, a divider marks where they start, Discord-style: a thin line on each side and a small "NEW" label in the primary colour (user mock-up, 2026-10-07).
+
+**Anchor.** The divider needs the read time from *before* `markRead` moves it. `isUnread` returns `{ hasUnread, lastReadAt }`. The hook becomes `useChatReadState` and:
+- on the first observation after the chat becomes active, stores `anchor = hasUnread ? (lastReadAt ?? 0) : undefined` in a ref, the same first-observation pattern `useAgentReplyChime` uses;
+- keeps the anchor while the chat stays active, even after `markRead` updates `lastReadAt` and new turns finish;
+- resets when `parentId` changes or `active` goes false → true, so a cached session that comes back gets a fresh anchor;
+- returns `newSinceAt: number | undefined`.
+
+**Placement.** `findNewBoundaryId(messages, newSinceAt)` in `chatBodyUtils.ts`, beside `findDayBoundaryIds`: the first message with `(finishedAt ?? timestamp) > newSinceAt` and either `role === "assistant"` or `isOtherUserChatMessage`. Own user messages never start the "new" block. `renderMessage` renders `ChatNewDivider` above that message, after `ChatDayDivider` when both apply. Rendering stays in `ChatBody`, so all three surfaces get it.
+
+**Component.** `_components/ChatNewDivider.tsx`:
+```tsx
+<div role="separator" aria-label="New messages" className="flex items-center gap-3 py-1 select-none">
+  <span className="h-px flex-1 bg-primary/30" />
+  <span className="text-2xs font-medium tracking-wide text-primary uppercase">New</span>
+  <span className="h-px flex-1 bg-primary/30" />
+</div>
+```
+`ChatDayDivider` is text only under the no-decorative-hairline rule. This one keeps the lines because they mark a boundary in the thread, which the mock-up asks for, and because a label alone does not read as "everything below is new". `design-check.mjs` does not flag `bg-*/30` rules.
+
+**Lifecycle.** The divider stays until the user leaves the chat. It does not vanish when `markRead` fires. New replies that finish while the user is looking fall below the divider, which is correct: they are also new since open.
+
+**Scroll.** The chat keeps opening at the bottom (today's behaviour via `Conversation`). The unread reply is usually the last message, so the divider is on screen. If several turns are unread the divider can sit above the fold. Follow-up, not v1: scroll to the divider on open, or mark it on the jump rail.
+
 ### UI
 
 Extract the dot from `ChangelogUnreadDot` into `ui/UnreadDot.tsx` (`CountPop`, `size-1.5 rounded-full bg-primary`, `sr-only` "Unread"). `ChangelogUnreadDot` uses it too.
@@ -131,10 +157,11 @@ Check: finish a turn on each surface and read the field in the Convex dashboard.
 2. `hasUnread` on the three list validators and queries.
 Check: `hasUnread` is true for a finished chat with no read row and false after calling `markRead` from the dashboard.
 
-### Phase 2: mark read from the open chat
-1. `useDocumentVisible` and `useMarkChatRead` in `lib/components/chat/`.
+### Phase 2: mark read from the open chat, and the "NEW" divider
+1. `useDocumentVisible` and `useChatReadState` in `lib/components/chat/`. `isUnread` returns `{ hasUnread, lastReadAt }`.
 2. Wire into `ChatBody`; pass `isRouteActive` from `ChatPanel`.
-Check: open chat A, start a turn, switch to chat B before it ends. A shows unread. Open A. The dot clears. Switch back to B and finish a turn in A: the hidden shell for A does not clear it.
+3. `findNewBoundaryId` in `chatBodyUtils.ts`, `ChatNewDivider`, and the render in `renderMessage`.
+Check: open chat A, start a turn, switch to chat B before it ends. A shows unread. Open A: the "NEW" divider sits above the finished reply and the dot clears. The divider stays while A is open. Switch to B and back to A: no divider. Finish another turn in A while B is open: the hidden shell for A does not clear the dot.
 
 ### Phase 3: dots on the three surfaces
 1. `UnreadDot`; replace the markup in `ChangelogUnreadDot`.
