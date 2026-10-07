@@ -35,7 +35,10 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v24";
+const SCRIPT_VERSION = "stream-v25";
+
+/** Minimum gap between two traffic heartbeats posted by one proxy process. */
+const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
 
 /** Values injected into the generated proxy script to drive the auth gate. */
 interface PreviewProxyAuthParams {
@@ -54,6 +57,13 @@ interface PreviewProxyAuthParams {
    * pass the exposed port here so grants and /preview-auth stay aligned.
    */
   authPort?: number;
+  /**
+   * Traffic heartbeat for the idle-pause sweep: the proxy POSTs
+   * `sandboxId` + `hmac` to `activityUrl` at most once a minute while it has
+   * served any non-loopback request. Either value empty disables it.
+   */
+  activityUrl?: string;
+  activityHmac?: string;
 }
 
 function isPort(value: number): boolean {
@@ -181,6 +191,52 @@ const GRANT_PARAM = ${JSON.stringify(PREVIEW_GRANT_PARAM)};
 const SESSION_TTL_SECONDS = ${PREVIEW_SESSION_TTL_SECONDS};
 const INJECT_ENABLED = ${params.inject ? "true" : "false"};
 const SCRIPT_VERSION = ${JSON.stringify(SCRIPT_VERSION)};
+// Traffic heartbeat (idle pause). Only external (non-loopback) requests count:
+// the agent's own in-sandbox browser is covered by its open turn, and must not
+// keep a sandbox awake after the turn ends.
+const ACTIVITY_URL = ${JSON.stringify(params.activityUrl ?? "")};
+const ACTIVITY_HMAC = ${JSON.stringify(params.activityHmac ?? "")};
+const ACTIVITY_INTERVAL_MS = ${ACTIVITY_HEARTBEAT_INTERVAL_MS};
+const ACTIVITY_ENABLED = ACTIVITY_URL.length > 0 && ACTIVITY_HMAC.length > 0;
+let activityPending = false;
+let activityLastSentAt = 0;
+
+function postActivityHeartbeat() {
+  activityLastSentAt = Date.now();
+  const body = new URLSearchParams();
+  body.set("sandboxId", SANDBOX_ID);
+  body.set("hmac", ACTIVITY_HMAC);
+  fetch(ACTIVITY_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  }).catch(function handleActivityError(err) {
+    console.error("Eva preview proxy: activity heartbeat failed", err);
+  });
+}
+
+// Called for every authorized external request. Sends immediately when the
+// last heartbeat is older than the interval, otherwise marks the interval
+// tick to send one — so steady traffic costs one POST a minute.
+function noteExternalActivity() {
+  if (!ACTIVITY_ENABLED) return;
+  if (Date.now() - activityLastSentAt >= ACTIVITY_INTERVAL_MS) {
+    activityPending = false;
+    postActivityHeartbeat();
+    return;
+  }
+  activityPending = true;
+}
+
+if (ACTIVITY_ENABLED) {
+  const activityTimer = setInterval(function flushActivity() {
+    if (!activityPending) return;
+    activityPending = false;
+    postActivityHeartbeat();
+  }, ACTIVITY_INTERVAL_MS);
+  // Never keep the process alive on our own account.
+  if (typeof activityTimer.unref === "function") activityTimer.unref();
+}
 const GATE_ENABLED = PUBLIC_KEY_JWK !== null && WEB_APP_URL.length > 0;
 // Port shown to /preview-auth and matched against grant claims. May differ from
 // targetPort when the proxy fronts an internal-only upstream (Vercel desktop).
@@ -1048,6 +1104,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
   }
 
   if (!authorize(clientReq, clientRes)) return;
+  if (!isLoopbackRequest(clientReq)) noteExternalActivity();
 
   // Strip a (consumed/stale) grant param before forwarding so it never leaks
   // to the dev server's own request logs.
@@ -1213,6 +1270,7 @@ server.on("upgrade", function handleUpgrade(req, socket, head) {
       return;
     }
   }
+  if (!isLoopbackRequest(req)) noteExternalActivity();
   // Strip grant from the upstream path so websockify sees a clean /websockify.
   let upgradeUrl = req.url || "/";
   if (GATE_ENABLED && upgradeUrl.indexOf(GRANT_PARAM) !== -1) {

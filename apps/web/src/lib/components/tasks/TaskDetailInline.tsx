@@ -273,6 +273,12 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          task.reviewTaskSandboxStatus === "closed" &&
+          sandboxId !== undefined &&
+          canStartSandbox &&
+          !hasActiveRun
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />

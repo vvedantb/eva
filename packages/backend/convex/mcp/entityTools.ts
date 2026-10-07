@@ -11,6 +11,7 @@ import {
   repoRefArgs,
   withSelfDefault,
   type EntityLocation,
+  type EntityTarget,
 } from "./entityRef";
 import {
   errorResult,
@@ -22,6 +23,7 @@ import {
 import { defineTool, type EvaTool } from "./registry";
 import { getEvaBaseUrl } from "../_taskWorkflow/urls";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
+import { previewWakePath } from "@eva/shared";
 
 /** Port the Preview pane falls back to when nothing recorded a dev port. */
 const DEFAULT_PREVIEW_PORT = 3000;
@@ -65,6 +67,30 @@ function evaPreviewUrl(location: EntityLocation): { evaUrl?: string } {
     return { evaUrl: `${getEvaBaseUrl()}${previewPath}` };
   } catch {
     return {};
+  }
+}
+
+/**
+ * The stable wake link (`/p/<kind>/<id>`), only while idle pause is fully on:
+ * it wakes a paused sandbox on open, so it is the right thing to hand a person
+ * once sandboxes can pause underneath them. Undefined otherwise, so the tool's
+ * output is unchanged when the setting is off.
+ */
+function wakePreviewUrl(
+  target: EntityTarget,
+  mode: string,
+  path: string | undefined,
+): string | undefined {
+  if (mode !== "on") return undefined;
+  try {
+    return `${getEvaBaseUrl()}${previewWakePath({
+      kind: target.kind,
+      id: target.targetId,
+      port: target.devPort,
+      path,
+    })}`;
+  } catch {
+    return undefined;
   }
 }
 
@@ -246,7 +272,7 @@ If a turn is in flight this is REJECTED rather than killing that turn: wait for 
 
 Name no chat and it answers for the one you are running in. "path" points the link at a route you built, e.g. "/demo/referral-portal".
 
-The returned "previewUrl" is served straight from the sandbox, so it only works while that sandbox is running, and opening it requires an Eva login — it is for the user and their team, not a public address. "evaUrl" is the permanent Eva page holding the same preview. When the sandbox is not running there is no previewUrl: "sandboxStatus" says so, and start_sandbox brings it up. A "ready" of false means the VM is up but the dev server is still compiling — wait and call again.`,
+The returned "previewUrl" opens the app and requires an Eva login — it is for the user and their team, not a public address. When idle pause is on it is a stable Eva link that wakes a paused sandbox on open; otherwise it is served straight from the sandbox and only works while that sandbox is running. "rawPreviewUrl" is always the sandbox's own address (null while the sandbox is not running). "evaUrl" is the permanent Eva page holding the same preview. When the sandbox is not running and idle pause is off there is no previewUrl: "sandboxStatus" says so, and start_sandbox brings it up. A "ready" of false means the dev server is not answering yet (a cold compile takes 1-2 minutes) — wait and call again.`,
       mutating: false,
       input: {
         ...entityRefArgs,
@@ -264,6 +290,11 @@ The returned "previewUrl" is served straight from the sandbox, so it only works 
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
 
+        const idlePause = await ctx.runQuery(
+          internal.sandboxIdlePause.getSettingsInternal,
+          {},
+        );
+        const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);
         const summary = {
           ...entitySummary(target),
           sandboxStatus: target.sandboxStatus,
@@ -276,9 +307,13 @@ The returned "previewUrl" is served straight from the sandbox, so it only works 
         ) {
           return textResult({
             ...summary,
-            previewUrl: null,
+            previewUrl: wakeUrl ?? null,
+            rawPreviewUrl: null,
             ready: false,
-            note: `This ${target.kind}'s sandbox is "${target.sandboxStatus}", so nothing is being served. Call start_sandbox and try again.`,
+            note:
+              wakeUrl !== undefined
+                ? `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Opening previewUrl wakes it and waits for the dev server; start_sandbox does the same without a browser.`
+                : `This ${target.kind}'s sandbox is "${target.sandboxStatus}", so nothing is being served. Call start_sandbox and try again.`,
           });
         }
 
@@ -297,16 +332,19 @@ The returned "previewUrl" is served straight from the sandbox, so it only works 
         if (preview.url.length === 0) {
           return textResult({
             ...summary,
-            previewUrl: null,
+            previewUrl: wakeUrl ?? null,
+            rawPreviewUrl: null,
             ready: false,
             port: preview.port,
             note: "The sandbox is not serving anything on the app port yet. Eva restarts the dev server automatically; wait a minute and call again.",
           });
         }
 
+        const rawPreviewUrl = shareablePreviewUrl(preview.url, path);
         return textResult({
           ...summary,
-          previewUrl: shareablePreviewUrl(preview.url, path),
+          previewUrl: wakeUrl ?? rawPreviewUrl,
+          rawPreviewUrl,
           port: preview.port,
           ready: preview.ready,
           ...(preview.ready

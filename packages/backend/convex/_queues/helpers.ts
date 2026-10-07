@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { internal } from "../_generated/api";
@@ -29,6 +29,10 @@ import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentia
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  activityRefForParentId,
+  touchUserActivity,
+} from "../_sandbox/activity";
 import type { OrchestratorNotifyChild } from "../orchestratorShared";
 import {
   findUsageLimitHold,
@@ -238,7 +242,7 @@ async function scheduleDrainAtBackgroundAgentExpiry<
  * provider is not held — that is how switching provider sends the queue now.
  */
 export async function usageLimitHoldFor(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
   next: Doc<"queuedMessages">,
 ): Promise<UsageLimitHold | null> {
@@ -365,6 +369,9 @@ async function startNextQueuedChatMessage<
 
   const now = Date.now();
   await config.insertUserMessage(ctx, id, entity, nextMessage, guard.data, now);
+  // A dequeued follow-up is the user's message landing: restart the idle clock.
+  const activityRef = activityRefForParentId(ctx.db, String(id));
+  if (activityRef) await touchUserActivity(ctx, activityRef, now);
   // After the user row exists, so detection sees the turn it is deciding about.
   await maybeInsertModelHandoffAlert(
     ctx,

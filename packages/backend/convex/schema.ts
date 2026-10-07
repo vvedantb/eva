@@ -35,6 +35,7 @@ import {
   harnessSkillReportTokenFields,
   sandboxGitCredentialsFields,
   appSettingsFields,
+  sandboxActivityFields,
   userFields,
   userPresenceFields,
   userProviderAccountFields,
@@ -248,6 +249,10 @@ const schema = defineSchema({
   })
     .index("by_sandbox", ["sandboxId"])
     .index("by_last_heal", ["lastHealAt"]),
+  sandboxActivity: defineTable(sandboxActivityFields).index("by_entity", [
+    "kind",
+    "entityId",
+  ]),
   streamingActivity: defineTable({
     entityId: v.string(),
     currentActivity: v.string(),
