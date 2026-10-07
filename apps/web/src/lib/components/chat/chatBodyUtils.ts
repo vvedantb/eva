@@ -1,7 +1,6 @@
 import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel, type ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
-import { isSandboxPausedAlert } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 import {
@@ -106,10 +105,7 @@ export function isSandboxLifecycleAlert(
 ): boolean {
   return (
     message.isSystemAlert === true &&
-    (SANDBOX_LIFECYCLE_ALERTS.has(message.content) ||
-      // "Sandbox paused after N min idle" carries a number, so it cannot sit
-      // in the exact-match set above.
-      isSandboxPausedAlert(message.content))
+    SANDBOX_LIFECYCLE_ALERTS.has(message.content)
   );
 }
 

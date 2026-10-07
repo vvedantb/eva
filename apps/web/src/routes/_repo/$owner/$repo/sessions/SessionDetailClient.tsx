@@ -307,12 +307,6 @@ export function SessionDetailClient({
                             }
                       }
                       isSandboxStarting={isSandboxStarting}
-                      autoWakeEligible={
-                        session.status === "closed" &&
-                        session.sandboxId !== undefined &&
-                        session.sandboxError === undefined &&
-                        !isReadOnly
-                      }
                       collapsed={rightPanelCollapsed}
                       onToggle={onToggleRightPanel}
                       miniPlayer={

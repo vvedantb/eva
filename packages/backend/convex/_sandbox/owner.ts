@@ -48,53 +48,6 @@ export function sandboxOwnerKey(owner: SandboxOwner): string {
   return `project-${owner.projectId}`;
 }
 
-/**
- * Reverse lookup: which entity owns `sandboxId`. Sessions first, then projects,
- * then quick tasks — the same order `sandboxHeal.isBoundToRepo` always used.
- * Unauthenticated by design: callers are internal (sweeps, HTTP heartbeats).
- */
-export async function findSandboxOwnerBySandboxId(
-  db: GenericDatabaseReader<DataModel>,
-  sandboxId: string,
-): Promise<ResolvedSandboxOwner | null> {
-  const session = await db
-    .query("sessions")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (session) {
-    return {
-      kind: "session",
-      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
-      doc: session,
-    };
-  }
-
-  const project = await db
-    .query("projects")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (project) {
-    return {
-      kind: "project",
-      ownerKey: sandboxOwnerKey({ kind: "project", projectId: project._id }),
-      doc: project,
-    };
-  }
-
-  const task = await db
-    .query("agentTasks")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (task) {
-    return {
-      kind: "task",
-      ownerKey: sandboxOwnerKey({ kind: "task", taskId: task._id }),
-      doc: task,
-    };
-  }
-  return null;
-}
-
 /** Resolves and authorizes any sandbox owner without duplicating table policy. */
 export async function resolveSandboxOwnerForUser(
   db: GenericDatabaseReader<DataModel>,

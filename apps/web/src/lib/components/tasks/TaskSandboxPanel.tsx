@@ -52,12 +52,6 @@ interface TaskSandboxPanelProps {
   onTabChange: (tab: SandboxTab) => void;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /**
-   * The sandbox is closed and the host would allow a Start: no last-start
-   * error, not read-only, no run or build owning it. Combined in
-   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
-   */
-  autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
 }
@@ -86,7 +80,6 @@ export function TaskSandboxPanel({
   onTabChange,
   onStartSandbox,
   isSandboxStarting,
-  autoWakeEligible,
   collapsed = false,
   onToggle,
 }: TaskSandboxPanelProps) {
@@ -232,9 +225,6 @@ export function TaskSandboxPanel({
           runConsoleDevCommandOnConnect={false}
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
-          autoWakeEligible={autoWakeEligible}
-          // A collapsed rail is not on screen: no presence beacon, no auto-wake.
-          presenceEnabled={!collapsed}
           stickyPreviewPath={viewState?.previewPath}
           onStickyPreviewPathChange={(path) => {
             void setPreviewPath({ owner, path });

@@ -20,12 +20,6 @@ import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { normalizeAIModel } from "../validators";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
-import {
-  stopAlertText,
-  stopReasonValidator,
-  type StopReason,
-} from "../_sandbox/stopReason";
-import { touchUserActivity } from "../_sandbox/activity";
 import { drainChatQueueQuietly } from "../_queues/helpers";
 
 const PREVIEW_ALLOWED_PHASES = [
@@ -379,11 +373,9 @@ export const stopProjectSandbox = authMutation({
 export async function requestProjectSandboxStop(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-  options: { stopReason?: StopReason } = {},
 ): Promise<void> {
   const project = await ctx.db.get(projectId);
   if (!project) return;
-  const { stopReason } = options;
 
   if (!project.sandboxId) {
     // Nothing to stop — close immediately.
@@ -393,23 +385,10 @@ export async function requestProjectSandboxStop(
     return;
   }
 
-  if (project.reviewProjectSandboxStatus === "stopping") {
-    // Already stopping — re-issue the idempotent finalize so a stalled first
-    // attempt recovers instead of leaving the row wedged.
-    await scheduleFinalizeStopProject(ctx, {
-      projectId,
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-      stopReason,
-    });
-    return;
-  }
-
   await scheduleFinalizeStopProject(ctx, {
     projectId,
     sandboxId: project.sandboxId,
     repoId: project.repoId,
-    stopReason,
   });
 
   // Clear leftover start steps so stop does not re-show startup activity.
@@ -440,7 +419,6 @@ export async function scheduleFinalizeStopProject(
     projectId: Id<"projects">;
     sandboxId: string;
     repoId: Id<"githubRepos">;
-    stopReason?: StopReason;
   },
 ): Promise<void> {
   await ctx.scheduler.runAfter(
@@ -451,19 +429,17 @@ export async function scheduleFinalizeStopProject(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._projects.sandbox.recoverStuckStopping,
-    { projectId: args.projectId, stopReason: args.stopReason },
+    { projectId: args.projectId },
   );
 }
 
 /**
  * Re-issues finalizeStopProjectSandbox if the project is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished. Carries the original
- * stop reason so the divider matches the request even when this finalize wins
- * the race against a slow provider stop.
+ * leave the UI wedged; no-ops if stop already finished.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { projectId: v.id("projects"), stopReason: stopReasonValidator },
+  args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -481,7 +457,6 @@ export const recoverStuckStopping = internalMutation({
         projectId: args.projectId,
         sandboxId: project.sandboxId,
         repoId: project.repoId,
-        stopReason: args.stopReason,
       },
     );
     return null;
@@ -497,7 +472,6 @@ export const finalizeStopProjectSandbox = internalAction({
     projectId: v.id("projects"),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
-    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -513,7 +487,6 @@ export const finalizeStopProjectSandbox = internalAction({
     await ctx.runMutation(internal._projects.sandbox.markProjectSandboxClosed, {
       projectId: args.projectId,
       error: stopError,
-      stopReason: args.stopReason,
     });
     return null;
   },
@@ -527,7 +500,6 @@ export const markProjectSandboxClosed = internalMutation({
   args: {
     projectId: v.id("projects"),
     error: v.optional(v.string()),
-    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -552,7 +524,7 @@ export const markProjectSandboxClosed = internalMutation({
     await ctx.db.insert("messages", {
       parentId: args.projectId,
       role: "assistant",
-      content: stopAlertText(args.stopReason),
+      content: "Sandbox stopped",
       timestamp: Date.now(),
       isSystemAlert: true,
     });
@@ -609,11 +581,6 @@ export const projectSandboxReady = internalMutation({
       lastSandboxActivity: Date.now(),
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
-    });
-    // A wake is an interaction: the idle sweep grants a full grace window.
-    await touchUserActivity(ctx, {
-      kind: "project",
-      entityId: String(args.projectId),
     });
     // Sends what was queued while Eva slept. Early + final ready both land
     // here; the second no-ops once the first turn is running.

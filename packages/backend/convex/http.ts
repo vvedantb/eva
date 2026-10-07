@@ -4,10 +4,7 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
-import {
-  previewActivityHmacMessage,
-  streamingHeartbeatHmacMessage,
-} from "./_sandbox_runtime/callbackAuth";
+import { streamingHeartbeatHmacMessage } from "./_sandbox_runtime/callbackAuth";
 import {
   parseCiPassed,
   parseRepoEvents,
@@ -154,40 +151,6 @@ http.route({
       accepted,
       lease: accepted ? null : { status: "terminal", reason: "superseded" },
     });
-  }),
-});
-
-/**
- * Traffic heartbeat from the in-sandbox preview proxy (idle pause). The proxy
- * posts at most once a minute while external requests flow through it, so a
- * saved preview link or a polling app keeps its sandbox awake, as Amp's portal
- * does. The HMAC is scoped per sandbox (`previewActivityHmacMessage`).
- */
-http.route({
-  path: "/api/preview/activity",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const params = new URLSearchParams(await request.text());
-    const sandboxId = requiredFormValue(params, "sandboxId");
-    const hmac = requiredFormValue(params, "hmac");
-    if (!sandboxId || !hmac) {
-      return new Response("Missing required activity fields", { status: 400 });
-    }
-    const expected = await computeScopedHmac(
-      previewActivityHmacMessage(sandboxId),
-    );
-    if (!expected) {
-      return new Response("ENCRYPTION_KEY is not configured", {
-        status: 500,
-      });
-    }
-    if (!timingSafeEqual(hmac, expected)) {
-      return new Response("Invalid activity signature", { status: 401 });
-    }
-    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-      sandboxId,
-    });
-    return Response.json({ ok: true });
   }),
 });
 

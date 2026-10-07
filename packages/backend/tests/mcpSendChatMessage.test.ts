@@ -663,17 +663,12 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
       nodeActions.indexOf("function chatDelivery"),
     );
     expect(ensure).toContain("SANDBOX_SURFACES[kind]");
-    // The start-and-wait loop is shared with the `/p/…` wake link
-    // (`sandboxWake.ts`), so it lives in orchestratorDelivery.
-    expect(ensure).toContain("awaitSandboxActive(");
-    const delivery = convexSource("mcp/orchestratorDelivery.ts");
-    const loop = delivery.slice(
-      delivery.indexOf("export async function awaitSandboxActive"),
-    );
-    expect(loop).toContain("decideSandboxStartPlan");
-    expect(loop).toContain("TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS");
+    expect(ensure).toContain("decideSandboxStartPlan");
+    expect(ensure).toContain("TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS");
     // The Start-button mutation, not an in-place resume of the closed id.
-    expect(delivery).toContain("agentTasks:startTaskSandbox");
+    expect(convexSource("mcp/orchestratorDelivery.ts")).toContain(
+      "agentTasks:startTaskSandbox",
+    );
   });
 
   test("turn staging does not prewarm a closed or stopping preview sandbox", () => {

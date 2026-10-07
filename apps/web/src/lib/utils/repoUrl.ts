@@ -36,8 +36,6 @@ const NON_REPO_PATH_PREFIXES = new Set([
   "testing",
   "agent-callback",
   "mcp",
-  // Stable preview wake links: `/p/$kind/$id` (routes/p.$kind.$id.tsx).
-  "p",
 ]);
 
 /**

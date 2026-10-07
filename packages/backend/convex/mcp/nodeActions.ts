@@ -14,12 +14,13 @@ import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
 import {
-  awaitSandboxActive,
   buildChatMessageCalls,
+  decideSandboxStartPlan,
   resolveAgentDelivery,
   SANDBOX_STOP_SETTLE_TIMEOUT_MS,
   SANDBOX_SURFACES,
   TASK_PREVIEW_SANDBOX_READY_POLL_MS,
+  TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS,
   type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
@@ -1717,17 +1718,44 @@ async function ensureEntitySandboxActive(
   kind: ChatTargetKind,
   id: string,
 ): Promise<{ startRequested: boolean }> {
+  const plan = decideSandboxStartPlan(
+    await readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
+  );
+  if (plan === "run") return { startRequested: false };
+
   const surface = SANDBOX_SURFACES[kind];
-  return await awaitSandboxActive({
-    kind,
-    readStatus: () => readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
-    start: async () => {
-      await runMutationAsUser(convexUrl, clerkUserId, surface.start, {
-        [surface.idArg]: id,
-      });
-    },
-    sleep: delay,
-  });
+  let started = false;
+  const start = async () => {
+    await runMutationAsUser(convexUrl, clerkUserId, surface.start, {
+      [surface.idArg]: id,
+    });
+    started = true;
+  };
+
+  // `wait` is a start/stop already in flight. If that settles to `closed`,
+  // start once rather than failing on a teardown race.
+  if (plan === "start") {
+    await start();
+  }
+  const deadline = Date.now() + TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const next = decideSandboxStartPlan(
+      await readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
+    );
+    if (next === "run") return { startRequested: started };
+    if (next === "start") {
+      if (started) {
+        throw new Error(
+          `The ${kind} sandbox did not become ready. Start it from the sandbox panel and retry.`,
+        );
+      }
+      await start();
+    }
+    await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
+  }
+  throw new Error(
+    `Timed out waiting for the ${kind} sandbox to start. Start it from the sandbox panel and retry.`,
+  );
 }
 
 /**

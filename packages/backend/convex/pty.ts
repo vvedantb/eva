@@ -7,7 +7,6 @@ import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 import { unwrapVercelSandbox } from "./_sandbox/vercelProvider";
 import { ownerArg, resolveOwner } from "./_pty/owners";
 import { getActionRepoWithAccess } from "./functions";
-import { internal } from "./_generated/api";
 import {
   connectVercelInteractive,
   ensureVercelSharedTerminal,
@@ -55,10 +54,6 @@ export const connectPty = action({
     if (resolved.isStoppingOrClosed) {
       throw new Error("Sandbox is not running. Start the sandbox first.");
     }
-    // Opening a terminal is a human interaction for the idle-pause sweep.
-    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-      sandboxId: resolved.sandboxId,
-    });
     await resolveSandboxCredentials(ctx, resolved.repoId);
 
     const handle = await getSandboxHandle(

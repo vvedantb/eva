@@ -5,20 +5,6 @@
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
-  SANDBOX_STOPPED_ALERT,
-  isSandboxPausedAlert,
-  sandboxPausedAlertText,
-} from "./sandboxStopReason";
-export { sandboxPresenceRoomId } from "./sandboxPresence";
-export {
-  PREVIEW_WAKE_KINDS,
-  previewWakePath,
-  previewWakeSearchSchema,
-  type PreviewWakeKind,
-  type PreviewWakeParams,
-  type SandboxIdlePauseMode,
-} from "./previewWake";
-export {
   TASK_TAGS,
   TASK_TAG_DESCRIPTIONS,
   TAG_PROBABILITY_THRESHOLD,

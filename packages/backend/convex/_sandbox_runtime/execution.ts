@@ -121,29 +121,6 @@ import {
 import { vercelAppListenPort } from "./vercelAppPorts";
 import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
-import { createHmac } from "node:crypto";
-import { previewActivityHmacMessage } from "./callbackAuth";
-import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
-
-/**
- * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
- * the deployment has no `ENCRYPTION_KEY` or no reachable site URL, which
- * simply disables the heartbeat (the sweep then relies on tab presence).
- */
-function previewActivityParams(sandboxId: string): {
-  activityUrl: string;
-  activityHmac: string;
-} {
-  const secret = process.env.ENCRYPTION_KEY;
-  const siteUrl = resolvePublicConvexSiteUrl(process.env);
-  if (!secret || !siteUrl) return { activityUrl: "", activityHmac: "" };
-  return {
-    activityUrl: `${siteUrl}/api/preview/activity`,
-    activityHmac: createHmac("sha256", secret)
-      .update(previewActivityHmacMessage(sandboxId))
-      .digest("hex"),
-  };
-}
 
 const sessionPersistenceKindValidator = v.union(
   v.literal("sessions"),
@@ -1033,7 +1010,6 @@ async function buildPreviewUrl(
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort ?? args.port,
-          ...previewActivityParams(args.sandboxId),
         },
         fixedVercelProxyPort,
       );
@@ -1091,14 +1067,6 @@ export const getPreviewUrl = action({
       throw new Error("Not authenticated");
     }
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
-    // A Preview/custom-tab open is a human interaction for the idle-pause
-    // sweep. Readiness polls repeat every 3s, but the touch is throttled
-    // server-side so the steady state is read-only.
-    if (args.checkReady || args.navigationSync) {
-      await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-        sandboxId: args.sandboxId,
-      });
-    }
     return await buildPreviewUrl(ctx, args, identity.subject);
   },
 });

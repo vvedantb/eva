@@ -366,13 +366,6 @@ export function ProjectDetailClient({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
-        autoWakeEligible={
-          project.reviewProjectSandboxStatus === "closed" &&
-          projectSandboxId !== undefined &&
-          canStartSandbox &&
-          project.activeBuildWorkflowId === undefined &&
-          project.activeChatWorkflowId === undefined
-        }
         collapsed={collapsed}
         onToggle={onToggle}
       />

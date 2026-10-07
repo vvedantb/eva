@@ -21,12 +21,14 @@ crons.interval(
   {},
 );
 
-// Pause sandboxes nobody is using (agent finished + no interaction for the
-// configured grace). A no-op while `appSettings.sandboxIdlePauseMode` is off.
+// Stop any active sandbox with no chat or agent activity for the configured
+// idle time (settings → Sandboxes, default 60 minutes). Vercel bills memory for
+// every running minute and never idle-stops on its own; without this a
+// forgotten session ran until its 24h cap.
 crons.interval(
-  "sandbox idle pause sweep",
+  "sandbox idle-stop sweep",
   { minutes: 5 },
-  internal.sandboxIdlePause.run,
+  internal.sandboxIdleStop.run,
   {},
 );
 

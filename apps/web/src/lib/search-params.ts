@@ -155,27 +155,6 @@ export function isSessionSandboxTab(s: string): s is SandboxTab {
   return sandboxTabs.some((tab) => tab === s);
 }
 
-/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
-const NON_VM_SANDBOX_TABS = new Set([
-  "review",
-  "agents",
-  "prd",
-  "designs",
-  "artifacts",
-  "documents",
-]);
-
-/**
- * True for a tab that talks to the sandbox VM itself (preview, browser,
- * editor, computer, files, and any custom tab slug). The idle-pause presence
- * beacon and wake-on-tab-open key off this, so a user reading the Review tab
- * neither keeps a sandbox awake nor wakes a paused one.
- */
-export function isSandboxVmTab(tab: string): boolean {
-  const id = sandboxTabIdFromParam(tab);
-  return id.length > 0 && !NON_VM_SANDBOX_TABS.has(id);
-}
-
 /** Old Computer-tab URL segment; redirect to `computer`. */
 export function isLegacyDesktopSandboxTab(s: string): boolean {
   return s === "desktop";
