@@ -14,6 +14,7 @@ import {
   type AgentTurnOwner,
   type ChatEntityId,
   type ChatSurfaceAdapter,
+  type ChatAlert,
 } from "./_chat/surfaceAdapters";
 import {
   tearDownStaleDocWorkflow,
@@ -47,7 +48,6 @@ import {
   turnLeaseDurationMs,
   type ExpiredTurnLeaseCause,
 } from "./_chat/turnLease";
-import type { ChatAlert } from "./_chat/surfaceAdapters";
 import {
   chatTurnEntityIdValidator,
   turnEntityIdValidator,

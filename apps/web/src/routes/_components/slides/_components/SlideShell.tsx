@@ -37,11 +37,7 @@ export function SlideReveal({
       initial="hidden"
       animate={isVisible ? "show" : "hidden"}
       variants={fadeUpVariants}
-      transition={{
-        duration: motionBase.duration as number,
-        ease: motionBase.ease,
-        delay: isVisible ? delay : 0,
-      }}
+      transition={{ ...motionBase, delay: isVisible ? delay : 0 }}
       className={className}
     >
       {children}
@@ -95,7 +91,7 @@ export function SlideItem({ children, className = "" }: SlideItemProps) {
   return (
     <motion.div
       variants={fadeUpVariants}
-      transition={{ duration: motionBase.duration as number, ease: motionBase.ease }}
+      transition={motionBase}
       className={className}
     >
       {children}

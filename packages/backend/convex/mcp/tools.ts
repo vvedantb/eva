@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
@@ -1391,7 +1390,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         const result = await ctx.runAction(
           internal.grokBotActions.callWebhook,
           {
-            userId: userId as Id<"users">,
+            userId,
             task,
           },
         );

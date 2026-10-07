@@ -3,7 +3,7 @@ import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { extractPrNumberFromUrl } from "../_github/prUrl";
 import { schedulePrLifecycleActions } from "../_github/prLifecycleActions";
-import { prStateValidator } from "../validators";
+import type { prStateValidator } from "../validators";
 
 export type PrState = Infer<typeof prStateValidator>;
 

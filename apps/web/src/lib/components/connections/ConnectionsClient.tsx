@@ -57,7 +57,7 @@ function ConnectionsView({
         provider,
         returnPath: "/settings/connections",
       });
-      window.location.href = url;
+      window.location.assign(url);
     } catch {
       toast.error(
         `Couldn't start ${provider === "linear" ? "Linear" : "Figma"} sign-in`,
