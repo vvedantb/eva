@@ -1,9 +1,6 @@
 # Move quick-task runs and one-shot agents onto the durable `turns` table (durable-turns Phases 6–7)
 
-Status: implemented in two pull requests, not yet deployed. Written 2026-10-07. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5).
-
-- **PR A (#914):** Phase 6.0–6.3 and Phase 7.0–7.2. Every new run and one-shot agent runs on a turn, and the lease is its stall check. Work in flight at deploy keeps its old path.
-- **PR B (stacked on A):** Phase 6.4, Phase 7.3, the session legacy branches and the old heartbeat path. Merge it only after the deploy check below.
+Status: implemented 2026-10-07 in two pull requests. PR A (#914) moved every new run and one-shot agent onto turns; PR B (this clean-up) requires a turn everywhere and deletes the old heartbeat path. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5). Open follow-up: delete the `checkStaleRuns` and `probeStaleRunLiveness` stubs one release after PR B.
 
 See "Implementation (2026-10-07)" for what changed from the phase text.
 
