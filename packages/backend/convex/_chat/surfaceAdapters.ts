@@ -3,6 +3,7 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
+import { getTaskRunStreamingEntityId } from "../_taskWorkflow/helpers";
 import {
   startNextQueuedProjectChatMessage,
   startNextQueuedSessionMessage,
@@ -16,6 +17,8 @@ import { STALL_ALERT_TEXT } from "./stallRetry";
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
 /** Streaming entityId prefix for agent task chat workflows. */
 export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
+/** Streaming entityId prefix of `getTaskRunStreamingEntityId` (quick-task runs). */
+const TASK_RUN_STREAM_PREFIX = "task-run-";
 
 /** A standalone system-alert message surfaced when a stale turn is torn down. */
 export type ChatAlert = { text: string; detail?: string };
@@ -383,40 +386,72 @@ export const chatSurfaceAdapters = [
 
 export { sessionChatAdapter, taskChatAdapter, projectChatAdapter };
 
+/**
+ * The turn owner that is not a chat: a quick-task run (`agentRuns`). It has no
+ * placeholder message, queue or synthetic turn, so it does not fit
+ * `ChatSurfaceAdapter`. Runs open no turn yet (durable-turns Phase 6).
+ */
+export const runTurnAdapter = {
+  kind: "run",
+  logLabel: "task-run",
+  parseId: (db: DatabaseReader, raw: string): Id<"agentRuns"> | null =>
+    db.normalizeId("agentRuns", raw),
+  streamingEntityId: getTaskRunStreamingEntityId,
+  parseStreamingEntityId: (
+    db: DatabaseReader,
+    streamingEntityId: string,
+  ): Id<"agentRuns"> | null =>
+    streamingEntityId.startsWith(TASK_RUN_STREAM_PREFIX)
+      ? db.normalizeId(
+          "agentRuns",
+          streamingEntityId.slice(TASK_RUN_STREAM_PREFIX.length),
+        )
+      : null,
+} as const;
+
 /** Generic over the surface, so one body serves every adapter type-safely. */
 export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
   adapter: ChatSurfaceAdapter<TId, TEntity>,
   id: TId,
 ) => R;
 
+/** One handler per kind of turn owner. */
+export type TurnAdapterVisitor<R> = {
+  chat: ChatAdapterVisitor<R>;
+  run: (adapter: typeof runTurnAdapter, runId: Id<"agentRuns">) => R;
+};
+
 /**
  * Picks the adapter for a durable turn's `entityId` by the id's table, then
- * hands it and the parsed id to `visit`. Null when no chat table owns the id.
+ * hands it and the parsed id to the matching handler. Null when no turn owner
+ * table holds the id.
  */
-export function chatAdapterForEntity<R>(
+export function turnAdapterForEntity<R>(
   db: DatabaseReader,
   entityId: string,
-  visit: ChatAdapterVisitor<R>,
+  visit: TurnAdapterVisitor<R>,
 ): R | null {
   const sessionId = sessionChatAdapter.parseId(db, entityId);
-  if (sessionId) return visit(sessionChatAdapter, sessionId);
+  if (sessionId) return visit.chat(sessionChatAdapter, sessionId);
   const taskId = taskChatAdapter.parseId(db, entityId);
-  if (taskId) return visit(taskChatAdapter, taskId);
+  if (taskId) return visit.chat(taskChatAdapter, taskId);
   const projectId = projectChatAdapter.parseId(db, entityId);
-  if (projectId) return visit(projectChatAdapter, projectId);
+  if (projectId) return visit.chat(projectChatAdapter, projectId);
+  const runId = runTurnAdapter.parseId(db, entityId);
+  if (runId) return visit.run(runTurnAdapter, runId);
   return null;
 }
 
-/** The chat entity whose turn writes this streamingActivity row, if any. */
-export function chatEntityIdFromStream(
+/** The turn owner whose turn writes this streamingActivity row, if any. */
+export function turnEntityIdFromStream(
   db: DatabaseReader,
   streamingEntityId: string,
-): ChatEntityId | null {
+): ChatEntityId | Id<"agentRuns"> | null {
   for (const adapter of chatSurfaceAdapters) {
     const id = adapter.parseStreamingEntityId(db, streamingEntityId);
     if (id) return id;
   }
-  return null;
+  return runTurnAdapter.parseStreamingEntityId(db, streamingEntityId);
 }
 
 /**

@@ -248,14 +248,21 @@ export const chatTurnEntityIdValidator = v.union(
   v.id("projects"),
 );
 
-/** Durable ownership record for one chat turn (session, task chat or project chat). */
+/**
+ * Every durable turn owner: the three chats plus quick-task runs. Runs open no
+ * turn yet (Phase 6 of the durable-turns plan); the union deploys first.
+ */
+export const turnEntityIdValidator = v.union(
+  v.id("sessions"),
+  v.id("agentTasks"),
+  v.id("projects"),
+  v.id("agentRuns"),
+);
+
+/** Durable ownership record for one turn (session, task chat, project chat or quick-task run). */
 export const turnFields = {
-  /**
-   * Retired: `entityId` already names the table. No longer written; drained by
-   * `dataMigrations:clearTurnSurface`, then deleted.
-   */
-  surface: v.optional(v.literal("session")),
-  entityId: chatTurnEntityIdValidator,
+  // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
+  entityId: turnEntityIdValidator,
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -336,12 +343,10 @@ export const chatDaemonEntityFields = {
   // hands back an empty claim so a dying daemon cannot take the turn (and its
   // 2-minute running lease) with it.
   claimPausedUntil: v.optional(v.number()),
-  /**
-   * Retired: the durable turn's lease now tells "claimed" from "wiped by a
-   * cancel race". No longer written or read. Delete after the
-   * `dataMigrations:clear{Session,Task,Project}PendingTurnClaimedAt` runs.
-   */
-  pendingTurnClaimedAt: v.optional(v.number()),
+  // `pendingTurnClaimedAt` removed; 0 prod rows held it on 2026-10-07.
+  // schema-narrowing-ok: clearSessionPendingTurnClaimedAt
+  // schema-narrowing-ok: clearTaskPendingTurnClaimedAt
+  // schema-narrowing-ok: clearProjectPendingTurnClaimedAt
 };
 
 export const agentTaskFields = {

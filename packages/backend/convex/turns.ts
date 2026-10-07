@@ -9,8 +9,8 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import {
-  chatAdapterForEntity,
-  chatEntityIdFromStream,
+  turnAdapterForEntity,
+  turnEntityIdFromStream,
   type ChatEntityId,
   type ChatSurfaceAdapter,
 } from "./_chat/surfaceAdapters";
@@ -202,7 +202,7 @@ async function applyLegacyHeartbeat(
   ctx: MutationCtx,
   args: Infer<typeof legacyHeartbeatArgsValidator>,
 ): Promise<boolean> {
-  const entityId = chatEntityIdFromStream(ctx.db, args.entityId);
+  const entityId = turnEntityIdFromStream(ctx.db, args.entityId);
   if (entityId && (await findOpenTurn(ctx, entityId))) return false;
   if (args.touchOnly) {
     await touchStreamingEntity(ctx, args.entityId);
@@ -418,6 +418,24 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
   }
 }
 
+/**
+ * Closes one expired quick-task run turn. No run opens a turn yet, and until
+ * durable-turns Phase 6 moves `cleanUpStaleRun` here, `checkStaleRuns` keeps
+ * owning the run itself. Closing only the turn keeps the reconciler from
+ * retrying it on every tick.
+ */
+async function finalizeExpiredRunTurn(
+  ctx: MutationCtx,
+  runId: Id<"agentRuns">,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  console.log(
+    `[watchdog][lease-reconcile] runId=${runId} turnId=${turn._id} cause=${cause} run left to checkStaleRuns`,
+  );
+  await closeTurn(ctx, turn, "error", { error: `Run lease expired (${cause})` });
+}
+
 /** Re-reads and converges one expired lease; a concurrent renewal always wins. */
 export const finalizeExpired = internalMutation({
   args: {
@@ -432,9 +450,12 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    await chatAdapterForEntity(ctx.db, turn.entityId, (adapter, id) =>
-      finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
-    );
+    await turnAdapterForEntity(ctx.db, turn.entityId, {
+      chat: (adapter, id) =>
+        finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
+      run: (_adapter, runId) =>
+        finalizeExpiredRunTurn(ctx, runId, turn, args.cause),
+    });
     return null;
   },
 });

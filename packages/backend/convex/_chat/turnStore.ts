@@ -42,12 +42,15 @@ export type CompletionTurnResolution =
   | { status: "legacy" }
   | { status: "stale" };
 
-/** Chat entities that own durable turns. The id's table picks the surface. */
-export type ChatTurnEntityId = Doc<"turns">["entityId"];
+/** Every durable turn owner. The id's table picks the surface. */
+export type TurnEntityId = Doc<"turns">["entityId"];
+
+/** Chat entities that own durable turns (every owner but a quick-task run). */
+export type ChatTurnEntityId = Exclude<TurnEntityId, Id<"agentRuns">>;
 
 export async function findOpenTurn(
   ctx: QueryCtx,
-  entityId: ChatTurnEntityId,
+  entityId: TurnEntityId,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
@@ -332,7 +335,7 @@ export async function graceExpiredTurnLease(
 export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
-    entityId: ChatTurnEntityId;
+    entityId: TurnEntityId;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
@@ -382,7 +385,7 @@ export async function closeTurn(
 
 export async function closeOpenTurn(
   ctx: MutationCtx,
-  entityId: ChatTurnEntityId,
+  entityId: TurnEntityId,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
@@ -392,7 +395,7 @@ export async function closeOpenTurn(
 
 export async function closeTurnForWorkflow(
   ctx: MutationCtx,
-  entityId: ChatTurnEntityId,
+  entityId: TurnEntityId,
   workflowId: string,
   state: TerminalTurnState,
   patch: { error?: string } = {},

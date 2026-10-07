@@ -379,3 +379,33 @@ describe.each<ChatSurface>(["task", "project"])(
     );
   },
 );
+
+/**
+ * Durable-turns Phase 6 groundwork: a run daemon that holds a lease sends the
+ * fence on its completion. The receiver must accept it before any run opens a
+ * turn, or the validator throws and the run's reply is lost.
+ */
+test(
+  "the quick-task run completion accepts the lease fence",
+  async () => {
+    const f = await createFixture("task");
+    if (f.entity.surface !== "task") throw new Error("task fixture expected");
+    const taskId = f.entity.id;
+    const runId = await f.t.run(async (ctx) =>
+      ctx.db.insert("agentRuns", { taskId, status: "running", logs: [] }),
+    );
+
+    await expect(
+      f.t
+        .withIdentity({ subject: CLERK_ID })
+        .mutation(api.taskWorkflow.handleCompletion, {
+          taskId,
+          runId,
+          ...reply,
+          turnId: "turn-from-a-leased-run",
+          leaseGeneration: 1,
+        }),
+    ).resolves.toBeNull();
+  },
+  TIMEOUT_MS,
+);

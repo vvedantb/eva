@@ -10,9 +10,11 @@ import {
   renewTurnLease,
 } from "../convex/_chat/turnStore";
 import {
-  chatAdapterForEntity,
+  runTurnAdapter,
   TASK_CHAT_STREAM_PREFIX,
   taskChatAdapter,
+  turnAdapterForEntity,
+  turnEntityIdFromStream,
 } from "../convex/_chat/surfaceAdapters";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
@@ -638,11 +640,101 @@ describe("task chat turns share the session turn lifecycle", () => {
         rawInput: "pick",
         updatedAt: Date.now(),
       });
-      return [sessionId, taskId, projectId, "not-an-id"].map((id) =>
-        chatAdapterForEntity(ctx.db, id, (adapter) => adapter.kind),
+      const runId = await ctx.db.insert("agentRuns", {
+        taskId,
+        status: "running",
+        logs: [],
+      });
+      return [sessionId, taskId, projectId, runId, "not-an-id"].map((id) =>
+        turnAdapterForEntity(ctx.db, id, {
+          chat: (adapter) => adapter.kind,
+          run: (adapter) => adapter.kind,
+        }),
       );
     });
-    expect(kinds).toEqual(["session", "taskChat", "projectChat", null]);
+    expect(kinds).toEqual(["session", "taskChat", "projectChat", "run", null]);
+  });
+});
+
+/**
+ * Phase 6 groundwork: `turns.entityId` accepts a quick-task run, but no code
+ * opens one yet. These pin the no-behaviour-change contract for a run turn.
+ */
+describe("quick-task run as a turn owner (groundwork)", () => {
+  async function createRunTurnFixture() {
+    const { t, repoId, taskId } = await createTaskChatFixture();
+    const ids = await t.run(async (ctx) => {
+      const runId = await ctx.db.insert("agentRuns", {
+        taskId,
+        repoId,
+        status: "running",
+        logs: [],
+        startedAt: Date.now(),
+      });
+      // Hand-inserted: `openTurn` still takes chat owners only.
+      const turnId = await ctx.db.insert("turns", {
+        entityId: runId,
+        streamingEntityId: runTurnAdapter.streamingEntityId(runId),
+        state: "running",
+        open: true,
+        turnStartedAt: Date.now(),
+        leaseExpiresAt: Date.now() + 60_000,
+        leaseGeneration: 1,
+        model: "claude:sonnet",
+        repoId,
+      });
+      return { runId, turnId };
+    });
+    return { t, taskId, ...ids };
+  }
+
+  test("the run streaming id maps back to the run", async () => {
+    const { t, runId } = await createRunTurnFixture();
+    const parsed = await t.run(async (ctx) =>
+      turnEntityIdFromStream(ctx.db, runTurnAdapter.streamingEntityId(runId)),
+    );
+    expect(parsed).toBe(runId);
+  });
+
+  test("a run turn renews and fences like any other turn", async () => {
+    const { t, runId, turnId } = await createRunTurnFixture();
+    const verdicts = await t.run(async (ctx) => ({
+      current: await renewTurnLease(ctx, {
+        turnId,
+        leaseGeneration: 1,
+        streamingEntityId: runTurnAdapter.streamingEntityId(runId),
+      }),
+      old: await renewTurnLease(ctx, { turnId, leaseGeneration: 0 }),
+    }));
+    expect(verdicts.current.status).toBe("renewed");
+    expect(verdicts.old).toEqual({ status: "terminal", reason: "superseded" });
+  });
+
+  test("an open run turn rejects the unfenced heartbeat for its stream", async () => {
+    const { t, runId } = await createRunTurnFixture();
+    const accepted = await t.mutation(internal.turns.legacyHeartbeat, {
+      entityId: runTurnAdapter.streamingEntityId(runId),
+      touchOnly: true,
+    });
+    expect(accepted).toBe(false);
+  });
+
+  test("an expired run turn closes, and the run is left to checkStaleRuns", async () => {
+    const { t, runId, turnId } = await createRunTurnFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
+    });
+    await t.mutation(internal.turns.finalizeExpired, {
+      turnId,
+      cause: "process_dead",
+    });
+    const after = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      run: await ctx.db.get(runId),
+    }));
+    expect(after.turn?.open).toBe(false);
+    expect(after.turn?.state).toBe("error");
+    expect(after.run?.status).toBe("running");
   });
 });
 

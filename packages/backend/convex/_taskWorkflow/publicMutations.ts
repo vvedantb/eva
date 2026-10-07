@@ -7,7 +7,11 @@ import {
   toWorkflowId,
 } from "../workflowManager";
 import { authMutation, hasTaskAccess } from "../functions";
-import { aiModelValidator, turnCheckpointArgs } from "../validators";
+import {
+  aiModelValidator,
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+} from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
   clearStreamingActivity,
@@ -62,6 +66,9 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    // Accepted and ignored until runs open durable turns (durable-turns
+    // Phase 6). A daemon that holds a lease sends both on every completion.
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {

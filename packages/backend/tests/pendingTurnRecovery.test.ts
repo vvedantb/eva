@@ -212,19 +212,7 @@ describe("every chat restages only when the lease says the turn is unclaimed", (
     expect(guardAt, `${path} no longer asks the lease`).toBeGreaterThan(-1);
     // The guard has to precede the restage decision to be worth anything.
     expect(guardAt).toBeLessThan(restage.indexOf("isUnclaimedOpenTurn({"));
-    expect(restage, "the retired claim stamp is back").not.toContain(
-      "pendingTurnClaimedAt",
-    );
   });
-
-  test.each(["_chat/taskChatDaemon.ts", "_chat/projectChatDaemon.ts"])(
-    "%s claim no longer stamps the entity",
-    (path) => {
-      expect(
-        definitionBody(readSource(path), "claimPendingTurn"),
-      ).not.toContain("pendingTurnClaimedAt");
-    },
-  );
 });
 
 /** Comments name the very calls these rules rule out, so they have to go first. */
