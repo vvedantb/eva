@@ -17,7 +17,7 @@ const devServer = readSource("convex/_sandbox_runtime/devServer.ts");
  */
 describe("dependency install commands", () => {
   test("yarn bootstraps the shim first", () => {
-    // Bare node24 images ship no yarn shim, so a bare `yarn install` exits 127
+    // No sandbox base image ships a yarn shim, so a bare `yarn install` exits 127
     // (fix 820990c4 / 457b046b).
     const command = dependencyInstallCommand("yarn", "/w");
     expect(command.startsWith("npm install -g yarn &&")).toBe(true);

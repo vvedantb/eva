@@ -40,6 +40,7 @@ import {
   rewrittenBranchPublishError,
 } from "./divergedPublish";
 import { ensureSwapFile } from "./swap";
+import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import {
   AGENT_CLI_PATH_LINE,
   COREPACK_SANDBOX_ENV,
@@ -456,7 +457,7 @@ export async function createSandbox(
           "GITHUB_APP_SLUG and GITHUB_BOT_USER_ID must be set in Convex env",
         );
       }
-      // Fresh Vercel node24 sandboxes ship without `jq`, which the git credential
+      // Fresh Vercel sandboxes ship without `jq`, which the git credential
       // helper (git-credential-eva) shells out to on every authenticated
       // fetch/push. Without it, syncRepo/fetchBaseBranch fail with exit 128
       // ("jq: command not found") before the seed toolchain stage ever runs.
@@ -465,7 +466,7 @@ export async function createSandbox(
       await runLoggedGitStep("createSandbox.ensureJq", sandbox.id, () =>
         execHandle(
           sandbox,
-          "command -v jq >/dev/null 2>&1 || sudo dnf install -y jq >/dev/null 2>&1 || true",
+          `${PACKAGE_HELPER_SCRIPT}\ncommand -v jq >/dev/null 2>&1 || ${pkgInstall("jq")} || true`,
           120,
         ),
       );
@@ -1011,7 +1012,7 @@ export function dependencyInstallCommand(pm: string, dir: string): string {
     return `npm install -g pnpm && cd ${dir} && pnpm install --config.confirm-modules-purge=false`;
   }
   if (pm === "yarn") {
-    // Bare node24 has no yarn shim — mirror the pnpm branch's global install.
+    // No base image ships a yarn shim — mirror the pnpm branch's global install.
     return `npm install -g yarn && cd ${dir} && yarn install`;
   }
   return `cd ${dir} && npm install`;

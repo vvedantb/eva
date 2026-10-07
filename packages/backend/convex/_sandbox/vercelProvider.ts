@@ -47,13 +47,15 @@ import {
   KEEP_LAST_SNAPSHOTS,
   vercelSnapshotCreateOptions,
 } from "./vercelSnapshotOptions";
-import {
-  driveCacheSetupScript,
-  driveCacheTeardownScript,
-} from "./driveCache";
+import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
+import {
+  CHROME_RUNTIME_LIBRARY_PACKAGES,
+  PACKAGE_HELPER_SCRIPT,
+  pkgInstall,
+} from "../_sandbox_runtime/packageManager";
 
 export {
   EVA_ENV_FILE,
@@ -74,6 +76,18 @@ const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 // repo/team env (~6 KB+). Instead of passing env at create, we write it to this
 // file in the sandbox and source it on every exec — no size cap, and it persists
 // across get()/resume like any other file.
+
+/**
+ * Base image for every sandbox that does not restore from a snapshot: Vercel's
+ * managed Ubuntu image, replacing the deprecated `runtime: "node24"` (Amazon
+ * Linux 2023). Snapshot restores never pass an image — Vercel forbids it — so
+ * seeded AL2023 snapshots keep booting as AL2023 until their repo's base Image
+ * is rebuilt (Rebuild Now), and the install code handles both distros
+ * (_sandbox_runtime/packageManager.ts). `latest` is patched nightly by Vercel;
+ * each snapshot freezes whatever it captured, so drift only reaches a repo on
+ * its next base rebuild.
+ */
+const VERCEL_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
 
 /** Prefix that sources the eva env file (if present) before a command. */
 const SOURCE_ENV = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE};`;
@@ -265,6 +279,8 @@ class VercelGit implements SandboxGit {
  * TigerVNC (Xvnc :1) + websockify + noVNC. Amazon Linux 2023 has no usable
  * window-manager packages (openbox/fluxbox/icewm are absent), so we follow the
  * GUI reference and run Chrome directly on the Xvnc display — no WM required.
+ * Ubuntu managed images do ship window managers, but the no-WM setup works on
+ * both, so it stays as the single path rather than branching by distro.
  *
  * Critical: long-running Xvnc/websockify MUST use native `detached: true`
  * (execDetached). Backgrounding with `setsid … &` OR plain `&` inside a
@@ -302,28 +318,19 @@ class VercelDesktop implements SandboxDesktop {
     // 1) Install + kill previous servers (sync).
     await this.handle.exec(
       [
+        PACKAGE_HELPER_SCRIPT,
         'NOVNC_DIR=""',
         "if [ -d /opt/novnc ]; then NOVNC_DIR=/opt/novnc; elif [ -d /opt/noVNC ]; then NOVNC_DIR=/opt/noVNC; fi",
         "INSTALLED=0",
         'if command -v Xvnc >/dev/null 2>&1 && command -v websockify >/dev/null 2>&1 && [ -n "$NOVNC_DIR" ]; then INSTALLED=1; fi',
         'if [ "$INSTALLED" != "1" ]; then',
-        "  sudo dnf install -y tigervnc-server python3 python3-pip xorg-x11-utils xterm dbus-x11 procps-ng psmisc git >/tmp/desktop-dnf.log 2>&1",
-        "  sudo dnf install -y gtk3 nss alsa-lib libXScrnSaver libXtst at-spi2-core libdrm mesa-libgbm libxkbcommon libXdamage libXcomposite libXrandr libXcursor libXinerama cups-libs >/tmp/desktop-gui-dnf.log 2>&1 || true",
+        `  ${pkgInstall("vnc-server", "vnc-common", "python3", "python3-pip", "x11-utils", "x11-xserver-utils", "xterm", "dbus-x11", "procps", "psmisc", "git")} || true`,
+        `  ${pkgInstall(...CHROME_RUNTIME_LIBRARY_PACKAGES)} || true`,
         "  sudo python3 -m pip install --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1",
         "  command -v websockify >/dev/null 2>&1 || sudo ln -sf $(python3 -m site --user-base)/bin/websockify /usr/local/bin/websockify || true",
         '  if [ -z "$NOVNC_DIR" ]; then sudo git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc >/tmp/novnc-git.log 2>&1; NOVNC_DIR=/opt/novnc; fi',
         "fi",
-        "if ! command -v google-chrome-stable >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then",
-        "  sudo tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'",
-        "[google-chrome]",
-        "name=google-chrome",
-        "baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64",
-        "enabled=1",
-        "gpgcheck=1",
-        "gpgkey=https://dl.google.com/linux/linux_signing_key.pub",
-        "EOF",
-        "  sudo dnf install -y google-chrome-stable >/tmp/chrome-dnf.log 2>&1 || sudo dnf install -y chromium >/tmp/chromium-dnf.log 2>&1 || true",
-        "fi",
+        "eva_pkg_install_chrome || true",
         "mkdir -p /home/eva/.vnc /tmp",
         "sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix",
         "pkill -9 -x Xvnc 2>/dev/null || true",
@@ -1248,9 +1255,7 @@ class VercelSandboxClient implements SandboxClient {
    * iad1 only — so a snapshot create follows its snapshot. Unknown regions
    * (lookup failed) keep the default and let the create report the real error.
    */
-  private async regionFor(
-    params: SandboxCreateParams,
-  ): Promise<SandboxRegion> {
+  private async regionFor(params: SandboxCreateParams): Promise<SandboxRegion> {
     if (params.forkFrom || !params.snapshot) return SANDBOX_REGION;
     try {
       const { Snapshot } = await import("@vercel/sandbox");
@@ -1270,6 +1275,7 @@ class VercelSandboxClient implements SandboxClient {
     // env is written to a file post-create (see EVA_ENV_FILE) rather than passed
     // here — Vercel's create-time env cap is 4 KB and eva's env exceeds it.
     const persistent = params.lifecycle.ephemeral !== true;
+    const image = params.image ?? VERCEL_SANDBOX_IMAGE;
     const region = await this.regionFor(params);
     // Drives are region-pinned to SANDBOX_REGION, so a sandbox placed elsewhere
     // cannot mount them — skip the mounts rather than spend a failed create.
@@ -1302,15 +1308,11 @@ class VercelSandboxClient implements SandboxClient {
           // including mounts — a fork mounts the Drive like any create.
           Sandbox.fork({ ...opts, sourceSandbox: params.forkFrom })
         : params.snapshot
-        ? Sandbox.create({
-            ...opts,
-            source: { type: "snapshot", snapshotId: params.snapshot },
-          })
-        : params.image
-          ? // VCR image boot. `image` and the legacy `runtime` are mutually
-            // exclusive in the SDK types, hence the separate call.
-            Sandbox.create({ ...opts, image: params.image })
-          : Sandbox.create({ ...opts, runtime: "node24" });
+          ? Sandbox.create({
+              ...opts,
+              source: { type: "snapshot", snapshotId: params.snapshot },
+            })
+          : Sandbox.create({ ...opts, image });
     };
     // Mounts attach at create, and the Drive write lock is enforced there too —
     // so a read-write request for a Drive an earlier sandbox still holds fails
@@ -1337,12 +1339,12 @@ class VercelSandboxClient implements SandboxClient {
         throw lastError;
       });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"} mounts=${describeMounts(used)}`,
+        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${image} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
       // (createSandbox) fire onSandboxAcquired first, then write EVA_ENV_FILE.
-      // Fresh node24 sandboxes don't include /tmp/repo. Every execHandle call
+      // Fresh sandboxes don't include /tmp/repo on any base image. Every execHandle call
       // defaults to that cwd (WORKSPACE_DIR = "/tmp/repo" in helpers.ts), so
       // any command with no explicit cwd returns HTTP 400 until the directory
       // exists. Pre-create it here so git config / ensureDockerDaemon calls in
@@ -1360,7 +1362,7 @@ class VercelSandboxClient implements SandboxClient {
         // requestedMounts is what the ladder STARTED from: by the time this
         // throws every weaker stage (including no mounts at all) has already
         // failed too, so mounts are never the remaining suspect.
-        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
+        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${image}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }
@@ -1404,7 +1406,6 @@ class VercelSandboxClient implements SandboxClient {
       return false;
     }
   }
-
 }
 
 /** Recovers the underlying Vercel sandbox from a handle (PTY, etc.). */
