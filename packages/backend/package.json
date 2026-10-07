@@ -10,9 +10,9 @@
     "dev:personal": "cross-env CONVEX_DEPLOYMENT=dev:elegant-snail-639 convex dev",
     "dev:evalucom": "cross-env CONVEX_DEPLOYMENT=dev:good-mule-506 convex dev",
     "dev:all": "concurrently -n personal,evalucom -c blue,green \"pnpm dev:personal\" \"pnpm dev:evalucom\"",
-    "typecheck": "tsc --noEmit -p convex/tsconfig.json",
-    "typecheck:callback": "tsc --noEmit -p callback-src/tsconfig.json",
-    "typecheck:annotation": "tsc --noEmit -p preview-annotation-src/tsconfig.json",
+    "typecheck": "tsc-rs --noEmit -p convex/tsconfig.json",
+    "typecheck:callback": "tsc-rs --noEmit -p callback-src/tsconfig.json",
+    "typecheck:annotation": "tsc-rs --noEmit -p preview-annotation-src/tsconfig.json",
     "build:callback": "node scripts/build-callback-script.mjs",
     "build:annotation": "node scripts/build-annotation-script.mjs",
     "sync:prod-to-dev": "node scripts/sync-prod-to-dev.mjs",
@@ -70,6 +70,7 @@
     "cross-env": "^7.0.3",
     "esbuild": "^0.25.0",
     "html2canvas": "^1.4.1",
+    "tsc-rs": "0.1.0",
     "typescript": "7.0.1-rc",
     "vitest": "^3.2.4"
   }
