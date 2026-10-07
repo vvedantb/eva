@@ -36,3 +36,7 @@ minimumReleaseAgeExclude:
   # 2026-09-23 and the SDK tracks the sandbox API closely, so the 7-day soak
   # would keep eva a week behind every provider-side change we depend on.
   - "@vercel/sandbox"
+  # tsc-rs 0.1.0 (Rust port of tsc 7) published 2026-10-07; it runs every
+  # typecheck script, ~1.5x faster than Go tsc here. Drop after 2026-10-14.
+  - tsc-rs
+  - "@tsc-rs/*"
