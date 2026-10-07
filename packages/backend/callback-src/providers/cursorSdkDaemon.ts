@@ -4,7 +4,6 @@ import {
   CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
   CURSOR_TURN_WORKER_LEASE_GENERATION,
-  CURSOR_TURN_WORKER_LIFECYCLE,
   CURSOR_TURN_WORKER_PROMPT_FILE,
   CURSOR_TURN_WORKER_TURN_ID,
   DAEMON_OPTS_SIG,
@@ -77,7 +76,8 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-const PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
+const PROMPT_POLL_IDLE_INTERVAL_MS =
+  DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
 const PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 const WATCHDOG_TICK_MS = 5000;
 // Outer bound on one claimed turn. `runCursorSdkAttempt` already enforces the
@@ -116,7 +116,6 @@ export type CursorTurnWorkerExit =
   | { status: "exited"; code: number | null; signal: NodeJS.Signals | null }
   | { status: "spawn_error"; message: string };
 
-
 function cursorTurnWorkerEntryPath(): string {
   const entryPath = process.argv[1];
   if (!entryPath) {
@@ -133,24 +132,10 @@ function readCursorTurnWorkerClaim(): ClaimedTurn {
     throw new Error("Cursor turn worker prompt file is missing");
   }
   const prompt = readFileSync(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
-  if (CURSOR_TURN_WORKER_LIFECYCLE === "legacy") {
-    return {
-      lifecycle: "legacy",
-      prompt,
-      attachmentUrls: [],
-      interactionMode: "default",
-      turnLease: null,
-    };
-  }
-  if (
-    CURSOR_TURN_WORKER_LIFECYCLE !== "durable" ||
-    !CURSOR_TURN_WORKER_TURN_ID ||
-    CURSOR_TURN_WORKER_LEASE_GENERATION <= 0
-  ) {
+  if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
   return {
-    lifecycle: "durable",
     prompt,
     attachmentUrls: [],
     interactionMode: "default",
@@ -207,17 +192,11 @@ export function buildCursorTurnWorkerEnv(
     ...baseEnv,
     ...mcpHandoffEnv,
     EVA_CURSOR_TURN_WORKER_PROMPT_FILE: promptFile,
-    EVA_CURSOR_TURN_WORKER_LIFECYCLE: turn.lifecycle,
-  };
-  if (turn.lifecycle === "durable") {
-    workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID = turn.turnLease.turnId;
-    workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION = String(
+    EVA_CURSOR_TURN_WORKER_TURN_ID: turn.turnLease.turnId,
+    EVA_CURSOR_TURN_WORKER_LEASE_GENERATION: String(
       turn.turnLease.leaseGeneration,
-    );
-  } else {
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID;
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION;
-  }
+    ),
+  };
   return workerEnv;
 }
 
@@ -252,7 +231,6 @@ function spawnCursorTurnWorker(
   }
   return child;
 }
-
 
 function readDaemonPidFile(): number {
   return readPidFromFile(daemonPaths.pid);

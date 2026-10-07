@@ -9,16 +9,22 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import {
-  chatAdapterForEntity,
-  chatEntityIdFromStream,
+  stalledAlert,
+  turnAdapterForEntity,
+  type AgentTurnOwner,
   type ChatEntityId,
   type ChatSurfaceAdapter,
 } from "./_chat/surfaceAdapters";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import {
-  touchStreamingEntity,
-  upsertStreamingActivity,
-} from "./streaming";
+  tearDownStaleDocWorkflow,
+  tearDownStaleEvaluationWorkflow,
+  tearDownStaleProjectWorkflow,
+  tearDownStaleSessionWorkflow,
+} from "./workflowWatchdog";
+import { tearDownStaleAutomationRun } from "./_automations/runs";
+import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
+import { clearStreamingActivity } from "./_taskWorkflow/helpers";
+import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
 import {
   authMutation,
   authQuery,
@@ -28,9 +34,11 @@ import {
 import {
   acquireTurnLease,
   advanceTurn,
+  bindTurnWorkflow,
   closeTurn,
   findOpenTurn,
   graceExpiredTurnLease,
+  openTurn,
   renewTurnLease,
   type ChatTurnEntityId,
 } from "./_chat/turnStore";
@@ -42,8 +50,11 @@ import {
 import type { ChatAlert } from "./_chat/surfaceAdapters";
 import {
   chatTurnEntityIdValidator,
+  turnEntityIdValidator,
+  turnLaneValidator,
   turnStateValidator,
 } from "./_validators/tableFields";
+import { normalizeAIModel } from "./_validators/aiModels";
 import {
   isLegacyChatExecuting,
   isLegacySessionExecuting,
@@ -189,34 +200,6 @@ async function applyFencedHeartbeat(
   return lease;
 }
 
-const legacyHeartbeatArgs = {
-  entityId: v.string(),
-  touchOnly: v.boolean(),
-  currentActivity: v.optional(v.string()),
-  currentContent: v.optional(v.string()),
-  pendingQuestion: v.optional(v.string()),
-};
-const legacyHeartbeatArgsValidator = v.object(legacyHeartbeatArgs);
-
-async function applyLegacyHeartbeat(
-  ctx: MutationCtx,
-  args: Infer<typeof legacyHeartbeatArgsValidator>,
-): Promise<boolean> {
-  const entityId = chatEntityIdFromStream(ctx.db, args.entityId);
-  if (entityId && (await findOpenTurn(ctx, entityId))) return false;
-  if (args.touchOnly) {
-    await touchStreamingEntity(ctx, args.entityId);
-  } else {
-    await upsertStreamingActivity(ctx, {
-      entityId: args.entityId,
-      currentActivity: args.currentActivity ?? "[]",
-      currentContent: args.currentContent,
-      pendingQuestion: args.pendingQuestion,
-    });
-  }
-  return true;
-}
-
 /** Renews the exact lease generation presented by a sandbox runner. */
 export const renew = internalMutation({
   args: {
@@ -244,36 +227,6 @@ export const heartbeatFromCallback = authMutation({
   }),
 });
 
-/** Legacy callbacks may write only while no durable Turn owns the chat. */
-export const legacyHeartbeat = internalMutation({
-  args: legacyHeartbeatArgs,
-  returns: v.boolean(),
-  handler: applyLegacyHeartbeat,
-});
-
-/** Authenticated legacy fallback with the same durable ownership gate. */
-const legacyHeartbeatResultValidator = v.object({
-  accepted: v.boolean(),
-  lease: v.union(leaseVerdictValidator, v.null()),
-});
-
-export const legacyHeartbeatFromCallback = authMutation({
-  args: legacyHeartbeatArgs,
-  returns: legacyHeartbeatResultValidator,
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof legacyHeartbeatResultValidator>> => {
-    const accepted = await applyLegacyHeartbeat(ctx, args);
-    return {
-      accepted,
-      lease: accepted
-        ? null
-        : { status: "terminal", reason: "superseded" },
-    };
-  },
-});
-
 /** Records that durable sandbox preparation has reached the launch phase. */
 export const markLaunching = internalMutation({
   args: {
@@ -284,6 +237,54 @@ export const markLaunching = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (turn) await advanceTurn(ctx, turn, "launching", args);
+    return null;
+  },
+});
+
+/**
+ * Opens a one-shot agent's turn already leased: the launch that follows starts
+ * the process that owns it. Binds the calling workflow so the reconciler can
+ * tear that workflow down if the agent stalls.
+ */
+export const openAgentTurnLease = internalMutation({
+  args: {
+    entityId: turnEntityIdValidator,
+    lane: v.optional(turnLaneValidator),
+    streamingEntityId: v.string(),
+    model: v.optional(v.string()),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    workflowId: v.string(),
+  },
+  returns: leaseIdentityValidator,
+  handler: async (ctx, args) => {
+    const turnId = await openTurn(ctx, {
+      entityId: args.entityId,
+      lane: args.lane,
+      streamingEntityId: args.streamingEntityId,
+      model: normalizeAIModel(args.model),
+      sandboxId: args.sandboxId,
+      repoId: args.repoId,
+    });
+    await bindTurnWorkflow(ctx, turnId, args.workflowId);
+    const turn = await ctx.db.get(turnId);
+    const lease = turn
+      ? await acquireTurnLease(ctx, turn, "running", {
+          sandboxId: args.sandboxId,
+        })
+      : null;
+    if (!lease) throw new Error("Agent turn lease was not acquired");
+    return lease;
+  },
+});
+
+/** Closes one agent turn, e.g. when its process failed to launch. */
+export const closeAgentTurn = internalMutation({
+  args: { turnId: v.id("turns"), error: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) await closeTurn(ctx, turn, "error", { error: args.error });
     return null;
   },
 });
@@ -418,6 +419,83 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
   }
 }
 
+/**
+ * Finalises one expired agent turn (a quick-task run or a one-shot agent)
+ * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
+ * teardown the 2-hour backstop uses for the others.
+ */
+async function finalizeExpiredAgentTurn(
+  ctx: MutationCtx,
+  owner: AgentTurnOwner,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - (turn.leaseExpiresAt - leaseDurationMs)) / 1000),
+  );
+  const error = `Agent stalled: no heartbeat for ${staleSeconds}s (${cause})`;
+  console.log(
+    `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
+  );
+  const workflowId = turn.workflowId;
+  switch (owner.kind) {
+    case "run":
+      await finalizeStalledRun(ctx, owner.id, {
+        ...stalledRunStop({
+          state: turn.state,
+          hasSandbox: turn.sandboxId !== undefined,
+          staleSeconds,
+        }),
+        sandboxId: turn.sandboxId,
+      });
+      break;
+    case "automation":
+      if (workflowId !== undefined) {
+        await tearDownStaleAutomationRun(
+          ctx,
+          owner.id,
+          workflowId,
+          { sandboxId: turn.sandboxId, repoId: turn.repoId },
+          error,
+        );
+      }
+      break;
+    case "doc":
+      if (workflowId !== undefined) {
+        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "evaluation":
+      if (workflowId !== undefined) {
+        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "summary":
+      if (workflowId !== undefined) {
+        await tearDownStaleSessionWorkflow(
+          ctx,
+          owner.id,
+          workflowId,
+          stalledAlert(
+            staleSeconds,
+            turn.state,
+            Math.round(leaseDurationMs / 1000),
+          ),
+        );
+      }
+      break;
+    case "interview":
+      if (workflowId !== undefined) {
+        await tearDownStaleProjectWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+  }
+  await clearStreamingActivity(ctx, turn.streamingEntityId);
+  await closeTurn(ctx, turn, "error", { error });
+}
+
 /** Re-reads and converges one expired lease; a concurrent renewal always wins. */
 export const finalizeExpired = internalMutation({
   args: {
@@ -432,9 +510,11 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    await chatAdapterForEntity(ctx.db, turn.entityId, (adapter, id) =>
-      finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
-    );
+    await turnAdapterForEntity(ctx.db, turn, {
+      chat: (adapter, id) =>
+        finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
+      agent: (owner) => finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
+    });
     return null;
   },
 });

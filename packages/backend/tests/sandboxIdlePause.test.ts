@@ -179,8 +179,7 @@ describe("idle pause sweep", () => {
       await setMode(t, "on");
       await t.run(async (ctx) => {
         await ctx.db.insert("turns", {
-          surface: "session",
-          entityId: String(sessionId),
+          entityId: sessionId,
           streamingEntityId: String(sessionId),
           state: "running",
           open: true,
@@ -249,8 +248,7 @@ describe("idle pause sweep", () => {
       await setMode(t, "on");
       await t.run(async (ctx) => {
         await ctx.db.insert("turns", {
-          surface: "session",
-          entityId: String(sessionId),
+          entityId: sessionId,
           streamingEntityId: String(sessionId),
           state: "running",
           open: true,

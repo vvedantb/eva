@@ -248,14 +248,36 @@ export const chatTurnEntityIdValidator = v.union(
   v.id("projects"),
 );
 
-/** Durable ownership record for one chat turn (session, task chat or project chat). */
+/**
+ * Every durable turn owner: the three chats, quick-task runs, and the rows the
+ * one-shot agents work on (automation runs, docs, evaluation reports).
+ */
+export const turnEntityIdValidator = v.union(
+  v.id("sessions"),
+  v.id("agentTasks"),
+  v.id("projects"),
+  v.id("agentRuns"),
+  v.id("automationRuns"),
+  v.id("docs"),
+  v.id("evaluationReports"),
+);
+
+/**
+ * A one-shot agent that works on a row which also owns chat turns. The lane
+ * keeps its turn apart from the chat's: chat turns leave it unset.
+ */
+export const turnLaneValidator = v.union(
+  v.literal("summary"),
+  v.literal("interview"),
+);
+
+export type TurnLane = Infer<typeof turnLaneValidator>;
+
+/** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
 export const turnFields = {
-  /**
-   * Retired: `entityId` already names the table. No longer written; drained by
-   * `dataMigrations:clearTurnSurface`, then deleted.
-   */
-  surface: v.optional(v.literal("session")),
-  entityId: chatTurnEntityIdValidator,
+  // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
+  entityId: turnEntityIdValidator,
+  lane: v.optional(turnLaneValidator),
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -336,12 +358,10 @@ export const chatDaemonEntityFields = {
   // hands back an empty claim so a dying daemon cannot take the turn (and its
   // 2-minute running lease) with it.
   claimPausedUntil: v.optional(v.number()),
-  /**
-   * Retired: the durable turn's lease now tells "claimed" from "wiped by a
-   * cancel race". No longer written or read. Delete after the
-   * `dataMigrations:clear{Session,Task,Project}PendingTurnClaimedAt` runs.
-   */
-  pendingTurnClaimedAt: v.optional(v.number()),
+  // The retired claim stamp field is removed; 0 prod rows held it on 2026-10-07.
+  // schema-narrowing-ok: clearSessionPendingTurnClaimedAt
+  // schema-narrowing-ok: clearTaskPendingTurnClaimedAt
+  // schema-narrowing-ok: clearProjectPendingTurnClaimedAt
 };
 
 export const agentTaskFields = {

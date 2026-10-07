@@ -53,6 +53,7 @@ import type * as _ave_context from "../_ave/context.js";
 import type * as _ave_prompt from "../_ave/prompt.js";
 import type * as _ave_run from "../_ave/run.js";
 import type * as _ave_threads from "../_ave/threads.js";
+import type * as _chat_agentStreamIds from "../_chat/agentStreamIds.js";
 import type * as _chat_cancelRace from "../_chat/cancelRace.js";
 import type * as _chat_cancelledMessage from "../_chat/cancelledMessage.js";
 import type * as _chat_chatParent from "../_chat/chatParent.js";
@@ -222,6 +223,7 @@ import type * as _sandbox_tags from "../_sandbox/tags.js";
 import type * as _sandbox_vercelEnvFile from "../_sandbox/vercelEnvFile.js";
 import type * as _sandbox_vercelProvider from "../_sandbox/vercelProvider.js";
 import type * as _sandbox_vercelSnapshotOptions from "../_sandbox/vercelSnapshotOptions.js";
+import type * as _sandbox_runtime_agentLaunchStep from "../_sandbox_runtime/agentLaunchStep.js";
 import type * as _sandbox_runtime_attachments from "../_sandbox_runtime/attachments.js";
 import type * as _sandbox_runtime_backgroundProcesses from "../_sandbox_runtime/backgroundProcesses.js";
 import type * as _sandbox_runtime_bulkSnapshotRetention from "../_sandbox_runtime/bulkSnapshotRetention.js";
@@ -315,6 +317,7 @@ import type * as _taskWorkflow_resolveBaseBranch from "../_taskWorkflow/resolveB
 import type * as _taskWorkflow_runLifecycle from "../_taskWorkflow/runLifecycle.js";
 import type * as _taskWorkflow_scheduling from "../_taskWorkflow/scheduling.js";
 import type * as _taskWorkflow_staleness from "../_taskWorkflow/staleness.js";
+import type * as _taskWorkflow_startRun from "../_taskWorkflow/startRun.js";
 import type * as _taskWorkflow_uiImplementationPrompt from "../_taskWorkflow/uiImplementationPrompt.js";
 import type * as _taskWorkflow_urls from "../_taskWorkflow/urls.js";
 import type * as _taskWorkflow_usageLimitReset from "../_taskWorkflow/usageLimitReset.js";
@@ -566,6 +569,7 @@ declare const fullApi: ApiFromModules<{
   "_ave/prompt": typeof _ave_prompt;
   "_ave/run": typeof _ave_run;
   "_ave/threads": typeof _ave_threads;
+  "_chat/agentStreamIds": typeof _chat_agentStreamIds;
   "_chat/cancelRace": typeof _chat_cancelRace;
   "_chat/cancelledMessage": typeof _chat_cancelledMessage;
   "_chat/chatParent": typeof _chat_chatParent;
@@ -735,6 +739,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/vercelEnvFile": typeof _sandbox_vercelEnvFile;
   "_sandbox/vercelProvider": typeof _sandbox_vercelProvider;
   "_sandbox/vercelSnapshotOptions": typeof _sandbox_vercelSnapshotOptions;
+  "_sandbox_runtime/agentLaunchStep": typeof _sandbox_runtime_agentLaunchStep;
   "_sandbox_runtime/attachments": typeof _sandbox_runtime_attachments;
   "_sandbox_runtime/backgroundProcesses": typeof _sandbox_runtime_backgroundProcesses;
   "_sandbox_runtime/bulkSnapshotRetention": typeof _sandbox_runtime_bulkSnapshotRetention;
@@ -828,6 +833,7 @@ declare const fullApi: ApiFromModules<{
   "_taskWorkflow/runLifecycle": typeof _taskWorkflow_runLifecycle;
   "_taskWorkflow/scheduling": typeof _taskWorkflow_scheduling;
   "_taskWorkflow/staleness": typeof _taskWorkflow_staleness;
+  "_taskWorkflow/startRun": typeof _taskWorkflow_startRun;
   "_taskWorkflow/uiImplementationPrompt": typeof _taskWorkflow_uiImplementationPrompt;
   "_taskWorkflow/urls": typeof _taskWorkflow_urls;
   "_taskWorkflow/usageLimitReset": typeof _taskWorkflow_usageLimitReset;

@@ -1,6 +1,11 @@
 import { v } from "convex/values";
+import { settleAgentTurnCompletion } from "../_chat/turnStore";
 import type { GenericDatabaseReader } from "convex/server";
-import { internalMutation, internalQuery } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
   automationRunFields,
@@ -8,6 +13,7 @@ import {
   findingTriageValidator,
   runStatusValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { cancelTrackedWorkflow } from "../workflowManager";
@@ -35,10 +41,12 @@ async function loadRunWithAccess(
 }
 import { taskCompleteEvent } from "../_taskWorkflow/events";
 import {
+  clearStreamingActivity,
   recordCompletionLog,
   sendCompletionEvent,
 } from "../_taskWorkflow/helpers";
 import { listAutomationsForRepo } from "./helpers";
+import { automationRunStreamingEntityId } from "../_chat/agentStreamIds";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
 export const listRuns = authQuery({
@@ -324,7 +332,7 @@ export const cancelRun = authMutation({
       activeWorkflowId: undefined,
     });
 
-    const streamingEntityId = `automation-run-${String(args.runId)}`;
+    const streamingEntityId = automationRunStreamingEntityId(args.runId);
     const streaming = await ctx.db
       .query("streamingActivity")
       .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
@@ -346,11 +354,23 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.automationRunId);
     if (!run || !run.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.automationRunId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, taskCompleteEvent, run.activeWorkflowId, {
       success: args.success,
@@ -373,3 +393,34 @@ export const handleCompletion = authMutation({
     return null;
   },
 });
+
+/**
+ * Tears down an automation run whose agent stalled (the lease reconciler gave
+ * up on it). Cancelling the workflow skips its `finally`, so the ephemeral
+ * sandbox is deleted here too.
+ */
+export async function tearDownStaleAutomationRun(
+  ctx: MutationCtx,
+  runId: Id<"automationRuns">,
+  workflowId: string,
+  sandbox: { sandboxId: string | undefined; repoId: Id<"githubRepos"> },
+  error: string,
+): Promise<void> {
+  const run = await ctx.db.get(runId);
+  if (!run || run.activeWorkflowId !== workflowId) return;
+
+  await cancelTrackedWorkflow(ctx, workflowId);
+  await ctx.db.patch(runId, {
+    status: "error",
+    error,
+    finishedAt: Date.now(),
+    activeWorkflowId: undefined,
+  });
+  await clearStreamingActivity(ctx, automationRunStreamingEntityId(runId));
+  if (sandbox.sandboxId !== undefined) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+      sandboxId: sandbox.sandboxId,
+      repoId: sandbox.repoId,
+    });
+  }
+}

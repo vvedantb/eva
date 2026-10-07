@@ -23,6 +23,7 @@ import {
   trackAgentTaskChatWorkflow,
   trackProjectChatWorkflow,
   trackSessionWorkflow,
+  type ChatAlert,
 } from "./_chat/surfaceAdapters";
 import {
   cancelStaleWorkflow,
@@ -128,25 +129,40 @@ export const handleStaleSession = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await sessionChatAdapter.getEntity(ctx, args.sessionId);
-    if (
-      !session ||
-      sessionChatAdapter.activeWorkflowId(session) !== args.workflowId
-    )
-      return null;
-
-    await finalizeStaleChatTurn(
+    await tearDownStaleSessionWorkflow(
       ctx,
-      sessionChatAdapter,
       args.sessionId,
-      session,
       args.workflowId,
       sessionChatAdapter.alerts.timeout,
     );
-
     return null;
   },
 });
+
+/**
+ * Tears down a session workflow the 2-hour backstop or the lease reconciler
+ * gave up on (a session summary has no chat turn of its own). No-op once the
+ * session tracks another workflow.
+ */
+export async function tearDownStaleSessionWorkflow(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  workflowId: string,
+  alert: ChatAlert,
+): Promise<void> {
+  const session = await sessionChatAdapter.getEntity(ctx, sessionId);
+  if (!session || sessionChatAdapter.activeWorkflowId(session) !== workflowId) {
+    return;
+  }
+  await finalizeStaleChatTurn(
+    ctx,
+    sessionChatAdapter,
+    sessionId,
+    session,
+    workflowId,
+    alert,
+  );
+}
 
 /**
  * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
@@ -191,29 +207,37 @@ export const handleStaleEvaluation = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const report = await ctx.db.get(args.reportId);
-    if (!report || report.activeWorkflowId !== args.workflowId) return null;
-
-    await cancelStaleWorkflow(ctx, args.workflowId, [String(args.reportId)]);
-
-    if (report.status === "completed" && report.fixStatus === "fixing") {
-      await ctx.db.patch(args.reportId, {
-        fixStatus: "fix_error",
-        activeWorkflowId: undefined,
-        updatedAt: Date.now(),
-      });
-    } else {
-      await ctx.db.patch(args.reportId, {
-        status: "error",
-        error: "Evaluation timed out",
-        activeWorkflowId: undefined,
-        updatedAt: Date.now(),
-      });
-    }
-
+    await tearDownStaleEvaluationWorkflow(ctx, args.reportId, args.workflowId);
     return null;
   },
 });
+
+/** Cancels a stale evaluation or fix workflow and marks the report failed. */
+export async function tearDownStaleEvaluationWorkflow(
+  ctx: MutationCtx,
+  reportId: Id<"evaluationReports">,
+  workflowId: string,
+): Promise<void> {
+  const report = await ctx.db.get(reportId);
+  if (!report || report.activeWorkflowId !== workflowId) return;
+
+  await cancelStaleWorkflow(ctx, workflowId, [String(reportId)]);
+
+  if (report.status === "completed" && report.fixStatus === "fixing") {
+    await ctx.db.patch(reportId, {
+      fixStatus: "fix_error",
+      activeWorkflowId: undefined,
+      updatedAt: Date.now(),
+    });
+  } else {
+    await ctx.db.patch(reportId, {
+      status: "error",
+      error: "Evaluation timed out",
+      activeWorkflowId: undefined,
+      updatedAt: Date.now(),
+    });
+  }
+}
 
 /** Cancels a stale doc workflow and updates interview history with an error marker. */
 export const handleStaleDoc = internalMutation({
@@ -223,16 +247,24 @@ export const handleStaleDoc = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || doc.activeWorkflowId !== args.workflowId) return null;
-
-    await cancelStaleWorkflow(ctx, args.workflowId, [String(args.docId)]);
-
-    await ctx.db.patch(args.docId, buildStaleDocPatch(doc, Date.now()));
-
+    await tearDownStaleDocWorkflow(ctx, args.docId, args.workflowId);
     return null;
   },
 });
+
+/** Cancels a stale doc workflow (PR recap, doc interview, test generation) and marks the doc failed. */
+export async function tearDownStaleDocWorkflow(
+  ctx: MutationCtx,
+  docId: Id<"docs">,
+  workflowId: string,
+): Promise<void> {
+  const doc = await ctx.db.get(docId);
+  if (!doc || doc.activeWorkflowId !== workflowId) return;
+
+  await cancelStaleWorkflow(ctx, workflowId, [String(docId)]);
+
+  await ctx.db.patch(docId, buildStaleDocPatch(doc, Date.now()));
+}
 
 /** Cancels a stale project workflow and marks the last message as timed out. */
 export const handleStaleProject = internalMutation({
@@ -242,27 +274,35 @@ export const handleStaleProject = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || project.activeWorkflowId !== args.workflowId) return null;
-
-    await cancelStaleWorkflow(ctx, args.workflowId, [String(args.projectId)]);
-
-    const conversation = await getProjectConversation(ctx.db, args.projectId);
-    const messages = [...conversation];
-    const last = messages[messages.length - 1];
-    if (last && last.role === "assistant" && !last.content) {
-      last.content = JSON.stringify({ error: true });
-    }
-
-    await setProjectConversation(ctx.db, args.projectId, messages);
-    await ctx.db.patch(args.projectId, {
-      activeWorkflowId: undefined,
-      lastSandboxActivity: Date.now(),
-    });
-
+    await tearDownStaleProjectWorkflow(ctx, args.projectId, args.workflowId);
     return null;
   },
 });
+
+/** Cancels a stale project interview or spec workflow and marks the last message failed. */
+export async function tearDownStaleProjectWorkflow(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  workflowId: string,
+): Promise<void> {
+  const project = await ctx.db.get(projectId);
+  if (!project || project.activeWorkflowId !== workflowId) return;
+
+  await cancelStaleWorkflow(ctx, workflowId, [String(projectId)]);
+
+  const conversation = await getProjectConversation(ctx.db, projectId);
+  const messages = [...conversation];
+  const last = messages[messages.length - 1];
+  if (last && last.role === "assistant" && !last.content) {
+    last.content = JSON.stringify({ error: true });
+  }
+
+  await setProjectConversation(ctx.db, projectId, messages);
+  await ctx.db.patch(projectId, {
+    activeWorkflowId: undefined,
+    lastSandboxActivity: Date.now(),
+  });
+}
 
 /** Cancels a stale project chat workflow via the 2-hour workflow-timeout backstop. */
 export const handleStaleProjectChat = internalMutation({

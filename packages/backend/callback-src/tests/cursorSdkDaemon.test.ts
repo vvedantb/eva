@@ -115,12 +115,12 @@ describe("the daemon preserves durable ownership from the claim response", () =>
         value: {
           prompt: "Fix the upload.",
           attachmentUrls: ["https://example.test/input.png", 42],
+          turnLifecycle: "durable",
           turnId: "turn-47",
           leaseGeneration: 3,
         },
       }),
     ).toEqual({
-      lifecycle: "durable",
       prompt: "Fix the upload.",
       attachmentUrls: ["https://example.test/input.png"],
       interactionMode: "default",
@@ -128,14 +128,8 @@ describe("the daemon preserves durable ownership from the claim response", () =>
     });
   });
 
-  test("keeps legacy claims usable without inventing a lease", () => {
-    expect(readClaimedTurn({ prompt: "Legacy turn" })).toEqual({
-      lifecycle: "legacy",
-      prompt: "Legacy turn",
-      attachmentUrls: [],
-      interactionMode: "default",
-      turnLease: null,
-    });
+  test("a prompt without a lease is no claim", () => {
+    expect(readClaimedTurn({ prompt: "Turn without a lease" })).toBeNull();
   });
 });
 
@@ -179,11 +173,10 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
         EVA_MCP_BASE_URL: "https://example.convex.site",
       },
       {
-        lifecycle: "legacy",
         prompt: "p",
         attachmentUrls: [],
         interactionMode: "default",
-        turnLease: null,
+        turnLease: { turnId: "turn-1", leaseGeneration: 1 },
       },
       "/tmp/eva-cursor-turn-1.txt",
     );
@@ -192,8 +185,7 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
     expect(env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE).toBe(
       "/tmp/eva-cursor-turn-1.txt",
     );
-    expect(env.EVA_CURSOR_TURN_WORKER_LIFECYCLE).toBe("legacy");
-    expect(env.EVA_CURSOR_TURN_WORKER_TURN_ID).toBeUndefined();
+    expect(env.EVA_CURSOR_TURN_WORKER_TURN_ID).toBe("turn-1");
   });
 
   test("a durable lease rides the worker env alongside the MCP handoff", () => {
@@ -201,7 +193,6 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
       {},
       {},
       {
-        lifecycle: "durable",
         prompt: "p",
         attachmentUrls: [],
         interactionMode: "default",
@@ -254,9 +245,18 @@ describe("the cursor daemon's per-turn ordering", () => {
     const resetAt = worker.indexOf("resetTurnState()");
     const leaseAt = worker.indexOf("startClaimedTurn(turn)");
     const executeAt = worker.indexOf("executeClaimedTurn(turn)");
-    expect(resetAt, "the worker no longer clears per-turn state").toBeGreaterThan(-1);
-    expect(leaseAt, "the worker no longer installs the claimed lease").toBeGreaterThan(-1);
-    expect(executeAt, "the worker no longer executes the claimed turn").toBeGreaterThan(-1);
+    expect(
+      resetAt,
+      "the worker no longer clears per-turn state",
+    ).toBeGreaterThan(-1);
+    expect(
+      leaseAt,
+      "the worker no longer installs the claimed lease",
+    ).toBeGreaterThan(-1);
+    expect(
+      executeAt,
+      "the worker no longer executes the claimed turn",
+    ).toBeGreaterThan(-1);
     expect(
       prepareAt,
       "session prep moved out of the turn loop",
@@ -342,9 +342,10 @@ describe("the cursor daemon's per-turn ordering", () => {
     );
     const workerAt = entry.indexOf("if (IS_CURSOR_TURN_WORKER)");
     const readyUnlinkAt = entry.indexOf("unlinkSync(READY_FILE)");
-    expect(workerAt, "the disposable worker entrypoint is missing").toBeGreaterThan(
-      -1,
-    );
+    expect(
+      workerAt,
+      "the disposable worker entrypoint is missing",
+    ).toBeGreaterThan(-1);
     expect(
       readyUnlinkAt,
       "the parent ready-marker initialization moved",

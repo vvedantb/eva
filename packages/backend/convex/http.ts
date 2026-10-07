@@ -8,10 +8,7 @@ import {
   previewActivityHmacMessage,
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
-import {
-  parseCiPassed,
-  parseRepoEvents,
-} from "./_automationEvents/events";
+import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
 
 const http = httpRouter();
 
@@ -109,51 +106,33 @@ http.route({
         status: 500,
       });
     }
-    const validCurrent = timingSafeEqual(hmac, expected);
-    // Warm callbacks launched before domain separation still sign their raw
-    // entity id. Keep that narrow compatibility path, but never for the old
-    // catalog namespace whose credential caused the cross-route collision.
-    const legacyExpected = validCurrent
-      ? null
-      : await computeScopedHmac(entityId);
-    const validLegacy =
-      !entityId.startsWith("harness-catalog:") &&
-      legacyExpected !== null &&
-      timingSafeEqual(hmac, legacyExpected);
-    if (!validCurrent && !validLegacy) {
+    if (!timingSafeEqual(hmac, expected)) {
       return new Response("Invalid heartbeat signature", { status: 401 });
     }
 
+    // Every agent turn holds a durable lease. A heartbeat without one comes
+    // from a process no turn owns, so it is told to stop.
     const turnId = params.get("turnId");
-    if (turnId !== null) {
-      const leaseGeneration = Number(params.get("leaseGeneration"));
-      if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
-        return new Response("Invalid turn lease generation", { status: 400 });
-      }
-      const lease = await ctx.runMutation(internal.turns.heartbeat, {
-        turnId,
-        leaseGeneration,
-        entityId,
-        touchOnly,
-        currentActivity: currentActivity ?? undefined,
-        currentContent: params.get("currentContent") ?? "",
-        pendingQuestion: params.get("pendingQuestion") ?? undefined,
+    if (turnId === null) {
+      return Response.json({
+        ok: true,
+        lease: { status: "terminal", reason: "unknown_turn" },
       });
-      return Response.json({ ok: true, lease });
     }
-
-    const accepted = await ctx.runMutation(internal.turns.legacyHeartbeat, {
+    const leaseGeneration = Number(params.get("leaseGeneration"));
+    if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
+      return new Response("Invalid turn lease generation", { status: 400 });
+    }
+    const lease = await ctx.runMutation(internal.turns.heartbeat, {
+      turnId,
+      leaseGeneration,
       entityId,
       touchOnly,
       currentActivity: currentActivity ?? undefined,
       currentContent: params.get("currentContent") ?? "",
       pendingQuestion: params.get("pendingQuestion") ?? undefined,
     });
-    return Response.json({
-      ok: true,
-      accepted,
-      lease: accepted ? null : { status: "terminal", reason: "superseded" },
-    });
+    return Response.json({ ok: true, lease });
   }),
 });
 
@@ -807,7 +786,9 @@ http.route({
 function connectorAuthReturnUrl(returnPath: string | null): string {
   const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
   const path =
-    returnPath && returnPath.startsWith("/settings") && !returnPath.includes("//")
+    returnPath &&
+    returnPath.startsWith("/settings") &&
+    !returnPath.includes("//")
       ? returnPath
       : "/settings/connections";
   return `${webAppUrl}${path}`;
