@@ -1,6 +1,6 @@
-# Move quick-task runs onto the durable `turns` table (durable-turns Phase 6)
+# Move quick-task runs and one-shot agents onto the durable `turns` table (durable-turns Phases 6–7)
 
-Status: todo. Written 2026-10-07. Phase 6.0 (groundwork) done 2026-10-07. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5).
+Status: todo. Written 2026-10-07. Phase 6.0 (groundwork) done 2026-10-07. Phase 7 (one-shot agents) added 2026-10-07. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5).
 
 ## Goal
 
@@ -12,7 +12,7 @@ Quick-task and project-task runs (`agentRuns`, `taskExecutionWorkflow`) use the 
 - The run extends its sandbox deadline from the watchdog chain, not from the agent's own heartbeat.
 - The chats already moved. The run chain is the last per-entity stall chain that reads `streamingActivity.lastUpdatedAt`.
 
-**Out of scope:** the other one-shot agents (automations, PR recap, summarize, doc and project interview, evaluation, test generation). See "Old heartbeat path".
+**Also in scope (Phase 7, owner decision 2026-10-07):** the seven other one-shot agents move onto turns too, so every sandbox agent has one stall model and the old heartbeat path can be deleted.
 
 ## Current state
 
@@ -148,28 +148,67 @@ Do this at least 2 h plus one release after Phase 6.3, or after a production che
 - `cleanUpStaleRun` and `maybeScheduleQuickTaskRetry`.
 - `handleCompletion`'s latest-running-run check. It costs little and also guards a rival run of the same task.
 
-## Old heartbeat path after Phase 6
+### Phase 7: one-shot agents on durable turns
 
-`turns.legacyHeartbeat`, `turns.legacyHeartbeatFromCallback` and the no-`turnId` branch of `http.ts` `/api/streaming/heartbeat` **cannot be deleted after Phase 6**. The path writes only `streamingActivity` (no lease, no deadline). Remaining callers:
+Every sandbox agent that `launchOnExistingSandbox` starts opens a turn. Today these agents have only the 2-hour `handleStale*` backstop; nothing reads their heartbeat age.
 
-| Caller | Stream id | Who reads its freshness |
-|---|---|---|
-| Automations (`automationWorkflow.ts`) | `automation-run-<runId>` | nobody (2-hour backstop only) |
-| PR recap (`prRecapWorkflow.ts`) | `pr-recap:<docId>` | nobody |
-| Session summarize (`summarizeWorkflow.ts`) | `summary:<sessionId>` | nobody |
-| Doc interview and generate (`docInterviewWorkflow.ts`) | raw `docId` | nobody |
-| Project interview and spec (`projectInterviewWorkflow.ts`) | raw `projectId` | nobody |
-| Evaluation and eval-fix (`evaluationWorkflow.ts`) | raw `reportId` | nobody |
-| Test generation (`testGenWorkflow.ts`) | raw `docId` | nobody |
-| Session one-shot workflows started before the session cutover, and session claims of a `pendingTurn` without `turnId` | raw `sessionId` | gated by the open turn |
-| Cursor turn worker (`callback-src/providers/cursorSdkDaemon.ts`) under a legacy claim | parent stream id | gated |
+| Agent | Workflow | Turn owner (`entityId`) | `lane` | Stall teardown today |
+|---|---|---|---|---|
+| Automations | `automationWorkflow.ts` | `automationRuns` id | — | none (add one) |
+| PR recap | `prRecapWorkflow.ts` | `docs` id | — | none (add one) |
+| Doc interview and generate | `docInterviewWorkflow.ts` | `docs` id | — | `handleStaleDoc` |
+| Test generation | `testGenWorkflow.ts` | `docs` id | — | `handleStaleDoc` |
+| Evaluation and eval-fix | `evaluationWorkflow.ts` | `evaluationReports` id | — | `handleStaleEvaluation` |
+| Session summarize | `summarizeWorkflow.ts` | `sessions` id | `summary` | `handleStaleSession` |
+| Project interview and spec | `projectInterviewWorkflow.ts` | `projects` id | `interview` | `handleStaleProject` |
 
-`sandboxIdlePause` also reads `streamingActivity` freshness (15-minute window) for every row, so these writes keep a sandbox from pausing.
+**Why a lane (Decision 6):** summarize and project interview/spec run against a session or project row that already owns chat turns. Under one key, `getChatStatus` would show "Working…" during a summary, and `openTurn` for a chat would supersede (cancel) the summary turn. The lane keeps the two apart. Chat turns leave it unset.
 
-**To delete the path, all of these must also happen:**
-1. Move the seven one-shot agents onto turns, or replace their heartbeat with a plain, ungated stream write (see Open question 1).
-2. Session: no `pendingTurn` and no in-flight workflow without `turnId` (`_sessions/workflow.ts` claim and one-shot branches). Make `turnId` required there, as task and project chats did in Phase 5.
-3. Callback: delete the lease-less senders (`identity === null` fallbacks in `http/convexClient.ts`, legacy claim parsing in `claimedTurnLifecycle.ts`, the Cursor legacy worker), then the raw-`entityId` HMAC fallback in `http.ts`.
+#### Phase 7.0: groundwork (no behaviour change)
+
+1. **Schema:**
+   - Add `v.id("automationRuns")`, `v.id("docs")` and `v.id("evaluationReports")` to `turnEntityIdValidator`.
+   - Add `lane: v.optional(v.union(v.literal("summary"), v.literal("interview")))` to `turnFields`.
+   - Change `by_entity_open` to `["entityId", "lane", "open"]`. Chat readers (`findOpenTurn`, `hasOpenChatTurn`) query `lane === undefined`. A new `findOpenLaneTurn(entityId, lane)` serves the one-shots.
+   - `turnProjection.openChatEntityIdsForRepo` and `sandboxIdlePause` keep counting lane turns as "sandbox busy". Only chat UI status ignores them.
+2. **Adapter:** one `oneShotTurnAdapter` per owner (table plus lane): `parseId`, `streamingEntityId`, `parseStreamingEntityId` (`automation-run-`, `pr-recap:`, `summary:`, raw doc / report / project id), and `finalizeExpired`, which calls that agent's existing stall teardown. `turnAdapterForEntity` gains a `oneShot` handler and also receives `turn.lane`.
+   - Raw doc, report and project stream ids cannot tell the agent apart by prefix. The adapter maps a stream id to an owner only through the open turn (`by_entity_open`), not by parsing.
+3. **Completion:** add `turnLeaseFenceArgs` to every one-shot `handleCompletion` and ignore the values (the Phase 6.0 / chat Phase 1 rule).
+4. Centralise the stream-id strings that are inline today (`automation-run-`, `pr-recap:`, `summary:`) next to the other prefixes.
+
+#### Phase 7.1: open turns for one-shot agents (both systems run)
+
+The same method as Phase 6.2, per workflow:
+- Open the turn at the start site, start the workflow with an optional `turnId`, bind the workflow.
+- Gated steps: `markLaunching` after sandbox preparation; `acquireOneShotLease` before each `launchOnExistingSandbox`; pass `turnId` / `turnLeaseGeneration`.
+- Workflows with two launches (doc interview then generate, evaluation then eval-fix, interview then spec) open one turn per launch. They close the first before they open the next.
+- `handleCompletion` resolves the fence (`stale` → ignore; `current` → `finalizing`).
+- Close the turn in the workflow's `finally` and in every cancel and backstop path.
+- The reconciler still only closes one-shot turns. The 2-hour backstops stay.
+
+#### Phase 7.2: the lease becomes the stall authority
+
+- `finalizeExpired` calls each adapter's `finalizeExpired` (the existing teardown), then closes the turn.
+- Add the missing teardowns for automations and PR recap: mark the run or doc failed, clear the workflow pointer, clear the stream row.
+
+#### Phase 7.3: cleanup
+
+- Make `turnId` required on every one-shot workflow (after the drain rule).
+- Delete the old heartbeat path (below).
+
+### Deleting the old heartbeat path
+
+`turns.legacyHeartbeat`, `turns.legacyHeartbeatFromCallback` and the no-`turnId` branch of `http.ts` `/api/streaming/heartbeat` write only `streamingActivity` (no lease, no deadline). After Phases 6 and 7, these senders are left:
+- Session one-shot workflows without `turnId`, and session claims of a `pendingTurn` without `turnId` (`_sessions/workflow.ts`). Make `turnId` required there, as task and project chats did in chat Phase 5.
+- The Cursor turn worker under a legacy claim (`callback-src/providers/cursorSdkDaemon.ts`). It goes with the session legacy claim.
+
+**Delete, in order, after Phase 7.3 and the session clean-up:**
+1. Server: `legacyHeartbeat`, `legacyHeartbeatFromCallback`, `applyLegacyHeartbeat`, and the `http.ts` no-`turnId` branch (answer `terminal: unknown_turn`).
+2. Server: the raw-`entityId` HMAC fallback in `http.ts`.
+3. Callback: the lease-less senders (`identity === null` fallbacks in `http/convexClient.ts`), legacy claim parsing in `claimedTurnLifecycle.ts`, and the Cursor legacy worker.
+4. Tests: the legacy cases in `turnLifecycleIntegration.test.ts` and `turnLifecycleContract.test.ts`.
+
+`sandboxIdlePause` keeps reading `streamingActivity` freshness. Fenced heartbeats still write that row.
 
 ## Risks
 
@@ -181,7 +220,8 @@ Do this at least 2 h plus one release after Phase 6.3, or after a production che
 | A start site misses the turn | Phase 6.1 moves every start to one helper, pinned by a contract test |
 | The lease kills a frozen-but-alive run earlier than today | Decision 2 |
 | Post-agent steps (push, PR) outlive the 10-minute finalizing lease | Same limit as today (`STALE_FINISHING_THRESHOLD_MS`). The finalizing deadline extension keeps the sandbox up for it |
-| Reconcile load | The 25-per-tick batch now also covers runs. Check it against peak open turns plus running runs |
+| Reconcile load | The 25-per-tick batch now also covers runs and one-shot agents. Check it against peak open turns |
+| A lane turn shows as a chat turn | Chat readers query `lane === undefined`; a contract test pins every `by_entity_open` reader |
 | Two stall systems act on one run in 6.2 | Every stop path closes the turn; the reconciler only closes the turn |
 
 ## Tests
@@ -203,7 +243,5 @@ Do this at least 2 h plus one release after Phase 6.3, or after a production che
 3. **Keep the stop texts and `exitReason` values.** `maybeScheduleQuickTaskRetry` retries only when `isDaytonaNetworkIssue(error)` is true. None of today's watchdog texts pass that check, so a stalled run is stopped and not retried today. Phase 6 keeps that. Changing the retry rule is a separate decision.
 4. **Gate by the open turn, not a new step argument.** `updateRunToRunning` reads the open turn to decide whether to arm `checkStaleRuns` (the chat Phase 3 method).
 5. **Close the run turn at the end of the workflow, not at completion.** Push and PR creation are part of the run. The `finalizing` lease covers them, as `finalizingAt` does today.
-
-## Open questions
-
-1. **The seven other one-shot agents.** Option A: move them onto turns too (a later Phase 7). They gain a stall check; today only the 2-hour backstop covers them. Option B: keep their heartbeat as a plain stream write, renamed from "legacy", and delete only the gate. Without one of these, the old path stays.
+6. **Move every one-shot agent onto turns (owner, 2026-10-07).** One stall model for all sandbox agents, and the old heartbeat path can go (Phase 7).
+7. **An optional `lane` keeps one-shot turns apart from chat turns on the same row (owner, 2026-10-07).** Rejected: a new table with one row per one-shot job. It needs writes at every start site and adds a table for one field of information. This partly reverses chat decision 5 (no surface label), but only for the two owners that share a row.
