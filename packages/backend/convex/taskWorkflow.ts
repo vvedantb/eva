@@ -4,6 +4,7 @@ export { taskExecutionWorkflow } from "./_taskWorkflow/workflowDefinition";
 
 export {
   updateRunToRunning,
+  closeRunTurn,
   appendRunLog,
   saveSandboxId,
   saveTaskSandboxId,

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
 import { internal } from "../_generated/api";
 import {
   internalAction,
@@ -305,29 +306,22 @@ export const resolveProjectConflicts = authMutation({
       status: "in_progress",
       updatedAt: Date.now(),
     });
-
-    let workflowIdString = "";
     try {
-      const workflowId = await workflow.start(
-        ctx,
-        internal.taskWorkflow.taskExecutionWorkflow,
-        {
-          runId,
-          taskId: carrier._id,
-          repoId: project.repoId,
-          installationId: repo.installationId,
-          projectId: args.projectId,
-          branchName,
-          baseBranch,
-          isFirstTaskOnBranch: false,
-          model: carrier.model ?? repo.defaultModel,
-          providerAccountId: carrier.providerAccountId,
-          credentialOwnerUserId: carrier.createdBy,
-          userId: ctx.userId,
-          mode: "resolve_conflicts",
-        },
-      );
-      workflowIdString = String(workflowId);
+      await startTaskRunWorkflow(ctx, {
+        runId,
+        taskId: carrier._id,
+        repoId: project.repoId,
+        installationId: repo.installationId,
+        projectId: args.projectId,
+        branchName,
+        baseBranch,
+        isFirstTaskOnBranch: false,
+        model: carrier.model ?? repo.defaultModel,
+        providerAccountId: carrier.providerAccountId,
+        credentialOwnerUserId: carrier.createdBy,
+        userId: ctx.userId,
+        mode: "resolve_conflicts",
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to start workflow";
@@ -344,10 +338,6 @@ export const resolveProjectConflicts = authMutation({
       });
       throw error;
     }
-
-    await ctx.db.patch(carrier._id, {
-      activeWorkflowId: workflowIdString,
-    });
 
     return null;
   },

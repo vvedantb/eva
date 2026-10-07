@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
 import { aiModelValidator } from "./validators";
@@ -13,6 +14,7 @@ import {
 import { parseFindingsFromResult } from "./_automationWorkflow/findings";
 import { extractReadOnlyDeliverable } from "./_automationWorkflow/deliverable";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { automationRunStreamingEntityId } from "./_chat/agentStreamIds";
 
 /** Runs an automation: prepares sandbox, executes the prompt, optionally creates a PR, and cleans up. */
 export const automationExecutionWorkflow = workflow.define({
@@ -73,7 +75,7 @@ export const automationExecutionWorkflow = workflow.define({
               args.rootDirectory,
             );
 
-      const streamingEntityId = `automation-run-${String(args.runId)}`;
+      const streamingEntityId = automationRunStreamingEntityId(args.runId);
 
       ({ sandboxId } = await prepareSandboxSteps(step, {
         installationId: args.installationId,
@@ -95,22 +97,28 @@ export const automationExecutionWorkflow = workflow.define({
         sandboxId,
       });
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: String(args.runId),
-        prompt,
-        userId: args.userId,
-        completionMutation: "automations:handleCompletion",
-        entityIdField: "automationRunId",
-        model: args.model,
-        allowedTools: isReadOnly
-          ? "Read,Bash,Glob,Grep"
-          : "Read,Write,Edit,Bash,Glob,Grep",
-        repoId: sandboxRepoId,
-        streamingEntityId,
-        runId: String(args.runId),
-        requireTaskCommit: !isReadOnly,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: String(args.runId),
+          prompt,
+          userId: args.userId,
+          completionMutation: "automations:handleCompletion",
+          entityIdField: "automationRunId",
+          model: args.model,
+          allowedTools: isReadOnly
+            ? "Read,Bash,Glob,Grep"
+            : "Read,Write,Edit,Bash,Glob,Grep",
+          repoId: sandboxRepoId,
+          streamingEntityId,
+          runId: String(args.runId),
+          requireTaskCommit: !isReadOnly,
+        },
+        {
+          entityId: args.runId,
+        },
+      );
 
       const result = await step.awaitEvent(taskCompleteEvent);
 

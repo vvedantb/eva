@@ -163,43 +163,6 @@ export const clearProjectOrchestratorWatch = dataMigrations.define({
   },
 });
 
-/** Drains the retired `turns.surface` label before the field is deleted. */
-export const clearTurnSurface = dataMigrations.define({
-  table: "turns",
-  migrateOne: async (_ctx, turn) => {
-    if (turn.surface === undefined) return;
-    return { surface: undefined };
-  },
-});
-
-/**
- * Drains the retired `pendingTurnClaimedAt` claim stamp (the durable turn's
- * lease replaced it) before the field is deleted. One per chat table.
- */
-export const clearSessionPendingTurnClaimedAt = dataMigrations.define({
-  table: "sessions",
-  migrateOne: async (_ctx, row) => {
-    if (row.pendingTurnClaimedAt === undefined) return;
-    return { pendingTurnClaimedAt: undefined };
-  },
-});
-
-export const clearTaskPendingTurnClaimedAt = dataMigrations.define({
-  table: "agentTasks",
-  migrateOne: async (_ctx, row) => {
-    if (row.pendingTurnClaimedAt === undefined) return;
-    return { pendingTurnClaimedAt: undefined };
-  },
-});
-
-export const clearProjectPendingTurnClaimedAt = dataMigrations.define({
-  table: "projects",
-  migrateOne: async (_ctx, row) => {
-    if (row.pendingTurnClaimedAt === undefined) return;
-    return { pendingTurnClaimedAt: undefined };
-  },
-});
-
 export const clearQueuedOrchestratorNotification = dataMigrations.define({
   table: "queuedMessages",
   migrateOne: async (_ctx, row) => {

@@ -12,6 +12,10 @@ const helpers = readFileSync(
   join(repoRoot, "packages/backend/convex/_taskWorkflow/helpers.ts"),
   "utf8",
 );
+const streamIds = readFileSync(
+  join(repoRoot, "packages/backend/convex/_chat/agentStreamIds.ts"),
+  "utf8",
+);
 
 /**
  * A quick task's first run streams its live activity into the chat bubble by
@@ -33,6 +37,9 @@ test("the client mirrors the server's task-run streaming entity id", () => {
   expect(
     body,
     "the server's entity-id format changed; update taskRunStreamingEntityId",
-  ).toContain("return `task-run-${String(runId)}`;");
+  ).toContain("return `${TASK_RUN_STREAM_PREFIX}${String(runId)}`;");
+  expect(streamIds).toContain(
+    'export const TASK_RUN_STREAM_PREFIX = "task-run-";',
+  );
   expect(taskRunStreamingEntityId("run-1")).toBe("task-run-run-1");
 });
