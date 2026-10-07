@@ -7,7 +7,11 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackProjectWorkflow } from "./workflowWatchdog";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { PROJECT_INTERVIEW_SYSTEM_PROMPT, SPEC_SYSTEM_PROMPT } from "./prompts";

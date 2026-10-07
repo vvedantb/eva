@@ -100,7 +100,7 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
 };
 
 /** Alert text shared by every surface when the agent process itself has gone silent (not the sandbox VM). */
-function stalledAlert(
+export function stalledAlert(
   staleSeconds: number,
   phase: string,
   thresholdSeconds: number,
@@ -504,22 +504,24 @@ function keyOf(
 }
 
 /**
- * The turn owner whose agent writes this streamingActivity row, if any. Chats
- * and prefixed agent rows first; a bare doc, report or project id is a doc
+ * The turn owner whose agent writes this streamingActivity row, if any.
+ * Prefixed agent rows, then chats; a bare doc, report or project id is a doc
  * agent, an evaluation, or a project interview (a project chat is prefixed).
  */
 export function turnOwnerFromStream(
   db: DatabaseReader,
   streamingEntityId: string,
 ): TurnOwnerKey | null {
-  for (const adapter of chatSurfaceAdapters) {
-    const id = adapter.parseStreamingEntityId(db, streamingEntityId);
-    if (id) return { entityId: id };
-  }
+  // Agent prefixes first: `summary:<sessionId>` must never parse as the
+  // session's own (bare-id) chat row.
   for (const { prefix, parse } of AGENT_STREAM_PREFIXES) {
     if (streamingEntityId.startsWith(prefix)) {
       return parse(db, streamingEntityId.slice(prefix.length));
     }
+  }
+  for (const adapter of chatSurfaceAdapters) {
+    const id = adapter.parseStreamingEntityId(db, streamingEntityId);
+    if (id) return { entityId: id };
   }
   return (
     keyOf(db.normalizeId("docs", streamingEntityId)) ??

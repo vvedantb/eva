@@ -317,6 +317,7 @@ import type * as _taskWorkflow_resolveBaseBranch from "../_taskWorkflow/resolveB
 import type * as _taskWorkflow_runLifecycle from "../_taskWorkflow/runLifecycle.js";
 import type * as _taskWorkflow_scheduling from "../_taskWorkflow/scheduling.js";
 import type * as _taskWorkflow_staleness from "../_taskWorkflow/staleness.js";
+import type * as _taskWorkflow_startRun from "../_taskWorkflow/startRun.js";
 import type * as _taskWorkflow_uiImplementationPrompt from "../_taskWorkflow/uiImplementationPrompt.js";
 import type * as _taskWorkflow_urls from "../_taskWorkflow/urls.js";
 import type * as _taskWorkflow_usageLimitReset from "../_taskWorkflow/usageLimitReset.js";
@@ -831,6 +832,7 @@ declare const fullApi: ApiFromModules<{
   "_taskWorkflow/runLifecycle": typeof _taskWorkflow_runLifecycle;
   "_taskWorkflow/scheduling": typeof _taskWorkflow_scheduling;
   "_taskWorkflow/staleness": typeof _taskWorkflow_staleness;
+  "_taskWorkflow/startRun": typeof _taskWorkflow_startRun;
   "_taskWorkflow/uiImplementationPrompt": typeof _taskWorkflow_uiImplementationPrompt;
   "_taskWorkflow/urls": typeof _taskWorkflow_urls;
   "_taskWorkflow/usageLimitReset": typeof _taskWorkflow_usageLimitReset;

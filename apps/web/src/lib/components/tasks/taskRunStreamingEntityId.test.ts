@@ -38,6 +38,8 @@ test("the client mirrors the server's task-run streaming entity id", () => {
     body,
     "the server's entity-id format changed; update taskRunStreamingEntityId",
   ).toContain("return `${TASK_RUN_STREAM_PREFIX}${String(runId)}`;");
-  expect(streamIds).toContain('export const TASK_RUN_STREAM_PREFIX = "task-run-";');
+  expect(streamIds).toContain(
+    'export const TASK_RUN_STREAM_PREFIX = "task-run-";',
+  );
   expect(taskRunStreamingEntityId("run-1")).toBe("task-run-run-1");
 });

@@ -1,12 +1,15 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "./startRun";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
-import {
-  workflow,
-  cancelTrackedWorkflow,
-  toWorkflowId,
-} from "../workflowManager";
+import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
 import { authMutation, hasTaskAccess } from "../functions";
+import {
+  advanceTurn,
+  closeOpenTurn,
+  resolveCompletionTurn,
+} from "../_chat/turnStore";
+import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
 import {
   aiModelValidator,
   turnCheckpointArgs,
@@ -66,8 +69,7 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
-    // Accepted and ignored until runs open durable turns (durable-turns
-    // Phase 6). A daemon that holds a lease sends both on every completion.
+    // The run's lease, sent by every callback launched with one.
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
@@ -110,6 +112,33 @@ export const handleCompletion = authMutation({
       return ignoreStaleCompletionCallback(
         `run ${String(args.runId)} lost the race to active run ${String(latestRunningRun._id)}`,
       );
+    }
+
+    const turn = await resolveCompletionTurn(ctx, {
+      entityId: args.runId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+    });
+    if (turn.status === "stale") {
+      return ignoreStaleCompletionCallback(
+        `run ${String(args.runId)} completion holds a superseded lease`,
+      );
+    }
+    if (turn.status === "current") {
+      await advanceTurn(ctx, turn.turn, "finalizing");
+      // Push, PR and deployment tracking run after the agent exits, and no
+      // heartbeat renews the lease then. Keep the sandbox up for them.
+      if (turn.turn.sandboxId !== undefined) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.sandbox.extendSandboxDeadline,
+          {
+            sandboxId: turn.turn.sandboxId,
+            repoId: turn.turn.repoId,
+            durationMs: 2 * TURN_FINALIZING_LEASE_MS,
+          },
+        );
+      }
     }
 
     await ctx.db.patch(latestRunningRun._id, {
@@ -174,6 +203,7 @@ export const cancelExecution = authMutation({
       .first();
 
     if (run) {
+      await closeOpenTurn(ctx, run._id, "cancelled");
       await ctx.db.patch(run._id, {
         status: "cancelled",
         finalizingAt: undefined,
@@ -235,25 +265,17 @@ export const triggerExecution = authMutation({
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.taskWorkflow.taskExecutionWorkflow,
-      {
-        runId: args.runId,
-        taskId: args.taskId,
-        repoId: args.repoId,
-        installationId: repo.installationId,
-        projectId: args.projectId,
-        branchName: args.branchName,
-        baseBranch: args.baseBranch,
-        isFirstTaskOnBranch: args.isFirstTaskOnBranch,
-        model: args.model,
-        userId: ctx.userId,
-      },
-    );
-
-    await ctx.db.patch(args.taskId, {
-      activeWorkflowId: String(workflowId),
+    await startTaskRunWorkflow(ctx, {
+      runId: args.runId,
+      taskId: args.taskId,
+      repoId: args.repoId,
+      installationId: repo.installationId,
+      projectId: args.projectId,
+      branchName: args.branchName,
+      baseBranch: args.baseBranch,
+      isFirstTaskOnBranch: args.isFirstTaskOnBranch,
+      model: args.model,
+      userId: ctx.userId,
     });
 
     return null;

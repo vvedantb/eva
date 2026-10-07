@@ -1,10 +1,10 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
-import { workflow } from "../workflowManager";
 import type { Doc, Id } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
@@ -166,29 +166,21 @@ export const autoStartTask = internalMutation({
     });
 
     try {
-      const workflowId = await workflow.start(
-        ctx,
-        internal.taskWorkflow.taskExecutionWorkflow,
-        {
-          runId,
-          taskId: args.taskId,
-          repoId: task.repoId,
-          installationId: repo.installationId,
-          baseBranch: await resolveTaskWorkflowBaseBranchForTask(
-            ctx.db,
-            task,
-            repo,
-          ),
-          isFirstTaskOnBranch: true,
-          model: task.model ?? repo.defaultModel,
-          providerAccountId: task.providerAccountId,
-          credentialOwnerUserId: task.createdBy,
-          userId: args.userId,
-        },
-      );
-
-      await ctx.db.patch(args.taskId, {
-        activeWorkflowId: String(workflowId),
+      await startTaskRunWorkflow(ctx, {
+        runId,
+        taskId: args.taskId,
+        repoId: task.repoId,
+        installationId: repo.installationId,
+        baseBranch: await resolveTaskWorkflowBaseBranchForTask(
+          ctx.db,
+          task,
+          repo,
+        ),
+        isFirstTaskOnBranch: true,
+        model: task.model ?? repo.defaultModel,
+        providerAccountId: task.providerAccountId,
+        credentialOwnerUserId: task.createdBy,
+        userId: args.userId,
       });
     } catch (error) {
       const message =

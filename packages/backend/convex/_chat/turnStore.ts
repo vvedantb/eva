@@ -46,7 +46,10 @@ export type CompletionTurnResolution =
 export type TurnEntityId = Doc<"turns">["entityId"];
 
 /** Chat entities that own durable turns. */
-export type ChatTurnEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+export type ChatTurnEntityId =
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
 
 /**
  * The entity's open turn in one lane. Chat turns, runs and most one-shot

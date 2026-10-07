@@ -27,7 +27,9 @@ export function isLegacySessionExecuting(
 export function isLegacyChatExecuting(
   entity: Pick<
     Doc<"agentTasks"> | Doc<"projects">,
-    "activeChatWorkflowId" | "syntheticTurnMessageId" | "chatTurnLifecycleVersion"
+    | "activeChatWorkflowId"
+    | "syntheticTurnMessageId"
+    | "chatTurnLifecycleVersion"
   >,
 ): boolean {
   return (

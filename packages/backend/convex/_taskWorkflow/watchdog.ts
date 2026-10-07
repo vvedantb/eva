@@ -3,6 +3,7 @@ import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { cancelTrackedWorkflow } from "../workflowManager";
 import { buildTaskDoneEvent } from "./events";
+import { closeOpenTurn } from "../_chat/turnStore";
 import {
   cleanUpStaleRun,
   STALE_THRESHOLD_MS,
@@ -241,6 +242,9 @@ export const handleStaleRun = internalMutation({
         taskStatus: task.status,
       });
     } else {
+      await closeOpenTurn(ctx, args.runId, "error", {
+        error: "Run timed out after 2 hours",
+      });
       const taskStatus =
         run && run.status === "success" ? "business_review" : "todo";
       await ctx.db.patch(args.taskId, {

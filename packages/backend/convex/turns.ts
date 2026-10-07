@@ -9,7 +9,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import {
-  sessionChatAdapter,
+  stalledAlert,
   turnAdapterForEntity,
   turnOwnerFromStream,
   type AgentTurnOwner,
@@ -23,15 +23,9 @@ import {
   tearDownStaleSessionWorkflow,
 } from "./workflowWatchdog";
 import { tearDownStaleAutomationRun } from "./_automations/runs";
-import {
-  finalizeStalledRun,
-  stalledRunStop,
-} from "./_taskWorkflow/recovery";
+import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import {
-  touchStreamingEntity,
-  upsertStreamingActivity,
-} from "./streaming";
+import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
 import {
   authMutation,
   authQuery,
@@ -287,9 +281,7 @@ export const legacyHeartbeatFromCallback = authMutation({
     const accepted = await applyLegacyHeartbeat(ctx, args);
     return {
       accepted,
-      lease: accepted
-        ? null
-        : { status: "terminal", reason: "superseded" },
+      lease: accepted ? null : { status: "terminal", reason: "superseded" },
     };
   },
 });
@@ -545,7 +537,7 @@ async function finalizeExpiredAgentTurn(
           ctx,
           owner.id,
           workflowId,
-          sessionChatAdapter.alerts.stalled(
+          stalledAlert(
             staleSeconds,
             turn.state,
             Math.round(leaseDurationMs / 1000),
@@ -580,8 +572,7 @@ export const finalizeExpired = internalMutation({
     await turnAdapterForEntity(ctx.db, turn, {
       chat: (adapter, id) =>
         finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
-      agent: (owner) =>
-        finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
+      agent: (owner) => finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
     });
     return null;
   },

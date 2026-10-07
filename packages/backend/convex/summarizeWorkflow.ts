@@ -7,7 +7,11 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -141,7 +145,10 @@ export const saveResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, sessionSummaryStreamingEntityId(args.sessionId));
+    await clearStreamingActivity(
+      ctx,
+      sessionSummaryStreamingEntityId(args.sessionId),
+    );
 
     let summary: string[] = ["No summary available"];
 

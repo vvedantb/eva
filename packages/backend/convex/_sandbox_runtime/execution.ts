@@ -2432,7 +2432,6 @@ async function launchAgentOnSandbox(
   console.log(
     `[sandbox][execution] launchOnExistingSandbox finished in ${Date.now() - launchStartedAt}ms entityId=${args.entityId} sandboxId=${args.sandboxId}`,
   );
-
 }
 
 /** Launches an AI agent script on an existing sandbox with streaming and token setup. */

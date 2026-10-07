@@ -9,6 +9,7 @@ import {
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { buildTaskDoneEvent } from "./events";
+import { closeOpenTurn, findOpenTurn } from "../_chat/turnStore";
 import {
   STALE_CHECK_DELAY_MS,
   isUsageLimitError,
@@ -65,15 +66,35 @@ export const updateRunToRunning = internalMutation({
       },
     );
 
-    await ctx.scheduler.runAfter(
-      STALE_CHECK_DELAY_MS,
-      internal.taskWorkflow.checkStaleRuns,
-      {
-        runId: args.runId,
-        taskId: args.taskId,
-      },
-    );
+    // A run with a durable turn is watched by its lease (`turns.reconcile`).
+    // Reading the turn here, not a new argument, keeps this step's journal
+    // unchanged for runs started before durable run turns.
+    if ((await findOpenTurn(ctx, args.runId)) === null) {
+      await ctx.scheduler.runAfter(
+        STALE_CHECK_DELAY_MS,
+        internal.taskWorkflow.checkStaleRuns,
+        {
+          runId: args.runId,
+          taskId: args.taskId,
+        },
+      );
+    }
 
+    return null;
+  },
+});
+
+/** Closes a run's durable turn when its workflow ends. */
+export const closeRunTurn = internalMutation({
+  args: { runId: v.id("agentRuns"), success: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await closeOpenTurn(
+      ctx,
+      args.runId,
+      args.success ? "done" : "error",
+      args.success ? {} : { error: "Run failed" },
+    );
     return null;
   },
 });

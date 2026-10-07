@@ -8,7 +8,11 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackEvaluationWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,

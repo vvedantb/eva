@@ -6,7 +6,11 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
