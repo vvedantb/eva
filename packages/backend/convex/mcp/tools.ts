@@ -17,6 +17,7 @@ import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
+import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
 import {
   entityAccess,
@@ -558,6 +559,23 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
           elapsedMs: outcome.elapsedMs,
         };
       }),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // render_html — an agent-authored HTML page rendered inline in the chat
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the page has to land in *this* chat.
+  if (entityKind !== undefined && entityId !== undefined) {
+    tools.push(
+      renderHtmlTool((input) =>
+        ctx.runMutation(internal.chatHtml.create, {
+          entityKind,
+          entityId,
+          ...input,
+        }),
+      ),
     );
   }
 

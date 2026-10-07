@@ -58,6 +58,8 @@ import {
   sessionDaemonStateFields,
   turnFields,
   chatUiPanelFields,
+  chatHtmlRenderFields,
+  chatHtmlRenderBodyFields,
   envVarRequestFields,
   previewToolCallFields,
   proposedPlanFields,
@@ -205,6 +207,12 @@ const schema = defineSchema({
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Agent-authored HTML pages, one row per `render_html` call; the page body
+  // is its own row. Same three chat surfaces as `chatUiPanels`.
+  chatHtmlRenders: defineTable(chatHtmlRenderFields).index("by_parent", [
+    "parentId",
+  ]),
+  chatHtmlRenderBodies: defineTable(chatHtmlRenderBodyFields),
   // Secret requests the agent posts as an inline card (`request_env_var`).
   // Status only: the value goes to the encrypted env var stores.
   envVarRequests: defineTable(envVarRequestFields).index("by_parent", [

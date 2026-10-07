@@ -1540,6 +1540,26 @@ export const chatUiPanelFields = {
   createdAt: v.number(),
 };
 
+/**
+ * One agent-authored HTML page (`render_html`). The page itself is a separate
+ * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
+ */
+export const chatHtmlRenderFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the page appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  title: v.string(),
+  /** The agent's frame height in CSS px, used until the page reports its own. */
+  height: v.number(),
+  bodyId: v.id("chatHtmlRenderBodies"),
+  createdAt: v.number(),
+};
+
+/** The page of one HTML render, as the agent wrote it (no bootstrap). */
+export const chatHtmlRenderBodyFields = {
+  html: v.string(),
+};
+
 export const envVarRequestScopeValidator = v.union(
   v.literal("repo"),
   v.literal("team"),
