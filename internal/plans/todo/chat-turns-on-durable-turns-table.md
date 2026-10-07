@@ -1,6 +1,6 @@
 # Move task and project chats onto the durable `turns` table
 
-Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done 2026-10-07 (PR #906, deployed about 12:23 UTC), but **not yet proven in production** (see the Phase 2 check result). Phases 3 and 4 implemented 2026-10-07; do not merge them until Phase 2 is proven.
+Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done 2026-10-07 (PR #906, deployed about 12:23 UTC): task chat passed in production, project chat not yet tested (see the Phase 2 check result). Phases 3 and 4 implemented 2026-10-07 (PR #909); do not merge them until a project-chat turn passes.
 
 ## Goal
 
@@ -80,7 +80,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 **Why first:** Phase 2 daemons send fenced completions. Without these arguments, the completion validators throw.
 
-### Phase 2: open durable turns for new chat turns — done 2026-10-07 (PR #906), production check not passed yet
+### Phase 2: open durable turns for new chat turns — done 2026-10-07 (PR #906); task chat passed in production, project chat not yet tested
 
 **Stage** (`stageAndStartTaskChatTurn`, `stageAndStartProjectChatTurn`):
 1. Call `openTurn` with the task or project id, `streamingEntityId: chatStreamEntityId(id)` and the placeholder message id.
@@ -126,7 +126,13 @@ Ship each phase on its own. Each phase ends in a state you can check.
 - `turns` rows created after 12:23 UTC: 3. All are session turns (1 `done`, 2 open `running`, no expired lease). No row had an unknown entity table.
 - Task-chat turns: 0. Project-chat turns: 0. The newest 1,500 `turns` rows (back to 2026-09-01) hold no task or project row.
 - No task in the newest 300 and no project in the newest 200 has `chatTurnLifecycleVersion: 2` or a `pendingTurn.turnId`.
-- **Verdict: not proven.** No task or project chat had started a turn yet. Re-run the check after real task and project chat traffic, before Phase 3 merges.
+- **Verdict at 12:25 UTC: not proven.** No task or project chat had started a turn yet.
+
+**Re-check (2026-10-07, 12:48 UTC):**
+- Task chat: **PASS.** Quick task #496 (evalucom/carepulse-ts) opened a durable turn with a bound workflow at 12:44 UTC, lease generation 1. It closed `done` after 19 s, with no error and no expired lease.
+- Project chat: **NOT YET TESTED.** No project-chat turn exists in production.
+- Sessions after the deploy: 6 `done`, 1 open `running`. No row has an unknown entity table.
+- **Merge gate for Phases 3 and 4 stays closed** until one project-chat turn also passes this check.
 
 ### Phase 3: the lease becomes the stall authority — implemented 2026-10-07, not merged
 
