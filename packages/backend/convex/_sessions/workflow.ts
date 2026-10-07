@@ -79,7 +79,8 @@ export const sessionCompleteEvent = defineEvent({
 
 /**
  * Tools every session turn may use. Skill is required so the harness can invoke
- * Eva's system skills (eva-plan, eva-design, eva-ask, eva-capture, eva-audit, eva-grab-proof), which is
+ * Eva's system skills (eva-plan, eva-design, eva-ask, eva-capture, eva-audit, eva-grab-proof,
+ * eva-resolve-conflicts), which is
  * how planning and design work now that turn modes are gone.
  */
 export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
