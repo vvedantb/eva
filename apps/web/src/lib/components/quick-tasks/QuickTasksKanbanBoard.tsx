@@ -8,7 +8,6 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { KanbanBoard } from "@/lib/components/kanban/KanbanBoard";
 import { QuickTaskCard } from "./QuickTaskCard";
-import { isTaskAgentActive } from "@/lib/components/tasks/taskAgentActivity";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { RunAllDialog } from "./RunAllDialog";
 import { Button, Spinner, toast } from "@eva/ui";
@@ -198,7 +197,7 @@ export function QuickTasksKanbanBoard({
             title={task.title}
             description={task.description}
             status={task.status}
-            isAgentActive={isTaskAgentActive(task)}
+            isAgentActive={task.isExecuting}
             priority={task.priority}
             numId={task.numId}
             projectNumId={
@@ -255,7 +254,7 @@ export function QuickTasksKanbanBoard({
             title={task.title}
             description={task.description}
             status={task.status}
-            isAgentActive={isTaskAgentActive(task)}
+            isAgentActive={task.isExecuting}
             priority={task.priority}
             numId={task.numId}
             projectNumId={

@@ -337,10 +337,8 @@ export const chatDaemonEntityFields = {
   // 2-minute running lease) with it.
   claimPausedUntil: v.optional(v.number()),
   /**
-   * When the daemon last claimed `pendingTurn` (cleared when the turn
-   * finalizes). Lets the workflow's re-stage tell "claimed and running" from
-   * "wiped by a cancel race" — tasks/projects have no `turns` row to consult,
-   * unlike sessions. See `_chat/pendingTurnRestage.ts`.
+   * Retired: the durable turn's lease now tells "claimed" from "wiped by a
+   * cancel race". No longer written; unset and deleted in the cleanup phase.
    */
   pendingTurnClaimedAt: v.optional(v.number()),
 };

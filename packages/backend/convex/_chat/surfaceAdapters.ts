@@ -18,6 +18,7 @@ import {
 import type { WorkflowId } from "@convex-dev/workflow";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import { findOpenTurn } from "./turnStore";
 
 /** Streaming entityId prefix for project chat workflows. */
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
@@ -77,8 +78,11 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
    * placeholder and the streaming row, and drains the queue after.
    */
   finalizeOrphanTurn: (ctx: MutationCtx, id: TId) => Promise<void>;
-  /** Runs after the lease reconciler finalises a stalled (not sandbox-stopped) turn. */
-  afterStallFinalize?: (
+  /**
+   * Runs after the lease reconciler finalises a stalled (not sandbox-stopped)
+   * turn. Every chat schedules its one-shot empty-stall retry here.
+   */
+  afterStallFinalize: (
     ctx: MutationCtx,
     id: TId,
     turnId: Id<"turns">,
@@ -314,6 +318,13 @@ const taskChatAdapter: ChatSurfaceAdapter<
       updatedAt: Date.now(),
     });
   },
+  afterStallFinalize: async (ctx, id, turnId) => {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.agentTaskChatWorkflow.retryEmptyStalledTurn,
+      { taskId: id, turnId },
+    );
+  },
   scheduleCheck: (ctx, id, delayMs, args) =>
     ctx.scheduler
       .runAfter(
@@ -420,6 +431,13 @@ const projectChatAdapter: ChatSurfaceAdapter<
       updatedAt: Date.now(),
     });
   },
+  afterStallFinalize: async (ctx, id, turnId) => {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.projectChatWorkflow.retryEmptyStalledTurn,
+      { projectId: id, turnId },
+    );
+  },
   scheduleCheck: (ctx, id, delayMs, args) =>
     ctx.scheduler
       .runAfter(
@@ -504,7 +522,33 @@ export function chatEntityIdFromStream(
   return null;
 }
 
-/** Records a workflow as the active workflow for a session and schedules a stale handler. */
+/**
+ * Arms the old no-heartbeat check chain, but only for a workflow no durable
+ * turn owns (a session summarize, say). An owned workflow's turn lease is the
+ * only stall check: `turns.reconcile` finalises it through the same adapter.
+ */
+async function armLegacyStallCheck<TId extends ChatEntityId, TEntity>(
+  ctx: MutationCtx,
+  adapter: ChatSurfaceAdapter<TId, TEntity>,
+  id: TId,
+  workflowId: string,
+): Promise<void> {
+  const turn = await findOpenTurn(ctx, id);
+  if (turn?.workflowId === workflowId) return;
+  // The in-sandbox callback touches streamingActivity at least every ~15s
+  // while a turn runs, so a silently dead agent process (OOM) shows up as a
+  // stale row within minutes instead of at the 2h backstop.
+  await adapter.scheduleCheck(ctx, id, STALE_CHECK_DELAY_MS, {
+    workflowId,
+    turnStartedAt: Date.now(),
+  });
+}
+
+/**
+ * Records a workflow as the active workflow for a session and schedules the
+ * 2-hour backstop. Call after `bindTurnWorkflow`, so a turn-owned workflow is
+ * recognised and skips the legacy stall chain.
+ */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
@@ -518,18 +562,10 @@ export async function trackSessionWorkflow(
     internal.workflowWatchdog.handleStaleSession,
     { sessionId, workflowId: id },
   );
-  // No-heartbeat watchdog: the in-sandbox callback touches streamingActivity
-  // at least every ~15s while a turn runs, so a silently dead agent process
-  // (OOM) shows up as a stale row within minutes. Without this chain the chat
-  // sat on "Working…" until the 2h handleStaleSession backstop above.
-  await ctx.scheduler.runAfter(
-    STALE_CHECK_DELAY_MS,
-    internal.workflowWatchdog.checkStaleSessionHeartbeat,
-    { sessionId, workflowId: id, turnStartedAt: Date.now() },
-  );
+  await armLegacyStallCheck(ctx, sessionChatAdapter, sessionId, id);
 }
 
-/** Records a workflow as the active chat workflow for a project and schedules a stale handler. */
+/** Records the active chat workflow for a project; see `trackSessionWorkflow`. */
 export async function trackProjectChatWorkflow(
   ctx: MutationCtx,
   projectId: Id<"projects">,
@@ -543,15 +579,10 @@ export async function trackProjectChatWorkflow(
     internal.workflowWatchdog.handleStaleProjectChat,
     { projectId, workflowId: id },
   );
-  // No-heartbeat watchdog — same rationale as trackSessionWorkflow above.
-  await ctx.scheduler.runAfter(
-    STALE_CHECK_DELAY_MS,
-    internal.workflowWatchdog.checkStaleProjectChatHeartbeat,
-    { projectId, workflowId: id, turnStartedAt: Date.now() },
-  );
+  await armLegacyStallCheck(ctx, projectChatAdapter, projectId, id);
 }
 
-/** Records a workflow as the active chat workflow for an agent task and schedules a stale handler. */
+/** Records the active chat workflow for an agent task; see `trackSessionWorkflow`. */
 export async function trackAgentTaskChatWorkflow(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -565,10 +596,5 @@ export async function trackAgentTaskChatWorkflow(
     internal.workflowWatchdog.handleStaleAgentTaskChat,
     { taskId, workflowId: id },
   );
-  // No-heartbeat watchdog — same rationale as trackSessionWorkflow above.
-  await ctx.scheduler.runAfter(
-    STALE_CHECK_DELAY_MS,
-    internal.workflowWatchdog.checkStaleAgentTaskChatHeartbeat,
-    { taskId, workflowId: id, turnStartedAt: Date.now() },
-  );
+  await armLegacyStallCheck(ctx, taskChatAdapter, taskId, id);
 }

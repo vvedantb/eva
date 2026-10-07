@@ -1,6 +1,6 @@
 # Move task and project chats onto the durable `turns` table
 
-Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 implemented 2026-10-07; waiting for the production check before Phase 3.
+Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done 2026-10-07 (PR #906, deployed about 12:23 UTC), but **not yet proven in production** (see the Phase 2 check result). Phases 3 and 4 implemented 2026-10-07; do not merge them until Phase 2 is proven.
 
 ## Goal
 
@@ -80,7 +80,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 **Why first:** Phase 2 daemons send fenced completions. Without these arguments, the completion validators throw.
 
-### Phase 2: open durable turns for new chat turns
+### Phase 2: open durable turns for new chat turns — done 2026-10-07 (PR #906), production check not passed yet
 
 **Stage** (`stageAndStartTaskChatTurn`, `stageAndStartProjectChatTurn`):
 1. Call `openTurn` with the task or project id, `streamingEntityId: chatStreamEntityId(id)` and the placeholder message id.
@@ -122,14 +122,28 @@ Ship each phase on its own. Each phase ends in a state you can check.
 - Confirm that a `turns` row moves `staged → running → finalizing → done`.
 - Kill the daemon mid-turn. Confirm the reconciler closes the turn.
 
-### Phase 3: the lease becomes the stall authority
+**Production check result (2026-10-07, 12:25 UTC, about 2.5 minutes after the deploy):**
+- `turns` rows created after 12:23 UTC: 3. All are session turns (1 `done`, 2 open `running`, no expired lease). No row had an unknown entity table.
+- Task-chat turns: 0. Project-chat turns: 0. The newest 1,500 `turns` rows (back to 2026-09-01) hold no task or project row.
+- No task in the newest 300 and no project in the newest 200 has `chatTurnLifecycleVersion: 2` or a `pendingTurn.turnId`.
+- **Verdict: not proven.** No task or project chat had started a turn yet. Re-run the check after real task and project chat traffic, before Phase 3 merges.
+
+### Phase 3: the lease becomes the stall authority — implemented 2026-10-07, not merged
 
 1. **`ensurePendingTurn`:** decide with `openTurn.state === "running"`, not `pendingTurnAlreadyClaimed`. Stop writing `pendingTurnClaimedAt`.
 2. **Watchdog:** stop arming `checkStale*ChatHeartbeat` for durable turns. Add a `durable` flag to `trackXChatWorkflow`.
 3. **Sandbox deadline:** move `extendSandboxDeadline` into the lease path. Either schedule it from `renewTurnLease` (throttled) or sweep open turns in `reconcile`. Update `turnDeadlineExtensionContract.test.ts`.
 4. **Two-hour backstop:** keep `handleStale*Chat`. `turnLeaseExpiry` already caps at 2 h, but the backstop costs little.
+5. **Early-stall retry (decision 4):** enable `afterStallFinalize` for task and project chats.
 
-### Phase 4: frontend and other readers
+**Implementation notes:**
+- `ensurePendingTurn` uses `isTurnClaimed(openTurn)` on all three chats. It treats `finalizing` as claimed too: a daemon that already reported its completion has claimed the turn, and a restage there would run the prompt twice.
+- No `durable` flag on the trackers. `armLegacyStallCheck` reads the open turn instead: if that turn owns the workflow, the chain is not armed. Callers already bind the turn before they track the workflow. A workflow with no turn (session summarize) keeps the chain.
+- The deadline extension rides on the written lease renewal in `renewTurnLease` (at most once per half lease), for `2 × lease` (4 min while running). The old chain keeps its own extension for workflows no turn owns.
+- `afterStallFinalize` is now required. Task and project chats schedule `retryEmptyStalledTurn`; it skips when a chat turn, a staged prompt or (tasks) a main run is active. The decision is shared with the session retry (`emptyStallRetryPrompt`).
+- `pendingTurnRestage.ts` has no callers now. It stays until Phase 5, as planned.
+
+### Phase 4: frontend and other readers — implemented 2026-10-07, not merged
 
 1. Add `turns.getChatStatus({ entityId })`, the generic form of `getSessionStatus`. It bridges legacy rows through `chatTurnLifecycleVersion`.
 2. Replace the `activeChatWorkflowId` "is executing" checks in:
@@ -145,6 +159,14 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
    These need the open turns for one repo, split by table. `by_repo_open` gives the set; split it with `normalizeId`.
 4. Show synthetic turns in the task and project UIs.
+
+**Implementation notes:**
+- `sandboxIdleStop.ts` no longer exists; the reader is `sandboxIdlePause.ts`.
+- `getSessionStatus` now delegates to the same reader as `getChatStatus`. The session hooks still call it; Phase 5 can switch them and delete it.
+- `_chat/turnProjection.ts`: `openChatEntityIdsForRepo` (one `by_repo_open` read gives every open entity id; ids are unique across tables, so one set serves all three), `hasOpenChatTurn`, `isLegacyChatExecuting`, `chatTurnIsOpen`, and `taskIsExecuting` / `projectIsExecuting` that take the open set.
+- Task list rows (`getAllTasks`, `listByProject`) and the MCP slim task list carry a server-side `isExecuting`. The web hook `useChatTurnOpen` reads `getChatStatus` for one entity.
+- Synthetic turns: the task and project composers read `getChatStatus`, the same rule as the session composer. No new visuals.
+- Not changed: the queue gates in `_queues/helpers.ts` (`hasActiveWorkflow` plus `syntheticTurnMessageId`) and `daemonEntitySnapshot.ts`. They read the workflow pointer, which Phase 5 keeps.
 
 ### Phase 5: cleanup
 

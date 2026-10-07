@@ -1,3 +1,5 @@
+import type { TurnState } from "../_validators/tableFields";
+
 /**
  * Whether a session is still waiting on a turn no daemon can claim.
  *
@@ -33,6 +35,15 @@ type OpenTurnCandidate = {
  * An orphan is recognisable without a clock: a slot staged for some other turn
  * can never be claimed against this one.
  */
+/**
+ * Whether a daemon already claimed this durable turn. The lease is the proof:
+ * a claim moves the turn to `running`, and the daemon's completion moves it on
+ * to `finalizing`. Restaging a claimed turn runs its prompt a second time.
+ */
+export function isTurnClaimed(turn: { state: TurnState } | null): boolean {
+  return turn?.state === "running" || turn?.state === "finalizing";
+}
+
 export function isPendingTurnLive(params: {
   /** `turnId` of the slot, absent when nothing is staged. */
   pendingTurn: { turnId?: string } | undefined;

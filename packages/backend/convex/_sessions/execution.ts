@@ -40,10 +40,7 @@ import {
   closeTurnForWorkflow,
   openSessionTurn,
 } from "../_chat/turnStore";
-import {
-  countStallAlertsAfterLastUser,
-  shouldRetryEmptyStall,
-} from "../_chat/stallRetry";
+import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 
 async function stageAndStartSessionTurn(
   ctx: MutationCtx,
@@ -187,25 +184,12 @@ export const retryEmptyStalledSessionTurn = internalMutation({
     const turn = await ctx.db.get(args.turnId);
     if (!session || !turn) return null;
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .order("desc")
-      .take(20);
-    const counted = countStallAlertsAfterLastUser(messages);
-    if (
-      !shouldRetryEmptyStall({
-        sandboxStopped: args.sandboxStopped,
-        hasActiveWorkflow: session.activeWorkflowId !== undefined,
-        stallAlertsAfterLastUser: counted.stallAlertsAfterLastUser,
-        lastUserContent: counted.lastUserContent,
-        hasSalvagedOutput: counted.hasSalvagedOutput,
-      })
-    ) {
-      return null;
-    }
-    const lastUserContent = counted.lastUserContent;
-    if (lastUserContent === undefined) return null;
+    const lastUserContent = await emptyStallRetryPrompt(ctx.db, {
+      parentId: args.sessionId,
+      sandboxStopped: args.sandboxStopped,
+      hasActiveWorkflow: session.activeWorkflowId !== undefined,
+    });
+    if (lastUserContent === null) return null;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return null;

@@ -45,6 +45,7 @@ import { resolveStorageUrls } from "../_chat/storageUrls";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import {
   isPendingTurnLive,
+  isTurnClaimed,
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
@@ -1343,7 +1344,7 @@ export const ensurePendingTurn = internalMutation({
     }
 
     const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
-    if (openTurn && openTurn.state === "running") return null;
+    if (isTurnClaimed(openTurn)) return null;
     const last = await ctx.db
       .query("messages")
       .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))

@@ -100,13 +100,37 @@ describe("shared chat stall watchdog implementation (_chat/stallWatchdog.ts)", (
  * workflowWatchdog.ts still wire to the shared implementation with the right
  * adapter constant.
  */
+/**
+ * The durable turn's lease is the only stall check for a workflow it owns
+ * (decision 2 of the durable-turns plan). Two checks on one turn would race to
+ * finalise it, so the old chain is armed only for a workflow no turn owns.
+ */
+describe("the lease replaces the heartbeat chain for durable turns", () => {
+  test("the legacy chain is skipped when the open turn owns the workflow", () => {
+    const body = functionBody(
+      surfaceAdapters,
+      "async function armLegacyStallCheck<",
+    );
+    const ownedAt = body.indexOf(
+      "if (turn?.workflowId === workflowId) return;",
+    );
+    expect(ownedAt, "the ownership gate moved").toBeGreaterThan(-1);
+    expect(ownedAt).toBeLessThan(body.indexOf("adapter.scheduleCheck("));
+  });
+});
+
 describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
-  test("every tracked session workflow arms the heartbeat chain", () => {
+  test("a tracked session workflow arms the heartbeat chain only without a durable turn", () => {
     const body = functionBody(
       surfaceAdapters,
       "export async function trackSessionWorkflow(",
     );
-    expect(body).toContain("checkStaleSessionHeartbeat");
+    expect(body).toContain("armLegacyStallCheck(ctx, sessionChatAdapter,");
+    // The 2-hour backstop stays armed for every workflow.
+    expect(body).toContain("handleStale");
+    expect(adapterBody(surfaceAdapters, "sessionChatAdapter", "\n};")).toContain(
+      "internal.workflowWatchdog.checkStaleSessionHeartbeat",
+    );
   });
 
   test("checkStaleSessionHeartbeat and probeStaleSessionLiveness wire to the shared implementation with sessionChatAdapter", () => {
@@ -160,12 +184,17 @@ describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
 
 /** Task chat mirror of the session adapter checks above. */
 describe("task chat adapter (_chat/surfaceAdapters.ts)", () => {
-  test("every tracked task chat workflow arms the heartbeat chain", () => {
+  test("a tracked task chat workflow arms the heartbeat chain only without a durable turn", () => {
     const body = functionBody(
       surfaceAdapters,
       "export async function trackAgentTaskChatWorkflow(",
     );
-    expect(body).toContain("checkStaleAgentTaskChatHeartbeat");
+    expect(body).toContain("armLegacyStallCheck(ctx, taskChatAdapter,");
+    // The 2-hour backstop stays armed for every workflow.
+    expect(body).toContain("handleStale");
+    expect(adapterBody(surfaceAdapters, "taskChatAdapter", "\n};")).toContain(
+      "internal.workflowWatchdog.checkStaleAgentTaskChatHeartbeat",
+    );
   });
 
   test("checkStaleAgentTaskChatHeartbeat and probeStaleAgentTaskChatLiveness wire to the shared implementation with taskChatAdapter", () => {
@@ -219,12 +248,17 @@ describe("task chat adapter (_chat/surfaceAdapters.ts)", () => {
 
 /** Project chat mirror of the session adapter checks above. */
 describe("project chat adapter (_chat/surfaceAdapters.ts)", () => {
-  test("every tracked project chat workflow arms the heartbeat chain", () => {
+  test("a tracked project chat workflow arms the heartbeat chain only without a durable turn", () => {
     const body = functionBody(
       surfaceAdapters,
       "export async function trackProjectChatWorkflow(",
     );
-    expect(body).toContain("checkStaleProjectChatHeartbeat");
+    expect(body).toContain("armLegacyStallCheck(ctx, projectChatAdapter,");
+    // The 2-hour backstop stays armed for every workflow.
+    expect(body).toContain("handleStale");
+    expect(adapterBody(surfaceAdapters, "projectChatAdapter", "\n};")).toContain(
+      "internal.workflowWatchdog.checkStaleProjectChatHeartbeat",
+    );
   });
 
   test("checkStaleProjectChatHeartbeat and probeStaleProjectChatLiveness wire to the shared implementation with projectChatAdapter", () => {

@@ -1308,9 +1308,20 @@ const agentTaskSchema = z.object({
   updatedAt: z.number(),
   model: z.string().optional(),
   lastChatModel: z.string().optional(),
-  activeWorkflowId: z.string().optional(),
-  activeChatWorkflowId: z.string().optional(),
   reviewTaskSandboxStatus: z.string().optional(),
+});
+
+/** One row of `getActiveTasksSlim`: the busy state is computed server-side. */
+const agentTaskListItemSchema = z.object({
+  _id: z.string(),
+  numId: z.number().optional(),
+  repoId: z.string().optional(),
+  title: z.string(),
+  status: z.string(),
+  updatedAt: z.number(),
+  model: z.string().optional(),
+  lastChatModel: z.string().optional(),
+  isExecuting: z.boolean(),
 });
 
 /** Slim projection of a `projects` document (its chat mirrors a task's). */
@@ -1471,7 +1482,7 @@ export const orchestratorListAgents = internalAction({
         });
       }
     }
-    for (const task of z.array(agentTaskSchema).parse(rawTasks)) {
+    for (const task of z.array(agentTaskListItemSchema).parse(rawTasks)) {
       // Keep tasks inside the requested repo scope (all repos, or one).
       if (task.repoId === undefined) continue;
       const repoName = repoNameById.get(task.repoId);
@@ -1483,9 +1494,7 @@ export const orchestratorListAgents = internalAction({
         repo: repoName,
         title: task.title,
         status: task.status,
-        isExecuting:
-          task.activeWorkflowId !== undefined ||
-          task.activeChatWorkflowId !== undefined,
+        isExecuting: task.isExecuting,
         model: task.lastChatModel ?? task.model,
         updatedAt: task.updatedAt,
       });
@@ -1731,23 +1740,24 @@ async function ensureEntitySandboxActive(
 }
 
 /**
- * Decides how a chat surface's own workflow slot answers "is this busy", and
- * which model the turn falls back to. Each surface has a different slot: a
- * session's single workflow, a task's chat slot (separate from its run), a
- * project's chat slot (separate from build and spec workflows).
+ * Decides whether a message starts a turn or joins the queue, and which model
+ * the turn falls back to. `isExecuting` is `entityIsExecuting`: the open
+ * durable turn (synthetic turns included), plus a task's main run or a
+ * project's build. A busy answer is always safe — the queue drain starts the
+ * message at once when the chat itself is free.
  */
 function chatDelivery(
   kind: ChatTargetKind,
   rawDoc: unknown,
   queuedAhead: number,
   requestedModel: string | undefined,
-  sessionIsExecuting: boolean,
+  isExecuting: boolean,
 ): AgentDelivery {
+  const isBusy = isExecuting || queuedAhead > 0;
   if (kind === "session") {
     const session = sessionDocSchema.parse(rawDoc);
     return resolveAgentDelivery({
-      // Durable `/loop` turns never set `activeWorkflowId`.
-      isBusy: sessionIsExecuting || queuedAhead > 0,
+      isBusy,
       requestedModel,
       storedModel: session.lastModel,
     });
@@ -1755,15 +1765,14 @@ function chatDelivery(
   if (kind === "task") {
     const task = agentTaskSchema.parse(rawDoc);
     return resolveAgentDelivery({
-      // A quick task's run and its sandbox chat are independent slots.
-      isBusy: task.activeChatWorkflowId !== undefined || queuedAhead > 0,
+      isBusy,
       requestedModel,
       storedModel: task.lastChatModel ?? task.model,
     });
   }
   const project = projectDocSchema.parse(rawDoc);
   return resolveAgentDelivery({
-    isBusy: project.activeChatWorkflowId !== undefined || queuedAhead > 0,
+    isBusy,
     requestedModel,
     storedModel: project.lastChatModel ?? project.model,
   });
@@ -1831,20 +1840,11 @@ export const orchestratorSendMessage = internalAction({
         ),
       ).length;
 
-    const sessionIsExecuting: boolean =
-      kind === "session"
-        ? await ctx.runQuery(internal.mcp.queries.entityIsExecuting, {
-            kind,
-            id,
-          })
-        : false;
-    const delivery = chatDelivery(
-      kind,
-      rawDoc,
-      queuedAhead,
-      model,
-      sessionIsExecuting,
+    const isExecuting: boolean = await ctx.runQuery(
+      internal.mcp.queries.entityIsExecuting,
+      { kind, id },
     );
+    const delivery = chatDelivery(kind, rawDoc, queuedAhead, model, isExecuting);
     for (const call of buildChatMessageCalls({
       kind,
       id,

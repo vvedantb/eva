@@ -17,6 +17,7 @@ import { toast } from "@eva/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
+import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
@@ -69,6 +70,7 @@ export function TaskSandboxChatPanel({
 }: TaskSandboxChatPanelProps) {
   const { repo, basePath } = useRepo();
   const task = useQuery(api.agentTasks.get, { id: taskId });
+  const chatTurnOpen = useChatTurnOpen(taskId);
   const messages = useQuery(api.messages.listByParent, { parentId: taskId });
   const queuedMessages = useQuery(api.queuedMessages.listByParent, {
     parentId: taskId,
@@ -235,15 +237,13 @@ export function TaskSandboxChatPanel({
     switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
-  // Server flag first; the message-shape fallback is the shared helper so a
-  // finished-but-empty bubble or a trailing system alert cannot pin the
-  // composer in "working" mode (same rule as useSessionSend). The first run
-  // counts too: its bubble is on screen here, so the composer shows Working
-  // and Stop for it like any other turn.
+  // The open durable turn is canonical, synthetic turns included; message
+  // shape only covers the first render while it loads (same rule as
+  // useSessionSend). The first run counts too: its bubble is on screen here,
+  // so the composer shows Working and Stop for it like any other turn.
   const isExecuting =
     isFirstRunInProgress ||
-    Boolean(task?.activeChatWorkflowId) ||
-    isAssistantTurnInProgress(messages ?? []);
+    (chatTurnOpen ?? isAssistantTurnInProgress(messages ?? []));
 
   const queueGate = useChatQueueGate({
     parentId: taskId,

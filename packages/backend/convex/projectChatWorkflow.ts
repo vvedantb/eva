@@ -65,6 +65,7 @@ import {
 } from "./_shared/modelHandoff";
 import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
+import { emptyStallRetryPrompt } from "./_chat/stallRetry";
 import {
   advanceTurn,
   bindTurnWorkflow,
@@ -527,6 +528,49 @@ export const retryLastTurnWithAccount = authMutation({
   },
 });
 
+/**
+ * Restages the last user prompt once after an empty stall, so the question is
+ * not lost. Scheduled by the lease reconciler through the adapter's
+ * `afterStallFinalize`; same rule as `retryEmptyStalledSessionTurn`.
+ */
+export const retryEmptyStalledTurn = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    turnId: v.id("turns"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    const turn = await ctx.db.get(args.turnId);
+    if (!project || !turn) return null;
+    const message = await emptyStallRetryPrompt(ctx.db, {
+      parentId: args.projectId,
+      sandboxStopped: false,
+      hasActiveWorkflow:
+        project.activeChatWorkflowId !== undefined ||
+        project.pendingTurn !== undefined,
+    });
+    if (message === null) return null;
+    // No attachment handling needed: the prompt build reads the newest user
+    // message's attachments itself.
+    await stageAndStartProjectChatTurn(ctx, {
+      project,
+      actingUserId: project.userId,
+      message,
+      model: turn.model,
+      reasoningLevel: project.lastReasoningLevel,
+      thinkingEnabled: project.lastThinkingEnabled,
+      use1mContext: project.lastUse1mContext,
+      fastMode: project.lastFastMode,
+      providerAccountId: project.providerAccountId,
+    });
+    console.log(
+      `[project-chat] retryEmptyStalledTurn projectId=${args.projectId} turnId=${args.turnId}`,
+    );
+    return null;
+  },
+});
+
 /** Queues a chat message to run after the current workflow finishes. */
 export const enqueueMessage = authMutation({
   args: {
@@ -700,7 +744,6 @@ export const cancelExecution = authMutation({
     const projectPatch: {
       activeChatWorkflowId?: undefined;
       pendingTurn?: undefined;
-      pendingTurnClaimedAt?: undefined;
       syntheticTurnMessageId?: undefined;
       updatedAt: number;
     } = { updatedAt: Date.now() };
@@ -719,9 +762,6 @@ export const cancelExecution = authMutation({
     }
     if (cancelOwnsCurrentTurn) {
       projectPatch.syntheticTurnMessageId = undefined;
-      // This cancel owns the current turn and nothing newer has arrived, so the
-      // claim stamp is spent. See `_chat/pendingTurnRestage.ts`.
-      projectPatch.pendingTurnClaimedAt = undefined;
     }
 
     await ctx.db.patch(args.projectId, projectPatch);
@@ -1090,9 +1130,6 @@ export const saveResult = internalMutation({
 
     await ctx.db.patch(args.projectId, {
       activeChatWorkflowId: undefined,
-      // The turn is over, so the claim stamp has nothing left to vouch for.
-      // See `_chat/pendingTurnRestage.ts`.
-      pendingTurnClaimedAt: undefined,
       updatedAt: Date.now(),
       lastSandboxActivity: Date.now(),
     });
@@ -1149,14 +1186,8 @@ export const handleCompletion = authMutation({
       await advanceTurn(ctx, turnResolution.turn, "finalizing");
     }
 
-    if (
-      project.pendingTurn !== undefined ||
-      project.pendingTurnClaimedAt !== undefined
-    ) {
-      await ctx.db.patch(args.projectId, {
-        pendingTurn: undefined,
-        pendingTurnClaimedAt: undefined,
-      });
+    if (project.pendingTurn !== undefined) {
+      await ctx.db.patch(args.projectId, { pendingTurn: undefined });
     }
 
     await sendCompletionEvent(

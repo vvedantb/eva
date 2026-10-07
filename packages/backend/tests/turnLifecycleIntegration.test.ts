@@ -20,7 +20,8 @@ import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
 import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
 import {
   isLegacySessionExecuting,
-  openSessionIdsForRepo,
+  openChatEntityIdsForRepo,
+  taskIsExecuting,
 } from "../convex/_chat/turnProjection";
 import { rollbackQueuedChatStart } from "../convex/_queues/helpers";
 import {
@@ -519,23 +520,38 @@ describe("task chat turns share the session turn lifecycle", () => {
       });
     });
 
-    await t.mutation(internal.turns.finalizeExpired, {
-      turnId,
-      cause: "process_dead",
-    });
+    // finalizeExpired schedules the one-shot stall retry (decision 4: every
+    // chat has it); drain it inside the test so it never fires against a
+    // later test's database.
+    vi.useFakeTimers();
+    let scheduled: string[] = [];
+    try {
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: "process_dead",
+      });
+      scheduled = await t.run(async (ctx) =>
+        (await ctx.db.system.query("_scheduled_functions").collect()).map(
+          (job) => job.name,
+        ),
+      );
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+    } finally {
+      vi.useRealTimers();
+    }
 
     const rows = await t.run(async (ctx) => ({
       turn: await ctx.db.get(turnId),
       task: await ctx.db.get(taskId),
       placeholder: await ctx.db.get(placeholderMessageId),
-      scheduled: await ctx.db.system.query("_scheduled_functions").collect(),
     }));
     expect(rows.turn?.open).toBe(false);
     expect(rows.turn?.error).toBe(STALL_ALERT_TEXT);
     expect(rows.placeholder?.content).toBe(STALL_ALERT_TEXT);
     expect(rows.task?.syntheticTurnMessageId).toBeUndefined();
-    // The empty-stall retry is still session-only until Phase 3.
-    expect(rows.scheduled).toEqual([]);
+    expect(scheduled).toEqual([
+      "agentTaskChatWorkflow:retryEmptyStalledTurn",
+    ]);
   });
 
   test("the legacy heartbeat teardown closes the turn it tears down", async () => {
@@ -564,13 +580,39 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(turn?.error).toBe(STALL_ALERT_TEXT);
   });
 
-  test("a task turn never shows up as an open session", async () => {
+  test("an open task turn makes the task busy, synthetic or not", async () => {
     const { t, repoId, taskId } = await createTaskChatFixture();
-    const open = await t.run(async (ctx) => [
-      ...(await openSessionIdsForRepo(ctx.db, repoId)),
-    ]);
-    expect(open).not.toContain(String(taskId));
-    expect(open).toEqual([]);
+    const busy = await t.run(async (ctx) => {
+      const open = await openChatEntityIdsForRepo(ctx.db, repoId);
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new Error("missing task");
+      // No `activeChatWorkflowId`: the open turn alone is the answer.
+      return {
+        open: [...open],
+        task: taskIsExecuting(
+          { ...task, activeChatWorkflowId: undefined },
+          open,
+        ),
+      };
+    });
+    expect(busy.open).toEqual([String(taskId)]);
+    expect(busy.task).toBe(true);
+  });
+
+  test("a closed task turn leaves the task idle once it is durable", async () => {
+    const { t, taskId, turnId } = await createTaskChatFixture();
+    const busy = await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, { open: false, state: "done" });
+      await ctx.db.patch(taskId, {
+        chatTurnLifecycleVersion: 2,
+        // A stale pointer must not read as a live turn after the cutover.
+        activeChatWorkflowId: "finished-workflow",
+      });
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new Error("missing task");
+      return taskIsExecuting(task, new Set());
+    });
+    expect(busy).toBe(false);
   });
 
   test("the adapter is picked from the entity id's table", async () => {
