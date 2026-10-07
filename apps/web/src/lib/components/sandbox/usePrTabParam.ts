@@ -42,26 +42,32 @@ export function usePrTabParam() {
 
   const prTab = pathTab ?? searchTab;
 
-  const setPrTab = (tab: ReviewTab) => {
+  /**
+   * Switches tab. `pr` also picks which of the chat's pull requests the tabs
+   * show, in the same navigation — a second URL write racing this one would
+   * land on the old path and undo the switch.
+   */
+  const setPrTab = (tab: ReviewTab, pr?: string) => {
+    const withPr = pr === undefined ? {} : { pr };
     if (pathTab !== undefined) {
       const reviewBase = pathname.replace(/\/review\/.*$/, "/review");
       const viewMatch = pathname.match(/\/review\/diffs\/(unified|split)/);
       const view = viewMatch?.[1] ?? "unified";
       const nextPath = `${reviewBase}/${reviewSubPath(tab, view)}`;
-      if (nextPath === pathname) return;
+      if (nextPath === pathname && pr === undefined) return;
       // Pathname is usually already `--` form, but `navigate({ to })` does
       // not run the history rewrite. Internalize so a slash-form monorepo
       // path cannot miss the route tree.
       void navigate({
         to: toInternalRepoHref(nextPath),
-        search: true,
+        search: (prev) => ({ ...prev, ...withPr }),
         replace: true,
       });
       return;
     }
     void navigate({
       to: ".",
-      search: (prev) => ({ ...prev, prTab: tab }),
+      search: (prev) => ({ ...prev, prTab: tab, ...withPr }),
       replace: true,
     });
   };

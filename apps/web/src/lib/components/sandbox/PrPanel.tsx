@@ -38,10 +38,9 @@ interface PrPanelProps {
 export function PrPanel({ owner, prUrl, repoId, isActive }: PrPanelProps) {
   const { prTab, setPrTab } = usePrTabParam();
   const pullRequests = useQuery(api.pullRequests.listForOwner, { owner });
-  const [selectedParam, setSelectedParam] = useQueryState(
-    "pr",
-    reviewPullRequestParser,
-  );
+  // Read through nuqs; written by `setPrTab`, which moves to Summary in the
+  // same navigation.
+  const [selectedParam] = useQueryState("pr", reviewPullRequestParser);
   // Primary first, then newest — so with no choice made, the chat's own PR.
   const selected =
     pullRequests?.find((pr) => pr._id === selectedParam) ?? pullRequests?.[0];
@@ -85,10 +84,7 @@ export function PrPanel({ owner, prUrl, repoId, isActive }: PrPanelProps) {
       pullRequests={{
         items: pullRequests ?? [],
         selectedId: selected?._id,
-        onSelect: (id) => {
-          setPrTab("summary");
-          void setSelectedParam(id);
-        },
+        onSelect: (id) => setPrTab("summary", id),
       }}
     />
   );
