@@ -1,6 +1,6 @@
 # Move task and project chats onto the durable `turns` table
 
-Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done 2026-10-07 (PR #906, deployed about 12:23 UTC): task chat passed in production, project chat not yet tested (see the Phase 2 check result). Phases 3 and 4 implemented 2026-10-07 (PR #909); do not merge them until a project-chat turn passes.
+Status: in progress. Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done and verified in production 2026-10-07 (PR #906, deployed about 12:23 UTC; task and project chat both passed). Phases 3 and 4 implemented 2026-10-07 (PR #909); the Phase 2 merge gate is cleared.
 
 ## Goal
 
@@ -80,7 +80,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 **Why first:** Phase 2 daemons send fenced completions. Without these arguments, the completion validators throw.
 
-### Phase 2: open durable turns for new chat turns — done 2026-10-07 (PR #906); task chat passed in production, project chat not yet tested
+### Phase 2: open durable turns for new chat turns — done and verified 2026-10-07 (PR #906)
 
 **Stage** (`stageAndStartTaskChatTurn`, `stageAndStartProjectChatTurn`):
 1. Call `openTurn` with the task or project id, `streamingEntityId: chatStreamEntityId(id)` and the placeholder message id.
@@ -130,11 +130,16 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 **Re-check (2026-10-07, 12:48 UTC):**
 - Task chat: **PASS.** Quick task #496 (evalucom/carepulse-ts) opened a durable turn with a bound workflow at 12:44 UTC, lease generation 1. It closed `done` after 19 s, with no error and no expired lease.
-- Project chat: **NOT YET TESTED.** No project-chat turn exists in production.
+- Project chat at 12:48 UTC: not yet tested (no project-chat turn existed).
 - Sessions after the deploy: 6 `done`, 1 open `running`. No row has an unknown entity table.
-- **Merge gate for Phases 3 and 4 stays closed** until one project-chat turn also passes this check.
 
-### Phase 3: the lease becomes the stall authority — implemented 2026-10-07, not merged
+**Final check (2026-10-07, 12:51 UTC): VERIFIED.**
+- Project chat: **PASS.** Project #3 (evalucom/carepulse-ts) opened a durable turn with a bound workflow at 12:49 UTC, lease generation 1. It closed `done` after 54 s, with no error and no expired lease.
+- Task chat: **PASS** (quick task #496, above).
+- Sessions after the deploy: 8 `done`, 1 open `running`. No row has an unknown entity table.
+- The merge gate for Phases 3 and 4 is cleared.
+
+### Phase 3: the lease becomes the stall authority — implemented 2026-10-07 (PR #909)
 
 1. **`ensurePendingTurn`:** decide with `openTurn.state === "running"`, not `pendingTurnAlreadyClaimed`. Stop writing `pendingTurnClaimedAt`.
 2. **Watchdog:** stop arming `checkStale*ChatHeartbeat` for durable turns. Add a `durable` flag to `trackXChatWorkflow`.
@@ -149,7 +154,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 - `afterStallFinalize` is now required. Task and project chats schedule `retryEmptyStalledTurn`; it skips when a chat turn, a staged prompt or (tasks) a main run is active. The decision is shared with the session retry (`emptyStallRetryPrompt`).
 - `pendingTurnRestage.ts` has no callers now. It stays until Phase 5, as planned.
 
-### Phase 4: frontend and other readers — implemented 2026-10-07, not merged
+### Phase 4: frontend and other readers — implemented 2026-10-07 (PR #909)
 
 1. Add `turns.getChatStatus({ entityId })`, the generic form of `getSessionStatus`. It bridges legacy rows through `chatTurnLifecycleVersion`.
 2. Replace the `activeChatWorkflowId` "is executing" checks in:
