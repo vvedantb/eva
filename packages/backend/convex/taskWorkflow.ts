@@ -17,9 +17,7 @@ export {
   recordManualTaskPr,
 } from "./_taskWorkflow/runLifecycle";
 
-export { checkStaleRuns, handleStaleRun } from "./_taskWorkflow/watchdog";
-
-export { probeStaleRunLiveness } from "./_taskWorkflow/livenessProbe";
+export { handleStaleRun } from "./_taskWorkflow/watchdog";
 
 export {
   maybeScheduleQuickTaskRetry,

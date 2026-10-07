@@ -182,6 +182,9 @@ describe("resumeAfterStop call sites", () => {
     "_sandbox_runtime/helpers.ts",
     // Explicit retention repair cycles a live sandbox to mint a policy-compliant snap.
     "_sandbox_runtime/bulkSnapshotRetention.ts",
+    // PR description: only when the user moves a task to code review
+    // (`agentTasks.updateStatus` sets `restoreStoppedSandbox`).
+    "_github/prDescription.ts",
   ];
 
   test("all sit in a file on the allow-list", () => {

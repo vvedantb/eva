@@ -22,7 +22,6 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
-import { drainChatQueueQuietly } from "../_queues/helpers";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -616,13 +615,22 @@ export const taskSandboxReady = internalMutation({
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
     });
     // A wake is an interaction: the idle sweep grants a full grace window.
-    await touchUserActivity(ctx, {
-      kind: "task",
-      entityId: String(args.taskId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "task", entityId: String(args.taskId) },
+      { source: "start" },
+    );
     // Sends what was queued while Eva slept. Early + final ready both land
     // here; the second no-ops once the first turn is running.
-    await drainChatQueueQuietly(ctx, args.taskId);
+    // Scheduled, not imported: the queue helpers import this module to wake a
+    // stopped sandbox, so a direct call would make an import cycle.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      {
+        parentId: args.taskId,
+      },
+    );
 
     return null;
   },

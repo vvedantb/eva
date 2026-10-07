@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import type * as ConvexClient from "../http/convexClient.js";
 
 // Only the network call is faked; the pure envelope reader
 // (`unwrapConvexMutationPayload`) must stay real so the `{ status, value }`
 // shape below is unwrapped exactly as it is in production.
 vi.mock("../http/convexClient.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../http/convexClient.js")>()),
+  ...(await importOriginal<typeof ConvexClient>()),
   callConvexWithRetry: vi.fn(async (_type: string, path: string) =>
     path === "pendingQuestions:claimAnswer"
       ? {
@@ -152,10 +153,7 @@ describe("the canUseTool gate grants MCP on every surface", () => {
 
 describe("the permission mode is not tied to blocking questions", () => {
   const here = dirname(fileURLToPath(import.meta.url));
-  const source = readFileSync(
-    join(here, "../providers/claudeSdk.ts"),
-    "utf8",
-  );
+  const source = readFileSync(join(here, "../providers/claudeSdk.ts"), "utf8");
 
   test("canUseTool is installed for every agent turn", () => {
     expect(source).toContain('tools === "agent"\n      ? {');

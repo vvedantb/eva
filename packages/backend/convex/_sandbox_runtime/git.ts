@@ -243,6 +243,9 @@ function isRetryableGitNetworkError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     isSandboxExecTimeout(message) ||
+    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
+    lower.includes("internal server error") ||
+    lower.includes("status code 500") ||
     lower.includes("status code 502") ||
     lower.includes("status code 503") ||
     lower.includes("status code 504") ||

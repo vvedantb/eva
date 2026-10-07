@@ -58,6 +58,8 @@ export const connectPty = action({
     // Opening a terminal is a human interaction for the idle-pause sweep.
     await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
       sandboxId: resolved.sandboxId,
+      source: "terminal",
+      clerkUserId: identity.subject,
     });
     await resolveSandboxCredentials(ctx, resolved.repoId);
 

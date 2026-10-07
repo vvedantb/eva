@@ -366,10 +366,11 @@ export const addMessage = authMutation({
     });
     await ctx.db.patch(args.projectId, { updatedAt: Date.now() });
     if (role === "user") {
-      await touchUserActivity(ctx, {
-        kind: "project",
-        entityId: String(args.projectId),
-      });
+      await touchUserActivity(
+        ctx,
+        { kind: "project", entityId: String(args.projectId) },
+        { source: "chat", userId: ctx.userId },
+      );
     }
     return null;
   },
@@ -394,10 +395,11 @@ export const startExecute = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    await touchUserActivity(ctx, {
-      kind: "project",
-      entityId: String(args.projectId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "project", entityId: String(args.projectId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -594,10 +596,11 @@ export const enqueueMessage = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    await touchUserActivity(ctx, {
-      kind: "project",
-      entityId: String(args.projectId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "project", entityId: String(args.projectId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -1355,7 +1358,6 @@ export {
   claimPendingTurn,
   completeSyntheticTurn,
   ensurePendingTurn,
-  handleStaleSyntheticTurn,
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,

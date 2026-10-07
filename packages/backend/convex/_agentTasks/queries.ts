@@ -12,6 +12,7 @@ import {
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../_chat/turnProjection";
+import { unreadLookupForRepo } from "../chatReads";
 
 /** Validator for a task document enriched with its latest run and busy state. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -19,6 +20,8 @@ export const agentTaskWithLastRunValidator = v.object({
   lastRunStartedAt: v.optional(v.number()),
   /** Main run or chat turn (synthetic turns too): `taskIsExecuting`. */
   isExecuting: v.boolean(),
+  /** Unread chat reply for this user (`chatReads.ts`). Autonomous runs do not count. */
+  hasUnread: v.boolean(),
 });
 
 function repoIdsOf(
@@ -45,10 +48,23 @@ async function openChatEntityIdsForRepos(
 /** Enriches each task with its most recent run start and its busy state. */
 async function enrichTasksWithLastRun(
   db: QueryCtx["db"],
+  userId: Id<"users">,
   tasks: Array<Doc<"agentTasks">>,
 ) {
   const repoIds = repoIdsOf(tasks);
   const openChatEntityIds = await openChatEntityIdsForRepos(db, tasks);
+  const unreadLookups = new Map<
+    string,
+    (task: Doc<"agentTasks">) => Promise<boolean>
+  >();
+  await Promise.all(
+    [...repoIds].map(async (repoId) => {
+      unreadLookups.set(
+        String(repoId),
+        await unreadLookupForRepo(db, userId, repoId),
+      );
+    }),
+  );
   const summaryGroups = await Promise.all(
     [...repoIds].map((repoId) =>
       db
@@ -65,11 +81,14 @@ async function enrichTasksWithLastRun(
     tasks.map(async (task) => {
       const summary = summariesByTask.get(String(task._id));
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
+      const unreadLookup = unreadLookups.get(String(task.repoId));
+      const hasUnread = unreadLookup ? await unreadLookup(task) : false;
       if (summary) {
         return {
           ...task,
           lastRunStartedAt: summary.lastRunStartedAt,
           isExecuting,
+          hasUnread,
         };
       }
       // Migration-safe fallback for tasks whose summary row is not backfilled.
@@ -82,6 +101,7 @@ async function enrichTasksWithLastRun(
         ...task,
         lastRunStartedAt: latestRun?.startedAt,
         isExecuting,
+        hasUnread,
       };
     }),
   );
@@ -104,7 +124,7 @@ export const listByProject = authQuery({
     const sorted = tasks.sort(
       (a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0),
     );
-    return enrichTasksWithLastRun(ctx.db, sorted);
+    return enrichTasksWithLastRun(ctx.db, ctx.userId, sorted);
   },
 });
 
@@ -320,7 +340,7 @@ export const getAllTasks = authQuery({
       ),
     );
     const tasks = taskArrays.flat().sort((a, b) => a.createdAt - b.createdAt);
-    return enrichTasksWithLastRun(ctx.db, tasks);
+    return enrichTasksWithLastRun(ctx.db, ctx.userId, tasks);
   },
 });
 

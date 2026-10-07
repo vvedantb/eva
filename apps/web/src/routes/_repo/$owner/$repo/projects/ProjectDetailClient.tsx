@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useAction, useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
@@ -144,6 +145,7 @@ export function ProjectDetailClient({
 
   const project = useQuery(api.projects.get, { id: projectId });
   const chatTurnOpen = useChatTurnOpen(projectId);
+  const chatUnread = useChatUnread(projectId);
   useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
@@ -468,6 +470,7 @@ export function ProjectDetailClient({
             isSandboxActive={isSandboxActive}
             isSandboxStarting={isSandboxStarting}
             isSandboxStopping={isSandboxStopping}
+            hasUnread={chatUnread && chatTurnOpen !== true}
           />
         ) : null
       }

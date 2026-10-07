@@ -13,6 +13,21 @@ type ChatEntityKind = typeof chatEntityKindValidator.type;
 
 type ChatParentId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
 
+/**
+ * Narrows a bare turn owner id to a chat entity. Null for runs, docs,
+ * automation runs and evaluation reports, which own turns but no chat.
+ */
+export function chatParentIdOf(
+  db: DatabaseReader,
+  entityId: string,
+): ChatParentId | null {
+  return (
+    db.normalizeId("sessions", entityId) ??
+    db.normalizeId("agentTasks", entityId) ??
+    db.normalizeId("projects", entityId)
+  );
+}
+
 /** The chat a sandbox token names, resolved to the id its messages hang off. */
 export function resolveChatParent(
   db: DatabaseReader,

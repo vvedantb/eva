@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import {
   internalAction,
@@ -7,9 +7,16 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { authMutation, authQuery, hasActiveRun } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  hasActiveRun,
+  hasRepoAccess,
+  hasTaskAccess,
+} from "./functions";
+import { resolveUserDisplayFirstName } from "./_userProviderAccounts/defaults";
 import { sandboxPresenceRoomId } from "@eva/shared";
-import { isAnyonePresentInRoom } from "./presence";
+import { firstPresentUserInRoom } from "./presence";
 import {
   openChatEntityIdsFor,
   projectIsExecuting,
@@ -32,7 +39,10 @@ import {
   resolveIdleThresholds,
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
-import { sandboxIdlePauseModeValidator } from "./_validators/tableFields";
+import {
+  sandboxActivitySourceValidator,
+  sandboxIdlePauseModeValidator,
+} from "./_validators/tableFields";
 
 /**
  * Idle pause: stops sandboxes nobody is using (Amp-orb style) so Vercel stops
@@ -105,6 +115,55 @@ export const setSandboxIdlePauseSettings = authMutation({
   },
 });
 
+/**
+ * Sandbox panel read: who or what last reset this entity's idle clock, so a
+ * sandbox that stays awake can be traced to a person and a channel. Null when
+ * nothing was recorded or the caller cannot see the entity.
+ */
+export const getSandboxLastActivity = authQuery({
+  args: sandboxActivityRefArgs,
+  returns: v.union(
+    v.null(),
+    v.object({
+      at: v.number(),
+      source: v.optional(sandboxActivitySourceValidator),
+      userName: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    if (!(await canSeeEntity(ctx, args, ctx.userId))) return null;
+    const row = await getSandboxActivity(ctx.db, args);
+    if (row?.lastUserActivityAt === undefined) return null;
+    return {
+      at: row.lastUserActivityAt,
+      source: row.lastUserActivitySource,
+      userName: row.lastUserActivityUserId
+        ? await resolveUserDisplayFirstName(ctx.db, row.lastUserActivityUserId)
+        : undefined,
+    };
+  },
+});
+
+async function canSeeEntity(
+  ctx: QueryCtx,
+  ref: SandboxActivityRef,
+  userId: Id<"users">,
+): Promise<boolean> {
+  if (ref.kind === "session") {
+    const id = ctx.db.normalizeId("sessions", ref.entityId);
+    const session = id ? await ctx.db.get(id) : null;
+    return session ? hasRepoAccess(ctx.db, session.repoId, userId) : false;
+  }
+  if (ref.kind === "task") {
+    const id = ctx.db.normalizeId("agentTasks", ref.entityId);
+    const task = id ? await ctx.db.get(id) : null;
+    return task ? hasTaskAccess(ctx.db, task, userId) : false;
+  }
+  const id = ctx.db.normalizeId("projects", ref.entityId);
+  const project = id ? await ctx.db.get(id) : null;
+  return project ? hasRepoAccess(ctx.db, project.repoId, userId) : false;
+}
+
 /** Internal: thresholds in milliseconds for the sweep. */
 export const getSettingsInternal = internalQuery({
   args: {},
@@ -131,17 +190,15 @@ const candidateValidator = v.object({
   status: v.optional(v.string()),
   busy: v.boolean(),
   present: v.boolean(),
+  /** A user on a sandbox tab right now; credited when presence resets the clock. */
+  presentUserId: v.optional(v.id("users")),
   lastUserActivityAt: v.number(),
+  lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
+  lastUserActivityUserId: v.optional(v.id("users")),
   lastAgentFinishedAt: v.optional(v.number()),
 });
 
-type Candidate = {
-  status: string | undefined;
-  busy: boolean;
-  present: boolean;
-  lastUserActivityAt: number;
-  lastAgentFinishedAt: number | undefined;
-};
+type Candidate = Infer<typeof candidateValidator>;
 
 /**
  * True when a fresh streaming row or a queued follow-up exists for the entity.
@@ -249,17 +306,23 @@ async function finishCandidate(
   creationTime: number,
 ): Promise<Candidate> {
   const activity = await getSandboxActivity(ctx.db, ref);
-  const present = await isAnyonePresentInRoom(
+  const presentUser = await firstPresentUserInRoom(
     ctx,
     sandboxPresenceRoomId(ref.entityId),
   );
   return {
     status,
     busy,
-    present,
+    present: presentUser !== null,
+    presentUserId:
+      presentUser === null
+        ? undefined
+        : (ctx.db.normalizeId("users", presentUser) ?? undefined),
     lastUserActivityAt:
       activity?.lastUserActivityAt ??
       fallbackLastActivity(fallbacks, creationTime),
+    lastUserActivitySource: activity?.lastUserActivitySource,
+    lastUserActivityUserId: activity?.lastUserActivityUserId,
     lastAgentFinishedAt: activity?.lastAgentFinishedAt,
   };
 }
@@ -366,7 +429,11 @@ export const run = internalAction({
         present += 1;
         // Presence is an interaction: restart the grace from now so the
         // sandbox outlives the tab by the configured window, not by zero.
-        await ctx.runMutation(internal._sandbox.activity.touchUser, ref);
+        await ctx.runMutation(internal._sandbox.activity.touchUser, {
+          ...ref,
+          source: "viewing",
+          userId: candidate.presentUserId,
+        });
         continue;
       }
       const decision = decideIdlePause({
@@ -386,7 +453,7 @@ export const run = internalAction({
       if (paused >= MAX_PAUSES_PER_RUN) continue;
       const verb = thresholds.mode === "on" ? "pause" : "would-pause";
       console.log(
-        `[sandboxIdlePause] ${verb} kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()}`,
+        `[sandboxIdlePause] ${verb} kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()} lastSource=${candidate.lastUserActivitySource ?? "unknown"} lastUserId=${candidate.lastUserActivityUserId ?? "none"}`,
       );
       if (thresholds.mode === "on") {
         const stopped = await ctx.runMutation(

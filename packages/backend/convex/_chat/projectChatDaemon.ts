@@ -414,19 +414,6 @@ export const completeSyntheticTurn = authMutation({
   },
 });
 
-/**
- * No-op stub. The durable turn's lease now ends a stalled synthetic turn.
- * Kept for one release because timers scheduled before 2026-10-07 still call
- * it. Delete on or after 2026-10-14.
- */
-export const handleStaleSyntheticTurn = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    messageId: v.id("messages"),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
 export const ensurePendingTurn = internalMutation({
   args: {

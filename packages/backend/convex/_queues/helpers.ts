@@ -373,7 +373,14 @@ async function startNextQueuedChatMessage<
   await config.insertUserMessage(ctx, id, entity, nextMessage, guard.data, now);
   // A dequeued follow-up is the user's message landing: restart the idle clock.
   const activityRef = activityRefForParentId(ctx.db, String(id));
-  if (activityRef) await touchUserActivity(ctx, activityRef, now);
+  if (activityRef) {
+    await touchUserActivity(
+      ctx,
+      activityRef,
+      { source: "chat", userId: nextMessage.userId },
+      now,
+    );
+  }
   // After the user row exists, so detection sees the turn it is deciding about.
   await maybeInsertModelHandoffAlert(
     ctx,
@@ -916,7 +923,11 @@ export async function drainChatQueueQuietly(
   return false;
 }
 
-/** Scheduled resume for a queue held by a usage limit (`usageLimitHoldFor`). */
+/**
+ * Scheduled quiet drain: resumes a queue held by a usage limit
+ * (`usageLimitHoldFor`), and drains after a sandbox start (scheduled by the
+ * sandbox modules, which cannot import these helpers without a cycle).
+ */
 export const drainQueueQuietly = internalMutation({
   args: { parentId: queuedMessageFields.parentId },
   returns: v.null(),

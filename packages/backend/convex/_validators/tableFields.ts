@@ -511,6 +511,8 @@ export const agentTaskFields = {
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   ...chatDaemonEntityFields,
+  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
+  lastTurnFinishedAt: v.optional(v.number()),
   ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
@@ -661,6 +663,8 @@ export const sessionFields = {
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
   ...chatDaemonEntityFields,
+  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
+  lastTurnFinishedAt: v.optional(v.number()),
   // Soft UX lock while the agent drives the shared desktop Chrome via
   agentBrowsingAt: v.optional(v.number()),
   // True while a new session's sandbox finishes pulling the latest base branch
@@ -1000,6 +1004,8 @@ export const projectFields = {
   // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   ...chatDaemonEntityFields,
+  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
+  lastTurnFinishedAt: v.optional(v.number()),
   ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
@@ -1335,6 +1341,16 @@ export const taskSubscriberFields = {
   updatedAt: v.number(),
 };
 
+// One row per (user, chat): when the user last saw it. "Read" is per user, so
+// it cannot live on the shared chat doc. `repoId` lets a list query load one
+// user's rows for one repo in a single indexed read.
+export const chatReadFields = {
+  userId: v.id("users"),
+  parentId: chatTurnEntityIdValidator, // sessions | agentTasks | projects
+  repoId: v.id("githubRepos"),
+  lastReadAt: v.number(),
+};
+
 // Per-sandbox bearer secret the in-sandbox git credential helper presents to
 // /api/git-credentials to receive a freshly minted GitHub App installation
 // token. One row per sandbox; rotated every time the helper is
@@ -1380,11 +1396,35 @@ export const sandboxActivityKindValidator = v.union(
   v.literal("project"),
 );
 
+/** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
+export const sandboxActivitySourceValidator = v.union(
+  /** A chat message was sent or a queued one landed. */
+  v.literal("chat"),
+  /** The sandbox was started or woken. */
+  v.literal("start"),
+  /** An Eva sandbox tab was on screen at sweep time. */
+  v.literal("viewing"),
+  /** Eva's Preview / custom tab loaded or polled the preview URL. */
+  v.literal("preview-tab"),
+  /** The preview page was on screen, or a non-browser client hit the proxy. */
+  v.literal("preview-page"),
+  v.literal("terminal"),
+  v.literal("files"),
+  v.literal("services"),
+);
+export type SandboxActivitySource = Infer<
+  typeof sandboxActivitySourceValidator
+>;
+
 export const sandboxActivityFields = {
   kind: sandboxActivityKindValidator,
   entityId: v.string(),
   /** Last human interaction: message sent, tab opened, preview traffic, presence. */
   lastUserActivityAt: v.optional(v.number()),
+  /** How the last interaction arrived. Unset on rows written before attribution. */
+  lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
+  /** Who made it, when known (chat, preview, terminal…; not system wakes). */
+  lastUserActivityUserId: v.optional(v.id("users")),
   /** Last time an agent turn or run finished for this entity. */
   lastAgentFinishedAt: v.optional(v.number()),
 };

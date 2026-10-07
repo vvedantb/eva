@@ -58,6 +58,7 @@ const handleUpstreamFactory = new Function(
   "VERCEL_HOST_SUFFIX",
   "STATIC_ASSET_RE",
   "isLoopbackRequest",
+  "ACTIVITY_PING_PAGES",
   "route",
   "clientReq",
   "clientRes",
@@ -65,12 +66,16 @@ const handleUpstreamFactory = new Function(
     // Stubbed: the real tag embeds the generated nav-sync + annotation scripts.
     "function buildInjectionTag() { return INJECTION_TAG; }",
     'const NOVNC_CDN_RFB = "https://cdn.example.test/rfb.js";',
+    // Stubbed: the real ping script interpolates the heartbeat interval.
+    'const visibilityPingScript = "PING";',
+    extractFunctionSource("function isDocumentRequest(req) {"),
+    extractFunctionSource("function injectVisibilityPing(html) {"),
     extractFunctionSource("function stripModuleCrossorigin(html) {"),
     extractFunctionSource("function rewriteNovncModuleImports(html) {"),
     extractFunctionSource("function injectHtml(html) {"),
     extractFunctionSource("function prefixTabPath(value, tabPrefix) {"),
     extractFunctionSource("function rewriteTabHtml(html, tabPrefix) {"),
-    extractFunctionSource("function rewriteHtml(html, injects, tabPrefix) {"),
+    extractFunctionSource("function rewriteHtml(html, injects, tabPrefix, pings) {"),
     extractFunctionSource("function rewriteLocationHeader(value, route) {"),
     extractFunctionSource("function rewriteSetCookie(value) {"),
     extractFunctionSource("function responseHeaders("),
@@ -81,12 +86,21 @@ const handleUpstreamFactory = new Function(
 
 interface HarnessOptions {
   bufferWholeHtml?: boolean;
+  /** Proxy-level switch for the on-screen idle-pause ping. */
+  pingPages?: boolean;
+  /** Request headers, e.g. `sec-fetch-dest` for a document load. */
+  requestHeaders?: Record<string, string>;
   /** `false` makes every clientRes.write report backpressure. */
   acceptWrites?: boolean;
 }
 
 function createHarness(options: HarnessOptions = {}) {
-  const { bufferWholeHtml = false, acceptWrites = true } = options;
+  const {
+    bufferWholeHtml = false,
+    acceptWrites = true,
+    pingPages = false,
+    requestHeaders = {},
+  } = options;
 
   const drainListeners: Array<() => void> = [];
   const clientRes: FakeClientRes = {
@@ -124,8 +138,9 @@ function createHarness(options: HarnessOptions = {}) {
     ".vercel.run",
     /^$/,
     () => false,
+    pingPages,
     { port: 3000, path: "/", injects: true, tabPrefix: null },
-    { headers: {} },
+    { headers: requestHeaders },
     clientRes,
   );
 
@@ -328,5 +343,54 @@ describe("desktop and editor HTML keeps whole-document buffering", () => {
     );
     expect(definition).toContain("VERCEL_DESKTOP_INTERNAL_PORT");
     expect(definition).toContain("VERCEL_EDITOR_INTERNAL_PORT");
+  });
+});
+
+/**
+ * Idle pause: a hidden tab used to keep its sandbox awake for hours because
+ * every request it made (polls, reconnects) counted as a human. Documents now
+ * carry an on-screen ping instead, and only real document loads get it.
+ */
+describe("on-screen ping injection", () => {
+  const PING_TAG = "<script data-eva-preview-activity>PING</script>";
+
+  test("a document load gets the ping once, next to the nav-sync script", () => {
+    const { clientRes, handleUpstream, upstream } = createHarness({
+      pingPages: true,
+      requestHeaders: { "sec-fetch-dest": "iframe" },
+    });
+    const res = upstream();
+    handleUpstream(res);
+    res.emit("data", Buffer.from("<html><head></head><body>x</body></html>"));
+    res.emit("end");
+
+    expect(received(clientRes)).toBe(
+      `<html><head>${INJECTION_TAG}${PING_TAG}</head><body>x</body></html>`,
+    );
+  });
+
+  test("an HTML fragment the app fetches itself is left alone", () => {
+    const { clientRes, handleUpstream, upstream } = createHarness({
+      pingPages: true,
+      requestHeaders: { "sec-fetch-dest": "empty" },
+    });
+    const res = upstream();
+    handleUpstream(res);
+    res.emit("data", Buffer.from("<html><head></head><body>x</body></html>"));
+    res.emit("end");
+
+    expect(received(clientRes)).not.toContain(PING_TAG);
+  });
+
+  test("desktop and editor proxies (ping off) never inject it", () => {
+    const { clientRes, handleUpstream, upstream } = createHarness({
+      requestHeaders: { "sec-fetch-dest": "document" },
+    });
+    const res = upstream();
+    handleUpstream(res);
+    res.emit("data", Buffer.from("<html><head></head><body>x</body></html>"));
+    res.emit("end");
+
+    expect(received(clientRes)).not.toContain(PING_TAG);
   });
 });

@@ -37,6 +37,8 @@ export const projectPlanningModeValidator = v.union(
 export const projectListItemValidator = v.object({
   ...projectSummaryFields,
   planningMode: projectPlanningModeValidator,
+  /** Unread project chat reply for this user (`chatReads.ts`). */
+  hasUnread: v.boolean(),
 });
 
 /** Infers interview vs tasks-only for projects created before `planningMode` existed. */

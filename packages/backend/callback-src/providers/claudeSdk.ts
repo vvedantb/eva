@@ -29,7 +29,6 @@ import { buildClaudeStartupStep } from "../session/claudeSession.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { updateThinkingStep } from "../parse/canonical.js";
 import {
-  appendToRawLogFile,
   recordSdkAttemptFailure,
   recordSdkRetry,
   trimBufferHead,
@@ -265,7 +264,10 @@ const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
  * found that newer copy, reported the pin as present and returned `command -v
  * claude` — the image's stale 2.1.258 — so the agent stayed on it for good.
  */
-function binPackageVersion(binPath: string, packageName: string): string | null {
+function binPackageVersion(
+  binPath: string,
+  packageName: string,
+): string | null {
   return installedPackageVersion(
     dirname(dirname(binPath)) + "/lib/node_modules/" + packageName,
   );

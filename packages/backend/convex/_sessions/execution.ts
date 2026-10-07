@@ -305,10 +305,11 @@ export const startExecute = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    await touchUserActivity(ctx, {
-      kind: "session",
-      entityId: String(args.sessionId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "session", entityId: String(args.sessionId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     // Notify before the turn runs or queues so a mention fires either way.
     await notifyChatMentions(ctx, {
@@ -525,10 +526,11 @@ export const enqueueMessage = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    await touchUserActivity(ctx, {
-      kind: "session",
-      entityId: String(args.sessionId),
-    });
+    await touchUserActivity(
+      ctx,
+      { kind: "session", entityId: String(args.sessionId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: args.providerAccountId,

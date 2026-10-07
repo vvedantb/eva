@@ -35,6 +35,8 @@ export const toggleCodeServer = action({
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
     await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
       sandboxId: args.sandboxId,
+      source: "services",
+      clerkUserId: identity.subject,
     });
 
     console.log(
@@ -159,6 +161,8 @@ export const toggleDesktopServer = action({
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
     await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
       sandboxId: args.sandboxId,
+      source: "services",
+      clerkUserId: identity.subject,
     });
 
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
@@ -320,6 +324,8 @@ export async function authorizedRunningHandle(
   // File browsing/editing is a human interaction for the idle-pause sweep.
   await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
     sandboxId,
+    source: "files",
+    clerkUserId: identity.subject,
   });
 
   const handle = await getSandboxHandle(ctx, repoId, sandboxId);

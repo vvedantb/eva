@@ -29,6 +29,7 @@ import {
   taskCommentFields,
   taskReactionFields,
   taskSubscriberFields,
+  chatReadFields,
   repoSkillFields,
   repoSkillContentFields,
   repoSystemSkillFields,
@@ -162,6 +163,10 @@ const schema = defineSchema({
   taskSubscribers: defineTable(taskSubscriberFields)
     .index("by_task", ["taskId"])
     .index("by_task_and_user", ["taskId", "userId"]),
+
+  chatReads: defineTable(chatReadFields)
+    .index("by_user_parent", ["userId", "parentId"])
+    .index("by_user_repo", ["userId", "repoId"]),
 
   taskDependencies: defineTable({
     taskId: v.id("agentTasks"),

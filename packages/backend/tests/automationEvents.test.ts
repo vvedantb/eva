@@ -4,6 +4,7 @@ import {
   repoEventKey,
   triggerMatchesEvent,
   type RepoEvent,
+  type AutomationTrigger,
 } from "../convex/_automationEvents/events";
 import {
   buildCiFailureMessage,
@@ -15,7 +16,6 @@ import {
   automationCronspec,
   automationTrigger,
 } from "../convex/_automations/systemAutomations";
-import type { AutomationTrigger } from "../convex/_automationEvents/events";
 
 const repository = { name: "eva", owner: { login: "acme" } };
 const human = { type: "User" };
@@ -97,7 +97,10 @@ describe("parseRepoEvents", () => {
     const body = JSON.stringify({
       action: "submitted",
       review: { state: "approved", author_association: "OWNER" },
-      pull_request: { number: 3, html_url: "https://github.com/acme/eva/pull/3" },
+      pull_request: {
+        number: 3,
+        html_url: "https://github.com/acme/eva/pull/3",
+      },
       repository,
       sender: human,
     });
