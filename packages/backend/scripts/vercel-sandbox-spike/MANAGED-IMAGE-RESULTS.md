@@ -146,14 +146,24 @@ Phase 2 is in the backend and is inert until you set one env var.
 
 ### Flipping it
 
-```bash
-# in the Convex deployment env, NOT a dev shell
-VERCEL_SANDBOX_IMAGE=vercel/sandbox/universal:<pinned-tag>
-```
+Per repo (the canary path):
 
-Pin a tag rather than using `universal` bare: `latest` moves under you, and a
-base-image change is exactly the kind of thing that should not arrive silently.
-Unset the variable to roll back — no code change, no re-seed.
+1. In eva, open the repo → Settings → Env Vars. Add
+   `VERCEL_SANDBOX_IMAGE` = `vercel/sandbox/universal@sha256:<digest>`.
+2. Settings → Snapshots → **Rebuild Now**. This rebuilds the base Image from a
+   fresh sandbox (now Ubuntu), then re-seeds on top of it.
+3. When the build succeeds, start a session and check it works.
+
+Setting it at team level flips every repo in the team. Setting it in the Convex
+deployment env is the global default; a repo's own value overrides it.
+
+Precedence: a per-call image (the orchestrator) → the repo's env var → the
+deployment env → `runtime: node24`.
+
+Pin a digest rather than `universal` bare: `latest` moves under you, and a
+base-image change should not arrive silently. To roll back, delete the env var
+and click Rebuild Now again. Until that rebuild, the repo keeps booting the
+Ubuntu snapshots it already has.
 
 ### Order of operations
 
@@ -170,5 +180,4 @@ Unset the variable to roll back — no code change, no re-seed.
 4. ~~Confirm `userIsUbuntu` / `legacyWorkdirStillExists`~~ — **done**, see
    "What differs" above. `/vercel/sandbox` is absent on the managed image but
    `EVA_ENV_FILE` writes still work, and the `.bashrc` hook now follows `$HOME`.
-5. Set `VERCEL_SANDBOX_IMAGE` on one repo's deployment first and rebuild its
-   seed; only then roll out.
+5. Flip one low-stakes repo first (steps above); only then roll out.

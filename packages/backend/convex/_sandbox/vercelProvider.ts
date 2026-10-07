@@ -1206,7 +1206,15 @@ class VercelSandboxHandle implements SandboxHandle {
 class VercelSandboxClient implements SandboxClient {
   readonly kind: SandboxProviderKind = "vercel";
 
-  constructor(private readonly creds: VercelCredentials) {}
+  /**
+   * `sandboxImage` is the repo's own VERCEL_SANDBOX_IMAGE. Kept out of `creds`
+   * on purpose: `creds` is spread into every SDK call, which must not receive
+   * an unknown option.
+   */
+  constructor(
+    private readonly creds: VercelCredentials,
+    private readonly sandboxImage?: string,
+  ) {}
 
   /**
    * Turns neutral {@link SandboxMount}s into the SDK's `mounts` map, resolving
@@ -1270,12 +1278,14 @@ class VercelSandboxClient implements SandboxClient {
     // Resolved once per create so the value in the log line and the value in the
     // failure message are provably the same one that was sent.
     //
-    // A caller-supplied VCR image (the orchestrator's ORCHESTRATOR_SANDBOX_IMAGE)
-    // is a deliberate per-sandbox choice and outranks the deployment-wide
-    // default that VERCEL_SANDBOX_IMAGE sets for everything else.
+    // Precedence, most specific first: a caller-supplied VCR image (a
+    // deliberate per-sandbox choice), then the repo's VERCEL_SANDBOX_IMAGE env
+    // var (per-repo canary), then the deployment-wide default.
     const freshSource = params.image
       ? { image: params.image }
-      : resolveVercelSandboxSource();
+      : resolveVercelSandboxSource(
+          this.sandboxImage ?? process.env.VERCEL_SANDBOX_IMAGE,
+        );
     const region = await this.regionFor(params);
     // Drives are region-pinned to SANDBOX_REGION, so a sandbox placed elsewhere
     // cannot mount them — skip the mounts rather than spend a failed create.
@@ -1420,6 +1430,9 @@ export function unwrapVercelSandbox(handle: SandboxHandle): Sandbox {
 }
 
 /** Constructs a Vercel-backed {@link SandboxClient} from access-token credentials. */
-export function createVercelClient(creds: VercelCredentials): SandboxClient {
-  return new VercelSandboxClient(creds);
+export function createVercelClient(
+  creds: VercelCredentials,
+  sandboxImage?: string,
+): SandboxClient {
+  return new VercelSandboxClient(creds, sandboxImage);
 }

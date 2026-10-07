@@ -27,7 +27,31 @@ describe("selectVercelCredentials", () => {
       token: "tok_web",
       teamId: "team_web",
       projectId: "prj_eproc",
+      sandboxImage: undefined,
     });
+  });
+
+  /**
+   * The base image is a per-app canary switch. Borrowing a sibling's would
+   * flip an app to Ubuntu that nobody chose to flip.
+   */
+  test("takes VERCEL_SANDBOX_IMAGE from the target app only", () => {
+    const flipped = selectVercelCredentials(
+      { ...eprocVars, VERCEL_SANDBOX_IMAGE: "universal" },
+      [webVars],
+    );
+    expect(flipped.ok && flipped.sandboxImage).toBe("universal");
+
+    const sibling = selectVercelCredentials(eprocVars, [
+      { ...webVars, VERCEL_SANDBOX_IMAGE: "universal" },
+    ]);
+    expect(sibling.ok && sibling.sandboxImage).toBeUndefined();
+
+    const blank = selectVercelCredentials(
+      { ...eprocVars, VERCEL_SANDBOX_IMAGE: "  " },
+      [webVars],
+    );
+    expect(blank.ok && blank.sandboxImage).toBeUndefined();
   });
 
   test("does not borrow a sibling app's VERCEL_PROJECT_ID", () => {

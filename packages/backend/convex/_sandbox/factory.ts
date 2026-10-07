@@ -16,9 +16,12 @@ import { createVercelClient } from "./vercelProvider";
 export function getSandboxClient(
   credentials: SandboxCredentials,
 ): SandboxClient {
-  return createVercelClient({
-    token: credentials.token,
-    teamId: credentials.teamId,
-    projectId: credentials.projectId,
-  });
+  return createVercelClient(
+    {
+      token: credentials.token,
+      teamId: credentials.teamId,
+      projectId: credentials.projectId,
+    },
+    credentials.sandboxImage,
+  );
 }

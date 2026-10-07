@@ -118,11 +118,12 @@ test("snapshot restores never pass a base image", () => {
 });
 
 /**
- * `params.image` is a deliberate per-sandbox choice — the orchestrator boots
- * from ORCHESTRATOR_SANDBOX_IMAGE regardless of the deployment default — so it
- * has to outrank VERCEL_SANDBOX_IMAGE rather than be overwritten by it.
+ * Precedence, most specific first: a per-call image (the orchestrator), then
+ * the repo's own VERCEL_SANDBOX_IMAGE (a per-repo canary), then the
+ * deployment default. Getting this order wrong either flips every repo at once
+ * or silently ignores the canary.
  */
-test("a caller-supplied image outranks the deployment default", () => {
+test("image precedence: per-call, then repo env var, then deployment default", () => {
   const source = readFileSync(
     join(testsDir, "../convex/_sandbox/vercelProvider.ts"),
     "utf8",
@@ -130,10 +131,14 @@ test("a caller-supplied image outranks the deployment default", () => {
   const at = source.indexOf("const freshSource =");
   expect(at, "freshSource moved or was renamed").toBeGreaterThan(-1);
   const decl = source.slice(at, source.indexOf(";", at));
-  expect(decl).toContain("params.image");
-  expect(decl).toContain("resolveVercelSandboxSource()");
-  expect(
-    decl.indexOf("params.image"),
-    "the per-call image must be the ternary's condition, not its fallback",
-  ).toBeLessThan(decl.indexOf("resolveVercelSandboxSource()"));
+  const order = [
+    "params.image",
+    "this.sandboxImage",
+    "process.env.VERCEL_SANDBOX_IMAGE",
+  ].map((needle) => decl.indexOf(needle));
+  for (const i of order) expect(i).toBeGreaterThan(-1);
+  expect(order).toEqual([...order].sort((a, b) => a - b));
+  expect(decl, "the repo value must fall back, not replace").toContain(
+    "this.sandboxImage ?? process.env.VERCEL_SANDBOX_IMAGE",
+  );
 });
