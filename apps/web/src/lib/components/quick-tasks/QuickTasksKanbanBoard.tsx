@@ -198,6 +198,7 @@ export function QuickTasksKanbanBoard({
             description={task.description}
             status={task.status}
             isAgentActive={task.isExecuting}
+            hasUnread={task.hasUnread}
             priority={task.priority}
             numId={task.numId}
             projectNumId={
@@ -255,6 +256,7 @@ export function QuickTasksKanbanBoard({
             description={task.description}
             status={task.status}
             isAgentActive={task.isExecuting}
+            hasUnread={task.hasUnread}
             priority={task.priority}
             numId={task.numId}
             projectNumId={

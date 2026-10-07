@@ -430,6 +430,8 @@ export const agentTaskFields = {
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   ...chatDaemonEntityFields,
+  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
+  lastTurnFinishedAt: v.optional(v.number()),
   ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
@@ -584,6 +586,8 @@ export const sessionFields = {
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
   ...chatDaemonEntityFields,
+  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
+  lastTurnFinishedAt: v.optional(v.number()),
   // Soft UX lock while the agent drives the shared desktop Chrome via
   agentBrowsingAt: v.optional(v.number()),
   // True while a new session's sandbox finishes pulling the latest base branch
@@ -921,6 +925,8 @@ export const projectFields = {
   // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   ...chatDaemonEntityFields,
+  /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
+  lastTurnFinishedAt: v.optional(v.number()),
   ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
@@ -1254,6 +1260,16 @@ export const taskSubscriberFields = {
   subscribed: v.boolean(),
   createdAt: v.number(),
   updatedAt: v.number(),
+};
+
+// One row per (user, chat): when the user last saw it. "Read" is per user, so
+// it cannot live on the shared chat doc. `repoId` lets a list query load one
+// user's rows for one repo in a single indexed read.
+export const chatReadFields = {
+  userId: v.id("users"),
+  parentId: chatTurnEntityIdValidator, // sessions | agentTasks | projects
+  repoId: v.id("githubRepos"),
+  lastReadAt: v.number(),
 };
 
 // Per-sandbox bearer secret the in-sandbox git credential helper presents to

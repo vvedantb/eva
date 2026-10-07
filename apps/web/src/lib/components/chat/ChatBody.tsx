@@ -11,6 +11,9 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
+import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
+import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
+import { useSeenOnce } from "@/lib/components/chat/useSeenOnce";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
   ChatComposer,
@@ -45,6 +48,7 @@ import type { TurnCheckpointContext } from "@/lib/components/chat/_components/us
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
+import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
@@ -63,6 +67,8 @@ import {
   buildJumpRailTicks,
   buildMessageHistory,
   findDayBoundaryIds,
+  findNewMessageIds,
+  type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findLastAssistantMessageId,
@@ -118,7 +124,12 @@ interface ChatBodyProps {
    * that belong to this transcript.
    * Absent (Manager Ave): no panels are loaded.
    */
-  chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+  chatParentId?: ChatParentId;
+  /**
+   * Cached session shells stay mounted but hidden. False stops mark-read and
+   * the "NEW" divider anchor, so a hidden chat never clears its own dot.
+   */
+  isRouteActive?: boolean;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -253,6 +264,7 @@ function ChatBodyInner({
   repo,
   conversationId,
   chatParentId,
+  isRouteActive = true,
   messages,
   isLoadingMessages = false,
   queuedMessages,
@@ -471,6 +483,23 @@ function ChatBodyInner({
       lastUserMessage === undefined ||
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
+  const { newSinceAt } = useChatReadState({
+    parentId: chatParentId,
+    active: isRouteActive,
+  });
+  const newMessageIds = findNewMessageIds(
+    displayMessages,
+    newSinceAt,
+    currentUserId,
+  );
+  const newBoundaryId = newMessageIds[0];
+  // Seen state lives here, not in the divider: the pill is a sibling and needs
+  // it. It is keyed by the boundary id, so a new boundary starts unseen.
+  const newDivider = useSeenOnce(newBoundaryId);
+  const jumpToNewDivider = () => {
+    newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    newDivider.markSeen();
+  };
 
   // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
   // (`render_html`) and secret requests (`request_env_var`). One query each
@@ -611,6 +640,9 @@ function ChatBodyInner({
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
         ) : null}
+        {message._id === newBoundaryId ? (
+          <ChatNewDivider ref={newDivider.ref} />
+        ) : null}
         <ChatMessage
           message={message}
           animateIn={!isBacklog}
@@ -705,6 +737,14 @@ function ChatBodyInner({
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
+        {newBoundaryId ? (
+          <ChatNewMessagesPill
+            key={newBoundaryId}
+            count={newMessageIds.length}
+            visible={newDivider.status === "above"}
+            onJump={jumpToNewDivider}
+          />
+        ) : null}
         <ConversationScrollButton resetKey={conversationId} />
         {/* Mounted with the backlog: the rail resolves its ticks by querying
             `[data-message-id]` from an effect keyed on the (memoised) tick

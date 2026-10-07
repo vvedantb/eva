@@ -41,6 +41,7 @@ import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
 import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
+import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import {
   fileViewerPathParser,
   isTaskRouteSandboxTab,
@@ -139,6 +140,7 @@ export function TaskDetailInline({
     handleCreatePr,
   } = useTaskDetail(taskId, routing);
   const isAgentActive = useTaskAgentActive(taskId, task);
+  const chatUnread = useChatUnread(taskId);
   const altHeld = useAltHeld();
 
   useEffect(() => {
@@ -553,6 +555,7 @@ export function TaskDetailInline({
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
         isAgentActive={isAgentActive}
+        hasUnread={chatUnread}
         onSurfaceChange={handleSelectSurface}
       />
     ) : null;

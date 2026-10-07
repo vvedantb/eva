@@ -140,6 +140,7 @@ function VirtualProjectColumn({
                   planningMode={project.planningMode}
                   isBuilding={project.activeBuildWorkflowId !== undefined}
                   sandboxStatus={project.reviewProjectSandboxStatus}
+                  hasUnread={project.hasUnread}
                   href={
                     entityPathSegment(project)
                       ? `${basePath}/projects/${entityPathSegment(project)}`
