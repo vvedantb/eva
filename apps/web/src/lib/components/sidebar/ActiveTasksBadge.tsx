@@ -45,7 +45,7 @@ export function ActiveTasksBadge({ repoId }: ActiveTasksBadgeProps) {
               className="flex items-center gap-1.5"
             >
               <span className="h-2 w-2 rounded-full bg-success" />
-              <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+              <span className="text-2xs font-medium text-muted-foreground tabular-nums">
                 {sandboxTasks.length}
               </span>
             </CountPop>

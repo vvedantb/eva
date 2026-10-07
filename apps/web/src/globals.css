@@ -125,25 +125,25 @@
 }
 
 @utility rounded-surface {
-  border-radius: clamp(0.75rem, var(--radius), 1.25rem);
+  border-radius: clamp(0.75rem, var(--radius), 1rem);
 }
 
 @utility rounded-b-surface {
-  border-radius: 0 0 clamp(0.75rem, var(--radius), 1.25rem)
-    clamp(0.75rem, var(--radius), 1.25rem);
+  border-radius: 0 0 clamp(0.75rem, var(--radius), 1rem)
+    clamp(0.75rem, var(--radius), 1rem);
 }
 
 @utility rounded-t-surface {
-  border-radius: clamp(0.75rem, var(--radius), 1.25rem)
-    clamp(0.75rem, var(--radius), 1.25rem) 0 0;
+  border-radius: clamp(0.75rem, var(--radius), 1rem)
+    clamp(0.75rem, var(--radius), 1rem) 0 0;
 }
 
 @utility rounded-menu-item {
-  border-radius: min(var(--radius), 0.75rem);
+  border-radius: min(var(--radius), 0.5rem);
 }
 
 @utility rounded-control {
-  border-radius: min(var(--radius), 1.25rem);
+  border-radius: min(var(--radius), 0.625rem);
 }
 
 @utility bg-app-shell {
@@ -590,6 +590,16 @@
     --chart-3: 129 140 248;
     --chart-4: 167 139 250;
     --chart-5: 6 182 212;
+    /* Muted categorical ramp for hash-assigned identity colour (tab groups,
+     * repo tiles, avatars). Not for status — status uses --status-*. */
+    --cat-1: 72 106 168; /* blue */
+    --cat-2: 120 96 170; /* violet */
+    --cat-3: 54 122 118; /* teal */
+    --cat-4: 150 108 42; /* amber */
+    --cat-5: 160 82 100; /* rose */
+    --cat-6: 62 122 84; /* emerald */
+    --cat-7: 56 112 150; /* sky */
+    --cat-8: 162 96 62; /* orange */
     --warning-bg: 255 247 237;
     --success-bg: 240 253 244;
     /* Tinted-chip text. `--warning` / `--destructive` are the brightest point
@@ -706,6 +716,16 @@
     --chart-3: 129 140 248;
     --chart-4: 167 139 250;
     --chart-5: 6 182 212;
+    /* Muted categorical ramp for hash-assigned identity colour (tab groups,
+     * repo tiles, avatars). Not for status — status uses --status-*. */
+    --cat-1: 138 165 214;
+    --cat-2: 170 152 214;
+    --cat-3: 120 176 172;
+    --cat-4: 202 160 96;
+    --cat-5: 210 142 158;
+    --cat-6: 126 178 144;
+    --cat-7: 128 172 200;
+    --cat-8: 212 152 118;
     --warning-bg: 47 35 20;
     --success-bg: 18 44 30;
     --warning-strong: 252 211 77;
@@ -873,11 +893,11 @@
     ):not([type="file"]),
   textarea,
   select {
-    border-radius: min(var(--radius), 1.25rem);
+    border-radius: min(var(--radius), 0.625rem);
   }
 
   [contenteditable="true"][role="textbox"] {
-    border-radius: min(var(--radius), 1.25rem);
+    border-radius: min(var(--radius), 0.625rem);
   }
 
   /*

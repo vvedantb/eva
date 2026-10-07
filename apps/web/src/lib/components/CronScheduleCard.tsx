@@ -173,7 +173,7 @@ function CronPreview({
     <div className="mb-2 rounded-surface bg-muted/50 px-3 py-2 text-center">
       <p className="text-lg font-medium">{result.text}</p>
       {next && (
-        <p className="text-[11px] text-muted-foreground">next at {next}</p>
+        <p className="text-2xs text-muted-foreground">next at {next}</p>
       )}
     </div>
   );
@@ -183,12 +183,12 @@ function CronGuide() {
   return (
     <div className="mt-3 rounded-surface border border-border bg-muted/40 overflow-hidden">
       <div className="bg-muted/30 px-3 py-1.5">
-        <p className="text-[11px] font-medium text-muted-foreground">
+        <p className="text-2xs font-medium text-muted-foreground">
           Cron format reference
         </p>
       </div>
       <div className="p-2 flex flex-col gap-3 sm:flex-row sm:gap-6 sm:p-3">
-        <pre className="overflow-x-auto font-mono text-[11px] text-muted-foreground leading-relaxed shrink-0">
+        <pre className="overflow-x-auto font-mono text-2xs text-muted-foreground leading-relaxed shrink-0">
           {"┌─ minute (0-59)\n"}
           {"│ ┌─ hour (0-23)\n"}
           {"│ │ ┌─ day of month (1-31)\n"}
@@ -196,7 +196,7 @@ function CronGuide() {
           {"│ │ │ │ ┌─ day of week (0-6)\n"}
           {"* * * * *"}
         </pre>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] content-start sm:gap-x-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs content-start sm:gap-x-4">
           {(
             [
               ["*", "any value"],

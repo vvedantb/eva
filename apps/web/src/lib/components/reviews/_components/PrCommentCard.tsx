@@ -62,7 +62,7 @@ export function PrCommentCard({
             <span className="text-muted-foreground">{action}</span>
             {badge}
           </div>
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-2xs text-muted-foreground">
             {at === null ? null : (
               <RelativeDateTime at={new Date(at).getTime()} />
             )}

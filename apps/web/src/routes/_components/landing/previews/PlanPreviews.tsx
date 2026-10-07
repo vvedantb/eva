@@ -111,7 +111,7 @@ export function ProjectsPreview() {
                 key={card.title}
                 className="space-y-2 rounded-md border border-border bg-card p-2"
               >
-                <p className="text-[11px] font-medium leading-tight text-foreground">
+                <p className="text-2xs font-medium leading-tight text-foreground">
                   {card.title}
                 </p>
                 <div className="flex items-center justify-between">
@@ -157,7 +157,7 @@ export function DraftsPreview() {
             meta={draft.meta}
             trailing={
               index === 0 ? (
-                <span className="flex items-center gap-1 rounded-md border border-primary/25 bg-primary/10 px-1.5 py-1 text-[10px] font-medium text-primary">
+                <span className="flex items-center gap-1 rounded-md border border-primary/25 bg-primary/10 px-1.5 py-1 text-3xs font-medium text-primary">
                   Promote
                   <IconArrowRight size={11} aria-hidden />
                 </span>
@@ -168,7 +168,7 @@ export function DraftsPreview() {
       </div>
 
       <div className="mt-4 rounded-md border border-dashed border-border px-3 py-6 text-center">
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           Write it down now, specify it later.
         </p>
       </div>

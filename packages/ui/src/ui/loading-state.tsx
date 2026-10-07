@@ -178,7 +178,7 @@ export function LoadingState({
     <div className="flex w-fit items-center gap-2.5">
       {grid}
       <span
-        className="shimmer-text bg-clip-text text-[13px] font-medium text-transparent"
+        className="shimmer-text bg-clip-text text-2sm font-medium text-transparent"
         style={{
           // Eva tokens are `R G B` triplets — wrap with rgb() for gradients.
           backgroundImage:

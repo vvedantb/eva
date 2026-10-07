@@ -31,6 +31,7 @@ export function SessionSwitcher({ sessionId, title }: SessionSwitcherProps) {
   const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId: repo._id });
   const sessions = useQuery(api.sessions.list, { repoId: repo._id });
   const appName = repoDisplayLabel(repo);
+  const tile = repoTileColor(`${repo.owner}/${repo.name}/${appName}`);
   const activeSessions = sortSessionsForSidebar(
     (sessions ?? []).filter(
       (session) =>
@@ -55,8 +56,9 @@ export function SessionSwitcher({ sessionId, title }: SessionSwitcherProps) {
             fallback={
               <span
                 className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded text-[9px] font-semibold text-white",
-                  repoTileColor(`${repo.owner}/${repo.name}/${appName}`),
+                  "flex size-4 shrink-0 items-center justify-center rounded text-[9px] font-semibold",
+                  tile.bg,
+                  tile.text,
                 )}
               >
                 {appName.charAt(0).toUpperCase()}

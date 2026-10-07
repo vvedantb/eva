@@ -109,7 +109,7 @@ export function MentionRow({
     kind !== undefined ? (
       <MentionKindIcon kind={kind} />
     ) : badge !== undefined ? (
-      <span className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+      <span className="flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground">
         <BadgeLogo provider={provider} />
         {badge}
       </span>

@@ -41,7 +41,7 @@ function LandingMockAvatar({
   return (
     <span
       className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[10px] font-medium text-primary",
+        "flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/12 text-3xs font-medium text-primary",
         className,
       )}
       aria-hidden
@@ -62,11 +62,11 @@ export function LandingTaskDetailMock() {
             <span className="size-2 rounded-full bg-foreground/15" />
             <span className="size-2 rounded-full bg-foreground/15" />
           </div>
-          <span className="truncate font-mono text-[10px] text-muted-foreground">
+          <span className="truncate font-mono text-3xs text-muted-foreground">
             {LANDING_MOCK_REPO}
           </span>
           <span className="text-muted-foreground/40">·</span>
-          <span className="truncate font-mono text-[10px] tabular-nums text-muted-foreground/80">
+          <span className="truncate font-mono text-3xs tabular-nums text-muted-foreground/80">
             QT-{LANDING_MOCK_TASK_NUMBER}
           </span>
         </div>
@@ -75,7 +75,7 @@ export function LandingTaskDetailMock() {
             className="landing-pulse-dot size-1.5 rounded-full bg-emerald-500"
             aria-hidden
           />
-          <span className="text-[10px] font-medium text-muted-foreground">
+          <span className="text-3xs font-medium text-muted-foreground">
             Sandbox live
           </span>
         </div>

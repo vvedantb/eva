@@ -37,6 +37,7 @@ function RowIdentity({
   seed: string;
   label: string;
 }) {
+  const tile = repoTileColor(seed);
   return (
     <>
       <RepoLogo
@@ -45,8 +46,9 @@ function RowIdentity({
         fallback={
           <span
             className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded text-[10px] font-semibold text-white",
-              repoTileColor(seed),
+              "flex size-5 shrink-0 items-center justify-center rounded text-3xs font-semibold",
+              tile.bg,
+              tile.text,
             )}
           >
             {label.charAt(0).toUpperCase()}
@@ -259,7 +261,7 @@ export function AppRow({
 
 export function PickerSectionLabel({ children }: { children: string }) {
   return (
-    <div className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+    <div className="px-2 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground/80">
       {children}
     </div>
   );

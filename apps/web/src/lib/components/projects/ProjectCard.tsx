@@ -238,7 +238,7 @@ export function ProjectCard({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-baseline gap-1.5">
             <EntityNumLabel numId={numId} />
-            <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+            <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
               {title}
             </MarqueeOnHover>
           </div>
@@ -277,7 +277,7 @@ export function ProjectCard({
           <TooltipTrigger asChild>
             <Badge
               variant="secondary"
-              className="gap-0.5 px-1.5 py-0 text-[10px] font-medium leading-4"
+              className="gap-0.5 px-1.5 py-0 text-3xs font-medium leading-4"
             >
               {planningMode === "interview" ? (
                 <IconSparkles className="size-2.5 shrink-0" />
@@ -308,7 +308,7 @@ export function ProjectCard({
               ))}
             </AvatarStack>
             {hiddenCount > 0 ? (
-              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+              <span className="text-2xs font-medium tabular-nums text-muted-foreground">
                 +{hiddenCount}
               </span>
             ) : null}

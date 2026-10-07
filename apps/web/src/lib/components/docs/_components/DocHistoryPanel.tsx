@@ -67,14 +67,14 @@ export function DocHistoryPanel({
                   {ver.title}
                 </MarqueeOnHover>
                 {isRecap && ver.headSha ? (
-                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                  <span className="shrink-0 font-mono text-3xs text-muted-foreground">
                     {ver.headSha.slice(0, 7)}
                   </span>
                 ) : null}
               </div>
               <RelativeDateTime
                 at={ver.createdAt}
-                className="text-[10px] text-muted-foreground"
+                className="text-3xs text-muted-foreground"
               />
             </button>
           </ListEnter>

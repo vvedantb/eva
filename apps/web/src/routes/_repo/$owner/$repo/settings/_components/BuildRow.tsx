@@ -103,7 +103,7 @@ export function BuildRow({
               <Button
                 size="sm"
                 variant="destructive"
-                className="h-6 px-2 text-[10px]"
+                className="h-6 px-2 text-3xs"
                 disabled={cancelling}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -168,7 +168,7 @@ export function BuildRow({
                   </div>
                 )}
                 {build.logs ? (
-                  <pre className="max-h-64 overflow-y-auto overflow-x-hidden scroll-fade rounded bg-muted/50 p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap break-all sm:p-3 sm:text-[11px]">
+                  <pre className="max-h-64 overflow-y-auto overflow-x-hidden scroll-fade rounded bg-muted/50 p-2 font-mono text-3xs leading-relaxed whitespace-pre-wrap break-all sm:p-3 sm:text-2xs">
                     {build.logs}
                   </pre>
                 ) : (
@@ -218,10 +218,10 @@ export function BuildStatusBadge({
 function ProviderBadge() {
   return (
     <div className="group relative inline-flex">
-      <span className="inline-flex items-center gap-1 rounded-surface bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+      <span className="inline-flex items-center gap-1 rounded-surface bg-blue-500/10 px-2 py-0.5 text-2xs font-medium text-blue-600">
         ▲ Vercel
       </span>
-      <div className="absolute bottom-full mb-1 hidden whitespace-nowrap rounded bg-foreground px-2 py-1 text-[10px] text-background group-hover:block">
+      <div className="absolute bottom-full mb-1 hidden whitespace-nowrap rounded bg-foreground px-2 py-1 text-3xs text-background group-hover:block">
         Vercel sandbox provider
       </div>
     </div>
@@ -235,13 +235,13 @@ function BuildKindBadge({ kind }: { kind?: "base" | "seeded" }) {
   }
   if (kind === "seeded") {
     return (
-      <span className="inline-flex items-center rounded-surface bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+      <span className="inline-flex items-center rounded-surface bg-primary/10 px-1.5 py-0.5 text-2xs font-medium text-primary">
         Seeded
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-surface bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+    <span className="inline-flex items-center rounded-surface bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
       Base image
     </span>
   );

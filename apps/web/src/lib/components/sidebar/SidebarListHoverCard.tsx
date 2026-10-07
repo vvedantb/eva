@@ -80,7 +80,7 @@ export function SessionFolderAuthor({ userId }: { userId: Id<"users"> }) {
       {user ? (
         <span
           data-pii
-          className="truncate text-[10px] leading-none text-muted-foreground"
+          className="truncate text-3xs leading-none text-muted-foreground"
         >
           {authorFirstName(user)}
         </span>

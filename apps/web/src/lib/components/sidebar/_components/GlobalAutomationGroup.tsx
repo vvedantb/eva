@@ -99,7 +99,7 @@ export function GlobalAutomationGroup({
               logoUrl={repo.logoUrl}
               size={18}
               fallback={
-                <span className="flex size-[18px] items-center justify-center rounded-sm bg-muted text-[10px] font-semibold text-muted-foreground">
+                <span className="flex size-[18px] items-center justify-center rounded-sm bg-muted text-3xs font-semibold text-muted-foreground">
                   {label.charAt(0).toUpperCase()}
                 </span>
               }
@@ -110,7 +110,7 @@ export function GlobalAutomationGroup({
               </span>
               <CountPop
                 label={countLabel(sorted.length)}
-                className="shrink-0 px-1.5 py-0 text-[11px] font-medium tabular-nums text-muted-foreground"
+                className="shrink-0 px-1.5 py-0 text-2xs font-medium tabular-nums text-muted-foreground"
               />
               <IconChevronDown
                 size={14}
@@ -156,7 +156,7 @@ export function GlobalAutomationGroup({
               <p className="text-xs font-medium text-foreground">
                 No automations yet
               </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
+              <p className="mt-0.5 text-2xs text-muted-foreground">
                 Press + to add one.
               </p>
             </div>
@@ -213,7 +213,7 @@ export function GlobalAutomationGroup({
                               {automation.title}
                             </span>
                             {automation.systemKey !== undefined && (
-                              <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
+                              <span className="shrink-0 rounded-full bg-muted px-1.5 text-3xs text-muted-foreground">
                                 System
                               </span>
                             )}

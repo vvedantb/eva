@@ -94,7 +94,7 @@ export function ProjectTagsPopover({
             ref={inputRef}
             value={draft}
             placeholder="Add tag..."
-            className="h-7 text-[13px]"
+            className="h-7 text-2sm"
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => {
               if (draft.trim()) {
