@@ -15,6 +15,7 @@ import {
   activityRefForParentId,
   touchAgentFinished,
 } from "../_sandbox/activity";
+import { chatParentIdOf } from "./chatParent";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -391,6 +392,15 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
+  // The unread watermark read by `chatReads.ts`: chat turns only. Runs and
+  // one-shot lanes (summary, interview) are not replies, and their owner rows
+  // have no such field. Lease sweeps can close a turn after its chat was
+  // hard-deleted, and `patch` throws then.
+  const chatParentId =
+    turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
+  if (chatParentId && (await ctx.db.get(chatParentId))) {
+    await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
+  }
   // Every durable turn ends here, so this is the one place the idle-pause
   // sweep learns "the agent finished". The id's table names the surface; a
   // run counts for its task.

@@ -7,6 +7,7 @@ import {
   collectQuestionSteps,
   findDayBoundaryIds,
   findHandoffBoundaryIds,
+  findNewMessageIds,
   findStreamingTargetMessage,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
@@ -181,6 +182,91 @@ describe("findHandoffBoundaryIds", () => {
     ]);
 
     expect([...boundaries]).toEqual([]);
+  });
+});
+
+const me = "user-me";
+const mine = (_id: string, timestamp: number) => ({
+  _id,
+  role: "user" as const,
+  timestamp,
+  userId: me,
+});
+const timedReply = (_id: string, timestamp: number, finishedAt?: number) => ({
+  _id,
+  role: "assistant" as const,
+  timestamp,
+  finishedAt,
+});
+
+describe("findNewMessageIds", () => {
+  test("returns nothing without an anchor", () => {
+    expect(findNewMessageIds([timedReply("a", 10, 20)], undefined, me)).toEqual(
+      [],
+    );
+  });
+
+  test("skips own user messages after the anchor and picks the reply", () => {
+    expect(
+      findNewMessageIds(
+        [timedReply("a", 1, 2), mine("b", 10), timedReply("c", 11, 30)],
+        5,
+        me,
+      ),
+    ).toEqual(["c"]);
+  });
+
+  test("picks a teammate's message after the anchor", () => {
+    expect(
+      findNewMessageIds(
+        [{ _id: "a", role: "user", timestamp: 10, userId: "user-other" }],
+        5,
+        me,
+      ),
+    ).toEqual(["a"]);
+  });
+
+  test("counts a reply by its finish time", () => {
+    // Started before the anchor, finished after it: still new.
+    expect(findNewMessageIds([timedReply("a", 3, 9)], 5, me)).toEqual(["a"]);
+  });
+
+  test("picks a streaming placeholder by its timestamp", () => {
+    expect(
+      findNewMessageIds([timedReply("a", 1, 2), timedReply("b", 8)], 5, me),
+    ).toEqual(["b"]);
+  });
+
+  test("skips system alerts", () => {
+    expect(
+      findNewMessageIds(
+        [{ ...timedReply("a", 8, 8), isSystemAlert: true }],
+        5,
+        me,
+      ),
+    ).toEqual([]);
+  });
+
+  test("returns nothing when nothing is after the anchor", () => {
+    expect(
+      findNewMessageIds([timedReply("a", 1, 2), mine("b", 3)], 5, me),
+    ).toEqual([]);
+  });
+
+  test("lists every new reply and teammate turn in thread order, not own messages", () => {
+    expect(
+      findNewMessageIds(
+        [
+          timedReply("old", 1, 2),
+          timedReply("a", 6, 7),
+          mine("b", 8),
+          { _id: "c", role: "user", timestamp: 9, userId: "user-other" },
+          timedReply("d", 10, 12),
+        ],
+        5,
+        me,
+      ),
+    ).toEqual(["a", "c", "d"]);
   });
 });
 

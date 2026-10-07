@@ -8,6 +8,7 @@ import {
   showsSandboxStatusDot,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 
 /** Primary project tabs. `work` is the index route, so it owns every deep link. */
 export type ProjectMainTab = "overview" | "work" | "sandbox";
@@ -24,6 +25,7 @@ export function ProjectMainTabs({
   isSandboxActive = false,
   isSandboxStarting = false,
   isSandboxStopping = false,
+  hasUnread = false,
 }: {
   /** Project base path, e.g. `/owner/repo/projects/3` (pre-internal form). */
   projectHref: string;
@@ -35,6 +37,11 @@ export function ProjectMainTabs({
   isSandboxActive?: boolean;
   isSandboxStarting?: boolean;
   isSandboxStopping?: boolean;
+  /**
+   * The project chat has an unseen reply. The chat lives on the sandbox tab,
+   * so the dot shows only while another tab is open.
+   */
+  hasUnread?: boolean;
 }) {
   const navigate = useNavigate();
   const simpleView = useSimpleView();
@@ -86,6 +93,7 @@ export function ProjectMainTabs({
                 aria-label={SANDBOX_STATUS_STYLES[sandboxStatus].label}
               />
             ) : null}
+            <UnreadDot show={hasUnread && activeTab !== "sandbox"} />
           </TabsTrigger>
         ) : null}
       </TabsList>
