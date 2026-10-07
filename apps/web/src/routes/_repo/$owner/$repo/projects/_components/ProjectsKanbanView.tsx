@@ -13,12 +13,22 @@ import {
   type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
+import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import { motionBase } from "@eva/ui";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
-interface ProjectsKanbanViewProps {
+interface ProjectsSelectionProps {
+  isSelecting?: boolean;
+  selectedIds?: Set<Id<"projects">>;
+  onToggleSelect?: (
+    id: Id<"projects">,
+    options?: SelectionToggleOptions<Id<"projects">>,
+  ) => void;
+}
+
+interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
   projectsByPhase: Record<ProjectPhase, Project[]>;
   visiblePhases: Set<ProjectPhase>;
   owner: string;
@@ -34,6 +44,9 @@ export function ProjectsKanbanView({
   name,
   basePath,
   onDelete,
+  isSelecting,
+  selectedIds,
+  onToggleSelect,
 }: ProjectsKanbanViewProps) {
   return (
     <AnimatePresence initial={false}>
@@ -56,6 +69,9 @@ export function ProjectsKanbanView({
                   name={name}
                   basePath={basePath}
                   onDelete={onDelete}
+                  isSelecting={isSelecting}
+                  selectedIds={selectedIds}
+                  onToggleSelect={onToggleSelect}
                 />
               </m.div>,
             ]
@@ -72,7 +88,10 @@ function VirtualProjectColumn({
   name,
   basePath,
   onDelete,
-}: {
+  isSelecting = false,
+  selectedIds,
+  onToggleSelect,
+}: ProjectsSelectionProps & {
   phase: ProjectPhase;
   projects: Project[];
   owner: string;
@@ -83,6 +102,8 @@ function VirtualProjectColumn({
   const { scrollParent, scrollRef } = usePersistedScrollParent(
     `${owner}/${name}/projects/kanban/${phase}`,
   );
+  // Shift-click spans this column only.
+  const columnIds = projects.map((p) => p._id);
 
   return (
     <KanbanColumn
@@ -125,6 +146,14 @@ function VirtualProjectColumn({
                       : `${basePath}/projects`
                   }
                   onDelete={() => onDelete(project._id, project.title)}
+                  isSelecting={isSelecting}
+                  isSelected={selectedIds?.has(project._id)}
+                  onToggleSelect={(event) =>
+                    onToggleSelect?.(project._id, {
+                      range: event.shiftKey,
+                      orderedIds: columnIds,
+                    })
+                  }
                 />
               </div>
             );

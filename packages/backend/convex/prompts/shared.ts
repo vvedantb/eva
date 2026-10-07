@@ -1,4 +1,5 @@
 import { PERSONALISATION_PRESETS } from "../validators";
+import { primaryLinkPath } from "../_sandbox_runtime/workspaceLayout";
 
 /** Builds the custom instructions block from a user's role preset and custom instructions. */
 export function buildCustomInstructionsBlock(
@@ -26,12 +27,139 @@ export function buildSystemPromptBlock(
   return `\n\n## System Prompt\n${systemPrompt}`;
 }
 
-/** Builds an instruction string directing the agent to work inside a specific root directory. */
+/** Repo-relative folder holding agent memory when the repo opts in. */
+export const AGENT_MEMORY_DIR = ".eva/memory";
+
+/**
+ * How a memory entry is written, after the Agent Memory Repo spec
+ * (github.com/AgentMemoryRepo/agentmemoryrepo). Shared by the per-turn block
+ * and the dreaming automation so both enforce the same format and rules.
+ */
+export const AGENT_MEMORY_FORMAT = `- \`${AGENT_MEMORY_DIR}/MEMORY.md\` is the short entry point: one-line bullets plus \`[[path]]\` links to topic files in the same folder (e.g. \`[[billing/pricing.md]]\`). Keep it under ~100 lines.
+- One fact per bullet, stated once and linked from elsewhere, with metadata: \`- Fact. [source: <PR, file or chat>, added: YYYY-MM-DD]\`.
+- Worth saving: non-obvious lessons, gotchas, decisions and the reason for them, user preferences, useful queries or commands. Not worth saving: anything the code, git history or CLAUDE.md already records.
+- Never save secrets, tokens, credentials, customer or client data, or anything that identifies a person. Describe the pattern instead.`;
+
+/** Per-turn memory instructions; empty unless the repo opted in. */
+export function buildAgentMemoryBlock(enabled: boolean | undefined): string {
+  if (enabled !== true) return "";
+  return `\n\n## Agent memory (this repo opted in):
+Notes from earlier sessions live in \`${AGENT_MEMORY_DIR}/\` at the repo root. Read \`MEMORY.md\` before starting work and grep the folder or follow links for anything relevant. When you learn something a later session would need, or find an entry is wrong, update the folder in the same turn and commit it with your other changes.
+${AGENT_MEMORY_FORMAT}`;
+}
+
+/** Lists sibling repositories the sandbox's git credentials can read; empty when there are none. */
+export function buildReadableReposBlock(
+  repos: ReadonlyArray<{ owner: string; name: string }>,
+): string {
+  const [first] = repos;
+  if (first === undefined) return "";
+  const list = repos.map((repo) => `${repo.owner}/${repo.name}`).join(", ");
+  return `\n\n## Other repositories you may read
+Your git credentials can also read these repositories (clone/fetch only, no push): ${list}.
+Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
+}
+
+/**
+ * Monorepo scope: which app this session/task is for. A default, not a write
+ * fence — shared packages and backend stay in scope when the change belongs
+ * there. Sibling apps under `apps/` stay out unless the user asks.
+ */
 export function buildRootDirectoryInstruction(rootDirectory: string): string {
   if (!rootDirectory) return "";
-  return `\nIMPORTANT: Unless the user mentions otherwise, all changes must be made inside the app at "${rootDirectory}".`;
+  return `\nMonorepo: this session is for "${rootDirectory}". Start there. Change shared packages and backend when the task needs them. Leave other apps alone unless asked.`;
 }
 
 /** Reply-length constraint appended to every session turn prompt. */
 export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
+
+/**
+ * Writing style for every chat reply: ASD-STE100 Simplified Technical English,
+ * applied loosely. Full STE bans non-dictionary words, which would strip the
+ * domain terms (workflow, lease, commit) a dev reader needs, so those stay.
+ */
+export const COMMUNICATION_STYLE_INSTRUCTION =
+  "\n\nWriting style: follow ASD-STE100 Simplified Technical English about 80% of the way. One idea per sentence, about 20 words or fewer. Active voice, simple present or past tense. One word for one meaning; literal verbs, no idioms. Numbered steps for sequences, bullets for conditions. Keep technical names and domain terms, and keep the reason behind each decision.";
+
+/**
+ * Ask before inventing a visual, and name every visual you changed.
+ *
+ * A trophy icon and a `green.1` alert wash nobody requested rode along inside a
+ * large tabs feature, were never mentioned, and shipped to production
+ * unreviewed — a diff that size hides a one-line icon swap.
+ *
+ * Deliberately narrow. "Ask whenever unsure" produces a turn that stalls on
+ * every judgement call, and a user who learns to wave questions through; the
+ * trigger here is only a *visible* choice the ask did not make, where an
+ * existing pattern cannot settle it. Both tools are named because blocking
+ * `AskUserQuestion` only exists on session runs
+ * (`callback-src/config.ts` `BLOCKING_QUESTIONS_ENABLED`) and only on the Claude
+ * SDK provider, while `render_ui` is on every sandbox token — the trophy came
+ * from a quick task on a Cursor model, where the first tool does not block.
+ *
+ * The report half explicitly overrides RESPONSE_LENGTH_INSTRUCTION so the
+ * concise-reply rule cannot swallow those lines.
+ */
+export const VISUAL_CHANGE_INSTRUCTION = `
+
+## Visual decisions: ask first, then report
+When the work needs a visible choice the user did not make — which icon, which colour, which wording, where a new control goes — do not invent one silently.
+1. **Reuse first.** If the codebase already solves the same thing, copy that pattern and say you did. This settles most cases without a question.
+2. **Otherwise ask, before you build it.** \`AskUserQuestion\` when you have it (it blocks and waits for a real answer); otherwise the eva MCP tool \`render_ui\` with two or three \`reply\` buttons naming the concrete options. Ask once, with options, not an open-ended "what would you like?".
+3. **Never stall.** If nobody can answer (an autonomous run), pick the closest existing pattern, build it, and report it as a choice. A blocked turn helps nobody.
+This is for visible choices only. Implementation details — naming, file layout, how you structure the code — are yours to make; asking about those wastes the user's attention and trains them to wave questions through.
+
+## Visual changes (always report)
+Name every visible change you made, however small, and separately flag the ones you chose rather than were asked for — icon, colour, spacing, radius, shadow, copy, empty/loading state, hover/focus/disabled state, motion, layout. A one-line icon swap inside a large feature diff is exactly what slips through review and reaches production unseen.
+- Write invented choices as "chose X (not asked for)" with what you picked and why.
+- This overrides the reply-length limit: these lines are always in scope.`;
+
+/**
+ * Nudge towards `render_ui` and `render_html`. Appended to the shared
+ * chat-turn prompt, so sessions, quick tasks and project chat all get it — both
+ * tools are on every sandbox token, and without a prompt line agents never
+ * reach for them.
+ */
+export const CHAT_UI_INSTRUCTION = `
+
+Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.
+
+Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.`;
+
+/** One linked repo, as the prompt needs to describe it to the agent. */
+export type LinkedRepoPromptRow = {
+  owner: string;
+  name: string;
+  path: string;
+  branchName: string;
+  baseBranch: string;
+};
+
+/**
+ * Builds the "Linked repositories" prompt block for a multi-repo session.
+ * Empty string for an ordinary single-repo session (no `linkedRepos`) — every
+ * other prompt section stays byte-identical to before multi-repo sessions
+ * existed.
+ */
+export function buildLinkedReposSection(
+  primary: { owner: string; name: string; branchName: string },
+  linkedRepos: LinkedRepoPromptRow[],
+  commitMessage: string,
+): string {
+  if (linkedRepos.length === 0) return "";
+  const primaryLine = `- ${primary.owner}/${primary.name}   ${primaryLinkPath(primary.name)}   (primary, your cwd)   branch ${primary.branchName}`;
+  const linkedLines = linkedRepos.map(
+    (repo) =>
+      `- ${repo.owner}/${repo.name}   ${repo.path}   branch ${repo.branchName}   base ${repo.baseBranch}`,
+  );
+  return `
+
+## Linked repositories
+This session spans several repos. All are checked out under /tmp/workspace:
+${[primaryLine, ...linkedLines].join("\n")}
+Commit in each repo you change: cd <path> && git add -A -- ':!*.png' ':!*.jpg' ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}".
+Before running a linked repo's commands, load its env: cd <path> && set -a && . ./.env.eva && set +a (the file is absent when the repo has no Eva env vars).
+Never push. Eva pushes every repo that has new commits and opens one PR per repo after the turn.
+Keep plan.md, screenshots/ and recordings/ in /tmp/repo.`;
+}

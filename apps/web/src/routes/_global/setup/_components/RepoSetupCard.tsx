@@ -1,4 +1,4 @@
-import { Button } from "@eva/ui";
+import { Button, Spinner } from "@eva/ui";
 import {
   IconBrandGithub,
   IconCheck,
@@ -19,6 +19,8 @@ interface RepoSetupCardProps {
   repo: GitHubRepo;
   isExpanded: boolean;
   isAdded: boolean;
+  /** Connect is in flight for this repo. */
+  isAdding?: boolean;
   onToggleExpand: () => void;
   onAdd: () => void;
   children: React.ReactNode;
@@ -28,6 +30,7 @@ export function RepoSetupCard({
   repo,
   isExpanded,
   isAdded,
+  isAdding = false,
   onToggleExpand,
   onAdd,
   children,
@@ -53,8 +56,9 @@ export function RepoSetupCard({
               <span className="hidden sm:inline">Added</span>
             </span>
           ) : (
-            <Button size="sm" onClick={onAdd}>
-              Add
+            <Button size="sm" onClick={onAdd} disabled={isAdding}>
+              {isAdding ? <Spinner size="sm" /> : null}
+              {isAdding ? "Adding" : "Add"}
             </Button>
           )}
           <Button

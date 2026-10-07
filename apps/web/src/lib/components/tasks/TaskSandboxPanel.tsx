@@ -17,6 +17,14 @@ import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SessionArtifactsPanel,
+  useSourceArtifacts,
+} from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 
 interface TaskSandboxPanelProps {
   taskId: Id<"agentTasks">;
@@ -80,6 +88,9 @@ export function TaskSandboxPanel({
 
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
   // panel already subscribes to (same entity ids).
+  const artifactSource = { kind: "task" as const, taskId };
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: taskId,
     streamingEntityId: `task-chat-${taskIdStr}`,
@@ -107,10 +118,14 @@ export function TaskSandboxPanel({
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
+  /* eslint-disable no-effect/no-event-handler --
+     "prd" is a session-only tab that can arrive from a deep link or persisted
+     state, so the redirect has to follow the prop rather than a click. */
   useEffect(() => {
     if (activeTab !== "prd") return;
     onTabChange("preview");
   }, [activeTab, onTabChange]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const tabBarValue = activeTab === "prd" ? "preview" : activeTab;
 
@@ -131,37 +146,67 @@ export function TaskSandboxPanel({
           onTabChange={handleTabChange}
           collapsed={collapsed}
           onToggle={onToggle}
-        onNewPreview={() => {
-          panes.handleNewPreview();
-          onTabChange("preview");
-        }}
-        newPreviewDisabled={panes.newPreviewDisabled}
-        enabledTabs={enabledTabs}
-        showFilesTab
-        showAgentsTab={hasAgents}
-        hasRunningAgents={hasRunningAgents}
-        agentBrowsingAt={viewState?.agentBrowsingAt}
-        fileList={fileList}
-        consoleDock={panes.consoleDock}
-        terminalPanel={terminalPanel}
+          onNewPreview={() => {
+            panes.handleNewPreview();
+            onTabChange("preview");
+          }}
+          newPreviewDisabled={panes.newPreviewDisabled}
+          enabledTabs={enabledTabs}
+          showFilesTab
+          showAgentsTab={hasAgents}
+          hasRunningAgents={hasRunningAgents}
+          artifactCount={artifactCount}
+          documentCount={documentCount}
+          agentBrowsingAt={viewState?.agentBrowsingAt}
+          fileList={fileList}
+          consoleDock={panes.consoleDock}
+          terminalPanel={terminalPanel}
         />
       }
     >
       <div className="h-full overflow-hidden">
-        <div className={!simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"}>
+        <div
+          className={
+            tabBarValue === "artifacts"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionArtifactsPanel source={artifactSource} />
+        </div>
+        <div
+          className={
+            tabBarValue === "documents"
+              ? "flex h-full min-h-0 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <SessionDocumentsPanel source={artifactSource} />
+        </div>
+        <div
+          className={
+            !simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"
+          }
+        >
           <FilesPanel
             sandboxId={sandboxId}
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
           />
         </div>
         <div
           className={
-            !simpleView && tabBarValue === "agents" ? "h-full min-h-0" : "hidden"
+            !simpleView && tabBarValue === "agents"
+              ? "h-full min-h-0"
+              : "hidden"
           }
         >
-          <SandboxAgentsPanel entity={{ kind: "task", taskId }} agents={agents} />
+          <SandboxAgentsPanel
+            entity={{ kind: "task", taskId }}
+            agents={agents}
+          />
         </div>
         <SandboxPaneSlots
           activeTab={tabBarValue}

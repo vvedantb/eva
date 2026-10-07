@@ -8,17 +8,20 @@ import {
   IconArchive,
   IconArchiveOff,
   IconClipboard,
-  IconCopy,
   IconExternalLink,
   IconEye,
   IconGitBranch,
+  IconGitFork,
   IconLink,
   IconPencil,
   IconSparkles,
 } from "@tabler/icons-react";
 import { useAction } from "convex/react";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 export interface SessionMenuSession {
   _id: Id<"sessions">;
@@ -26,6 +29,10 @@ export interface SessionMenuSession {
   branchName?: string;
   prUrl?: string;
   titleRegeneration?: { startedAt: number };
+  /** Unset before the first boot and after an archived sandbox is deleted — nothing to fork. */
+  sandboxId?: string;
+  /** Mid-turn sessions cannot fork: the fork stops the source sandbox. */
+  isExecuting?: boolean;
 }
 
 /**
@@ -45,9 +52,8 @@ interface SessionMenuItemsProps {
   isRegeneratingTitle: boolean;
   /** Active list only — omitting hides Rename and Regenerate title. */
   onRenameRequest?: () => void;
-  /** Active list only — both are needed for Duplicate to show. */
-  onDuplicate?: () => Promise<string>;
-  onDuplicateNavigate?: (pathSegment: string) => void;
+  /** Shows Fork session; called with the fork's path segment once it exists. */
+  onForkNavigate?: (pathSegment: string) => void;
   /** Sessions with a branch and no open PR yet — opens the review dialog. */
   onSendForReview?: () => void;
   /** Active list: archive. Omit in archived list. */
@@ -66,15 +72,24 @@ export function SessionMenuItems({
   href,
   isRegeneratingTitle,
   onRenameRequest,
-  onDuplicate,
-  onDuplicateNavigate,
+  onForkNavigate,
   onSendForReview,
   onArchiveRequest,
   onUnarchive,
 }: SessionMenuItemsProps) {
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
-  const branchName = session.branchName;
-  const prUrl = session.prUrl;
+  const forkSession = useAction(api.sandbox.forkSession);
+  // Simple view hides branch/PR actions, matching the hidden PR chip on the
+  // row: dropping the values here drops Copy branch name, Open PR and Review.
+  const simpleView = useSimpleView();
+  const branchName = simpleView ? undefined : session.branchName;
+  const prUrl = simpleView ? undefined : session.prUrl;
+  const forkBlockedReason =
+    session.sandboxId === undefined
+      ? "No sandbox"
+      : session.isExecuting === true
+        ? "Agent working"
+        : null;
 
   return (
     <>
@@ -100,16 +115,36 @@ export function SessionMenuItems({
           </ContextMenuItem>
         </>
       ) : null}
-      {onDuplicate && onDuplicateNavigate ? (
+      {onForkNavigate ? (
         <ContextMenuItem
+          disabled={forkBlockedReason !== null}
           onSelect={() => {
-            void onDuplicate().then((newPathSegment) => {
-              onDuplicateNavigate(newPathSegment);
-            });
+            // Can take a minute: a running source sandbox is stopped first so
+            // its disk (DBs included) is snapshotted for the fork to boot from.
+            const toastId = "session-fork";
+            toast.loading("Forking session…", { id: toastId });
+            forkSession({ sessionId: session._id }).then(
+              ({ numId }) => {
+                toast.success("Session forked", { id: toastId });
+                onForkNavigate(String(numId));
+              },
+              (error) => {
+                toast.error(
+                  convexErrorMessage(error, "Couldn't fork session"),
+                  { id: toastId },
+                );
+              },
+            );
           }}
         >
-          <IconCopy size={16} />
-          Duplicate
+          <IconGitFork size={16} />
+          Fork session
+          {/* Disabled items drop pointer events, so a title tooltip never shows. */}
+          {forkBlockedReason === null ? null : (
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+              {forkBlockedReason}
+            </span>
+          )}
         </ContextMenuItem>
       ) : null}
       <ContextMenuItem
@@ -150,12 +185,16 @@ export function SessionMenuItems({
           Open PR
         </ContextMenuItem>
       ) : null}
-      {onSendForReview ? (
+      {onSendForReview && !simpleView ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onSelect={onSendForReview}>
+          <ContextMenuItem
+            onSelect={onSendForReview}
+            title={skipConfirmTitle("Send for Review")}
+          >
             <IconEye size={16} className="text-status-code-review" />
             Send for Review
+            <ConfirmSkipHint />
           </ContextMenuItem>
         </>
       ) : null}
@@ -175,9 +214,14 @@ export function SessionMenuItems({
       {onArchiveRequest ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-warning" onSelect={onArchiveRequest}>
+          <ContextMenuItem
+            className="text-warning"
+            onSelect={onArchiveRequest}
+            title={skipConfirmTitle("Archive")}
+          >
             <IconArchive size={16} />
             Archive
+            <ConfirmSkipHint />
           </ContextMenuItem>
         </>
       ) : null}

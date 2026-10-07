@@ -1,6 +1,7 @@
 "use client";
 
-import { Badge, Button, cn } from "@eva/ui";
+import { Badge, Button, cn, motionFast } from "@eva/ui";
+import { m } from "motion/react";
 import { IconClipboardList, IconCode } from "@tabler/icons-react";
 import { proposedPlanTitle } from "./planExport";
 
@@ -26,11 +27,15 @@ export function ComposerPlanReadyBanner({
   const title = proposedPlanTitle(planContent);
 
   return (
-    <div
+    <m.div
       className={cn(
         "mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5",
         className,
       )}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={motionFast}
     >
       <Badge
         variant="secondary"
@@ -72,6 +77,6 @@ export function ComposerPlanReadyBanner({
           </Button>
         ) : null}
       </div>
-    </div>
+    </m.div>
   );
 }

@@ -38,9 +38,9 @@ function redirectToQuickTaskReview(args: {
         ? args.search.diffFile
         : undefined;
 
-  if (dest.kind === "overview") {
+  if (dest.kind === "summary") {
     throw redirect({
-      to: "/$owner/$repo/quick-tasks/$numId/sandbox/review/overview",
+      to: "/$owner/$repo/quick-tasks/$numId/sandbox/review/summary",
       params: {
         owner: args.owner,
         repo: args.repo,
@@ -57,9 +57,9 @@ function redirectToQuickTaskReview(args: {
     });
   }
 
-  if (dest.kind === "recap") {
+  if (dest.kind === "timeline") {
     throw redirect({
-      to: "/$owner/$repo/quick-tasks/$numId/sandbox/review/recap",
+      to: "/$owner/$repo/quick-tasks/$numId/sandbox/review/timeline",
       params: {
         owner: args.owner,
         repo: args.repo,
@@ -134,6 +134,7 @@ export const Route = createFileRoute(
           diffFile: corrupted.diffFile,
           diffView: corrupted.diffView,
           prTab: undefined,
+          ...(corrupted.file !== undefined ? { file: corrupted.file } : {}),
         }),
         replace: true,
       });

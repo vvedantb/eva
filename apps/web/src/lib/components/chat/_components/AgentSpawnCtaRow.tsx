@@ -1,9 +1,10 @@
-import { cn } from "@eva/ui";
+import { cn, CrossfadeIcon, motionFast } from "@eva/ui";
 import {
   IconCheck,
   IconChevronRight,
   IconRobot,
 } from "@tabler/icons-react";
+import { AnimatePresence, m } from "motion/react";
 import type { BackgroundAgentEntry } from "@eva/backend";
 import {
   deriveSubagents,
@@ -107,29 +108,45 @@ export function AgentSpawnCtaRow({
       : "bg-success";
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="motion-press mt-2 flex w-full items-center gap-2 rounded-surface border border-border bg-muted/30 px-2.5 py-1.5 text-left text-[13px] hover:bg-accent/50 active:scale-[0.99]"
-    >
-      <span
-        aria-hidden
-        className={cn("size-1.5 shrink-0 rounded-full", dotClass)}
-      />
-      <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate font-medium">{lead}</span>
-      <span className="ml-auto flex shrink-0 items-center gap-2 font-mono text-[.7rem] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          {!live && failed === 0 ? (
-            <IconCheck aria-hidden className="size-3 text-success" />
-          ) : null}
-          {status}
-        </span>
-        <span className="flex items-center text-primary">
-          {live ? "Open Agents" : "View"}
-          <IconChevronRight aria-hidden className="size-3" />
-        </span>
-      </span>
-    </button>
+    <AnimatePresence>
+      <m.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={motionFast}
+      >
+        <button
+          type="button"
+          onClick={onOpen}
+          className="motion-press mt-2 flex w-full items-center gap-2 rounded-surface border border-border bg-muted/30 px-2.5 py-1.5 text-left text-[13px] hover:bg-accent/50 active:scale-[0.99]"
+        >
+          <span
+            aria-hidden
+            className={cn("size-1.5 shrink-0 rounded-full", dotClass)}
+          />
+          <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate font-medium">{lead}</span>
+          <span className="ml-auto flex shrink-0 items-center gap-2 font-mono text-[.7rem] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <CrossfadeIcon
+                show={!live && failed === 0}
+                trueKey="settled"
+                falseKey="live"
+                variant="soft"
+                className="relative flex size-3 items-center justify-center"
+                whenTrue={
+                  <IconCheck aria-hidden className="size-3 text-success" />
+                }
+                whenFalse={<span aria-hidden className="size-3" />}
+              />
+              {status}
+            </span>
+            <span className="flex items-center text-primary">
+              {live ? "Open Agents" : "View"}
+              <IconChevronRight aria-hidden className="size-3" />
+            </span>
+          </span>
+        </button>
+      </m.div>
+    </AnimatePresence>
   );
 }

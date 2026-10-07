@@ -37,8 +37,7 @@ function useSharedLayoutNav() {
 }
 
 /** Active surface for vertical rail tiles — matches sidebar nav pill. */
-export const railTileActiveClass =
-  "bg-sidebar-accent text-sidebar-primary";
+export const railTileActiveClass = "bg-sidebar-accent text-sidebar-primary";
 
 const sidebarNavPillClass =
   "pointer-events-none absolute inset-0 rounded-menu-item bg-sidebar-accent";
@@ -125,30 +124,6 @@ export function sidebarNavLinkClass(
   );
 }
 
-/**
- * Row geometry for a nav row that is a `Button` rather than a `Link`.
- *
- * Same shape as `sidebarNavLinkClass`, plus the button defaults a nav row does
- * not want: the fixed control height, the semibold label, and the ghost hover
- * fill — hover is already drawn by the highlight pill in
- * `SharedLayoutNavSurface`, so a second fill would stack.
- *
- * `Button`'s own press scale used to be cancelled here too. It no longer is:
- * `sidebarNavLinkClass` now sets the row's press, and these rows sit beside
- * `Link` rows carrying the same class, so cancelling it left two visually
- * identical nav rows where only one answered a press.
- */
-export function sidebarNavButtonClass(
-  isActive: boolean,
-  collapsed?: boolean,
-): string {
-  return cn(
-    "h-auto justify-start bg-transparent hover:bg-transparent",
-    !isActive && "font-normal",
-    sidebarNavLinkClass(isActive, collapsed),
-  );
-}
-
 /** Section group label above a cluster of sidebar nav rows (Build / Ship / …). */
 export const sidebarSectionLabelClass =
   "px-4 py-1 text-[11px] font-medium tracking-[-0.01em] text-muted-foreground/55";
@@ -156,15 +131,6 @@ export const sidebarSectionLabelClass =
 export function sidebarNavLinkClassCompact(isActive: boolean): string {
   return cn(
     "group motion-press active:scale-[0.99] flex w-full items-center gap-2.5 rounded-menu-item px-4 py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
-    isActive
-      ? "font-medium text-sidebar-primary"
-      : "text-sidebar-foreground/80 hover:text-sidebar-foreground",
-  );
-}
-
-export function sidebarNavListItemClass(isActive: boolean): string {
-  return cn(
-    "flex w-full items-center rounded-menu-item px-4 py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
     isActive
       ? "font-medium text-sidebar-primary"
       : "text-sidebar-foreground/80 hover:text-sidebar-foreground",

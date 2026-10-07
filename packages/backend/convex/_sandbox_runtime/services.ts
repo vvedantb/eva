@@ -9,9 +9,13 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import { internal } from "../_generated/api";
 import { resolveSandboxCredentials } from "../envVarResolver";
 import { execHandle, getSandboxHandle, workspaceDirShell } from "./helpers";
+import { WORKSPACE_ROOT } from "./workspaceLayout";
 import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
 import { assertActionSandboxAccess } from "../functions";
+import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
+// Aliased: this module's public action is also called writeSandboxFile.
+import { writeSandboxFile as writeFileToSandbox } from "./sandboxFiles";
 
 /** Starts or stops a code-server instance inside a sandbox. */
 export const toggleCodeServer = action({
@@ -62,16 +66,34 @@ export const toggleCodeServer = action({
         `[code-server] Starting code-server on port ${listenPort}...`,
       );
       try {
+        // Multi-repo sessions create `/tmp/workspace` (linked clones plus a
+        // symlink to the primary); open that so every repo is in the editor
+        // tree. Single-repo sandboxes never have it and keep opening the repo.
+        const hasWorkspaceRoot =
+          (
+            await execHandle(
+              handle,
+              `test -d ${WORKSPACE_ROOT} && echo yes || echo no`,
+              5,
+            )
+          ).trim() === "yes";
+        const openDir = hasWorkspaceRoot ? WORKSPACE_ROOT : workspaceDirShell();
         // Native detached exec — `… &` inside sync runCommand zombies on Vercel.
         await handle.execDetached(
-          `code-server --port ${listenPort} --auth none --bind-addr ${bindAddr} ${workspaceDirShell()} > /tmp/code-server.log 2>&1`,
+          `code-server --port ${listenPort} --auth none --bind-addr ${bindAddr} ${openDir} > /tmp/code-server.log 2>&1`,
         );
 
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
         const ready = await execHandle(
           handle,
-          `for i in $(seq 1 20); do curl -fsS http://127.0.0.1:${listenPort}/ >/dev/null 2>&1 && echo ready && exit 0; sleep 0.5; done; echo not_ready`,
+          buildHttpReadyProbeCommand({
+            url: `http://127.0.0.1:${listenPort}/`,
+            attempts: 20,
+            sleepSec: 0.5,
+            onReady: "echo ready && exit 0",
+            onTimeout: "echo not_ready",
+          }),
           20,
         );
         const logs = await execHandle(
@@ -356,6 +378,74 @@ export const readSandboxFile = action({
 });
 
 /**
+ * Whether a path is safe to write to. The File Viewer only ever saves back a
+ * path it received from listSandboxFiles or readSandboxFile, so anything else
+ * is a client bug or a probe: reject outright rather than normalise, so a
+ * traversal attempt can never resolve to a write somewhere unintended.
+ */
+export function isValidSandboxWritePath(path: string): boolean {
+  if (!path.startsWith("/")) return false;
+  if (path.includes(String.fromCharCode(0))) return false;
+  if (path.endsWith("/")) return false;
+  // Catches `/../`, a leading `/..`, and a trailing `/..` in one pass.
+  return !path.split("/").includes("..");
+}
+
+/**
+ * Writes a file back into a running sandbox — the File Viewer's save path.
+ *
+ * Authorization is identical to readSandboxFile: authorizedRunningHandle checks
+ * identity, repo access, and the repo↔sandbox binding, and never resumes a
+ * stopped VM.
+ *
+ * Deliberately overwrites with no conflict check. The sandbox is the user's own
+ * workspace and the agent may be editing the same file; last write wins, the
+ * same as two terminals would.
+ */
+export const writeSandboxFile = action({
+  args: {
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    path: v.string(),
+    content: v.string(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("ok"), size: v.number() }),
+    v.object({ status: v.literal("not_running") }),
+    v.object({ status: v.literal("too_large"), size: v.number() }),
+  ),
+  handler: async (ctx, args) => {
+    if (!isValidSandboxWritePath(args.path)) {
+      throw new Error("Invalid file path");
+    }
+
+    // The viewer reads at most MAX_FILE_VIEWER_BYTES, so a truncated read must
+    // never be saved back over the whole file. Capping writes at the same size
+    // makes that impossible even when the client forgets to check `truncated`.
+    // Checked before touching the sandbox so an oversized body costs nothing.
+    const size = new TextEncoder().encode(args.content).byteLength;
+    if (size > MAX_FILE_VIEWER_BYTES) {
+      return { status: "too_large" as const, size };
+    }
+
+    const handle = await authorizedRunningHandle(
+      ctx,
+      args.repoId,
+      args.sandboxId,
+    );
+    if (!handle) {
+      return { status: "not_running" as const };
+    }
+
+    // Goes through the provider's writeFile, never a shell command — see
+    // MAX_INLINE_EXEC_CONTENT_BYTES in sandboxFiles.ts for why content must
+    // never be interpolated into an exec argument.
+    await writeFileToSandbox(handle, args.path, args.content);
+    return { status: "ok" as const, size };
+  },
+});
+
+/**
  * Reads an image or video out of a running sandbox as base64 so the File Viewer
  * can preview it as a data URL. The bytes cannot travel as text — the exec
  * transport returns a string — so they are encoded in the sandbox.
@@ -445,6 +535,13 @@ export const listSandboxFiles = action({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    /**
+     * Lists a linked repo's checkout instead of the primary (multi-repo
+     * sessions) — an absolute sandbox path, e.g. `/tmp/workspace/<name>`.
+     * Omitted (or the primary's own path) keeps the existing
+     * `workspaceDirShell()` resolution, including the legacy-sandbox fallback.
+     */
+    rootPath: v.optional(v.string()),
   },
   returns: v.union(
     v.object({
@@ -467,8 +564,9 @@ export const listSandboxFiles = action({
 
     // Echo the resolved workspace root first so legacy `/workspace/repo`
     // sandboxes build correct absolute `?file=` paths. Keep default exec cwd.
+    const dir = args.rootPath ? quote([args.rootPath]) : workspaceDirShell();
     const script =
-      `d=${workspaceDirShell()}; ` +
+      `d=${dir}; ` +
       `printf '%s\\0' "$d"; ` +
       `git -C "$d" ls-files --cached --others --exclude-standard -z` +
       ` | head -z -n ${MAX_FILE_LIST_ENTRIES + 1}`;

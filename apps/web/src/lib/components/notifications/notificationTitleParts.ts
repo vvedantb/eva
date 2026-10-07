@@ -2,7 +2,9 @@
  * Notification titles are authored in the backend as one packed sentence that
  * carries both the entity and what happened to it — `PR #678 merged — "Ship the
  * inbox" archived`, `Quick task completed: Ship the inbox`, `Assigned: "Ship the
- * inbox"`. Rendered whole, every row in the inbox opens with the same boilerplate
+ * inbox"`. A trailing bare `archived` after a PR merge/close is expanded to
+ * `session archived` so the event line names both outcomes. Rendered whole, every
+ * row in the inbox opens with the same boilerplate
  * and the part that identifies the row gets truncated away.
  *
  * This splits a title into the two lines the row renders: the subject (the
@@ -75,12 +77,16 @@ export function splitNotificationTitle(notification: {
 
   const quotedSubject = quoted ? quoted[1].trim() : "";
   if (quoted && quotedSubject) {
+    const before = tidy(title.slice(0, quoted.index));
+    const after = tidy(title.slice(quoted.index + quoted[0].length));
+    const afterEvent =
+      after.toLowerCase() === "archived" &&
+      /\b(?:pr\b|merged|closed)/i.test(before)
+        ? "session archived"
+        : after;
     return {
       subject: quotedSubject,
-      event: joinEvent(
-        tidy(title.slice(0, quoted.index)),
-        tidy(title.slice(quoted.index + quoted[0].length)),
-      ),
+      event: joinEvent(before, afterEvent),
     };
   }
 

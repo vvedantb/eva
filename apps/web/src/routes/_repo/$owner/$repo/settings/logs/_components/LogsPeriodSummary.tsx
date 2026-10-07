@@ -1,4 +1,7 @@
+"use client";
+
 import { formatDurationMs } from "@eva/shared/duration";
+import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 import { formatCost, formatTokens, type LogTotals } from "../_utils";
 
 interface LogsPeriodSummaryProps {
@@ -11,6 +14,7 @@ interface LogsPeriodSummaryProps {
  * Not a card — spend is a figure, not a control.
  */
 export function LogsPeriodSummary({ title, totals }: LogsPeriodSummaryProps) {
+  const spend = useCountUpDisplay(formatCost(totals.totalCost));
   const meta = [
     formatDurationMs(totals.totalDuration),
     `${formatTokens(totals.totalInput)} in`,
@@ -23,7 +27,7 @@ export function LogsPeriodSummary({ title, totals }: LogsPeriodSummaryProps) {
         {title}
       </h3>
       <p className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-        {formatCost(totals.totalCost)}
+        {spend}
       </p>
       <p className="mt-0.5 text-sm text-pretty text-muted-foreground">
         {meta.join(" · ")}

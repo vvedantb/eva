@@ -301,34 +301,6 @@ export const PACKAGE_HELPER_SCRIPT = [
   "}",
 ].join("\n");
 
-/**
- * Shell expression for the sandbox USER's global npm prefix, evaluated by the
- * calling (non-root) shell. Pass it to every root-run `npm install -g`.
- *
- * Every reader of globally installed CLIs/SDKs — the seed's idempotency check
- * (`globalPackageIsVersion`), the per-boot pin check in launch.ts, and the
- * callback's SDK resolvers (`globalNpmRoot()` in claudeSdk.ts / cursorSdk.ts) —
- * resolves `npm root -g` as the sandbox user. A plain `sudo npm install -g`
- * writes to ROOT's prefix instead. On AL2023 both are `/usr/local`, so nothing
- * noticed; on the Ubuntu managed image the user's prefix is `/vercel/.global/npm`
- * (where the image preinstalls claude/codex/opencode) and root's is not, so the
- * seed installed eva's pins somewhere nobody read, the version check failed on
- * every run, and the preinstalled versions won.
- *
- * Quoting: `$(npm prefix -g)` must be expanded BEFORE `sudo` runs, so this only
- * works inside a double-quoted or unquoted context of the user's shell — never
- * inside a single-quoted `sudo sh -c '…'` body.
- */
-export const USER_NPM_PREFIX_SHELL = `"$(npm prefix -g)"`;
-
-/**
- * `sudo npm install -g` that lands where the sandbox user's `npm root -g` looks.
- * `packages` is already-shell-safe text (versions/names), joined as given.
- */
-export function sudoNpmInstallGlobal(packages: string): string {
-  return `sudo npm install -g --prefix ${USER_NPM_PREFIX_SHELL} ${packages}`;
-}
-
 /** `eva_pkg_install a b c` — assumes PACKAGE_HELPER_SCRIPT is already in scope. */
 export function pkgInstall(...ids: readonly string[]): string {
   return `eva_pkg_install ${assertKnown(ids).join(" ")}`;

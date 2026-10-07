@@ -112,7 +112,9 @@ function diffOptions<LAnnotation>({
 }: Pick<
   ReviewableFileDiffProps,
   "diffView" | "resolvedTheme" | "hideFileHeader" | "wrapLines"
->): FileDiffOptions<LAnnotation> {
+  // `Caret` types externally owned carets, which this surface never renders,
+  // so it stays `undefined` everywhere the options are named.
+>): FileDiffOptions<LAnnotation, undefined> {
   return {
     diffStyle: diffView,
     // Must match the worker pool's own render options — the pool's win when one
@@ -257,7 +259,7 @@ function AnnotatableDiff({
 
   const hasOpenDraft = draft !== null;
 
-  const options: FileDiffOptions<DiffCommentAnnotationGroup> = {
+  const options: FileDiffOptions<DiffCommentAnnotationGroup, undefined> = {
     ...diffOptions<DiffCommentAnnotationGroup>({
       diffView,
       resolvedTheme,

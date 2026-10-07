@@ -12,10 +12,13 @@ import {
   sidebarNavLinkClassCompact,
 } from "@/lib/components/sidebar/SharedLayoutNav";
 import { HomeTeamsNav } from "@/lib/components/sidebar/_components/HomeTeamsNav";
+import { ChangelogUnreadDot } from "@/lib/components/sidebar/_components/ChangelogUnreadDot";
+
+const WHATS_NEW_HREF = "/whats-new";
 
 const HOME_NAV = [
   { name: "Artifacts", href: "/artifacts", icon: IconLayoutDashboard },
-  { name: "What's New", href: "/whats-new", icon: IconSparkles },
+  { name: "What's New", href: WHATS_NEW_HREF, icon: IconSparkles },
 ] as const;
 
 interface HomeSidebarProps {
@@ -56,6 +59,7 @@ export function HomeSidebar({ pathname, onNavigate }: HomeSidebarProps) {
             >
               <item.icon size={14} />
               <span>{item.name}</span>
+              {item.href === WHATS_NEW_HREF ? <ChangelogUnreadDot /> : null}
             </Link>
           </SharedLayoutNavSurface>
         );

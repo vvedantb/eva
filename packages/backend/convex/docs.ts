@@ -11,6 +11,7 @@ import {
   internalMutation,
   internalQuery,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server";
 import { components, internal } from "./_generated/api";
 import { extractPrNumberFromUrl } from "./_projects/prSync";
@@ -38,6 +39,16 @@ import {
   resolveCodebaseDocsRepoId,
 } from "./_githubRepos/helpers";
 import { isEvaOwnedPullRequest } from "./_github/evaPrOwnership";
+import {
+  callerCanSeeChatSource,
+  chatSourceArgValidator,
+  chatSourceFieldsFromArg,
+  chatSourceSummaryValidator,
+  listRowsForChatSource,
+  resolveChatSource,
+  type ChatSourceArg,
+  type RepoCache,
+} from "./_chatSource/helpers";
 
 const docValidator = v.object({
   _id: v.id("docs"),
@@ -77,6 +88,7 @@ const docListItemValidator = v.object({
   createdBy: v.optional(v.id("users")),
   createdAt: v.number(),
   updatedAt: v.number(),
+  source: chatSourceSummaryValidator,
 });
 
 function docListPreview(doc: {
@@ -123,6 +135,17 @@ function toDocListItem(doc: Doc<"docs">) {
   };
 }
 
+async function toDocListItemWithSource(
+  ctx: QueryCtx,
+  doc: Doc<"docs">,
+  repoCache: RepoCache,
+) {
+  return {
+    ...toDocListItem(doc),
+    source: await resolveChatSource(ctx, doc, repoCache, doc.sessionId),
+  };
+}
+
 /** Lists all docs for a given repo, filtered by user access. PR recaps are shared across monorepo apps. */
 export const list = authQuery({
   args: {
@@ -165,17 +188,67 @@ export const list = authQuery({
     }
 
     // PR recaps: newest PRs first. Other docs: most recently created first.
-    return docs
-      .toSorted((a, b) => {
-        if (a.kind === "pr-recap" && b.kind === "pr-recap") {
-          const byPr = (b.prNumber ?? 0) - (a.prNumber ?? 0);
-          if (byPr !== 0) return byPr;
-        }
-        return b._creationTime - a._creationTime;
-      })
-      .map(toDocListItem);
+    const repoCache: RepoCache = new Map();
+    return Promise.all(
+      docs
+        .toSorted((a, b) => {
+          if (a.kind === "pr-recap" && b.kind === "pr-recap") {
+            const byPr = (b.prNumber ?? 0) - (a.prNumber ?? 0);
+            if (byPr !== 0) return byPr;
+          }
+          return b._creationTime - a._creationTime;
+        })
+        .map((doc) => toDocListItemWithSource(ctx, doc, repoCache)),
+    );
   },
 });
+
+/** Docs created from one session, quick task, or project sandbox. */
+export const listForSource = authQuery({
+  args: { source: chatSourceArgValidator },
+  returns: v.array(docListItemValidator),
+  handler: async (ctx, args) => {
+    if (!(await callerCanSeeChatSource(ctx, args.source))) return [];
+    const rows = await listDocsForSource(ctx, args.source);
+    const visible = rows.filter(
+      (doc) => !isEntityDeleted(doc) && doc.kind !== "pr-recap",
+    );
+    visible.sort((a, b) => b.createdAt - a.createdAt);
+    const repoCache: RepoCache = new Map();
+    return Promise.all(
+      visible.map((doc) => toDocListItemWithSource(ctx, doc, repoCache)),
+    );
+  },
+});
+
+/**
+ * Docs for a chat's Documents tab. Sessions also include Plan → Save as
+ * document (`sessionId`); `getBySession` still reads only `sessionId`.
+ */
+async function listDocsForSource(
+  ctx: QueryCtx,
+  source: ChatSourceArg,
+): Promise<Doc<"docs">[]> {
+  if (source.kind !== "session") {
+    return listRowsForChatSource(ctx, "docs", source);
+  }
+  const sessionId = source.sessionId;
+  const [fromSource, fromPlan] = await Promise.all([
+    listRowsForChatSource(ctx, "docs", source),
+    ctx.db
+      .query("docs")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect(),
+  ]);
+  const seen = new Set<string>();
+  const merged: Doc<"docs">[] = [];
+  for (const doc of [...fromSource, ...fromPlan]) {
+    if (seen.has(doc._id)) continue;
+    seen.add(doc._id);
+    merged.push(doc);
+  }
+  return merged;
+}
 
 /** Returns the per-repo numId used in Eva doc URLs (/docs/$numId/…). */
 export const getPathNumId = internalQuery({
@@ -281,6 +354,7 @@ export const create = authMutation({
     repoId: v.id("githubRepos"),
     title: v.string(),
     content: v.string(),
+    source: v.optional(chatSourceArgValidator),
   },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
@@ -297,6 +371,7 @@ export const create = authMutation({
       createdAt: now,
       updatedAt: now,
       numId,
+      ...(await chatSourceFieldsFromArg(ctx, args.source, "document")),
     });
 
     await prosemirrorSync.create(ctx, docId, markdownToDocJson(args.content));
@@ -398,6 +473,8 @@ export const createFromSession = authMutation({
     const docId = await ctx.db.insert("docs", {
       repoId: session.repoId,
       sessionId: args.sessionId,
+      sourceKind: "session",
+      sourceSessionId: args.sessionId,
       title: session.title,
       content: session.planContent ?? "",
       contentUpdatedAt: now,

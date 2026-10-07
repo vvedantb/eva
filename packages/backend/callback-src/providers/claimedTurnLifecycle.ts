@@ -1,3 +1,4 @@
+import { unwrapConvexMutationPayload } from "../http/convexClient.js";
 import type { JsonObject, JsonValue } from "../types.js";
 import {
   beginTurnOwnership,
@@ -11,9 +12,12 @@ import {
   resetTurnCheckpoint,
 } from "../runtime/turnCheckpoint.js";
 
+export type ClaimedInteractionMode = "default" | "plan";
+
 type ClaimedTurnBase = {
   prompt: string;
   attachmentUrls: string[];
+  interactionMode: ClaimedInteractionMode;
 };
 
 export type ClaimedTurn =
@@ -26,19 +30,9 @@ export type ClaimedTurn =
       turnLease: TurnLeaseIdentity;
     });
 
-function claimPayload(result: JsonValue): JsonObject | null {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
-    return null;
-  }
-  const inner = result.value;
-  return typeof inner === "object" && inner !== null && !Array.isArray(inner)
-    ? inner
-    : result;
-}
-
 /** Parses the one shared claim contract used by every persistent provider. */
 export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
-  const payload = claimPayload(result);
+  const payload = unwrapConvexMutationPayload(result);
   if (!payload || typeof payload.prompt !== "string") return null;
   const lifecycle = payload.turnLifecycle;
   if (
@@ -53,6 +47,7 @@ export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
         (url): url is string => typeof url === "string",
       )
     : [];
+  const interactionMode: ClaimedInteractionMode = "default";
   const turnLease = readTurnLeaseIdentity(result);
   if (lifecycle === "durable" && turnLease === null) {
     throw new Error("Durable claimed turn did not include a lease identity");
@@ -65,6 +60,7 @@ export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
       lifecycle: "durable",
       prompt: payload.prompt,
       attachmentUrls,
+      interactionMode,
       turnLease,
     };
   }
@@ -72,6 +68,7 @@ export function readClaimedTurn(result: JsonValue): ClaimedTurn | null {
     lifecycle: "legacy",
     prompt: payload.prompt,
     attachmentUrls,
+    interactionMode,
     turnLease: null,
   };
 }

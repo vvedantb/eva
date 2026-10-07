@@ -2,19 +2,18 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { cn, STREAMDOWN_TABLE_RADIUS_CLASS } from "@eva/ui";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import {
+  CenteredSpinner,
+  cn,
+  motionBase,
+  motionStagger,
+} from "@eva/ui";
+import { m } from "motion/react";
+import { Markdown } from "@eva/ui/markdown";
 import { IconSparkles } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
-import { TimelineEntriesSkeleton } from "@/lib/components/ui/TimelineEntriesSkeleton";
-
-/** Same plugin set as `ChangelogDialog`, so both surfaces render identically. */
-const whatsNewPlugins = { cjk, math, mermaid };
 
 /**
  * Every published entry of the "Eva Weekly Changelog" automation as a timeline.
@@ -26,7 +25,7 @@ export function WhatsNewClient() {
   return (
     <PageWrapper title="What's New" comfortable>
       {entries === undefined ? (
-        <TimelineEntriesSkeleton aria-label="Loading updates" />
+        <CenteredSpinner label="Loading updates" />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<IconSparkles size={24} />}
@@ -38,7 +37,13 @@ export function WhatsNewClient() {
         // between cards instead of restarting at each one.
         <ol className="relative space-y-4 border-l border-border pl-6 sm:pl-8">
           {entries.map((entry, index) => (
-            <li key={entry.id} className="relative">
+            <m.li
+              key={entry.id}
+              className="relative"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...motionBase, delay: motionStagger(index) }}
+            >
               <span
                 className={cn(
                   "absolute -left-6 top-4 size-2 rounded-full ring-4 ring-background sm:-left-8",
@@ -58,18 +63,10 @@ export function WhatsNewClient() {
                   ) : null}
                 </header>
                 <div className="px-4 py-3">
-                  <Streamdown
-                    className={cn(
-                      "text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-                      STREAMDOWN_TABLE_RADIUS_CLASS,
-                    )}
-                    plugins={whatsNewPlugins}
-                  >
-                    {entry.content}
-                  </Streamdown>
+                  <Markdown className="text-sm">{entry.content}</Markdown>
                 </div>
               </article>
-            </li>
+            </m.li>
           ))}
         </ol>
       )}

@@ -25,9 +25,9 @@ function redirectToProjectReview(args: {
         : args.search.diffView,
   });
 
-  if (dest.kind === "overview") {
+  if (dest.kind === "summary") {
     throw redirect({
-      to: "/$owner/$repo/projects/$numId/sandbox/review/overview",
+      to: "/$owner/$repo/projects/$numId/sandbox/review/summary",
       params: {
         owner: args.owner,
         repo: args.repo,
@@ -43,9 +43,9 @@ function redirectToProjectReview(args: {
     });
   }
 
-  if (dest.kind === "recap") {
+  if (dest.kind === "timeline") {
     throw redirect({
-      to: "/$owner/$repo/projects/$numId/sandbox/review/recap",
+      to: "/$owner/$repo/projects/$numId/sandbox/review/timeline",
       params: {
         owner: args.owner,
         repo: args.repo,
@@ -115,6 +115,7 @@ export const Route = createFileRoute(
         search: {
           diffFile: corrupted.diffFile,
           diffView: corrupted.diffView,
+          ...(corrupted.file !== undefined ? { file: corrupted.file } : {}),
         },
         replace: true,
       });

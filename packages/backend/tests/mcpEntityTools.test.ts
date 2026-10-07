@@ -261,9 +261,7 @@ describe("list_entities returns what the caller can already open", () => {
     const ids = (await listFor(f)).entities.map((entity) => entity.id);
     expect(ids).toEqual([f.closedSessionId]);
     // Also gone from the per-status path, which uses different indexes.
-    expect(
-      (await listFor(f, { status: "code_review" })).entities,
-    ).toEqual([]);
+    expect((await listFor(f, { status: "code_review" })).entities).toEqual([]);
   });
 });
 
@@ -346,64 +344,101 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     expect(decideSandboxStartPlan(undefined)).toBe("start");
   });
 
-  test("starting a task from closed moves it to starting", async () => {
-    const f = await fixture();
-    const closedTaskId = await f.t.run(async (ctx) => {
-      const now = Date.now();
-      return ctx.db.insert("agentTasks", {
-        repoId: f.repoId,
-        title: "Closed sandbox",
-        status: "business_review",
-        numId: 22,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: f.ownerUserId,
-        // A resumable sandbox id takes the direct-start path rather than
-        // scheduling the whole startup workflow.
-        sandboxId: "sbx_closed",
-        reviewTaskSandboxStatus: "closed",
+  test(
+    "starting a task from closed moves it to starting",
+    async () => {
+      const f = await fixture();
+      const closedTaskId = await f.t.run(async (ctx) => {
+        const now = Date.now();
+        return ctx.db.insert("agentTasks", {
+          repoId: f.repoId,
+          title: "Closed sandbox",
+          status: "business_review",
+          numId: 22,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: f.ownerUserId,
+          // A resumable sandbox id takes the direct-start path rather than
+          // scheduling the whole startup workflow.
+          sandboxId: "sbx_closed",
+          reviewTaskSandboxStatus: "closed",
+        });
       });
-    });
 
-    const after = await withoutRunningScheduledWork(async () => {
-      await f.t
-        .withIdentity({ subject: OWNER_CLERK_ID })
-        .mutation(api.agentTasks.startTaskSandbox, { taskId: closedTaskId });
-      return f.t.run(async (ctx) => ctx.db.get(closedTaskId));
-    });
+      const after = await withoutRunningScheduledWork(async () => {
+        await f.t
+          .withIdentity({ subject: OWNER_CLERK_ID })
+          .mutation(api.agentTasks.startTaskSandbox, { taskId: closedTaskId });
+        return f.t.run(async (ctx) => ctx.db.get(closedTaskId));
+      });
 
-    expect(after?.reviewTaskSandboxStatus).toBe("starting");
-    // The resumable id is kept, so the paused filesystem comes back.
-    expect(after?.sandboxId).toBe("sbx_closed");
-  }, TIMEOUT_MS);
+      expect(after?.reviewTaskSandboxStatus).toBe("starting");
+      // The resumable id is kept, so the paused filesystem comes back.
+      expect(after?.sandboxId).toBe("sbx_closed");
+    },
+    TIMEOUT_MS,
+  );
 
-  test("stopping a task from active moves it to stopping, keeping the sandbox id", async () => {
-    const f = await fixture();
-    await f.t.run(async (ctx) => {
-      await ctx.db.patch(f.taskId, { sandboxId: "sbx_live" });
-    });
+  test(
+    "stopping a task from active moves it to stopping, keeping the sandbox id",
+    async () => {
+      const f = await fixture();
+      await f.t.run(async (ctx) => {
+        await ctx.db.patch(f.taskId, { sandboxId: "sbx_live" });
+      });
 
-    const after = await withoutRunningScheduledWork(async () => {
+      const after = await withoutRunningScheduledWork(async () => {
+        await f.t
+          .withIdentity({ subject: OWNER_CLERK_ID })
+          .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
+        return f.t.run(async (ctx) => ctx.db.get(f.taskId));
+      });
+
+      expect(after?.reviewTaskSandboxStatus).toBe("stopping");
+      // Kept so the same paused filesystem can be resumed by a later start.
+      expect(after?.sandboxId).toBe("sbx_live");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "stopping a task that never had a sandbox closes it outright",
+    async () => {
+      const f = await fixture();
       await f.t
         .withIdentity({ subject: OWNER_CLERK_ID })
         .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-      return f.t.run(async (ctx) => ctx.db.get(f.taskId));
-    });
 
-    expect(after?.reviewTaskSandboxStatus).toBe("stopping");
-    // Kept so the same paused filesystem can be resumed by a later start.
-    expect(after?.sandboxId).toBe("sbx_live");
-  }, TIMEOUT_MS);
+      const after = await f.t.run(async (ctx) => ctx.db.get(f.taskId));
+      expect(after?.reviewTaskSandboxStatus).toBe("closed");
+    },
+    TIMEOUT_MS,
+  );
 
-  test("stopping a task that never had a sandbox closes it outright", async () => {
-    const f = await fixture();
-    await f.t
-      .withIdentity({ subject: OWNER_CLERK_ID })
-      .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
+  test("get_agent_state uses the same executing rule as stop and list", () => {
+    const nodeActions = convexSource("mcp/nodeActions.ts");
+    const getState = nodeActions.slice(
+      nodeActions.indexOf("export const orchestratorGetAgentState"),
+      nodeActions.indexOf("async function delay"),
+    );
+    expect(getState).toContain("internal.mcp.queries.entityIsExecuting");
+    expect(getState).not.toContain("session.activeWorkflowId !== undefined");
+  });
 
-    const after = await f.t.run(async (ctx) => ctx.db.get(f.taskId));
-    expect(after?.reviewTaskSandboxStatus).toBe("closed");
-  }, TIMEOUT_MS);
+  test("send treats a session /loop turn as busy", () => {
+    const nodeActions = convexSource("mcp/nodeActions.ts");
+    const send = nodeActions.slice(
+      nodeActions.indexOf("export const orchestratorSendMessage"),
+      nodeActions.indexOf("export const orchestratorStopAgent"),
+    );
+    expect(send).toContain("internal.mcp.queries.entityIsExecuting");
+    const delivery = nodeActions.slice(
+      nodeActions.indexOf("function chatDelivery"),
+      nodeActions.indexOf("export const orchestratorSendMessage"),
+    );
+    expect(delivery).toContain("sessionIsExecuting || queuedAhead > 0");
+    expect(delivery).not.toContain("session.activeWorkflowId");
+  });
 
   test("stop refuses to kill a turn that is already running", () => {
     const nodeActions = convexSource("mcp/nodeActions.ts");
@@ -434,8 +469,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
         turnLifecycleVersion: 2,
       });
       await ctx.db.insert("turns", {
-        surface: "session",
-        entityId: String(sessionId),
+        entityId: sessionId,
         streamingEntityId: String(sessionId),
         state: "running",
         open: true,
@@ -574,9 +608,7 @@ describe("cancel_queued_message only touches the queue", () => {
     const survivors = await f.t.run(async (ctx) =>
       ctx.db
         .query("queuedMessages")
-        .withIndex("by_parent_and_order", (q) =>
-          q.eq("parentId", f.sessionId),
-        )
+        .withIndex("by_parent_and_order", (q) => q.eq("parentId", f.sessionId))
         .collect(),
     );
     expect(survivors).toHaveLength(2);
@@ -599,11 +631,11 @@ describe("the new tools reach every MCP caller and write no review state", () =>
   const entityTools = convexSource("mcp/entityTools.ts");
   const nodeActions = convexSource("mcp/nodeActions.ts");
 
-  test("they are registered above the orchestrator gate, like send_chat_message", () => {
+  test("they are registered above the Ave gate, like send_chat_message", () => {
     const registered = tools.indexOf(
-      "registerEntityTools(server, credentials, ctx)",
+      "tools.push(...entityTools(credentials, ctx))",
     );
-    const gate = tools.indexOf("if (isOrchestrator) {");
+    const gate = tools.indexOf("if (isAve) {");
     expect(registered).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(registered);
     for (const name of [
@@ -611,6 +643,7 @@ describe("the new tools reach every MCP caller and write no review state", () =>
       '"start_sandbox"',
       '"stop_sandbox"',
       '"cancel_queued_message"',
+      '"get_preview_url"',
     ]) {
       expect(entityTools).toContain(name);
     }
@@ -618,12 +651,16 @@ describe("the new tools reach every MCP caller and write no review state", () =>
 
   test("every entity tool resolves its target through the shared access check", () => {
     const entityRef = convexSource("mcp/entityRef.ts");
-    expect(entityRef).toContain("assertRepoAccess(target.repoId");
-    // Four tools, four resolutions: three by entity ref, one by repo ref.
+    expect(entityRef).toContain("assertUserRepoAccess(target.repoId");
+    // Five tools, five resolutions: four by entity ref, one by repo ref.
     expect(
       (entityTools.match(/resolveEntityTarget\(ref, userId\)/g) ?? []).length,
     ).toBe(3);
-    expect(entityTools).toContain("assertRepoAccess(ref.repoId, userId)");
+    // get_preview_url falls back to the chat the token names, then resolves
+    // that through the very same check rather than trusting the claim.
+    expect(entityTools).toContain("const chatRef = withSelfDefault(ref, credentials)");
+    expect(entityTools).toContain("resolveEntityTarget(chatRef, userId)");
+    expect(entityTools).toContain("assertUserRepoAccess(ref.repoId, userId)");
   });
 
   test("no entity tool patches status, phase or any review field", () => {
@@ -659,5 +696,152 @@ describe("the new tools reach every MCP caller and write no review state", () =>
     );
     expect(ensure).toContain("surface.start");
     expect(ensure.match(/"[\w/]+:[\w]+"/g)).toBeNull();
+  });
+});
+
+/**
+ * 2026-09-10: a session on eva diagnosed a carepulse-ts PR but could not post
+ * the fix into that PR's task chat — every entity tool ran the sandbox token's
+ * single-repo pin, while create_and_run_task never did. Chats now follow the
+ * per-user rule the web app uses; the pin stays on anything that hands out a
+ * repo's credentials.
+ */
+describe("a sandbox token reaches chats in every repo its user can, but credentials stay pinned", () => {
+  const entityRef = readFileSync(
+    join(testsDir, "../convex/mcp/entityRef.ts"),
+    "utf8",
+  );
+  const entityToolsSource = readFileSync(
+    join(testsDir, "../convex/mcp/entityTools.ts"),
+    "utf8",
+  );
+  const tools = readFileSync(join(testsDir, "../convex/mcp/tools.ts"), "utf8");
+  const between = (source: string, start: string, end: string): string =>
+    source.slice(source.indexOf(start), source.indexOf(end));
+
+  test("resolving a chat checks the user, not the token pin", () => {
+    const resolve = between(
+      entityRef,
+      "async function resolveEntityTarget(",
+      "return {\n    assertRepoAccess,",
+    );
+    expect(resolve).toContain("assertUserRepoAccess(target.repoId, userId)");
+    expect(resolve).not.toContain("assertRepoAccess(");
+    expect(entityRef).not.toContain("tokenScopedRepoIds");
+  });
+
+  test("the chat tools never import the pinned check", () => {
+    expect(entityToolsSource).toContain("assertUserRepoAccess");
+    expect(entityToolsSource).not.toMatch(/\bassertRepoAccess\b/);
+    expect(entityToolsSource).not.toContain("tokenScopedRepoIds");
+  });
+
+  test("the pin still guards every credential hand-out", () => {
+    const pinned = between(
+      entityRef,
+      "async function assertRepoAccess(",
+      "async function resolveRepoRef(",
+    );
+    expect(pinned).toContain("scoped to a different repository");
+    // Convex deploy keys, Postgres, and repo skills all go through the pinned check.
+    const credentials = between(
+      tools,
+      "async function resolveTargetWithAccess(",
+      '"list_tables"',
+    );
+    expect(credentials).toContain("await assertRepoAccess(repoId, userId)");
+    const postgres = between(
+      tools,
+      '"postgres_query"',
+      "async function resolveRepoByName(",
+    );
+    expect(postgres).toContain("await assertRepoAccess(ref.repoId, userId)");
+  });
+});
+
+/**
+ * 2026-09-24: asked "give me the link then?", a session answered that no link
+ * existed and offered to merge the PR — its own sandbox was serving the work
+ * the whole time. `get_preview_url` closes that gap, so what it needs to
+ * answer has to travel with the resolved chat.
+ */
+describe("get_preview_url can find the running app behind a chat", () => {
+  async function resolve(
+    f: Awaited<ReturnType<typeof fixture>>,
+    kind: "session" | "task" | "project",
+    id: string,
+  ) {
+    return f.t.query(internal.mcp.queries.resolveChatTargetForUser, {
+      userId: f.ownerUserId,
+      kind,
+      id,
+    });
+  }
+
+  test("a resolved chat carries its sandbox, its VM state and its dev port", async () => {
+    const f = await fixture();
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch(f.repoId, { devPort: 3000 });
+      await ctx.db.patch(f.sessionId, {
+        sandboxId: "sbx_session",
+        devPort: 5173,
+      });
+      await ctx.db.patch(f.taskId, { sandboxId: "sbx_task" });
+    });
+
+    // A session's own status is its sandbox's, and its port beats the repo's.
+    const session = await resolve(f, "session", f.sessionId);
+    expect(session?.sandboxStatus).toBe("active");
+    expect(session?.sandboxId).toBe("sbx_session");
+    expect(session?.devPort).toBe(5173);
+
+    // A task parks the reviewer-facing VM state in its own field, and has no
+    // port of its own — the repo default answers for it.
+    const task = await resolve(f, "task", f.taskId);
+    expect(task?.sandboxStatus).toBe("active");
+    expect(task?.sandboxId).toBe("sbx_task");
+    expect(task?.devPort).toBe(3000);
+
+    // A project that never started one reports closed rather than nothing.
+    const project = await resolve(f, "project", f.projectId);
+    expect(project?.sandboxStatus).toBe("closed");
+    expect(project?.sandboxId).toBeUndefined();
+  });
+
+  test("a stopped sandbox is reported, never guessed at", () => {
+    const entityTools = convexSource("mcp/entityTools.ts");
+    const tool = entityTools.slice(
+      entityTools.indexOf('name: "get_preview_url"'),
+      entityTools.indexOf('name: "cancel_queued_message"'),
+    );
+    // No sandbox and no active VM both short-circuit before any provider call.
+    expect(tool).toContain('target.sandboxStatus !== "active"');
+    expect(tool).toContain("Call start_sandbox and try again");
+    // The five-minute bearer grant must not be pasted into a chat message.
+    expect(tool).toContain("shareablePreviewUrl(preview.url, path)");
+    expect(entityTools).toContain(
+      "url.searchParams.delete(PREVIEW_GRANT_PARAM)",
+    );
+  });
+
+  test("every surface points at its own Preview tab", () => {
+    const entityRef = convexSource("mcp/entityRef.ts");
+    const previewPath = entityRef.slice(
+      entityRef.indexOf("export function entityPreviewPath("),
+      entityRef.indexOf("/** The identity every entity tool echoes back"),
+    );
+    // Sessions hang their sandbox tabs off the chat route; the other two nest
+    // theirs under /sandbox (see the web app's route files).
+    expect(previewPath).toContain("`${base}/preview`");
+    expect(previewPath).toContain("`${base}/sandbox/preview`");
+  });
+
+  test("the agent is told the link exists before it is asked for one", () => {
+    const prompts = readFileSync(
+      join(testsDir, "../convex/_sessions/prompts.ts"),
+      "utf8",
+    );
+    expect(prompts).toContain("get_preview_url");
+    expect(prompts).toContain("Never reply that no link exists");
   });
 });

@@ -17,7 +17,7 @@ import {
   WORK_DIR,
 } from "./config.js";
 import { callbackState as S } from "./runtime/state.js";
-import type { JsonValue } from "./types.js";
+import type { JsonObject, JsonValue } from "./types.js";
 
 /** Narrow JSON.parse / Response.json() payloads into JsonValue (null if invalid). */
 function narrowJsonValue(
@@ -76,6 +76,13 @@ export function log(msg: string): void {
   } catch {
     /* ignore log write failures */
   }
+}
+
+/** Coerces a JSON value to an object; non-objects become `{}`. */
+export function asJsonObject(value: JsonValue | undefined): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 
 /** Attempts to parse a JSON string, returning null on failure. */
@@ -172,9 +179,14 @@ export function runTimedBashSync(script: string, label: string): boolean {
   return true;
 }
 
-/** Returns the current git HEAD sha in the workspace, or empty when unavailable. */
-export function readGitHeadSha(): string {
-  const result = spawnSync("git", ["-C", WORK_DIR, "rev-parse", "HEAD"], {
+/**
+ * Returns the current git HEAD sha in `dir` (defaults to the primary
+ * workspace), or empty when unavailable — missing directory, not a git repo,
+ * or no commits yet all fail the same way, so callers skip on empty rather
+ * than distinguishing why.
+ */
+export function readGitHeadSha(dir: string = WORK_DIR): string {
+  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
     encoding: "utf8",
     timeout: CLAUDE_SYNC_TIMEOUT_MS,
   });

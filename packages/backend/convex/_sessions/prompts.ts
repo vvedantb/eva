@@ -1,11 +1,58 @@
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
+  buildAgentMemoryBlock,
+  buildLinkedReposSection,
+  buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
+  CHAT_UI_INSTRUCTION,
+  COMMUNICATION_STYLE_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
+  VISUAL_CHANGE_INSTRUCTION,
 } from "../prompts";
+import type { LinkedRepoPromptRow } from "../prompts";
 import { stripMentionTokens } from "../_mentions/resolveDocMentions";
+import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 
+/**
+ * Facts about the chat's own runtime that Eva already knows, stated up front
+ * so the agent does not have to rediscover (or guess) them each turn.
+ */
+export interface ChatRuntimeFacts {
+  /** Sandbox owner key: `session-<id>`, `task-<id>` or `project-<id>`. */
+  ownerKey: string;
+  prUrl?: string;
+  devCommand?: string;
+  startupCommands?: readonly string[];
+  backgroundCommands?: readonly string[];
+  /** Repo opted in to `.eva/memory/` (Agent Memory Repo spec). */
+  agentMemoryEnabled?: boolean;
+}
+
+function commandList(commands: readonly string[] | undefined): string {
+  if (commands === undefined || commands.length === 0) return "none";
+  return commands.map((command) => `\`${command}\``).join(", ");
+}
+
+/** The "this chat" block: PR, dev server wiring, and the Eva MCP controls. */
+function buildChatRuntimeSection(
+  runtime: ChatRuntimeFacts,
+  branchName: string,
+  devPortText: string,
+): string {
+  const consoleSession = previewConsoleSessionName(runtime.ownerKey);
+  const prLine = runtime.prUrl
+    ? `- Pull request: ${runtime.prUrl}. Eva pushes "${branchName}" after your turn, which updates it.`
+    : `- Pull request: none yet. Eva pushes "${branchName}" after your turn and opens the PR through its own flow.`;
+  return `
+
+## This chat (from Eva):
+${prLine} Never run \`gh pr create\` for this branch — Eva links a chat to its PR only when Eva opens it, so a PR you open yourself is orphaned.
+- Dev server: \`${runtime.devCommand ?? "auto-detected from package.json"}\` on port ${devPortText}. Startup commands: ${commandList(runtime.startupCommands)}. Background commands: ${commandList(runtime.backgroundCommands)}.
+- Dev server logs: \`tmux capture-pane -p -S -200 -t ${consoleSession}\` (the Preview Console). Read them before concluding the app is broken. To restart it, call eva MCP \`restart_dev_server\` — never kill it or launch your own. A dead daemon (e.g. \`convex dev\`) comes back with \`restart_background_commands\`; \`rerun_startup_commands\` reseeds and may reset local data, so ask first.
+- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked; queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
+- Deleting anything through eva MCP (tasks, automations, artifacts, docs) needs the user's explicit yes in chat first. Ask, wait for the answer, then pass \`confirmed: true\`.`;
+}
 /**
  * Session chat no longer injects this block: Cursor resumes one agent and the
  * SDK compacts in place. The helper remains for tests and any caller that
@@ -158,51 +205,6 @@ export function buildTitleDigest(
     .join("\n\n");
 }
 
-/**
- * Turn prompt for the master ("orchestrator") session — Manager Ave.
- *
- * Deliberately NOT `buildEditPrompt`. That prompt opens with "Do all work on
- * <branch>" and hands over a `git commit` line, which is an instruction to
- * implement; the master was receiving it on every turn and doing exactly what it
- * said, delegating only when the user objected. The `eva-orchestrator` skill
- * cannot correct that on its own — a skill is only in context once the agent
- * invokes it, whereas this text prefixes every turn.
- *
- * No branch contract, no commit line, no dev-server or recording sections: the
- * master's sandbox boots from the managed image with no repo services, so those
- * sections only described things it must not do.
- */
-export function buildOrchestratorPrompt(
-  message: string,
-  customInstructionsBlock: string,
-): string {
-  return `${message}
-
-You are Manager Ave, the user's master session. You supervise other Eva agents; you never build anything yourself.
-
-## Never implement
-- Do not edit, create, or delete files. You have no Write and no Edit tool — attempting an edit wastes the turn.
-- Do not commit, push, open PRs, or change any branch. You have no branch of your own to work on.
-- Do not run builds, installs, tests, linters, formatters, code generators, or dev servers.
-- "Fix it", "add this", "change that" is never a request for you to do it. It is a request for you to hand it to an agent.
-
-## Delegate instead
-Use the eva MCP tools. That is how the work gets done:
-- \`create_session\` — open a session in the right repo with the task as its first message. This is the default answer to any build request.
-- \`send_agent_message\` — give an existing agent more context, an answer, or a correction.
-- \`list_agents\` / \`get_agent_state\` — see what the fleet is doing before you speak for it.
-- \`stop_agent\` — cancel a runaway.
-Read \`eva-orchestrator\` (via \`get_skill\`) for the full supervision loop and the round report format.
-
-If the user asks for work and you are unsure which repo or how to split it, ask them — one short question — then delegate. Do not start it yourself while you wait.
-
-## What you may do
-- Read the codebase (Read, Glob, Grep) to understand a request well enough to brief an agent, or to answer a question directly.
-- Run read-only shell commands for diagnostics: \`timeout 60 npx convex logs --prod\`, \`gh pr checks\`, \`gh run view\`, \`vercel logs <deployment>\`, \`git log\`, \`git status\`. Prefix every command with a timeout.
-- The shell is for reading only. No \`git commit\`, no \`git push\`, no in-place edits (\`sed -i\`, \`>\` redirects into tracked files), no package installs.
-- Relay, summarise, and report: what each agent is doing, what finished, what needs the user.${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}`;
-}
-
 /** Eva-specific session constraints; exploration is left to the claude_code factory preset. */
 export function buildEditPrompt(
   repo: { owner: string; name: string; baseBranch?: string },
@@ -214,12 +216,15 @@ export function buildEditPrompt(
   systemPrompt: string | undefined,
   devPort?: number,
   conversationHistory: Array<{ role: string; content: string }> = [],
+  readableRepos: ReadonlyArray<{ owner: string; name: string }> = [],
+  linkedRepos: LinkedRepoPromptRow[] = [],
+  runtime?: ChatRuntimeFacts,
 ): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
   const baseBranch = repo.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-  const planContext = planContent
-    ? `\n\nApproved plan:\n${planContent}\n\nFollow this plan when implementing.`
-    : "";
+  // Task/project chat reuse this helper and pass spec/description as planContent.
+  // Sessions pass "" — leftover plan.md must not become an "Approved plan" block.
+  const planContext = planContent ? `\n\nContext:\n${planContent}` : "";
   const handoff = buildSessionHandoff(conversationHistory);
   const conversationContext = handoff
     ? `\n\nPrior instructions from this session (handoff; may overlap provider memory). Earlier instructions still apply unless the user has since changed them — do not undo agreed work:\n${handoff}`
@@ -232,7 +237,10 @@ export function buildEditPrompt(
   const devServerSection = `
 
 ## App dev server (managed by Eva):
-Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPortText} after every sandbox start, including the one that launched this turn. A cold compile takes 1-2 minutes, so an immediate check can look "down" while it is still warming up. To verify it, retry \`curl -sf http://localhost:${devPortText}\` for up to ~2 minutes before concluding anything. NEVER start your own dev server — a second instance has caused out-of-memory crashes on this VM. If the port still serves nothing after ~2 minutes, say so in your reply; Eva restarts it automatically.`;
+Eva auto-starts the app dev server in the Preview Console (tmux) on port ${devPortText} after every sandbox start, including the one that launched this turn. A cold compile takes 1-2 minutes, so an immediate check can look "down" while it is still warming up. To verify it, retry \`curl -sf http://localhost:${devPortText}\` for up to ~2 minutes before concluding anything. NEVER start your own dev server — a second instance has caused out-of-memory crashes on this VM. If the port still serves nothing after ~2 minutes, say so in your reply; Eva restarts it automatically.
+
+## Preview link (the running app has one):
+That dev server is reachable from outside the sandbox. When the user asks for "the link", "the preview", "the URL", or to open something you built, call eva MCP \`get_preview_url\` — with no arguments it answers for this chat, and \`path\` points it at a route ("/demo/referral-portal"). Paste the \`previewUrl\` it returns. Never reply that no link exists, and never guess a staging or production address for unmerged work: the branch is not deployed, but this sandbox is serving it right now. The link needs an Eva login and dies with the sandbox, so say that rather than presenting it as a public address.`;
   const browserSection = `
 
 ## Shared Browser (user-visible):
@@ -253,12 +261,15 @@ When the user asks for a recording, walkthrough video, or screenshot:
 6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
 7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
 8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.`;
-  return `${message}${planContext}${conversationContext}${devServerSection}${browserSection}
+  const runtimeSection = runtime
+    ? buildChatRuntimeSection(runtime, branchName, devPortText)
+    : "";
+  return `${message}${planContext}${conversationContext}${devServerSection}${runtimeSection}${browserSection}
 
 Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
 - If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
-- Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh branch: \`git fetch origin && git checkout --no-track -b eva/dup-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/eva/dup-<short-slug>:refs/heads/eva/dup-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Base on "${baseBranch}" unless the user names a different base branch. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
+- Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh branch: \`git fetch origin && git checkout --no-track -b eva/dup-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/eva/dup-<short-slug>:refs/heads/eva/dup-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
 - Questions only: answer without unnecessary edits. No build/lint/test unless asked.
-- Never commit images/video or \`plan.md\`. Minimal changes.${RESPONSE_LENGTH_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildRootDirectoryInstruction(rootDirectory)}`;
+- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
 }

@@ -1,8 +1,4 @@
-export {
-  parseResultEvent,
-  getTotalInputTokens,
-  type ParsedResultEvent,
-} from "@eva/shared/resultEvent";
+export { parseResultEvent, getTotalInputTokens } from "@eva/shared/resultEvent";
 
 const usdWhole = new Intl.NumberFormat("en-GB", {
   style: "currency",

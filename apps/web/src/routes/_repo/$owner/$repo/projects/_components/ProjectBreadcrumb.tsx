@@ -45,7 +45,7 @@ export function ProjectBreadcrumb({
   return (
     <RepoSectionBreadcrumb
       sectionLabel="Projects"
-      onSectionClick={() => navigate({ to: `${basePath}/projects` })}
+      onSectionClick={() => navigate({ to: toInternalRepoHref(`${basePath}/projects`) })}
       entityLabel={title}
       entitySwitcher={{
         ariaLabel: "Switch project",

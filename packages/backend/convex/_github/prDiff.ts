@@ -7,6 +7,11 @@ import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { extractPrNumber } from "./helpers";
+import {
+  decodeGitHubContent,
+  decodeGitHubContentBytes,
+  githubContentContainsNul,
+} from "../_repoSkills/decodeGitHubContent";
 import { isPrDiffTooLargeError, listFileToUnifiedDiff } from "./prDiffFallback";
 import { getActionRepoWithAccess } from "../functions";
 
@@ -454,11 +459,13 @@ async function readFileAtRef(
     return { contents: null, skipped: "too-large" };
   }
 
-  const buffer = Buffer.from(file.data.content, "base64");
+  const bytes = decodeGitHubContentBytes(file.data.content);
   // A NUL byte is the same heuristic git uses to call a file binary.
-  if (buffer.includes(0)) return { contents: null, skipped: "binary" };
+  if (githubContentContainsNul(bytes)) {
+    return { contents: null, skipped: "binary" };
+  }
 
-  return { contents: buffer.toString("utf8"), skipped: null };
+  return { contents: decodeGitHubContent(file.data.content), skipped: null };
 }
 
 /**

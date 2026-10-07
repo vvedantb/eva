@@ -7,28 +7,24 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from "@eva/ui";
-import {
-  IconBrandVercel,
-  IconDots,
-  IconEye,
-  IconGitPullRequest,
-  IconMessagePlus,
-  IconSparkles,
-} from "@tabler/icons-react";
+import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
+import {
+  SandboxErrorNotice,
+  useSessionSandboxError,
+} from "@/lib/components/sandbox/SandboxErrorNotice";
 import { SessionSwitcher } from "./SessionSwitcher";
-import { prStateIconClass } from "../_utils/-prStateIconClass";
+import { SessionRepoBadges } from "./SessionRepoBadges";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
-interface SessionChatHeaderProps {
+interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
   sessionId: Id<"sessions">;
   title: string;
@@ -42,16 +38,11 @@ interface SessionChatHeaderProps {
   /** True while the assistant holds the turn — hides the sleep button. */
   isAssistantResponding: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
-  /** Canonical link to this session; omitted when the URL already is one. */
-  permalinkPath?: string;
   /**
-   * Chat-only surface (Manager Ave). It supervises other agents instead of
-   * building on its own branch, so "Send for Review" would open a PR with no
-   * commits against base — a guaranteed failure, hidden rather than offered.
+   * Hides Send for Review — git/PR plumbing simple view does not surface. The
+   * PR links hide themselves (see `usePrLinkMenuItems`).
    */
-  chatOnly?: boolean;
-  /** Popover already titles the surface — omit the duplicate "Manager Ave". */
-  hideTitle?: boolean;
+  simpleView: boolean;
   /** Active model + sticky credential — only the chip bar cares. */
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
@@ -59,11 +50,14 @@ interface SessionChatHeaderProps {
   onSandboxToggle: (action: "start" | "stop") => void;
   onOpenSummaryModal: () => void;
   onOpenReviewModal: () => void;
-  /** Manager Ave only: offers "Start new chat". Absent on ordinary sessions. */
-  onOpenResetChatDialog?: () => void;
 }
 
-export function SessionChatHeader({
+/**
+ * Builds the session chat header slots. Named `use*` because ChatPanel invokes
+ * it during render: a PascalCase helper would look pure to React Compiler,
+ * which then skips the call on a cache hit and drops `usePrLinkMenuItems`.
+ */
+export function useSessionChatHeader({
   repoId,
   sessionId,
   title,
@@ -76,41 +70,41 @@ export function SessionChatHeader({
   isSandboxToggling,
   isAssistantResponding,
   deploymentStatus,
-  permalinkPath,
-  chatOnly = false,
-  hideTitle = false,
+  simpleView,
   model,
   providerAccountId,
   usageAccountLabel,
   onSandboxToggle,
   onOpenSummaryModal,
   onOpenReviewModal,
-  onOpenResetChatDialog,
-}: SessionChatHeaderProps) {
-  // `chatOnly` is Manager Ave, i.e. `session.isOrchestrator`.
-  const showSendForReview = canSendSessionForReview({
-    branchName,
+}: SessionChatHeaderArgs) {
+  const showSendForReview =
+    !simpleView && canSendSessionForReview({ branchName, prState });
+  // A start that failed leaves the session `closed`, which the header would
+  // otherwise render as an ordinary sleeping sandbox. The hook reads the row
+  // itself because nothing upstream hands this header the failure.
+  const sandboxError = useSessionSandboxError(sessionId);
+  const prLinks = usePrLinkMenuItems({
+    prUrl,
     prState,
-    isOrchestrator: chatOnly,
+    hasDeployment: Boolean(deploymentStatus),
   });
 
-  // Manager Ave is one fixed session at its own URL, so there is nothing to
-  // switch to and no repo to navigate up into — the switcher's dropdown would
-  // list other repos' sessions and its crumb would imply this chat belongs to
-  // the home repo, which is only where its sandbox happens to live. The
-  // popover already paints that title in its own chrome, so hide it there.
-  const headerLeft = chatOnly ? (
-    hideTitle ? undefined : (
-      <span className="truncate text-sm font-medium text-foreground">
-        {title}
-      </span>
-    )
-  ) : (
-    <SessionSwitcher sessionId={sessionId} title={title} />
+  const headerLeft = (
+    <>
+      <SessionSwitcher sessionId={sessionId} title={title} />
+      <SessionRepoBadges sessionId={sessionId} />
+    </>
   );
 
   const headerRight = (
     <>
+      {sandboxError !== undefined ? (
+        <SandboxErrorNotice
+          sandboxError={sandboxError}
+          onRetry={() => onSandboxToggle("start")}
+        />
+      ) : null}
       <EntityContextUsage repoId={repoId} entityId={sessionId} />
       <UsageLimitsIndicator
         repoId={repoId}
@@ -123,6 +117,7 @@ export function SessionChatHeader({
         isToggling={isSandboxToggling}
         onToggle={onSandboxToggle}
         isAssistantResponding={isAssistantResponding}
+        hasStartError={sandboxError !== undefined}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -131,68 +126,31 @@ export function SessionChatHeader({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {onOpenResetChatDialog && (
-            <>
-              {/* Disabled mid-turn: the reset retires this session, and the
-                  in-flight turn would finish writing into a chat the user can
-                  no longer reach. */}
-              <DropdownMenuItem
-                onClick={onOpenResetChatDialog}
-                disabled={isAssistantResponding}
-              >
-                <IconMessagePlus size={14} />
-                Start new chat
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
           <DropdownMenuItem
             onClick={onOpenSummaryModal}
             disabled={!isSandboxActive || messageCount === 0}
+            title={skipConfirmTitle(
+              hasSummary ? "Regenerate Summary" : "Summarise Session",
+            )}
           >
             <IconSparkles size={14} />
             {hasSummary ? "Regenerate Summary" : "Summarise Session"}
+            <ConfirmSkipHint />
           </DropdownMenuItem>
-          {(showSendForReview || deploymentStatus || prUrl) && (
-            <DropdownMenuSeparator />
-          )}
+          {(showSendForReview || prLinks.hasItems) && <DropdownMenuSeparator />}
           {showSendForReview && (
-            <DropdownMenuItem onClick={onOpenReviewModal}>
+            <DropdownMenuItem
+              onClick={onOpenReviewModal}
+              title={skipConfirmTitle("Send for Review")}
+            >
               <IconEye size={14} className="text-status-code-review" />
               Send for Review
+              <ConfirmSkipHint />
             </DropdownMenuItem>
           )}
-          {deploymentStatus && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <DropdownMenuItem disabled>
-                    <IconBrandVercel size={14} />
-                    View Preview
-                  </DropdownMenuItem>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                Please start sandbox and view changes through the preview tab
-                there instead
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {prUrl && (
-            <DropdownMenuItem
-              onClick={() => {
-                window.open(prUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <IconGitPullRequest
-                size={14}
-                className={prStateIconClass(prState)}
-              />
-              View PR
-            </DropdownMenuItem>
-          )}
+          {prLinks.items}
           <DropdownMenuSeparator />
-          <CopyLinkMenuItem path={permalinkPath} />
+          <CopyLinkMenuItem />
         </DropdownMenuContent>
       </DropdownMenu>
     </>

@@ -3,6 +3,7 @@ import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
+import { archiveSessionDoc } from "./_sessions/mutations";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -100,5 +101,81 @@ export const backfillLogUsageFields = dataMigrations.define({
     const usage = deriveLogUsage(entry.rawResultEvent);
     if (usage.costUsd === undefined) return;
     return usage;
+  },
+});
+
+/*
+ * Manager Ave rebuild (Ave now lives in `aveThreads`). Run in order, then drop
+ * the deprecated fields and delete these five:
+ *   users.orchestratorSessionId, sessions.isOrchestrator,
+ *   sessions/agentTasks/projects.watchedByOrchestrator,
+ *   queuedMessages.orchestratorNotification
+ */
+
+/** Archives each pre-rebuild Ave session (stops its sandbox) and drops the pointer. */
+export const retireOrchestratorSessions = dataMigrations.define({
+  table: "users",
+  migrateOne: async (ctx, user) => {
+    if (user.orchestratorSessionId === undefined) return;
+    const session = await ctx.db.get(user.orchestratorSessionId);
+    if (session) {
+      if (session.archived !== true) await archiveSessionDoc(ctx, session);
+      // A wake-up queued behind a busy old master would otherwise drain into
+      // the archived chat and restart its sandbox.
+      const queued = await ctx.db
+        .query("queuedMessages")
+        .withIndex("by_parent_and_created", (q) =>
+          q.eq("parentId", session._id),
+        )
+        .collect();
+      for (const row of queued) await ctx.db.delete(row._id);
+    }
+    return { orchestratorSessionId: undefined };
+  },
+});
+
+export const clearSessionOrchestratorFields = dataMigrations.define({
+  table: "sessions",
+  migrateOne: async (_ctx, session) => {
+    if (
+      session.isOrchestrator === undefined &&
+      session.watchedByOrchestrator === undefined
+    ) {
+      return;
+    }
+    return { isOrchestrator: undefined, watchedByOrchestrator: undefined };
+  },
+});
+
+export const clearTaskOrchestratorWatch = dataMigrations.define({
+  table: "agentTasks",
+  migrateOne: async (_ctx, task) => {
+    if (task.watchedByOrchestrator === undefined) return;
+    return { watchedByOrchestrator: undefined };
+  },
+});
+
+export const clearProjectOrchestratorWatch = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (_ctx, project) => {
+    if (project.watchedByOrchestrator === undefined) return;
+    return { watchedByOrchestrator: undefined };
+  },
+});
+
+/** Drains the retired `turns.surface` label before the field is deleted. */
+export const clearTurnSurface = dataMigrations.define({
+  table: "turns",
+  migrateOne: async (_ctx, turn) => {
+    if (turn.surface === undefined) return;
+    return { surface: undefined };
+  },
+});
+
+export const clearQueuedOrchestratorNotification = dataMigrations.define({
+  table: "queuedMessages",
+  migrateOne: async (_ctx, row) => {
+    if (row.orchestratorNotification === undefined) return;
+    return { orchestratorNotification: undefined };
   },
 });

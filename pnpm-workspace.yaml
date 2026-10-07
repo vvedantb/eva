@@ -5,6 +5,8 @@ packages:
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - prettier
+  # @vvedantb/redline 0.1.1 published 2026-10-05; 7-day soak would block this PR.
+  - "@vvedantb/redline"
   # Native (Rust) React Compiler landed 2026-08-18 and is what the web build
   # runs; the 7-day soak would block installs until it ages in.
   - "@vitejs/plugin-react"
@@ -18,3 +20,23 @@ minimumReleaseAgeExclude:
   # release. A 7-day soak would leave every sandbox failing those turns.
   - "@anthropic-ai/claude-agent-sdk"
   - "@anthropic-ai/claude-agent-sdk-*"
+  # The evaluate API (TypeSafe Jev on AI Gateway) shipped in ai 7.0.105 and
+  # @ai-sdk/gateway 4.0.85 on 2026-09-16; the MCP `evaluate` tool needs it.
+  # Remove these four once those versions are past the soak (after 2026-09-23).
+  - ai
+  - "@ai-sdk/gateway"
+  - "@ai-sdk/provider"
+  - "@ai-sdk/provider-utils"
+  # json-render 0.21.0 (2026-09-18) is the first release to export
+  # experimental_composeSpec / experimental_createEvaluator, which is what the
+  # chat's generative UI panels are built on. Drop once it is past the soak.
+  - "@json-render/core"
+  - "@json-render/react"
+  # Drives (persistent storage mounted into a sandbox) went public beta on
+  # 2026-09-23 and the SDK tracks the sandbox API closely, so the 7-day soak
+  # would keep eva a week behind every provider-side change we depend on.
+  - "@vercel/sandbox"
+  # tsc-rs 0.1.0 (Rust port of tsc 7) published 2026-10-07; it runs every
+  # typecheck script, ~1.5x faster than Go tsc here. Drop after 2026-10-14.
+  - tsc-rs
+  - "@tsc-rs/*"

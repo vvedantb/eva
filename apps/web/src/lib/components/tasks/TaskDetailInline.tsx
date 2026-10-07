@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, cn } from "@eva/ui";
+import { Badge, CircleSpinner, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
-import { IconLoader2, IconClock } from "@tabler/icons-react";
+import { IconClock } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { useTaskDetail } from "./useTaskDetail";
 import { TaskHeader } from "./_components/TaskHeader";
@@ -22,16 +24,21 @@ import { StopConfirmDialog } from "./_components/StopConfirmDialog";
 import { ResolveConfirmDialog } from "./_components/ResolveConfirmDialog";
 import { StartupCommandsConfirmDialog } from "./_components/StartupCommandsConfirmDialog";
 import { RunDevServerConfirmDialog } from "./_components/RunDevServerConfirmDialog";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
-import { findFirstRunChatTurnRun } from "./firstRunChatTurn";
+import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
+import { isTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
   SandboxWorkspace,
   type TerminalPanelApi,
 } from "@/lib/components/sandbox/SandboxWorkspace";
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -57,6 +64,7 @@ export function TaskDetailInline({
   allTags = [],
   routing,
 }: TaskDetailInlineProps) {
+  const navigate = useNavigate();
   const [embeddedSandboxTab, setEmbeddedSandboxTab] =
     useState<SandboxTab>("preview");
   /** Which detail pane is on screen below `md`; both show at `md` and up. */
@@ -64,6 +72,7 @@ export function TaskDetailInline({
   const [, setFileViewerPath] = useQueryState("file", fileViewerPathParser);
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
+  const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmChatDaemon = useMutation(
     api.agentTaskChatWorkflow.prewarmChatDaemon,
   );
@@ -92,7 +101,6 @@ export function TaskDetailInline({
     latestPrError,
     latestDeployment,
     baseBranch,
-    setBaseBranch,
     executionError,
     showStopConfirm,
     setShowStopConfirm,
@@ -114,6 +122,7 @@ export function TaskDetailInline({
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
+    sandboxStartupActivity,
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
@@ -129,11 +138,14 @@ export function TaskDetailInline({
     isCreatingPr,
     handleCreatePr,
   } = useTaskDetail(taskId, routing);
+  const altHeld = useAltHeld();
 
   useEffect(() => {
     if (!isSandboxActive || !sandboxId) return;
     void prewarmChatDaemon({ taskId });
   }, [taskId, isSandboxActive, sandboxId, prewarmChatDaemon]);
+
+  const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   // Must stay above early returns so hooks order is stable.
@@ -145,6 +157,23 @@ export function TaskDetailInline({
     }
     void setFileViewerPath(path);
     setEmbeddedSandboxTab("files");
+  };
+
+  const openDiffs = (repoRelativePath?: string) => {
+    if (simpleView) return;
+    if (routing?.mode === "quick-sandbox") {
+      routing.quick.onViewDiff(repoRelativePath);
+      setExpandRightSignal((n) => n + 1);
+      return;
+    }
+    if (repoRelativePath) {
+      void navigate({
+        to: ".",
+        search: (prev) => ({ ...prev, diffFile: repoRelativePath }),
+      });
+    }
+    setEmbeddedSandboxTab("review");
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Must stay above early returns — same hooks-order constraint as openFile.
@@ -164,8 +193,10 @@ export function TaskDetailInline({
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const [expandRightSignal, setExpandRightSignal] = useState(0);
   const agentBrowsingAt = task?.agentBrowsingAt;
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent --
+     The agent taking the browser happens in the sandbox and arrives as a live
+     query change, so there is no local event to switch the tab from. */
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
@@ -175,11 +206,12 @@ export function TaskDetailInline({
     // Full deps are safe: the ref guard above makes re-runs no-ops, and a
     // disable comment here makes React Compiler skip the whole file.
   }, [agentBrowsingAt, handleSandboxTabChange]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent */
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <IconLoader2 size={20} className="animate-spin text-muted-foreground" />
+        <CircleSpinner size="sm" className="size-5" />
       </div>
     );
   }
@@ -191,12 +223,20 @@ export function TaskDetailInline({
   const isQuickTask = task.projectId === undefined;
   const isSandboxViewActive = showSandbox;
 
-  // A quick task's settled first run renders as the opening chat turn in the
-  // sandbox view instead of a timeline accordion (see firstRunChatTurn.ts).
-  const firstRunInChat = isQuickTask ? findFirstRunChatTurnRun(runs) : undefined;
-  const timelineRuns = firstRunInChat
-    ? runs?.filter((run) => run._id !== firstRunInChat._id)
-    : runs;
+  // A quick task's first run renders as the opening chat turn in the sandbox
+  // view (see firstRunChatTurn.ts). Once it settles there its timeline
+  // accordion goes away entirely; while it is still running the row stays —
+  // it is the only place with a Stop button and it may yet fail back into the
+  // timeline — but its activity steps and log render in the chat, not here.
+  const firstRunInChat = isQuickTask
+    ? findFirstRunChatTurnRun(runs)
+    : undefined;
+  const firstRunStreamingToChat =
+    firstRunInChat !== undefined && isRunInProgress(firstRunInChat.status);
+  const timelineRuns =
+    firstRunInChat && !firstRunStreamingToChat
+      ? runs?.filter((run) => run._id !== firstRunInChat._id)
+      : runs;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
@@ -248,56 +288,64 @@ export function TaskDetailInline({
     );
 
   const sandboxContent = (
-    <SandboxWorkspace
-      ownerKind="task"
-      ownerId={taskId}
-      storageScope={`task:${taskId}`}
-      sandboxId={sandboxId}
-      isActive={isSandboxActive}
-      terminalPanes={task.terminalPanes}
-    >
-      {(panes, owner, terminalPanel) => (
-        <ResizablePanelLayout
-          storageKey="task-sandbox-panel"
-          leftDefaultSize="40%"
-          leftMinWidthPx={350}
-          rightMinWidthPx={300}
-          rightCollapsedSizePx={SANDBOX_RAIL_WIDTH_PX}
-          defaultRightCollapsed={false}
-          expandRightSignal={expandRightSignal}
-          mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          leftPanel={() => (
-            <TaskSandboxChatPanel
-              taskId={taskId}
-              isSandboxActive={isSandboxActive}
-              isSandboxToggling={isSandboxStarting || isSandboxStopping}
-              onOpenFile={openFile}
-              onOpenAgentsTab={() => {
-                handleSandboxTabChange("agents");
-                setExpandRightSignal((n) => n + 1);
-              }}
-              onSandboxToggle={
-                canStartSandbox || isSandboxActive
-                  ? (action) => {
-                      if (action === "start") void handleStartSandbox();
-                      else void handleStopSandbox();
+    <PendingPreviewSnapshotsProvider>
+      <PendingWebMcpProvider>
+        <OpenSandboxFileProvider onOpenFile={openFile}>
+          <SandboxWorkspace
+            ownerKind="task"
+            ownerId={taskId}
+            storageScope={`task:${taskId}`}
+            sandboxId={sandboxId}
+            isActive={isSandboxActive}
+            terminalPanes={task.terminalPanes}
+          >
+            {(panes, owner, terminalPanel) => (
+              <ResizablePanelLayout
+                storageKey="task-sandbox-panel"
+                leftDefaultSize="40%"
+                leftMinWidthPx={350}
+                rightMinWidthPx={300}
+                rightCollapsedSizePx={sandboxRailWidthPx}
+                defaultRightCollapsed={false}
+                expandRightSignal={expandRightSignal}
+                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                leftPanel={() => (
+                  <TaskSandboxChatPanel
+                    taskId={taskId}
+                    isSandboxActive={isSandboxActive}
+                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
+                    onOpenFile={openFile}
+                    onViewDiff={openDiffs}
+                    onOpenAgentsTab={() => {
+                      handleSandboxTabChange("agents");
+                      setExpandRightSignal((n) => n + 1);
+                    }}
+                    onSandboxToggle={
+                      canStartSandbox || isSandboxActive
+                        ? (action) => {
+                            if (action === "start") void handleStartSandbox();
+                            else void handleStopSandbox();
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-            />
-          )}
-          rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-            sandboxRightPanel(
-              panes,
-              owner,
-              terminalPanel,
-              rightPanelCollapsed,
-              onToggleRightPanel,
-            )
-          }
-        />
-      )}
-    </SandboxWorkspace>
+                  />
+                )}
+                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+                  sandboxRightPanel(
+                    panes,
+                    owner,
+                    terminalPanel,
+                    rightPanelCollapsed,
+                    onToggleRightPanel,
+                  )
+                }
+              />
+            )}
+          </SandboxWorkspace>
+        </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
+    </PendingPreviewSnapshotsProvider>
   );
 
   const detailContent = (
@@ -380,13 +428,22 @@ export function TaskDetailInline({
                       createdAt={task.createdAt}
                       creatorUser={creatorUser}
                       runs={timelineRuns}
+                      {...(firstRunStreamingToChat && firstRunInChat
+                        ? { activityInChatRunId: firstRunInChat._id }
+                        : {})}
                       comments={comments}
                       taskActivity={taskActivity}
                       users={users}
                       streaming={streaming}
                       activeRunElapsed={activeRunElapsed}
                       isStopping={isStopping}
-                      onStopConfirm={() => setShowStopConfirm(true)}
+                      onStopConfirm={() =>
+                        requestConfirm(
+                          altHeld,
+                          () => setShowStopConfirm(true),
+                          handleStopExecution,
+                        )
+                      }
                       isProjectTask={isProjectTask}
                     />
                   </div>
@@ -409,7 +466,6 @@ export function TaskDetailInline({
                 users={users}
                 projects={projects}
                 baseBranch={baseBranch}
-                setBaseBranch={setBaseBranch}
                 latestDeployment={latestDeployment}
                 hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}
@@ -434,6 +490,7 @@ export function TaskDetailInline({
         task={task}
         status={status}
         hasActiveRun={hasActiveRun}
+        hasRuns={hasRuns}
         latestPrUrl={latestPrUrl}
         latestPrError={latestPrError}
         latestDeployment={latestDeployment}
@@ -441,20 +498,39 @@ export function TaskDetailInline({
         isStarting={isStarting}
         canStartSandbox={canStartSandbox}
         isSandboxActive={isSandboxActive}
+        isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
         isRetryingStartupCommands={isRetryingStartupCommands}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
+        onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        isSandboxViewActive={isSandboxViewActive}
-        onRunStartupCommands={() => setShowStartupCommandsConfirm(true)}
-        onRunDevServer={() => setShowRunDevServerConfirm(true)}
+        onRunStartupCommands={() =>
+          requestConfirm(
+            altHeld,
+            () => setShowStartupCommandsConfirm(true),
+            handleRetryStartupCommands,
+          )
+        }
+        onRunDevServer={() =>
+          requestConfirm(
+            altHeld,
+            () => setShowRunDevServerConfirm(true),
+            handleRunDevServer,
+          )
+        }
         isRunningDevServer={isRunningDevServer}
         onRunBackgroundCommands={handleRunBackgroundCommands}
         isRunningBackgroundCommands={isRunningBackgroundCommands}
         onStartExecution={handleStartExecution}
-        onResolveConfirm={() => setShowResolveConfirm(true)}
+        onResolveConfirm={() =>
+          requestConfirm(
+            altHeld,
+            () => setShowResolveConfirm(true),
+            handleResolveConflicts,
+          )
+        }
       />
     ) : null;
 
@@ -468,6 +544,7 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
+        isAgentActive={isTaskAgentActive(task)}
         onSurfaceChange={handleSelectSurface}
       />
     ) : null;
@@ -481,15 +558,31 @@ export function TaskDetailInline({
         ? createPortal(quickTaskSurfaceTabs, titleSlotElement)
         : null}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {isSandboxViewActive ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {sandboxContent}
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {detailContent}
-          </div>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isSandboxViewActive ? (
+            <m.div
+              key="sandbox"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {sandboxContent}
+            </m.div>
+          ) : (
+            <m.div
+              key="task"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {detailContent}
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
       <StopConfirmDialog
         open={showStopConfirm}

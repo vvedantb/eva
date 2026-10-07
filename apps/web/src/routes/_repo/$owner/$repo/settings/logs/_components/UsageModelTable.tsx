@@ -1,7 +1,8 @@
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { formatCost, formatTokens, sharePercent } from "../_utils";
 
-export interface UsageModelRow {
+interface UsageModelRow {
   model: string;
   provider?: string;
   costUsd: number;
@@ -35,8 +36,14 @@ export function UsageModelTable({ rows, totalCostUsd }: UsageModelTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {rows.map((row) => (
-              <tr key={row.model} className="tabular-nums">
+            {rows.map((row, index) => (
+              <ListEnter
+                key={row.model}
+                as="tr"
+                index={index}
+                slide={false}
+                className="tabular-nums"
+              >
                 <td className="px-4 py-2.5">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate font-medium text-foreground">
@@ -72,7 +79,7 @@ export function UsageModelTable({ rows, totalCostUsd }: UsageModelTableProps) {
                 <td className="px-4 py-2.5 text-right text-muted-foreground">
                   {row.completions.toLocaleString("en-GB")}
                 </td>
-              </tr>
+              </ListEnter>
             ))}
           </tbody>
         </table>

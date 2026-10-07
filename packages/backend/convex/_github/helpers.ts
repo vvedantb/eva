@@ -2,16 +2,13 @@
 
 import type { Octokit } from "octokit";
 import { z } from "zod";
+import { decodeGitHubContent } from "../_repoSkills/decodeGitHubContent";
 
 const packageJsonSchema = z.object({
   scripts: z.object({ dev: z.string() }).partial().optional(),
 });
 
-/** Extracts the PR number from a GitHub PR URL. */
-export function extractPrNumber(prUrl: string): number | null {
-  const match = prUrl.match(/\/pull\/(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
-}
+export { extractPrNumber } from "./prUrl";
 
 /** Scans the apps/ directory of a repo to detect monorepo sub-applications. */
 export async function detectAppsForRepo(
@@ -41,7 +38,7 @@ export async function detectAppsForRepo(
           path: `${appPath}/package.json`,
         });
         if ("content" in appPkg) {
-          const decoded = Buffer.from(appPkg.content, "base64").toString();
+          const decoded = decodeGitHubContent(appPkg.content);
           const parsed = packageJsonSchema.safeParse(JSON.parse(decoded));
           hasDevScript = typeof parsed.data?.scripts?.dev === "string";
         }

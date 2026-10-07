@@ -14,14 +14,17 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import {
   Button,
-  Skeleton,
+  CenteredSpinner,
   Spinner,
   Switch,
   Tabs,
   TabsList,
   TabsTrigger,
   Textarea,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
@@ -229,15 +232,7 @@ export function SnapshotsClient({
           </Tabs>
         }
       >
-        <div
-          className="flex min-h-112 flex-col gap-4"
-          aria-busy="true"
-          aria-label="Loading snapshots"
-        >
-          <Skeleton className="h-9 w-80 max-w-full" />
-          <Skeleton className="h-48 border border-border" />
-          <Skeleton className="h-32 border border-border" />
-        </div>
+        <CenteredSpinner label="Loading snapshots" className="min-h-112" />
       </SettingsPage>
     );
   }
@@ -264,6 +259,14 @@ export function SnapshotsClient({
         </Tabs>
       }
     >
+      <AnimatePresence mode="wait" initial={false}>
+        <m.div
+          key={activeTab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
       {activeTab === "configuration" ? (
         <>
           <CronScheduleCard
@@ -650,6 +653,8 @@ export function SnapshotsClient({
       {activeTab === "config-files" ? (
         <ConfigFilesSection repoId={repoId} snapshotId={snapshot?._id} />
       ) : null}
+        </m.div>
+      </AnimatePresence>
     </SettingsPage>
   );
 }
@@ -889,8 +894,13 @@ function ConfigFilesSection({
                 </tr>
               </thead>
               <tbody>
-                {files.map((file) => (
-                  <tr key={file._id} className="hover:bg-muted/30">
+                {files.map((file, index) => (
+                  <ListEnter
+                    key={file._id}
+                    as="tr"
+                    index={index}
+                    className="hover:bg-muted/30"
+                  >
                     <td className="px-2 py-2 font-mono max-sm:break-all">
                       {file.fileName}
                     </td>
@@ -922,7 +932,7 @@ function ConfigFilesSection({
                         <IconTrash size={14} />
                       </Button>
                     </td>
-                  </tr>
+                  </ListEnter>
                 ))}
               </tbody>
             </table>

@@ -38,7 +38,9 @@ describe("quick-task SPA navigation", () => {
 
   test("selection mode cancels navigation before toggling selection", () => {
     for (const { path, source } of callers.slice(0, 2)) {
-      const toggleAt = source.indexOf("onToggleSelect(task._id)");
+      // The second argument carries the shift modifier and the view's own
+      // visible order for range selection.
+      const toggleAt = source.indexOf("onToggleSelect(task._id, {");
       const preventAt = source.lastIndexOf("event.preventDefault()", toggleAt);
       expect(toggleAt, path).toBeGreaterThan(-1);
       expect(preventAt, path).toBeGreaterThan(-1);

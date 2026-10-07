@@ -2,7 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { cn } from "@eva/ui";
+import { CircleSpinner } from "@eva/ui";
 import {
   IconCircleCheck,
   IconCircleX,
@@ -10,7 +10,6 @@ import {
   IconGitPullRequest,
   IconGitPullRequestClosed,
   IconGitPullRequestDraft,
-  IconLoader2,
   IconMessageCircle,
   IconMinus,
   type Icon as TablerIcon,
@@ -24,7 +23,6 @@ export type PrOverview = FunctionReturnType<
   typeof api.github.getPullRequestOverview
 >;
 export type PrCheck = PrOverview["checks"][number];
-export type PrReview = PrOverview["reviews"][number];
 export type PrReviewEvent = PrOverview["reviewEvents"][number];
 export type PrCommit = PrOverview["commits"][number];
 export type PrComment = PrOverview["comments"][number];
@@ -57,9 +55,10 @@ export function ToneIcon({
 }) {
   if (tone === "pending") {
     return (
-      <IconLoader2
-        size={size}
-        className="shrink-0 animate-spin text-muted-foreground"
+      <CircleSpinner
+        size="sm"
+        style={{ width: size, height: size }}
+        className="shrink-0"
       />
     );
   }
@@ -78,20 +77,18 @@ export function ToneIcon({
 }
 
 /**
- * The lifecycle, always stated. Open used to render nothing on the grounds that it
- * is the common case, but the pill sits immediately left of the title now: a slot
- * that is empty nine times in ten reads as a missing thing rather than a saved
- * one, and the title shifted left or right depending on the PR it belonged to.
- * One pill, four states, same position.
+ * The lifecycle in one table — wording, colour, and glyph — so the header's
+ * state-coloured number cannot pair one state's word with another's tone.
  */
 export function statusMeta(
   status: PrOverview["status"],
   draft: boolean,
-): { label: string; className: string; icon: TablerIcon } {
+): { label: string; className: string; textClassName: string; icon: TablerIcon } {
   if (status === "merged") {
     return {
       label: "Merged",
       className: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+      textClassName: "text-violet-700 dark:text-violet-300",
       icon: IconGitMerge,
     };
   }
@@ -99,6 +96,7 @@ export function statusMeta(
     return {
       label: "Closed",
       className: "bg-destructive/10 text-destructive",
+      textClassName: "text-destructive",
       icon: IconGitPullRequestClosed,
     };
   }
@@ -106,43 +104,16 @@ export function statusMeta(
     return {
       label: "Draft",
       className: "bg-muted/60 text-muted-foreground",
+      textClassName: "text-muted-foreground",
       icon: IconGitPullRequestDraft,
     };
   }
   return {
     label: "Open",
     className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    textClassName: "text-emerald-700 dark:text-emerald-300",
     icon: IconGitPullRequest,
   };
-}
-
-/**
- * The lifecycle pill itself. Rendered from `statusMeta` rather than beside it, so
- * a surface cannot pair one status's wording with another's colour, icon, or tone.
- */
-export function PrStatusPill({
-  status,
-  draft,
-  className,
-}: {
-  status: PrOverview["status"];
-  draft: boolean;
-  className?: string;
-}) {
-  const meta = statusMeta(status, draft);
-  const Icon = meta.icon;
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
-        meta.className,
-        className,
-      )}
-    >
-      <Icon size={12} aria-hidden />
-      {meta.label}
-    </span>
-  );
 }
 
 /**
@@ -192,8 +163,5 @@ export function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }
 
-/** Shared prose styling for GitHub-authored markdown (description, comments). */
-// `[&_pre]:overflow-x-auto`: a PR body's code fence is often wider than a phone,
-// and it used to push the whole column sideways instead of scrolling itself.
-export const MARKDOWN_CLASS =
-  "prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 max-sm:[&_pre]:overflow-x-auto";
+/** Text size for GitHub-authored markdown (description, comments). */
+export const MARKDOWN_CLASS = "text-sm";

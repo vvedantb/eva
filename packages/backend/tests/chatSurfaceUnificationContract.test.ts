@@ -82,6 +82,43 @@ test("all three chat surface adapters are registered together in chatSurfaceAdap
   expect(body).toContain("projectChatAdapter");
 });
 
+/**
+ * The lease reconciler serves every chat surface through the adapter picked
+ * from the turn's entity id. Naming one surface's adapter in turns.ts is the
+ * regression back to session-only turns.
+ */
+test("turns.ts dispatches through chatAdapterForEntity, never one fixed surface", () => {
+  const turns = readSource("convex/turns.ts");
+  expect(turns).toContain("chatAdapterForEntity(");
+  for (const adapter of [
+    "sessionChatAdapter",
+    "taskChatAdapter",
+    "projectChatAdapter",
+  ]) {
+    expect(turns, `turns.ts names ${adapter}`).not.toContain(adapter);
+  }
+});
+
+/**
+ * The usage-limit retry shipped for sessions only (#734) because nothing
+ * pinned the three chat surfaces to the same mutation set. This does.
+ */
+test("every chat surface's workflow module exposes the same user-facing recovery mutations", () => {
+  for (const module of [
+    "convex/sessionWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+    "convex/projectChatWorkflow.ts",
+  ]) {
+    const source = readSource(module);
+    expect(source, `${module} is missing retryLastTurnWithAccount`).toContain(
+      "retryLastTurnWithAccount",
+    );
+    expect(source, `${module} is missing requestStopBackgroundAgent`).toContain(
+      "requestStopBackgroundAgent",
+    );
+  }
+});
+
 /** Comments name the very calls these rules rule out, so they have to go first. */
 function readSource(relativePath: string): string {
   return stripComments(

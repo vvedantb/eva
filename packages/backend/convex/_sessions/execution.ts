@@ -1,10 +1,15 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { internalMutation, internalQuery, type MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { authAction, authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
+  launchTraitsFromStored,
   normalizeAIModel,
   reasoningLevelValidator,
   usesChatDaemon,
@@ -12,13 +17,22 @@ import {
 import { trackSessionWorkflow } from "../workflowWatchdog";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
+import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
-import { startNextQueuedSessionMessage } from "../_queues/helpers";
-import { buildSessionPrompt, sessionTurnTools } from "./workflow";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedSessionMessage,
+} from "../_queues/helpers";
+import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
+import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
+import { composerTraitFields } from "../_shared/composerTraits";
+import { detectCancelSupersession } from "../_chat/cancelRace";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   bindTurnWorkflow,
   closeOpenSessionTurn,
@@ -29,18 +43,6 @@ import {
   countStallAlertsAfterLastUser,
   shouldRetryEmptyStall,
 } from "../_chat/stallRetry";
-
-async function finalizeOpenSyntheticTurnOnCancel(
-  ctx: MutationCtx,
-  syntheticTurnMessageId: Id<"messages"> | undefined,
-  streaming: Doc<"streamingActivity"> | null,
-): Promise<void> {
-  if (syntheticTurnMessageId === undefined) return;
-  const syntheticMessage = await ctx.db.get(syntheticTurnMessageId);
-  if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-    await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-  }
-}
 
 async function stageAndStartSessionTurn(
   ctx: MutationCtx,
@@ -56,6 +58,7 @@ async function stageAndStartSessionTurn(
     fastMode?: boolean;
     providerAccountId?: Id<"userProviderAccounts">;
     attachmentStorageIds?: Id<"_storage">[];
+    sourceProposedPlanId?: Id<"proposedPlans">;
   },
 ): Promise<void> {
   const stickyProviderAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -87,6 +90,17 @@ async function stageAndStartSessionTurn(
   });
 
   const normalizedModel = normalizeAIModel(params.model);
+  // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
+  // in `prewarmDaemon` below): the composer can send a model default explicitly
+  // (e.g. reasoning "high", its display value), and forwarding it verbatim gives
+  // this turn's prewarm and the workflow's prewarm a different daemon opts sig
+  // from the page-open one — killing the daemon that was just booted.
+  const launchTraits = launchTraitsFromStored(normalizedModel, {
+    reasoningLevel: params.reasoningLevel,
+    thinkingEnabled: params.thinkingEnabled,
+    use1mContext: params.use1mContext,
+    fastMode: params.fastMode,
+  });
   const usesDaemonPull = usesChatDaemon(normalizedModel);
   const turnId = await openSessionTurn(ctx, {
     sessionId: params.session._id,
@@ -105,22 +119,14 @@ async function stageAndStartSessionTurn(
         turnId,
         attachmentStorageIds: params.attachmentStorageIds,
         model: normalizedModel,
+        interactionMode: "default" as const,
       }
     : undefined;
   await ctx.db.patch(params.session._id, {
     pendingTurn,
     providerAccountId: stickyProviderAccountId,
     lastModel: normalizedModel,
-    ...(params.reasoningLevel !== undefined
-      ? { lastReasoningLevel: params.reasoningLevel }
-      : {}),
-    ...(params.thinkingEnabled !== undefined
-      ? { lastThinkingEnabled: params.thinkingEnabled }
-      : {}),
-    ...(params.use1mContext !== undefined
-      ? { lastUse1mContext: params.use1mContext }
-      : {}),
-    ...(params.fastMode !== undefined ? { lastFastMode: params.fastMode } : {}),
+    ...composerTraitFields(params),
     updatedAt: Date.now(),
   });
   await syncSessionDaemonState(ctx, params.session, { pendingTurn });
@@ -132,11 +138,8 @@ async function stageAndStartSessionTurn(
       repoId: params.session.repoId,
       userId: params.actingUserId,
       model: normalizedModel,
-      reasoningLevel: params.reasoningLevel,
-      thinkingEnabled: params.thinkingEnabled,
-      use1mContext: params.use1mContext,
-      fastMode: params.fastMode,
-      ...sessionTurnTools(params.session.isOrchestrator),
+      ...launchTraits,
+      allowedTools: SESSION_TOOLS,
       providerAccountId: stickyProviderAccountId,
       credentialOwnerUserId,
       sessionPersistenceId: params.session._id,
@@ -150,10 +153,9 @@ async function stageAndStartSessionTurn(
       sessionId: params.session._id,
       message: params.message,
       model: params.model,
-      reasoningLevel: params.reasoningLevel,
-      thinkingEnabled: params.thinkingEnabled,
-      use1mContext: params.use1mContext,
-      fastMode: params.fastMode,
+      // Same normalisation as the prewarm above: the workflow forwards these
+      // straight back into `prewarmSessionDaemon`.
+      ...launchTraits,
       providerAccountId: stickyProviderAccountId,
       credentialOwnerUserId,
       userId: params.actingUserId,
@@ -214,6 +216,9 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       actingUserId,
       message: lastUserContent,
       model: turn.model,
+      // Raw sticky traits: `stageAndStartSessionTurn` normalises them through
+      // `launchTraitsFromStored` before they reach any daemon launch, so this
+      // restaged turn's opts sig matches a warm daemon's instead of killing it.
       reasoningLevel: session.lastReasoningLevel,
       thinkingEnabled: session.lastThinkingEnabled,
       use1mContext: session.lastUse1mContext,
@@ -223,6 +228,73 @@ export const retryEmptyStalledSessionTurn = internalMutation({
     });
     console.log(
       `[sessions] retryEmptyStalledSessionTurn sessionId=${args.sessionId} turnId=${args.turnId}`,
+    );
+    return null;
+  },
+});
+
+/**
+ * Re-run the last user prompt on a different provider account after a
+ * usage-limit failure. No new user bubble: the original message stays, its
+ * credential label moves to the new account, and a fresh placeholder opens
+ * below the failed reply — which dismisses the recovery banner because the
+ * failed reply is no longer the newest message. Same model and reasoning as
+ * the failed turn; other traits come from the session's sticky fields.
+ */
+export const retryLastTurnWithAccount = authMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    /** null = the team credential. */
+    providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+      throw new Error("Not authorized");
+    if (
+      session.activeWorkflowId !== undefined ||
+      session.pendingTurn !== undefined
+    ) {
+      throw new Error("A turn is already running");
+    }
+
+    const recent = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .order("desc")
+      .take(20);
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
+
+    const repo = await ctx.db.get(session.repoId);
+    if (!repo) throw new Error("Repository not found");
+
+    const providerAccountId = args.providerAccountId ?? undefined;
+    const ownerUserId = session.createdBy ?? session.userId;
+    await ctx.db.patch(userMessage._id, {
+      credentialSourceLabel: await resolveCredentialSourceLabel(
+        ctx.db,
+        providerAccountId,
+        ownerUserId,
+      ),
+    });
+
+    await stageAndStartSessionTurn(ctx, {
+      session,
+      repo,
+      actingUserId: ctx.userId,
+      message: userMessage.content,
+      model: userMessage.model ?? normalizeAIModel(session.lastModel),
+      reasoningLevel: userMessage.reasoningLevel ?? session.lastReasoningLevel,
+      thinkingEnabled: session.lastThinkingEnabled,
+      use1mContext: session.lastUse1mContext,
+      fastMode: session.lastFastMode,
+      providerAccountId,
+      attachmentStorageIds: userMessage.attachmentStorageIds,
+    });
+    console.log(
+      `[sessions] retryLastTurnWithAccount sessionId=${args.sessionId} providerAccountId=${String(args.providerAccountId)}`,
     );
     return null;
   },
@@ -240,6 +312,7 @@ export const startExecute = authMutation({
     fastMode: v.optional(v.boolean()),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+    sourceProposedPlanId: v.optional(v.id("proposedPlans")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -269,6 +342,18 @@ export const startExecute = authMutation({
       session.provider,
     );
 
+    if (args.sourceProposedPlanId !== undefined) {
+      const plan = await ctx.db.get(args.sourceProposedPlanId);
+      if (plan && plan.sessionId === args.sessionId) {
+        const now = Date.now();
+        await ctx.db.patch(args.sourceProposedPlanId, {
+          implementedAt: now,
+          implementationSessionId: args.sessionId,
+          updatedAt: now,
+        });
+      }
+    }
+
     await stageAndStartSessionTurn(ctx, {
       session,
       repo,
@@ -281,6 +366,7 @@ export const startExecute = authMutation({
       fastMode: args.fastMode,
       providerAccountId: args.providerAccountId,
       attachmentStorageIds: args.attachmentStorageIds,
+      sourceProposedPlanId: args.sourceProposedPlanId,
     });
 
     return null;
@@ -305,29 +391,33 @@ export const prewarmDaemon = authMutation({
     // session status stays "closed"). A closed session keeps its sandboxId, so
     // without this guard merely opening its page (SessionDetailClient fires this
     // on mount) wakes the VM behind the user's back.
-    if (session.status === "closed" || session.status === "stopping")
-      return null;
+    if (isSandboxClosingStatus(session.status)) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     // Match the turn path's launch options so the first real message does not
     // immediately optsmismatch-kill this daemon (which races with
-    // claimPendingTurn and leaves the chat stuck on Working). Traits must be
-    // forwarded for the same reason: the turn-path prewarm includes them in the
-    // opts sig, so omitting them here made every page-open prewarm mismatch a
-    // trait-launched daemon and kill+respawn it (each respawn window can
-    // duplicate daemons).
+    // claimPendingTurn and leaves the chat stuck on Working). The sticky traits
+    // must go through `launchTraitsFromStored` — the same normalisation the
+    // composer applies — because the send path omits defaults. Forwarding the
+    // stored values verbatim (e.g. reasoning "high", which is the Claude
+    // default, or `fastMode: false` on a model with no Fast trait) yields a
+    // different opts sig from the turn path and kill+respawns the warm daemon on
+    // every page open (each respawn window can duplicate daemons).
     const credentialOwnerUserId = session.createdBy ?? session.userId;
+    const normalizedModel = normalizeAIModel(session.lastModel);
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
       sandboxId: session.sandboxId,
       sessionId: args.sessionId,
       repoId: session.repoId,
       userId: session.userId,
-      model: normalizeAIModel(session.lastModel),
-      reasoningLevel: session.lastReasoningLevel,
-      thinkingEnabled: session.lastThinkingEnabled,
-      use1mContext: session.lastUse1mContext,
-      fastMode: session.lastFastMode,
-      ...sessionTurnTools(session.isOrchestrator),
+      model: normalizedModel,
+      ...launchTraitsFromStored(normalizedModel, {
+        reasoningLevel: session.lastReasoningLevel,
+        thinkingEnabled: session.lastThinkingEnabled,
+        use1mContext: session.lastUse1mContext,
+        fastMode: session.lastFastMode,
+      }),
+      allowedTools: SESSION_TOOLS,
       providerAccountId: session.providerAccountId,
       credentialOwnerUserId,
       sessionPersistenceId: args.sessionId,
@@ -360,7 +450,7 @@ export const prewarmDaemonNow = authAction({
       thinkingEnabled: data.thinkingEnabled,
       use1mContext: data.use1mContext,
       fastMode: data.fastMode,
-      ...sessionTurnTools(data.isOrchestrator),
+      allowedTools: SESSION_TOOLS,
       providerAccountId: data.providerAccountId,
       credentialOwnerUserId: data.credentialOwnerUserId,
       sessionPersistenceId: args.sessionId,
@@ -387,8 +477,6 @@ export const getDaemonPrewarmData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
       providerAccountId: v.optional(v.id("userProviderAccounts")),
-      /** Selects the master's reduced tool set — see `sessionTurnTools`. */
-      isOrchestrator: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -397,25 +485,26 @@ export const getDaemonPrewarmData = internalQuery({
     if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (
-      !session.sandboxId ||
-      session.status === "closed" ||
-      session.status === "stopping"
-    ) {
+    if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
       return null;
     }
+    const normalizedModel = normalizeAIModel(session.lastModel);
     return {
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       ownerUserId: session.userId,
       credentialOwnerUserId: session.createdBy ?? session.userId,
-      model: normalizeAIModel(session.lastModel),
-      reasoningLevel: session.lastReasoningLevel,
-      thinkingEnabled: session.lastThinkingEnabled,
-      use1mContext: session.lastUse1mContext,
-      fastMode: session.lastFastMode,
+      model: normalizedModel,
+      // Normalised here, not in the caller: the traits must be exactly what the
+      // composer sends (defaults omitted) or the prewarm's opts sig differs from
+      // the turn path's and kills the warm daemon.
+      ...launchTraitsFromStored(normalizedModel, {
+        reasoningLevel: session.lastReasoningLevel,
+        thinkingEnabled: session.lastThinkingEnabled,
+        use1mContext: session.lastUse1mContext,
+        fastMode: session.lastFastMode,
+      }),
       providerAccountId: session.providerAccountId,
-      isOrchestrator: session.isOrchestrator,
     };
   },
 });
@@ -480,18 +569,13 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.sessionId, {
       lastModel: args.model,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.sessionId);
     return null;
   },
 });
@@ -550,14 +634,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.sessionId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeWorkflowId !== undefined &&
-      latest.activeWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+      latestPendingTurn: latest.pendingTurn,
+      cancelPendingRequestedAt: pendingRequestedAt,
+      latestActiveWorkflowId: latest.activeWorkflowId,
+      cancelWorkflowId: workflowIdToCancel,
+    });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -603,7 +687,7 @@ export const cancelExecution = authMutation({
     if (clearsPendingTurn) {
       sessionPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       sessionPatch.syntheticTurnMessageId = undefined;
     }
 

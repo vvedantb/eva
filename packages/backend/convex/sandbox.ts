@@ -7,6 +7,7 @@ export {
   captureDiagnosticsAndStopSandbox,
   archiveSandbox,
   verifySandboxLiveness,
+  captureStalledTurnDiagnostics,
   getSandboxProviderKind,
   getSnapshotSandboxProviderKind,
 } from "./_sandbox_runtime/lifecycle";
@@ -27,12 +28,14 @@ export {
   watchConvexReadiness,
   runStopCommands,
   getPreviewUrl,
+  previewUrlForAuthorizedSandbox,
   prepareSandbox,
   createOrResumeSandbox,
   fetchBaseBranch,
   checkoutBaseBranch,
   setupSandboxBranch,
   pushSandboxBranch,
+  pushLinkedRepoBranches,
   launchOnExistingSandbox,
   prewarmSessionDaemon,
   prewarmEntityDaemon,
@@ -52,6 +55,7 @@ export {
   launchChromeInDesktop,
   startDesktopForBrowserEntity,
   readSandboxFile,
+  writeSandboxFile,
   readSandboxMediaFile,
   listSandboxFiles,
 } from "./_sandbox_runtime/services";
@@ -70,3 +74,7 @@ export {
   startTaskPreviewSandbox,
   startProjectPreviewSandbox,
 } from "./_sandbox_runtime/sessions";
+
+export { prepareLinkedRepo } from "./_sandbox_runtime/linkedRepos";
+
+export { forkSession } from "./_sandbox_runtime/sessionFork";

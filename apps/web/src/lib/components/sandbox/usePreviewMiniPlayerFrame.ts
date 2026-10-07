@@ -3,7 +3,11 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { z } from "zod";
-import { endPreviewGesture, setPreviewGesture } from "./previewIframeHost";
+import {
+  endPreviewGesture,
+  setPreviewGesture,
+  type PreviewGesture,
+} from "./previewIframeHost";
 
 /** Smallest gap kept between the window and a viewport edge. */
 const EDGE_GAP_PX = 8;
@@ -90,6 +94,27 @@ function clampFrame(
   };
 }
 
+/**
+ * The offsets a frame change applies to the window's painted box, published so
+ * the hosted iframe overlay moves with it in the same commit. The frame is
+ * anchored to the bottom-right corner while the overlay paints from the
+ * top-left: the box's left is `viewport.width - right - width`, so a shrinking
+ * `right` and a growing `width` both push the top-left the same way.
+ */
+export function previewGestureOffsets(
+  origin: PreviewMiniPlayerFrame,
+  next: PreviewMiniPlayerFrame,
+): Omit<PreviewGesture, "key"> {
+  const dWidth = next.width - origin.width;
+  const dHeight = next.height - origin.height;
+  return {
+    dx: origin.right - next.right - dWidth,
+    dy: origin.bottom - next.bottom - dHeight,
+    dWidth,
+    dHeight,
+  };
+}
+
 type Gesture = "move" | "resize";
 
 interface GestureState {
@@ -153,24 +178,13 @@ export function usePreviewMiniPlayerFrame(
 
   const frame = live?.frame ?? savedFrame;
 
-  /**
-   * The offsets this frame applies to the window's box, published so the
-   * hosted iframe overlay moves with it in the same commit. Offsets are read
-   * from the bottom-right corner, so a growing offset pushes the box left and
-   * up — and growing the box moves its top-left the same way.
-   */
   const publish = (
     next: PreviewMiniPlayerFrame,
     origin: PreviewMiniPlayerFrame,
   ) => {
-    const dWidth = next.width - origin.width;
-    const dHeight = next.height - origin.height;
     setPreviewGesture({
       key: entryKey,
-      dx: origin.right - next.right - dWidth,
-      dy: origin.bottom - next.bottom - dHeight,
-      dWidth,
-      dHeight,
+      ...previewGestureOffsets(origin, next),
     });
   };
 

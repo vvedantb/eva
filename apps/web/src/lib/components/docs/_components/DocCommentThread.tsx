@@ -5,10 +5,18 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { UserInitials } from "@eva/shared";
-import { Button, cn, LIST_ROW_CONTROL_CLASS, Textarea } from "@eva/ui";
+import { UserInitials } from "@eva/shared/user-initials";
+import {
+  Button,
+  cn,
+  LIST_ROW_CONTROL_CLASS,
+  Textarea,
+  motionFast,
+} from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconCheck, IconArrowBackUp } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { useState, useEffect, useRef } from "react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
@@ -40,18 +48,23 @@ export function DocCommentThread({
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A notification for a reply carries the reply's id, but the whole thread
   // renders as one card — so the card is what scrolls and flashes.
-  const { ref: anchorRef, isAnchored } = useCommentAnchor(root._id, (anchorId) =>
-    replies.some((reply) => reply._id === anchorId),
+  const { ref: anchorRef, isAnchored } = useCommentAnchor(
+    root._id,
+    (anchorId) => replies.some((reply) => reply._id === anchorId),
   );
 
   const isResolved = root.resolvedAt !== undefined;
 
+  /* eslint-disable no-effect/no-event-handler --
+     The click happens on a highlight inside the editor, in a different subtree;
+     all this thread can do is scroll itself once it learns it is active. */
   // Bring the thread into view when its highlight is clicked in the editor.
   useEffect(() => {
     if (isActive) {
       rootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [isActive]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const handleReply = async () => {
     if (!replyContent.trim()) return;
@@ -112,13 +125,12 @@ export function DocCommentThread({
 
       <DocCommentItem comment={root} />
 
-      {replies.map((reply) => (
-        <div
-          key={reply._id}
-          className="ml-3 mt-2 border-l-2 border-border pl-2"
-        >
-          <DocCommentItem comment={reply} />
-        </div>
+      {replies.map((reply, index) => (
+        <ListEnter key={reply._id} index={index} fast>
+          <div className="ml-3 mt-2 border-l-2 border-border pl-2">
+            <DocCommentItem comment={reply} />
+          </div>
+        </ListEnter>
       ))}
 
       <div
@@ -173,39 +185,47 @@ export function DocCommentThread({
         )}
       </div>
 
-      {isReplying && (
-        <div className={cn(LIST_ROW_CONTROL_CLASS, "mt-2")}>
-          <Textarea
-            value={replyContent}
-            onChange={(e) => setReplyContent(e.target.value)}
-            placeholder="Reply..."
-            rows={2}
-            className="text-sm"
-            autoFocus
-          />
-          <div className="mt-1.5 flex justify-end gap-1 max-sm:gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 text-xs max-sm:h-10 max-sm:px-3"
-              onClick={() => {
-                setIsReplying(false);
-                setReplyContent("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              className="h-6 text-xs max-sm:h-10 max-sm:px-3"
-              disabled={!replyContent.trim()}
-              onClick={handleReply}
-            >
-              Reply
-            </Button>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {isReplying && (
+          <m.div
+            className={cn(LIST_ROW_CONTROL_CLASS, "mt-2")}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <Textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="Reply..."
+              rows={2}
+              className="text-sm"
+              autoFocus
+            />
+            <div className="mt-1.5 flex justify-end gap-1 max-sm:gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-xs max-sm:h-10 max-sm:px-3"
+                onClick={() => {
+                  setIsReplying(false);
+                  setReplyContent("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="h-6 text-xs max-sm:h-10 max-sm:px-3"
+                disabled={!replyContent.trim()}
+                onClick={handleReply}
+              >
+                Reply
+              </Button>
+            </div>
+          </m.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

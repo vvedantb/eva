@@ -59,6 +59,9 @@ function clearLegacyPreviewUrlCache(): void {
   }
 }
 
+/** Port the preview falls back to when the app declares no dev port. */
+export const DEFAULT_PREVIEW_PORT = 3000;
+
 /**
  * Drives the WebPreview pane: resolves a sandbox+port to a live URL and polls
  * until the dev server is reachable. Signed Vercel preview URLs are kept in
@@ -73,7 +76,7 @@ export function useSandboxPreview({
   onPortPersist,
 }: UseSandboxPreviewArgs): SandboxPreviewApi {
   const [port, setPortQuery] = useQueryState("port", previewPortParser);
-  const effectivePort = port ?? devPort ?? 3000;
+  const effectivePort = port ?? devPort ?? DEFAULT_PREVIEW_PORT;
   const configKey = `${sandboxId ?? ""}:${effectivePort}`;
 
   // Seed from the iframe-host meta cache: when this hook remounts (route
@@ -192,6 +195,9 @@ export function useSandboxPreview({
     await fetchPreview();
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     Starts and stops a polling loop against the sandbox and drops cached
+     preview grants; all of that is external work, not derivable state. */
   useEffect(() => {
     // Cached-but-hidden session: keep the iframe, pause polling. Do not clear
     // previewInfo — returning to this session must not flash/reload.
@@ -228,6 +234,7 @@ export function useSandboxPreview({
     void fetchPreview();
     return stopPolling;
   }, [isRouteActive, isActive, sandboxId, configKey]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   return {
     previewInfo,

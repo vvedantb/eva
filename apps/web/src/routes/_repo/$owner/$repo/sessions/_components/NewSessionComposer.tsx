@@ -25,7 +25,8 @@ import {
   defaultProviderAccountId,
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
-import { ComposerAppSwitcher } from "./ComposerAppSwitcher";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 
 /**
  * Shared landing composer for repo home and `/sessions`: branding + prompt,
@@ -40,6 +41,7 @@ export function NewSessionComposer() {
   const createSession = useMutation(api.sessions.create);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { baseBranch, setBaseBranch } = useBaseBranchState();
+  const codebases = useCodebasesSelection();
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
   const {
@@ -80,6 +82,9 @@ export function NewSessionComposer() {
   // because setProviderAccountId writes to localStorage, which dispatches a
   // sync event — doing that during render triggers React's
   // event-handler-in-render error.
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-chain-state-updates --
+     See the comment above: setProviderAccountId writes localStorage and
+     dispatches a sync event, which React forbids during render. */
   useEffect(() => {
     if (accountsReady && !accountDefaulted) {
       const storedResolvesToOwn = accounts.some(
@@ -98,6 +103,7 @@ export function NewSessionComposer() {
     providerAccountId,
     setProviderAccountId,
   ]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-chain-state-updates */
 
   const handleSend = async (
     content: string,
@@ -107,6 +113,16 @@ export function NewSessionComposer() {
     // Resolved before the try: React Compiler bails on the whole file when a
     // nullish-coalescing expression sits inside a try/catch.
     const accountId = resolveAccountId(providerAccountId) ?? null;
+    // Only sent when the codebases picker actually links other repos — an
+    // empty array would still be a meaningful signal server-side.
+    const linkedCodebases =
+      codebases.linkedRepoIds.length > 0
+        ? {
+            linkedRepoIds: codebases.linkedRepoIds,
+            repoGroupId: codebases.repoGroupId ?? undefined,
+            installDependencies: codebases.installDependencies,
+          }
+        : {};
     try {
       const { numId } = await createSession({
         repoId: repo._id,
@@ -122,9 +138,18 @@ export function NewSessionComposer() {
         fastMode: displayTraits.fastMode,
         providerAccountId: accountId,
         attachmentStorageIds,
+        ...linkedCodebases,
       });
       clearDraft();
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      // The codebases selection is query-string state, and this navigation
+      // already drops it. Clearing it here queued a nuqs URL write instead:
+      // nuqs flushes on a later tick, through an adapter that navigates to the
+      // pathname captured when it rendered — the composer's own. That flush
+      // landed after this navigation and replaced the new session's URL with
+      // the composer again, so hitting send looked like it did nothing.
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Couldn't create session";
@@ -146,31 +171,32 @@ export function NewSessionComposer() {
               "What are we building for"
             )}
           </span>
-          <ComposerAppSwitcher />
+          <CodebasesPicker />
           <span>?</span>
         </h1>
         <ChatComposer
-          repoId={repo._id}
-          repoBasePath={basePath}
+          repo={{ id: repo._id, basePath }}
           conversationId={`new-session-${repo._id}`}
           queuedMessages={[]}
           messageHistory={[]}
           isExecuting={false}
           isInputDisabled={isSubmitting}
           placeholder="Ask Eva anything... / for skills · @ to mention"
-          model={model}
-          setModel={(next) => {
-            setModel(next);
-            setProviderAccountId(
-              providerAccountIdForModel(accounts, providerAccountId, next),
-            );
+          modelPicker={{
+            model,
+            setModel: (next) => {
+              setModel(next);
+              setProviderAccountId(
+                providerAccountIdForModel(accounts, providerAccountId, next),
+              );
+            },
+            modelOptions,
+            accounts,
+            accountId: providerAccountId,
+            onAccountChange: setProviderAccountId,
+            displayTraits,
+            onTraitsChange,
           }}
-          modelOptions={modelOptions}
-          accounts={accounts}
-          accountId={providerAccountId}
-          onAccountChange={setProviderAccountId}
-          displayTraits={displayTraits}
-          onTraitsChange={onTraitsChange}
           onSend={handleSend}
           onCancel={async () => {}}
           localDraft={{

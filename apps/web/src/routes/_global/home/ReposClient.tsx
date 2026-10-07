@@ -17,17 +17,23 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Skeleton,
+  CenteredSpinner,
   toast,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconDots,
   IconEyeOff,
   IconPlus,
-  IconRefresh,
   IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
 import { HiddenReposSheet } from "./_components/HiddenReposSheet";
@@ -46,6 +52,7 @@ export function ReposClient() {
   const [syncing, setSyncing] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const altHeld = useAltHeld();
   const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
     // Sync read avoids banner mount/unmount flash after hydration (CLS).
     // Only the storage read is wrapped: React Compiler bails on the whole file
@@ -140,13 +147,20 @@ export function ReposClient() {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={syncing}
-                    onClick={() => setSyncConfirmOpen(true)}
+                    title={skipConfirmTitle("Sync Repos")}
+                    onClick={() =>
+                      requestConfirm(
+                        altHeld,
+                        () => setSyncConfirmOpen(true),
+                        () => {
+                          void handleSync();
+                        },
+                      )
+                    }
                   >
-                    <IconRefresh
-                      size={16}
-                      className={syncing ? "animate-spin" : ""}
-                    />
+                    <RefreshSpinIcon busy={syncing} />
                     {syncing ? "Syncing..." : "Sync Repos"}
+                    <ConfirmSkipHint />
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -178,10 +192,7 @@ export function ReposClient() {
                         handleSync();
                       }}
                     >
-                      <IconRefresh
-                        size={16}
-                        className={syncing ? "animate-spin" : ""}
-                      />
+                      <RefreshSpinIcon busy={syncing} />
                       Sync
                     </Button>
                   </DialogFooter>
@@ -201,7 +212,7 @@ export function ReposClient() {
                 rel={hasRepos ? "noopener noreferrer" : undefined}
               >
                 <IconPlus size={16} />
-                <span className="hidden sm:inline">{primaryLabel}</span>
+                <span className="max-sm:sr-only">{primaryLabel}</span>
               </a>
             </Button>
           ) : (
@@ -211,25 +222,14 @@ export function ReposClient() {
               className="motion-press bg-foreground font-medium text-background"
             >
               <IconPlus size={16} />
-              <span className="hidden sm:inline">{primaryLabel}</span>
+              <span className="max-sm:sr-only">{primaryLabel}</span>
             </Button>
           )}
         </div>
       }
     >
       {repos === undefined || appSlug === undefined ? (
-        <div
-          className="min-h-112 space-y-6"
-          aria-busy="true"
-          aria-label="Loading repositories"
-        >
-          <Skeleton className="ml-4 h-8 w-40" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-28 border border-border" />
-            ))}
-          </div>
-        </div>
+        <CenteredSpinner label="Loading repositories" className="min-h-112" />
       ) : repos.length === 0 ? (
         <EmptyOnboarding connectUrl={buildConnectUrl(appSlug)} />
       ) : (

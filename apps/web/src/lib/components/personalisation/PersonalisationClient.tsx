@@ -12,7 +12,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@eva/ui";
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { RolePresetPicker } from "./RolePresetPicker";
 import {
@@ -53,14 +53,28 @@ export function PersonalisationClient() {
     },
   );
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const savedValue = personalisation?.customInstructions ?? "";
+  const [draft, setDraft] = useState(savedValue);
+  const [seenSaved, setSeenSaved] = useState(savedValue);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Adopt a new saved value during render rather than in an effect, and only
+  // when the draft is untouched. Picking a role preset (optimistic update) or a
+  // save from another tab used to wipe whatever the user was typing.
+  if (savedValue !== seenSaved) {
+    setSeenSaved(savedValue);
+    if (draft === seenSaved) {
+      setDraft(savedValue);
+    }
+  }
+
+  const isDirty = draft !== savedValue;
 
   const handleSave = async () => {
-    const value = textareaRef.current?.value ?? "";
+    setIsSaving(true);
     try {
       await withMutationToast(
-        setCustomInstructions({ customInstructions: value }),
+        setCustomInstructions({ customInstructions: draft }),
         "Instructions saved",
         "Couldn't save instructions",
         "personalisation-instructions",
@@ -68,13 +82,10 @@ export function PersonalisationClient() {
     } catch {
       // Toast already shown.
     }
+    // No `finally`: the catch swallows, so this always runs (and `finally`
+    // bails the React Compiler out of the whole file).
+    setIsSaving(false);
   };
-
-  useEffect(() => {
-    if (textareaRef.current && personalisation) {
-      textareaRef.current.value = personalisation.customInstructions ?? "";
-    }
-  }, [personalisation]);
 
   if (!personalisation) {
     return (
@@ -128,16 +139,28 @@ export function PersonalisationClient() {
         title="Custom instructions"
         description="Extra guidance included in every session."
         footer={
-          <Button size="sm" onClick={handleSave}>
-            Save instructions
-          </Button>
+          <>
+            {isDirty ? (
+              <span className="text-xs text-muted-foreground">
+                Unsaved changes
+              </span>
+            ) : null}
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={isSaving || !isDirty}
+            >
+              {isSaving ? <Spinner size="sm" /> : null}
+              Save instructions
+            </Button>
+          </>
         }
       >
         <Textarea
-          ref={textareaRef}
           className="min-h-[160px] font-mono text-xs"
           placeholder="e.g. Explain changes in plain English before showing code"
-          defaultValue={savedValue}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
         />
       </SettingsSection>
     </SettingsPage>

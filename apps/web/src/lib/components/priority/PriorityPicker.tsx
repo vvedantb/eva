@@ -10,6 +10,7 @@ import {
   CommandGroup,
   CommandItem,
   cn,
+  CrossfadeIconSlot,
 } from "@eva/ui";
 import { IconCheck } from "@tabler/icons-react";
 import { PriorityIcon } from "./PriorityIcon";
@@ -46,7 +47,12 @@ export function PriorityPicker({
           )}
           aria-label={`Priority: ${value ? PRIORITY_LABELS[value] : "No priority"}`}
         >
-          <PriorityIcon level={value} size={14} />
+          <CrossfadeIconSlot
+            iconKey={value ?? "none"}
+            className="relative flex size-3.5 items-center justify-center"
+          >
+            <PriorityIcon level={value} size={14} />
+          </CrossfadeIconSlot>
           {!compact && (
             <span className={value ? "text-foreground" : ""}>
               {value ? PRIORITY_LABELS[value] : "Priority"}

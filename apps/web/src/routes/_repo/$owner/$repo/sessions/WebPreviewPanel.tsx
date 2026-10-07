@@ -2,16 +2,23 @@ import { useRef, useState } from "react";
 import type { Id } from "@eva/backend";
 import { cn, Spinner, Button, WebPreview } from "@eva/ui";
 import { useSessionStorage } from "usehooks-ts";
-import { IconPlayerPlay, IconRefresh, IconWorld } from "@tabler/icons-react";
+import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
+import { IconRefresh, IconWorld } from "@tabler/icons-react";
 import {
   buildUrlWithPath,
   normalizePreviewPath,
+  type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
 import {
   PersistentPreviewBody,
   useFullscreenElement,
   usePreviewIframeElement,
 } from "@/lib/components/sandbox/previewIframeHost";
+import {
+  PreviewToolCallExecutor,
+  type PreviewToolCallParentId,
+} from "@/lib/components/sandbox/PreviewToolCallExecutor";
+import { resolveMiniPlayerLogicalSize } from "@/lib/components/sandbox/previewContain";
 import {
   closePreviewMiniPlayer,
   openPreviewMiniPlayer,
@@ -25,10 +32,15 @@ import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
 import { PreviewViewportFrame } from "./_components/PreviewViewportFrame";
 import {
   FILL_PREVIEW_VIEWPORT,
+  framedPreviewViewport,
+  parsePreviewContainSize,
   parsePreviewViewport,
   readStoredPreviewViewport,
+  serializePreviewContainSize,
   serializePreviewViewport,
-  snapshotFillViewport,
+  togglePreviewContain,
+  togglePreviewDevice,
+  type PreviewFramingChange,
   type PreviewViewport,
 } from "./_utils/previewViewport";
 
@@ -47,7 +59,11 @@ interface WebPreviewPanelProps {
   onRefresh: () => void;
   port: number;
   onPortChange: (port: number) => void;
+  /** Multi-repo sessions: one dev-server port per checked-out repo. */
+  portOptions?: readonly PreviewPortOption[];
   pathStorageKey: string;
+  /** The chat that owns this sandbox: agent page-tool calls are queued on it. */
+  toolCallParentId: PreviewToolCallParentId;
   /**
    * When set (sessions), Preview path is sticky on Convex. `undefined` while
    * the session query loads — falls back to sessionStorage until then.
@@ -83,7 +99,9 @@ export function WebPreviewPanel({
   onRefresh,
   port,
   onPortChange,
+  portOptions,
   pathStorageKey,
+  toolCallParentId,
   stickyPath,
   onStickyPathChange,
   onStartSandbox,
@@ -144,6 +162,25 @@ export function WebPreviewPanel({
     setAspectKey(pathStorageKey);
     setAspectRatio(null);
   }
+  const containStorageKey = `${pathStorageKey}:contain`;
+  const [contain, setContain] = useSessionStorage(containStorageKey, false, {
+    serializer: (value) => (value ? "1" : "0"),
+    deserializer: (value) => value === "1",
+  });
+  const containSizeStorageKey = `${pathStorageKey}:contain-size`;
+  const [containSize, setContainSize] = useSessionStorage(
+    containSizeStorageKey,
+    { width: 1280, height: 800 },
+    {
+      serializer: serializePreviewContainSize,
+      deserializer: parsePreviewContainSize,
+    },
+  );
+  const framedViewport: PreviewViewport = framedPreviewViewport(
+    viewport,
+    contain,
+    containSize,
+  );
   const previewPath = normalizePreviewPath(stickyPath ?? localPath);
 
   // iframeSrc is recomputed only at remount points (previewInfo change,
@@ -177,43 +214,37 @@ export function WebPreviewPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
-          <IconWorld className="w-12 h-12 opacity-50" />
-          <p className="text-sm">
-            {!isActive
-              ? "Wake Eva up to preview your app"
-              : "Waiting for sandbox..."}
-          </p>
-          {!isActive && onStartSandbox ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onStartSandbox}
-              disabled={isSandboxStarting}
-            >
-              <IconPlayerPlay size={14} />
-              {isSandboxStarting ? "Starting..." : "Wake up Eva"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      <SandboxAsleepState
+        icon={IconWorld}
+        label={
+          !isActive
+            ? "Wake Eva up to preview your app"
+            : "Waiting for sandbox..."
+        }
+        wake={!isActive ? { onStartSandbox, isSandboxStarting } : undefined}
+      />
     );
   }
 
+  function applyFraming(next: PreviewFramingChange) {
+    setViewport(next.viewport);
+    setContain(next.contain);
+    setContainSize(next.containSize);
+    if (next.resetAspectRatio) setAspectRatio(null);
+  }
+
   function handleToggleDevice() {
-    if (viewport.mode !== "fill") {
-      setViewport(FILL_PREVIEW_VIEWPORT);
-      setAspectRatio(null);
-      return;
-    }
     const rect = iframeElement?.getBoundingClientRect();
-    setViewport(
-      snapshotFillViewport({
-        width: rect?.width ?? 1280,
-        height: rect?.height ?? 800,
-      }),
+    applyFraming(
+      togglePreviewDevice(
+        { viewport, contain, containSize },
+        rect ? { width: rect.width, height: rect.height } : null,
+      ),
     );
+  }
+
+  function handleToggleContain() {
+    applyFraming(togglePreviewContain({ viewport, contain, containSize }));
   }
 
   // Manual pop-out: the pane hands its anchor to the mini-player and shows a
@@ -227,6 +258,7 @@ export function WebPreviewPanel({
               closePreviewMiniPlayer();
               return;
             }
+            const fillBox = iframeElement?.getBoundingClientRect();
             openPreviewMiniPlayer({
               ...miniPlayerSource,
               entryKey: pathStorageKey,
@@ -234,6 +266,17 @@ export function WebPreviewPanel({
               src: iframeSrc,
               epoch: iframeKey,
               mode: "manual",
+              logicalSize: resolveMiniPlayerLogicalSize(
+                framedViewport.mode === "fill"
+                  ? null
+                  : {
+                      width: framedViewport.width,
+                      height: framedViewport.height,
+                    },
+                fillBox
+                  ? { width: fillBox.width, height: fillBox.height }
+                  : null,
+              ),
             });
           },
         }
@@ -258,14 +301,21 @@ export function WebPreviewPanel({
         onToggleFullscreen={toggleFullscreen}
         port={port}
         onPortChange={onPortChange}
+        portOptions={portOptions}
         previewPath={previewPath}
         onPathChange={handlePathChange}
         viewport={viewport}
         onToggleDevice={handleToggleDevice}
+        contain={contain}
+        onToggleContain={handleToggleContain}
         annotationMode={annotationMode}
         onAnnotationModeChange={setAnnotationMode}
         showAnnotationToggle={Boolean(onAnnotationSubmit)}
         popOut={popOut}
+      />
+      <PreviewToolCallExecutor
+        parentId={toolCallParentId}
+        iframeElement={iframeElement}
       />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar
@@ -276,6 +326,7 @@ export function WebPreviewPanel({
           onFill={() => {
             setViewport(FILL_PREVIEW_VIEWPORT);
             setAspectRatio(null);
+            setContain(false);
           }}
         />
       ) : null}
@@ -284,15 +335,19 @@ export function WebPreviewPanel({
       ) : (
         <div className="relative flex min-h-0 flex-1 flex-col">
           <PreviewViewportFrame
-            viewport={viewport}
+            viewport={framedViewport}
             aspectRatio={aspectRatio}
-            onResize={(size) =>
+            onResize={(size) => {
+              if (viewport.mode === "fill" && contain) {
+                setContainSize(size);
+                return;
+              }
               setViewport({
                 mode: "freeform",
                 width: size.width,
                 height: size.height,
-              })
-            }
+              });
+            }}
           >
             <PersistentPreviewBody
               entryKey={pathStorageKey}
@@ -302,9 +357,12 @@ export function WebPreviewPanel({
               covered={error !== null}
               miniPlayer={miniPlayerSource}
               logicalSize={
-                viewport.mode === "fill"
+                framedViewport.mode === "fill"
                   ? null
-                  : { width: viewport.width, height: viewport.height }
+                  : {
+                      width: framedViewport.width,
+                      height: framedViewport.height,
+                    }
               }
               loading={
                 isLoading && !previewInfo ? (

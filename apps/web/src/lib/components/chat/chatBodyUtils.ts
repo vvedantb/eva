@@ -1,4 +1,5 @@
-import { getAIModelProvider, type Doc } from "@eva/backend";
+import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
+import { getProviderLabel, type ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
@@ -8,11 +9,22 @@ import {
 } from "@/lib/components/chat/ChangedFilesCard";
 import { z } from "zod";
 
+/**
+ * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
+ * skill slash items, the prompt stash and repo mentions all switch off.
+ */
+export interface ChatRepo {
+  id: Id<"githubRepos">;
+  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
+  basePath: string;
+}
+
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without
 // forging a branded id. Real docs stay assignable; nothing in the chat tree
-// feeds `_id` back into Convex.
-export type ChatBodyMessage = Omit<Doc<"messages">, "_id"> & {
+// feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
+// `aveMessages` rows (keyed by thread, not by chat entity) fit too.
+export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
   /** @deprecated Prefer `attachments` — kept for optimistic/local messages. */
@@ -53,18 +65,64 @@ export function findHandoffBoundaryIds(
   return boundaries;
 }
 
+/**
+ * Turns that open a new local calendar day — the first turn of the transcript
+ * included — so ChatBody can head each day with an iMessage-style date label.
+ */
+export function findDayBoundaryIds(
+  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
+): Set<string> {
+  const boundaries = new Set<string>();
+  let previousDay: string | undefined;
+  for (const message of messages) {
+    const day = new Date(message.timestamp).toDateString();
+    if (day !== previousDay) boundaries.add(message._id);
+    previousDay = day;
+  }
+  return boundaries;
+}
+
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
 
 /**
- * Simple view omits sandbox lifecycle / stall banners from the transcript.
+ * A follow-up the server already holds for the next turn, so it cannot be
+ * edited, removed or reordered (Manager Ave). Shown in the same queue panel.
+ */
+export interface ChatHeldFollowUp {
+  id: string;
+  content: string;
+  userId?: Id<"users">;
+}
+
+const SANDBOX_LIFECYCLE_ALERTS = new Set([
+  "Sandbox started",
+  "Sandbox stopped",
+  "Sandbox reconnected",
+]);
+
+export function isSandboxLifecycleAlert(
+  message: Pick<ChatBodyMessage, "isSystemAlert" | "content">,
+): boolean {
+  return (
+    message.isSystemAlert === true &&
+    SANDBOX_LIFECYCLE_ALERTS.has(message.content)
+  );
+}
+
+/**
+ * Simple view omits all system-alert banners. Sandbox start/stop/reconnect
+ * rows are always hidden — they spam the transcript on every VM cycle.
  * Rows stay in Convex; this only affects rendering, empty-state, and
  * last-message targeting. Execution helpers already skip `isSystemAlert`.
  */
 export function visibleChatMessages<
-  M extends Pick<ChatBodyMessage, "isSystemAlert">,
+  M extends Pick<ChatBodyMessage, "isSystemAlert" | "content">,
 >(messages: M[], hideSystemAlerts: boolean): M[] {
-  if (!hideSystemAlerts) return messages;
-  return messages.filter((message) => message.isSystemAlert !== true);
+  const hidden = (message: M) =>
+    isSandboxLifecycleAlert(message) ||
+    (hideSystemAlerts && message.isSystemAlert === true);
+  if (!messages.some(hidden)) return messages;
+  return messages.filter((message) => !hidden(message));
 }
 
 // Boundary schema for the pending-question JSON emitted by the agent. A
@@ -151,22 +209,167 @@ export function otherUserIdsInChat<TUserId extends string>(
   return [...ids].sort();
 }
 
-/** Streaming / changed-files flags for an assistant row. */
+/**
+ * Answered AskUserQuestion prompts, as a read-only record for the transcript.
+ * A still-active question is excluded: the composer dock is showing it live,
+ * so a card for it would be the same prompt twice.
+ */
+export function collectQuestionSteps(steps: ActivityStep[]): ActivityStep[] {
+  return steps.filter(
+    (step) =>
+      step.type === "question" &&
+      step.status === "complete" &&
+      step.questions !== undefined &&
+      step.questions.length > 0,
+  );
+}
+
+/** Streaming / changed-files / question-record flags for an assistant row. */
 export function getAssistantTurnState(message: ChatBodyMessage): {
   isStreamingPlaceholder: boolean;
   changedFiles: ChangedFile[];
+  questionSteps: ActivityStep[];
 } {
   const isStreamingPlaceholder =
     message.role === "assistant" &&
     !message.content &&
     message.finishedAt === undefined;
-  const changedFiles =
+  const steps =
     !isStreamingPlaceholder &&
     message.role === "assistant" &&
     message.activityLog
-      ? collectChangedFiles(parseActivitySteps(message.activityLog) ?? [])
+      ? (parseActivitySteps(message.activityLog) ?? [])
       : [];
-  return { isStreamingPlaceholder, changedFiles };
+  return {
+    isStreamingPlaceholder,
+    changedFiles: collectChangedFiles(steps),
+    questionSteps: collectQuestionSteps(steps),
+  };
+}
+
+/**
+ * The failure text without the harness's `Error: ` stamp. A failed turn is
+ * already framed as an error by the notice around it, so the prefix only
+ * repeats what the icon and the title say.
+ */
+export function stripErrorPrefix(content: string): string {
+  const trimmed = content.trim();
+  const prefix = /^error:\s*/i.exec(trimmed);
+  return prefix === null ? trimmed : trimmed.slice(prefix[0].length);
+}
+
+/**
+ * The heading a failed turn is announced with, or null when the turn is not a
+ * failure. Both failure classes are failures rather than replies: as markdown
+ * they read as Eva answering "Error: …" in body copy.
+ *
+ * A usage limit belongs to whichever provider ran the turn, so the title reads
+ * that turn's model stamp instead of naming Claude — a Cursor turn used to be
+ * reported as a Claude limit. An unstamped legacy turn names no provider
+ * rather than guessing one.
+ */
+export function turnErrorTitle({
+  errorType,
+  turnModel,
+  messageModel,
+}: {
+  errorType: ChatBodyMessage["errorType"];
+  /** Stamp of the user turn this answers — what the run was actually sent on. */
+  turnModel: string | undefined;
+  /** The assistant row's own stamp, for a failure with no user turn above it. */
+  messageModel: string | undefined;
+}): string | null {
+  if (errorType === "generic") return "This turn failed";
+  if (errorType !== "rate_limit") return null;
+  const model = turnModel ?? messageModel;
+  if (model === undefined) return "Usage limit reached";
+  return `${getProviderLabel(getAIModelProvider(model))} usage limit reached`;
+}
+
+/**
+ * One wording for the sandbox across every chat panel (session, quick task,
+ * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
+ * so the transcript and the composer speak about Eva too rather than about a
+ * "sandbox" the user never named.
+ */
+export const SANDBOX_CHAT_COPY = {
+  startingTitle: "Waking Eva up…",
+  stoppingTitle: "Putting Eva to sleep…",
+  asleepTitle: "Eva is asleep",
+  asleepDescription: "Eva's sandbox is asleep.",
+  /** Sending while asleep queues the message and wakes Eva to run it. */
+  asleepPlaceholder: "Send a message to wake Eva up…",
+  /** The last turn hit a usage limit; sends queue until just after the reset. */
+  usageLimitPlaceholder: "Usage limit reached — messages send after the reset…",
+  /** Why the composer will not send while Eva sleeps. */
+  asleepDisabledReason: "Wake Eva up to send",
+  wakeAction: "Wake up Eva",
+  switchingAccountPlaceholder: "Switching Claude account…",
+  activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
+  /** Teaches the three composer affordances on an empty, awake chat. */
+  activeDescription:
+    "Type / for skills, @ to mention, or drop files to attach.",
+} as const;
+
+/**
+ * Whether a sandbox chat composer accepts input, where its sends go, and the
+ * copy that goes with it. One rule for all three surfaces (session, quick
+ * task, project):
+ * - only an account swap locks the composer. A running turn, a sleeping
+ *   sandbox and a usage limit all take the message into the queue instead.
+ * - `queuesSends` is that queue rule for an idle chat: asleep (the queue wakes
+ *   Eva and sends once she is up) or held by a usage limit on the chosen
+ *   provider (it sends just after the reset). A running turn queues too, but
+ *   each surface already routes that through its own `isExecuting`.
+ */
+export function sandboxComposerState({
+  isSandboxActive,
+  isSwitchingAccount,
+  isExecuting,
+  isUsageLimitHeld,
+}: {
+  isSandboxActive: boolean;
+  isSwitchingAccount: boolean;
+  isExecuting: boolean;
+  isUsageLimitHeld: boolean;
+}): {
+  isInputDisabled: boolean;
+  queuesSends: boolean;
+  placeholder: string;
+  disabledReason: string;
+} {
+  const isAsleep = !isSandboxActive && !isExecuting;
+  const isHeld = isUsageLimitHeld && !isExecuting;
+  return {
+    isInputDisabled: isSwitchingAccount,
+    queuesSends: isAsleep || isHeld,
+    placeholder: isSwitchingAccount
+      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+      : isHeld
+        ? SANDBOX_CHAT_COPY.usageLimitPlaceholder
+        : isAsleep
+          ? SANDBOX_CHAT_COPY.asleepPlaceholder
+          : SANDBOX_CHAT_COPY.activePlaceholder,
+    disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
+  };
+}
+
+/**
+ * The failure a send threw, as the user should read it. Convex wraps a server
+ * error in `[CONVEX …] [Request ID: …] Server Error` plus an `Uncaught Error:`
+ * line and a stack, none of which means anything outside the dashboard.
+ */
+export function readableSendError(message: string): string {
+  const cleaned = message
+    .replace(/\s+/g, " ")
+    .replace(/\[CONVEX[^\]]*\]/g, "")
+    .replace(/\[Request ID:[^\]]*\]/g, "")
+    .replace(/\bServer Error\b/g, "")
+    .replace(/\bUncaught [A-Za-z]*Error:?/g, "")
+    // Everything from the first stack frame on is for the logs, not the user.
+    .split(" at ")[0];
+  const trimmed = (cleaned ?? "").trim();
+  return trimmed.length > 0 ? trimmed : "Something went wrong";
 }
 
 /**

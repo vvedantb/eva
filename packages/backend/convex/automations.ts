@@ -10,6 +10,7 @@ export {
 export {
   triggerAutomation,
   runNow,
+  startEventRun,
 } from "./_automations/triggers";
 
 export {
@@ -24,6 +25,8 @@ export {
   countUnreadAll,
   getAutomationData,
   getRunForEmail,
+  getRunForTriage,
+  setFindingsTriage,
   updateRunStatus,
   clearRunWorkflow,
   cancelRun,

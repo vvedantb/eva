@@ -1,16 +1,19 @@
 "use client";
 
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { isReviewTab, type ReviewTab } from "@/lib/search-params";
+import { canonicalReviewTab, type ReviewTab } from "@/lib/search-params";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 /** Matches `/review/diffs…` or any of the single-segment review sub-tabs. */
 const REVIEW_DIFFS_PATH = /\/review\/diffs(?:\/(?:unified|split))?\/?$/;
-const REVIEW_PLAIN_PATH = /\/review\/(overview|commits|checks|recap)\/?$/;
+const REVIEW_PLAIN_PATH = /\/review\/([a-z]+)\/?$/;
 
 function prTabFromPathname(pathname: string): ReviewTab | undefined {
   if (REVIEW_DIFFS_PATH.test(pathname)) return "diffs";
   const plain = REVIEW_PLAIN_PATH.exec(pathname)?.[1];
-  return plain !== undefined && isReviewTab(plain) ? plain : undefined;
+  // Legacy slugs (`overview`, `recap`, …) redirect, but read through the map
+  // too so the panel never flashes the default tab during that redirect.
+  return plain === undefined ? undefined : canonicalReviewTab(plain);
 }
 
 /** Diffs is the one sub-tab with a nested segment of its own. */
@@ -19,8 +22,8 @@ function reviewSubPath(tab: ReviewTab, diffView: string): string {
 }
 
 /**
- * Review panel sub-tab. Prefers path segments (`…/review/overview`,
- * `…/review/commits`, `…/review/checks`, `…/review/diffs/…`, `…/review/recap`)
+ * Review panel sub-tab. Prefers path segments (`…/review/summary`,
+ * `…/review/timeline`, `…/review/diffs/…`)
  * on sessions/projects/quick-tasks and falls back to `?prTab=` only when those
  * paths are absent.
  */
@@ -33,8 +36,8 @@ export function usePrTabParam() {
 
   const searchTabValue = "prTab" in search ? search.prTab : undefined;
   const searchTab: ReviewTab | undefined =
-    typeof searchTabValue === "string" && isReviewTab(searchTabValue)
-      ? searchTabValue
+    typeof searchTabValue === "string"
+      ? canonicalReviewTab(searchTabValue)
       : undefined;
 
   const prTab = pathTab ?? searchTab;
@@ -46,8 +49,11 @@ export function usePrTabParam() {
       const view = viewMatch?.[1] ?? "unified";
       const nextPath = `${reviewBase}/${reviewSubPath(tab, view)}`;
       if (nextPath === pathname) return;
+      // Pathname is usually already `--` form, but `navigate({ to })` does
+      // not run the history rewrite. Internalize so a slash-form monorepo
+      // path cannot miss the route tree.
       void navigate({
-        to: nextPath,
+        to: toInternalRepoHref(nextPath),
         search: true,
         replace: true,
       });

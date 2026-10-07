@@ -5,7 +5,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
 import { workflow } from "../workflowManager";
@@ -17,8 +17,10 @@ import {
 } from "../_sandbox/startupActivity";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { normalizeAIModel } from "../validators";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
+import { drainChatQueueQuietly } from "../_queues/helpers";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -39,63 +41,90 @@ export const startProjectSandbox = authMutation({
       ctx.userId,
     );
 
-    if (!PREVIEW_ALLOWED_PHASES.some((phase) => phase === project.phase)) {
+    if (!isPreviewAllowedPhase(project)) {
       throw new Error(
         `Project must be in in_progress, business_review, or code_review to start sandbox. Current phase: ${project.phase}`,
       );
     }
 
-    const repo = await ctx.db.get(project.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    const branchName =
-      project.branchName ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-    const baseBranch =
-      project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-
-    await ctx.db.patch(args.projectId, {
-      reviewProjectSandboxStatus: "starting",
-    });
-    // Seed startup streaming immediately so the UI shows a real step instead of
-    // the random "Eva is inferring…" spinner while the workflow schedules.
-    await seedSandboxStartupActivity(
-      ctx.db,
-      `project-sandbox-startup-${args.projectId}`,
-    );
-    const reusableSandboxId = project.sandboxId;
-    console.log(
-      `[projects] startProjectSandbox projectId=${args.projectId} existingSandboxId=${project.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
-    );
-
-    const startArgs = {
-      projectId: args.projectId,
-      existingSandboxId: project.sandboxId,
-
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      branchName,
-      baseBranch,
-      repoId: project.repoId,
-    };
-    // Vercel: schedule start action directly (skip ~6s workflow scheduling).
-    if (reusableSandboxId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.startProjectPreviewSandbox,
-        startArgs,
-      );
-    } else {
-      await workflow.start(
-        ctx,
-        internal.projectSandboxWorkflow.projectPreviewSandboxStartupWorkflow,
-        startArgs,
-      );
-    }
-
+    await requestProjectSandboxStart(ctx, project);
     return null;
   },
 });
+
+function isPreviewAllowedPhase(project: Doc<"projects">): boolean {
+  return PREVIEW_ALLOWED_PHASES.some((phase) => phase === project.phase);
+}
+
+/**
+ * Marks the project's preview sandbox starting and schedules the start. Shared
+ * by the wake button and the chat queue (`wakeProjectSandboxForQueue`).
+ * Callers check access and the phase.
+ */
+async function requestProjectSandboxStart(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+): Promise<void> {
+  const repo = await ctx.db.get(project.repoId);
+  if (!repo) throw new Error("Repository not found");
+
+  const branchName =
+    project.branchName ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+  const baseBranch =
+    project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+
+  await ctx.db.patch(project._id, {
+    reviewProjectSandboxStatus: "starting",
+  });
+  // Seed startup streaming immediately so the UI shows a real step instead of
+  // the random "Eva is inferring…" spinner while the workflow schedules.
+  await seedSandboxStartupActivity(
+    ctx.db,
+    `project-sandbox-startup-${project._id}`,
+  );
+  const reusableSandboxId = project.sandboxId;
+  console.log(
+    `[projects] startProjectSandbox projectId=${project._id} existingSandboxId=${project.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
+  );
+
+  const startArgs = {
+    projectId: project._id,
+    existingSandboxId: project.sandboxId,
+
+    installationId: repo.installationId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    branchName,
+    baseBranch,
+    repoId: project.repoId,
+  };
+  // Vercel: schedule start action directly (skip ~6s workflow scheduling).
+  if (reusableSandboxId) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.startProjectPreviewSandbox,
+      startArgs,
+    );
+  } else {
+    await workflow.start(
+      ctx,
+      internal.projectSandboxWorkflow.projectPreviewSandboxStartupWorkflow,
+      startArgs,
+    );
+  }
+}
+
+/**
+ * Wakes a sleeping project sandbox so its queued chat can send. Skipped in a
+ * phase the wake button would refuse, leaving the message queued.
+ */
+export async function wakeProjectSandboxForQueue(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+): Promise<void> {
+  if (!isPreviewAllowedPhase(project)) return;
+  await requestProjectSandboxStart(ctx, project);
+}
 
 /**
  * Re-runs startup commands for a project's preview sandbox by kicking off the
@@ -329,44 +358,55 @@ export const stopProjectSandbox = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-
-    if (!project.sandboxId) {
-      // Nothing to stop — close immediately.
-      await ctx.db.patch(args.projectId, {
-        reviewProjectSandboxStatus: "closed",
-      });
-      return null;
-    }
-
-    await scheduleFinalizeStopProject(ctx, {
-      projectId: args.projectId,
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-    });
-
-    // Clear leftover start steps so stop does not re-show startup activity.
-    await clearSandboxStartupActivity(
-      ctx.db,
-      `project-sandbox-startup-${args.projectId}`,
-    );
-
-    // Stopping kills the paused turn, so any blocking AskUserQuestion can
-    // never be claimed — clear it or it hides the composer forever.
-    await clearPendingQuestionsForEntity(ctx.db, String(args.projectId));
-
-    // Keep sandboxId so we can resume the stopped sandbox later.
-    await ctx.db.patch(args.projectId, {
-      reviewProjectSandboxStatus: "stopping",
-    });
-
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    await requestProjectSandboxStop(ctx, args.projectId);
     return null;
   },
 });
+
+/**
+ * Shared stop path for a project sandbox: the Stop button, the daily auto-stop
+ * sweep and the idle sweep all go through here (mirrors
+ * `requestSessionSandboxStop` / `requestTaskSandboxStop`), so every stop clears
+ * the same leftover UI state. Callers own the auth check.
+ */
+export async function requestProjectSandboxStop(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+): Promise<void> {
+  const project = await ctx.db.get(projectId);
+  if (!project) return;
+
+  if (!project.sandboxId) {
+    // Nothing to stop — close immediately.
+    await ctx.db.patch(projectId, {
+      reviewProjectSandboxStatus: "closed",
+    });
+    return;
+  }
+
+  await scheduleFinalizeStopProject(ctx, {
+    projectId,
+    sandboxId: project.sandboxId,
+    repoId: project.repoId,
+  });
+
+  // Clear leftover start steps so stop does not re-show startup activity.
+  await clearSandboxStartupActivity(
+    ctx.db,
+    `project-sandbox-startup-${projectId}`,
+  );
+
+  // Stopping kills the paused turn, so any blocking AskUserQuestion can
+  // never be claimed — clear it or it hides the composer forever.
+  await clearPendingQuestionsForEntity(ctx.db, String(projectId));
+  await clearPreviewToolCallsForParent(ctx.db, projectId);
+
+  // Keep sandboxId so we can resume the stopped sandbox later.
+  await ctx.db.patch(projectId, {
+    reviewProjectSandboxStatus: "stopping",
+  });
+}
 
 /**
  * Schedules project sandbox teardown. Every path that flips a project to
@@ -542,6 +582,9 @@ export const projectSandboxReady = internalMutation({
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
     });
+    // Sends what was queued while Eva slept. Early + final ready both land
+    // here; the second no-ops once the first turn is running.
+    await drainChatQueueQuietly(ctx, args.projectId);
 
     return null;
   },

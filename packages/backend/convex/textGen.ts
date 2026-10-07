@@ -2,11 +2,19 @@
 
 import { ActionCache } from "@convex-dev/action-cache";
 import { generateText } from "ai";
-import { isTitleRegenerating, parseGeneratedTags } from "@eva/shared";
+import {
+  isTitleRegenerating,
+  selectTagsByProbability,
+  TASK_TAGS,
+  TASK_TAG_DESCRIPTIONS,
+  type TaskTag,
+} from "@eva/shared";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { getActionRepoWithAccess } from "./functions";
+import { readBoolean } from "./_jev/answers";
+import { evaluateDecision } from "./_jev/client";
 import { buildTitleDigest } from "./_sessions/prompts";
 
 /** Cheap gateway model for session titles — one-line change later. */
@@ -128,8 +136,12 @@ ${digest}`,
 });
 
 /**
- * Suggests up to three vocabulary tags for a newly created task. Background /
- * flex tier — failures leave the task untagged rather than blocking create.
+ * Suggests up to three vocabulary tags for a newly created task.
+ *
+ * One Jev boolean per candidate tag rather than a prose prompt: each tag is
+ * judged against its own rubric, and the probabilities let the threshold and
+ * the cap be applied here instead of trusting the model to count. Background
+ * work — failures leave the task untagged rather than blocking create.
  */
 export const generateTaskTags = internalAction({
   args: {
@@ -141,37 +153,51 @@ export const generateTaskTags = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const already =
-        args.existingTags.length > 0 ? args.existingTags.join(", ") : "none";
-      const description =
-        args.description !== undefined && args.description.trim().length > 0
-          ? args.description.slice(0, 2000)
-          : "(none)";
-      const { text } = await generateText({
-        model: TEXT_GEN_MODEL,
-        prompt: `Pick 0-3 tags that best describe this coding task. Choose only from the list below — never invent a tag. Prefer fewer precise tags over three loose ones. Reply with nothing if none clearly fit.
+      const applied = new Set(
+        args.existingTags.map((tag) => tag.trim().toLowerCase()),
+      );
+      const asked = TASK_TAGS.filter((tag) => !applied.has(tag));
+      if (asked.length === 0) {
+        return null;
+      }
 
-Type: bug, feature, refactor, docs, testing, chore, migration
-Quality: performance, security, accessibility, reliability, design, ux
-Area: frontend, backend, database, infra, ci, auth, dependencies, config, integration
+      const questions: Record<
+        string,
+        { type: "boolean"; instructions: string }
+      > = {};
+      for (const tag of asked) {
+        questions[tag] = {
+          type: "boolean",
+          instructions: `Does this coding task fit the tag '${tag}': ${TASK_TAG_DESCRIPTIONS[tag]}?`,
+        };
+      }
 
-Already applied — do not repeat these: ${already}
-
-Reply with the tags on one line, comma separated, no other text.
-
-Title: ${args.title}
-Description: ${description}`,
-        providerOptions: {
-          gateway: {
-            serviceTier: "flex",
+      const outcome = await evaluateDecision(
+        {
+          state: {
+            title: args.title,
+            description: (args.description ?? "").slice(0, 2000),
           },
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
+          questions,
         },
-      });
-      const tags = parseGeneratedTags(text, args.existingTags);
+        { tag: "eva-task-tags" },
+      );
+      if (!outcome.ok) {
+        console.error(
+          "[textGen.generateTaskTags]",
+          outcome.errorCode,
+          outcome.error,
+        );
+        return null;
+      }
+
+      const probabilities: Partial<Record<TaskTag, number>> = {};
+      for (const tag of asked) {
+        const probability = readBoolean(outcome, tag);
+        if (probability !== null) probabilities[tag] = probability;
+      }
+
+      const tags = selectTagsByProbability(probabilities, args.existingTags);
       if (tags.length === 0) {
         return null;
       }

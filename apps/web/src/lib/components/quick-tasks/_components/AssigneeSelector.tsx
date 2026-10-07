@@ -12,7 +12,8 @@ import {
   CommandItem,
 } from "@eva/ui";
 import { IconUserPlus, IconCheck } from "@tabler/icons-react";
-import { getUserInitials, UserInitials } from "@eva/shared";
+import { getUserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import type { FunctionReturnType } from "convex/server";
 import type { api, Id } from "@eva/backend";

@@ -72,12 +72,18 @@ describe("saved provider sessions are resumed, not rotated on context size", () 
     );
   });
 
-  test("a stalled cursor resume retries the same agent before going fresh", () => {
+  test("a stalled cursor resume retries the same agent and never mints a replacement", () => {
     const cursorSdk = read("callback-src/providers/cursorSdk.ts");
     for (const source of [cursorSdk, callbackBundle]) {
       expect(source).toContain("Retrying the saved Cursor agent");
       // In-place compaction counts as liveness, never as a stall to rotate on.
       expect(source).toContain("compactionInFlight");
+      expect(source).toContain("canReplaceCursorAgent");
+      // Stall-twice used to fall through to createFreshAgent and persist a
+      // blank id. That notice must stay gone so a slow resume cannot rotate.
+      expect(source).not.toContain(
+        "The saved agent stopped responding twice, so Eva recovered with a clean context.",
+      );
     }
   });
 });

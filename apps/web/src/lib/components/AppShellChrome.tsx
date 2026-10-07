@@ -6,11 +6,13 @@ import { Sidebar } from "@/lib/components/Sidebar";
 import { SpotlightSearch } from "@/lib/components/SpotlightSearch";
 import { NotificationToastStream } from "@/lib/components/NotificationToastStream";
 import { UpdateAvailableToast } from "@/lib/components/UpdateAvailableToast";
+import { ConnectionStatusToast } from "@/lib/components/ConnectionStatusToast";
 import { FollowProvider } from "@/lib/contexts/FollowContext";
 import { SidebarProvider } from "@/lib/contexts/SidebarContext";
 import { PageTitleProvider } from "@/lib/contexts/PageTitleContext";
 import { SearchProvider } from "@/lib/contexts/SearchContext";
 import { ShortcutsProvider } from "@/lib/hotkeys/ShortcutsContext";
+import { ShortcutsCheatsheet } from "@/lib/hotkeys/ShortcutsCheatsheet";
 
 /**
  * The signed-in app chrome. Split from `AppShell` so the sidebar, spotlight
@@ -38,23 +40,30 @@ export function AppShellChrome({
             <ShortcutsProvider>
               <SearchProvider>
                 <FollowProvider>
-                  {/* Embedded documents (inbox preview pane) render content
-                      only: the host window already owns the sidebar, search,
-                      follow overlay and toast streams. Providers stay — pages
-                      consume them regardless of where they render. */}
-                  {embedded ? null : <Sidebar />}
                   {/* Wraps the outlet rather than sitting beside it: the
                       launcher popover keeps a live chat mounted, so it has to
-                      live above the routed content that comes and goes. */}
+                      live above the routed content that comes and goes.
+                      The sidebar is inside it — first, so the DOM order of the
+                      fixed z-50 chrome is unchanged — because below `lg` the
+                      mobile header owns Ave's summon button and reads the
+                      launcher state from its context. */}
                   <AveLauncherProvider enabled={!embedded}>
+                    {/* Embedded documents (inbox preview pane) render content
+                        only: the host window already owns the sidebar, search,
+                        follow overlay and toast streams. Providers stay — pages
+                        consume them regardless of where they render. */}
+                    {embedded ? null : <Sidebar />}
                     {children}
                   </AveLauncherProvider>
                   {embedded ? null : (
                     <>
                       <SpotlightSearch />
+                      {/* Inside ShortcutsProvider: it lists that registry. */}
+                      <ShortcutsCheatsheet />
                       <FollowOverlay />
                       <NotificationToastStream />
                       <UpdateAvailableToast />
+                      <ConnectionStatusToast />
                     </>
                   )}
                 </FollowProvider>

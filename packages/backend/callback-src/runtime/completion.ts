@@ -2,6 +2,7 @@ import {
   CODEX_PRICING_PER_MILLION,
   COMPLETION_MUTATION,
   ENTITY_ID,
+  ENTITY_ID_FIELD,
   PROVIDER,
   ROOT_DIRECTORY,
   RUN_ID,
@@ -22,8 +23,18 @@ import { callConvexWithRetry, fetchWithTimeout } from "../http/convexClient.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
 import { callbackState as S } from "../runtime/state.js";
 import { mediaSearchDirs } from "../runtime/sandboxMedia.js";
+import { appendClaimedTurnCompletion } from "../providers/claimedTurnLifecycle.js";
+import { buildEntityMutationArgs } from "./daemonProcess.js";
+import { persistTurnWork } from "./turnPersist.js";
+import { flushStreaming, setFinalizingState } from "./heartbeats.js";
 import { appendTurnCheckpoint } from "../runtime/turnCheckpoint.js";
-import type { JsonObject, ResultEvent } from "../types.js";
+import { releaseTurnLeaseForCompletion } from "./turnLease.js";
+import type {
+  JsonObject,
+  JsonValue,
+  ProviderAttemptResult,
+  ResultEvent,
+} from "../types.js";
 import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
 import {
   existsSync,
@@ -431,6 +442,139 @@ export function buildErrorMessage(
   return agentName + " exited with code " + code;
 }
 
+/** Signal death (direct or shell-translated) is never a successful result. */
+export function providerAttemptWasInterrupted(
+  attempt: Pick<ProviderAttemptResult, "code" | "terminatedBySignal">,
+): boolean {
+  return (
+    attempt.terminatedBySignal || attempt.code === 137 || attempt.code === 143
+  );
+}
+
+/** Any watchdog timeout or tool stall counts as a timed-out attempt. */
+export function providerAttemptTimedOut(
+  attempt: ProviderAttemptResult,
+): boolean {
+  return (
+    attempt.timedOutAfterFirstText ||
+    attempt.timedOutForNoOutput ||
+    attempt.timedOutForMaxRuntime ||
+    attempt.timedOutForFirstEvent ||
+    attempt.timedOutForFirstAssistant ||
+    attempt.timedOutForZombie ||
+    Boolean(attempt.toolStallErrorMessage)
+  );
+}
+
+/**
+ * Maps a provider attempt + parsed result event to `{ success, error }`.
+ * One-shot still owns task-commit and response-step dedup on top of this.
+ */
+export function resolveProviderAttemptOutcome(
+  attempt: ProviderAttemptResult,
+  resultEvent: ResultEvent | null,
+): { success: boolean; error: string | null } {
+  const agentWasInterrupted = providerAttemptWasInterrupted(attempt);
+  const attemptEndedDueToTimeout = providerAttemptTimedOut(attempt);
+  const runSucceededWithResult =
+    resultEvent != null && !resultEvent.isError && !agentWasInterrupted;
+  if (resultEvent?.isError) {
+    return { success: false, error: resultEvent.result };
+  }
+  if (
+    (!runSucceededWithResult && attempt.code !== 0) ||
+    (attemptEndedDueToTimeout && !runSucceededWithResult)
+  ) {
+    return {
+      success: false,
+      error: appendDiagnosticTail(
+        buildErrorMessage(
+          attempt.code,
+          S.fatalHeartbeatErrorMessage,
+          attempt.toolStallErrorMessage,
+          attempt.timedOutForMaxRuntime,
+          attempt.timedOutForNoOutput,
+          attempt.timedOutForFirstEvent,
+          attempt.timedOutForFirstAssistant,
+          attempt.timedOutAfterFirstText,
+          attempt.timedOutForZombie,
+        ),
+      ),
+    };
+  }
+  return { success: runSucceededWithResult, error: null };
+}
+
+/** Drain the stream into steps and mark them complete before reading the log. */
+export async function drainStreamingAndCompleteSteps(): Promise<void> {
+  await flushStreaming();
+  for (const step of S.accumulatedSteps) step.status = "complete";
+}
+
+/**
+ * Final streaming reconcile then persist. True means skip the completion
+ * (lease lost or already finalizing).
+ */
+export async function reconcileStreamingAndPersist(): Promise<boolean> {
+  if (await setFinalizingState()) return true;
+  persistTurnWork();
+  return false;
+}
+
+/** Shared success/failure completion envelope. Callers still decide the fields. */
+export function buildTurnCompletionPayload(params: {
+  success: boolean;
+  result: JsonValue;
+  error: string | null;
+  activityLog: string | null;
+  resultEvent?: ResultEvent | null;
+  entityFieldFallback?: string;
+}): JsonObject {
+  return buildEntityMutationArgs(
+    ENTITY_ID_FIELD ?? params.entityFieldFallback,
+    ENTITY_ID,
+    {
+      success: params.success,
+      result: params.result,
+      error: params.error,
+      activityLog: params.activityLog,
+      ...(RUN_ID ? { runId: RUN_ID } : {}),
+      ...(params.resultEvent?.rawResultEvent
+        ? { rawResultEvent: params.resultEvent.rawResultEvent }
+        : {}),
+      ...(S.pendingQuestionData
+        ? { pendingQuestion: S.pendingQuestionData }
+        : {}),
+    },
+  );
+}
+
+/**
+ * Posts a failure completion without media harvest. Callers persist first,
+ * then choose whether to exit. A null activityLog tells Convex to keep the
+ * last streaming snapshot.
+ */
+export async function postClaimedTurnFailureCompletion(params: {
+  error: string;
+  activityLog: string | null;
+}): Promise<void> {
+  const completionArgs = buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, {
+    success: false,
+    result: null,
+    error: params.error,
+    activityLog: params.activityLog,
+    ...(RUN_ID ? { runId: RUN_ID } : {}),
+  });
+  appendClaimedTurnCompletion(completionArgs);
+  appendTurnCheckpoint(completionArgs);
+  releaseTurnLeaseForCompletion();
+  await callConvexWithRetry(
+    "mutation",
+    COMPLETION_MUTATION ?? "",
+    completionArgs,
+  );
+}
+
 export function appendDiagnosticTail(message: string): string {
   const details: string[] = [];
   const stdoutTail = S.rawOutput.slice(-1500).trim();
@@ -489,10 +633,18 @@ async function uploadMediaFile(
   throw new Error("Missing storageId in upload response");
 }
 
+/**
+ * Which chat message a harvest attaches to: an exact one for a synthetic turn,
+ * otherwise the parent's latest. Named rather than inline so the signatures
+ * below stay on one line — the deliverable-contract tests read these function
+ * bodies as text.
+ */
+type MediaTarget = { messageId?: string };
+
 /** Attaches uploaded media to the chat message the turn just wrote. */
 async function attachChatMediaIfAny(
   uploaded: { storageId: string; fileName: string }[],
-  target: { messageId?: string },
+  target: MediaTarget,
 ): Promise<void> {
   if (uploaded.length === 0) return;
   const mediaArgs: JsonObject = {
@@ -504,10 +656,35 @@ async function attachChatMediaIfAny(
 }
 
 /**
- * Sends the completion mutation, then attaches sandbox media.
+ * Attaches uploaded media to the run doc, for task runs.
  *
- * Completion runs first so `screenshots:attachMedia` can patch the assistant
- * message that was just written.
+ * A run writes no `messages` row — the quick task's first-run chat turn and the
+ * timeline row are both rendered from the run itself — so its media hangs off
+ * the run instead of the last message.
+ */
+async function attachRunMediaIfAny(
+  uploaded: { storageId: string; fileName: string }[],
+): Promise<void> {
+  if (uploaded.length === 0) return;
+  await callConvexWithRetry(
+    "mutation",
+    "agentRuns:attachMedia",
+    {
+      id: RUN_ID ?? "",
+      mediaStorageIds: uploaded.map((item) => item.storageId),
+    },
+    3,
+  );
+}
+
+/**
+ * Sends the completion mutation and attaches sandbox media around it.
+ *
+ * A chat turn harvests after completion, so `screenshots:attachMedia` can patch
+ * the assistant message that was just written. A task run harvests *before*:
+ * its media hangs off the run doc, which already exists, and completing a run
+ * hands control back to the task workflow — which pushes, opens the PR and
+ * stops the sandbox out from under a late upload.
  */
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
@@ -515,18 +692,24 @@ export async function deliverCompletionWithMedia(
   // Every success path runs persistTurnWork() before this, so the checkpoint's
   // afterSha is the pushed turn-end tip.
   appendTurnCheckpoint(completionArgs);
+  // The payload already carries the lease; stop heartbeating under it before
+  // the server closes the turn, or the media upload window below emits
+  // heartbeats that come back `closed` and read as a takeover (session 225).
+  releaseTurnLeaseForCompletion();
+  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",
     completionArgs,
   );
-  await uploadAndAttachSandboxMedia({});
+  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
 }
 
 /**
  * Scans sandbox `recordings/` then `screenshots/` under the repo root and the
  * app rootDirectory, uploads all captured media (videos first, in capture
- * order), and attaches it to the last chat message.
+ * order), and attaches it to the last chat message — or, for a task run, to the
+ * run doc that the chat renders its first turn from.
  * Shared by the one-shot callback and the Claude sdk-daemon finalize path —
  * daemon turns previously skipped this, so chat never showed agent
  * recordings.
@@ -552,12 +735,8 @@ function archivePostedFile(dir: string, file: string): void {
 }
 
 export async function uploadAndAttachSandboxMedia(
-  target: { messageId?: string },
+  target: MediaTarget,
 ): Promise<void> {
-  // Task runs (RUN_ID set) have no chat message to attach to — only chat turns
-  // scan. Anything a run leaves behind is picked up by the next chat turn.
-  if (RUN_ID) return;
-
   const uploaded: { storageId: string; fileName: string }[] = [];
   // Agents re-capture the same frame more than once (a retried screenshot, a
   // verify loop); byte-identical files add chat noise, so only the first copy
@@ -620,7 +799,11 @@ export async function uploadAndAttachSandboxMedia(
   }
 
   try {
-    await attachChatMediaIfAny(uploaded, target);
+    if (RUN_ID) {
+      await attachRunMediaIfAny(uploaded);
+    } else {
+      await attachChatMediaIfAny(uploaded, target);
+    }
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }

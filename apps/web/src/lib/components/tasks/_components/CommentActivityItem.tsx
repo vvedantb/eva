@@ -6,7 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import {
   Button,
@@ -18,13 +18,11 @@ import {
   toast,
 } from "@eva/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { getUserDisplayName } from "./task-detail-constants";
 import {
   CommentMentionInput,
@@ -48,6 +46,9 @@ interface CommentActivityItemProps {
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
 }
 
+/** Author name: quieter than a heading, so the comment body stays the emphasis. */
+const AUTHOR_NAME_CLASS = "truncate text-[13px] font-medium text-foreground";
+
 function CommentAuthorName({
   authorId,
   users,
@@ -60,7 +61,7 @@ function CommentAuthorName({
 
   if (fromList) {
     return (
-      <span data-pii className="truncate text-sm font-medium text-foreground">
+      <span data-pii className={AUTHOR_NAME_CLASS}>
         {getUserDisplayName(fromList)}
       </span>
     );
@@ -68,22 +69,18 @@ function CommentAuthorName({
 
   if (profile === undefined) {
     return (
-      <span className="truncate text-sm font-medium text-muted-foreground">
+      <span className={cn(AUTHOR_NAME_CLASS, "text-muted-foreground")}>
         ...
       </span>
     );
   }
 
   if (profile === null) {
-    return (
-      <span className="truncate text-sm font-medium text-foreground">
-        Unknown
-      </span>
-    );
+    return <span className={AUTHOR_NAME_CLASS}>Unknown</span>;
   }
 
   return (
-    <span data-pii className="truncate text-sm font-medium text-foreground">
+    <span data-pii className={AUTHOR_NAME_CLASS}>
       {getUserDisplayName(profile)}
     </span>
   );
@@ -166,22 +163,32 @@ export function CommentActivityItem({
       data-comment-id={comment._id}
       className={cn("group", isAnchored && "rounded-surface t-anchor-flash")}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex min-h-6 items-center justify-between gap-2">
+        {/* Name and time sit together on the byline — the reading order is
+            "who, when", not "who … when" with the timestamp exiled right. */}
         <div className="flex min-w-0 items-center gap-2">
           {comment.authorId ? (
             <UserInitials userId={comment.authorId} size="sm" />
           ) : null}
-          {comment.authorId ? (
-            <CommentAuthorName authorId={comment.authorId} users={users} />
-          ) : (
-            <span className="truncate text-sm font-medium text-foreground">
-              Unknown
-            </span>
-          )}
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            {comment.authorId ? (
+              <CommentAuthorName authorId={comment.authorId} users={users} />
+            ) : (
+              <span className={AUTHOR_NAME_CLASS}>Unknown</span>
+            )}
+            <RelativeDateTime
+              at={comment.createdAt}
+              className="shrink-0 text-[11px] text-muted-foreground/70"
+            />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           {!isEditing && !isDeleted ? (
-            <EmojiReactionPicker onSelect={toggle} variant="ghost" />
+            <EmojiReactionPicker
+              onSelect={toggle}
+              variant="ghost"
+              hoverSuggestFor={mentionTokensToEditableText(comment.content)}
+            />
           ) : null}
           {canManage && !isEditing ? (
             <DropdownMenu>
@@ -206,23 +213,21 @@ export function CommentActivityItem({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
+                  title={skipConfirmTitle("Delete")}
                   onClick={() => onDeleteRequest(comment._id)}
                 >
                   <IconTrash size={14} />
                   Delete
+                  <ConfirmSkipHint />
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-          <RelativeDateTime
-            at={comment.createdAt}
-            className="shrink-0 pl-1 text-[11px] text-muted-foreground/60"
-          />
         </div>
       </div>
 
       {isEditing ? (
-        <div className="space-y-2">
+        <div className="mt-2 space-y-2">
           <CommentMentionInput
             ref={editMentionRef}
             value={editText}
@@ -251,21 +256,24 @@ export function CommentActivityItem({
           </div>
         </div>
       ) : isDeleted ? (
-        <p className="pl-6 text-sm italic text-muted-foreground">
+        <p className="mt-1 text-sm italic text-muted-foreground">
           {DELETED_COMMENT_PLACEHOLDER}
         </p>
       ) : (
+        /* Full-bleed body rather than indented under the avatar: the byline
+           already establishes the author, and long comments read better when
+           they use the whole row. */
         <MarkdownMentionText
           text={comment.content}
           repoBasePath={basePath}
           repoId={repo._id}
           atKind="user"
-          className={`${MARKDOWN_PROSE_CLASS} pl-6 text-sm wrap-break-word`}
+          className="mt-1 text-sm wrap-break-word"
         />
       )}
 
       {!isEditing && !isDeleted ? (
-        <div className="mt-2 pl-6">
+        <div className="mt-2">
           <ReactionBar groups={groups} toggle={toggle} />
         </div>
       ) : null}

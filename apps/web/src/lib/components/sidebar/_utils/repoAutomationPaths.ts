@@ -1,11 +1,5 @@
 import { repoBasePaths } from "@/lib/components/sidebar/_utils/repoSessionPaths";
-import { repoHref } from "@/lib/utils/repoUrl";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
-
-/** Automations index URL for an app. */
-export function repoAutomationsIndexPath(repo: RepoWithLogo): string {
-  return `${repoHref(repo.owner, repo.name, repo.rootDirectory)}/automations`;
-}
 
 /**
  * Whether `pathname` is this automation under the app. Checks slash + `--`

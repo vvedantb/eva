@@ -1,16 +1,13 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { createNotification } from "../notifications";
 import { runModeValidator } from "../validators";
-import type { Id } from "../_generated/dataModel";
 import {
   hasActiveRun,
   isSupersededTaskRun,
   recomputeProjectPhase,
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
-import { buildWorkflowRunNotificationMessage } from "./prompts";
 import { buildTaskDoneEvent } from "./events";
 import {
   STALE_CHECK_DELAY_MS,
@@ -326,6 +323,14 @@ export const completeRun = internalMutation({
       await ctx.db.patch(args.taskId, {
         status: args.success ? "business_review" : "todo",
         updatedAt: now,
+        // Released with the status, not in the workflow's `finally`: the
+        // remaining steps (PR description, sandbox stop) run for tens of
+        // seconds after this patch, and a set `activeWorkflowId` on a task that
+        // has already left `in_progress` shows the card the "Eva is replying"
+        // grid long after eva stopped. The `finally` stays as the safety net
+        // for runs that never reach here. Guarded by `staleCompletion`, so a
+        // queued or superseding run keeps its own id.
+        activeWorkflowId: undefined,
       });
       if (task.projectId) {
         await recomputeProjectPhase(ctx, task.projectId);
@@ -347,31 +352,8 @@ export const completeRun = internalMutation({
     await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));
     await clearStreamingActivity(ctx, String(args.taskId));
 
-    if (task) {
-      const scopeLabel = task.projectId ? "Task" : "Quick task";
-      const statusText = args.success ? "completed" : "failed";
-      const notifyUsers = new Set(
-        [task.createdBy, task.assignedTo].filter(
-          (id): id is Id<"users"> => id !== undefined,
-        ),
-      );
-      for (const userId of notifyUsers) {
-        await createNotification(ctx, {
-          userId,
-          type: args.success ? "run_completed" : "run_failed",
-          title: `${scopeLabel} ${statusText}: ${task.title}`,
-          repoId: task.repoId,
-          projectId: task.projectId,
-          taskId: args.taskId,
-          message: buildWorkflowRunNotificationMessage({
-            success: args.success,
-            projectId: task.projectId,
-            error: args.error,
-            prUrl: args.prUrl,
-          }),
-        });
-      }
-    }
+    // Run success/failure deliberately sends no notification: the task card and
+    // chat already show the outcome, so an inbox row per run is pure noise.
 
     // Auto-schedule retry on usage-limit errors
     if (!args.success && args.error && isUsageLimitError(args.error)) {

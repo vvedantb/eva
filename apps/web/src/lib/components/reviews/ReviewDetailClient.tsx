@@ -12,9 +12,9 @@ import { prErrorMessage, prHeaderQuery } from "@/lib/prReviewQueries";
 import { REVIEW_DEFAULT_TAB, isReviewTab } from "@/lib/search-params";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { ReviewTabsPanel } from "./ReviewTabsPanel";
-import { PrBreadcrumb } from "./_components/PrBreadcrumb";
 import { usePrRefresh } from "./usePrOverview";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 /**
  * Standalone Reviews page for one pull request. Owns the PR title block and the
@@ -47,9 +47,14 @@ export function ReviewDetailClient({
   );
   const prHeader = headerQuery.data;
   // One Refresh for the page, renewing both the title block and the overview.
-  // Handed to the tab panel so the header's overflow menu is the only place it
+  // Handed to the panel so the header's overflow menu is the only place it
   // appears.
   const { refresh, refreshing } = usePrRefresh(repoId, prNumber);
+
+  // Tab title matches how a PR is named everywhere else: "#123 Fix the thing".
+  useEntityDocumentTitle(
+    prHeader === undefined ? null : `#${prHeader.number} ${prHeader.title}`,
+  );
 
   const goToTab = (nextTab: string) => {
     // basePath is already the router's internal `--` form on main
@@ -69,30 +74,25 @@ export function ReviewDetailClient({
     );
   }
 
-  // Padding is owned by the header slot in `ReviewTabsPanel`, so this block sits
-  // flush with the author and branch rows below it. Every control that acts on
-  // the pull request lives in `PrHeaderActions`, beside this title on the same
-  // row — including Refresh, which is why this block carries no chrome of its own.
-  const header = (
-    <>
-      {prHeader !== undefined ? (
-        <h1 className="min-w-0 text-xl font-semibold leading-tight tracking-tight">
-          {prHeader.title}{" "}
-          <span className="font-normal text-muted-foreground">
-            #{prHeader.number}
-          </span>
-        </h1>
-      ) : headerQuery.isError ? (
-        <p className="text-sm text-destructive">
-          {prErrorMessage(headerQuery.error, "Couldn't load pull request")}
-        </p>
-      ) : (
-        <div className="flex h-7 items-center">
-          <Spinner size="sm" />
-        </div>
-      )}
-    </>
-  );
+  // Stands in for the header until the overview lands: the cached title, so a
+  // revisited pull request names itself on the first paint.
+  const placeholder =
+    prHeader !== undefined ? (
+      <h1 className="min-w-0 truncate text-base font-semibold leading-snug">
+        {prHeader.title}{" "}
+        <span className="font-normal text-muted-foreground">
+          #{prHeader.number}
+        </span>
+      </h1>
+    ) : headerQuery.isError ? (
+      <p className="text-sm text-destructive">
+        {prErrorMessage(headerQuery.error, "Couldn't load pull request")}
+      </p>
+    ) : (
+      <div className="flex h-6 items-center">
+        <Spinner size="sm" />
+      </div>
+    );
 
   return (
     // Wraps the whole page (not just Diffs) so drafted comments survive a tab
@@ -105,10 +105,7 @@ export function ReviewDetailClient({
         prNumber={prNumber}
         activeTab={tab}
         onTabChange={goToTab}
-        header={header}
-        breadcrumb={
-          <PrBreadcrumb basePath={basePath} owner={owner} name={name} />
-        }
+        placeholder={placeholder}
         refresh={{ run: refresh, running: refreshing }}
       />
     </PendingReviewCommentsProvider>

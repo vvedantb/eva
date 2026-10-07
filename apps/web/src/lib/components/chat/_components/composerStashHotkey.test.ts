@@ -47,7 +47,17 @@ describe("the composer's stash hotkey always swallows the browser default", () =
     expect(call).toContain(
       "if (!open && !rootRef.current?.contains(document.activeElement)) return;",
     );
-    expect(call).toContain("if (disabled) return;");
+  });
+
+  /**
+   * A sleeping sandbox disables sending, not stashing: the stash is repo-scoped
+   * Convex state, and the trigger and drawer stay clickable while Eva sleeps.
+   * Gating the callback on that flag turned ⌘S into a dead key — swallowed by
+   * `preventDefault`, then dropped — on the very surface where a draft the user
+   * cannot send yet is most worth stashing.
+   */
+  test("the send-disabled state does not gate the stash", () => {
+    expect(call).not.toContain("disabled");
   });
 });
 

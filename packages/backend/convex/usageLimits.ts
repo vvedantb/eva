@@ -23,6 +23,7 @@ import {
   ensureSessionDaemonState,
   syncSessionDaemonState,
 } from "./_sessions/daemonState";
+import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 
 /**
  * Agent plan usage limits. A sandbox turn captures how much of the provider's
@@ -429,10 +430,6 @@ function parseRefreshTarget(args: {
   );
 }
 
-function isStoppedSandbox(status: string | undefined): boolean {
-  return status === "closed" || status === "stopping";
-}
-
 /**
  * Whether the chip's surface has a running sandbox that can answer a refresh.
  * Stopped VMs must not be exec'd — Vercel `withResume` would wake them.
@@ -454,7 +451,7 @@ export const getRefreshSurface = internalQuery({
       if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
         throw new Error("Not authorized");
       }
-      if (!session.sandboxId || isStoppedSandbox(session.status)) {
+      if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
         return "idle";
       }
       return "ready";
@@ -469,7 +466,7 @@ export const getRefreshSurface = internalQuery({
       }
       if (
         !project.sandboxId ||
-        isStoppedSandbox(project.reviewProjectSandboxStatus)
+        isSandboxClosingStatus(project.reviewProjectSandboxStatus)
       ) {
         return "idle";
       }
@@ -482,7 +479,7 @@ export const getRefreshSurface = internalQuery({
     if (!(await hasRepoAccess(ctx.db, task.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (!task.sandboxId || isStoppedSandbox(task.reviewTaskSandboxStatus)) {
+    if (!task.sandboxId || isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return "idle";
     }
     return "ready";
@@ -511,7 +508,7 @@ export const requestRefresh = authMutation({
       if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
         throw new Error("Not authorized");
       }
-      if (!session.sandboxId || isStoppedSandbox(session.status)) {
+      if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
         return false;
       }
       await ensureSessionDaemonState(ctx, session);
@@ -530,7 +527,7 @@ export const requestRefresh = authMutation({
       }
       if (
         !project.sandboxId ||
-        isStoppedSandbox(project.reviewProjectSandboxStatus)
+        isSandboxClosingStatus(project.reviewProjectSandboxStatus)
       ) {
         return false;
       }
@@ -544,7 +541,7 @@ export const requestRefresh = authMutation({
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    if (!task.sandboxId || isStoppedSandbox(task.reviewTaskSandboxStatus)) {
+    if (!task.sandboxId || isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return false;
     }
     await ctx.db.patch(target.taskId, { usageRefreshRequestedAt: now });

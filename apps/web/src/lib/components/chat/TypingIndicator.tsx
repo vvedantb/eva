@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { cn } from "@eva/ui";
+import { cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { TypingUser } from "@/lib/hooks/useTypingPresence";
 
 function typingLabel(users: TypingUser[]): ReactNode {
@@ -68,22 +70,37 @@ export function TypingIndicator({
   users: TypingUser[];
   className?: string;
 }) {
-  if (users.length === 0) return null;
   return (
-    <div
-      aria-live="polite"
-      className={cn(
-        "pointer-events-none flex items-center gap-2 text-xs text-muted-foreground",
-        className,
+    <AnimatePresence>
+      {users.length === 0 ? null : (
+        <m.div
+          key="typing"
+          aria-live="polite"
+          className={cn(
+            "pointer-events-none flex items-center gap-2 text-xs text-muted-foreground",
+            className,
+          )}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={motionFast}
+        >
+          <span className="flex -space-x-1.5">
+            {users.slice(0, 3).map((user, index) => (
+              <ListEnter
+                key={user.userId}
+                index={index}
+                fast
+                className="inline-flex"
+              >
+                <TypingAvatar firstName={user.firstName} />
+              </ListEnter>
+            ))}
+          </span>
+          <span className="truncate">{typingLabel(users)}</span>
+          <TypingDots />
+        </m.div>
       )}
-    >
-      <span className="flex -space-x-1.5">
-        {users.slice(0, 3).map((user) => (
-          <TypingAvatar key={user.userId} firstName={user.firstName} />
-        ))}
-      </span>
-      <span className="truncate">{typingLabel(users)}</span>
-      <TypingDots />
-    </div>
+    </AnimatePresence>
   );
 }

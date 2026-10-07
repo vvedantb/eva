@@ -2,6 +2,7 @@ import { useParams, useRouterState } from "@tanstack/react-router";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import {
   isTaskRouteSandboxTab,
+  sandboxTabIdFromParam,
   type TaskRouteSandboxTab,
 } from "@/lib/search-params";
 
@@ -21,8 +22,8 @@ const SANDBOX_REVIEW_PATH = /\/sandbox\/review(?:\/|$)/;
  *
  * Detail lives at `/quick-tasks/$numId` (no tab segment). Sandbox stays at
  * `/quick-tasks/$numId/sandbox/$sandboxTab`, with Review at
- * `/sandbox/review/overview`, `/sandbox/review/diffs/…`, or
- * `/sandbox/review/recap`.
+ * `/sandbox/review/summary`, `/sandbox/review/timeline`, or
+ * `/sandbox/review/diffs/…`.
  */
 export function useQuickTaskRouteState(): QuickTaskRouteState | null {
   const params = useParams({ strict: false });
@@ -36,7 +37,10 @@ export function useQuickTaskRouteState(): QuickTaskRouteState | null {
     };
   }
 
-  const sandboxTab = params.sandboxTab;
+  const sandboxTab =
+    typeof params.sandboxTab === "string"
+      ? sandboxTabIdFromParam(params.sandboxTab)
+      : params.sandboxTab;
   if (typeof sandboxTab === "string" && isTaskRouteSandboxTab(sandboxTab)) {
     return {
       surface: "sandbox",

@@ -6,7 +6,10 @@ export type ExperimentalFlagKey =
   | "voiceDictation"
   | "composerAutocomplete"
   | "simpleView"
-  | "replyChime";
+  | "replyChime"
+  | "notificationBell"
+  | "disablePageMotion"
+  | "viewVercelDeployment";
 
 export type ResolvedExperimentalFlags = {
   sessionTabs: boolean;
@@ -15,6 +18,9 @@ export type ResolvedExperimentalFlags = {
   composerAutocomplete: boolean;
   simpleView: boolean;
   replyChime: boolean;
+  notificationBell: boolean;
+  disablePageMotion: boolean;
+  viewVercelDeployment: boolean;
 };
 
 /** Resolves experimental flags for a user. Missing / unset keys are false. */
@@ -29,5 +35,8 @@ export function resolveExperimentalFlags(
     composerAutocomplete: flags?.composerAutocomplete ?? false,
     simpleView: flags?.simpleView ?? false,
     replyChime: flags?.replyChime ?? false,
+    notificationBell: flags?.notificationBell ?? false,
+    disablePageMotion: flags?.disablePageMotion ?? false,
+    viewVercelDeployment: flags?.viewVercelDeployment ?? false,
   };
 }

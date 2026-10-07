@@ -58,17 +58,18 @@ the VNC stack, `xterm`, Chrome.
 ### Q1 — preinstalled CLIs vs eva's pins: resolved
 
 The image's `claude`/`codex`/`opencode` live under the sandbox user's global npm
-prefix (`/vercel/.global/npm`). Every eva reader — the seed's idempotency check,
-`launch.ts`'s per-boot pin check, the callback's SDK resolvers — resolves
-`npm root -g` as that user, but the seed wrote with a plain `sudo npm install
--g`, i.e. into **root's** prefix. On AL2023 both are `/usr/local` so it never
-showed; here the pins landed where nothing looked, the version check failed on
-every seed, and the image's versions won every turn.
+prefix (`/vercel/.global/npm`), while the seed's `sudo npm install -g` writes to
+node's own prefix. Main hit the same root-vs-user split on AL2023 and fixed it
+by design, which also covers Ubuntu:
 
-Fix: `sudoNpmInstallGlobal()` in `packageManager.ts` adds
-`--prefix "$(npm prefix -g)"`, expanded by the user's shell before `sudo`, so
-eva's pins replace the preinstalled packages in the same root. A contract test
-rejects any bare root-run `npm install -g`. On AL2023 this is a no-op.
+- `globalPackageIsVersion` (snapshotActions.ts) and `globalNpmRoots()`
+  (callback-src/providers/claudeSdk.ts) check **both** roots, and the first
+  root holding the exact pin wins — the image's drifted copies are ignored.
+- Claude and Codex are installed per launch into `/tmp/claude-cli` /
+  `/tmp/codex-cli`, which `AGENT_CLI_PATH_LINE` puts first on `PATH`.
+
+This branch briefly redirected the seed install to the user prefix instead; that
+was dropped as redundant once main's two-root design landed.
 
 ## Static findings (from the v3 type declarations)
 

@@ -12,6 +12,7 @@ const STEPS = [
   "snapshots",
   "automations",
   "flatTables",
+  "repoLinks",
   "repo",
 ] as const;
 
@@ -33,6 +34,7 @@ const stepValidator = v.union(
   v.literal("snapshots"),
   v.literal("automations"),
   v.literal("flatTables"),
+  v.literal("repoLinks"),
   v.literal("repo"),
 );
 
@@ -173,6 +175,17 @@ export const deleteRepoStep = internalMutation({
             deleted++;
           }
 
+          // Links this session held to OTHER repos; the mirror case (other
+          // sessions linking to this repo) is the "repoLinks" step.
+          const links = await ctx.db
+            .query("sessionRepos")
+            .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+            .collect();
+          for (const link of links) {
+            await ctx.db.delete(link._id);
+            deleted++;
+          }
+
           await ctx.db.delete(session._id);
           deleted++;
         }
@@ -274,6 +287,53 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(row._id);
             deleted++;
           }
+        }
+        break;
+      }
+
+      case "repoLinks": {
+        // Multi-repo sessions that cloned this repo alongside their own.
+        const links = await ctx.db
+          .query("sessionRepos")
+          .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+          .collect();
+        for (const link of links) {
+          const session = await ctx.db.get(link.sessionId);
+          if (session) {
+            const remaining = (session.linkedRepoCount ?? 1) - 1;
+            await ctx.db.patch(link.sessionId, {
+              linkedRepoCount: remaining > 0 ? remaining : undefined,
+            });
+          }
+          await ctx.db.delete(link._id);
+          deleted++;
+        }
+
+        // `repoGroups` is small and has no membership index, so scan it: a
+        // group loses this repo, and dies with its primary or its last member.
+        const groups = await ctx.db.query("repoGroups").collect();
+        for (const group of groups) {
+          if (group.primaryRepoId === repoId) {
+            await ctx.db.delete(group._id);
+            deleted++;
+            continue;
+          }
+          if (!group.linkedRepoIds.includes(repoId)) continue;
+          const linkedRepoIds = group.linkedRepoIds.filter(
+            (id) => id !== repoId,
+          );
+          if (linkedRepoIds.length === 0) {
+            await ctx.db.delete(group._id);
+            deleted++;
+            continue;
+          }
+          await ctx.db.patch(group._id, {
+            linkedRepoIds,
+            updatedAt: Date.now(),
+            // The seeded snapshot was built for the old membership.
+            seededSnapshotName: undefined,
+            seededFingerprint: undefined,
+          });
         }
         break;
       }

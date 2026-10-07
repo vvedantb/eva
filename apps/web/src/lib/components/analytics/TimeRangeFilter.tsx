@@ -59,5 +59,3 @@ export function TimeRangeFilter({
     </DropdownMenu>
   );
 }
-
-export type { TimeRange };

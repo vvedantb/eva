@@ -1,4 +1,4 @@
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { Avatar, AvatarFallback } from "@eva/ui";
 import type { Id } from "@eva/backend";
 

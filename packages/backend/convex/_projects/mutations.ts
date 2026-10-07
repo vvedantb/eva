@@ -29,6 +29,10 @@ import {
   reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
+import {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+} from "../_shared/composerTraits";
 
 /**
  * Creates a new project. Defaults to `draft` phase with an initial conversation
@@ -418,26 +422,10 @@ export const setTraits = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    if (
-      args.reasoningLevel === undefined &&
-      args.thinkingEnabled === undefined &&
-      args.use1mContext === undefined &&
-      args.fastMode === undefined
-    ) {
+    if (!hasComposerTraitUpdate(args)) {
       return null;
     }
-    await ctx.db.patch(args.id, {
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-    });
+    await ctx.db.patch(args.id, composerTraitFields(args));
     return null;
   },
 });

@@ -2,11 +2,13 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { IconDeviceDesktop } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { BorderBeam, Button, cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   SandboxIframeService,
   type StartResult,
 } from "@/lib/components/sandbox/SandboxIframeService";
+import type { SandboxWake } from "@/lib/components/sandbox/SandboxAsleepState";
 
 const AGENT_BROWSING_LOCK_TTL_MS = 30 * 60 * 1000;
 
@@ -24,6 +26,7 @@ interface DesktopPanelProps {
    * mutation, provided by the caller). Takeover overlay only renders when set.
    */
   onReleaseLock?: () => void;
+  wake?: SandboxWake;
 }
 
 const SURFACE_COPY = {
@@ -89,6 +92,7 @@ export function DesktopPanel({
   surface = "desktop",
   agentBrowsingAt,
   onReleaseLock,
+  wake,
 }: DesktopPanelProps) {
   const copy = SURFACE_COPY[surface];
   const toggleDesktopServer = useAction(api.sandbox.toggleDesktopServer);
@@ -118,6 +122,7 @@ export function DesktopPanel({
   const autoStartKey = isAgentBrowsing ? agentBrowsingAt : undefined;
 
   const showLockOverlay = onReleaseLock !== undefined && isAgentBrowsing;
+  const beamPane = surface === "browser" && showLockOverlay;
 
   const handleTakeControl = () => {
     onReleaseLock?.();
@@ -148,30 +153,50 @@ export function DesktopPanel({
         loadFailedError={copy.loadFailedError}
         iframeAllow="clipboard-read; clipboard-write"
         autoStartKey={autoStartKey}
+        wake={wake}
       />
       {showLockOverlay ? (
         <>
-          {/* Same language as FollowOverlay: an inset ring marks the surface as
-              driven by someone else, and this layer swallows clicks so a stray
-              tap cannot fight the agent for the cursor. Releasing the lock is
-              the pill button only. No scrim/blur — the agent's browsing has to
-              stay watchable. */}
-          <div className="absolute inset-0 z-10 cursor-not-allowed ring-[3px] ring-inset ring-primary/70" />
-          <div className="absolute top-3 left-1/2 z-20 -translate-x-1/2">
-            <div className="flex items-center gap-2 rounded-full bg-primary py-1.5 pr-1.5 pl-4 text-sm font-medium text-primary-foreground smooth-shadow-lg">
-              <span>Agent is browsing</span>
-              <Button
-                size="xs"
-                variant="secondary"
-                className="rounded-full"
-                onClick={handleTakeControl}
-              >
-                Take control
-              </Button>
-            </div>
-          </div>
+          {/* Browser pane: the colorful beam circles the "Agent is browsing"
+              pill (below) instead of the iframe. Computer keeps a static
+              ring — same Chrome, different tab. The click layer swallows taps. */}
+          <div
+            className={cn(
+              "absolute inset-0 z-10 cursor-not-allowed",
+              beamPane ? null : "ring-[3px] ring-inset ring-primary/70",
+            )}
+          />
         </>
       ) : null}
+      <AnimatePresence initial={false}>
+        {showLockOverlay ? (
+          <m.div
+            className="absolute top-3 left-1/2 z-20 -translate-x-1/2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionFast}
+          >
+            <BorderBeam
+              active={beamPane}
+              colorVariant="colorful"
+              className="rounded-full"
+            >
+              <div className="relative flex items-center gap-2 rounded-full bg-primary py-1.5 pr-1.5 pl-4 text-sm font-medium text-primary-foreground smooth-shadow-lg">
+                <span>Agent is browsing</span>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={handleTakeControl}
+                >
+                  Take control
+                </Button>
+              </div>
+            </BorderBeam>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

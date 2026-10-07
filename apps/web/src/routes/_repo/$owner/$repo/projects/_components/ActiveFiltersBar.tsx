@@ -1,4 +1,6 @@
 import { IconX } from "@tabler/icons-react";
+import { motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 
 interface ActiveFiltersBarProps {
   filters: Array<{ key: string; label: string }>;
@@ -12,7 +14,15 @@ export function ActiveFiltersBar({
   onClearAll,
 }: ActiveFiltersBarProps) {
   return (
-    <div className="flex items-center gap-1.5 flex-wrap pb-2 max-sm:gap-2.5">
+    <AnimatePresence>
+      <m.div
+        key="active-filters"
+        className="flex items-center gap-1.5 flex-wrap pb-2 max-sm:gap-2.5"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={motionFast}
+      >
       <span className="text-xs text-muted-foreground mr-0.5">Filtered by</span>
       {filters.map((f) => (
         <button
@@ -39,6 +49,7 @@ export function ActiveFiltersBar({
           Clear all
         </button>
       )}
-    </div>
+      </m.div>
+    </AnimatePresence>
   );
 }

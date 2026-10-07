@@ -1,7 +1,7 @@
 import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { DEFAULT_SESSION_TITLE, sessionValidator } from "./helpers";
-import { deploymentStatusValidator } from "../validators";
+import { deploymentStatusValidator, repoShaValidator } from "../validators";
 import {
   cancelSessionSandboxGraceDelete,
   scheduleSessionSandboxGraceDelete,
@@ -259,6 +259,8 @@ const revertContextValidator = v.union(
     sandboxId: v.string(),
     branchName: v.string(),
     beforeSha: v.string(),
+    /** Multi-repo checkpoint, when the turn recorded one (see messageFields.beforeShas). */
+    beforeShas: v.optional(v.array(repoShaValidator)),
     /** 1-based position of this reply among the session's real assistant turns. */
     turnNumber: v.number(),
   }),
@@ -312,6 +314,7 @@ export const getRevertContext = internalQuery({
       sandboxId: session.sandboxId,
       branchName: session.branchName,
       beforeSha: message.beforeSha,
+      beforeShas: message.beforeShas,
       turnNumber,
     };
   },

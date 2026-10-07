@@ -9,7 +9,7 @@ import { cn } from "@eva/ui";
  */
 
 /** Fixed body height so switching tabs never changes the panel's size. */
-export const MOCK_BODY_HEIGHT = "h-76";
+const MOCK_BODY_HEIGHT = "h-76";
 
 export function MockWindow({
   title,

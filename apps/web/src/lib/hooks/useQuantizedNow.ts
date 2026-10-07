@@ -1,5 +1,6 @@
 "use client";
 
+import { quantizedSnapshot, subscribeQuantized } from "@eva/ui";
 import { useSyncExternalStore } from "react";
 
 /**
@@ -16,26 +17,15 @@ import { useSyncExternalStore } from "react";
  * Rounding gives both properties: the argument is identical for the whole
  * interval, and it advances predictably. Pick the interval from how fresh the
  * answer has to be — a minute for a live count, a day for a date window.
+ *
+ * Every caller of the same interval shares one timeout chain (and the chain
+ * sleeps while the tab is hidden). The snapshot is still `floor(now / interval)`,
+ * so the value on screen is unchanged.
  */
 export function useQuantizedNow(intervalMs: number): number {
   return useSyncExternalStore(
-    (onChange) => {
-      // Chained to the next boundary rather than setInterval: an interval
-      // started mid-period fires mid-period forever, so the value would lag the
-      // boundary it is supposed to land on by however late the mount was.
-      let timer: ReturnType<typeof setTimeout>;
-      const scheduleNextBoundary = () => {
-        timer = setTimeout(
-          () => {
-            onChange();
-            scheduleNextBoundary();
-          },
-          intervalMs - (Date.now() % intervalMs),
-        );
-      };
-      scheduleNextBoundary();
-      return () => clearTimeout(timer);
-    },
-    () => Math.floor(Date.now() / intervalMs) * intervalMs,
+    (onChange) => subscribeQuantized(intervalMs, onChange),
+    () => quantizedSnapshot(intervalMs),
+    () => quantizedSnapshot(intervalMs),
   );
 }

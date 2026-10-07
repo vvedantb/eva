@@ -7,16 +7,23 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { Button, Input, Spinner, Badge } from "@eva/ui";
+import {
+  Badge,
+  Button,
+  CrossfadeIcon,
+  Input,
+  RefreshSpinIcon,
+  Spinner,
+} from "@eva/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconFolders,
   IconPlus,
   IconCheck,
   IconTerminal2,
   IconAlertCircle,
-  IconRefresh,
   IconEye,
   IconEyeOff,
 } from "@tabler/icons-react";
@@ -124,8 +131,8 @@ export function MonorepoClient() {
           onClick={() => void runDetection()}
           className="motion-press border-border text-muted-foreground"
         >
-          <IconRefresh size={16} className={loading ? "animate-spin" : ""} />
-          <span className="hidden sm:inline">Re-detect</span>
+          <RefreshSpinIcon busy={loading} />
+          <span className="max-sm:sr-only">Re-detect</span>
         </Button>
       }
     >
@@ -137,9 +144,10 @@ export function MonorepoClient() {
           bodyVariant="list"
         >
           <div className="divide-y divide-border/50">
-            {connectedApps.map((app) => (
-              <div
+            {connectedApps.map((app, index) => (
+              <ListEnter
                 key={app._id}
+                index={index}
                 className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
               >
                 <IconFolders
@@ -181,7 +189,7 @@ export function MonorepoClient() {
                     </>
                   )}
                 </Button>
-              </div>
+              </ListEnter>
             ))}
           </div>
         </SettingsSection>
@@ -209,10 +217,7 @@ export function MonorepoClient() {
           </div>
         ) : error ? (
           <div className="flex items-center gap-3 px-4 py-4">
-            <IconAlertCircle
-              size={20}
-              className="shrink-0 text-destructive"
-            />
+            <IconAlertCircle size={20} className="shrink-0 text-destructive" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">
                 Detection failed
@@ -228,13 +233,14 @@ export function MonorepoClient() {
           />
         ) : (
           <div className="divide-y divide-border/50">
-            {detected.map((app) => {
+            {detected.map((app, index) => {
               const isConnected = connectedPaths.has(app.path);
               const isAdding = addingPath === app.path;
 
               return (
-                <div
+                <ListEnter
                   key={app.path}
+                  index={index}
                   className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
                 >
                   <IconFolders
@@ -270,11 +276,19 @@ export function MonorepoClient() {
                       onClick={() => void handleAdd(app.path)}
                       className="motion-press"
                     >
-                      {isAdding ? <Spinner size="sm" /> : <IconPlus size={14} />}
+                      <CrossfadeIcon
+                        show={isAdding}
+                        trueKey="loading"
+                        falseKey="idle"
+                        variant="soft"
+                        className="relative flex size-3.5 items-center justify-center"
+                        whenTrue={<Spinner size="sm" />}
+                        whenFalse={<IconPlus size={14} />}
+                      />
                       Add
                     </Button>
                   )}
-                </div>
+                </ListEnter>
               );
             })}
           </div>

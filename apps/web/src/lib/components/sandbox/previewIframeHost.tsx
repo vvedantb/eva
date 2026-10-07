@@ -11,6 +11,11 @@ import {
   type PreviewAnchorRole,
   type PreviewMiniPlayerSource,
 } from "./previewMiniPlayerStore";
+import {
+  previewContainedLayout,
+  resolveMiniPlayerLogicalSize,
+} from "./previewContain";
+import { setPreviewDocumentLoading } from "./previewDocumentLoading";
 
 /**
  * Global preview-iframe keep-alive.
@@ -42,7 +47,8 @@ export interface PreviewMeta {
   epoch: number;
 }
 
-interface Rect {
+/** Viewport-relative box the host paints a hosted iframe into. */
+export interface Rect {
   top: number;
   left: number;
   width: number;
@@ -137,8 +143,8 @@ function getPreviewGesture(): PreviewGesture | null {
 }
 
 /** The rect to paint at: the measured anchor, plus any live gesture offsets. */
-function overlayRect(
-  entry: HostEntry,
+export function overlayRect(
+  entry: { key: string; rect: Rect | null },
   live: PreviewGesture | null,
 ): Rect | null {
   if (entry.rect === null) return null;
@@ -182,14 +188,80 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
   );
 }
 
+let remeasureRaf = 0;
+
+/** Anchors inside `hidden` shells/tabs paint at 0×0 — skip them and their listeners. */
+function anchorNeedsLayoutTracking(anchor: HTMLElement): boolean {
+  if (document.visibilityState !== "visible") return false;
+  const rect = anchor.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function hasActiveLayoutAnchor(): boolean {
+  for (const entry of entries.values()) {
+    if (entry.anchor !== null && anchorNeedsLayoutTracking(entry.anchor)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Window-level layout listeners exist only while at least one visible
+ * placeholder needs tracking. Scroll uses capture so scrolling inside any
+ * container repositions the overlay, not just document scrolls.
+ */
+let layoutListenersAttached = false;
+function syncLayoutListeners(): void {
+  const shouldAttach = hasActiveLayoutAnchor();
+  if (shouldAttach && !layoutListenersAttached) {
+    window.addEventListener("resize", scheduleRemeasure);
+    window.addEventListener("scroll", scheduleRemeasure, true);
+    document.addEventListener("fullscreenchange", scheduleRemeasure);
+    layoutListenersAttached = true;
+  } else if (!shouldAttach && layoutListenersAttached) {
+    window.removeEventListener("resize", scheduleRemeasure);
+    window.removeEventListener("scroll", scheduleRemeasure, true);
+    document.removeEventListener("fullscreenchange", scheduleRemeasure);
+    layoutListenersAttached = false;
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      remeasureAll();
+      return;
+    }
+    syncLayoutListeners();
+  });
+}
+
+/** Coalesce scroll/resize/RO into one measure per frame. */
+function scheduleRemeasure(): void {
+  if (document.visibilityState !== "visible") return;
+  if (remeasureRaf !== 0) return;
+  remeasureRaf = requestAnimationFrame(() => {
+    remeasureRaf = 0;
+    remeasureAll();
+  });
+}
+
 /** Re-reads every anchored placeholder's rect; notifies only on change. */
 function remeasureAll(): void {
   // Mid-gesture the anchor has already moved, so re-measuring it here would
   // double-count the offsets the window is publishing.
   if (gesture !== null) return;
+  if (document.visibilityState !== "visible") {
+    syncLayoutListeners();
+    return;
+  }
   let changed = false;
   for (const [key, entry] of entries) {
     if (entry.anchor === null) continue;
+    // Measure 0×0 anchors too: a sandbox tab switch hides the pane with
+    // `display: none` without unmounting it, and skipping it here left the
+    // overlay painted at the last visible rect. A 0×0 rect hides the overlay.
     const rect = measure(entry.anchor);
     if (!sameRect(rect, entry.rect)) {
       entries.set(key, { ...entry, rect });
@@ -197,27 +269,7 @@ function remeasureAll(): void {
     }
   }
   if (changed) notify();
-}
-
-/**
- * Window-level layout listeners exist only while at least one placeholder is
- * attached. Scroll uses capture so scrolling inside any container repositions
- * the overlay, not just document scrolls.
- */
-let layoutListenerCount = 0;
-function acquireLayoutListeners(): void {
-  layoutListenerCount += 1;
-  if (layoutListenerCount > 1) return;
-  window.addEventListener("resize", remeasureAll);
-  window.addEventListener("scroll", remeasureAll, true);
-  document.addEventListener("fullscreenchange", remeasureAll);
-}
-function releaseLayoutListeners(): void {
-  layoutListenerCount -= 1;
-  if (layoutListenerCount > 0) return;
-  window.removeEventListener("resize", remeasureAll);
-  window.removeEventListener("scroll", remeasureAll, true);
-  document.removeEventListener("fullscreenchange", remeasureAll);
+  syncLayoutListeners();
 }
 
 function evictOverCap(): void {
@@ -283,7 +335,10 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
     rect: measure(options.anchor),
     element: sameEpoch ? existing.element : null,
     logical: options.logical,
-    bordered: options.logical !== null,
+    // Device chrome belongs on the pane's contained box, not the mini-player
+    // body — that overlay is the letterbox, so a border there would frame the
+    // bars instead of the page.
+    bordered: options.role === "panel" && options.logical !== null,
     attachedAt: Date.now(),
   });
   evictOverCap();
@@ -300,6 +355,10 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
         group: current.group,
         src: current.src,
         epoch: current.epoch,
+        logicalSize: resolveMiniPlayerLogicalSize(
+          options.logical,
+          measure(options.anchor),
+        ),
       });
     } else {
       disarmPreviewMiniPlayer(key);
@@ -307,22 +366,14 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
   }
 
   const observer = new ResizeObserver(() => {
-    const entry = entries.get(key);
-    if (entry === undefined || entry.anchor === null) return;
-    // See remeasureAll: a resize gesture already moves this rect by hand.
-    if (gesture !== null) return;
-    const rect = measure(entry.anchor);
-    if (sameRect(rect, entry.rect)) return;
-    entries.set(key, { ...entry, rect });
-    notify();
+    scheduleRemeasure();
   });
   observer.observe(options.anchor);
-  acquireLayoutListeners();
+  syncLayoutListeners();
   notify();
 
   return () => {
     observer.disconnect();
-    releaseLayoutListeners();
     if (onElementByKey.get(key) === options.onElement) {
       onElementByKey.delete(key);
     }
@@ -335,6 +386,7 @@ function attach(key: string, options: AttachOptions): (() => void) | undefined {
       notify();
       notePreviewAnchorDetached(key);
     }
+    syncLayoutListeners();
   };
 }
 
@@ -353,6 +405,8 @@ function iframeRefFor(key: string): (el: HTMLIFrameElement | null) => void {
   const callback = (el: HTMLIFrameElement | null) => {
     const entry = entries.get(key);
     if (entry === undefined || entry.element === el) return;
+    // A fresh element is a fresh document: it spins until its first `load`.
+    if (el !== null) setPreviewDocumentLoading(el, true);
     entries.set(key, { ...entry, element: el });
     onElementByKey.get(key)?.(el);
     notify();
@@ -423,15 +477,16 @@ export function PreviewIframeHost() {
         const rect = overlayRect(entry, live);
         const visible = rect !== null && rect.width > 0 && rect.height > 0;
         const logical = entry.logical;
-        const scale =
-          logical && rect
-            ? Math.min(rect.width / logical.width, rect.height / logical.height)
-            : 1;
+        const contained =
+          logical && rect ? previewContainedLayout(rect, logical) : null;
         return (
           <div
             key={entry.key}
             className={cn(
-              "absolute overflow-hidden bg-background",
+              "absolute overflow-hidden",
+              // Dark canvas so contain letterbox reads as bars, not leftover
+              // chrome — muted matches the title bar and hides the ratio.
+              logical ? "bg-black" : "bg-background",
               // Iframes swallow pointer events, so every overlay goes inert
               // for the duration of a gesture, not just the dragged one.
               live !== null ? "pointer-events-none" : "pointer-events-auto",
@@ -454,15 +509,24 @@ export function PreviewIframeHost() {
               ref={iframeRefFor(entry.key)}
               src={entry.src}
               title="Preview"
+              // The preview is cross-origin, and Chrome's native WebMCP
+              // (`navigator.modelContext`) refuses to run in a cross-origin
+              // frame unless the embedder delegates the `tools` feature. Without
+              // it every agent `call_preview_tool` fails with a permissions
+              // policy error.
+              allow="tools"
+              onLoad={(event) => {
+                setPreviewDocumentLoading(event.currentTarget, false);
+              }}
               className={
                 logical ? "block border-0" : "block size-full border-0"
               }
               style={
-                logical
+                logical && contained
                   ? {
                       width: logical.width,
                       height: logical.height,
-                      transform: `scale(${scale})`,
+                      transform: `translate(${contained.offsetX}px, ${contained.offsetY}px) scale(${contained.scale})`,
                       transformOrigin: "top left",
                     }
                   : undefined

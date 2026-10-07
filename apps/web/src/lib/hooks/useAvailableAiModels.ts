@@ -10,6 +10,7 @@ import {
   type Id,
 } from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 
 export function useAvailableAiModels(
   repoId: Id<"githubRepos"> | null | undefined,
@@ -115,14 +116,15 @@ export function useTaskOwnerProviderAccounts(
  */
 export function useSessionOwnerProviderAccounts(
   sessionId: Id<"sessions"> | null | undefined,
+  active = true,
 ): {
   options: ReadonlyArray<ModelAccount>;
   resolveId: (id: string | null) => Id<"userProviderAccounts"> | undefined;
   ready: boolean;
 } {
-  const accounts = useQuery(
+  const accounts = useHeldQuery(
     api.userProviderAccounts.listForSessionOwner,
-    sessionId ? { sessionId } : "skip",
+    sessionId && active ? { sessionId } : "skip",
   );
   return toModelAccounts(accounts);
 }

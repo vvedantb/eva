@@ -3,7 +3,7 @@ import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { motionBase } from "@eva/ui";
+import { CenteredSpinner, motionBase } from "@eva/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -27,12 +27,7 @@ import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
 import { IconChecklist } from "@tabler/icons-react";
 import { TASK_STATUSES } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
-import {
-  QuickTaskDetailSkeleton,
-  QuickTasksListSkeleton,
-} from "./_components/QuickTasksSkeletons";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
-import { KanbanBoardSkeleton } from "@/lib/components/kanban/KanbanBoardSkeleton";
 import {
   QuickTasksBulkBar,
   type BulkAction,
@@ -42,6 +37,16 @@ import { useFilteredQuickTasks, useQuickTaskFilters } from "./_utils";
 import { useAgentTaskByNumId } from "@/lib/useResolveByNumId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { TASK_TAGS } from "@eva/shared";
+import {
+  rangeBetween,
+  type SelectionToggleOptions,
+} from "@/lib/components/quick-tasks/selectionRange";
+import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
+import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
+import {
+  mutationError,
+  mutationSuccess,
+} from "@/lib/utils/mutationToast";
 
 export function QuickTasksClient() {
   const navigate = useNavigate();
@@ -71,9 +76,13 @@ export function QuickTasksClient() {
   const [selectedIds, setSelectedIds] = useState<Set<Id<"agentTasks">>>(
     new Set(),
   );
+  // Where the next shift-click measures from: the last row toggled on its own.
+  const [anchorId, setAnchorId] = useState<Id<"agentTasks"> | null>(null);
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
   );
+  const deleteSelected = useBulkDeleteTasks();
+  const runSelected = useBulkRunTasks();
   const [
     { q, view, project, user, assignee, tags, timeRange, statuses },
     setParams,
@@ -138,7 +147,22 @@ export function QuickTasksClient() {
 
   const selectedTasks = quickTasks.filter((t) => selectedIds.has(t._id));
 
-  const toggleSelect = (id: Id<"agentTasks">) => {
+  const toggleSelect = (
+    id: Id<"agentTasks">,
+    options?: SelectionToggleOptions<Id<"agentTasks">>,
+  ) => {
+    // A range only ever adds: shift-clicking back over a span you just selected
+    // should not punch holes in it.
+    if (options?.range) {
+      const range = rangeBetween(options.orderedIds ?? [], anchorId, id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const rangeId of range) next.add(rangeId);
+        return next;
+      });
+      return;
+    }
+    setAnchorId(id);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -153,7 +177,33 @@ export function QuickTasksClient() {
   const exitSelectMode = () => {
     setIsSelecting(false);
     setSelectedIds(new Set());
+    setAnchorId(null);
     setActiveBulkAction(null);
+  };
+
+  const skipBulkDelete = () => {
+    void deleteSelected(selectedIds).then(exitSelectMode);
+  };
+
+  const skipBulkRun = () => {
+    void runSelected(selectedIds).then(({ startedCount, count }) => {
+      if (startedCount === count) {
+        mutationSuccess(
+          `Started ${count} task${count === 1 ? "" : "s"}`,
+          "tasks-bulk-run",
+        );
+        exitSelectMode();
+        return;
+      }
+      if (startedCount === 0) {
+        mutationError("Couldn't start tasks", "tasks-bulk-run");
+        return;
+      }
+      mutationError(
+        `Started ${startedCount} of ${count} tasks. ${count - startedCount} failed to start.`,
+        "tasks-bulk-run",
+      );
+    });
   };
 
   const activeFilterLabels = (() => {
@@ -307,7 +357,7 @@ export function QuickTasksClient() {
   ) {
     return (
       <PageWrapper title="Quick Tasks" fillHeight childPadding={false}>
-        <QuickTaskDetailSkeleton />
+        <CenteredSpinner label="Loading task" />
       </PageWrapper>
     );
   }
@@ -408,18 +458,7 @@ export function QuickTasksClient() {
                 exit={{ opacity: 0, y: 8 }}
                 transition={motionBase}
               >
-                {view === "list" ? (
-                  <QuickTasksListSkeleton />
-                ) : (
-                  <KanbanBoardSkeleton
-                    columns={
-                      statuses.length > 0
-                        ? statuses.length
-                        : TASK_STATUSES.length
-                    }
-                    aria-label="Loading quick tasks"
-                  />
-                )}
+                <CenteredSpinner label="Loading quick tasks" />
               </m.div>
             ) : !hasQuickTasks &&
             !(view === "list" && numIdParam !== undefined) ? (
@@ -506,9 +545,21 @@ export function QuickTasksClient() {
             <QuickTasksBulkBar
               isSelecting={isSelecting}
               selectedCount={selectedIds.size}
+              totalCount={quickTasks.length}
               onExitSelect={exitSelectMode}
+              onSelectAll={() =>
+                setSelectedIds(new Set(quickTasks.map((t) => t._id)))
+              }
+              onClearSelection={() => {
+                setSelectedIds(new Set());
+                setAnchorId(null);
+              }}
               activeBulkAction={activeBulkAction}
               onSetBulkAction={setActiveBulkAction}
+              onSkipConfirm={{
+                delete: skipBulkDelete,
+                run: skipBulkRun,
+              }}
             />
           )}
         </div>

@@ -55,13 +55,18 @@ function completionReceivers(): { where: string; args: string }[] {
 }
 
 describe("turn checkpoint shas ride on every sandbox completion", () => {
-  test("the callback stamps exactly beforeSha and afterSha", () => {
+  test("the callback stamps the scalar shas and their multi-repo arrays", () => {
     const stamp = read(
       join(backendDir, "callback-src/runtime/turnCheckpoint.ts"),
     );
     expect(stamp).toContain("args.beforeSha = turnStartSha;");
     expect(stamp).toContain("args.afterSha = afterSha;");
-    expect(stamp.match(/args\.\w+ =/g)).toHaveLength(2);
+    // Multi-repo sessions also send one `{ path, sha }` per checked-out repo.
+    // The scalars stay primary-only alongside them, so a Convex deployment
+    // that predates the array fields keeps working.
+    expect(stamp).toContain("args.beforeShas = turnStartShas;");
+    expect(stamp).toContain("args.afterShas = readAllRepoShas();");
+    expect(stamp.match(/args\.\w+ =/g)).toHaveLength(4);
   });
 
   test("the shared arg shape and the workflow event carry both shas", () => {

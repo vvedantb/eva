@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
@@ -13,27 +13,23 @@ import {
   SelectValue,
   SelectLabel,
   SelectGroup,
-  Input,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
   Badge,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import {
   IconUserPlus,
   IconFolder,
   IconFolderPlus,
-  IconTags,
   IconGitBranch,
   IconInfoCircle,
   IconBrandVercelFilled,
-  IconChevronDown,
 } from "@tabler/icons-react";
-import { UserInitials, getUserInitials } from "@eva/shared";
+import { getUserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import {
   statusConfig,
@@ -52,6 +48,7 @@ import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
 import {
   FieldsSection,
   FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
 import {
@@ -67,7 +64,9 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
+import { LabelsField } from "@/lib/components/labels/LabelsField";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
+import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -80,8 +79,9 @@ interface StatusFieldsSectionProps {
   isBlocked: boolean | undefined;
   users: FunctionReturnType<typeof api.users.listAll> | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
+  /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
   baseBranch: string;
-  setBaseBranch: (v: string) => void;
+  /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
   hasActiveRun: boolean;
   /** Locks the model picker — the model that ran must stay on the record. */
@@ -99,13 +99,13 @@ export function StatusFieldsSection({
   users,
   projects,
   baseBranch,
-  setBaseBranch,
   latestDeployment,
   hasActiveRun: _hasActiveRun,
   hasRuns,
   isOwner,
   allTags,
 }: StatusFieldsSectionProps) {
+  const viewVercelDeployment = useViewVercelDeployment();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       if (!task?.repoId) return;
@@ -182,39 +182,7 @@ export function StatusFieldsSection({
       );
     }
   });
-  const [tagDraft, setTagDraft] = useState("");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const tagDraftRef = useRef<HTMLInputElement>(null);
-
-  const addTag = async (raw: string) => {
-    const value = raw.trim();
-    if (!value || !task) return;
-    const current = task.tags ?? [];
-    if (current.includes(value)) return;
-    await updateTask({ id: taskId, tags: [...current, value] });
-  };
-
-  const removeTag = async (tag: string) => {
-    if (!task) return;
-    const next = (task.tags ?? []).filter((t) => t !== tag);
-    await updateTask({ id: taskId, tags: next });
-  };
-
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if ((e.key === "Enter" || e.key === ",") && tagDraft.trim()) {
-      e.preventDefault();
-      void addTag(tagDraft);
-      setTagDraft("");
-    }
-    if (
-      e.key === "Backspace" &&
-      tagDraft === "" &&
-      (task?.tags?.length ?? 0) > 0
-    ) {
-      const tags = task?.tags ?? [];
-      void removeTag(tags[tags.length - 1]);
-    }
-  };
 
   const projectOptions = projects ?? [];
   const hasSelectedProject =
@@ -265,16 +233,36 @@ export function StatusFieldsSection({
                     const config = statusConfig[status];
                     const Icon = config.icon;
                     return (
-                      <div
-                        className={`flex items-center gap-1.5 ${config.text}`}
-                      >
-                        <Icon size={14} />
-                        <span>{config.label}</span>
-                        {isBlocked && (
-                          <Badge variant="warning" className="ml-0.5">
-                            Blocked
-                          </Badge>
-                        )}
+                      <div className="flex items-center gap-1.5">
+                        <AnimatePresence mode="wait" initial={false}>
+                          <m.span
+                            key={status}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                            className={`flex items-center gap-1.5 ${config.text}`}
+                          >
+                            <Icon size={14} />
+                            <span>{config.label}</span>
+                          </m.span>
+                        </AnimatePresence>
+                        <AnimatePresence initial={false}>
+                          {isBlocked ? (
+                            <m.span
+                              key="blocked"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={motionFast}
+                              className="inline-flex"
+                            >
+                              <Badge variant="warning" className="ml-0.5">
+                                Blocked
+                              </Badge>
+                            </m.span>
+                          ) : null}
+                        </AnimatePresence>
                       </div>
                     );
                   })()
@@ -362,11 +350,29 @@ export function StatusFieldsSection({
               <div
                 className={`flex items-center gap-1.5 ${!task?.assignedTo ? "text-muted-foreground" : ""}`}
               >
-                {assignedUser ? (
-                  <UserInitials user={assignedUser} size="sm" hideLastSeen />
-                ) : (
-                  <IconUserPlus size={14} className="text-muted-foreground" />
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                  <m.span
+                    key={assignedUser?._id ?? "unassigned"}
+                    className="inline-flex items-center"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={motionFast}
+                  >
+                    {assignedUser ? (
+                      <UserInitials
+                        user={assignedUser}
+                        size="sm"
+                        hideLastSeen
+                      />
+                    ) : (
+                      <IconUserPlus
+                        size={14}
+                        className="text-muted-foreground"
+                      />
+                    )}
+                  </m.span>
+                </AnimatePresence>
                 <span data-pii={Boolean(task?.assignedTo) || undefined}>
                   {task?.assignedTo ? assignedDisplayName : "Code Reviewer"}
                 </span>
@@ -418,7 +424,7 @@ export function StatusFieldsSection({
             onTraitsChange={(partial) =>
               updateTask({ id: taskId, ...toRunTraitArgs(partial) })
             }
-            className="px-0"
+            className={`px-0 ${FIELD_TEXT_CLASS}`}
           />
           {modelLockReason ? (
             <Tooltip>
@@ -433,133 +439,77 @@ export function StatusFieldsSection({
           ) : null}
         </div>
 
-        {!task?.projectId && (
-          <div className={FIELD_ROW_CLASS}>
-            {status === "todo" ? (
-              <BranchSelect
-                value={baseBranch}
-                onValueChange={(val) => {
-                  setBaseBranch(val);
-                  updateTask({ id: taskId, baseBranch: val });
-                }}
-                className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
-              />
-            ) : (
-              <div className="flex items-center gap-1.5 text-[13px]">
-                <IconGitBranch size={14} className="text-muted-foreground" />
-                <span>{baseBranch}</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <IconInfoCircle
-                      size={12}
-                      className="text-muted-foreground cursor-help"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Cannot be modified after task has run
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {!task?.projectId ? (
+            <m.div
+              key="base-branch"
+              className={FIELD_ROW_CLASS}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {status === "todo" ? (
+                <BranchSelect
+                  value={baseBranch}
+                  onValueChange={(val) => {
+                    updateTask({ id: taskId, baseBranch: val });
+                  }}
+                  className={`h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent [&>svg:last-child]:hidden ${FIELD_TEXT_CLASS}`}
+                />
+              ) : (
+                <div className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}>
+                  <IconGitBranch size={14} className="text-muted-foreground" />
+                  <span>{baseBranch}</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <IconInfoCircle
+                        size={12}
+                        className="text-muted-foreground cursor-help"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Cannot be modified after task has run
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </m.div>
+          ) : null}
+        </AnimatePresence>
 
-        {latestDeployment?.deploymentStatus && (
-          <div className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}>
-            <IconBrandVercelFilled
-              size={14}
-              className={
-                DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
-                  ?.iconColor ?? "text-muted-foreground"
-              }
-            />
-            <span>
-              {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
-                ?.label ?? "Unknown"}
-            </span>
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
+            <m.div
+              key="vercel-deployment"
+              className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <IconBrandVercelFilled
+                size={14}
+                className={
+                  DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+                    ?.iconColor ?? "text-muted-foreground"
+                }
+              />
+              <span>
+                {DEPLOYMENT_STATUS_CONFIG[latestDeployment.deploymentStatus]
+                  ?.label ?? "Unknown"}
+              </span>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
       </FieldsSection>
 
       <FieldsSection title="Labels">
-        {/* No row-level `onClick` to focus the input: a click handler on a
-            non-interactive element has no keyboard equivalent, and the input
-            already fills the rest of the row, so it is directly clickable. */}
-        <div
-          className={`${FIELD_ROW_CLASS} group/tags flex-wrap gap-1 cursor-text`}
-        >
-          <IconTags size={14} className="text-muted-foreground shrink-0" />
-          {task?.tags?.map((tag) => (
-            <Badge
-              key={tag}
-              variant="outline"
-              className="text-xs h-8 gap-0.5 pr-0.5 group/tag sm:h-5"
-            >
-              {tag}
-              <button
-                type="button"
-                aria-label={`Remove label ${tag}`}
-                className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
-                onClick={() => void removeTag(tag)}
-              >
-                ×
-              </button>
-            </Badge>
-          ))}
-          <Input
-            ref={tagDraftRef}
-            value={tagDraft}
-            placeholder={
-              (task?.tags?.length ?? 0) === 0 ? "Tags" : "Add tag..."
-            }
-            className="h-7 border-0 shadow-none bg-transparent px-0 focus-visible:ring-0 text-[13px] min-w-16 flex-1 placeholder:text-muted-foreground"
-            onChange={(e) => setTagDraft(e.target.value)}
-            onBlur={() => {
-              if (tagDraft.trim()) {
-                void addTag(tagDraft);
-                setTagDraft("");
-              }
-            }}
-            onKeyDown={handleTagKeyDown}
-          />
-          {allTags.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Choose from existing labels"
-                  className="rounded-sm p-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground max-sm:flex max-sm:size-10 max-sm:items-center max-sm:justify-center max-sm:p-0"
-                >
-                  <IconChevronDown size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="max-h-56 overflow-y-auto"
-              >
-                {(() => {
-                  const tagSet = new Set(task?.tags ?? []);
-                  return allTags.map((tag) => (
-                    <DropdownMenuCheckboxItem
-                      key={tag}
-                      checked={tagSet.has(tag)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          void addTag(tag);
-                        } else {
-                          void removeTag(tag);
-                        }
-                      }}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      {tag}
-                    </DropdownMenuCheckboxItem>
-                  ));
-                })()}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        <LabelsField
+          tags={task?.tags}
+          allTags={allTags}
+          onChange={(tags) => updateTask({ id: taskId, tags })}
+        />
       </FieldsSection>
 
       <FieldsSection title="Project">

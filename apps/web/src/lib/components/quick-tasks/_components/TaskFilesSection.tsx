@@ -15,6 +15,7 @@ import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachment
 import type { TaskAttachment } from "../useTaskAttachments";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface TaskFilesSectionProps {
   attachments: TaskAttachment[];
@@ -59,6 +60,7 @@ export function TaskFilesSection({
     label: string;
   } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const altHeld = useAltHeld();
   const [open, setOpen] = useState<OpenTextAttachment | null>(null);
 
   const requestRemove = (attachment: TaskAttachment) => {
@@ -68,15 +70,22 @@ export function TaskFilesSection({
       onRemove(attachment.key);
       return;
     }
-    setPending({
+    const next = {
       key: attachment.key,
       storageId: attachment.storageId,
       label: labelForAttachment(attachment.name, attachment.contentType),
+    };
+    requestConfirm(altHeld, () => setPending(next), () => {
+      void removeStored(next);
     });
   };
 
-  const handleConfirm = async () => {
-    if (!pending || !draftTaskId) return;
+  const removeStored = async (file: {
+    key: string;
+    storageId: Id<"_storage">;
+    label: string;
+  }) => {
+    if (!draftTaskId) return;
     setIsRemoving(true);
     // Reset is duplicated into the catch instead of using `finally`: React
     // Compiler bails on the whole file when it meets a `finally` clause.
@@ -84,19 +93,24 @@ export function TaskFilesSection({
       await withMutationToast(
         removeAttachment({
           taskId: draftTaskId,
-          storageId: pending.storageId,
+          storageId: file.storageId,
         }),
         "File removed",
         "Couldn't remove file",
         "draft-file-remove",
       );
-      onRemove(pending.key);
+      onRemove(file.key);
       setPending(null);
     } catch {
       setIsRemoving(false);
       return;
     }
     setIsRemoving(false);
+  };
+
+  const handleConfirm = async () => {
+    if (!pending) return;
+    await removeStored(pending);
   };
 
   const openTextAttachment = (attachment: TaskAttachment) => {

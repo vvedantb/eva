@@ -1,14 +1,25 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
   acquireTurnLease,
+  graceExpiredTurnLease,
   openSessionTurn,
+  openTurn,
   renewTurnLease,
 } from "../convex/_chat/turnStore";
+import {
+  chatAdapterForEntity,
+  TASK_CHAT_STREAM_PREFIX,
+} from "../convex/_chat/surfaceAdapters";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
-import { isLegacySessionExecuting } from "../convex/_chat/turnProjection";
+import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
+import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
+import {
+  isLegacySessionExecuting,
+  openSessionIdsForRepo,
+} from "../convex/_chat/turnProjection";
 import { rollbackQueuedSessionStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,
@@ -51,6 +62,46 @@ async function createSessionFixture() {
       repoId,
     });
     return { sessionId, placeholderMessageId, turnId };
+  });
+  return { t, ...ids };
+}
+
+/** A task chat turn inserted by hand: nothing stages task turns yet. */
+async function createTaskChatFixture() {
+  const t = convexTest(schema, modules);
+  const ids = await t.run(async (ctx) => {
+    const userId = await ctx.db.insert("users", {});
+    const repoId = await ctx.db.insert("githubRepos", {
+      owner: "eva",
+      name: "task-turn-test",
+      installationId: 1,
+    });
+    const now = Date.now();
+    const taskId = await ctx.db.insert("agentTasks", {
+      repoId,
+      title: "Task chat turn",
+      status: "code_review",
+      createdAt: now,
+      updatedAt: now,
+      createdBy: userId,
+    });
+    const placeholderMessageId = await ctx.db.insert("messages", {
+      parentId: taskId,
+      role: "assistant",
+      content: "",
+      timestamp: now,
+    });
+    await ctx.db.patch(taskId, { syntheticTurnMessageId: placeholderMessageId });
+    const streamingEntityId = `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
+    const turnId = await openTurn(ctx, {
+      entityId: taskId,
+      streamingEntityId,
+      placeholderMessageId,
+      prompt: "hi",
+      model: "claude:sonnet",
+      repoId,
+    });
+    return { repoId, taskId, placeholderMessageId, streamingEntityId, turnId };
   });
   return { t, ...ids };
 }
@@ -199,6 +250,188 @@ describe("turn lifecycle integration", () => {
     expect(second.afterState).toBe("running");
   });
 
+  test("an expired lease on a live process is graced and stamped once", async () => {
+    const { t, turnId } = await createSessionFixture();
+    const expireLease = async () =>
+      await t.run(async (ctx) => {
+        await ctx.db.patch(turnId, {
+          state: "running",
+          leaseExpiresAt: Date.now() - 1,
+        });
+      });
+    const grace = async () =>
+      await t.run(async (ctx) => {
+        const turn = await ctx.db.get(turnId);
+        if (!turn) throw new Error("missing turn");
+        await graceExpiredTurnLease(ctx, turn, Date.now());
+        return await ctx.db.get(turnId);
+      });
+
+    await expireLease();
+    const first = await grace();
+    expect(first?.open).toBe(true);
+    expect(first?.leaseExpiresAt).toBeGreaterThan(Date.now());
+    expect(first?.silentSince).toBeGreaterThan(0);
+
+    await expireLease();
+    const second = await grace();
+    expect(second?.silentSince).toBe(first?.silentSince);
+    expect(second?.leaseExpiresAt).toBeGreaterThan(Date.now());
+  });
+
+  test("a recovered daemon's heartbeat clears the silent marker", async () => {
+    const { t, turnId } = await createSessionFixture();
+    const leaseGeneration = await t.run(async (ctx) => {
+      const turn = await ctx.db.get(turnId);
+      if (!turn) throw new Error("missing turn");
+      const identity = await acquireTurnLease(ctx, turn, "running");
+      if (!identity) throw new Error("lease not acquired");
+      await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
+      const expired = await ctx.db.get(turnId);
+      if (!expired) throw new Error("missing turn");
+      await graceExpiredTurnLease(ctx, expired, Date.now());
+      return identity.leaseGeneration;
+    });
+
+    const stamped = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(stamped?.silentSince).toBeGreaterThan(0);
+    // A full lease was just written by the grace, so the renewal throttle
+    // would normally skip the write — the silent marker must override it.
+    expect(stamped?.leaseExpiresAt).toBeGreaterThan(Date.now() + 60_000);
+
+    const renewed = await t.run(async (ctx) => {
+      const verdict = await renewTurnLease(ctx, {
+        turnId: String(turnId),
+        leaseGeneration,
+      });
+      return { verdict, turn: await ctx.db.get(turnId) };
+    });
+    expect(renewed.verdict.status).toBe("renewed");
+    expect(renewed.turn?.silentSince).toBeUndefined();
+  });
+
+  test("a silent-timeout finalisation closes the turn with the stall alert", async () => {
+    const { t, placeholderMessageId, turnId } = await createSessionFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() - 1,
+        silentSince: Date.now() - 10 * 60 * 1000,
+      });
+    });
+
+    // finalizeExpired schedules the one-shot stall retry; drain it inside the
+    // test so it never fires against a later test's database.
+    vi.useFakeTimers();
+    try {
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: "silent_timeout",
+      });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const rows = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      placeholder: await ctx.db.get(placeholderMessageId),
+    }));
+    expect(rows.turn?.open).toBe(false);
+    expect(rows.turn?.state).toBe("error");
+    expect(rows.placeholder?.content).toContain("Turn stalled");
+  });
+
+  /**
+   * Grace is the only path that extends a lease without the daemon asking, so
+   * it is also the only one that could keep a wedged turn open forever. The
+   * 2-hour backstop must win even while the probe still reports the process
+   * alive.
+   */
+  test("grace closes a turn that passed the absolute 2-hour limit", async () => {
+    const { t, turnId } = await createSessionFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        turnStartedAt: Date.now() - RUN_TIMEOUT_MS - 1,
+        leaseExpiresAt: Date.now() - 1,
+      });
+      const turn = await ctx.db.get(turnId);
+      if (!turn) throw new Error("missing turn");
+      await graceExpiredTurnLease(ctx, turn, Date.now());
+    });
+
+    const turn = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(turn?.open).toBe(false);
+    expect(turn?.state).toBe("error");
+    expect(turn?.error).toContain("2-hour limit");
+    // No silent marker on a closed turn: nothing is waiting for it any more.
+    expect(turn?.silentSince).toBeUndefined();
+  });
+
+  /**
+   * The reconciler reads expired turns in a batch and mutates them one at a
+   * time; a daemon that renews in between must not be marked silent, or its
+   * next stall would start the 10-minute clock from a lie.
+   */
+  test("graceExpired leaves a turn whose lease was renewed in the meantime", async () => {
+    const { t, turnId } = await createSessionFixture();
+    const before = await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() + 60_000,
+      });
+      return await ctx.db.get(turnId);
+    });
+
+    await t.mutation(internal.turns.graceExpired, { turnId });
+
+    const after = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(after?.silentSince).toBeUndefined();
+    expect(after?.leaseExpiresAt).toBe(before?.leaseExpiresAt);
+    expect(after?.open).toBe(true);
+  });
+
+  /**
+   * `finalizeExpired` took a `sandboxStopped` boolean before the grace work
+   * split it into three causes. The user-visible alert is what tells a stopped
+   * VM apart from a dead agent process, so pin the mapping in both directions.
+   */
+  test.each([
+    {
+      cause: "sandbox_stopped" as const,
+      expected: "Sandbox stopped while this turn was running.",
+    },
+    { cause: "process_dead" as const, expected: STALL_ALERT_TEXT },
+  ])("finalizing with cause $cause reports its own alert", async (scenario) => {
+    const { t, placeholderMessageId, turnId } = await createSessionFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() - 1,
+      });
+    });
+
+    vi.useFakeTimers();
+    try {
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: scenario.cause,
+      });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const rows = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      placeholder: await ctx.db.get(placeholderMessageId),
+    }));
+    expect(rows.turn?.open).toBe(false);
+    expect(rows.turn?.error).toBe(scenario.expected);
+    expect(rows.placeholder?.content).toBe(scenario.expected);
+  });
+
   test("a streaming touch within 2s does not rewrite lastUpdatedAt", async () => {
     const { t, sessionId } = await createSessionFixture();
     const entityId = String(sessionId);
@@ -223,6 +456,117 @@ describe("turn lifecycle integration", () => {
           .unique(),
     );
     expect(after?.lastUpdatedAt).toBe(stamped);
+  });
+});
+
+describe("task chat turns share the session turn lifecycle", () => {
+  test("renewal fences an older lease generation", async () => {
+    const { t, turnId, streamingEntityId } = await createTaskChatFixture();
+    const claim = async () =>
+      await t.run(async (ctx) => {
+        const turn = await ctx.db.get(turnId);
+        if (!turn) throw new Error("missing turn");
+        return (await acquireTurnLease(ctx, turn, "running"))?.leaseGeneration;
+      });
+    const renew = async (leaseGeneration: number) =>
+      await t.run(
+        async (ctx) =>
+          await renewTurnLease(ctx, {
+            turnId: String(turnId),
+            leaseGeneration,
+            streamingEntityId,
+          }),
+      );
+
+    expect(await claim()).toBe(1);
+    expect(await renew(1)).toMatchObject({ status: "renewed" });
+    expect(await claim()).toBe(2);
+    expect(await renew(1)).toEqual({ status: "terminal", reason: "superseded" });
+    expect(await renew(2)).toMatchObject({ status: "renewed" });
+  });
+
+  test("a legacy heartbeat is rejected only while the task turn is open", async () => {
+    const { t, turnId, streamingEntityId } = await createTaskChatFixture();
+    const heartbeat = async () =>
+      await t.mutation(internal.turns.legacyHeartbeat, {
+        entityId: streamingEntityId,
+        touchOnly: false,
+        currentActivity: "legacy activity",
+      });
+
+    expect(await heartbeat()).toBe(false);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, { open: false, state: "done" });
+    });
+    expect(await heartbeat()).toBe(true);
+  });
+
+  test("an expired task turn finalises through the task adapter", async () => {
+    const { t, taskId, placeholderMessageId, turnId } =
+      await createTaskChatFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() - 1,
+      });
+    });
+
+    await t.mutation(internal.turns.finalizeExpired, {
+      turnId,
+      cause: "process_dead",
+    });
+
+    const rows = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      task: await ctx.db.get(taskId),
+      placeholder: await ctx.db.get(placeholderMessageId),
+      scheduled: await ctx.db.system.query("_scheduled_functions").collect(),
+    }));
+    expect(rows.turn?.open).toBe(false);
+    expect(rows.turn?.error).toBe(STALL_ALERT_TEXT);
+    expect(rows.placeholder?.content).toBe(STALL_ALERT_TEXT);
+    expect(rows.task?.syntheticTurnMessageId).toBeUndefined();
+    // The empty-stall retry is still session-only until Phase 3.
+    expect(rows.scheduled).toEqual([]);
+  });
+
+  test("a task turn never shows up as an open session", async () => {
+    const { t, repoId, taskId } = await createTaskChatFixture();
+    const open = await t.run(async (ctx) => [
+      ...(await openSessionIdsForRepo(ctx.db, repoId)),
+    ]);
+    expect(open).not.toContain(String(taskId));
+    expect(open).toEqual([]);
+  });
+
+  test("the adapter is picked from the entity id's table", async () => {
+    const { t, taskId } = await createTaskChatFixture();
+    const kinds = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {});
+      const repoId = await ctx.db.insert("githubRepos", {
+        owner: "eva",
+        name: "adapter-pick",
+        installationId: 1,
+      });
+      const sessionId = await ctx.db.insert("sessions", {
+        repoId,
+        userId,
+        title: "Pick",
+        status: "active",
+      });
+      const projectId = await ctx.db.insert("projects", {
+        repoId,
+        userId,
+        title: "Pick",
+        phase: "in_progress",
+        rawInput: "pick",
+        updatedAt: Date.now(),
+      });
+      return [sessionId, taskId, projectId, "not-an-id"].map((id) =>
+        chatAdapterForEntity(ctx.db, id, (adapter) => adapter.kind),
+      );
+    });
+    expect(kinds).toEqual(["session", "taskChat", "projectChat", null]);
   });
 });
 
@@ -327,15 +671,19 @@ describe("turn lifecycle rollout", () => {
   });
 
   test("an authenticated fallback heartbeat propagates a terminal fence", () => {
-    beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 7 });
+    const lease = { turnId: "turn-1", leaseGeneration: 7 };
+    beginTurnOwnership("claim", lease);
     expect(
-      noteHeartbeatResponse({
-        status: "success",
-        value: {
-          accepted: false,
-          lease: { status: "terminal", reason: "superseded" },
+      noteHeartbeatResponse(
+        {
+          status: "success",
+          value: {
+            accepted: false,
+            lease: { status: "terminal", reason: "superseded" },
+          },
         },
-      }),
+        lease,
+      ),
     ).toBe(true);
     expect(getLeaseTerminalReason()).toBe("superseded");
     endTurnOwnership();

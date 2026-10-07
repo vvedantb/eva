@@ -24,11 +24,14 @@ test("session lists derive execution from open Turns with a versioned rollout br
   expect(projection).toContain("session.activeWorkflowId !== undefined");
 });
 
+// The query, not the hook that wraps it: cached session shells read through
+// `useHeldQuery(..., isRouteActive ? args : "skip")`, so pinning `useQuery(`
+// here would break on the wrapper rather than on the contract.
 test("the session composer uses persisted turn status after query load", () => {
   const hook = source(
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
   );
-  expect(hook).toContain("useQuery(api.turns.getSessionStatus, { sessionId })");
+  expect(hook).toContain("api.turns.getSessionStatus");
   expect(hook).toContain("turnStatus === undefined");
   expect(hook).toContain(": turnStatus !== null");
 });
@@ -37,6 +40,6 @@ test("annotation sends share the same canonical turn projection", () => {
   const hook = source(
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionAnnotationSend.ts",
   );
-  expect(hook).toContain("useQuery(api.turns.getSessionStatus, { sessionId })");
+  expect(hook).toContain("api.turns.getSessionStatus");
   expect(hook).toContain(": turnStatus !== null");
 });

@@ -27,6 +27,9 @@ const sessionPanelSource = readSource(
 const sessionModelSource = readSource(
   "../../../apps/web/src/lib/hooks/useSessionModel.ts",
 );
+const chatBodyUtilsSource = readSource(
+  "../../../apps/web/src/lib/components/chat/chatBodyUtils.ts",
+);
 
 describe("provider account handoff is one shared contract", () => {
   test("turn account resolution lives in one helper used by all three chats", () => {
@@ -53,15 +56,18 @@ describe("provider account handoff is one shared contract", () => {
     expect(projectPanelSource).toContain("useProviderAccountHandoff(");
     expect(taskPanelSource).toContain("useProviderAccountHandoff(");
     expect(sessionModelSource).toContain("useProviderAccountHandoff(");
-    expect(projectPanelSource).toContain(
-      "isInputDisabled={!isSandboxActive || isSwitchingAccount}",
-    );
-    expect(taskPanelSource).toContain(
-      "isInputDisabled={!isSandboxActive || isSwitchingAccount}",
-    );
-    expect(sessionPanelSource).toContain(
-      "isInputDisabled={!isSandboxActive || isSwitchingAccount}",
-    );
+    // The composer gate itself is shared too, so the account swap blocks
+    // input the same way on all three — see the queueing contract below.
+    for (const panel of [
+      projectPanelSource,
+      taskPanelSource,
+      sessionPanelSource,
+    ]) {
+      expect(panel).toContain("sandboxComposerState({");
+      expect(panel).toContain("isInputDisabled={composer.isInputDisabled}");
+    }
+    const gate = functionBody(chatBodyUtilsSource, "sandboxComposerState");
+    expect(gate).toContain("isInputDisabled: isAsleep || isSwitchingAccount");
   });
 
   test("daemon identity includes both account id and credential revision", () => {

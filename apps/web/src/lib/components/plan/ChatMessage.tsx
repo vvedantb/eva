@@ -5,10 +5,10 @@ import {
   AvatarFallback,
   Message as AIMessage,
   MessageContent,
-  MessageResponse,
   motionFast,
 } from "@eva/ui";
-import { UserInitials } from "@eva/shared";
+import { Markdown } from "@eva/ui/markdown";
+import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import dayjs from "@eva/shared/dates";
 import type { Id } from "@eva/backend";
@@ -88,9 +88,9 @@ export function ChatMessage({
                       finalText={content}
                     />
                   )}
-                  <MessageResponse className="prose prose-sm dark:prose-invert max-w-none">
+                  <Markdown className="text-sm">
                     {content}
-                  </MessageResponse>
+                  </Markdown>
                 </>
               )}
             </>

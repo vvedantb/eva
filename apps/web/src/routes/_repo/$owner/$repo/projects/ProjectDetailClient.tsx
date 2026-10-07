@@ -19,11 +19,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DialogBody,
-  Spinner,
+  CenteredSpinner,
   toast,
+  motionFast,
+  CircleSpinner,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -39,8 +43,11 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
-import { SleepEvaButton } from "@/lib/components/sandbox/SleepEvaButton";
-import { SANDBOX_RAIL_WIDTH_PX } from "@/lib/components/sandbox/sandboxRail";
+import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
+import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
+import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
+import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -51,17 +58,16 @@ import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 import {
-  IconGitPullRequest,
   IconHammer,
   IconPlayerStop,
   IconTerminal2,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
-  IconBrandVercel,
   IconDots,
   IconRefresh,
   IconFileText,
@@ -78,6 +84,12 @@ import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { parseSpec } from "@/lib/utils/parseSpec";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
@@ -105,6 +117,7 @@ export function ProjectDetailClient({
   const navigate = useNavigate();
   const { basePath, repo } = useRepo();
   const simpleView = useSimpleView();
+  const sandboxRailWidthPx = useSandboxRailWidthPx();
   const [isBuildModalOpen, setIsBuildModalOpen] = useState(false);
   const [isStartingBuild, setIsStartingBuild] = useState(false);
   const [isStoppingBuild, setIsStoppingBuild] = useState(false);
@@ -112,6 +125,7 @@ export function ProjectDetailClient({
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
     useState(false);
+  const altHeld = useAltHeld();
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -127,6 +141,7 @@ export function ProjectDetailClient({
   );
 
   const project = useQuery(api.projects.get, { id: projectId });
+  useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
     api.agentRuns.getLatestDeploymentByProject,
@@ -164,22 +179,39 @@ export function ProjectDetailClient({
   const isSandboxSurface = surface === "sandbox";
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
+  const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   const openFile = (path: string) => {
     if (simpleView) return;
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/files`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/files`,
+      ),
       search: (prev) => ({ ...prev, file: path }),
     });
+  };
+
+  const openDiffs = (repoRelativePath?: string) => {
+    if (simpleView) return;
+    if (!projectPathSegment) return;
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/review/diffs/unified`,
+      ),
+      search: (prev) => ({
+        ...prev,
+        ...(repoRelativePath ? { diffFile: repoRelativePath } : {}),
+      }),
+    });
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const [expandRightSignal, setExpandRightSignal] = useState(0);
   const agentBrowsingAt =
     project === null || project === undefined
       ? undefined
@@ -190,7 +222,9 @@ export function ProjectDetailClient({
     if (agentBrowsingAt === undefined || prev !== undefined) return;
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/browser`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/browser`,
+      ),
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
@@ -203,7 +237,9 @@ export function ProjectDetailClient({
   const openAgentsTab = () => {
     if (!projectPathSegment) return;
     void navigate({
-      to: `${basePath}/projects/${projectPathSegment}/sandbox/agents`,
+      to: toInternalRepoHref(
+        `${basePath}/projects/${projectPathSegment}/sandbox/agents`,
+      ),
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
@@ -232,6 +268,25 @@ export function ProjectDetailClient({
     setIsCreatingPr(false);
   };
 
+  // Written with optional chaining so the hook can run above the early
+  // returns below (both read `project` / `latestDeployment`, which load late).
+  const hasDeployedPreview =
+    latestDeployment?.deploymentStatus === "deployed" &&
+    Boolean(latestDeployment.deploymentUrl);
+  const canCreatePr =
+    !project?.prUrl &&
+    !project?.activeBuildWorkflowId &&
+    (project?.phase === "business_review" || project?.phase === "in_progress");
+  const prLinks = usePrLinkMenuItems({
+    createPr: {
+      enabled: canCreatePr,
+      isCreating: isCreatingPr,
+      onCreate: handleCreatePr,
+    },
+    prUrl: project?.prUrl,
+    hasDeployment: hasDeployedPreview,
+  });
+
   const handleResolveConflicts = async () => {
     setPrError(null);
     setIsResolvingConflicts(true);
@@ -246,11 +301,7 @@ export function ProjectDetailClient({
   };
 
   if (project === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <CenteredSpinner label="Loading project" />;
   }
 
   if (project === null) {
@@ -263,13 +314,6 @@ export function ProjectDetailClient({
     project.phase === "draft" || project.phase === "finalized";
   const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
 
-  const hasDeployedPreview =
-    latestDeployment?.deploymentStatus === "deployed" &&
-    Boolean(latestDeployment.deploymentUrl);
-  const canCreatePr =
-    !project.prUrl &&
-    !project.activeBuildWorkflowId &&
-    (project.phase === "business_review" || project.phase === "in_progress");
   const showRetryStartupCommands =
     canStartSandbox && !isSandboxStarting && !isSandboxStopping;
   const showRunBackgroundCommands = isSandboxActive;
@@ -288,8 +332,6 @@ export function ProjectDetailClient({
   const hasPlanContext = Boolean(parsedSpec);
   const hasSandboxCommandItems =
     showRetryStartupCommands || showRunBackgroundCommands;
-  const hasPrLinkItems =
-    canCreatePr || Boolean(project.prUrl) || hasDeployedPreview;
 
   const tab = sandboxTab ?? "preview";
   // Always mount the sandbox panel when the project can have one so tabs
@@ -339,53 +381,61 @@ export function ProjectDetailClient({
     );
 
   const projectSandboxContent = (
-    <SandboxWorkspace
-      ownerKind="project"
-      ownerId={projectId}
-      storageScope={`project:${projectId}`}
-      sandboxId={projectSandboxId}
-      isActive={isSandboxActive}
-      terminalPanes={project.terminalPanes}
-    >
-      {(panes, owner, terminalPanel) => (
-        <ResizablePanelLayout
-          storageKey="project-sandbox-panel"
-          leftDefaultSize="40%"
-          leftMinWidthPx={350}
-          rightMinWidthPx={300}
-          rightCollapsedSizePx={SANDBOX_RAIL_WIDTH_PX}
-          defaultRightCollapsed={false}
-          expandRightSignal={expandRightSignal}
-          mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-          leftPanel={() => (
-            <ProjectSandboxChatPanel
-              projectId={projectId}
-              isSandboxActive={isSandboxActive}
-              isSandboxToggling={isSandboxStarting || isSandboxStopping}
-              onOpenFile={openFile}
-              onOpenAgentsTab={openAgentsTab}
-              onSandboxToggle={
-                canStartSandbox || isSandboxActive
-                  ? (action) => {
-                      if (action === "start") void handleStartSandbox();
-                      else void handleStopSandbox();
+    <PendingPreviewSnapshotsProvider>
+      <PendingWebMcpProvider>
+        <OpenSandboxFileProvider onOpenFile={openFile}>
+          <SandboxWorkspace
+            ownerKind="project"
+            ownerId={projectId}
+            storageScope={`project:${projectId}`}
+            sandboxId={projectSandboxId}
+            isActive={isSandboxActive}
+            terminalPanes={project.terminalPanes}
+          >
+            {(panes, owner, terminalPanel) => (
+              <ResizablePanelLayout
+                storageKey="project-sandbox-panel"
+                leftDefaultSize="40%"
+                leftMinWidthPx={350}
+                rightMinWidthPx={300}
+                rightCollapsedSizePx={sandboxRailWidthPx}
+                defaultRightCollapsed={false}
+                expandRightSignal={expandRightSignal}
+                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+                leftPanel={() => (
+                  <ProjectSandboxChatPanel
+                    projectId={projectId}
+                    isSandboxActive={isSandboxActive}
+                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
+                    onOpenFile={openFile}
+                    onViewDiff={openDiffs}
+                    onOpenAgentsTab={openAgentsTab}
+                    onSandboxToggle={
+                      canStartSandbox || isSandboxActive
+                        ? (action) => {
+                            if (action === "start") void handleStartSandbox();
+                            else void handleStopSandbox();
+                          }
+                        : undefined
                     }
-                  : undefined
-              }
-            />
-          )}
-          rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-            projectSandboxPanel(
-              panes,
-              owner,
-              terminalPanel,
-              rightPanelCollapsed,
-              onToggleRightPanel,
-            )
-          }
-        />
-      )}
-    </SandboxWorkspace>
+                  />
+                )}
+                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+                  projectSandboxPanel(
+                    panes,
+                    owner,
+                    terminalPanel,
+                    rightPanelCollapsed,
+                    onToggleRightPanel,
+                  )
+                }
+              />
+            )}
+          </SandboxWorkspace>
+        </OpenSandboxFileProvider>
+      </PendingWebMcpProvider>
+    </PendingPreviewSnapshotsProvider>
   );
 
   return (
@@ -425,15 +475,25 @@ export function ProjectDetailClient({
                 <DropdownMenuContent align="end">
                   {showResolveConflicts && (
                     <DropdownMenuItem
-                      onClick={() => setShowResolveConfirm(true)}
+                      title={skipConfirmTitle("Resolve Conflicts")}
+                      onClick={() =>
+                        requestConfirm(
+                          altHeld,
+                          () => setShowResolveConfirm(true),
+                          () => {
+                            void handleResolveConflicts();
+                          },
+                        )
+                      }
                       disabled={isResolvingConflicts}
                     >
                       {isResolvingConflicts ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconHammer size={14} />
                       )}
                       Resolve Conflicts
+                      <ConfirmSkipHint />
                     </DropdownMenuItem>
                   )}
                   {showResolveConflicts && hasSandboxCommandItems ? (
@@ -441,15 +501,23 @@ export function ProjectDetailClient({
                   ) : null}
                   {showRetryStartupCommands && (
                     <DropdownMenuItem
-                      onClick={() => setShowStartupCommandsConfirm(true)}
+                      title={skipConfirmTitle("Run Startup Commands")}
+                      onClick={() =>
+                        requestConfirm(
+                          altHeld,
+                          () => setShowStartupCommandsConfirm(true),
+                          handleRetryStartupCommands,
+                        )
+                      }
                       disabled={isRetryingStartupCommands}
                     >
                       {isRetryingStartupCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconRefresh size={14} />
                       )}
                       Run Startup Commands
+                      <ConfirmSkipHint />
                     </DropdownMenuItem>
                   )}
                   {showRunBackgroundCommands && (
@@ -458,7 +526,7 @@ export function ProjectDetailClient({
                       disabled={isRunningBackgroundCommands}
                     >
                       {isRunningBackgroundCommands ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconServerBolt size={14} />
                       )}
@@ -466,55 +534,15 @@ export function ProjectDetailClient({
                     </DropdownMenuItem>
                   )}
                   {(showResolveConflicts || hasSandboxCommandItems) &&
-                  hasPrLinkItems ? (
+                  prLinks.hasItems ? (
                     <DropdownMenuSeparator />
                   ) : null}
-                  {canCreatePr && (
-                    <DropdownMenuItem
-                      onClick={handleCreatePr}
-                      disabled={isCreatingPr}
-                    >
-                      {isCreatingPr ? (
-                        <IconLoader2 size={14} className="animate-spin" />
-                      ) : (
-                        <IconGitPullRequest size={14} />
-                      )}
-                      Create PR
-                    </DropdownMenuItem>
-                  )}
-                  {project.prUrl ? (
-                    <DropdownMenuItem asChild>
-                      <a
-                        href={project.prUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <IconGitPullRequest size={14} />
-                        View PR
-                      </a>
-                    </DropdownMenuItem>
-                  ) : null}
-                  {hasDeployedPreview && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <DropdownMenuItem disabled>
-                            <IconBrandVercel size={14} />
-                            View Preview
-                          </DropdownMenuItem>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Please start sandbox and view changes through the
-                        preview tab there instead
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                  {prLinks.items}
                   {hasPlanContext && (
                     <>
                       {(showResolveConflicts ||
                         hasSandboxCommandItems ||
-                        hasPrLinkItems) && <DropdownMenuSeparator />}
+                        prLinks.hasItems) && <DropdownMenuSeparator />}
                       <DropdownMenuItem onClick={() => setShowPlanModal(true)}>
                         <IconFileText size={14} />
                         View Plan
@@ -527,21 +555,25 @@ export function ProjectDetailClient({
                   )}
                   {(showResolveConflicts ||
                     hasSandboxCommandItems ||
-                    hasPrLinkItems ||
+                    prLinks.hasItems ||
                     hasPlanContext) && <DropdownMenuSeparator />}
                   <CopyLinkMenuItem />
                 </DropdownMenuContent>
               </DropdownMenu>
-              {/* Inert while a chat turn is in flight — see `SleepEvaButton`.
-                  A running build keeps its own confirmed "Stop Build", so it is
-                  not gated here. Hidden on the sandbox surface, which has its
-                  own stop control in the chat header. */}
-              {isSandboxActive && !isSandboxStopping && !isSandboxSurface ? (
-                <SleepEvaButton
-                  onStop={handleStopSandbox}
-                  isStopping={isSandboxStopping}
-                  blockedMidTurn={Boolean(project?.activeChatWorkflowId)}
-                  size="sm"
+              {/* One control for both directions — see `SandboxStartStopButton`.
+                  Inert while a chat turn is in flight; a running build keeps its
+                  own confirmed "Stop Build", so it is not gated here. This is the
+                  only wake/sleep control now, the sandbox chat header carries
+                  usage alone. */}
+              {isSandboxActive || canStartSandbox ? (
+                <SandboxStartStopButton
+                  isActive={isSandboxActive}
+                  isToggling={isSandboxStarting || isSandboxStopping}
+                  onToggle={(action) => {
+                    if (action === "start") void handleStartSandbox();
+                    else void handleStopSandbox();
+                  }}
+                  isAssistantResponding={Boolean(project?.activeChatWorkflowId)}
                 />
               ) : null}
               {canBuildProject ? (
@@ -550,19 +582,25 @@ export function ProjectDetailClient({
                     size="sm"
                     variant="destructive"
                     aria-label="Stop build"
-                    onClick={() => setShowStopBuildConfirm(true)}
+                    title={skipConfirmTitle("Stop Build")}
+                    onClick={() =>
+                      requestConfirm(
+                        altHeld,
+                        () => setShowStopBuildConfirm(true),
+                        () => {
+                          void handleStopBuild();
+                        },
+                      )
+                    }
                     disabled={isStoppingBuild}
                   >
                     {isStoppingBuild ? (
-                      <IconLoader2
-                        size={16}
-                        className="animate-spin"
-                        aria-hidden
-                      />
+                      <CircleSpinner size="sm" aria-hidden />
                     ) : (
                       <IconPlayerStop size={16} aria-hidden />
                     )}
                     <span className="hidden sm:inline">Stop Build</span>
+                    <ConfirmSkipHint />
                   </Button>
                 ) : (
                   <SplitBuildButton
@@ -579,39 +617,75 @@ export function ProjectDetailClient({
       }
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        {isSandboxSurface ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {projectSandboxContent}
-          </div>
-        ) : mainTab === "overview" ? (
-          <ProjectOverviewTab
-            projectId={projectId}
-            title={project.title}
-            description={project.description}
-          />
-        ) : isDraftOrFinalized ? (
-          <ProjectTabs
-            projectId={projectId}
-            projectPhase={project.phase}
-            activeWorkflowId={project.activeWorkflowId}
-            rawInput={project.rawInput}
-            generatedSpec={project.generatedSpec}
-            conversationHistory={project.conversationHistory}
-            streamingActivity={streaming?.currentActivity}
-            sandboxStartupActivity={sandboxStartupActivity}
-            basePath={basePath}
-            repoId={repo._id}
-          />
-        ) : (
-          <ProjectActiveLayout
-            projectId={projectId}
-            project={project}
-            basePath={basePath}
-            selectedTaskId={selectedTaskId}
-            selectedTaskStatus={selectedTaskStatus}
-            detailTab={detailTab}
-          />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {isSandboxSurface ? (
+            <m.div
+              key="sandbox"
+              className="min-h-0 flex-1 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {projectSandboxContent}
+            </m.div>
+          ) : mainTab === "overview" ? (
+            <m.div
+              key="overview"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectOverviewTab
+                projectId={projectId}
+                title={project.title}
+                description={project.description}
+              />
+            </m.div>
+          ) : isDraftOrFinalized ? (
+            <m.div
+              key="plan"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectTabs
+                projectId={projectId}
+                projectPhase={project.phase}
+                activeWorkflowId={project.activeWorkflowId}
+                rawInput={project.rawInput}
+                generatedSpec={project.generatedSpec}
+                conversationHistory={project.conversationHistory}
+                streamingActivity={streaming?.currentActivity}
+                sandboxStartupActivity={sandboxStartupActivity}
+                basePath={basePath}
+                repoId={repo._id}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="tasks"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <ProjectActiveLayout
+                projectId={projectId}
+                project={project}
+                basePath={basePath}
+                selectedTaskId={selectedTaskId}
+                selectedTaskStatus={selectedTaskStatus}
+                detailTab={detailTab}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Dialog

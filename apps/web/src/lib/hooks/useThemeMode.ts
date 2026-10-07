@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-/** User preference, including System (local-only, not persisted to Convex). */
+/** User preference. Every mode, System included, is persisted to Convex. */
 export type ThemeMode = "light" | "neutral" | "dark" | "system";
 
 /** Resolved appearance applied to the DOM (`dark neutral` for Neutral). */
@@ -33,10 +33,4 @@ export function appearanceToResolvedTheme(
   appearance: ThemeAppearance,
 ): ResolvedTheme {
   return appearance === "light" ? "light" : "dark";
-}
-
-export function isPersistedTheme(
-  theme: ThemeMode,
-): theme is "light" | "neutral" | "dark" {
-  return theme === "light" || theme === "neutral" || theme === "dark";
 }

@@ -6,7 +6,11 @@ import { formatDurationMsShort } from "@eva/shared/duration";
 import { getInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
-import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
+import type {
+  SandboxClient,
+  SandboxHandle,
+  SandboxMount,
+} from "../_sandbox/provider";
 import {
   execHandle,
   LEGACY_WORKSPACE_DIR,
@@ -28,16 +32,28 @@ import { isSandboxGoneError } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
 import { ensureGitCredentialHelper } from "./gitCredentials";
 import { isMissingRemoteRefFetchFailure } from "../_git/remoteRef";
+import { gitRemoteAuthPrefix } from "./gitRemoteCommand";
 import {
-  divergedPublishLooksLikeRewrite,
   isEvaOwnedBranch,
   parseGitNameOnlyList,
-  remoteOnlyChangedFileCount,
   rewrittenBranchIsOwnHistory,
   rewrittenBranchPublishError,
 } from "./divergedPublish";
 import { ensureSwapFile } from "./swap";
 import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
+import {
+  AGENT_CLI_PATH_LINE,
+  COREPACK_SANDBOX_ENV,
+} from "../_sandbox/vercelEnvFile";
+import {
+  DRIVE_CACHE_ENV,
+  DRIVE_CACHE_READER,
+  DRIVE_CACHE_WRITER,
+  DRIVE_MOUNT_PATH,
+  driveCacheName,
+  driveCacheSetupScript,
+  type DriveCacheRole,
+} from "../_sandbox/driveCache";
 import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
@@ -184,7 +200,7 @@ async function execSdkGitOperation<T>(
 }
 
 /** Wraps a git operation with timing logs and error reporting. */
-async function runLoggedGitStep<T>(
+export async function runLoggedGitStep<T>(
   label: string,
   details: string,
   fn: () => Promise<T>,
@@ -312,26 +328,33 @@ export async function createSandbox(
   // Those post-create steps absorb Vercel's first-command boot penalty
   // (seconds–tens of seconds); session UI should not wait on them.
   onSandboxAcquired?: (sandbox: SandboxHandle) => Promise<void>,
-  // Boot from a Vercel Container Registry image instead of the legacy runtime.
-  // Only read when there is no snapshot — a restore carries its own image.
-  image?: string,
+  // "Fork session": fork this sandbox (provider-side) instead of booting
+  // `snapshotName`.
+  forkFrom?: string,
   /**
-   * Manager Ave never runs repo services, so installing and polling dockerd
-   * on the Ubuntu universal image is pure wait (dnf is missing, then 90s+60s
-   * of `docker info` loops). Skip it.
+   * How this sandbox uses the repo's shared package cache Drive. Defaults to
+   * the read-only reader role; only the seed-prep and group-builder sandboxes
+   * pass `writer`, since a Drive allows one read-write mount at a time.
+   * See ../_sandbox/driveCache.ts.
    */
-  skipDocker = false,
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<SandboxHandle> {
+  // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
+  // only on paths that never resolve a repo, which then get no mount at all.
+  const repoId = sandboxEnvVars.REPO_ID;
+  const driveMountMode: SandboxMount["mode"] =
+    driveCacheRole === DRIVE_CACHE_WRITER ? "read-write" : "snapshot";
   const details = [
     `installation=${installationId}`,
+    forkFrom ? `forkFrom=${forkFrom}` : "forkFrom=none",
     snapshotName ? `snapshot=${snapshotName}` : "snapshot=none",
-    image ? `image=${image}` : "image=none",
     lifecycle.ephemeral ? "ephemeral=true" : "ephemeral=false",
+    `driveCache=${repoId ? driveCacheRole : "none"}`,
   ].join(", ");
   return await runLoggedGitStep("createSandbox", details, async () => {
     const timeoutSeconds =
       readyTimeoutSeconds ??
-      (snapshotName
+      (snapshotName || forkFrom
         ? SNAPSHOT_SANDBOX_READY_TIMEOUT_SECONDS
         : DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS);
 
@@ -343,7 +366,7 @@ export async function createSandbox(
 
     const sandbox = await client.create({
       snapshot: snapshotName,
-      image,
+      ...(forkFrom ? { forkFrom } : {}),
       ports: [...VERCEL_DEFAULT_EXPOSED_PORTS],
       envVars: {
         // VNC_RESOLUTION is read by the snapshot's ComputerUse plugin at startup
@@ -368,6 +391,15 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
+      mounts: repoId
+        ? [
+            {
+              path: DRIVE_MOUNT_PATH,
+              volumeName: driveCacheName(repoId),
+              mode: driveMountMode,
+            },
+          ]
+        : undefined,
     });
     logGit(
       `createSandbox: created id=${sandbox.id}, cpu=${sandbox.cpu}, memory=${sandbox.memory}, disk=${sandbox.disk}`,
@@ -386,11 +418,22 @@ export async function createSandbox(
           EVA_ENV_FILE,
           renderEvaEnvFile({
             VNC_RESOLUTION: "1920x1080",
+            ...COREPACK_SANDBOX_ENV,
+            // Safe to set unconditionally: driveCacheSetupScript guarantees the
+            // cache root exists and is writable even when no Drive attached, so
+            // the worst case is an ordinary empty local cache.
+            ...DRIVE_CACHE_ENV,
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),
-          }),
+          }) + AGENT_CLI_PATH_LINE,
         ),
+      );
+      // Must run before any install: it turns the raw Drive mount into the
+      // writable cache root the env above points at. Never fails a create —
+      // the script itself soft-fails to a plain directory.
+      await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
+        execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources
       // eva-env. Never fail create over this hook.
@@ -464,13 +507,11 @@ export async function createSandbox(
       // since dockerd doesn't survive auto-stop. Already fast-paths on an
       // already-running daemon (`docker info` check first); the timing
       // wrapper just makes that fast path visible in logs instead of assumed.
-      // Orchestrator: no containers, and the universal image has no docker
-      // binary — the bootstrap would sit in a 90s poll then another 60s.
-      if (!skipDocker) {
-        await runLoggedGitStep("createSandbox.bootstrapDocker", sandbox.id, () =>
-          bootstrapVercelDocker(sandbox),
-        );
-      }
+      await runLoggedGitStep(
+        "createSandbox.bootstrapDocker",
+        sandbox.id,
+        () => bootstrapVercelDocker(sandbox),
+      );
 
       return sandbox;
     } catch (error) {
@@ -536,7 +577,7 @@ export async function fetchOrigin(
         async () => {
           await execGitCommand(
             sandbox,
-            `cd ${workspaceDir} && git config --unset-all http.https://github.com/.extraheader 2>/dev/null; git remote set-url origin ${quote([repoUrl])} && GIT_TERMINAL_PROMPT=0 git fetch --no-tags${pruneArg} origin${refArg}`,
+            `${gitRemoteAuthPrefix(workspaceDir, repoUrl)} git fetch --no-tags${pruneArg} origin${refArg}`,
             opts?.timeoutSeconds ?? 240,
           );
         },
@@ -571,6 +612,8 @@ export async function fetchBranchRefs(
     prune?: boolean;
     timeoutSeconds?: number;
     retryAttempts?: number;
+    /** Absolute clone path to fetch into. Defaults to the primary `/tmp/repo`. */
+    workspaceDir?: string;
   },
 ): Promise<string[]> {
   const details = `${owner}/${name}, branches=${branchNames.join(",")}, timeout=${opts?.timeoutSeconds ?? 240}`;
@@ -582,12 +625,12 @@ export async function fetchBranchRefs(
     const repoUrl = bareGitHubRepoUrl(owner, name);
     const pruneArg = opts?.prune === false ? "" : " --prune";
     const timeoutSeconds = opts?.timeoutSeconds ?? 240;
-    const workspaceDir = workspaceDirShell();
+    const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
     const refspecs = normalized.map(
       (b) => `+refs/heads/${b}:refs/remotes/origin/${b}`,
     );
     const refspecArgs = refspecs.map((r) => quote([r])).join(" ");
-    const setupAndFetch = `cd ${workspaceDir} && git config --unset-all http.https://github.com/.extraheader 2>/dev/null; git remote set-url origin ${quote([repoUrl])} && GIT_TERMINAL_PROMPT=0 git fetch --no-tags${pruneArg} origin`;
+    const setupAndFetch = `${gitRemoteAuthPrefix(workspaceDir, repoUrl)} git fetch --no-tags${pruneArg} origin`;
     return await retryGitNetworkOperation(
       "fetchBranchRefs",
       details,
@@ -958,39 +1001,44 @@ export async function copySandboxConfigFilesToWorkspace(
   );
 }
 
-/** Installs project dependencies using the detected package manager. */
-async function installDependencies(
-  sandbox: SandboxHandle,
-  pm: string,
-): Promise<void> {
-  const workspaceDir = workspaceDirShell();
+/** Shell for a non-interactive dependency install of `dir` with package manager `pm`. */
+export function dependencyInstallCommand(pm: string, dir: string): string {
   if (pm === "pnpm") {
-    await execHandle(
-      sandbox,
-      `npm install -g pnpm && cd ${workspaceDir} && pnpm install`,
-      PNPM_INSTALL_TIMEOUT_SECONDS,
-    );
-  } else if (pm === "yarn") {
-    // No base image ships a yarn shim — mirror the pnpm branch's global install.
-    await execHandle(
-      sandbox,
-      `npm install -g yarn && cd ${workspaceDir} && yarn install`,
-      YARN_INSTALL_TIMEOUT_SECONDS,
-    );
-  } else {
-    await execHandle(
-      sandbox,
-      `cd ${workspaceDir} && npm install`,
-      NPM_INSTALL_TIMEOUT_SECONDS,
-    );
+    // DRIVE_CACHE_ENV moves the pnpm store to the Drive cache, so snapshots baked
+    // with the old local store make pnpm purge and rebuild node_modules. Without
+    // a TTY its confirm prompt aborts (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+    // Only the CLI flag works: pnpm 10 reads "false" from .npmrc/env as truthy.
+    // CI=true is rejected because it also implies --frozen-lockfile.
+    return `npm install -g pnpm && cd ${dir} && pnpm install --config.confirm-modules-purge=false`;
   }
+  if (pm === "yarn") {
+    // No base image ships a yarn shim — mirror the pnpm branch's global install.
+    return `npm install -g yarn && cd ${dir} && yarn install`;
+  }
+  return `cd ${dir} && npm install`;
 }
 
-/** Best-effort pip for root requirements.txt / pyproject.toml (never throws). */
-async function installPythonDependencies(
+/** Installs project dependencies using the detected package manager. */
+export async function installDependencies(
   sandbox: SandboxHandle,
+  pm: string,
+  dir: string = WORKSPACE_DIR,
 ): Promise<void> {
-  const result = await installPythonDependenciesBestEffort(sandbox);
+  const timeoutSeconds =
+    pm === "pnpm"
+      ? PNPM_INSTALL_TIMEOUT_SECONDS
+      : pm === "yarn"
+        ? YARN_INSTALL_TIMEOUT_SECONDS
+        : NPM_INSTALL_TIMEOUT_SECONDS;
+  await execHandle(sandbox, dependencyInstallCommand(pm, dir), timeoutSeconds);
+}
+
+/** Best-effort pip for `dir`'s requirements.txt / pyproject.toml (never throws). */
+export async function installPythonDependencies(
+  sandbox: SandboxHandle,
+  dir: string = WORKSPACE_DIR,
+): Promise<void> {
+  const result = await installPythonDependenciesBestEffort(sandbox, dir);
   if (!result.attempted) return;
   if (result.ok) {
     logGit("installPythonDependencies: pip install succeeded");
@@ -999,6 +1047,68 @@ async function installPythonDependencies(
   logGit(
     "installPythonDependencies: pip install failed (continuing without Python deps)",
   );
+}
+
+/**
+ * Clones a GitHub repo into `destDir` with retry on transient network errors.
+ * SDK clone doesn't clean the target dir, so this pre-cleans it first.
+ *
+ * Extracted from `cloneAndSetupRepo` so a linked repo's clone (into
+ * `/tmp/workspace/<name>`, not `WORKSPACE_DIR`) shares the same retry loop
+ * instead of copying it — see `linkedRepos.ts`'s `prepareLinkedRepo`. Does
+ * NOT install the git credential helper; callers that need it (both current
+ * ones do) install it themselves before or after, per their own ordering
+ * needs.
+ */
+export async function cloneRepoInto(
+  sandbox: SandboxHandle,
+  installationId: number,
+  owner: string,
+  name: string,
+  destDir: string,
+  onProgress?: (label: string) => Promise<void>,
+): Promise<void> {
+  if (onProgress) await onProgress("Cloning repository...");
+  const githubToken = await getInstallationToken(installationId);
+  const repoUrl = `https://github.com/${owner}/${name}.git`;
+
+  await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
+
+  const maxCloneAttempts = 3;
+  for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
+    try {
+      await execSdkGitOperation(
+        sandbox,
+        `clone ${owner}/${name}`,
+        () =>
+          sandbox.git.clone(repoUrl, destDir, "x-access-token", githubToken),
+        REPO_CLONE_TIMEOUT_SECONDS,
+      );
+      if (attempt > 1) {
+        logGit(
+          `cloneRepoInto: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
+        );
+      }
+      return;
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
+      const shouldRetry =
+        attempt < maxCloneAttempts &&
+        isRetryableGitNetworkError(error.message);
+      if (!shouldRetry) {
+        throw error;
+      }
+      const delayMs = attempt * 2000;
+      logGit(
+        `cloneRepoInto: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
+      );
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delayMs);
+      });
+    }
+  }
 }
 
 /**
@@ -1019,63 +1129,25 @@ export async function cloneAndSetupRepo(
 ): Promise<void> {
   const details = `${owner}/${name}, installDeps=${shouldInstallDeps}`;
   await runLoggedGitStep("cloneAndSetupRepo", details, async () => {
-    if (onProgress) await onProgress("Cloning repository...");
-    const githubToken = await getInstallationToken(installationId);
-    const repoUrl = `https://github.com/${owner}/${name}.git`;
-
-    // SDK clone doesn't clean target dir — pre-clean workspace directories
-    await execHandle(
+    // Legacy pre-migration workspace path; only the primary repo ever used it.
+    await execHandle(sandbox, `rm -rf ${quote([LEGACY_WORKSPACE_DIR])}`, 30);
+    await cloneRepoInto(
       sandbox,
-      `rm -rf ${quote([WORKSPACE_DIR])} ${quote([LEGACY_WORKSPACE_DIR])}`,
-      30,
+      installationId,
+      owner,
+      name,
+      WORKSPACE_DIR,
+      onProgress,
     );
-
-    const maxCloneAttempts = 3;
-    for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
-      try {
-        await execSdkGitOperation(
-          sandbox,
-          `clone ${owner}/${name}`,
-          () =>
-            sandbox.git.clone(
-              repoUrl,
-              WORKSPACE_DIR,
-              "x-access-token",
-              githubToken,
-            ),
-          REPO_CLONE_TIMEOUT_SECONDS,
-        );
-        if (attempt > 1) {
-          logGit(
-            `cloneAndSetupRepo: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
-          );
-        }
-        break;
-      } catch (error) {
-        if (!(error instanceof Error)) {
-          throw error;
-        }
-        const shouldRetry =
-          attempt < maxCloneAttempts &&
-          isRetryableGitNetworkError(error.message);
-        if (!shouldRetry) {
-          throw error;
-        }
-        const delayMs = attempt * 2000;
-        logGit(
-          `cloneAndSetupRepo: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
-        );
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, delayMs);
-        });
-      }
-    }
 
     // Install the credential helper after the clone so subsequent fetches /
     // pushes (here and from inside the sandbox) auth without URL tokens. The
     // initial SDK clone still uses an explicit token because the helper
     // can't be wired up before the .git directory exists.
-    await ensureGitCredentialHelper(ctx, sandbox, installationId);
+    await ensureGitCredentialHelper(ctx, sandbox, installationId, {
+      owner,
+      name,
+    });
 
     if (!shouldInstallDeps) {
       return;
@@ -1132,13 +1204,14 @@ type BranchPublishSync = {
 
 /**
  * Every commit the local branch has ever pointed at in this sandbox. Empty when
- * the branch has no reflog, which makes the caller refuse rather than guess.
+ * the branch has no reflog, which makes the caller merge rather than force.
  */
 async function localBranchReflogShas(
   sandbox: SandboxHandle,
   branchName: string,
+  workspaceDirOverride?: string,
 ): Promise<string[]> {
-  const workspaceDir = workspaceDirShell();
+  const workspaceDir = workspaceDirOverride ?? workspaceDirShell();
   const quotedLocalRef = quote([`refs/heads/${branchName}`]);
   try {
     return parseGitNameOnlyList(
@@ -1172,28 +1245,33 @@ async function localBranchReflogShas(
  * merge could never publish, and every retry failed identically. A merge
  * conflicts only where the two tips genuinely touch the same lines.
  *
- * Skip that merge when the unique remote tree looks like a rewritten base
- * (task 231, 25 Aug 2026): rebasing onto main left one local file against
- * 1,272 remote-only staging commits, and merging the old tip back in
- * conflicted inside publish while the sandbox stayed clean.
+ * Skip that merge when the local branch rewrote its own history (task 231,
+ * 25 Aug 2026): rebasing onto main left one local file against 1,272
+ * remote-only staging commits, and merging the old tip back in conflicted
+ * inside publish while the sandbox stayed clean. A rewrite is recognised by
+ * the local branch's reflog holding the remote tip — the sandbox once had
+ * every remote commit and moved off them on purpose — and an eva/ branch is
+ * then published as a push leased on that exact tip.
  *
- * A rewritten eva/ branch is published anyway — as a push leased on the exact
- * remote tip — when that tip is in the local branch's reflog, i.e. the remote
- * only holds history this sandbox itself used to have (task m57dve3m, 2 Sep
- * 2026). Anything else on the remote keeps the refusal, so the caller can send
- * the user a message that says why and what to do.
+ * A remote tip the reflog never held was pushed by someone else, however many
+ * files it touched, and is merged in like any concurrent work. Quick task 220
+ * (evalucom/carepulse-ts, 2–3 Sep 2026) is why the file counts are not
+ * consulted: GitHub had gained 118 commits on the PR branch, the sandbox one,
+ * and a "many remote-only files" classifier refused twice what a merge fixed.
  */
 async function synchronizeBranchForPublish(
   sandbox: SandboxHandle,
   owner: string,
   name: string,
   branchName: string,
+  /** Absolute clone path to synchronize. Defaults to the primary `/tmp/repo`. */
+  workspaceDirOverride?: string,
 ): Promise<BranchPublishSync> {
   if (!isSafeBranchName(branchName)) {
     throw new Error(`Unsafe branch name: ${branchName}`);
   }
 
-  const workspaceDir = workspaceDirShell();
+  const workspaceDir = workspaceDirOverride ?? workspaceDirShell();
   const currentBranch = (
     await execGitCommand(
       sandbox,
@@ -1237,6 +1315,7 @@ async function synchronizeBranchForPublish(
     prune: false,
     timeoutSeconds: 60,
     retryAttempts: 2,
+    workspaceDir,
   });
   const remoteRefName = `refs/remotes/origin/${branchName}`;
   const quotedRemoteRef = quote([remoteRefName]);
@@ -1272,66 +1351,32 @@ async function synchronizeBranchForPublish(
     return { remoteExists: true };
   }
   if (/^[1-9]\d*\s+[1-9]\d*$/.test(divergence)) {
-    const mergeBase = (
+    // "<remote-only> <local-only>" commit counts, for the log and the error.
+    const [remoteOnlyCommits, localOnlyCommits] = divergence.split(/\s+/);
+    const remoteTip = (
       await execGitCommand(
         sandbox,
-        `cd ${workspaceDir} && git merge-base ${quotedRemoteRef} ${quotedLocalRef}`,
-        15,
+        `cd ${workspaceDir} && git rev-parse --verify ${quotedRemoteRef}`,
+        10,
       )
     ).trim();
-    const quotedMergeBase = quote([mergeBase]);
-    const localChanged = parseGitNameOnlyList(
-      await execGitCommand(
-        sandbox,
-        `cd ${workspaceDir} && git diff --name-only ${quotedMergeBase} ${quotedLocalRef}`,
-        30,
-      ),
+    const reflogShas = await localBranchReflogShas(
+      sandbox,
+      branchName,
+      workspaceDir,
     );
-    const remoteChanged = parseGitNameOnlyList(
-      await execGitCommand(
-        sandbox,
-        `cd ${workspaceDir} && git diff --name-only ${quotedMergeBase} ${quotedRemoteRef}`,
-        30,
-      ),
-    );
-    if (divergedPublishLooksLikeRewrite(localChanged, remoteChanged)) {
-      const remoteOnly = remoteOnlyChangedFileCount(
-        localChanged,
-        remoteChanged,
-      );
+    if (rewrittenBranchIsOwnHistory(remoteTip, reflogShas)) {
       if (!isEvaOwnedBranch(branchName)) {
-        throw new Error(
-          rewrittenBranchPublishError(
-            branchName,
-            remoteOnly,
-            localChanged.length,
-            "branch-not-eva-owned",
-          ),
-        );
-      }
-      const remoteTip = (
-        await execGitCommand(
-          sandbox,
-          `cd ${workspaceDir} && git rev-parse --verify ${quotedRemoteRef}`,
-          10,
-        )
-      ).trim();
-      const reflogShas = await localBranchReflogShas(sandbox, branchName);
-      if (!rewrittenBranchIsOwnHistory(remoteTip, reflogShas)) {
-        throw new Error(
-          rewrittenBranchPublishError(
-            branchName,
-            remoteOnly,
-            localChanged.length,
-            "remote-holds-foreign-commits",
-          ),
-        );
+        throw new Error(rewrittenBranchPublishError(branchName));
       }
       logGit(
-        `synchronizeBranchForPublish: origin/${branchName} tip ${remoteTip.slice(0, 7)} is in the local branch reflog; publishing the rewritten branch leased on it (${remoteOnly} remote-only files vs ${localChanged.length} local)`,
+        `synchronizeBranchForPublish: origin/${branchName} tip ${remoteTip.slice(0, 7)} is in the local branch reflog (${reflogShas.length} entries); the local branch rewrote its own history — publishing leased on that tip (${remoteOnlyCommits} remote-only commits vs ${localOnlyCommits} local)`,
       );
       return { remoteExists: true, replaceRemoteTip: remoteTip };
     }
+    logGit(
+      `synchronizeBranchForPublish: origin/${branchName} tip ${remoteTip.slice(0, 7)} is not in the local branch reflog (${reflogShas.length} entries); merging its ${remoteOnlyCommits} remote-only commits into the ${localOnlyCommits} local`,
+    );
     try {
       await execGitCommand(
         sandbox,
@@ -1354,7 +1399,7 @@ async function synchronizeBranchForPublish(
         );
       }
       throw new Error(
-        `Could not merge origin/${branchName} into the local branch. The sandbox was left clean — there are no conflict markers to resolve. If you rewrote history, force-push; if both sides committed, merge the remote branch in the sandbox and retry.`,
+        `Could not merge origin/${branchName} (${remoteOnlyCommits} commits this sandbox never had) into the local branch (${localOnlyCommits} unpublished commits). The sandbox was left clean — there are no conflict markers to resolve. If you rewrote history, force-push; if both sides committed, merge the remote branch in the sandbox and retry.`,
       );
     }
     return { remoteExists: true };
@@ -1378,11 +1423,13 @@ export async function pushBranchToOrigin(
   opts?: {
     timeoutSeconds?: number;
     retryAttempts?: number;
+    /** Absolute clone path to push from. Defaults to the primary `/tmp/repo`. */
+    workspaceDir?: string;
   },
 ): Promise<{ pushed: boolean; published: boolean }> {
   const details = `${owner}/${name}, branch=${branchName}`;
   return await runLoggedGitStep("pushBranchToOrigin", details, async () => {
-    const workspaceDir = workspaceDirShell();
+    const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
     // Fully-qualified refspec, both sides. A bare branch name, `HEAD` or `@{u}`
     // can each resolve somewhere else (stale upstream, detached HEAD, a tag of
     // the same name); `refs/heads/x:refs/heads/x` names the exact ref to update.
@@ -1393,7 +1440,13 @@ export async function pushBranchToOrigin(
     const maxAttempts = opts?.retryAttempts ?? 2;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const { remoteExists, replaceRemoteTip } =
-        await synchronizeBranchForPublish(sandbox, owner, name, branchName);
+        await synchronizeBranchForPublish(
+          sandbox,
+          owner,
+          name,
+          branchName,
+          workspaceDir,
+        );
       // Never a bare --force: the lease names the exact remote sha the sync
       // just verified as the sandbox's own old tip, so a commit that lands in
       // between is rejected ("stale info") and the retry re-syncs against it.
@@ -1433,7 +1486,7 @@ export async function pushBranchToOrigin(
       try {
         await execGitCommand(
           sandbox,
-          `cd ${workspaceDir} && git config --unset-all http.https://github.com/.extraheader 2>/dev/null; git remote set-url origin ${quote([repoUrl])} && GIT_TERMINAL_PROMPT=0 git push ${lease}-u origin ${quotedRefspec}`,
+          `${gitRemoteAuthPrefix(workspaceDir, repoUrl)} git push ${lease}-u origin ${quotedRefspec}`,
           opts?.timeoutSeconds ?? 60,
         );
         return { pushed: true, published: true };
@@ -1473,13 +1526,17 @@ export async function forcePushBranchToOrigin(
   owner: string,
   name: string,
   branchName: string,
+  opts?: {
+    /** Absolute clone path to push from. Defaults to the primary `/tmp/repo`. */
+    workspaceDir?: string;
+  },
 ): Promise<void> {
   if (!isSafeBranchName(branchName)) {
     throw new Error(`Unsafe branch name: ${branchName}`);
   }
   const details = `${owner}/${name}, branch=${branchName}`;
   await runLoggedGitStep("forcePushBranchToOrigin", details, async () => {
-    const workspaceDir = workspaceDirShell();
+    const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
     const quotedLocalRef = quote([`refs/heads/${branchName}`]);
     const localBranchState = (
       await execGitCommand(
@@ -1497,6 +1554,7 @@ export async function forcePushBranchToOrigin(
       prune: false,
       timeoutSeconds: 60,
       retryAttempts: 2,
+      workspaceDir,
     });
     const lease = fetched.includes(branchName)
       ? `--force-with-lease=${quote([`refs/heads/${branchName}`])} `
@@ -1507,7 +1565,7 @@ export async function forcePushBranchToOrigin(
     const repoUrl = bareGitHubRepoUrl(owner, name);
     await execGitCommand(
       sandbox,
-      `cd ${workspaceDir} && git config --unset-all http.https://github.com/.extraheader 2>/dev/null; git remote set-url origin ${quote([repoUrl])} && GIT_TERMINAL_PROMPT=0 git push ${lease}-u origin ${quotedRefspec}`,
+      `${gitRemoteAuthPrefix(workspaceDir, repoUrl)} git push ${lease}-u origin ${quotedRefspec}`,
       90,
     );
   });
@@ -1572,15 +1630,16 @@ export async function createSandboxAndPrepareRepo(
   // and reliably trips Convex's 600s per-action ceiling on providers (Vercel)
   // that don't have it pre-baked into their base snapshot.
   skipInstallDeps = false,
-  // VCR image to boot from when there is no snapshot (orchestrator sessions use
-  // the Vercel-managed universal image). Threaded straight to createSandbox.
-  image?: string,
-  // Orchestrator: skip dockerd. See createSandbox.skipDocker.
-  skipDocker = false,
+  // "Fork session": fork this sandbox instead of booting `snapshotName`. The
+  // fork carries the repo checkout, so it takes the snapshot path below. No
+  // fallback on failure — the source's data is the point of a fork.
+  forkFrom?: string,
+  // Shared package-cache Drive role. See createSandbox.driveCacheRole.
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
   let sandbox: SandboxHandle | undefined;
   try {
-    const details = `${owner}/${name}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, syncStrategy=${syncStrategy.mode}`;
+    const details = `${owner}/${name}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
     return await runLoggedGitStep(
       "createSandboxAndPrepareRepo",
       details,
@@ -1596,11 +1655,11 @@ export async function createSandboxAndPrepareRepo(
             effectiveSnapshot,
             readyTimeoutSeconds,
             onSandboxAcquired,
-            image,
-            skipDocker,
+            forkFrom,
+            driveCacheRole,
           );
         } catch (err) {
-          if (effectiveSnapshot && isSnapshotUnusableError(err)) {
+          if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
             logGit(
               `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${err instanceof Error ? err.message : String(err)})`,
             );
@@ -1615,14 +1674,14 @@ export async function createSandboxAndPrepareRepo(
               undefined,
               readyTimeoutSeconds,
               onSandboxAcquired,
-              image,
-              skipDocker,
+              undefined, // forkFrom — the fallback is a fresh boot
+              driveCacheRole,
             );
           } else {
             throw err;
           }
         }
-        if (effectiveSnapshot) {
+        if (effectiveSnapshot || forkFrom) {
           // Deliberately no `installDependencies`/pnpm install on this path:
           // a seeded/base snapshot already carries node_modules from the seed
           // build (launchSeedRun's buildCommands), and normalizeSnapshotWorktree
@@ -1633,7 +1692,10 @@ export async function createSandboxAndPrepareRepo(
           // The snapshot was baked with a stale token in its git config /
           // remotes. Install the credential helper before any git network op
           // so syncRepo (and later in-sandbox `git pull`) authenticate cleanly.
-          await ensureGitCredentialHelper(ctx, sandbox, installationId);
+          await ensureGitCredentialHelper(ctx, sandbox, installationId, {
+            owner,
+            name,
+          });
           if (syncStrategy.mode !== "none") {
             if (onProgress) await onProgress("Syncing repository...");
             await syncRepo(sandbox, owner, name, syncStrategy);
@@ -1696,17 +1758,12 @@ export async function getOrCreateSandbox(
   snapshotName?: string,
   onProgress?: (label: string) => Promise<void>,
   syncStrategy: RepoSyncStrategy = { mode: "all" },
-  // Both only matter on the create fallback below — a resume reuses whatever the
-  // existing sandbox was built from. See createSandboxAndPrepareRepo.
-  skipInstallDeps = false,
-  image?: string,
-  skipDocker = false,
 ): Promise<{
   sandbox: SandboxHandle;
   isNew: boolean;
   resumeFellBack: boolean;
 }> {
-  const details = `${owner}/${name}, existingSandboxId=${existingSandboxId ?? "none"}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, syncStrategy=${syncStrategy.mode}`;
+  const details = `${owner}/${name}, existingSandboxId=${existingSandboxId ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
   return await runLoggedGitStep("getOrCreateSandbox", details, async () => {
     if (existingSandboxId) {
       const resumed = await tryResumeSandbox(
@@ -1738,10 +1795,6 @@ export async function getOrCreateSandbox(
       undefined,
       onProgress,
       syncStrategy,
-      undefined,
-      skipInstallDeps,
-      image,
-      skipDocker,
     );
     return {
       sandbox,
@@ -1822,7 +1875,10 @@ async function tryResumeSandbox(
       // Self-heal: rotate the per-sandbox secret and (re)install the helper on
       // every resume so the in-sandbox `git pull` works without a stale token
       // and so sandboxes that pre-date this change pick up the helper.
-      await ensureGitCredentialHelper(ctx, sandbox, installationId);
+      await ensureGitCredentialHelper(ctx, sandbox, installationId, {
+        owner,
+        name,
+      });
       if (syncStrategy.mode !== "none") {
         if (onProgress) await onProgress("Syncing repository...");
         await syncRepo(sandbox, owner, name, syncStrategy);

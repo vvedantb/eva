@@ -5,7 +5,7 @@ export const PREVIEW_VIEWPORT_MAX = 3840;
 export const PREVIEW_VIEWPORT_MAX_AREA = 3840 * 2160;
 export const PREVIEW_VIEWPORT_RAIL_PX = 10;
 
-export const PREVIEW_VIEWPORT_PRESET_IDS = [
+const PREVIEW_VIEWPORT_PRESET_IDS = [
   "iphone-se",
   "iphone-xr",
   "iphone-12-pro",
@@ -185,16 +185,8 @@ export const PREVIEW_VIEWPORT_PRESETS: ReadonlyArray<PreviewViewportPreset> =
 export const FILL_PREVIEW_VIEWPORT: PreviewViewport = { mode: "fill" };
 
 const sizeSchema = z.object({
-  width: z
-    .number()
-    .int()
-    .min(PREVIEW_VIEWPORT_MIN)
-    .max(PREVIEW_VIEWPORT_MAX),
-  height: z
-    .number()
-    .int()
-    .min(PREVIEW_VIEWPORT_MIN)
-    .max(PREVIEW_VIEWPORT_MAX),
+  width: z.number().int().min(PREVIEW_VIEWPORT_MIN).max(PREVIEW_VIEWPORT_MAX),
+  height: z.number().int().min(PREVIEW_VIEWPORT_MIN).max(PREVIEW_VIEWPORT_MAX),
 });
 
 const previewViewportSchema = z.discriminatedUnion("mode", [
@@ -282,7 +274,7 @@ export function presetViewport(
   };
 }
 
-export function clampPreviewDimension(value: number): number {
+function clampPreviewDimension(value: number): number {
   if (!Number.isFinite(value)) return PREVIEW_VIEWPORT_MIN;
   return Math.min(
     PREVIEW_VIEWPORT_MAX,
@@ -328,12 +320,6 @@ export function rotatePreviewViewport(
     width: viewport.height,
     height: viewport.width,
   };
-}
-
-export function previewViewportAspectRatio(
-  viewport: SizedPreviewViewport,
-): number {
-  return viewport.width / viewport.height;
 }
 
 function resizeAtAspectRatio(
@@ -385,17 +371,7 @@ export function resizePreviewViewport(
   });
 }
 
-export function previewIframeScale(
-  visual: { width: number; height: number },
-  logical: { width: number; height: number },
-): number {
-  if (logical.width <= 0 || logical.height <= 0) return 1;
-  const scale = Math.min(
-    visual.width / logical.width,
-    visual.height / logical.height,
-  );
-  return Number.isFinite(scale) && scale > 0 ? scale : 1;
-}
+export { previewIframeScale } from "@/lib/components/sandbox/previewContain";
 
 export function fittedPreviewContainStyle(logical: {
   width: number;
@@ -410,17 +386,142 @@ export function fittedPreviewContainStyle(logical: {
   };
 }
 
-export function previewViewportLabel(viewport: PreviewViewport): string {
-  if (viewport.mode === "fill") return "Fill panel";
-  if (viewport.mode === "preset") {
-    const preset = PRESET_DEFINITIONS[viewport.id];
-    return preset.label;
-  }
-  return "Responsive";
-}
-
 export function sizedPreviewViewport(
   viewport: PreviewViewport,
 ): SizedPreviewViewport | null {
   return viewport.mode === "fill" ? null : viewport;
+}
+
+const DEFAULT_CONTAIN_SIZE = { width: 1280, height: 800 };
+
+const containSizeSchema = z.object({
+  width: z.number().finite(),
+  height: z.number().finite(),
+});
+
+/**
+ * Locked guest box for the preview-bar contain toggle (fill + letterbox).
+ *
+ * This reads sessionStorage, so anything can be on the other end of it — a
+ * value an older build wrote in another shape, or a hand-edited entry. Coercing
+ * with `Number()` turned every one of those into NaN, which the clamp floors to
+ * the 240px minimum: the preview letterboxed to a 240×240 stamp and stayed that
+ * way across reloads. Reject the whole value instead and fall back.
+ */
+export function parsePreviewContainSize(raw: string): {
+  width: number;
+  height: number;
+} {
+  try {
+    const parsed = containSizeSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return { ...DEFAULT_CONTAIN_SIZE };
+    const size = snapshotFillViewport(parsed.data);
+    return { width: size.width, height: size.height };
+  } catch {
+    return { ...DEFAULT_CONTAIN_SIZE };
+  }
+}
+
+export function serializePreviewContainSize(size: {
+  width: number;
+  height: number;
+}): string {
+  return JSON.stringify(clampPreviewViewportSize(size));
+}
+
+export interface PreviewContainSize {
+  width: number;
+  height: number;
+}
+
+/** The three pieces of pane state the two toolbar toggles move between. */
+export interface PreviewFraming {
+  viewport: PreviewViewport;
+  /** Fill mode only: letterbox `containSize` instead of reflowing the guest. */
+  contain: boolean;
+  containSize: PreviewContainSize;
+}
+
+export interface PreviewFramingChange extends PreviewFraming {
+  /** An aspect lock belongs to one box; a new box has to drop it. */
+  resetAspectRatio: boolean;
+}
+
+/**
+ * The viewport the pane actually paints.
+ *
+ * Contain applies to `fill` only. A device viewport is already a locked box
+ * that the frame letterboxes on its own, so honouring a leftover `contain`
+ * flag there would paint the stored contain size instead of the chosen
+ * device — a phone preview silently rendering at 1280×800.
+ */
+export function framedPreviewViewport(
+  viewport: PreviewViewport,
+  contain: boolean,
+  containSize: PreviewContainSize,
+): PreviewViewport {
+  if (viewport.mode !== "fill") return viewport;
+  if (!contain) return FILL_PREVIEW_VIEWPORT;
+  return { mode: "freeform", ...containSize };
+}
+
+/**
+ * Device toggle: a sized viewport goes back to fill, and fill snapshots the
+ * live pane rect so the guest keeps its current size while gaining a frame.
+ *
+ * Either way contain drops. Leaving it set is what makes the pane letterbox
+ * to a box the user never chose the next time they land in fill mode.
+ */
+export function togglePreviewDevice(
+  current: PreviewFraming,
+  fillRect: { width: number; height: number } | null,
+): PreviewFramingChange {
+  if (current.viewport.mode !== "fill") {
+    return {
+      viewport: FILL_PREVIEW_VIEWPORT,
+      contain: false,
+      containSize: current.containSize,
+      resetAspectRatio: true,
+    };
+  }
+  return {
+    viewport: snapshotFillViewport({
+      width: fillRect?.width ?? DEFAULT_CONTAIN_SIZE.width,
+      height: fillRect?.height ?? DEFAULT_CONTAIN_SIZE.height,
+    }),
+    contain: false,
+    containSize: current.containSize,
+    resetAspectRatio: false,
+  };
+}
+
+/**
+ * Contain toggle. From a device viewport this hands the device's box over to
+ * contain and drops back to fill, so the same pixels keep being shown — the
+ * device size would otherwise be lost the moment the frame came off.
+ *
+ * From fill it is a plain flip that keeps the stored box (default 1280×800)
+ * rather than snapshotting the pane: a snapshot matches the pane exactly and
+ * looks like a dead button until the splitter moves.
+ */
+export function togglePreviewContain(
+  current: PreviewFraming,
+): PreviewFramingChange {
+  if (current.viewport.mode !== "fill") {
+    return {
+      viewport: FILL_PREVIEW_VIEWPORT,
+      contain: true,
+      containSize: {
+        width: current.viewport.width,
+        height: current.viewport.height,
+      },
+      resetAspectRatio: true,
+    };
+  }
+  return {
+    viewport: current.viewport,
+    contain: !current.contain,
+    containSize: current.containSize,
+    resetAspectRatio: false,
+  };
 }

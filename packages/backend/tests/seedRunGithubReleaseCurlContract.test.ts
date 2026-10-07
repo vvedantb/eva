@@ -124,7 +124,7 @@ describe("seed run GitHub release downloads survive direct-path failures", () =>
 
   test("OpenCode is pinned separately from the other agent CLIs", () => {
     expect(seedRunCommands).toContain(
-      "sudoNpmInstallGlobal(`opencode-ai@${OPENCODE_VERSION}",
+      "sudo npm install -g opencode-ai@${OPENCODE_VERSION}",
     );
     // CLI and SDK are one release: the SDK is a generated client for the
     // server the CLI serves, so they must never drift apart.

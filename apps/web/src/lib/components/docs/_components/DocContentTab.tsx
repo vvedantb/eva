@@ -3,10 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "@tiptap/markdown";
 import type { Transaction } from "@tiptap/pm/state";
-import { useTiptapSync } from "@convex-dev/prosemirror-sync/tiptap";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -15,10 +12,12 @@ import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docModeParser, type DocMode } from "@/lib/search-params";
 import { nanoid } from "nanoid";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconMessage } from "@tabler/icons-react";
 import { FloatingToc } from "../FloatingToc";
 import { DocCommentsPanel } from "./DocCommentsPanel";
+import { DocSaveStatus, type DocSaveState } from "./DocSaveStatus";
 import { DocHistoryPanel } from "./DocHistoryPanel";
 import { DocSuggestionsPanel } from "./DocSuggestionsPanel";
 import { DocVersionDiff } from "./DocVersionDiff";
@@ -39,17 +38,16 @@ import {
   scrollToAnchor,
 } from "../_utils/docCommentAnchors";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { baseDocEditorExtensions, useDocSync } from "../_utils/useDocSync";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
-const baseEditorExtensions = [
-  StarterKit.configure({
-    heading: { levels: [1, 2, 3, 4, 5, 6] },
-  }),
-  Markdown.configure({
-    markedOptions: { gfm: true },
-  }),
-];
+/**
+ * How long editing has to stop before a version is snapshotted. Two minutes
+ * outlived most editing sessions, so a doc could be closed having never been
+ * snapshotted at all.
+ */
+const VERSION_IDLE_MS = 15_000;
 
 export function DocContentTab({
   doc,
@@ -74,7 +72,6 @@ export function DocContentTab({
   const [mode] = useQueryState("mode", docModeParser);
   const isPrRecap = doc.kind === "pr-recap";
   const effectiveMode: DocMode = isPrRecap ? "viewing" : mode;
-  const ensureSyncDoc = useMutation(api.docs.ensureSyncDoc);
   const touchDraft = useMutation(api.docVersions.touchDraft);
   const saveVersion = useMutation(api.docVersions.saveVersion);
 
@@ -89,7 +86,7 @@ export function DocContentTab({
   // extension reach the latest handler without recreating the editor.
   const anchorClickRef = useRef<(anchorId: string) => void>(() => undefined);
   const extensions = [
-    ...baseEditorExtensions,
+    ...baseDocEditorExtensions,
     SuggestChangesKit.configure({ getUserId: () => userIdRef.current }),
     DocCommentMark,
     DocCommentHighlight.configure({
@@ -97,7 +94,7 @@ export function DocContentTab({
     }),
   ];
 
-  const sync = useTiptapSync(api.prosemirrorSync, doc._id);
+  const { sync, isLoading: syncLoading } = useDocSync(doc._id);
 
   const [composingAnchorId, setComposingAnchorId] = useState<string | null>(
     null,
@@ -132,17 +129,9 @@ export function DocContentTab({
   const lastTouchDraftRef = useRef<number>(0);
   const editCountRef = useRef<number>(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasMigratedRef = useRef(false);
-
-  // Lazy migration: ensure sync doc exists for legacy docs
-  const needsMigration =
-    !sync.isLoading && sync.initialContent === null && "create" in sync;
-  useEffect(() => {
-    if (needsMigration && !hasMigratedRef.current) {
-      hasMigratedRef.current = true;
-      ensureSyncDoc({ id: doc._id });
-    }
-  }, [needsMigration, doc._id, ensureSyncDoc]);
+  const [docSaveState, setDocSaveState] = useState<DocSaveState>({
+    status: "idle",
+  });
 
   const editor = useEditor(
     {
@@ -167,6 +156,9 @@ export function DocContentTab({
     }
   }, [editor, effectiveMode]);
 
+  /* eslint-disable no-effect/no-event-handler --
+     Reconfigures the TipTap instance, which lives outside React state and is
+     only available after it mounts. */
   // Toggle suggestion tracking with the mode. Editing/Viewing apply edits
   // directly; Suggesting converts them into tracked-change marks.
   useEffect(() => {
@@ -178,6 +170,7 @@ export function DocContentTab({
     if (effectiveMode === "suggesting") enableSuggesting(editor);
     else disableSuggesting(editor);
   }, [editor, effectiveMode, isPrRecap]);
+  /* eslint-enable no-effect/no-event-handler */
 
   // Surface the pending-suggestion count so the header toggle can show it.
   const suggestionCount =
@@ -186,10 +179,18 @@ export function DocContentTab({
       selector: ({ editor: e }) =>
         e ? collectSuggestions(e.state.doc).length : 0,
     }) ?? 0;
+  /* eslint-disable no-effect/no-pass-data-to-parent --
+     The count is read off the TipTap document, which this component owns; the
+     header that displays it is a sibling, so it has to be pushed up. */
   useEffect(() => {
     onSuggestionCount(suggestionCount);
   }, [suggestionCount, onSuggestionCount]);
+  /* eslint-enable no-effect/no-pass-data-to-parent */
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     TipTap emits "update" on its own bus and has no immutable snapshot to hand
+     useSyncExternalStore; re-serialising markdown per render would be far
+     costlier than mirroring it on change. */
   // Keep the outline in sync with live editor content.
   useEffect(() => {
     if (!editor) return;
@@ -204,6 +205,34 @@ export function DocContentTab({
       editor.off("update", syncTocContent);
     };
   }, [editor]);
+  /* eslint-enable no-effect/no-external-store-subscription */
+
+  /**
+   * Snapshot the current document as a version. Shared by the idle timer and
+   * the status line's Retry, so a failed snapshot is recoverable without
+   * touching the text again.
+   */
+  const runSaveVersion = () => {
+    if (!editor) return;
+    setDocSaveState({ status: "saving" });
+    saveVersion({
+      docId: doc._id,
+      content: editor.getMarkdown(),
+      pmContent: JSON.stringify(editor.state.doc.toJSON()),
+    })
+      .then(() => {
+        editCountRef.current = 0;
+        setDocSaveState({ status: "saved", at: Date.now() });
+      })
+      .catch(() => setDocSaveState({ status: "error" }));
+  };
+
+  // The transaction listener is registered once per editor; the ref lets it
+  // reach the current save closure without re-registering on every render.
+  const saveVersionRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    saveVersionRef.current = runSaveVersion;
+  }, [runSaveVersion]);
 
   // Version snapshot tracking
   useEffect(() => {
@@ -218,6 +247,11 @@ export function DocContentTab({
       // so another user's edits don't trigger or attribute a version here.
       if (transaction.getMeta("collab$")) return;
       editCountRef.current += 1;
+      // Returning `prev` unchanged skips a re-render, so this costs nothing per
+      // keystroke once the status line already says "Unsaved version".
+      setDocSaveState((prev) =>
+        prev.status === "pending" ? prev : { status: "pending" },
+      );
 
       const now = Date.now();
       if (now - lastTouchDraftRef.current > 30_000) {
@@ -227,17 +261,8 @@ export function DocContentTab({
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
-        if (editCountRef.current > 0 && editor) {
-          const markdown = editor.getMarkdown();
-          const pmContent = JSON.stringify(editor.state.doc.toJSON());
-          saveVersion({
-            docId: doc._id,
-            content: markdown,
-            pmContent,
-          });
-          editCountRef.current = 0;
-        }
-      }, 120_000);
+        if (editCountRef.current > 0) saveVersionRef.current();
+      }, VERSION_IDLE_MS);
     };
 
     editor.on("update", handleTransaction);
@@ -245,7 +270,7 @@ export function DocContentTab({
       editor.off("update", handleTransaction);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  }, [editor, doc._id, touchDraft, saveVersion]);
+  }, [editor, doc._id, touchDraft]);
 
   // Reflect open/active anchors as highlights in the document.
   useEffect(() => {
@@ -253,6 +278,8 @@ export function DocContentTab({
     setCommentHighlightState(editor, { openAnchorIds, activeAnchorId });
   }, [editor, openAnchorIds, activeAnchorId]);
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     Same TipTap event bus as above: no snapshot function to subscribe with. */
   // Track anchors still present in the doc so deleted ones show as orphaned.
   useEffect(() => {
     if (!editor) return;
@@ -264,7 +291,11 @@ export function DocContentTab({
       editor.off("update", update);
     };
   }, [editor]);
+  /* eslint-enable no-effect/no-external-store-subscription */
 
+  /* eslint-disable no-effect/no-event-handler --
+     Keeps a ref fresh for a callback the TipTap extension calls imperatively
+     from a DOM click, outside React's event system. */
   // Highlight click -> focus its thread in the panel.
   useEffect(() => {
     anchorClickRef.current = (anchorId: string) => {
@@ -272,6 +303,7 @@ export function DocContentTab({
       if (!commentsOpen) onToggleComments();
     };
   }, [commentsOpen, onToggleComments]);
+  /* eslint-enable no-effect/no-event-handler */
 
   // Panel thread click -> scroll the editor to the anchored text.
   const handleAnchorActivate = (anchorId: string) => {
@@ -331,7 +363,7 @@ export function DocContentTab({
     );
   };
 
-  if (sync.isLoading || (!sync.extension && sync.initialContent === null)) {
+  if (syncLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Spinner size="sm" />
@@ -345,86 +377,136 @@ export function DocContentTab({
     // and they position against this row.
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="flex max-sm:min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        {selectedVersionId ? (
-          <div className="scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-            <DocVersionDiff
-              versionId={selectedVersionId}
-              currentContent={doc.content}
-              onRestore={handleRestoreVersion}
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
-            {!commentsOpen &&
-              !historyOpen &&
-              !suggestionsOpen &&
-              tocContent.trim().length > 0 && (
-                <FloatingToc
-                  containerRef={contentScrollRef}
-                  content={tocContent}
-                  className="hidden w-52 shrink-0 border-r border-border py-1 lg:block"
-                />
-              )}
-
-            <div
-              ref={contentScrollRef}
-              className="scrollbar min-h-0 flex-1 overflow-y-auto"
-            >
-              <EditorContent
-                editor={editor}
-                // Code fences scroll inside themselves; an unbroken line would
-                // otherwise widen the whole document past the viewport.
-                className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
-              />
-              {editor && (
-                <BubbleMenu
-                  editor={editor}
-                  className="rounded-menu-item bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-md"
-                >
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs max-sm:h-10 max-sm:px-3"
-                    onClick={handleStartComment}
-                  >
-                    <IconMessage size={14} aria-hidden />
-                    Comment
-                  </Button>
-                </BubbleMenu>
-              )}
-            </div>
-          </div>
+        {/* This tab has no toolbar of its own, so the version state sits top
+            right above the editor. It renders nothing until there is something
+            to say. */}
+        {selectedVersionId ? null : (
+          <DocSaveStatus state={docSaveState} onRetry={runSaveVersion} />
         )}
+        <AnimatePresence mode="wait" initial={false}>
+          {selectedVersionId ? (
+            <m.div
+              key="diff"
+              className="scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              <DocVersionDiff
+                versionId={selectedVersionId}
+                currentContent={doc.content}
+                onRestore={handleRestoreVersion}
+              />
+            </m.div>
+          ) : (
+            <m.div
+              key="live"
+              className="flex min-h-0 flex-1 gap-6 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={motionFast}
+            >
+              {!commentsOpen &&
+                !historyOpen &&
+                !suggestionsOpen &&
+                tocContent.trim().length > 0 && (
+                  <FloatingToc
+                    containerRef={contentScrollRef}
+                    content={tocContent}
+                    className="hidden w-52 shrink-0 border-r border-border py-1 lg:block"
+                  />
+                )}
+
+              <div
+                ref={contentScrollRef}
+                className="scrollbar min-h-0 flex-1 overflow-y-auto"
+              >
+                <EditorContent
+                  editor={editor}
+                  // Code fences scroll inside themselves; an unbroken line would
+                  // otherwise widen the whole document past the viewport.
+                  className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
+                />
+                {editor && (
+                  <BubbleMenu
+                    editor={editor}
+                    className="rounded-menu-item bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-md"
+                  >
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs max-sm:h-10 max-sm:px-3"
+                      onClick={handleStartComment}
+                    >
+                      <IconMessage size={14} aria-hidden />
+                      Comment
+                    </Button>
+                  </BubbleMenu>
+                )}
+              </div>
+            </m.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {commentsOpen && (
-        <DocCommentsPanel
-          docId={doc._id}
-          allowAskEva={isPrRecap}
-          activeAnchorId={activeAnchorId}
-          onAnchorClick={handleAnchorActivate}
-          onClose={onToggleComments}
-          composingAnchorId={composingAnchorId}
-          composingAnchorText={composingAnchorText}
-          onCancelCompose={handleCancelCompose}
-          onCommentCreated={handleCommentCreated}
-          presentAnchorIds={presentAnchorIds}
-        />
-      )}
-
-      {historyOpen && (
-        <DocHistoryPanel
-          docId={doc._id}
-          docKind={doc.kind}
-          selectedVersionId={selectedVersionId}
-          onSelectVersion={(id) => setSelectedVersionId(id)}
-          onClose={onToggleHistory}
-        />
-      )}
-
-      {suggestionsOpen && editor && (
-        <DocSuggestionsPanel editor={editor} onClose={onToggleSuggestions} />
-      )}
+      <AnimatePresence mode="wait">
+        {commentsOpen ? (
+          <m.div
+            key="comments"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocCommentsPanel
+              docId={doc._id}
+              allowAskEva={isPrRecap}
+              activeAnchorId={activeAnchorId}
+              onAnchorClick={handleAnchorActivate}
+              onClose={onToggleComments}
+              composingAnchorId={composingAnchorId}
+              composingAnchorText={composingAnchorText}
+              onCancelCompose={handleCancelCompose}
+              onCommentCreated={handleCommentCreated}
+              presentAnchorIds={presentAnchorIds}
+            />
+          </m.div>
+        ) : historyOpen ? (
+          <m.div
+            key="history"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocHistoryPanel
+              docId={doc._id}
+              docKind={doc.kind}
+              selectedVersionId={selectedVersionId}
+              onSelectVersion={(id) => setSelectedVersionId(id)}
+              onClose={onToggleHistory}
+            />
+          </m.div>
+        ) : suggestionsOpen && editor ? (
+          <m.div
+            key="suggestions"
+            className="flex h-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
+          >
+            <DocSuggestionsPanel
+              editor={editor}
+              onClose={onToggleSuggestions}
+            />
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

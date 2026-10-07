@@ -72,7 +72,7 @@ const CLAUDE_WINDOW_LABELS: Record<string, string> = {
  * method cannot break this module's types; every value read is still guarded,
  * because the SDK documents the shape itself as unstable.
  */
-export type ClaudeUsageWindowLike = {
+type ClaudeUsageWindowLike = {
   utilization?: number | null;
   resets_at?: string | null;
 } | null;
@@ -286,9 +286,7 @@ export function unwrapUsagePayload(
   return response;
 }
 
-function usageAvailability(
-  payload: ClaudeUsageResponseLike,
-): boolean | null {
+function usageAvailability(payload: ClaudeUsageResponseLike): boolean | null {
   if (payload.rate_limits_available === true) return true;
   if (payload.rate_limits_available === false) return false;
   if (payload.rate_limits !== undefined && payload.rate_limits !== null) {
@@ -401,10 +399,13 @@ export async function captureClaudeUsage(
 export function captureClaudeUsageLimitError(error: string | undefined): void {
   if (!error) return;
   const message = error.toLowerCase();
+  // Mirrors `isUsageLimitError` in convex/_taskWorkflow/usageLimitReset.ts —
+  // the callback bundle cannot import from convex/, so keep the two in sync.
   if (
     !message.includes("out of extra usage") &&
     !message.includes("rate limit") &&
     !message.includes("usage limit") &&
+    !message.includes("session limit") &&
     !message.includes("spend limit") &&
     !message.includes("token limit exceeded")
   ) {
@@ -466,7 +467,7 @@ export function buildUsageLimitReportArgs(
  * failure is logged and swallowed. Unchanged readings are skipped between
  * periodic refreshes, keeping a live warm daemon from looking stale.
  */
-export async function reportUsageLimits(
+async function reportUsageLimits(
   provider: UsageLimitProvider,
   force = false,
 ): Promise<void> {

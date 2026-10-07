@@ -1,8 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
+  assistantReplyContent,
   delayedPublishFailureError,
+  formatDelayedPublishFailureError,
   orphanPlaceholderMessages,
+  PUBLISH_FAILURE_MARKER,
   resultTargetMessage,
+  selectUsageLimitRetryUserMessage,
 } from "../convex/_sessions/resultTarget";
 
 /** Only the fields the decision reads; the real docs carry many more. */
@@ -12,6 +16,7 @@ function reply(fields: {
   isSyntheticTurn?: boolean;
   finishedAt?: number;
   role?: string;
+  errorType?: string;
 }) {
   return {
     role: fields.role ?? "assistant",
@@ -19,8 +24,56 @@ function reply(fields: {
     isSystemAlert: fields.isSystemAlert,
     isSyntheticTurn: fields.isSyntheticTurn,
     finishedAt: fields.finishedAt,
+    errorType: fields.errorType,
   };
 }
+
+describe("assistantReplyContent", () => {
+  test("uses the result on success", () => {
+    expect(
+      assistantReplyContent({
+        success: true,
+        result: "done",
+        error: null,
+      }),
+    ).toBe("done");
+  });
+
+  test("falls back when a successful turn produced no text", () => {
+    expect(
+      assistantReplyContent({
+        success: true,
+        result: null,
+        error: null,
+      }),
+    ).toBe("I couldn't process your message.");
+  });
+
+  test("surfaces the error on failure", () => {
+    expect(
+      assistantReplyContent({
+        success: false,
+        result: null,
+        error: "sandbox died",
+      }),
+    ).toBe("Error: sandbox died");
+  });
+});
+
+describe("formatDelayedPublishFailureError", () => {
+  test.each(["session", "chat", "task"] as const)(
+    "the %s lead-in is recognised as a delayed publish failure",
+    (scope) => {
+      const error = formatDelayedPublishFailureError(
+        scope,
+        new Error("origin rejected the push"),
+      );
+      expect(error).toContain(PUBLISH_FAILURE_MARKER);
+      expect(error).toContain("origin rejected the push");
+      expect(delayedPublishFailureError("saved reply", error)).toBe(error);
+    },
+  );
+});
 
 describe("delayedPublishFailureError", () => {
   test("identifies a publish failure after a result was already saved", () => {
@@ -145,5 +198,38 @@ describe("orphanPlaceholderMessages", () => {
       first,
       second,
     ]);
+  });
+});
+
+describe("selectUsageLimitRetryUserMessage", () => {
+  test("returns the user message after a finished usage-limit reply", () => {
+    const user = reply({ role: "user", content: "try again" });
+    const assistant = reply({
+      content: "rate limited",
+      errorType: "rate_limit",
+      finishedAt: 1,
+    });
+    expect(selectUsageLimitRetryUserMessage([assistant, user])).toBe(user);
+  });
+
+  test("rejects a missing or unfinished usage-limit reply", () => {
+    const user = reply({ role: "user", content: "try again" });
+    expect(() => selectUsageLimitRetryUserMessage([user])).toThrow(
+      "usage limit",
+    );
+    expect(() =>
+      selectUsageLimitRetryUserMessage([
+        reply({ errorType: "rate_limit" }),
+        user,
+      ]),
+    ).toThrow("usage limit");
+  });
+
+  test("rejects when there is no user message to restage", () => {
+    expect(() =>
+      selectUsageLimitRetryUserMessage([
+        reply({ errorType: "rate_limit", finishedAt: 1 }),
+      ]),
+    ).toThrow("No message to retry");
   });
 });

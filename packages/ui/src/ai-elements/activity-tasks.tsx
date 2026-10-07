@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, Ref } from "react";
 import { flushSync } from "react-dom";
 
@@ -14,12 +14,14 @@ import {
   IconCircle,
   IconCircleCheck,
   IconGitBranch,
-  IconLoader,
   IconSearch,
   IconTerminal2,
 } from "@tabler/icons-react";
 import { cn } from "../utils/cn";
-import { Spinner } from "../ui/spinner";
+import { CircleSpinner, Spinner } from "../ui/spinner";
+import { CrossfadeIconSlot } from "../ui/crossfade-icon";
+import { motionFast, motionStagger } from "../utils/motion";
+import { m } from "motion/react";
 import { Shimmer } from "./shimmer";
 import {
   type ActivityStep,
@@ -45,9 +47,34 @@ import {
   type CommandVisualKind,
 } from "./activity-step-label";
 import { ActivityStepDetail } from "./activity-step-detail";
-import { MessageResponse } from "./message";
+import { Markdown } from "../markdown/Markdown";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
 import { Task, TaskContent, TaskItem, TaskItemFile, TaskTrigger } from "./task";
+
+const ActivityStreamingHeader = memo(function ActivityStreamingHeader({
+  steps,
+  name,
+  startedAt,
+}: {
+  steps: ActivityStep[];
+  name?: string;
+  startedAt?: number;
+}) {
+  const verb = useSpinnerVerb(true);
+  const elapsed = useElapsedSeconds(startedAt, true);
+  const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
+  const headerText = `${
+    activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
+  }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <Spinner size="sm" />
+      <Shimmer as="span" duration={2.5} spread={1.5}>
+        {headerText}
+      </Shimmer>
+    </div>
+  );
+});
 
 /** Max timeline blocks shown before the overflow toggle appears. */
 const MAX_VISIBLE_ROWS = 8;
@@ -96,6 +123,23 @@ function toggleWithScrollCompensation(
 
 export type { ActivityStep };
 
+/**
+ * Asks the owner of the payload for the untrimmed steps. Passed by context
+ * rather than props because all three collapsibles that can reveal a stripped
+ * row sit at different depths, and none of them otherwise needs the callback.
+ */
+const RequestFullDetailContext = createContext<(() => void) | undefined>(
+  undefined,
+);
+
+/** `onOpenChange` handler that asks for the full payload the first time a fold opens. */
+function useRequestFullDetailOnOpen(): (open: boolean) => void {
+  const request = useContext(RequestFullDetailContext);
+  return (open: boolean) => {
+    if (open) request?.();
+  };
+}
+
 export interface ActivityTasksProps extends ComponentProps<"div"> {
   steps: ActivityStep[];
   isStreaming?: boolean;
@@ -110,22 +154,30 @@ export interface ActivityTasksProps extends ComponentProps<"div"> {
    * this with the path. Pass a stable callback — {@link ActivityTasks} is memoised.
    */
   onOpenFile?: (path: string) => void;
+  /**
+   * Called when a reader opens a fold that may contain step detail the
+   * transcript query stripped (see {@link ActivityStep.hasHiddenDetail}). Fires
+   * on every open, so the owner is responsible for fetching once.
+   */
+  onRequestFullDetail?: () => void;
 }
 
 /** Status glyph for one todo row. */
 function TodoStatusIcon({ status }: { status: TodoItem["status"] }) {
-  if (status === "completed") {
-    return (
-      <IconCircleCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <IconLoader className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
-    );
-  }
   return (
-    <IconCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+    <CrossfadeIconSlot
+      iconKey={status}
+      variant="soft"
+      className="relative mt-0.5 flex size-3.5 shrink-0 items-center justify-center"
+    >
+      {status === "completed" ? (
+        <IconCircleCheck className="size-3.5 text-primary" />
+      ) : status === "in_progress" ? (
+        <CircleSpinner size="sm" className="size-3.5" />
+      ) : (
+        <IconCircle className="size-3.5 text-muted-foreground" />
+      )}
+    </CrossfadeIconSlot>
   );
 }
 
@@ -176,6 +228,29 @@ function iconForStep(step: ActivityStep) {
   return (stepConfig[step.type] ?? stepConfig.tool).icon;
 }
 
+/**
+ * One thinking block behind a "Thought for Ns" trigger. Streaming steps open
+ * themselves so live thinking is readable as it lands, then auto-close.
+ */
+function ActivityReasoningDisclosure({ step }: { step: ActivityStep }) {
+  const thoughts = step.detail?.trim() ?? "";
+  const isActive = step.status === "active";
+  const seconds = step.durationMs
+    ? Math.max(1, Math.round(step.durationMs / 1000))
+    : undefined;
+  return (
+    <Reasoning
+      className="mb-0"
+      isStreaming={isActive}
+      defaultOpen={isActive}
+      duration={isActive ? undefined : seconds}
+    >
+      <ReasoningTrigger />
+      {thoughts ? <ReasoningContent>{thoughts}</ReasoningContent> : null}
+    </Reasoning>
+  );
+}
+
 /** One per-call activity row with Synara-style humanized label. */
 function ActivityStepRow({
   row,
@@ -189,6 +264,7 @@ function ActivityStepRow({
   const { step, children } = row;
   const isActive = step.status === "active";
   const presentation = deriveStepRowPresentation(step, isActive);
+  const requestFullDetail = useRequestFullDetailOnOpen();
 
   if (step.type === "todos") {
     return (
@@ -215,21 +291,7 @@ function ActivityStepRow({
   }
 
   if (step.type === "reasoning") {
-    const thoughts = step.detail?.trim() ?? "";
-    const seconds = step.durationMs
-      ? Math.max(1, Math.round(step.durationMs / 1000))
-      : undefined;
-    return (
-      <Reasoning
-        className="mb-0"
-        isStreaming={isActive}
-        defaultOpen={isActive}
-        duration={isActive ? undefined : seconds}
-      >
-        <ReasoningTrigger />
-        {thoughts ? <ReasoningContent>{thoughts}</ReasoningContent> : null}
-      </Reasoning>
-    );
+    return <ActivityReasoningDisclosure step={step} />;
   }
 
   const Icon = iconForStep(step);
@@ -283,7 +345,13 @@ function ActivityStepRow({
         step.isError ? "text-destructive" : "text-muted-foreground",
       )}
     >
-      <Icon className="size-4 shrink-0" />
+      <CrossfadeIconSlot
+        iconKey={`${step.type}-${step.status}`}
+        variant="soft"
+        className="relative flex size-4 shrink-0 items-center justify-center"
+      >
+        <Icon className="size-4" />
+      </CrossfadeIconSlot>
       {label}
       {fileChip}
     </div>
@@ -314,7 +382,7 @@ function ActivityStepRow({
   if (hasDetail) {
     return (
       <div className="space-y-1">
-        <Collapsible className="group w-full">
+        <Collapsible className="group w-full" onOpenChange={requestFullDetail}>
           <CollapsibleTrigger className="flex w-full items-center gap-2 text-left transition-colors hover:text-foreground">
             {rowHeader}
             <IconChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
@@ -341,9 +409,9 @@ function ActivityReasoningBlock({ step }: { step: ActivityStep }) {
   const thoughts = step.detail?.trim();
   if (!thoughts) return null;
   return (
-    <MessageResponse className="my-1 text-foreground text-sm leading-relaxed">
+    <Markdown className="my-1 text-foreground text-sm leading-relaxed">
       {thoughts}
-    </MessageResponse>
+    </Markdown>
   );
 }
 
@@ -360,14 +428,25 @@ function ActivityActionGroup({
   const summary = deriveActionGroupSummary(steps);
   const firstStep = steps[0];
   const Icon = firstStep ? iconForStep(firstStep) : IconTerminal2;
+  const requestFullDetail = useRequestFullDetailOnOpen();
 
   return (
-    <Collapsible className="group w-full" defaultOpen={isActive}>
+    <Collapsible
+      className="group py-2 w-full"
+      defaultOpen={isActive}
+      onOpenChange={requestFullDetail}
+    >
       {/* Summary stays muted even when a call inside failed: agents run failing
           commands on purpose, so one non-zero exit should not paint the run red.
           The failed row itself is still red once the fold is open. */}
       <CollapsibleTrigger className="flex w-full items-center gap-2 text-left text-muted-foreground text-sm transition-colors hover:text-foreground">
-        <Icon className="size-4 shrink-0" />
+        <CrossfadeIconSlot
+          iconKey={isActive ? "group-active" : "group-idle"}
+          variant="soft"
+          className="relative flex size-4 shrink-0 items-center justify-center"
+        >
+          <Icon className="size-4" />
+        </CrossfadeIconSlot>
         <span className="min-w-0 truncate" title={summary}>
           {isActive ? (
             <Shimmer as="span" duration={2.5} spread={1.5}>
@@ -460,12 +539,18 @@ function ActivityRowList({
   return (
     <>
       {isStreaming && toggle}
-      {visible.map(({ segment, key }) => (
-        <ActivitySegmentBlock
+      {visible.map(({ segment, key }, index) => (
+        <m.div
           key={key}
-          segment={segment}
-          onOpenFile={onOpenFile}
-        />
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            ...motionFast,
+            delay: motionStagger(index, 0.02, 0.08),
+          }}
+        >
+          <ActivitySegmentBlock segment={segment} onOpenFile={onOpenFile} />
+        </m.div>
       ))}
       {!isStreaming && toggle}
     </>
@@ -506,10 +591,9 @@ export const ActivityTasks = memo(
     duration,
     finalText,
     onOpenFile,
+    onRequestFullDetail,
     ...props
   }: ActivityTasksProps) => {
-    const verb = useSpinnerVerb(Boolean(isStreaming));
-    const elapsed = useElapsedSeconds(startedAt, Boolean(isStreaming));
     const rows = buildActivityRows(steps).filter(
       (row) => !HIDDEN_TYPES.has(row.step.type),
     );
@@ -518,54 +602,52 @@ export const ActivityTasks = memo(
 
     void finalText;
 
-    // When real tool/file rows exist, they already shimmer their own titles —
-    // don't also show the random "Eva is inferring…" header above them.
-    const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
-    const headerText =
-      rows.length > 0
-        ? null
-        : `${
-            activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
-          }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
-
     if (!isStreaming && duration) {
       return (
-        <Collapsible
-          className={cn("group text-sm", className)}
-          defaultOpen={false}
-          {...props}
-        >
-          <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-border pb-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground">
-            <span>Worked for {duration}</span>
-            <IconChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-2 space-y-1.5 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
-            <ActivityRowList
-              rows={rows}
-              isStreaming={false}
-              onOpenFile={onOpenFile}
-            />
-          </CollapsibleContent>
-        </Collapsible>
+        <RequestFullDetailContext value={onRequestFullDetail}>
+          <Collapsible
+            className={cn("group text-sm", className)}
+            defaultOpen={false}
+            // Opening the turn prefetches the stripped detail, so the rows
+            // inside already have their bodies by the time one is clicked.
+            onOpenChange={(open) => {
+              if (open) onRequestFullDetail?.();
+            }}
+            {...props}
+          >
+            <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-border pb-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground">
+              <span>Worked for {duration}</span>
+              <IconChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 space-y-1.5 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
+              <ActivityRowList
+                rows={rows}
+                isStreaming={false}
+                onOpenFile={onOpenFile}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        </RequestFullDetailContext>
       );
     }
 
     return (
-      <div className={cn("space-y-1.5 text-sm", className)} {...props}>
-        {isStreaming && headerText ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Spinner size="sm" />
-            <Shimmer as="span" duration={2.5} spread={1.5}>
-              {headerText}
-            </Shimmer>
-          </div>
-        ) : null}
-        <ActivityRowList
-          rows={rows}
-          isStreaming={isStreaming}
-          onOpenFile={onOpenFile}
-        />
-      </div>
+      <RequestFullDetailContext value={onRequestFullDetail}>
+        <div className={cn("space-y-1.5 text-sm", className)} {...props}>
+          {isStreaming && rows.length === 0 ? (
+            <ActivityStreamingHeader
+              steps={steps}
+              name={name}
+              startedAt={startedAt}
+            />
+          ) : null}
+          <ActivityRowList
+            rows={rows}
+            isStreaming={isStreaming}
+            onOpenFile={onOpenFile}
+          />
+        </div>
+      </RequestFullDetailContext>
     );
   },
 );

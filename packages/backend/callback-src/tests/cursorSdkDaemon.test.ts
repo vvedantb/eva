@@ -123,6 +123,7 @@ describe("the daemon preserves durable ownership from the claim response", () =>
       lifecycle: "durable",
       prompt: "Fix the upload.",
       attachmentUrls: ["https://example.test/input.png"],
+      interactionMode: "default",
       turnLease: { turnId: "turn-47", leaseGeneration: 3 },
     });
   });
@@ -132,6 +133,7 @@ describe("the daemon preserves durable ownership from the claim response", () =>
       lifecycle: "legacy",
       prompt: "Legacy turn",
       attachmentUrls: [],
+      interactionMode: "default",
       turnLease: null,
     });
   });
@@ -176,7 +178,13 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
         EVA_MCP_AUTH: "token-123",
         EVA_MCP_BASE_URL: "https://example.convex.site",
       },
-      { lifecycle: "legacy", prompt: "p", attachmentUrls: [], turnLease: null },
+      {
+        lifecycle: "legacy",
+        prompt: "p",
+        attachmentUrls: [],
+        interactionMode: "default",
+        turnLease: null,
+      },
       "/tmp/eva-cursor-turn-1.txt",
     );
     expect(env.EVA_MCP_AUTH).toBe("token-123");
@@ -196,6 +204,7 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
         lifecycle: "durable",
         prompt: "p",
         attachmentUrls: [],
+        interactionMode: "default",
         turnLease: { turnId: "turn-1", leaseGeneration: 3 },
       },
       "/tmp/eva-cursor-turn-2.txt",
@@ -215,12 +224,16 @@ describe("the cursor daemon's per-turn ordering", () => {
   const daemon = readSource("providers/cursorSdkDaemon.ts");
 
   test("clearing the turn buffer also rewinds the flush cursor", () => {
-    const reset = functionBody(daemon, "function resetTurnState(): void {");
-    expect(reset).toContain('S.rawOutput = ""');
+    expect(daemon).toContain("resetDaemonTurnStreamingState()");
+    const reset = functionBody(
+      readSource("runtime/state.ts"),
+      "export function resetDaemonTurnStreamingState(): void {",
+    );
+    expect(reset).toContain('callbackState.rawOutput = ""');
     expect(
       reset,
       "a cleared buffer with a live cursor kills flushing",
-    ).toContain("S.lastProcessed = 0");
+    ).toContain("callbackState.lastProcessed = 0");
   });
 
   /**
@@ -268,7 +281,7 @@ describe("the cursor daemon's per-turn ordering", () => {
       "async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {",
     );
     expect(finalize).toContain("appendClaimedTurnCompletion(completionArgs)");
-    expect(failAndExit).toContain("appendClaimedTurnCompletion(completionArgs)");
+    expect(failAndExit).toContain("postClaimedTurnFailureCompletion(");
     expect(runTurn).toContain("appendClaimedTurnCompletion(completionArgs)");
     const worker = functionBody(
       daemon,
@@ -287,7 +300,7 @@ describe("the cursor daemon's per-turn ordering", () => {
       daemon,
       "async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {",
     );
-    const flushAt = finalize.indexOf("await flushStreaming()");
+    const flushAt = finalize.indexOf("await drainStreamingAndCompleteSteps()");
     const serializeAt = finalize.indexOf("serializeSteps(S.accumulatedSteps)");
     const deliverAt = finalize.indexOf("deliverCompletionWithMedia(");
     expect(flushAt, "the pre-completion drain is gone").toBeGreaterThan(-1);
@@ -345,9 +358,8 @@ describe("the cursor daemon's per-turn ordering", () => {
   /** An idle daemon polling at 50ms burns ~20 Convex mutations/s for nothing. */
   test("the claim poll backs off once nothing is in flight", () => {
     const watcher = daemon.slice(daemon.indexOf("function startClaimWatcher("));
-    expect(watcher).toContain("PROMPT_POLL_IDLE_INTERVAL_MS");
-    expect(watcher).toContain("PROMPT_POLL_INTERVAL_MS");
-    expect(watcher).toContain("PROMPT_POLL_FAST_WINDOW_MS");
+    expect(watcher).toContain("selectClaimPollIntervalMs(");
+    expect(watcher).toContain("lastIdleActivityAtMs");
   });
 
   /**
@@ -396,7 +408,7 @@ describe("the cursor daemon's per-turn ordering", () => {
     expect(spawnWorker).toContain(
       "--max-old-space-size=${CURSOR_TURN_WORKER_HEAP_MB}",
     );
-    expect(spawnWorker).toContain("/oom_score_adj");
+    expect(spawnWorker).toContain("writeOomScoreAdj(");
     expect(spawnWorker).toContain("CURSOR_TURN_WORKER_OOM_SCORE");
   });
 });

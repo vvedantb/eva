@@ -21,6 +21,7 @@ import {
 import { IconPlus, IconFolder } from "@tabler/icons-react";
 import { TeamRepoCard } from "./TeamRepoCard";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.listByTeam>[number];
@@ -212,9 +213,7 @@ export function TeamReposTab({
                 </Button>
                 <Button
                   onClick={handleAddRepo}
-                  disabled={
-                    dialog.isSubmitting || availableRepos.length === 0
-                  }
+                  disabled={dialog.isSubmitting || availableRepos.length === 0}
                 >
                   {dialog.isSubmitting ? "Adding…" : "Add"}
                 </Button>
@@ -233,20 +232,21 @@ export function TeamReposTab({
             />
           </div>
         ) : (
-          repos.map((repo) => (
-            <TeamRepoCard
-              key={repo._id}
-              repo={repo}
-              teamId={teamId}
-              isOwner={isOwner}
-              onRemove={(repoId) =>
-                void catchMutationError(
-                  removeRepo({ teamId, repoId }),
-                  "Couldn't remove repository",
-                  "team-repo-remove",
-                )
-              }
-            />
+          repos.map((repo, index) => (
+            <ListEnter key={repo._id} index={index}>
+              <TeamRepoCard
+                repo={repo}
+                teamId={teamId}
+                isOwner={isOwner}
+                onRemove={(repoId) =>
+                  void catchMutationError(
+                    removeRepo({ teamId, repoId }),
+                    "Couldn't remove repository",
+                    "team-repo-remove",
+                  )
+                }
+              />
+            </ListEnter>
           ))
         )}
       </div>

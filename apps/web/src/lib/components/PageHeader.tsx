@@ -1,12 +1,16 @@
+"use client";
+
 import { Button } from "@eva/ui";
 import { IconArrowLeft } from "@tabler/icons-react";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 export interface PageHeaderProps {
   title?: React.ReactNode;
   /**
    * Sits beside the title, before `headerRight`. For navigation that belongs
    * with "where am I" rather than the action cluster — e.g. the main/sandbox
-   * surface switcher.
+   * surface switcher. Centred over the title row at `sm` and up; below that it
+   * takes its own row under the title.
    */
   titleAfter?: React.ReactNode;
   headerCenter?: React.ReactNode;
@@ -51,6 +55,12 @@ export function PageHeader({
   const hasHeaderRight = headerRight != null;
   const hasToolbar = toolbar != null;
   const hasTabs = tabs != null;
+  // Below `sm` the title row cannot hold a second control: a breadcrumb sharing
+  // the row with a three-segment tab control collapses to a few pixels and its
+  // trigger stops being tappable. `titleAfter` gets its own row there instead.
+  const isPhone = useMediaQuery("(max-width: 639px)");
+  const titleAfterInline = titleAfter != null && !isPhone;
+  const titleAfterOwnRow = titleAfter != null && isPhone;
 
   return (
     <div
@@ -78,7 +88,7 @@ export function PageHeader({
               /* Capped short of the row's centre when `titleAfter` is
                  centred over it, so a long title truncates instead of
                  sliding under the absolutely positioned control. */
-              className={`min-w-0 flex-1 ${titleAfter ? "sm:max-w-[calc(75%-4rem)]" : ""} text-base font-semibold tracking-[-0.02em] text-foreground sm:text-lg md:text-xl animate-in fade-in slide-in-from-left-1 duration-300 ${isStringTitle ? "hidden whitespace-nowrap text-balance lg:block" : "overflow-hidden"}`}
+              className={`min-w-0 flex-1 ${titleAfterInline ? "sm:max-w-[calc(75%-4rem)]" : ""} text-base font-semibold tracking-[-0.02em] text-foreground sm:text-lg md:text-xl animate-in fade-in slide-in-from-left-1 duration-300 ${isStringTitle ? "hidden whitespace-nowrap text-balance lg:block" : "overflow-hidden"}`}
             >
               {title}
             </h1>
@@ -87,8 +97,9 @@ export function PageHeader({
               title and action clusters are both variable-width, so any
               in-flow position drifts with them. Absolute keeps it fixed at
               the row's centre and out of the layout entirely. Below `sm`
-              there is no room to centre, so it sits after the title. */}
-          {titleAfter && (
+              there is no room for it on this row at all, so it moves to its
+              own full-width row under the title (rendered below). */}
+          {titleAfterInline && (
             <div className="shrink-0 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
               {titleAfter}
             </div>
@@ -105,6 +116,11 @@ export function PageHeader({
           </div>
         ) : null}
       </div>
+      {titleAfterOwnRow && (
+        <div className="mt-2 min-w-0 overflow-x-auto scrollbar-none">
+          {titleAfter}
+        </div>
+      )}
       {headerCenter && (
         <div className="mt-2 md:hidden animate-in fade-in duration-300">
           {headerCenter}

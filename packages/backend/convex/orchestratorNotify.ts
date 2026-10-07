@@ -1,29 +1,25 @@
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import { workflow } from "./workflowManager";
-import { trackSessionWorkflow } from "./workflowWatchdog";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { isEntityDeleted } from "./numId";
-import { normalizeAIModel } from "./validators";
+import type { Id } from "./_generated/dataModel";
 import {
   decideChildOutcome,
   orchestratorNotifyChildValidator,
   type OrchestratorNotifyChild,
 } from "./orchestratorShared";
-
+import { requestRun } from "./_ave/threads";
 
 /** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
-  masterSessionId: Id<"sessions">;
+  threadId: Id<"aveThreads">;
   kindLabel: string;
   title: string;
   /** Optional because a quick task can exist before a repo is attached. */
   repoId: Id<"githubRepos"> | undefined;
-  parentId: Id<"sessions"> | Id<"agentTasks">;
+  parentId: ChildParentId;
 };
+
+type ChildParentId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
 
 async function loadChildSummary(
   ctx: MutationCtx,
@@ -31,19 +27,30 @@ async function loadChildSummary(
 ): Promise<ChildSummary | null> {
   if (child.kind === "session") {
     const session = await ctx.db.get(child.sessionId);
-    if (!session || session.watchedByOrchestrator === undefined) return null;
+    if (!session || session.watchedByAve === undefined) return null;
     return {
-      masterSessionId: session.watchedByOrchestrator,
+      threadId: session.watchedByAve,
       kindLabel: "session",
       title: session.title,
       repoId: session.repoId,
       parentId: session._id,
     };
   }
+  if (child.kind === "project") {
+    const project = await ctx.db.get(child.projectId);
+    if (!project || project.watchedByAve === undefined) return null;
+    return {
+      threadId: project.watchedByAve,
+      kindLabel: "project",
+      title: project.title,
+      repoId: project.repoId,
+      parentId: project._id,
+    };
+  }
   const task = await ctx.db.get(child.taskId);
-  if (!task || task.watchedByOrchestrator === undefined) return null;
+  if (!task || task.watchedByAve === undefined) return null;
   return {
-    masterSessionId: task.watchedByOrchestrator,
+    threadId: task.watchedByAve,
     kindLabel: "task",
     title: task.title,
     repoId: task.repoId,
@@ -51,30 +58,20 @@ async function loadChildSummary(
   };
 }
 
-/** Drops the watch pointer once its master is gone, so we stop re-checking it. */
+/** Drops the watch pointer once its thread is gone, so we stop re-checking it. */
 async function clearWatch(
   ctx: MutationCtx,
   child: OrchestratorNotifyChild,
 ): Promise<void> {
   if (child.kind === "session") {
-    await ctx.db.patch(child.sessionId, { watchedByOrchestrator: undefined });
+    await ctx.db.patch(child.sessionId, { watchedByAve: undefined });
     return;
   }
-  await ctx.db.patch(child.taskId, { watchedByOrchestrator: undefined });
-}
-
-/**
- * A master that can still be woken. Archived/deleted masters are gone for good,
- * so their watches are dropped. A `closed` master is deliberately NOT treated as
- * gone: closed only means its sandbox stopped, and starting a turn restarts it —
- * exactly what the web composer does when a user messages a closed session.
- */
-function isLiveMaster(
-  master: Doc<"sessions"> | null,
-): master is Doc<"sessions"> {
-  return (
-    master !== null && !isEntityDeleted(master) && master.archived !== true
-  );
+  if (child.kind === "project") {
+    await ctx.db.patch(child.projectId, { watchedByAve: undefined });
+    return;
+  }
+  await ctx.db.patch(child.taskId, { watchedByAve: undefined });
 }
 
 /**
@@ -84,7 +81,7 @@ function isLiveMaster(
  */
 async function resolveChildOutcome(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | Id<"agentTasks">,
+  parentId: ChildParentId,
   reportedStatus: string,
 ): Promise<{ status: string; tail: string | undefined }> {
   const recent = await ctx.db
@@ -100,17 +97,12 @@ async function resolveChildOutcome(
 }
 
 /**
- * Wakes the master session watching a child agent that just went idle.
+ * Wakes the Manager Ave thread watching a child agent that just went idle.
  *
- * Inserts the wake-up as a normal user-role row (flagged
- * `orchestratorNotification` for styling) and then starts the master's turn the
- * same way a queue drain does — `sessionExecuteWorkflow` owns the assistant
- * placeholder and prompt build, so nothing here duplicates `startExecute`. A
- * busy master gets the wake-up queued instead; several children finishing at
- * once therefore drain one after another rather than racing.
- *
- * Notifications never register a watch of their own, so a woken master cannot
- * notify itself into a loop.
+ * Inserts the wake-up as a user-role row (flagged `orchestratorNotification`
+ * for styling) and asks for a run. A busy thread folds it into one follow-up
+ * run, so several children finishing at once drain together instead of racing.
+ * Ave never watches itself, so a wake-up cannot loop.
  */
 export const notifyOrchestratorOfChild = internalMutation({
   args: {
@@ -123,13 +115,11 @@ export const notifyOrchestratorOfChild = internalMutation({
     const summary = await loadChildSummary(ctx, args.child);
     if (!summary) return null;
 
-    const master = await ctx.db.get(summary.masterSessionId);
-    if (!isLiveMaster(master)) {
+    const thread = await ctx.db.get(summary.threadId);
+    if (!thread || thread.archivedAt !== undefined) {
       await clearWatch(ctx, args.child);
       return null;
     }
-    // A master cannot watch itself into a self-wake loop.
-    if (master._id === summary.parentId) return null;
 
     const repo =
       summary.repoId === undefined ? null : await ctx.db.get(summary.repoId);
@@ -143,68 +133,15 @@ export const notifyOrchestratorOfChild = internalMutation({
     const content =
       outcome.tail === undefined ? headline : `${headline}\n\n${outcome.tail}`;
 
-    const ownerUserId = master.createdBy ?? master.userId;
-    const model = normalizeAIModel(master.lastModel);
-    const now = Date.now();
-
-    if (master.activeWorkflowId !== undefined) {
-      await ctx.db.insert("queuedMessages", {
-        parentId: master._id,
-        content,
-        createdAt: now,
-        order: now,
-        userId: ownerUserId,
-        model,
-        providerAccountId: master.providerAccountId,
-        reasoningLevel: master.lastReasoningLevel,
-        thinkingEnabled: master.lastThinkingEnabled,
-        use1mContext: master.lastUse1mContext,
-        fastMode: master.lastFastMode,
-        orchestratorNotification: true,
-      });
-      await ctx.db.patch(master._id, { updatedAt: now });
-      return null;
-    }
-
-    const masterRepo = await ctx.db.get(master.repoId);
-    if (!masterRepo) return null;
-
-    // Same order as the queue drain: wipe any stale streaming row before the
-    // workflow stages its assistant placeholder, then insert the user row the
-    // placeholder answers.
-    await clearStreamingActivity(ctx, String(master._id));
-    await ctx.db.insert("messages", {
-      parentId: master._id,
+    await ctx.db.insert("aveMessages", {
+      threadId: thread._id,
       role: "user",
       content,
-      timestamp: now,
-      userId: ownerUserId,
-      model,
+      timestamp: Date.now(),
+      userId: thread.userId,
       orchestratorNotification: true,
     });
-
-    const workflowId = await workflow.start(
-      ctx,
-      internal.sessionWorkflow.sessionExecuteWorkflow,
-      {
-        sessionId: master._id,
-        message: content,
-        model,
-        reasoningLevel: master.lastReasoningLevel,
-        thinkingEnabled: master.lastThinkingEnabled,
-        use1mContext: master.lastUse1mContext,
-        fastMode: master.lastFastMode,
-        providerAccountId: master.providerAccountId,
-        credentialOwnerUserId: ownerUserId,
-        userId: ownerUserId,
-        installationId: masterRepo.installationId,
-      },
-    );
-    await ctx.db.patch(master._id, {
-      updatedAt: now,
-      lastModel: model,
-    });
-    await trackSessionWorkflow(ctx, master._id, workflowId);
+    await requestRun(ctx, thread);
     return null;
   },
 });

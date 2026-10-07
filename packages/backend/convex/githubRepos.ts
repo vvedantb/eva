@@ -15,6 +15,7 @@ export {
   getInstallationAccessState,
   findParentRepoByOwnerAndName,
   listRepoIdsByOwnerAndName,
+  getInstallationIdByOwnerAndName,
   listGroupedByCodebase,
   getAppSlug,
 } from "./_githubRepos/queries";

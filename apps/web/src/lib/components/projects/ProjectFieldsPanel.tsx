@@ -27,16 +27,14 @@ import {
   IconInfoCircle,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import {
-  FALLBACK_GIT_BASE_BRANCH,
-  UserInitials,
-  getUserInitials,
-} from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, getUserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   FieldsSection,
   FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
 import { ProjectPhaseBadge } from "./ProjectPhaseBadge";
@@ -132,7 +130,7 @@ export function ProjectFieldsPanel({
             onChange={(p) =>
               updateProject({ id: projectId, priority: p ?? null })
             }
-            className="text-[13px]"
+            className={FIELD_TEXT_CLASS}
           />
         </div>
 
@@ -232,7 +230,7 @@ export function ProjectFieldsPanel({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className={`${FIELD_ROW_CLASS} w-full gap-1.5 text-[13px] ${!project.members?.length ? "text-muted-foreground" : ""}`}
+              className={`${FIELD_ROW_CLASS} w-full gap-1.5 ${FIELD_TEXT_CLASS} ${!project.members?.length ? "text-muted-foreground" : ""}`}
             >
               <IconUsers size={14} className="text-muted-foreground shrink-0" />
               <span>
@@ -287,11 +285,11 @@ export function ProjectFieldsPanel({
             }}
             traits={projectStoredTraits(project)}
             onTraitsChange={setProjectTraits}
-            className="px-0"
+            className={`px-0 ${FIELD_TEXT_CLASS}`}
           />
         </div>
 
-        <div className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}>
+        <div className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}>
           <IconGitBranch size={14} className="text-muted-foreground" />
           <span>{displayBaseBranch}</span>
           <Tooltip>
@@ -334,7 +332,7 @@ export function ProjectFieldsPanel({
 
       <FieldsSection title="Created">
         <div
-          className={`${FIELD_ROW_CLASS} gap-1.5 text-xs text-muted-foreground`}
+          className={`${FIELD_ROW_CLASS} gap-1.5 text-muted-foreground ${FIELD_TEXT_CLASS}`}
         >
           {creator ? (
             <>

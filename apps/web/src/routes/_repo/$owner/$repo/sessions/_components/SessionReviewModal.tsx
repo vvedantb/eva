@@ -19,6 +19,30 @@ import { m, AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
+/** Opens (or un-drafts) this session's PR. Shared by the confirm dialog and Alt-click bypass. */
+export function useSendSessionForReview(sessionId: Id<"sessions">) {
+  const createPr = useAction(api.github.createSessionPr);
+  const [isCreatingPr, setIsCreatingPr] = useState(false);
+
+  const sendForReview = async (): Promise<boolean> => {
+    setIsCreatingPr(true);
+    try {
+      await catchMutationError(
+        createPr({ sessionId }),
+        "Couldn't create pull request",
+        "session-create-pr",
+      );
+    } catch {
+      setIsCreatingPr(false);
+      return false;
+    }
+    setIsCreatingPr(false);
+    return true;
+  };
+
+  return { sendForReview, isCreatingPr };
+}
+
 interface SessionReviewModalProps {
   sessionId: Id<"sessions">;
   open: boolean;
@@ -30,12 +54,10 @@ export function SessionReviewModal({
   open,
   onClose,
 }: SessionReviewModalProps) {
-  const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [reviewStep, setReviewStep] = useState<"confirm" | "complete">(
     "confirm",
   );
-
-  const createPr = useAction(api.github.createSessionPr);
+  const { sendForReview, isCreatingPr } = useSendSessionForReview(sessionId);
 
   const handleClose = () => {
     onClose();
@@ -43,18 +65,9 @@ export function SessionReviewModal({
   };
 
   const handleCreatePr = async () => {
-    setIsCreatingPr(true);
-    try {
-      await catchMutationError(
-        createPr({ sessionId }),
-        "Couldn't create pull request",
-        "session-create-pr",
-      );
-      setReviewStep("complete");
-    } catch {
-      setReviewStep("confirm");
-    }
-    setIsCreatingPr(false);
+    const ok = await sendForReview();
+    if (ok) setReviewStep("complete");
+    else setReviewStep("confirm");
   };
 
   return (

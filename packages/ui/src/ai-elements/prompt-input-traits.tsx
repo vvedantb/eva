@@ -244,6 +244,3 @@ export function TraitsPanel({
     </div>
   );
 }
-
-/** @deprecated Use `TraitsPanel`. Kept so existing imports keep working. */
-export const TraitsMenu = TraitsPanel;

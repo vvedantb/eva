@@ -7,19 +7,26 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   motionFast,
+  toast,
 } from "@eva/ui";
 import { useState } from "react";
-import { entityPathSegment } from "@/lib/numId";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
+import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
+import {
+  sessionHrefForRow,
+  type RepoPathParts,
+} from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import {
   SessionMenuItems,
   useIsRegeneratingTitle,
 } from "@/lib/components/sidebar/SessionMenuItems";
 import { SharedLayoutNavSurface } from "@/lib/components/sidebar/SharedLayoutNav";
-import { SessionReviewModal } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
+import {
+  SessionReviewModal,
+  useSendSessionForReview,
+} from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
-
-type SessionStatus = "active" | "starting" | "stopping" | "closed";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface SessionItem {
   _id: Id<"sessions">;
@@ -28,50 +35,59 @@ interface SessionItem {
   userId: Id<"users">;
   title: string;
   titleRegeneration?: { startedAt: number };
-  status: SessionStatus;
+  status: SandboxStatus;
+  /** Set when the last wake attempt failed; the row's dot reads as an error. */
+  sandboxError?: string;
   isExecuting?: boolean;
-  isOrchestrator?: boolean;
   updatedAt?: number;
   sandboxId?: string;
   branchName?: string;
   baseBranch?: string;
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
+  /**
+   * Set only on rows this app sees through a linked checkout: the session's
+   * primary repo, which owns its URL (see `sessionHrefForRow`).
+   */
+  linkedFrom?: RepoPathParts;
+  /** Linked repos cloned beside the primary; drives the `+N` badge. */
+  linkedRepoCount?: number;
+  /** Source of a "Fork session" fork; drives the row's fork glyph. */
+  forkedFromSessionId?: Id<"sessions">;
 }
 
 interface SidebarSessionRowProps<T extends SessionItem> {
   session: T;
   isSelected: boolean;
-  baseUrl: string;
+  /** The app whose sidebar this row sits in; the row's own repo unless linked in. */
+  repo: RepoPathParts;
   onNavigate?: () => void;
   onRename?: (session: T, newTitle: string) => Promise<void>;
-  onDuplicate?: (session: T) => Promise<string>;
   /** Active list: archive. Omit in archived list. */
   onArchiveRequest?: (session: T) => void;
   /** Archived list: unarchive. */
   onUnarchive?: (session: T) => Promise<void>;
-  onDuplicateNavigate?: (pathSegment: string) => void;
+  /** Shows Fork session (active and archived lists); opens the fork. */
+  onForkNavigate?: (pathSegment: string) => void;
   onRenameRequest?: (session: T) => void;
 }
 
 /**
- * One session row plus context menu. Active list gets rename/duplicate/archive;
- * archived list gets unarchive.
+ * One session row plus context menu. Active list gets rename/archive; archived
+ * list gets unarchive. Both can fork.
  */
 export function SidebarSessionRow<T extends SessionItem>({
   session,
   isSelected,
-  baseUrl,
+  repo,
   onNavigate,
   onRename,
-  onDuplicate,
   onArchiveRequest,
   onUnarchive,
-  onDuplicateNavigate,
+  onForkNavigate,
   onRenameRequest,
 }: SidebarSessionRowProps<T>) {
-  const pathSegment = entityPathSegment(session);
-  const href = pathSegment ? `${baseUrl}/${pathSegment}` : baseUrl;
+  const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
   const isRegeneratingTitle = useIsRegeneratingTitle(session);
   // Same gate the chat header uses, minus archived rows — an archived session
@@ -80,6 +96,8 @@ export function SidebarSessionRow<T extends SessionItem>({
   // Row-local: the dialog belongs to this session and the row outlives it
   // (unlike archive, which removes the row and so is owned by the sidebar).
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const altHeld = useAltHeld();
+  const { sendForReview } = useSendSessionForReview(session._id);
 
   return (
     <>
@@ -105,13 +123,16 @@ export function SidebarSessionRow<T extends SessionItem>({
                 createdAt={session._creationTime}
                 updatedAt={session.updatedAt}
                 status={session.status}
+                sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
-                isOrchestrator={session.isOrchestrator === true}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
                 prUrl={session.prUrl}
                 prState={session.prState}
                 baseBranch={session.baseBranch}
+                linkedFrom={session.linkedFrom}
+                linkedRepoCount={session.linkedRepoCount}
+                forkedFromSessionId={session.forkedFromSessionId}
               />
             </SharedLayoutNavSurface>
           </m.div>
@@ -126,14 +147,21 @@ export function SidebarSessionRow<T extends SessionItem>({
                 ? () => onRenameRequest(session)
                 : undefined
             }
-            onDuplicate={
-              !isArchivedList && onDuplicate
-                ? () => onDuplicate(session)
-                : undefined
-            }
-            onDuplicateNavigate={onDuplicateNavigate}
+            onForkNavigate={onForkNavigate}
             onSendForReview={
-              canSendForReview ? () => setIsReviewOpen(true) : undefined
+              canSendForReview
+                ? () =>
+                    requestConfirm(
+                      altHeld,
+                      () => setIsReviewOpen(true),
+                      () => {
+                        void sendForReview().then((ok) => {
+                          if (ok)
+                            toast.success("Sent to the team for review.");
+                        });
+                      },
+                    )
+                : undefined
             }
             onUnarchive={
               isArchivedList && onUnarchive

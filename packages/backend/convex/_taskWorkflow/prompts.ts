@@ -1,51 +1,15 @@
-import type { Id } from "../_generated/dataModel";
 import {
   buildImplementationSteps,
   buildSummarySection,
   detectUiImplementationTask,
 } from "./uiImplementationPrompt";
 import {
+  buildAgentMemoryBlock,
+  buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
 } from "../prompts";
-
-export const WORKSPACE_DIR = "/tmp/repo";
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function buildTypecheckCommand(rootDirectory: string): string {
-  const typecheckDirectory = rootDirectory
-    ? `${WORKSPACE_DIR}/${rootDirectory}`
-    : WORKSPACE_DIR;
-  return `cd ${shellSingleQuote(typecheckDirectory)} && { status=0; timeout --kill-after=10s 120s npx tsc --noEmit --pretty false > /tmp/eva-tsc.log 2>&1 || status=$?; tail -50 /tmp/eva-tsc.log; exit "$status"; }`;
-}
-
-/** Builds a user-facing notification message for a workflow run completion. */
-export function buildWorkflowRunNotificationMessage(params: {
-  success: boolean;
-  projectId: Id<"projects"> | undefined;
-  error: string | null;
-  prUrl: string | null;
-}): string {
-  const scopeLabel = params.projectId ? "project task" : "quick task";
-  if (params.success) {
-    if (params.prUrl) {
-      return `Run succeeded for this ${scopeLabel}. Pull request: ${params.prUrl}`;
-    }
-    return `Run succeeded for this ${scopeLabel}.`;
-  }
-  if (params.error) {
-    const trimmedError = params.error.trim();
-    const clippedError =
-      trimmedError.length > 200
-        ? `${trimmedError.slice(0, 197)}...`
-        : trimmedError;
-    return `Run failed for this ${scopeLabel}. ${clippedError}`;
-  }
-  return `Run failed for this ${scopeLabel}.`;
-}
+import { buildTypecheckCommand } from "../_sandbox_runtime/typecheckCommand";
 
 /**
  * A reviewer change request prepared for a re-run prompt.
@@ -70,6 +34,8 @@ export function buildImplementationPrompt(
   projectContext?: { title: string; description?: string },
   systemPrompt?: string,
   previousRunSummary?: string,
+  readableRepos: ReadonlyArray<{ owner: string; name: string }> = [],
+  agentMemoryEnabled = false,
 ): string {
   const commitScope = isQuickTask
     ? "feat"
@@ -127,7 +93,8 @@ ${buildSummarySection(uiTask)}
 - Prefix shell commands with timeouts: \`timeout 180 npm install\`, \`timeout 30 gh ...\`
 - For gh: \`GH_PROMPT_DISABLED=1 timeout 30 gh ...\`
 - Do NOT pipe long-running validation commands through \`tail\`; redirect output to a log file, wait for the command to exit, then tail the log.
-- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}`;
+- NEVER use \`sleep\` or \`2>/dev/null\` without \`|| echo "fallback"\`
+- If this task asks for screenshots or a recording, write them to \`/tmp/repo/screenshots/\` (stills) or \`/tmp/repo/recordings/\` (video) using absolute paths, and leave them there when you finish — Eva uploads whatever is in those two folders and posts it into the task chat. Never paste a URL instead, and never commit them.${buildRootDirectoryInstruction(rootDirectory)}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildAgentMemoryBlock(agentMemoryEnabled)}`;
 }
 
 /** Builds a prompt for resolving merge conflicts against the base branch. */

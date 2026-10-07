@@ -28,6 +28,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 - Hover: `hover:bg-*` (background shift). Active/selected: surface fill (and `ring-*` if extra emphasis is needed).
 - Press: respond on pointer-down with `motion-press` + `active:scale-[0.9x]` on controls (buttons, tabs, selects, switches, menu items). Keep color transitions slower than the press transform.
 - Enter/exit along the same path; default UI springs critically damped (`bounce: 0` / high damping). No `prefers-reduced-motion` support — never add `useReducedMotion` gates.
+- Never remount `.beam-halo` or put `filter: blur()` / `drop-shadow()` on a continuously animated beam. The halo was the leftover GPU floor (composer ~3.2→1.0 cores, lock pane ~7.4→2.5). `animationContract.test.ts` bans it.
   **Spacing**
 
 - Use whitespace/padding (Gestalt Law of Proximity) to group related elements; reach for borders/dividers only for structural separation (layout regions), not to outline soft surfaces.
@@ -61,3 +62,5 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 
 - Do not add `useMemo`/`useCallback` by default; only for proven identity/perf needs the compiler cannot cover.
 - Compiler bails on a whole file for `finally`, a catch-less `try`, or `throw`/`?:`/`&&`/`??`/`?.`/loops inside `try` (`eva/no-value-block-in-try`).
+- Never call a component as a function in render (`SessionChatHeader({...})`): the compiler memoises capitalised calls like pure values, so a cache hit skips the call, and if the callee runs hooks React throws #300 "Rendered fewer hooks than expected" (see PR #755/#758). Render components with JSX and name any hook-calling helper `use*`; `react/capitalized-calls` lints this as an error. A genuinely pure PascalCase call (e.g. `Intl.DateTimeFormat`) needs `new` or a lowercase local name.
+- `pnpm lint`, `pnpm typecheck` and `node scripts/compiler-check.mjs` run in CI on every PR, so a new compiler bailout or lint error blocks merge.

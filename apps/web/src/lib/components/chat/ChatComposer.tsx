@@ -1,27 +1,37 @@
 import {
-  motionBase,
   PromptInputProvider,
   toast,
   type ModelAccount,
   type ModelOption,
   type PromptInputMessage,
 } from "@eva/ui";
-import { useUploadChatAttachments } from "@/lib/components/chat/imageAttachments";
+import {
+  describeFailedAttachments,
+  useUploadChatAttachments,
+  type ChatAttachmentUploads,
+} from "@/lib/components/chat/imageAttachments";
 import { ChatDraftSync } from "@/lib/components/chat/ChatDraftSync";
 import { LocalChatDraftSync } from "@/lib/components/chat/LocalChatDraftSync";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { ChatTypeToFocus } from "@/lib/components/chat/ChatTypeToFocus";
 import { ChatTypingLayer } from "@/lib/components/chat/ChatTypingLayer";
 import { ComposerInputChrome } from "@/lib/components/chat/_components/ComposerInputChrome";
-import { ComposerStash } from "@/lib/components/chat/_components/ComposerStash";
+import {
+  ComposerDock,
+  ComposerStash,
+} from "@/lib/components/chat/_components/ComposerStash";
+import { SkillSuggestionChips } from "@/lib/components/chat/_components/SkillSuggestionChips";
+import { useSkillSuggestions } from "@/lib/components/chat/_components/useSkillSuggestions";
+import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
+import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
+import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import {
   mergeMentionItems,
   tokenizedToEditable,
 } from "@/lib/components/mentions";
-import { useRef } from "react";
-import { m, AnimatePresence } from "motion/react";
+import { useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -40,32 +50,41 @@ import {
   composerTaskStepsFromActivity,
   ComposerTasksPanel,
 } from "@/lib/components/chat/_components/ComposerTasksPanel";
-import type { ChatBodyQueuedMessage } from "@/lib/components/chat/chatBodyUtils";
+import type {
+  ChatBodyQueuedMessage,
+  ChatHeldFollowUp,
+  ChatRepo,
+} from "@/lib/components/chat/chatBodyUtils";
 import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
 
-/** localStorage-backed draft seed (no Convex row yet — e.g. new session). */
-type LocalChatDraft = {
+/** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
+export type LocalChatDraft = {
   initialDisplay: string;
   mentionMap: Map<string, string>;
   skillMap: Map<string, string>;
   onSave: (tokenized: string) => void;
 };
 
-interface ChatComposerProps {
-  repoId: Id<"githubRepos">;
-  repoBasePath: string;
-  conversationId: string;
-  queuedMessages: ChatBodyQueuedMessage[];
-  messageHistory: string[];
-  isExecuting: boolean;
-  isInputDisabled: boolean;
-  placeholder: string;
+/**
+ * Everything the model picker needs. Absent (Manager Ave runs on a fixed
+ * model): the picker is not rendered at all.
+ */
+export interface ChatModelPicker {
   model: AIModel;
   setModel: (model: AIModel) => void;
   modelOptions: ReadonlyArray<ModelOption<AIModel>>;
+  /**
+   * The user's own provider accounts. When non-empty, the model picker nests
+   * Team + account submenus under each provider; the chosen account's
+   * credentials run the turn (see `accountId`/`onAccountChange`).
+   */
   accounts?: ReadonlyArray<ModelAccount>;
   accountId?: string | null;
   onAccountChange?: (accountId: string | null) => void;
+  /**
+   * Model trait controls (reasoning effort, thinking toggle, Fast, 1M context).
+   * When provided, trait pills appear above the model list for capable models.
+   */
   displayTraits?: {
     effortLevel: ReasoningLevel | undefined;
     thinkingEnabled: boolean;
@@ -73,46 +92,65 @@ interface ChatComposerProps {
     fastMode: boolean;
   };
   onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
+}
+
+interface ChatComposerProps {
+  /** Absent (Manager Ave): no skills, stash or repo mentions. */
+  repo?: ChatRepo;
+  conversationId: string;
+  queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something; default "Queued". */
+  queueLabel?: string;
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
+  messageHistory: string[];
+  isExecuting: boolean;
+  isInputDisabled: boolean;
+  /** Why the composer will not send, for the toast on a blocked Enter. */
+  disabledReason?: string;
+  /** Wakes the sandbox; gives that toast its action. */
+  onStartSandbox?: () => void;
+  placeholder: string;
+  modelPicker?: ChatModelPicker;
   onSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
   ) => Promise<void>;
   onCancel: () => Promise<void>;
-  beforeQueuedContent?: React.ReactNode;
   preInputContent?: React.ReactNode;
   /** Live turn activity JSON — its todo snapshot feeds the Tasks panel. */
   streamingActivity?: string;
   /** Message id of the streaming turn; scopes Tasks-panel dismissal to it. */
   streamingTurnId?: string;
-  /** Optional left-side control on the under-input card (e.g. base branch). */
+  /**
+   * Optional left-side control on the under-input bar (e.g. base branch).
+   * The bar renders whenever it has anything to hold (this, the stash
+   * trigger or the model picker); this slot is only the extra leading control.
+   */
   underCardLeading?: React.ReactNode;
   draft?: ChatDraftSeed;
   /** Persist draft in localStorage when no Convex conversation exists yet. */
   localDraft?: LocalChatDraft;
   isDraftLoading?: boolean;
   hasPendingContext?: boolean;
+  allowEmptySubmit?: boolean;
 }
 
 export function ChatComposer({
-  repoId,
-  repoBasePath,
+  repo,
   conversationId,
   queuedMessages,
+  queueLabel,
+  heldFollowUps = [],
   messageHistory,
   isExecuting,
   isInputDisabled,
+  disabledReason,
+  onStartSandbox,
   placeholder,
-  model,
-  setModel,
-  modelOptions,
-  accounts,
-  accountId,
-  onAccountChange,
-  displayTraits,
-  onTraitsChange,
+  modelPicker,
   onSend,
   onCancel,
-  beforeQueuedContent,
   preInputContent,
   streamingActivity,
   streamingTurnId,
@@ -121,10 +159,15 @@ export function ChatComposer({
   localDraft,
   isDraftLoading,
   hasPendingContext = false,
+  allowEmptySubmit = false,
 }: ChatComposerProps) {
-  const skillItems = useSkillSlashItems(repoId, getAIModelProvider(model));
-  const dataMentions = useDataMentionItems(repoId);
-  const peopleMentions = usePeopleMentionItems(repoId);
+  const skillItems = useSkillSlashItems(
+    repo?.id,
+    modelPicker ? getAIModelProvider(modelPicker.model) : undefined,
+  );
+  const suggestions = useSkillSuggestions(skillItems);
+  const dataMentions = useDataMentionItems(repo?.id);
+  const peopleMentions = usePeopleMentionItems(repo?.id);
   const { items: plusDataItems } = mergeMentionItems(
     peopleMentions,
     dataMentions,
@@ -132,6 +175,11 @@ export function ChatComposer({
   const currentUserId = useQuery(api.auth.me);
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
+  const [isUploading, setIsUploading] = useState(false);
+  const readiness = useDraftReadiness();
+  // The composer's text lives inside PromptInput; the readiness verdict is
+  // keyed by the exact text it judged, so the last draft is mirrored here.
+  const [draftText, setDraftText] = useState("");
   const { updateQueuedMessage, deleteQueuedMessage, reorderQueuedMessages } =
     useQueuedMessageMutations(queuedMessages);
   // Convex draft wins when both are passed (existing sessions).
@@ -142,18 +190,47 @@ export function ChatComposer({
     files: PromptInputMessage["files"],
   ) => {
     const visible = text.trim();
-    const attachmentStorageIds = await uploadChatAttachments(files);
-    if (files.length > 0 && attachmentStorageIds.length < files.length) {
-      toast.error("Some attachments could not be uploaded.");
+    let uploads: ChatAttachmentUploads = { ids: [], failed: [] };
+    if (files.length > 0) {
+      // Fetch uploads report no bytes, so the only honest progress signal is
+      // that the send is busy: the submit button spins and stops accepting.
+      setIsUploading(true);
+      // Reset is duplicated into the catch rather than using `finally`: the
+      // React Compiler bails on the whole file when it meets one.
+      try {
+        uploads = await uploadChatAttachments(files);
+      } catch (error) {
+        setIsUploading(false);
+        throw error;
+      }
+      setIsUploading(false);
     }
-    if (!visible && attachmentStorageIds.length === 0 && !hasPendingContext) {
+    if (uploads.failed.length > 0) {
+      toast.error(
+        `Couldn't upload ${describeFailedAttachments(uploads.failed)}`,
+        {
+          id: "composer-attachments",
+          description: "Remove them or try again.",
+        },
+      );
+      // Sending anyway produced a turn the user believed carried a screenshot
+      // Eva never received. PromptInput keeps the text and the files exactly
+      // when onSubmit rejects, so throwing is what preserves the composer.
+      throw new Error("Chat attachments failed to upload");
+    }
+    if (
+      !visible &&
+      uploads.ids.length === 0 &&
+      !hasPendingContext &&
+      !allowEmptySubmit
+    ) {
       return;
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
-    await onSend(
-      content,
-      attachmentStorageIds.length > 0 ? attachmentStorageIds : undefined,
-    );
+    // The judged draft is gone once it is sent; a nudge about it is not.
+    setDraftText("");
+    readiness.reset();
+    await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
 
   const handlePromptSubmit = async ({ text, files }: PromptInputMessage) => {
@@ -169,27 +246,123 @@ export function ChatComposer({
     userId: message.userId,
   }));
 
+  const mutedBar = (stashButton: ReactNode) =>
+    !underCardLeading && !stashButton && !modelPicker ? null : (
+      <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
+        {/* On a phone the bar is ~340px wide and the model name is long, so a
+          `shrink-0` picker left the leading control (the base branch) one
+          letter. Both sides give width there: the leading control takes a share
+          of the free space, the picker shrinks and truncates. Desktop keeps the
+          picker at its natural width. */}
+        {underCardLeading ? (
+          <div className="min-w-0 max-sm:flex-1 max-sm:basis-0">
+            {underCardLeading}
+          </div>
+        ) : null}
+        {stashButton}
+        {modelPicker ? (
+          <div className="ml-auto min-w-0 max-sm:shrink sm:shrink-0">
+            <ModelSelectWithTraits
+              value={modelPicker.model}
+              options={modelPicker.modelOptions}
+              onValueChange={modelPicker.setModel}
+              accounts={modelPicker.accounts}
+              accountId={modelPicker.accountId}
+              onAccountChange={modelPicker.onAccountChange}
+              traits={modelPicker.displayTraits}
+              onTraitsChange={modelPicker.onTraitsChange}
+              className="h-7 w-auto max-w-full justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+
+  const renderQueuedContent = (content: string) => {
+    const stripped = stripReviewCommentBlocks(content);
+    const display = tokenizedToEditable(stripped.text).displayText;
+    const suffix =
+      stripped.reviewCommentCount > 0
+        ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
+        : "";
+    return (
+      <MessageMentionText
+        as="span"
+        text={`${display}${suffix}`}
+        repo={repo}
+        className="text-xs leading-4 text-foreground/90"
+      />
+    );
+  };
+
+  const dockPanels = (
+    <>
+      <ComposerTasksPanel
+        steps={composerTaskStepsFromActivity(streamingActivity)}
+        turnId={streamingTurnId}
+      />
+      <QueuedMessagesPanel
+        items={queuedMessageItems}
+        {...(queueLabel !== undefined ? { label: queueLabel } : {})}
+        renderContent={renderQueuedContent}
+        onEdit={async (id, content) => {
+          await updateQueuedMessage({ id, content });
+        }}
+        onDelete={async (id) => {
+          await deleteQueuedMessage({ id });
+        }}
+        onReorder={async (orderedIds) => {
+          const parentId = queuedMessages[0]?.parentId;
+          if (!parentId) return;
+          await reorderQueuedMessages({ parentId, orderedIds });
+        }}
+      />
+      <QueuedMessagesPanel
+        items={heldFollowUps}
+        renderContent={renderQueuedContent}
+      />
+    </>
+  );
+
+  const inputChrome = (
+    <ComposerInputChrome
+      repo={repo}
+      mentionRef={mentionRef}
+      skillItems={skillItems}
+      plusDataItems={plusDataItems}
+      placeholder={isExecuting ? "Add a follow-up..." : placeholder}
+      isExecuting={isExecuting}
+      isInputDisabled={isInputDisabled}
+      isUploading={isUploading}
+      disabledReason={disabledReason}
+      onStartSandbox={onStartSandbox}
+      hasPendingContext={hasPendingContext}
+      onPromptSubmit={handlePromptSubmit}
+      onCancel={onCancel}
+      seedMentionMap={seed?.mentionMap}
+      seedSkillMap={seed?.skillMap}
+      messageHistory={messageHistory}
+      allowEmptySubmit={allowEmptySubmit}
+      onDraftChange={(text) => {
+        suggestions.noteDraft(text);
+        setDraftText(text);
+        readiness.noteChange(text);
+      }}
+    />
+  );
+
   return (
     <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
-      <AnimatePresence initial={false}>
-        {beforeQueuedContent ? (
-          <m.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={motionBase}
-          >
-            {beforeQueuedContent}
-          </m.div>
-        ) : null}
-      </AnimatePresence>
       {preInputContent}
       {isDraftLoading ? (
-        <div
-          aria-busy="true"
-          aria-label="Loading draft..."
-          className="pointer-events-none rounded-full bg-background opacity-50 min-h-12"
-        />
+        <>
+          <div
+            aria-busy="true"
+            aria-label="Loading draft..."
+            className="pointer-events-none rounded-full bg-background opacity-50 min-h-12"
+          />
+          {mutedBar(null)}
+        </>
       ) : (
         <PromptInputProvider initialInput={seed?.initialDisplay}>
           <ChatTypingLayer
@@ -211,84 +384,34 @@ export function ChatComposer({
               onSave={localDraft.onSave}
             />
           )}
-          <ComposerStash
-            repoId={repoId}
-            mentionRef={mentionRef}
-            disabled={isInputDisabled}
-            panels={
-              <>
-                <ComposerTasksPanel
-                  steps={composerTaskStepsFromActivity(streamingActivity)}
-                  turnId={streamingTurnId}
-                />
-                <QueuedMessagesPanel
-                  items={queuedMessageItems}
-                  renderContent={(content) => {
-                    const stripped = stripReviewCommentBlocks(content);
-                    const display = tokenizedToEditable(
-                      stripped.text,
-                    ).displayText;
-                    const suffix =
-                      stripped.reviewCommentCount > 0
-                        ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
-                        : "";
-                    return (
-                      <MessageMentionText
-                        as="span"
-                        text={`${display}${suffix}`}
-                        repoBasePath={repoBasePath}
-                        className="text-xs leading-4 text-foreground/90"
-                      />
-                    );
-                  }}
-                  onEdit={async (id, content) => {
-                    await updateQueuedMessage({ id, content });
-                  }}
-                  onDelete={async (id) => {
-                    await deleteQueuedMessage({ id });
-                  }}
-                  onReorder={async (orderedIds) => {
-                    const parentId = queuedMessages[0]?.parentId;
-                    if (!parentId) return;
-                    await reorderQueuedMessages({ parentId, orderedIds });
-                  }}
-                />
-              </>
-            }
-          >
-            <ComposerInputChrome
-              repoId={repoId}
-              repoBasePath={repoBasePath}
+          <DraftReadinessBanner
+            result={readiness.resultFor(draftText)}
+            onDismiss={readiness.dismiss}
+            className="mx-0 mb-2"
+          />
+          <SkillSuggestionChips
+            chips={suggestions.chips}
+            onPick={(item) => {
+              mentionRef.current?.insertSkill(item);
+              suggestions.dismiss(item.id);
+            }}
+          />
+          {repo ? (
+            <ComposerStash
+              repoId={repo.id}
               mentionRef={mentionRef}
-              skillItems={skillItems}
-              plusDataItems={plusDataItems}
-              skillsSettingsHref={`${repoBasePath}/settings/skills`}
-              placeholder={isExecuting ? "Add a follow-up..." : placeholder}
-              isExecuting={isExecuting}
-              isInputDisabled={isInputDisabled}
-              hasPendingContext={hasPendingContext}
-              model={model}
-              setModel={setModel}
-              modelOptions={modelOptions}
-              accounts={accounts}
-              accountId={accountId}
-              onAccountChange={onAccountChange}
-              displayTraits={displayTraits}
-              onTraitsChange={onTraitsChange}
-              onPromptSubmit={handlePromptSubmit}
-              onCancel={onCancel}
-              seedMentionMap={seed?.mentionMap}
-              seedSkillMap={seed?.skillMap}
-              messageHistory={messageHistory}
-            />
-          </ComposerStash>
+              panels={dockPanels}
+              bar={mutedBar}
+            >
+              {inputChrome}
+            </ComposerStash>
+          ) : (
+            <ComposerDock panels={dockPanels} bar={mutedBar(null)}>
+              {inputChrome}
+            </ComposerDock>
+          )}
         </PromptInputProvider>
       )}
-      {underCardLeading ? (
-        <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center rounded-b-surface bg-muted/70 px-2 py-1.5">
-          <div className="min-w-0">{underCardLeading}</div>
-        </div>
-      ) : null}
     </div>
   );
 }

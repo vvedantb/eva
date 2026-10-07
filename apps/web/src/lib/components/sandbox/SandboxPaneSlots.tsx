@@ -3,6 +3,7 @@
 import type { Doc, Id, SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
 import { CustomTabPanel } from "./CustomTabPanel";
 import { TerminalPanel } from "@/routes/_repo/$owner/$repo/sessions/TerminalPanel";
 import { WebPreviewPanel } from "@/routes/_repo/$owner/$repo/sessions/WebPreviewPanel";
@@ -12,6 +13,7 @@ import { PrPanel } from "./PrPanel";
 import { SandboxPaneBoundary } from "./SandboxPaneBoundary";
 import { PreviewPaneTabs } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPaneTabs";
 import { ConsoleDock } from "./ConsoleDock";
+import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
 import {
@@ -54,6 +56,11 @@ interface SandboxPaneSlotsProps {
   onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
   /** Session-only: the visible preview may float into the mini-player. */
   miniPlayer?: { sessionId: Id<"sessions">; returnTo: string; title: string };
+  /**
+   * Multi-repo sessions: the dev-server port of each checked-out repo, offered
+   * beside the Preview port input. Omitted for a single-repo surface.
+   */
+  previewPortOptions?: readonly PreviewPortOption[];
   /** Session sticky Preview path from Convex. */
   stickyPreviewPath?: string;
   onStickyPreviewPathChange?: (path: string) => void;
@@ -89,12 +96,14 @@ export function SandboxPaneSlots({
   isSandboxStarting,
   onAnnotationSubmit,
   miniPlayer,
+  previewPortOptions,
   stickyPreviewPath,
   onStickyPreviewPathChange,
   stickyTerminalHistoryTail,
   onStickyTerminalHistoryTailChange,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
+  const wake = { onStartSandbox, isSandboxStarting };
   const resolvedTab =
     simpleView && isSimpleViewHiddenSandboxTab(activeTab)
       ? "preview"
@@ -150,6 +159,7 @@ export function SandboxPaneSlots({
               onRefresh={preview.reloadPreview}
               port={preview.effectivePort}
               onPortChange={preview.setPort}
+              portOptions={previewPortOptions}
               pathStorageKey={[
                 "eva",
                 owner.kind,
@@ -158,6 +168,7 @@ export function SandboxPaneSlots({
                 id,
                 preview.effectivePort,
               ].join(":")}
+              toolCallParentId={sandboxOwnerParentId(owner)}
               stickyPath={stickyPreviewPath}
               onStickyPathChange={onStickyPreviewPathChange}
               onStartSandbox={onStartSandbox}
@@ -221,6 +232,7 @@ export function SandboxPaneSlots({
             sandboxId={sandboxId}
             isActive={isActive}
             repoId={repoId}
+            wake={wake}
           />
         </SandboxPaneBoundary>
       </div>
@@ -242,6 +254,7 @@ export function SandboxPaneSlots({
             surface={resolvedTab === "browser" ? "browser" : "desktop"}
             agentBrowsingAt={agentBrowsingAt}
             onReleaseLock={onReleaseBrowserLock}
+            wake={wake}
           />
         </SandboxPaneBoundary>
       </div>
@@ -270,7 +283,9 @@ export function SandboxPaneSlots({
                     sandboxId={sandboxId}
                     isActive={isActive}
                     isForeground={resolvedTab === slug}
+                    previewPort={preview.effectivePort}
                     repoId={repoId}
+                    wake={wake}
                   />
                 </SandboxPaneBoundary>
               </div>

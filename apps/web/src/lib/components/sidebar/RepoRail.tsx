@@ -247,7 +247,7 @@ function RepoRailView({
                 railTileActive(inboxActive),
               )}
             >
-              <InboxIcon size={22} className="shrink-0" />
+              <InboxIcon size={22} filled={inboxActive} className="shrink-0" />
               <QueryErrorBoundary>
                 <InboxUnreadBadge />
               </QueryErrorBoundary>
@@ -273,7 +273,11 @@ function RepoRailView({
                 railTileActive(sessionsActive),
               )}
             >
-              <SessionsIcon size={22} className="shrink-0" />
+              <SessionsIcon
+                size={22}
+                filled={sessionsActive}
+                className="shrink-0"
+              />
               <CountPop
                 label={sessionsLabel}
                 className={RAIL_BADGE_LIVE_CLASS}
@@ -299,7 +303,11 @@ function RepoRailView({
             !sessionsActive &&
             !automationsActive &&
             isRowActive(row, currentOwner, currentName, currentAppName);
-          const tooltip = `${displayName} · ${row.owner}/${row.name}`;
+          // Simple view hides keycap hints and the GitHub `owner/repo`
+          // identifier; the hotkeys themselves still work.
+          const tooltip = simpleView
+            ? displayName
+            : `${displayName} · ${row.owner}/${row.name}`;
           const sandboxCount = activeSandboxCounts.get(row._id);
           const sandboxLabel = countLabel(sandboxCount);
 
@@ -353,7 +361,7 @@ function RepoRailView({
                   className="flex items-center gap-2"
                 >
                   {tooltip}
-                  {hotkeySlot !== null ? (
+                  {hotkeySlot !== null && !simpleView ? (
                     <ShortcutKbd id="jumpToApp" slot={hotkeySlot} />
                   ) : null}
                 </TooltipContent>
@@ -393,7 +401,11 @@ function RepoRailView({
                   railTileActive(automationsActive),
                 )}
               >
-                <AutomationsIcon size={22} className="shrink-0" />
+                <AutomationsIcon
+                  size={22}
+                  filled={automationsActive}
+                  className="shrink-0"
+                />
                 <QueryErrorBoundary>
                   <AutomationsUnreadBadge />
                 </QueryErrorBoundary>
@@ -442,7 +454,7 @@ function RepoRailView({
           </TooltipTrigger>
           <TooltipContent side="right" className="flex items-center gap-2">
             Search
-            <ShortcutKbd id="openSearch" />
+            {simpleView ? null : <ShortcutKbd id="openSearch" />}
           </TooltipContent>
         </Tooltip>
         <SidebarUserMenu name={userName} showSearch={showSearch} />

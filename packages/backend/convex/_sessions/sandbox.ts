@@ -5,7 +5,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -17,11 +17,35 @@ import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
-import { startNextQueuedSessionMessageAfterSandboxReady } from "../_queues/helpers";
+import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
+import { drainChatQueueQuietly } from "../_queues/helpers";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+
+/** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
+const SANDBOX_ERROR_MAX_LENGTH = 200;
+
+/**
+ * Turns a thrown start error into the short line the UI shows next to
+ * "Eva couldn't wake up". Action errors arrive with a Convex prefix, a request
+ * id, and a stack — none of which mean anything to the person reading them, and
+ * all of which would blow past the 200-char budget.
+ */
+export function toUserFacingSandboxError(raw: string): string {
+  const cleaned = (raw.split("\n")[0] ?? "")
+    .replace(/\[Request ID:[^\]]*\]/g, "")
+    .replace(/\[CONVEX[^\]]*\]/g, "")
+    .replace(/^(Uncaught\s+)?[A-Za-z]*Error:\s*/, "")
+    .replace(/\s+at\s+\S+\s*\(.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return "The sandbox did not start.";
+  return cleaned.length > SANDBOX_ERROR_MAX_LENGTH
+    ? `${cleaned.slice(0, SANDBOX_ERROR_MAX_LENGTH - 1).trimEnd()}…`
+    : cleaned;
+}
 
 /** Updates sandbox-related fields (sandbox ID, branch, PR URL) on a session. */
 export const updateSandbox = authMutation({
@@ -57,7 +81,9 @@ export const clearSandbox = authMutation({
     await markAllRunningExited(ctx.db, args.id);
     await ctx.db.patch(args.id, {
       sandboxId: undefined,
-
+      // The association is being reset, so a previous wake failure no longer
+      // describes anything the user can act on.
+      sandboxError: undefined,
       status: "closed",
     });
     return null;
@@ -76,60 +102,87 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    const repo = await ctx.db.get(session.repoId);
-    if (!repo) throw new Error("Repository not found");
-    const branchName = session.branchName || `eva/session-${args.sessionId}`;
-    const baseBranch = resolveSessionBaseBranch(session, repo);
-    await ctx.db.patch(args.sessionId, {
-      status: "starting",
-      updatedAt: Date.now(),
-    });
-    // Seed startup streaming immediately so the UI shows a real step instead of
-    // the random "Eva is inferring…" spinner while the workflow schedules.
-    await seedSandboxStartupActivity(
-      ctx.db,
-      `session-startup-${args.sessionId}`,
-    );
-    const reusableSandboxId = session.sandboxId;
-    console.log(
-      `[sessions] startSandbox sessionId=${args.sessionId} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
-    );
-    const startArgs = {
-      sessionId: args.sessionId,
-      existingSandboxId: session.sandboxId,
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      branchName,
-      baseBranch,
-      repoId: session.repoId,
-    };
-    // Vercel: schedule the start action directly. Workflow step scheduling was
-    // measured at ~6s before the first action ran.
-    if (reusableSandboxId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.startSessionSandbox,
-        startArgs,
-      );
-    } else {
-      await workflow.start(
-        ctx,
-        internal.sessionWorkflow.sessionSandboxStartupWorkflow,
-        startArgs,
-      );
-    }
+    await requestSessionSandboxStart(ctx, session);
     return null;
   },
 });
 
 /**
+ * Shared start path for the user Start button and the fork's source restart.
+ * Marks the session `"starting"` then schedules resume or create.
+ */
+export async function requestSessionSandboxStart(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<void> {
+  const repo = await ctx.db.get(session.repoId);
+  if (!repo) throw new Error("Repository not found");
+  const branchName = session.branchName || `eva/session-${session._id}`;
+  const baseBranch = resolveSessionBaseBranch(session, repo);
+  await ctx.db.patch(session._id, {
+    status: "starting",
+    // A new attempt owns the outcome: drop the previous failure so the dot
+    // leaves "Couldn't wake up" the moment Try again is pressed.
+    sandboxError: undefined,
+    updatedAt: Date.now(),
+  });
+  // Seed startup streaming immediately so the UI shows a real step instead of
+  // the random "Eva is inferring…" spinner while the workflow schedules.
+  await seedSandboxStartupActivity(
+    ctx.db,
+    `session-startup-${session._id}`,
+  );
+  const reusableSandboxId = session.sandboxId;
+  console.log(
+    `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
+  );
+  const startArgs = {
+    sessionId: session._id,
+    existingSandboxId: session.sandboxId,
+    installationId: repo.installationId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    branchName,
+    baseBranch,
+    repoId: session.repoId,
+    hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
+  };
+  // Vercel: schedule the start action directly. Workflow step scheduling was
+  // measured at ~6s before the first action ran.
+  // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
+  // arms `sandboxSetupPending` for them and only the workflow's
+  // `prepareLinkedRepo` steps clear it again, so a direct schedule would
+  // leave the gate armed forever (and re-clone nothing when a failed resume
+  // falls back to a fresh sandbox).
+  if (reusableSandboxId && !startArgs.hasLinkedRepos) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.startSessionSandbox,
+      startArgs,
+    );
+  } else {
+    await workflow.start(
+      ctx,
+      internal.sessionWorkflow.sessionSandboxStartupWorkflow,
+      startArgs,
+    );
+  }
+}
+
+/**
  * User-confirmed recovery for the rewritten-branch publish refusal: replaces
  * origin/<branch> with the sandbox's local branch. Fire-and-forget — the
  * scheduled action posts the outcome into the session chat as a system alert.
+ *
+ * `sessionRepoId` selects one of a multi-repo session's linked clones instead
+ * of the primary — the recovery banner renders one row per diverged repo, and
+ * each row recovers only its own branch.
  */
 export const forcePushBranch = authMutation({
-  args: { sessionId: v.id("sessions") },
+  args: {
+    sessionId: v.id("sessions"),
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(
@@ -140,14 +193,24 @@ export const forcePushBranch = authMutation({
     if (session.status !== "active" || !session.sandboxId) {
       throw new Error("Start the sandbox before force-pushing");
     }
-    if (!session.branchName) {
+    // Access is the session's; the linked row must still belong to it, or a
+    // session id the caller can reach would rewrite an unrelated branch.
+    let linkedRepo: Doc<"sessionRepos"> | null = null;
+    if (args.sessionRepoId !== undefined) {
+      linkedRepo = await ctx.db.get(args.sessionRepoId);
+      if (!linkedRepo || linkedRepo.sessionId !== args.sessionId) {
+        throw new Error("Linked repository not found for this session");
+      }
+    }
+    const branchName = linkedRepo ? linkedRepo.branchName : session.branchName;
+    if (!branchName) {
       throw new Error("Session has no branch to publish");
     }
     // Only eva-owned session branches may ever be rewritten on GitHub; a base
     // branch must never be reachable through this path.
-    if (!isEvaOwnedBranch(session.branchName)) {
+    if (!isEvaOwnedBranch(branchName)) {
       throw new Error(
-        `Refusing to force-push non-session branch ${session.branchName}`,
+        `Refusing to force-push non-session branch ${branchName}`,
       );
     }
     const repo = await ctx.db.get(session.repoId);
@@ -155,10 +218,15 @@ export const forcePushBranch = authMutation({
     await ctx.scheduler.runAfter(0, internal.sandbox.performForcePushBranch, {
       sessionId: args.sessionId,
       sandboxId: session.sandboxId,
+      // The sandbox (and therefore its provider credentials) always belongs to
+      // the primary repo, linked clones included.
       repoId: session.repoId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: session.branchName,
+      branchName,
+      ...(args.sessionRepoId !== undefined
+        ? { sessionRepoId: args.sessionRepoId }
+        : {}),
     });
     return null;
   },
@@ -178,6 +246,7 @@ export async function requestSessionSandboxStop(
   // Stopping kills the paused turn, so any blocking AskUserQuestion can never
   // be claimed — clear it or it hides the composer forever.
   await clearPendingQuestionsForEntity(ctx.db, String(sessionId));
+  await clearPreviewToolCallsForParent(ctx.db, sessionId);
 
   // Allow stop from closed when a sandboxId remains — start can early-ready
   // then fail and leave a live Vercel VM while UI shows inactive.
@@ -375,6 +444,7 @@ export const markSandboxClosed = internalMutation({
       // VM is still running — keep UI active so Stop can be retried.
       await ctx.db.patch(args.sessionId, {
         status: "active",
+        sandboxError: undefined,
         updatedAt: Date.now(),
       });
       return null;
@@ -468,6 +538,8 @@ export const sandboxReady = internalMutation({
       sandboxId: args.sandboxId,
       branchName: args.branchName,
       status: "active",
+      // Awake: whatever the last attempt failed on is history.
+      sandboxError: undefined,
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
       ...(args.markSetupPending ? { sandboxSetupPending: true } : {}),
@@ -485,7 +557,7 @@ export const sandboxReady = internalMutation({
     // Early + final ready both call this; second no-ops while activeWorkflowId is set.
     // Starting a sandbox is not a turn ending, so this drain must not wake a
     // watching orchestrator when the queue turns out to be empty.
-    await startNextQueuedSessionMessageAfterSandboxReady(ctx, args.sessionId);
+    await drainChatQueueQuietly(ctx, args.sessionId);
     return null;
   },
 });
@@ -548,13 +620,16 @@ export const sandboxError = internalMutation({
     });
     await ctx.db.patch(args.sessionId, {
       status: "closed",
+      // Read by the sidebar dot and the chat header's retry notice — a start
+      // that fails is otherwise indistinguishable from a sleeping sandbox.
+      sandboxError: toUserFacingSandboxError(args.error),
       updatedAt: Date.now(),
     });
     // A watched child whose sandbox never started will never reach the
     // queue-drain hook (its queued first turn stays queued), so without this
     // the orchestrator waits on it forever. Notify only — deliberately no
     // drain, which would start that turn on a session just marked closed.
-    if (session.watchedByOrchestrator !== undefined) {
+    if (session.watchedByAve !== undefined) {
       await ctx.scheduler.runAfter(
         0,
         internal.orchestratorNotify.notifyOrchestratorOfChild,

@@ -7,6 +7,7 @@ import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import { useSessionByNumId } from "@/lib/useResolveByNumId";
 import { SessionDetailClient } from "../SessionDetailClient";
 import { useSessionRouteSandboxTab } from "../_utils/useSessionRouteSandboxTab";
+import { workspaceRootPath } from "@/lib/components/chat/ChangedFilesCard";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
@@ -21,11 +22,6 @@ interface CachedSessionShellProps {
   repoParam: string;
   /** True when this shell matches the URL `$numId` (visible). */
   isActiveRoute: boolean;
-  /**
-   * Mounted inside Manager Ave's popover, which already titles the surface.
-   * Hides the session-chat title so "Manager Ave" is not painted twice.
-   */
-  embedded?: boolean;
 }
 
 /**
@@ -39,7 +35,6 @@ export function CachedSessionShell({
   owner,
   repoParam,
   isActiveRoute,
-  embedded = false,
 }: CachedSessionShellProps) {
   return (
     <RepoProvider owner={owner} repoParam={repoParam} passive>
@@ -49,7 +44,6 @@ export function CachedSessionShell({
           owner={owner}
           repoParam={repoParam}
           isActiveRoute={isActiveRoute}
-          embedded={embedded}
         />
       </RepoGate>
     </RepoProvider>
@@ -61,7 +55,6 @@ function CachedSessionShellInner({
   owner,
   repoParam,
   isActiveRoute,
-  embedded = false,
 }: CachedSessionShellProps) {
   const navigate = useNavigate();
   const { basePath, repoId } = useRepo();
@@ -70,23 +63,39 @@ function CachedSessionShellInner({
   const urlSandboxTab = useSessionRouteSandboxTab();
   const [sandboxTab, setSandboxTab] = useState(urlSandboxTab);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     Cached shells stay mounted while hidden: only the one on the live route may
+     follow the URL, so this cannot just mirror the prop during render. */
   useEffect(() => {
     if (!isActiveRoute) return;
     setSandboxTab(urlSandboxTab);
   }, [isActiveRoute, urlSandboxTab]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
+
+  // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
+  // `basePath`. `navigate({ to })` matches the route tree before the
+  // history rewrite, so `/owner/repo/app/sessions/…` is a miss on
+  // monorepo apps and the Review tab never opens.
+  const sessionParams = { owner, repo: repoParam, numId };
 
   const openFile = (path: string) => {
     if (simpleView) return;
+    // A file the agent touched in a linked checkout has to select that repo's
+    // root, or the Files tree would list the primary beside another repo's
+    // file. `undefined` drops a stale root when a primary file is opened.
+    const filesRoot = workspaceRootPath(path) ?? undefined;
     void navigate({
-      to: `${basePath}/sessions/${numId}/files`,
-      search: (prev) => ({ ...prev, file: path }),
+      to: "/$owner/$repo/sessions/$numId/$sandboxTab",
+      params: { ...sessionParams, sandboxTab: "files" },
+      search: (prev) => ({ ...prev, file: path, filesRoot }),
     });
   };
 
   const openDiffs = (repoRelativePath?: string) => {
     if (simpleView) return;
     void navigate({
-      to: `${basePath}/sessions/${numId}/review/diffs/unified`,
+      to: "/$owner/$repo/sessions/$numId/review/diffs/$diffView",
+      params: { ...sessionParams, diffView: "unified" },
       search: (prev) => ({
         ...prev,
         ...(repoRelativePath ? { diffFile: repoRelativePath } : {}),
@@ -97,13 +106,15 @@ function CachedSessionShellInner({
   const onSandboxTabChange = (next: string) => {
     if (next === "review") {
       void navigate({
-        to: `${basePath}/sessions/${numId}/review/diffs/unified`,
+        to: "/$owner/$repo/sessions/$numId/review/diffs/$diffView",
+        params: { ...sessionParams, diffView: "unified" },
         search: true,
       });
       return;
     }
     void navigate({
-      to: `${basePath}/sessions/${numId}/${next}`,
+      to: "/$owner/$repo/sessions/$numId/$sandboxTab",
+      params: { ...sessionParams, sandboxTab: next },
       search: true,
     });
   };
@@ -119,25 +130,24 @@ function CachedSessionShellInner({
           params={{ owner, repo: repoParam, numId }}
         />
       ) : null}
-    <EntityNumIdGate
-      // Same rule as the redirect above: only the visible shell may navigate,
-      // so a hidden shell holding a legacy Convex id just keeps its spinner.
-      resolve={isActiveRoute ? session : { ...session, redirectTo: null }}
-      entityLabel="session"
-      backTo={`${basePath}/sessions`}
-    >
-      {(sessionDoc) => (
-        <SessionDetailClient
-          sessionId={sessionDoc._id}
-          activeSandboxTab={sandboxTab}
-          onSandboxTabChange={onSandboxTabChange}
-          onOpenFile={openFile}
-          onViewDiff={simpleView ? undefined : openDiffs}
-          isRouteActive={isActiveRoute}
-          hideTitle={embedded}
-        />
-      )}
-    </EntityNumIdGate>
+      <EntityNumIdGate
+        // Same rule as the redirect above: only the visible shell may navigate,
+        // so a hidden shell holding a legacy Convex id just keeps its spinner.
+        resolve={isActiveRoute ? session : { ...session, redirectTo: null }}
+        entityLabel="session"
+        backTo={`${basePath}/sessions`}
+      >
+        {(sessionDoc) => (
+          <SessionDetailClient
+            sessionId={sessionDoc._id}
+            activeSandboxTab={sandboxTab}
+            onSandboxTabChange={onSandboxTabChange}
+            onOpenFile={openFile}
+            onViewDiff={simpleView ? undefined : openDiffs}
+            isRouteActive={isActiveRoute}
+          />
+        )}
+      </EntityNumIdGate>
     </>
   );
 }

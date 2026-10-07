@@ -6,7 +6,8 @@ import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner } from "@eva/ui";
+import { Spinner, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { entityPathSegment } from "@/lib/numId";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { useDetailPaneSignals } from "@/lib/hooks/useDetailPaneSignals";
@@ -129,6 +130,10 @@ export function ProjectActiveLayout({
   }
   const allTags = [...tagSet].sort();
 
+  /* eslint-disable no-effect/no-event-handler --
+     The project can reach a terminal phase from the server (another client, or
+     the workflow itself), so tearing the sandbox down has to follow the live
+     query rather than a local click. */
   useEffect(() => {
     if (
       (project.phase === "completed" || project.phase === "cancelled") &&
@@ -139,6 +144,7 @@ export function ProjectActiveLayout({
       clearProjectSandbox({ id: project._id }).catch(() => {});
     }
   }, [project.phase, project.sandboxId, project._id, clearProjectSandbox]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const notFoundPane = (
     <EntityNotFound
@@ -189,13 +195,23 @@ export function ProjectActiveLayout({
               selectedTaskId === null ? (
               notFoundPane
             ) : selectedTaskId ? (
-              <TaskDetailInline
-                key={selectedTaskId}
-                taskId={selectedTaskId}
-                onClose={handleCloseTask}
-                allTags={allTags}
-                routing={routing}
-              />
+              <AnimatePresence mode="wait" initial={false}>
+                <m.div
+                  key={selectedTaskId}
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={motionFast}
+                >
+                  <TaskDetailInline
+                    taskId={selectedTaskId}
+                    onClose={handleCloseTask}
+                    allTags={allTags}
+                    routing={routing}
+                  />
+                </m.div>
+              </AnimatePresence>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
                 <IconChecklist size={32} className="text-muted-foreground" />

@@ -5,6 +5,7 @@ import {
   snapshotsOf,
   type UsageAccountEntry,
 } from "./_utils";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { UsageProviderSection } from "./UsageProviderSection";
 import { UsageRefreshButton } from "./UsageRefreshButton";
 
@@ -52,12 +53,10 @@ export function UsageLimitsDetails({
         <p className="font-medium text-xs">Plan usage</p>
         <UsageRefreshButton repoId={repoId} />
       </div>
-      {entries.map((entry) => (
-        <UsageProviderSection
-          key={entry.providerAccountId ?? "team"}
-          entry={entry}
-          now={now}
-        />
+      {entries.map((entry, index) => (
+        <ListEnter key={entry.providerAccountId ?? "team"} index={index}>
+          <UsageProviderSection entry={entry} now={now} />
+        </ListEnter>
       ))}
       {capturedAt !== undefined && (
         <div className="bg-secondary py-1.5 pr-1.5 pl-3">

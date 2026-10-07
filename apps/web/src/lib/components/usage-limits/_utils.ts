@@ -75,11 +75,11 @@ export function claudeUsageAccountScope(
 }
 
 /** Utilisation at which a window stops reading as routine. */
-export const WARNING_UTILIZATION = 80;
+const WARNING_UTILIZATION = 80;
 /** Utilisation at which it reads as about to be refused. */
-export const DANGER_UTILIZATION = 95;
+const DANGER_UTILIZATION = 95;
 /** Mirrors the server-side freshness gate in `usageLimits.getForViewer`. */
-export const USAGE_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const USAGE_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type UsageTone = "neutral" | "warning" | "danger";
 
@@ -106,7 +106,7 @@ export function toneForUtilization(utilization: number): UsageTone {
 }
 
 /** The provider's own verdict, which is all a windowless reading reports. */
-export function toneForStatus(status: UsageSnapshot["status"]): UsageTone {
+function toneForStatus(status: UsageSnapshot["status"]): UsageTone {
   if (status === "rejected") return "danger";
   if (status === "allowed_warning") return "warning";
   return "neutral";
@@ -155,7 +155,7 @@ export function maxUtilization(
 }
 
 /** Status remains meaningful until its associated windows have all reset. */
-export function activeUsageStatus(
+function activeUsageStatus(
   snapshot: UsageSnapshot,
   now: number,
 ): UsageSnapshot["status"] {
@@ -259,10 +259,7 @@ export function chipSummaryForActive(
       for (const window of reportedWindows(row, now)) {
         if (window.utilization === undefined) continue;
         if (!windowMatchesScopedName(window.key, scopedName)) continue;
-        if (
-          match === undefined ||
-          window.utilization > match.utilization
-        ) {
+        if (match === undefined || window.utilization > match.utilization) {
           match = {
             utilization: window.utilization,
             tone: worseTone(

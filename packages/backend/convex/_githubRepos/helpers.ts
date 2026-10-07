@@ -12,6 +12,24 @@ export {
   type AppRepoPickFields,
 } from "./sandboxRepoPick";
 
+/** True when the user connected the repo or shares its team. */
+export async function userCanAccessRepo(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+  repo: Doc<"githubRepos">,
+): Promise<boolean> {
+  if (repo.connectedBy === userId) return true;
+  const teamId = repo.teamId;
+  if (!teamId) return false;
+  const membership = await db
+    .query("teamMembers")
+    .withIndex("by_team_and_user", (q) =>
+      q.eq("teamId", teamId).eq("userId", userId),
+    )
+    .first();
+  return membership !== null;
+}
+
 /** Resolves a repo ID to its parent repo ID if it is a sub-app, otherwise returns itself. */
 export async function resolveCanonicalRepoId(
   db: GenericDatabaseReader<DataModel>,

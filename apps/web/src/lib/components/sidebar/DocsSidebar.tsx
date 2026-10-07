@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation, useConvex } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -17,12 +17,24 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Spinner,
   Surface,
   Textarea,
 } from "@eva/ui";
-import { IconFile, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+import {
+  IconFile,
+  IconMessage,
+  IconPlus,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
+import {
+  chatSourceKindLabel,
+  chatSourceRoute,
+} from "@/lib/components/sandbox/chatSource";
+import { ChatSourceBadge } from "@/lib/components/sandbox/ChatSourceBadge";
+import { NewDocumentDialog } from "@/lib/components/docs/NewDocumentDialog";
+import { useCreateDoc } from "@/lib/components/docs/useCreateDoc";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -34,10 +46,14 @@ import {
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment, routeNumIdFromPath } from "@/lib/numId";
 import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface DocsSidebarProps {
   repoId: Id<"githubRepos">;
@@ -55,12 +71,11 @@ export function DocsSidebar({
   createRequestId,
 }: DocsSidebarProps) {
   const navigate = useNavigate();
-  const convex = useConvex();
   const docs = useQuery(api.docs.list, {
     repoId,
     excludeEvaRecaps: true,
   });
-  const createDoc = useMutation(api.docs.create);
+  const createDoc = useCreateDoc();
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.docs.list, {
@@ -81,67 +96,54 @@ export function DocsSidebar({
     title: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const altHeld = useAltHeld();
   const [isUploading, setIsUploading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newDocTitle, setNewDocTitle] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
   const [showUploadSection, setShowUploadSection] = useState(false);
   const [pastedPrdContent, setPastedPrdContent] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastCreateRequestIdRef = useRef(createRequestId ?? 0);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     `createRequestId` is a bumped counter from the shell's "New document"
+     command, which lives outside this subtree; the ref guard makes repeats
+     no-ops. */
   useEffect(() => {
     if (createRequestId === undefined) return;
     if (createRequestId <= lastCreateRequestIdRef.current) return;
     lastCreateRequestIdRef.current = createRequestId;
     setIsCreateDialogOpen(true);
   }, [createRequestId]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
   // PR recaps live under Reviews now — Documents is non-recap only.
   const filteredDocs = docs
     ? docs.filter((doc) => doc.kind !== "pr-recap")
     : [];
 
-  const handleCreateDoc = async () => {
-    if (!newDocTitle.trim()) return;
-    setIsCreating(true);
-    try {
-      const id = await createDoc({
-        repoId,
-        title: newDocTitle.trim(),
-        content: "",
-      });
-      const created = await convex.query(api.docs.get, { id });
-      // Guarded with ifs rather than a ternary, and onNavigate called through
-      // an if rather than `?.`: React Compiler bails on the whole file when a
-      // conditional, logical or optional-chaining expression sits inside a
-      // try/catch.
-      if (!created) {
-        setIsCreating(false);
-        return;
-      }
-      const segment = entityPathSegment(created);
-      if (!segment) {
-        setIsCreating(false);
-        return;
-      }
-      setNewDocTitle("");
-      setIsCreateDialogOpen(false);
-      navigate({
-        to: toInternalRepoHref(
-          `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
-        ),
-        search: (prev) => prev,
-      });
-      if (onNavigate) onNavigate();
-      mutationSuccess("Document created", "doc-create");
-    } catch {
-      mutationError("Couldn't create document", "doc-create");
-      setIsCreating(false);
-      return;
-    }
-    setIsCreating(false);
+  /** Opens a just-created doc in the viewer and closes the dialog. */
+  const finishCreate = (
+    created: Awaited<ReturnType<typeof createDoc>>,
+  ): boolean => {
+    if (!created) return false;
+    const segment = entityPathSegment(created);
+    if (!segment) return false;
+    setIsCreateDialogOpen(false);
+    setShowUploadSection(false);
+    setPastedPrdContent("");
+    void navigate({
+      to: toInternalRepoHref(
+        `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
+      ),
+      search: (prev) => prev,
+    });
+    if (onNavigate) onNavigate();
+    mutationSuccess("Document created", "doc-create");
+    return true;
   };
+
+  const handleCreateDoc = async (title: string) =>
+    finishCreate(await createDoc({ repoId, title, content: "" }));
 
   const readFileContent = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -177,35 +179,9 @@ export function DocsSidebar({
     prdContent: string;
   }) => {
     setIsUploading(true);
-    try {
-      const id = await createDoc({ repoId, title, content: prdContent });
-      const created = await convex.query(api.docs.get, { id });
-      if (!created) {
-        setIsUploading(false);
-        return;
-      }
-      const segment = entityPathSegment(created);
-      if (!segment) {
-        setIsUploading(false);
-        return;
-      }
-      setIsCreateDialogOpen(false);
-      setShowUploadSection(false);
-      setPastedPrdContent("");
-      setNewDocTitle("");
-      navigate({
-        to: toInternalRepoHref(
-          `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`,
-        ),
-        search: (prev) => prev,
-      });
-      if (onNavigate) onNavigate();
-      mutationSuccess("Document created", "doc-create");
-    } catch (error) {
-      console.error("PRD upload failed", error);
-      mutationError("Couldn't create the document. Try again.", "doc-create");
-    }
+    const created = await createDoc({ repoId, title, content: prdContent });
     setIsUploading(false);
+    finishCreate(created);
   };
 
   const handleUploadSelect = async (
@@ -220,7 +196,10 @@ export function DocsSidebar({
       await createDocFromPrd({ title, prdContent });
     } catch (error) {
       console.error("PRD upload failed", error);
-      mutationError("Couldn't read that file. Pick a plain text file.", "doc-upload");
+      mutationError(
+        "Couldn't read that file. Pick a plain text file.",
+        "doc-upload",
+      );
     }
   };
 
@@ -234,12 +213,14 @@ export function DocsSidebar({
     });
   };
 
-  const handleDelete = async () => {
-    if (!docToDelete) return;
+  const handleDelete = async (
+    target: { id: Id<"docs">; title: string } | null = docToDelete,
+  ) => {
+    if (!target) return;
     // Resolved before the try (it needs no await, and the guard above already
-    // proves docToDelete): React Compiler bails on the whole file when a
+    // proves target): React Compiler bails on the whole file when a
     // conditional or logical expression sits inside a try/catch.
-    const docToDeleteSegment = docs?.find((d) => d._id === docToDelete.id);
+    const docToDeleteSegment = docs?.find((d) => d._id === target.id);
     const deletePathSegment = docToDeleteSegment
       ? entityPathSegment(docToDeleteSegment)
       : null;
@@ -248,7 +229,7 @@ export function DocsSidebar({
       routeNumIdFromPath(pathname, `${basePath}/docs`) === deletePathSegment;
     setIsDeleting(true);
     try {
-      await removeDoc({ id: docToDelete.id });
+      await removeDoc({ id: target.id });
       mutationSuccess("Document deleted", "doc-delete");
       setDocToDelete(null);
       if (isViewing) {
@@ -293,14 +274,16 @@ export function DocsSidebar({
               size={20}
               className="mx-auto mb-2 text-muted-foreground opacity-50"
             />
-            <p className="text-sm font-medium text-foreground">No documents yet</p>
+            <p className="text-sm font-medium text-foreground">
+              No documents yet
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Create one to get started.
             </p>
           </div>
         ) : (
           <SharedLayoutNav layoutId="docs-nav" className="space-y-1">
-            {filteredDocs.map((doc) => {
+            {filteredDocs.map((doc, index) => {
               const segment = entityPathSegment(doc);
               if (!segment) return null;
               const href = `${basePath}/docs/${segment}/${DOC_VIEWER_DEFAULT_TAB}`;
@@ -308,72 +291,121 @@ export function DocsSidebar({
                 `${basePath}/docs/${segment}`,
               );
               return (
-                <ContextMenu key={doc._id}>
-                  <ContextMenuTrigger asChild>
-                    <SharedLayoutNavSurface
-                      itemId={doc._id}
-                      isActive={isSelected}
-                      className="group"
-                    >
-                      <SidebarListHoverCard
-                        title={doc.title}
-                        preview={doc.contentPreview}
-                        createdAt={doc.createdAt}
-                        userId={doc.createdBy}
+                <ListEnter key={doc._id} index={index} fast>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <SharedLayoutNavSurface
+                        itemId={doc._id}
+                        isActive={isSelected}
+                        className="group"
                       >
-                        <Link
-                          to={href}
-                          search={(prev) => prev}
-                          onClick={onNavigate}
-                          className={sidebarNavLinkClass(isSelected)}
+                        <SidebarListHoverCard
+                          title={doc.title}
+                          preview={doc.contentPreview}
+                          createdAt={doc.createdAt}
+                          userId={doc.createdBy}
                         >
-                          <span className="min-w-0 flex-1 truncate">
-                            {doc.title}
-                          </span>
-                          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                            {compactRelativeTime(doc.updatedAt)}
-                          </span>
-                        </Link>
-                      </SidebarListHoverCard>
-                    </SharedLayoutNavSurface>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent onClick={(e) => e.stopPropagation()}>
-                    {doc.kind !== "pr-recap" ? (
-                      <ContextMenuItem
-                        className="text-destructive"
-                        onClick={() =>
-                          setDocToDelete({ id: doc._id, title: doc.title })
-                        }
-                      >
-                        <IconTrash size={16} />
-                        Delete
-                      </ContextMenuItem>
-                    ) : null}
-                  </ContextMenuContent>
-                </ContextMenu>
+                          <Link
+                            to={href}
+                            search={(prev) => prev}
+                            onClick={onNavigate}
+                            className={sidebarNavLinkClass(isSelected)}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">
+                                {doc.title}
+                              </span>
+                              {doc.source ? (
+                                <span className="mt-0.5 flex">
+                                  <ChatSourceBadge source={doc.source} />
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                              {compactRelativeTime(doc.updatedAt)}
+                            </span>
+                          </Link>
+                        </SidebarListHoverCard>
+                      </SharedLayoutNavSurface>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent onClick={(e) => e.stopPropagation()}>
+                      {doc.source &&
+                      chatSourceRoute(doc.source, "documents") ? (
+                        <ContextMenuItem
+                          onClick={() => {
+                            // The guard above narrows the JSX, not this
+                            // callback, so the source is re-checked here.
+                            if (!doc.source) return;
+                            const route = chatSourceRoute(
+                              doc.source,
+                              "documents",
+                            );
+                            if (!route) return;
+                            void navigate({
+                              to: route.to,
+                              params: route.params,
+                            });
+                            if (onNavigate) onNavigate();
+                          }}
+                        >
+                          <IconMessage size={16} />
+                          Open{" "}
+                          {chatSourceKindLabel(doc.source.kind).toLowerCase()}
+                        </ContextMenuItem>
+                      ) : null}
+                      {doc.kind !== "pr-recap" ? (
+                        <ContextMenuItem
+                          className="text-destructive"
+                          title={skipConfirmTitle("Delete")}
+                          onClick={() => {
+                            const target = { id: doc._id, title: doc.title };
+                            requestConfirm(
+                              altHeld,
+                              () => setDocToDelete(target),
+                              () => {
+                                void handleDelete(target);
+                              },
+                            );
+                          }}
+                        >
+                          <IconTrash size={16} />
+                          Delete
+                          <ConfirmSkipHint />
+                        </ContextMenuItem>
+                      ) : null}
+                    </ContextMenuContent>
+                  </ContextMenu>
+                </ListEnter>
               );
             })}
           </SharedLayoutNav>
         )}
       </div>
 
-      <Dialog
+      <NewDocumentDialog
         open={isCreateDialogOpen}
         onOpenChange={(open) => {
-          if (isUploading || isCreating) return;
           setIsCreateDialogOpen(open);
           if (!open) {
-            setNewDocTitle("");
             setShowUploadSection(false);
             setPastedPrdContent("");
           }
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Document</DialogTitle>
-          </DialogHeader>
-          {showUploadSection ? (
+        onCreate={handleCreateDoc}
+        placeholder="e.g., User Authentication PRD"
+        busy={isUploading}
+        extra={
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-control border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            onClick={() => setShowUploadSection(true)}
+          >
+            <IconUpload size={14} />
+            Upload PRD instead
+          </button>
+        }
+        alternate={
+          showUploadSection ? (
             <div className="space-y-4">
               <Surface density="tight">
                 <p className="text-sm font-medium">Upload a file</p>
@@ -422,48 +454,9 @@ export function DocsSidebar({
                 </Button>
               </DialogFooter>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <Input
-                placeholder="e.g., User Authentication PRD"
-                value={newDocTitle}
-                onChange={(event) => setNewDocTitle(event.target.value)}
-                autoFocus
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && newDocTitle.trim()) {
-                    void handleCreateDoc();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-control border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                onClick={() => setShowUploadSection(true)}
-              >
-                <IconUpload size={14} />
-                Upload PRD instead
-              </button>
-              <DialogFooter>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setIsCreateDialogOpen(false);
-                    setNewDocTitle("");
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleCreateDoc}
-                  disabled={isCreating || !newDocTitle.trim()}
-                >
-                  {isCreating ? <Spinner size="sm" /> : "Create Document"}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          ) : undefined
+        }
+      />
 
       <Dialog
         open={!!docToDelete}
@@ -489,7 +482,7 @@ export function DocsSidebar({
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDelete}
+              onClick={() => void handleDelete()}
               disabled={isDeleting}
             >
               {isDeleting && <Spinner size="sm" />}

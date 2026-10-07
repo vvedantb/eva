@@ -27,6 +27,10 @@ const taskChatWorkflowSource = readFileSync(
   join(testsDir, "../convex/agentTaskChatWorkflow.ts"),
   "utf8",
 );
+const chatResultSource = readFileSync(
+  join(testsDir, "../convex/_chat/chatResult.ts"),
+  "utf8",
+);
 
 /**
  * A turn is staged in two places: the shared session stager (a fresh send, and
@@ -118,23 +122,37 @@ test.each([
   ["task chat", taskChatWorkflowSource],
 ])("%s saveResult preserves streamed activity after a worker crash", (_, source) => {
   const body = functionBody(source, "export const saveResult = internalMutation({");
-  const readAt = body.indexOf('.query("streamingActivity")');
-  const fallbackAt = body.indexOf(
-    "args.activityLog || streaming?.currentActivity",
+  expect(body).toContain("applyChatTurnResult(");
+});
+
+test("the shared salvage copies the live snapshot before clearing it", () => {
+  const salvage = functionBody(
+    chatResultSource,
+    "export async function salvageAndClearStreamingActivity(",
   );
-  const clearAt = body.indexOf("await clearStreamingActivity(");
-  const patchAt = body.indexOf("patch.activityLog = activityLog");
-  expect(readAt, "saveResult no longer reads the live snapshot").toBeGreaterThan(
+  const readAt = salvage.indexOf('.query("streamingActivity")');
+  const fallbackAt = salvage.indexOf(
+    "reportedActivityLog || streaming?.currentActivity",
+  );
+  const clearAt = salvage.indexOf("await clearStreamingActivity(");
+  expect(readAt, "salvage no longer reads the live snapshot").toBeGreaterThan(
     -1,
   );
   expect(fallbackAt, "null worker logs no longer fall back").toBeGreaterThan(-1);
-  expect(clearAt, "saveResult no longer clears streaming state").toBeGreaterThan(
+  expect(clearAt, "salvage no longer clears streaming state").toBeGreaterThan(
     -1,
   );
-  expect(patchAt, "the preserved log is not persisted").toBeGreaterThan(-1);
   expect(readAt).toBeLessThan(clearAt);
   expect(fallbackAt).toBeLessThan(clearAt);
-  expect(clearAt).toBeLessThan(patchAt);
+
+  const apply = functionBody(
+    chatResultSource,
+    "export async function applyChatTurnResult(",
+  );
+  const salvageAt = apply.indexOf("salvageAndClearStreamingActivity(");
+  const persistAt = apply.indexOf("patch.activityLog = activityLog");
+  expect(persistAt, "the preserved log is not persisted").toBeGreaterThan(-1);
+  expect(salvageAt).toBeLessThan(persistAt);
 });
 
 /**

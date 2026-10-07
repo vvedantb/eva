@@ -16,6 +16,8 @@ import {
   IconProgress,
   IconPencil,
   IconArchive,
+  IconGitMerge,
+  IconGitPullRequestClosed,
 } from "@tabler/icons-react";
 import { Avatar, AvatarFallback, cn } from "@eva/ui";
 import type { BadgeProps } from "@eva/ui";
@@ -135,6 +137,38 @@ const typeConfig: Record<Notification["type"], NotificationAppearance> = {
   },
 };
 
+const sessionPrMergedAppearance: NotificationAppearance = {
+  icon: IconGitMerge,
+  label: "PR Merged",
+  badgeVariant: "success",
+  iconBg: "bg-success/10",
+  iconColor: "text-success",
+};
+
+const sessionPrClosedAppearance: NotificationAppearance = {
+  icon: IconGitPullRequestClosed,
+  label: "PR Closed",
+  badgeVariant: "secondary",
+  iconBg: "bg-secondary",
+  iconColor: "text-secondary-foreground",
+};
+
+/**
+ * Session auto-archive inbox items are typed `session_archived`, but the
+ * reason is a GitHub PR merge or close. Read that from the stored title and
+ * message so the badge says the PR outcome instead of only "Archived".
+ * `\bmerged\b` does not match "without merging" on a close.
+ */
+function sessionArchivedAppearance(
+  notification: Pick<Notification, "title" | "message">,
+): NotificationAppearance {
+  const haystack =
+    `${notification.title} ${notification.message ?? ""}`.toLowerCase();
+  if (/\bmerged\b/.test(haystack)) return sessionPrMergedAppearance;
+  if (/\bclosed\b/.test(haystack)) return sessionPrClosedAppearance;
+  return typeConfig.session_archived;
+}
+
 /**
  * Older failures were stored as `run_completed` with a "failed" title/message.
  * Map those to the danger appearance until they age out of inboxes.
@@ -151,6 +185,9 @@ export function getNotificationAppearance(
     if (haystack.includes("failed")) {
       return typeConfig.run_failed;
     }
+  }
+  if (notification.type === "session_archived") {
+    return sessionArchivedAppearance(notification);
   }
   return typeConfig[notification.type];
 }

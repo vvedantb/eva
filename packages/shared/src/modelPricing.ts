@@ -21,7 +21,7 @@ export interface ModelPricing {
 
 const ANTHROPIC_PRICING_URL =
   "https://platform.claude.com/docs/en/about-claude/pricing";
-const ANTHROPIC_PRICING_AS_OF = "2026-09-01";
+const ANTHROPIC_PRICING_AS_OF = "2026-10-01";
 
 function anthropicRow(
   inputPerMillion: number,
@@ -51,11 +51,13 @@ export const CLAUDE_PRICING_PER_MILLION: Record<string, ModelPricing> = {
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
   "claude-mythos-5": anthropicRow(10, 1, 12.5, 50),
+  "claude-opus-5-5": anthropicRow(4, 0.2, 5, 20),
   "claude-opus-5": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-8": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-7": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-6": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-5": anthropicRow(5, 0.5, 6.25, 25),
+  "claude-sonnet-5-5": anthropicRow(2, 0.2, 2.5, 10),
   "claude-sonnet-5": anthropicRow(2, 0.2, 2.5, 10),
   "claude-sonnet-4-6": anthropicRow(3, 0.3, 3.75, 15),
   "claude-sonnet-4-5": anthropicRow(3, 0.3, 3.75, 15),
@@ -75,11 +77,14 @@ export const CODEX_PRICING_PER_MILLION: Record<
   { input: number; cached: number; output: number }
 > = {
   // OpenAI API list prices (per 1M tokens).
+  // GPT-6 Astra — third-party report of the OpenAI pricing page, read
+  // 2026-09-11; verify against https://developers.openai.com/api/docs/pricing.
+  "gpt-6-astra": { input: 10.0, cached: 1.0, output: 50.0 },
   "gpt-5.6-sol": { input: 5.0, cached: 0.5, output: 30.0 },
   "gpt-5.6-terra": { input: 2.0, cached: 0.2, output: 12.0 },
   "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
-  "gpt-5.5": { input: 5.0, cached: 0.5, output: 30.0 },
   // Legacy — kept so in-flight sandboxes still cost-account correctly.
+  "gpt-5.5": { input: 5.0, cached: 0.5, output: 30.0 },
   "gpt-5.5-pro": { input: 30.0, cached: 30.0, output: 180.0 },
 
   "gpt-5.4": { input: 1.25, cached: 0.125, output: 10.0 },

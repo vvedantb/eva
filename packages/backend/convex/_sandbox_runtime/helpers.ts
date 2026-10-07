@@ -8,17 +8,25 @@ import {
   resolveSandboxCredentials,
   resolveSandboxCredentialsOnly,
 } from "../envVarResolver";
+import { resolveConnectorLaunchEnv } from "../_connectors/resolve";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
 import {
   SandboxCommandFailedError,
   SandboxExecTimeoutError,
 } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
+import {
+  buildDockerdBackgroundStart,
+  buildDockerdProcessCleanup,
+  buildDockerdStaleRuntimeCleanup,
+  buildDockerInfoWaitLoop,
+  buildDockerSockPerms,
+} from "./dockerBootstrap";
 import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
+import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
 import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
-import { buildStubMarkdown, SYSTEM_SKILLS } from "../_systemSkills/registry";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 
 export const WORKSPACE_DIR = "/tmp/repo";
@@ -204,14 +212,13 @@ export async function ensureDockerDaemon(
         PACKAGE_HELPER_SCRIPT,
         `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || true`,
         "command -v docker >/dev/null 2>&1 || exit 1",
-        "sudo pkill -9 containerd 2>/dev/null",
-        "sudo pkill -9 dockerd 2>/dev/null",
+        ...buildDockerdProcessCleanup(),
         "sleep 1",
-        "sudo rm -f /var/run/docker.pid /var/run/docker.sock /run/docker/containerd/containerd.pid /run/docker/containerd/containerd.sock /run/docker/containerd/containerd.sock.ttrpc /run/docker/containerd/containerd-debug.sock 2>/dev/null",
+        buildDockerdStaleRuntimeCleanup(),
         "sudo systemctl start docker 2>/dev/null || true",
-        "sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 &",
-        "for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done",
-        "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+        buildDockerdBackgroundStart(),
+        buildDockerInfoWaitLoop(60),
+        buildDockerSockPerms(),
         "docker info >/dev/null 2>&1",
         // Newline-joined, not "; ": backgrounding `dockerd … &` followed by a
         // literal `;` is a bash syntax error, so this whole script used to fail
@@ -254,16 +261,12 @@ export async function bootstrapVercelDocker(
     PACKAGE_HELPER_SCRIPT,
     `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")}`,
     'command -v docker >/dev/null 2>&1 || { echo "bootstrap-docker:no-binary"; exit 1; }',
-    "sudo pkill -9 dockerd 2>/dev/null || true",
-    "sudo pkill -9 containerd 2>/dev/null || true",
-    "sudo rm -f /var/run/docker.pid /var/run/docker.sock /run/docker/containerd/containerd.pid /run/docker/containerd/containerd.sock /run/docker/containerd/containerd.sock.ttrpc /run/docker/containerd/containerd-debug.sock 2>/dev/null || true",
+    ...buildDockerdProcessCleanup(true),
+    buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",
-    "sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 &",
-    "for i in $(seq 1 90); do",
-    "  docker info >/dev/null 2>&1 && break",
-    "  sleep 1",
-    "done",
-    "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+    buildDockerdBackgroundStart(),
+    buildDockerInfoWaitLoop(90),
+    buildDockerSockPerms(),
     "docker info >/dev/null 2>&1 || { tail -30 /tmp/dockerd.log 2>/dev/null || true; exit 1; }",
     'echo "bootstrap-docker:ok"',
   ].join("\n");
@@ -532,27 +535,23 @@ export async function resolveSandboxClientOnly(
   return client;
 }
 
-/**
- * Vercel-managed universal image: Ubuntu with Node 24, git, ripgrep and the
- * claude-code / codex / opencode CLIs, patched nightly. The orchestrator boots
- * from it so the master session never waits on (or drifts with) a per-repo
- * snapshot build.
- */
-export const ORCHESTRATOR_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
-
 /** Resolves the provider client, sandbox env vars, and snapshot name for a repo. */
 export async function resolveSandboxContext(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
   opts?: {
-    /** Orchestrator sessions boot from the managed image, not a repo snapshot. */
-    isOrchestrator?: boolean;
+    /**
+     * A multi-repo session's saved codebase group. When its seeded snapshot
+     * (primary + linked repos, deps installed) is still current for this
+     * primary repo, boot from it instead of the plain per-repo snapshot — see
+     * `getGroupSnapshotForBoot`.
+     */
+    repoGroupId?: Id<"repoGroups">;
   },
 ): Promise<{
   client: SandboxClient;
   sandboxEnvVars: Record<string, string>;
   snapshotName: string | undefined;
-  image: string | undefined;
 }> {
   const startedAt = Date.now();
   const { credentials, sandboxEnvVars } = await resolveSandboxCredentials(
@@ -560,23 +559,25 @@ export async function resolveSandboxContext(
     repoId,
   );
   const client = getSandboxClient(credentials);
-  const isOrchestrator = opts?.isOrchestrator === true;
-  // Snapshot lookup is skipped entirely for the orchestrator: the image boot
-  // ignores it, and the query would only add latency to the master's start.
-  const repoSnapshot = isOrchestrator
-    ? null
-    : await ctx.runQuery(internal.repoSnapshots.getRepoSnapshotName, {
-        repoId,
-      });
-  const snapshotName = repoSnapshot?.snapshotName;
+  const repoSnapshot = await ctx.runQuery(
+    internal.repoSnapshots.getRepoSnapshotName,
+    { repoId },
+  );
+  let snapshotName = repoSnapshot?.snapshotName;
+  if (opts?.repoGroupId) {
+    const groupSnapshotName = await ctx.runQuery(
+      internal.repoGroups.getGroupSnapshotForBoot,
+      { groupId: opts.repoGroupId },
+    );
+    if (groupSnapshotName) snapshotName = groupSnapshotName;
+  }
   console.log(
-    `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} orchestrator=${isOrchestrator} elapsed=${Date.now() - startedAt}ms`,
+    `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,
   );
   return {
     client,
     sandboxEnvVars: { ...sandboxEnvVars, REPO_ID: repoId },
     snapshotName,
-    image: isOrchestrator ? ORCHESTRATOR_SANDBOX_IMAGE : undefined,
   };
 }
 
@@ -603,8 +604,6 @@ export async function signAndLaunchScript(
   opts: {
     model?: string;
     allowedTools?: string;
-    /** Read-only turn: each provider SDK translates this into its own option. */
-    noWrites?: boolean;
     systemPrompt?: string;
     extraEnvVars?: Record<string, string>;
     claudeSessionId?: string;
@@ -656,12 +655,26 @@ export async function signAndLaunchScript(
       );
     }
   }
-  // The orchestrator flag lives on the session, so it is resolved here — the
-  // single launch choke point — and minted into the MCP token as a claim.
+  // The linked-repo workspace description lives on the session, so it is
+  // resolved here — the single launch choke point.
   const launchSession =
     entityIdField === "sessionId"
       ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
       : null;
+
+  // Every launch path (prewarm daemon, launch on an existing sandbox,
+  // relaunch/heal) comes through here, so resolving the linked clones once
+  // means the agent is told about the same workspace on all of them. Absent entirely for single-repo sessions.
+  // Annotated locally so this `runQuery` cannot feed a generated-api type
+  // cycle back into `_generated/api.d.ts`.
+  let linkedRepos: LinkedRepoEnvRow[] = [];
+  if (launchSession && (launchSession.linkedRepoCount ?? 0) > 0) {
+    const linkedRows: LinkedRepoEnvRow[] = await ctx.runQuery(
+      internal.sessions.listLinkedReposInternal,
+      { sessionId: launchSession._id },
+    );
+    linkedRepos = linkedRows;
+  }
 
   // Mint the sandbox auth token and MCP token in a single node action. This
   // replaces three separate runAction hops across two "use node" isolates, which
@@ -680,7 +693,6 @@ export async function signAndLaunchScript(
           : entityIdField === "projectId"
             ? { entityKind: "project" as const }
             : {}),
-      ...(launchSession?.isOrchestrator ? { isOrchestrator: true } : {}),
     },
   );
   console.log(
@@ -688,6 +700,13 @@ export async function signAndLaunchScript(
   );
 
   const mcpBaseUrl = mcpToken ? (process.env.CONVEX_SITE_URL ?? "") : "";
+
+  if (opts.enableMcp !== false) {
+    const connectorEnv = await resolveConnectorLaunchEnv(ctx, userId, repoId);
+    if (Object.keys(connectorEnv).length > 0) {
+      extraEnvVars = { ...extraEnvVars, ...connectorEnv };
+    }
+  }
 
   // A catalog writer is deliberately short-lived and single-use. Unlike the
   // old fleet-constant HMAC, reading one sandbox's env cannot grant permanent
@@ -708,27 +727,11 @@ export async function signAndLaunchScript(
   // System skills reach the agent as stub SKILL.md files in the checkout, and
   // the stubs are useless without the eva MCP server — so a launch with MCP
   // disabled ships an empty list, which prunes any leftovers.
-  const installedSkillStubs = mcpToken
+  const systemSkillStubs = mcpToken
     ? await ctx.runQuery(internal.repoSystemSkills.listStubsForLaunch, {
         repoId,
       })
     : [];
-  // The master's own skill skips the per-repo install gate — it belongs to the
-  // session, not to whichever repo the master happens to be checked out on.
-  // `get_skill` mirrors this bypass when it serves the content.
-  const orchestratorSkill = SYSTEM_SKILLS["eva-orchestrator"];
-  const systemSkillStubs =
-    mcpToken && launchSession?.isOrchestrator === true
-      ? [
-          ...installedSkillStubs.filter(
-            (stub) => stub.name !== orchestratorSkill.name,
-          ),
-          {
-            name: orchestratorSkill.name,
-            stub: buildStubMarkdown(orchestratorSkill),
-          },
-        ]
-      : installedSkillStubs;
 
   await launchScript(
     sandbox,
@@ -744,6 +747,7 @@ export async function signAndLaunchScript(
       mcpBaseUrl,
       systemSkillsJson: JSON.stringify({ skills: systemSkillStubs }),
       harnessCatalogToken,
+      ...(linkedRepos.length > 0 ? { linkedRepos } : {}),
     },
   );
   console.log(

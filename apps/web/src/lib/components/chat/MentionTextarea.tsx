@@ -4,8 +4,8 @@ import { forwardRef, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { usePromptInputController, usePromptInputAttachments } from "@eva/ui";
-import { api, type Id } from "@eva/backend";
-import { UserProfileHoverCardBody } from "@eva/shared";
+import { api } from "@eva/backend";
+import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { attachPastedTextIfLarge } from "@/lib/components/attachments/attachmentMeta";
 import {
   MentionEditor,
@@ -16,21 +16,21 @@ import {
   isSkillTokenId,
   mergeMentionItems,
 } from "@/lib/components/mentions";
+import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { useInlineSuggestion } from "@/lib/hooks/useInlineSuggestion";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export type MentionTextareaHandle = MentionEditorHandle;
 
 interface MentionTextareaProps {
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
-  repoId: Id<"githubRepos">;
+  /** Absent (Manager Ave): no people/data mentions and no skills link. */
+  repo?: ChatRepo;
   /** `/` menu entries — repo skills plus installed Eva skills. */
   skillItems?: SlashItem[];
-  skillsSettingsHref?: string;
   placeholder?: string;
   initialMentionMap?: Map<string, string>;
   initialSkillMap?: Map<string, string>;
@@ -52,6 +52,18 @@ interface MentionTextareaProps {
    * "Composer autocomplete" flag is on; otherwise ignored.
    */
   completionContext?: string;
+  /**
+   * Called when Enter would have submitted but the submit button is disabled.
+   * The keystroke is still swallowed — this only lets the composer say why,
+   * instead of Enter doing nothing at all on a sleeping sandbox.
+   */
+  onBlockedSubmit?: () => void;
+  /**
+   * The visible draft after every edit. Separate from the prompt-input
+   * controller so a caller can react to typing (skill suggestions) without
+   * subscribing the whole composer to each keystroke.
+   */
+  onDraftChange?: (value: string) => void;
   className?: string;
 }
 
@@ -60,16 +72,16 @@ export const MentionTextarea = forwardRef<
   MentionTextareaProps
 >(function MentionTextarea(
   {
-    repoBasePath,
-    repoId,
+    repo,
     skillItems = [],
-    skillsSettingsHref,
     placeholder,
     initialMentionMap,
     initialSkillMap,
     history,
     enableAttachmentPaste,
     completionContext,
+    onBlockedSubmit,
+    onDraftChange,
     className,
   },
   ref,
@@ -78,10 +90,10 @@ export const MentionTextarea = forwardRef<
   const controller = usePromptInputController();
   const attachments = usePromptInputAttachments();
   const value = controller.textInput.value;
-  const peopleItems = usePeopleMentionItems(repoId);
-  const dataItems = useDataMentionItems(repoId);
+  const peopleItems = usePeopleMentionItems(repo?.id);
+  const dataItems = useDataMentionItems(repo?.id);
   const { items, peopleIds } = mergeMentionItems(peopleItems, dataItems);
-  const navigateToData = useDataMentionNavigate(repoBasePath, repoId);
+  const navigateToData = useDataMentionNavigate(repo?.basePath ?? "", repo?.id);
   const flags = useQuery(api.auth.getExperimentalFlags);
   const { suggestion, dismiss } = useInlineSuggestion(
     value,
@@ -98,6 +110,7 @@ export const MentionTextarea = forwardRef<
   const handleValueChange = (next: string) => {
     historyIndexRef.current = null;
     setInput(next);
+    onDraftChange?.(next);
   };
 
   const handleHistoryNavigate = (direction: "up" | "down") => {
@@ -136,10 +149,17 @@ export const MentionTextarea = forwardRef<
   // Skills settings do not exist in simple view, so the chip and the empty
   // state must not point at a page that redirects straight back out.
   const simpleView = useSimpleView();
+  // Soft keyboard, not viewport: a narrow desktop window still has a physical
+  // Enter key that should send; a phone Return key should insert a newline.
+  const isCoarsePointer = useMediaQuery("(pointer: coarse)");
+
+  const skillsSettingsHref = repo
+    ? `${repo.basePath}/settings/skills`
+    : undefined;
 
   const handleSkillChipClick = (_skillId: string) => {
-    if (simpleView) return;
-    navigate({ to: `${repoBasePath}/settings/skills` });
+    if (simpleView || !skillsSettingsHref) return;
+    navigate({ to: skillsSettingsHref });
   };
 
   return (
@@ -167,9 +187,9 @@ export const MentionTextarea = forwardRef<
       renderMentionChipHoverCard={(id) =>
         peopleIds.has(id) ? (
           <UserProfileHoverCardBody userId={id} />
-        ) : (
-          <DataMentionHoverCardBody entityId={id} repoId={repoId} />
-        )
+        ) : repo ? (
+          <DataMentionHoverCardBody entityId={id} repoId={repo.id} />
+        ) : null
       }
       renderSkillChipHoverCard={(id) =>
         isSkillTokenId(id) ? <SkillMentionHoverCardBody skillId={id} /> : null
@@ -209,18 +229,26 @@ export const MentionTextarea = forwardRef<
           "No available skills."
         )
       }
-      onEnterSubmit={(e) => {
-        const form = e.currentTarget.closest("form");
-        if (!(form instanceof HTMLFormElement)) return;
-        const submitButton = form.querySelector('button[type="submit"]');
-        if (
-          submitButton instanceof HTMLButtonElement &&
-          submitButton.disabled
-        ) {
-          return;
-        }
-        form.requestSubmit();
-      }}
+      onEnterSubmit={
+        isCoarsePointer
+          ? undefined
+          : (e) => {
+              const form = e.currentTarget.closest("form");
+              if (!(form instanceof HTMLFormElement)) return;
+              const submitButton = form.querySelector('button[type="submit"]');
+              if (
+                submitButton instanceof HTMLButtonElement &&
+                submitButton.disabled
+              ) {
+                // Enter on a disabled composer used to do nothing at all, which
+                // reads as the app ignoring the user. The caller decides whether
+                // there is anything worth saying (an empty draft: no).
+                onBlockedSubmit?.();
+                return;
+              }
+              form.requestSubmit();
+            }
+      }
     />
   );
 });

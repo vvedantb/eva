@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { Button, Spinner, toast } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner, toast } from "@eva/ui";
 import { IconRefresh } from "@tabler/icons-react";
 
 /**
@@ -77,7 +77,15 @@ export function UsageRefreshButton({ repoId }: UsageRefreshButtonProps) {
         void onRefresh();
       }}
     >
-      {pending ? <Spinner size="sm" /> : <IconRefresh size={14} />}
+      <CrossfadeIcon
+        show={pending}
+        trueKey="loading"
+        falseKey="idle"
+        variant="soft"
+        className="relative flex size-3.5 items-center justify-center"
+        whenTrue={<Spinner size="sm" />}
+        whenFalse={<IconRefresh size={14} />}
+      />
     </Button>
   );
 }

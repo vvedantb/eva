@@ -1,5 +1,5 @@
 /** How many non-archived sessions to show before the expand control. */
-export const SESSION_SIDEBAR_PREVIEW_LIMIT = 3;
+const SESSION_SIDEBAR_PREVIEW_LIMIT = 3;
 
 /**
  * Cap the non-archived session list like t3code's thread preview: show the

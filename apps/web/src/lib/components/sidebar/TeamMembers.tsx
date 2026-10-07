@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { useFollow } from "@/lib/contexts/FollowContext";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 

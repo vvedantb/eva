@@ -12,9 +12,18 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
-import { ChatBody } from "@/lib/components/chat/ChatBody";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import { toast } from "@eva/ui";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
+import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
+import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
+import {
+  isAssistantTurnInProgress,
+  readableSendError,
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
+} from "@/lib/components/chat/chatBodyUtils";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
+import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -31,8 +40,12 @@ interface ProjectSandboxChatPanelProps {
   projectId: Id<"projects">;
   isSandboxActive: boolean;
   isSandboxToggling?: boolean;
+  /** Startup steps while the preview sandbox wakes; undefined otherwise. */
+  sandboxStartupActivity?: string;
   /** Opens the Files tab and loads this sandbox path in the file viewer. */
   onOpenFile?: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
+  onViewDiff?: (repoRelativePath?: string) => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
@@ -42,7 +55,9 @@ export function ProjectSandboxChatPanel({
   projectId,
   isSandboxActive,
   isSandboxToggling = false,
+  sandboxStartupActivity,
   onOpenFile,
+  onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
 }: ProjectSandboxChatPanelProps) {
@@ -64,6 +79,7 @@ export function ProjectSandboxChatPanel({
     api.projectChatWorkflow.prewarmChatDaemonNow,
   );
   const updateProject = useUpdateProject(projectId);
+  const setDraft = useMutation(api.drafts.set);
   const { isSwitchingAccount, switchProviderAccount } =
     useProviderAccountHandoff({
       persist: (providerAccountId) =>
@@ -177,21 +193,74 @@ export function ProjectSandboxChatPanel({
     Boolean(project?.activeChatWorkflowId) ||
     isAssistantTurnInProgress(messages ?? []);
 
+  const queueGate = useChatQueueGate({
+    parentId: projectId,
+    messages: messages ?? [],
+    queuedMessages: queuedMessages ?? [],
+    model,
+    isSandboxActive,
+    setModel,
+  });
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
+  });
+
+  // A thrown send rolls the whole turn back (no placeholder, no workflow) and
+  // the composer has already cleared, so the prompt only exists here. The toast
+  // owns the failure and hands the text back through the same `drafts` row the
+  // composer reads (same contract as useSessionSend).
+  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
+    toast.error("Couldn't send your message", {
+      id: "project-chat-send",
+      description: readableSendError(errorMessage),
+      action: {
+        label: "Restore draft",
+        onClick: () => {
+          void setDraft({
+            target: { kind: "projectChat", projectId },
+            content: draftContent,
+          });
+        },
+      },
+    });
+  };
+
   const handleSend = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => {
-    if (isExecuting) {
-      await enqueueMessage({
-        projectId,
-        message: content,
-        model,
-        ...executionTraits,
-        reasoningLevel:
-          displayTraits.effortLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: resolveAccountId(providerAccountId),
-        attachmentStorageIds,
-      });
+    // What the user typed. A ChatBody send has already appended its citation /
+    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
+    // re-edit, so the restore has to use the pre-append text.
+    const draftContent = options?.draftContent ?? content;
+    // Hoisted out of the `try`: React Compiler bails on the whole file when it
+    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    const enqueueReasoningLevel =
+      displayTraits.effortLevel ?? executionTraits.reasoningLevel;
+    if (isExecuting || composer.queuesSends) {
+      try {
+        await enqueueMessage({
+          projectId,
+          message: content,
+          model,
+          ...executionTraits,
+          reasoningLevel: enqueueReasoningLevel,
+          providerAccountId: resolveAccountId(providerAccountId),
+          attachmentStorageIds,
+        });
+      } catch (error) {
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
+      }
       return;
     }
     const accountId = resolveAccountId(providerAccountId);
@@ -212,16 +281,13 @@ export function ProjectSandboxChatPanel({
         providerAccountId: accountId,
       });
     } catch (error) {
-      // Surface the failure in chat — a thrown startExecute rolls back the
-      // whole turn (no placeholder, no workflow), so without this the send
-      // silently vanishes (same contract as useSessionSend).
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send message";
-      await addMessage({
-        projectId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
-      });
+      raiseSendFailure(
+        error instanceof Error ? error.message : "",
+        draftContent,
+      );
+      // Rethrow: the caller tells a delivered send from a failed one by whether
+      // this settles, and keeps its pending chips on a failure.
+      throw error;
     }
   };
 
@@ -236,70 +302,100 @@ export function ProjectSandboxChatPanel({
     isExecuting,
     isReadOnly: false,
     // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
-    compactionReadOnly: !isSandboxActive,
     backgroundAgents: project?.backgroundAgents,
+    // Owner-only, like the account picker: project chat is owner-sticky. The
+    // account list is `accounts`, not `displayAccounts` — the synthetic owner
+    // row exists only for non-owners, who never see the card.
+    usageLimitRecovery:
+      isOwner && project
+        ? {
+            messages: messages ?? [],
+            accounts,
+            resolveAccountId,
+            currentAccountId: project.providerAccountId ?? null,
+            onSwitchAccount: switchProviderAccount,
+            isSandboxActive,
+          }
+        : undefined,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
-    onSendCommand: (command) => {
-      void handleSend(command);
-    },
   };
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
         repoId={repo._id}
-        isSandboxActive={isSandboxActive}
-        isSandboxToggling={isSandboxToggling}
-        onSandboxToggle={onSandboxToggle}
-        isAssistantResponding={isExecuting}
         model={model}
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
       />
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={projectId}
+        chatParentId={projectId}
         messages={messages ?? []}
+        isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streaming?.currentActivity}
         streamingContent={streaming?.currentContent}
         streamingPendingQuestion={streaming?.pendingQuestion}
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
-        isInputDisabled={!isSandboxActive || isSwitchingAccount}
-        placeholder={
-          !isSandboxActive
-            ? "Wake Eva up to chat..."
-            : isSwitchingAccount
-              ? "Switching Claude account..."
-              : "Ask Eva anything... / for skills · @ to mention"
-        }
+        isInputDisabled={composer.isInputDisabled}
+        placeholder={composer.placeholder}
         emptyStateTitle={
           isSandboxActive
             ? "Ask Eva anything about this project's running sandbox."
-            : "Wake Eva up to begin chatting."
+            : SANDBOX_CHAT_COPY.asleepTitle
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={displayAccounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={setTraits}
+        emptyStateDescription={
+          isSandboxActive
+            ? SANDBOX_CHAT_COPY.activeDescription
+            : SANDBOX_CHAT_COPY.asleepDescription
+        }
+        disabledReason={composer.disabledReason}
+        onStartSandbox={
+          !isSandboxActive && !isSandboxToggling && onSandboxToggle
+            ? () => onSandboxToggle("start")
+            : undefined
+        }
+        modelPicker={{
+          model,
+          setModel: queueGate.setModel,
+          modelOptions,
+          accounts: displayAccounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange: setTraits,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+        underCardLeading={
+          <SandboxBranchChip
+            branch={project?.sandboxBranch}
+            isSandboxActive={isSandboxActive}
+            intendedBranch={project?.branchName}
+          />
+        }
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}
+        onViewDiff={onViewDiff}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={project?.backgroundAgents}
         sandboxRunning={isSandboxActive}
+        transcriptTail={sandboxStartupTail(
+          sandboxStartupActivity,
+          sandboxStartupActivity !== undefined &&
+            !isSandboxActive &&
+            !isExecuting,
+        )}
       />
+      {queueGate.switchDialog}
     </div>
   );
 }

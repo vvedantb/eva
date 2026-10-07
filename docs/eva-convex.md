@@ -4,6 +4,8 @@ Read this when touching `packages/backend` / Convex schema, queries, mutations, 
 
 **Sandbox / Snapshot Storage lifecycle** (never-expire, 48h delete, resume fallthrough, orphan purge): [`docs/sandbox-snapshot-lifecycle.md`](./sandbox-snapshot-lifecycle.md).
 
+**Multi-repo sessions / codebase groups** (`sessionRepos`, `repoGroups`, `/tmp/workspace` layout, cross-installation git auth, group snapshots): [`docs/multi-repo-sessions.md`](./multi-repo-sessions.md).
+
 ## Types
 
 - Never manually define interfaces for Convex documents.
@@ -25,6 +27,7 @@ Read this when touching `packages/backend` / Convex schema, queries, mutations, 
 ## Env / runtime
 
 - Avoid importing `process.env` helpers into Convex isolate workflow files. If something needs env vars, keep it in `"use node"` actions.
+- Sandbox paths come from `_sandbox_runtime/workspaceLayout.ts` (isolate-safe: `WORKSPACE_ROOT`, `PRIMARY_REPO_DIR`, `linkedRepoDir`, `primaryLinkPath`) or `_sandbox_runtime/helpers.ts:WORKSPACE_DIR` in node modules. Never add a new `/tmp/...` string literal.
 
 ## Typecheck
 

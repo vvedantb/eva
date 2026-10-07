@@ -10,8 +10,6 @@ import {
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
   pkgInstallScript,
-  sudoNpmInstallGlobal,
-  USER_NPM_PREFIX_SHELL,
 } from "../convex/_sandbox_runtime/packageManager";
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
@@ -49,56 +47,6 @@ describe("no module installs packages behind the shared helper's back", () => {
       );
     });
   }
-});
-
-/**
- * Every reader of globally installed CLIs/SDKs resolves `npm root -g` as the
- * sandbox user; a root-run `npm install -g` without an explicit prefix writes to
- * ROOT's prefix instead. Identical on AL2023 (`/usr/local`), different on the
- * Ubuntu managed image (`/vercel/.global/npm`, where claude/codex/opencode are
- * preinstalled) — so eva's pins landed where nothing looked and the image's
- * versions won every turn.
- */
-describe("root-run global npm installs target the user's prefix", () => {
-  const modules = [
-    "convex/snapshotActions.ts",
-    "convex/_sandbox_runtime/launch.ts",
-    "convex/_sandbox_runtime/helpers.ts",
-    "convex/_sandbox_runtime/git.ts",
-    "convex/_sandbox_runtime/sessions.ts",
-  ];
-
-  test("the prefix expression is evaluated by the user's shell, not root's", () => {
-    // Double quotes: `$(…)` must expand before `sudo` sees it.
-    expect(USER_NPM_PREFIX_SHELL).toBe('"$(npm prefix -g)"');
-    expect(sudoNpmInstallGlobal("foo@1")).toBe(
-      'sudo npm install -g --prefix "$(npm prefix -g)" foo@1',
-    );
-  });
-
-  for (const relative of modules) {
-    test(`${relative} has no bare sudo npm install -g`, () => {
-      const source = readSource(relative).replace(/^\s*\/\/.*$/gm, "");
-      // Any `sudo … npm install -g` on one line that is not immediately
-      // followed by `--prefix` — catches both direct calls and `sudo sh -c`.
-      const bare = [
-        ...source.matchAll(/sudo[^\n]*npm install -g(?! --prefix)/g),
-      ];
-      expect(
-        bare.map((m) => m[0]),
-        "use sudoNpmInstallGlobal / USER_NPM_PREFIX_SHELL",
-      ).toEqual([]);
-    });
-  }
-
-  /** A single-quoted `sh -c` body would hand `$(npm prefix -g)` to root. */
-  test("the detached agent-browser install expands the prefix as the user", () => {
-    const source = readSource("convex/_sandbox_runtime/launch.ts");
-    const at = source.indexOf("nohup npm install -g");
-    expect(at).toBeGreaterThan(-1);
-    const window = source.slice(Math.max(0, at - 80), at);
-    expect(window, "sh -c body must be double-quoted").toMatch(/sh -c "[^']*$/);
-  });
 });
 
 describe("package alias table", () => {

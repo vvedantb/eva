@@ -1,26 +1,48 @@
 import { Codex, type ThreadEvent, type ThreadOptions } from "@openai/codex-sdk";
-import { existsSync, readFileSync } from "fs";
+import { readFileSync } from "fs";
 import {
   CODEX_BIN_PATH,
   CODEX_RUNTIME_HOME_DIR,
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
-  NO_WRITES,
   SYSTEM_PROMPT,
   WORK_DIR,
   normalizedCodexModel,
 } from "../config.js";
-import { processRealtimeStdoutChunk } from "../parse/streamRouter.js";
+import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { updateThinkingStep } from "../parse/canonical.js";
 import {
   appendToRawLogFile,
-  appendToRawOutput,
+  recordSdkAttemptFailure,
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { callbackState as S, resetAttemptState } from "../runtime/state.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
 import { log } from "../utils.js";
+import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { resolvePinnedCliBinary } from "./claudeSdk.js";
+
+const CODEX_CLI_PACKAGE = "@openai/codex";
+
+/**
+ * Locates the codex binary the SDK (and the App Server client) should drive.
+ *
+ * Same shape as `claudeExecutablePath`: launch.ts floats the CLI to the
+ * registry's latest and reports what it installed in CODEX_CLI_PINNED_VERSION,
+ * so a sandbox whose global `codex` predates that launch must lose to the
+ * fallback prefix. This used to test only whether the fallback path existed,
+ * which is the same existence-only check that left Claude snapshots driving
+ * CLI 2.1.246 against a model it could not run.
+ */
+export function codexExecutablePath(): string {
+  return resolvePinnedCliBinary({
+    packageName: CODEX_CLI_PACKAGE,
+    binName: "codex",
+    pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
+    fallbackBinPath: CODEX_BIN_PATH,
+  });
+}
 
 function readPromptText(): string {
   const prompt = readFileSync("/tmp/design-prompt.txt", "utf8");
@@ -36,29 +58,10 @@ function codexEnvironment(): Record<string, string> {
   return env;
 }
 
-/**
- * Codex's equivalent of Cursor's `disallowedTools` is its sandbox mode, which
- * gates writes at the filesystem rather than by tool name: `--sandbox read-only`
- * lets the agent run commands but refuses to modify the workspace. Paired with
- * the existing `approvalPolicy: "never"` a blocked write simply fails, rather
- * than stalling the turn on an approval nobody can answer.
- *
- * Deliberately NOT passing `networkAccessEnabled`. It looks like the way to keep
- * the master's log-reading shell working, but the SDK compiles it to
- * `--config sandbox_workspace_write.network_access=…`, which only configures the
- * *workspace-write* sandbox and is a no-op under `read-only`. Setting it would
- * read as a guarantee the flag does not provide.
- *
- * Known caveat: whether a read-only Codex sandbox permits outbound network from
- * shell commands is unverified, so `npx convex logs` may not work on this
- * provider even though it does on Cursor. Blocking writes is the requirement
- * here; if Codex ever becomes a real master provider, that needs testing on a
- * live sandbox. Writing sessions are untouched.
- */
 export function buildCodexSdkThreadOptions(): ThreadOptions {
   return {
     model: normalizedCodexModel,
-    sandboxMode: NO_WRITES ? "read-only" : "danger-full-access",
+    sandboxMode: "danger-full-access",
     workingDirectory: WORK_DIR,
     skipGitRepoCheck: true,
     approvalPolicy: "never",
@@ -115,7 +118,7 @@ export async function runCodexSdkAttempt(
   const agentTextByItem = new Map<string, string>();
 
   const codex = new Codex({
-    codexPathOverride: existsSync(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex",
+    codexPathOverride: codexExecutablePath(),
     env: codexEnvironment(),
   });
   const threadOptions = buildCodexSdkThreadOptions();
@@ -152,10 +155,8 @@ export async function runCodexSdkAttempt(
   }, NO_OUTPUT_CHECK_INTERVAL_MS);
 
   const emitLine = (line: string): void => {
-    appendToRawLogFile(line);
+    emitParsedStreamLine(line);
     attemptOutput = trimBufferHead(attemptOutput + line);
-    appendToRawOutput(line);
-    processRealtimeStdoutChunk(line);
   };
 
   try {
@@ -194,10 +195,7 @@ export async function runCodexSdkAttempt(
   }
 
   if (attemptErrorMessage) {
-    appendToRawLogFile("[sdk-error] " + attemptErrorMessage + "\n");
-    S.stderrOutput = trimBufferHead(
-      S.stderrOutput + attemptErrorMessage + "\n",
-    );
+    recordSdkAttemptFailure(attemptErrorMessage);
   }
 
   const code =
@@ -227,16 +225,10 @@ export async function runCodexSdkAttempt(
       ")",
   );
 
-  return {
+  return buildStandardSdkAttemptResult({
     code,
-    terminatedBySignal: false,
     output: attemptOutput,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
-    timedOutForFirstEvent: false,
-    timedOutForFirstAssistant: false,
-    timedOutAfterFirstText: false,
-    timedOutForZombie: false,
-    toolStallErrorMessage: "",
-  };
+  });
 }

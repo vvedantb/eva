@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
 import {
   DocumentsIcon,

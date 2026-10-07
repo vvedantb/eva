@@ -47,6 +47,7 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
@@ -155,7 +156,10 @@ export function TaskCardMenuItems({
     createdBy !== undefined &&
     currentUserId === createdBy;
 
-  const canRun = status === "todo" || status === "in_progress";
+  // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
+  const canRun =
+    (status === "todo" && runs !== undefined && runs.length === 0) ||
+    status === "in_progress";
   const StatusIcon = statusConfig[status].icon;
 
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
@@ -373,11 +377,13 @@ export function TaskCardMenuItems({
                   return (
                     <Item
                       key={app._id}
+                      title={skipConfirmTitle("Move")}
                       onSelect={() => {
                         onMove(app._id);
                       }}
                     >
                       {codebase.displayName}
+                      <ConfirmSkipHint />
                     </Item>
                   );
                 }
@@ -393,12 +399,14 @@ export function TaskCardMenuItems({
                       {availableApps.map((app) => (
                         <Item
                           key={app._id}
+                          title={skipConfirmTitle("Move")}
                           onSelect={(e) => {
                             e.preventDefault();
                             onMove(app._id);
                           }}
                         >
                           {app.appName}
+                          <ConfirmSkipHint />
                         </Item>
                       ))}
                     </SubContent>
@@ -439,12 +447,14 @@ export function TaskCardMenuItems({
 
       <Item
         className="text-destructive focus:text-destructive"
+        title={skipConfirmTitle("Delete")}
         onSelect={() => {
           onDelete();
         }}
       >
         <IconTrash size={16} />
         Delete
+        <ConfirmSkipHint />
       </Item>
     </>
   );

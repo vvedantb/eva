@@ -13,13 +13,15 @@ import {
   DropdownMenuTrigger,
   LIST_ROW_CONTROL_CLASS,
   ListRow,
+  LoadingState,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  toast,
 } from "@eva/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import {
   SANDBOX_STATUS_STYLES,
   type SandboxStatus,
@@ -40,8 +42,15 @@ import { useState, type MouseEvent } from "react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
-import { DeleteTaskDialog } from "./_components/DeleteTaskDialog";
-import { MoveTaskDialog } from "./_components/MoveTaskDialog";
+import {
+  DeleteTaskDialog,
+  useDeleteAgentTask,
+} from "./_components/DeleteTaskDialog";
+import {
+  MoveTaskDialog,
+  useMoveAgentTask,
+} from "./_components/MoveTaskDialog";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
@@ -52,17 +61,6 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 type DeploymentStatus = "queued" | "building" | "deployed" | "error";
-
-/** Chat or main-run workflow is live. Beam only — not a status change. */
-export function isTaskAgentActive(task: {
-  activeChatWorkflowId?: string;
-  activeWorkflowId?: string;
-}): boolean {
-  return (
-    task.activeChatWorkflowId !== undefined ||
-    task.activeWorkflowId !== undefined
-  );
-}
 
 interface QuickTaskCardProps {
   id: Id<"agentTasks">;
@@ -94,7 +92,8 @@ interface QuickTaskCardProps {
   isSelecting?: boolean;
   isSelected?: boolean;
   isActive?: boolean;
-  onToggleSelect?: () => void;
+  /** `shiftKey` asks the owner for a range selection from its anchor. */
+  onToggleSelect?: (event: { shiftKey: boolean }) => void;
   assignedTo?: Id<"users">;
   model?: string;
   providerAccountId?: Id<"userProviderAccounts">;
@@ -104,8 +103,8 @@ interface QuickTaskCardProps {
   currentUserId?: Id<"users">;
   projects?: Project[];
   /**
-   * Live chat or main-run workflow. Beam only — kanban column and status
-   * badge stay on `status`.
+   * Live chat or main-run workflow. Drives the pixel mark only — kanban column
+   * and status badge stay on `status`.
    */
   isAgentActive?: boolean;
 }
@@ -145,10 +144,18 @@ export function QuickTaskCard({
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
   const accentClass = showError ? "bg-destructive" : statusMeta.bar;
-  const isInProgress = !hasError && (status === "in_progress" || isAgentActive);
+  // Two different signals, two different marks: the beam is the column the task
+  // sits in, so it stays on `status` alone — it used to switch on for any live
+  // workflow, which read as a permanent spinner on cards nobody was working on.
+  // A live turn gets the same pixel grid the session rows use instead.
+  const isInProgress = !hasError && status === "in_progress";
+  const showAgentPulse = !hasError && !isInProgress && isAgentActive;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
+  const altHeld = useAltHeld();
+  const deleteTask = useDeleteAgentTask();
+  const moveTask = useMoveAgentTask();
 
   // Find the app name for the move target across all codebases
   const moveTargetAppName = (() => {
@@ -180,8 +187,20 @@ export function QuickTaskCard({
     users,
     currentUserId,
     projects,
-    onDelete: () => setShowDeleteConfirm(true),
-    onMove: (targetId: Id<"githubRepos">) => setMoveTarget(targetId),
+    onDelete: () =>
+      requestConfirm(altHeld, () => setShowDeleteConfirm(true), () => {
+        void deleteTask({ id }).catch((err) => {
+          console.error("Failed to delete task:", err);
+          toast.error("Could not delete the task. Try again.");
+        });
+      }),
+    onMove: (targetId: Id<"githubRepos">) =>
+      requestConfirm(altHeld, () => setMoveTarget(targetId), () => {
+        void moveTask({ id, repoId: targetId }).catch((err) => {
+          console.error("Failed to move task:", err);
+          toast.error("Could not move the task. Try again.");
+        });
+      }),
   };
 
   const hasDialogOpen = showDeleteConfirm || moveTarget !== null;
@@ -227,8 +246,15 @@ export function QuickTaskCard({
         {isSelecting ? (
           <Checkbox
             checked={isSelected}
-            onCheckedChange={() => onToggleSelect?.()}
-            onClick={(e) => e.stopPropagation()}
+            // One handler, not `onClick` + `onCheckedChange`: Radix composes
+            // its own toggle after ours and skips it once the event is
+            // default-prevented, so this reads the shift modifier without
+            // toggling twice.
+            onClick={(event) => {
+              event.stopPropagation();
+              event.preventDefault();
+              onToggleSelect?.({ shiftKey: event.shiftKey });
+            }}
             className={cn("mt-0.5 shrink-0", LIST_ROW_CONTROL_CLASS)}
           />
         ) : null}
@@ -250,7 +276,24 @@ export function QuickTaskCard({
               <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
             </Tooltip>
           ) : null}
-          {sandboxStatus ? (
+          {/* One mark, never two: a turn in flight already implies an awake
+              sandbox, so the pixel grid stands in for the status dot — the same
+              swap the session rows and the sandbox surface tabs make. */}
+          {showAgentPulse ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="relative flex items-center hit-target">
+                  <LoadingState
+                    label="Working"
+                    variant="Drive"
+                    size="sm"
+                    iconOnly
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Eva is replying</TooltipContent>
+            </Tooltip>
+          ) : sandboxStatus ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -359,7 +402,6 @@ export function QuickTaskCard({
     <BorderBeam
       active
       colorVariant="progress"
-      glow={false}
       className="rounded-surface"
     >
       {card}

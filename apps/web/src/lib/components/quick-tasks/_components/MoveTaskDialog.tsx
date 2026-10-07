@@ -8,23 +8,10 @@ import { toast } from "@eva/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-interface MoveTaskDialogProps {
-  targetId: Id<"githubRepos"> | null;
-  targetAppName: string;
-  onClose: () => void;
-  taskId: Id<"agentTasks">;
-  taskTitle: string;
-}
-
-export function MoveTaskDialog({
-  targetId,
-  targetAppName,
-  onClose,
-  taskId,
-  taskTitle,
-}: MoveTaskDialogProps) {
+/** Moves a quick task to another app. Shared by the confirm dialog and Alt-click bypass. */
+export function useMoveAgentTask() {
   const { repoId } = useRepo();
-  const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
+  return useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       // Moving to a different repo — remove from the current repo's list
       if (args.repoId) {
@@ -41,6 +28,24 @@ export function MoveTaskDialog({
       }
     },
   );
+}
+
+interface MoveTaskDialogProps {
+  targetId: Id<"githubRepos"> | null;
+  targetAppName: string;
+  onClose: () => void;
+  taskId: Id<"agentTasks">;
+  taskTitle: string;
+}
+
+export function MoveTaskDialog({
+  targetId,
+  targetAppName,
+  onClose,
+  taskId,
+  taskTitle,
+}: MoveTaskDialogProps) {
+  const updateTask = useMoveAgentTask();
   const [isMoving, setIsMoving] = useState(false);
 
   const handleMove = async () => {

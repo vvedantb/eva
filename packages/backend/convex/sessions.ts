@@ -4,8 +4,17 @@ export {
   get,
   getByNumId,
   getFirstMessagePreview,
+  getForkLinks,
   countActive,
 } from "./_sessions/queries";
+
+export {
+  listRepos,
+  listLinkedReposInternal,
+  getSessionRepoInternal,
+  patchSessionRepo,
+  findSessionRepoByPrUrl,
+} from "./_sessions/repos";
 
 export {
   create,
@@ -28,6 +37,7 @@ export {
   startSandbox,
   forcePushBranch,
   stopSandbox,
+  requestStopSandbox,
   sandboxReady,
   clearSandboxSetupPending,
   clearSandboxServicesPending,
@@ -35,13 +45,15 @@ export {
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
 
-export {
-  getOrchestratorSession,
-  ensureOrchestratorSession,
-  resetOrchestratorSession,
-} from "./_sessions/orchestrator";
-
 export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
+
+export {
+  getForkSource,
+  createForkedSession,
+  copyForkMessages,
+  copyForkCards,
+  settleForkSource,
+} from "./_sessions/fork";
 
 export {
   getInternal,

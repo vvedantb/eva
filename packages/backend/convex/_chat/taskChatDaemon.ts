@@ -6,11 +6,14 @@ import { authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
   normalizeAIModel,
+  daemonClaimResultValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "../validators";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "../_sessions/backgroundAgents";
+import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import {
@@ -19,6 +22,10 @@ import {
 } from "../_queues/helpers";
 import { TASK_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
+import { pendingTurnAlreadyClaimed } from "./pendingTurnRestage";
+import { resolveStorageUrls } from "./storageUrls";
+import { assistantReplyContent } from "../_sessions/resultTarget";
+import { isStreamingActivityStale } from "./turnLease";
 
 function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
   return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
@@ -47,14 +54,7 @@ export const claimPendingTurn = authMutation({
     model: v.optional(aiModelValidator),
     acceptTurn: v.optional(v.boolean()),
   },
-  returns: v.object({
-    prompt: v.union(v.string(), v.null()),
-    turnLifecycle: v.literal("legacy"),
-    attachmentUrls: v.array(v.string()),
-    stopTaskToolUseIds: v.array(v.string()),
-    cancelRequested: v.boolean(),
-    usageRefreshRequested: v.boolean(),
-  }),
+  returns: daemonClaimResultValidator,
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return emptyClaimReturn;
@@ -145,15 +145,17 @@ export const claimPendingTurn = authMutation({
     }
 
     const prompt = task.pendingTurn.prompt;
-    const resolvedUrls = await Promise.all(
-      (task.pendingTurn.attachmentStorageIds ?? []).map((id) =>
-        ctx.storage.getUrl(id),
-      ),
+    const attachmentUrls = await resolveStorageUrls(
+      (id) => ctx.storage.getUrl(id),
+      task.pendingTurn.attachmentStorageIds,
     );
-    const attachmentUrls = resolvedUrls.filter(
-      (url): url is string => url !== null,
-    );
-    await ctx.db.patch(args.taskId, { pendingTurn: undefined });
+    // The stamp is what tells `ensurePendingTurn` this prompt left
+    // `pendingTurn` via a claim rather than a cancel. See
+    // `pendingTurnRestage.ts` for the duplicate-run incident it prevents.
+    await ctx.db.patch(args.taskId, {
+      pendingTurn: undefined,
+      pendingTurnClaimedAt: Date.now(),
+    });
     const turnLifecycle = "legacy" as const;
     return {
       prompt,
@@ -278,6 +280,9 @@ export const completeSyntheticTurn = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     pendingQuestion: v.optional(v.string()),
+    // Accepted for daemons that hold a durable lease; unused until task and
+    // project chats open durable turns.
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
@@ -304,19 +309,39 @@ export const completeSyntheticTurn = authMutation({
       finishedAt: number;
       pendingQuestion?: string;
       model?: Doc<"messages">["model"];
+      beforeSha?: string;
+      afterSha?: string;
+      beforeShas?: Array<{ path: string; sha: string }>;
+      afterShas?: Array<{ path: string; sha: string }>;
     } = {
-      content: args.success
-        ? args.result || "I couldn't process your message."
-        : `Error: ${args.error || "Unknown error during execution."}`,
+      content: assistantReplyContent({
+        success: args.success,
+        result: args.result,
+        error: args.error,
+      }),
       finishedAt: Date.now(),
     };
     if (args.activityLog) patch.activityLog = args.activityLog;
     if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;
+    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
+      patch.beforeSha = args.beforeSha;
+      patch.afterSha = args.afterSha;
+    }
+    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
+      patch.beforeShas = args.beforeShas;
+      patch.afterShas = args.afterShas;
+    }
     // Drops the open-time stamp so a failed turn never becomes a checkpoint.
     if (!args.success) {
       patch.model = undefined;
     }
     await ctx.db.patch(args.messageId, patch);
+    // Judged out of band; a turn that changed no code schedules nothing.
+    await scheduleScopeCheck(ctx, {
+      _id: args.messageId,
+      beforeSha: patch.beforeSha,
+      afterSha: patch.afterSha,
+    });
 
     await ctx.db.patch(args.taskId, {
       syntheticTurnMessageId: undefined,
@@ -351,9 +376,7 @@ export const handleStaleSyntheticTurn = internalMutation({
       .query("streamingActivity")
       .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
       .first();
-    const streamingStale =
-      streaming === null ||
-      Date.now() - (streaming.lastUpdatedAt ?? 0) > 2 * 60 * 1000;
+    const streamingStale = isStreamingActivityStale(streaming);
     if (!streamingStale) {
       await ctx.scheduler.runAfter(
         10 * 60 * 1000,
@@ -401,6 +424,17 @@ export const ensurePendingTurn = internalMutation({
       last.role !== "assistant" ||
       last.finishedAt !== undefined ||
       last.isSyntheticTurn === true
+    ) {
+      return null;
+    }
+    // An open placeholder also describes a turn the daemon has already claimed
+    // and is running. Re-staging there parks a duplicate prompt for the whole
+    // turn, which a prewarm-respawned daemon then runs a second time.
+    if (
+      pendingTurnAlreadyClaimed({
+        pendingTurnClaimedAt: task.pendingTurnClaimedAt,
+        placeholderTimestamp: last.timestamp,
+      })
     ) {
       return null;
     }

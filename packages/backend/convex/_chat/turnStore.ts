@@ -37,44 +37,52 @@ export type CompletionTurnResolution =
   | { status: "legacy" }
   | { status: "stale" };
 
-export async function findOpenSessionTurn(
+/** Chat entities that own durable turns. The id's table picks the surface. */
+export type ChatTurnEntityId = Doc<"turns">["entityId"];
+
+export async function findOpenTurn(
   ctx: QueryCtx,
-  sessionId: Id<"sessions">,
+  entityId: ChatTurnEntityId,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q
-        .eq("surface", "session")
-        .eq("entityId", String(sessionId))
-        .eq("open", true),
+      q.eq("entityId", entityId).eq("open", true),
     )
     .first();
 }
 
-export async function openSessionTurn(
+export async function findOpenSessionTurn(
+  ctx: QueryCtx,
+  sessionId: Id<"sessions">,
+): Promise<Doc<"turns"> | null> {
+  return await findOpenTurn(ctx, sessionId);
+}
+
+type OpenTurnFields = {
+  streamingEntityId: string;
+  placeholderMessageId: Id<"messages">;
+  prompt: string;
+  attachmentStorageIds?: Id<"_storage">[];
+  model: Doc<"turns">["model"];
+  sandboxId?: string;
+  repoId: Id<"githubRepos">;
+};
+
+/** Opens a durable turn and supersedes any turn the entity still has open. */
+export async function openTurn(
   ctx: MutationCtx,
-  params: {
-    sessionId: Id<"sessions">;
-    streamingEntityId: string;
-    placeholderMessageId: Id<"messages">;
-    prompt: string;
-    attachmentStorageIds?: Id<"_storage">[];
-    model: Doc<"turns">["model"];
-    sandboxId?: string;
-    repoId: Id<"githubRepos">;
-  },
+  params: OpenTurnFields & { entityId: ChatTurnEntityId },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenSessionTurn(ctx, params.sessionId);
+  const previous = await findOpenTurn(ctx, params.entityId);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
     });
   }
-  const turnId = await ctx.db.insert("turns", {
-    surface: "session",
-    entityId: String(params.sessionId),
+  return await ctx.db.insert("turns", {
+    entityId: params.entityId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
     open: true,
@@ -92,7 +100,15 @@ export async function openSessionTurn(
     sandboxId: params.sandboxId,
     repoId: params.repoId,
   });
-  await ctx.db.patch(params.sessionId, { turnLifecycleVersion: 2 });
+}
+
+export async function openSessionTurn(
+  ctx: MutationCtx,
+  params: OpenTurnFields & { sessionId: Id<"sessions"> },
+): Promise<Id<"turns">> {
+  const { sessionId, ...turn } = params;
+  const turnId = await openTurn(ctx, { ...turn, entityId: sessionId });
+  await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
   return turnId;
 }
 
@@ -174,9 +190,7 @@ export async function renewTurnLease(
   if (turn.leaseGeneration !== params.leaseGeneration) {
     return { status: "terminal", reason: "superseded" };
   }
-  const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-  if (!sessionId) return { status: "terminal", reason: "unknown_turn" };
-  const current = await findOpenSessionTurn(ctx, sessionId);
+  const current = await findOpenTurn(ctx, turn.entityId);
   if (!current || current._id !== turn._id) {
     return { status: "terminal", reason: "superseded" };
   }
@@ -189,7 +203,11 @@ export async function renewTurnLease(
   }
   const state = turn.state === "finalizing" ? "finalizing" : "running";
   const durationMs = turnLeaseDurationMs(state);
+  // A turn the reconciler marked silent must always write, even when the
+  // renewal-throttle would skip it: the write is what clears `silentSince`,
+  // and without it a recovered daemon stays on the grace clock.
   if (
+    turn.silentSince === undefined &&
     !shouldWriteTurnLeaseRenewal({
       currentState: turn.state,
       nextState: state,
@@ -209,20 +227,53 @@ export async function renewTurnLease(
     turnStartedAt: turn.turnStartedAt,
     now,
   });
-  await ctx.db.patch(turn._id, { state, leaseExpiresAt });
+  await ctx.db.patch(turn._id, {
+    state,
+    leaseExpiresAt,
+    silentSince: undefined,
+  });
   return { status: "renewed", leaseExpiresAt, durationMs };
+}
+
+/**
+ * Extends an expired lease for a turn whose sandbox process the watchdog can
+ * still see running. Stamps `silentSince` on the first grace cycle so the
+ * reconciler can bound how long it keeps waiting; later cycles keep the
+ * original stamp. The absolute 2-hour limit is enforced exactly as
+ * `renewTurnLease` does.
+ */
+export async function graceExpiredTurnLease(
+  ctx: MutationCtx,
+  turn: Doc<"turns">,
+  now: number,
+): Promise<void> {
+  if (!turn.open || isTerminalTurnState(turn.state)) return;
+  if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
+    await closeTurn(ctx, turn, "error", {
+      error: "Turn exceeded the 2-hour limit",
+    });
+    return;
+  }
+  await ctx.db.patch(turn._id, {
+    leaseExpiresAt: turnLeaseExpiry({
+      state: turn.state,
+      turnStartedAt: turn.turnStartedAt,
+      now,
+    }),
+    silentSince: turn.silentSince ?? now,
+  });
 }
 
 export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
-    sessionId: Id<"sessions">;
+    entityId: ChatTurnEntityId;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenSessionTurn(ctx, params.sessionId);
+  const current = await findOpenTurn(ctx, params.entityId);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -232,7 +283,7 @@ export async function resolveCompletionTurn(
   if (
     !turn ||
     !turn.open ||
-    turn.entityId !== String(params.sessionId) ||
+    turn.entityId !== params.entityId ||
     turn.leaseGeneration !== params.leaseGeneration ||
     !current ||
     current._id !== turn._id ||
@@ -265,18 +316,18 @@ export async function closeOpenSessionTurn(
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, sessionId);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
 export async function closeTurnForWorkflow(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  entityId: ChatTurnEntityId,
   workflowId: string,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, entityId);
   if (!turn || turn.workflowId !== workflowId) return;
   await closeTurn(ctx, turn, state, patch);
 }

@@ -12,7 +12,10 @@ and its subprocess watchdog (the zombie / first-event / first-assistant guards
 and `CLAUDE_STREAM_SILENCE_TIMEOUT_MS`) were deleted once OpenCode moved to its
 SDK. Each SDK runner owns an inline `setInterval` enforcing max runtime plus a
 no-event silence kill at `CLAUDE_NO_OUTPUT_TIMEOUT_MS × 5`, exempting in-flight
-tools.
+tools. Cursor uses that same ×5 budget for the first visible event (not a
+shorter 60s window): a resumed agent that is thinking or compacting must not
+be mistaken for a hang and replaced. A stall retries the saved agent once;
+a second stall fails the turn. Only `agent_not_found` may mint a new agent.
 
 `CLAUDE_FIRST_EVENT_TIMEOUT_MS` and `CLAUDE_FIRST_ASSISTANT_EVENT_TIMEOUT_MS`
 no longer gate a kill; they survive only as the durations quoted in

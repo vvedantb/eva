@@ -1,7 +1,6 @@
 "use node";
 
 import type { SandboxHandle } from "../_sandbox/provider";
-import { defaultTerminalPtyId } from "../_sandbox_runtime/devServer";
 import { workspaceDirShell } from "../_sandbox_runtime/helpers";
 import { ensureSwapFile } from "../_sandbox_runtime/swap";
 import {
@@ -12,9 +11,16 @@ import {
   EVA_ENV_FILE,
   tmuxNewSessionWithEvaEnv,
 } from "../_sandbox/vercelEnvFile";
-import { tmuxSessionName } from "./vercel";
+import { previewConsoleSessionName } from "./consoleSessionName";
 
-const CONSOLE_LAUNCH_SCRIPT = "/tmp/eva-console-dev.sh";
+/**
+ * Per-`sessionName` so a linked repo's console session (a distinct tmux
+ * session from the primary's, see `launchLinkedRepoDevServerInVercelConsole`)
+ * never overwrites the primary's still-running launch script.
+ */
+function consoleLaunchScriptPath(sessionName: string): string {
+  return `/tmp/eva-console-dev-${sessionName}.sh`;
+}
 
 /**
  * Starts the app dev server inside the Preview Console's shared tmux session
@@ -22,15 +28,21 @@ const CONSOLE_LAUNCH_SCRIPT = "/tmp/eva-console-dev.sh";
  *
  * Safe to call when the browser already attached: send-keys goes into the
  * existing session. Skips when the listen port is already open.
+ *
+ * `dir` defaults to the primary repo's workspace root. A linked repo's own
+ * console session (see `launchLinkedRepoDevServerInVercelConsole`) passes its
+ * own clone directory instead, via a distinct `ownerKey` so it never fights
+ * the primary's tmux session.
  */
 export async function launchDevServerInVercelConsole(
   handle: SandboxHandle,
   ownerKey: string,
   devCommand: string,
   port: number,
+  dir: string = workspaceDirShell(),
 ): Promise<void> {
-  const sessionName = tmuxSessionName(defaultTerminalPtyId(ownerKey));
-  const workspace = workspaceDirShell();
+  const sessionName = previewConsoleSessionName(ownerKey);
+  const workspace = dir;
 
   await handle.exec(
     `${PACKAGE_HELPER_SCRIPT}\ncommand -v tmux >/dev/null 2>&1 || ${pkgInstall("tmux")}`,
@@ -80,8 +92,9 @@ export async function launchDevServerInVercelConsole(
     'export NODE_OPTIONS="--max-old-space-size=6144${NODE_OPTIONS:+ $NODE_OPTIONS}"',
     devCommand,
   ].join("\n");
-  await handle.writeFile(CONSOLE_LAUNCH_SCRIPT, script);
-  await handle.exec(`chmod +x ${CONSOLE_LAUNCH_SCRIPT}`, {
+  const scriptPath = consoleLaunchScriptPath(sessionName);
+  await handle.writeFile(scriptPath, script);
+  await handle.exec(`chmod +x ${scriptPath}`, {
     cwd: "/",
     timeoutSeconds: 5,
   });
@@ -110,10 +123,46 @@ export async function launchDevServerInVercelConsole(
 
   // Run via script path so send-keys needs no shell-escaping of the command.
   await handle.exec(
-    `tmux send-keys -t ${sessionName} ${CONSOLE_LAUNCH_SCRIPT} Enter`,
+    `tmux send-keys -t ${sessionName} ${scriptPath} Enter`,
     { cwd: "/", timeoutSeconds: 10 },
   );
   console.log(
     `[vercel] launchDevServerInVercelConsole: started in tmux ${sessionName} on ${handle.id} port=${port}`,
+  );
+}
+
+/**
+ * Starts one linked repo's dev server in its own Preview Console tmux session
+ * (`ownerKey` should be unique per repo, e.g. `session-<id>-<repoName>`, so it
+ * never shares a tmux session — or launch script — with the primary's).
+ * Sources that repo's own `.env.eva` first when present, never the
+ * sandbox-wide env file, since linked-repo env vars are scoped to that repo
+ * alone (see `linkedRepos.ts`'s `prepareLinkedRepo`).
+ *
+ * There is no framework auto-detection here, unlike the primary's
+ * `resolveVercelConsoleDevCommand` — a linked repo only ever gets a dev server
+ * when its `sessionRepos` row has an explicit `devCommand` and `devPort`.
+ *
+ * `devPort` needs no registration at sandbox-create time: Vercel exposes a
+ * fixed four-port set (`VERCEL_DEFAULT_EXPOSED_PORTS`, all four already taken
+ * by the auth proxy, editor, desktop and Supabase) and every app port —
+ * including the primary's own — is reached through the in-sandbox navigation
+ * proxy on 3000 instead (`execution.ts`'s `ensurePreviewNavigationProxy`). So
+ * a linked repo's dev server just listens on its own internal port.
+ */
+export async function launchLinkedRepoDevServerInVercelConsole(
+  handle: SandboxHandle,
+  ownerKey: string,
+  dir: string,
+  devCommand: string,
+  devPort: number,
+): Promise<void> {
+  const fullDevCommand = `if [ -f .env.eva ]; then set -a; . ./.env.eva; set +a; fi; HOSTNAME=0.0.0.0 PORT=${devPort} ${devCommand}`;
+  await launchDevServerInVercelConsole(
+    handle,
+    ownerKey,
+    fullDevCommand,
+    devPort,
+    dir,
   );
 }

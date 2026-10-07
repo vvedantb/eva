@@ -13,6 +13,7 @@ import {
 } from "@/lib/useResolveByNumId";
 import {
   isTaskRouteSandboxTab,
+  sandboxTabIdFromParam,
   type TaskRouteSandboxTab,
 } from "@/lib/search-params";
 import { isTaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
@@ -106,8 +107,9 @@ function sandboxTabFrom(
   isReview: boolean,
 ): TaskRouteSandboxTab {
   if (isReview) return "review";
-  if (sandboxTabParam !== undefined && isTaskRouteSandboxTab(sandboxTabParam)) {
-    return sandboxTabParam;
+  if (sandboxTabParam !== undefined) {
+    const tabId = sandboxTabIdFromParam(sandboxTabParam);
+    if (isTaskRouteSandboxTab(tabId)) return tabId;
   }
   return "preview";
 }

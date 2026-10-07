@@ -15,6 +15,30 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
+/** Starts a session summary. Shared by the confirm dialog and Alt-click bypass. */
+export function useStartSessionSummary(sessionId: Id<"sessions">) {
+  const startSummarize = useMutation(api.summarizeWorkflow.startSummarize);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+
+  const startSummary = async (): Promise<boolean> => {
+    setIsSummarizing(true);
+    try {
+      await catchMutationError(
+        startSummarize({ sessionId }),
+        "Couldn't generate summary",
+        "session-summarize",
+      );
+    } catch {
+      setIsSummarizing(false);
+      return false;
+    }
+    setIsSummarizing(false);
+    return true;
+  };
+
+  return { startSummary, isSummarizing };
+}
+
 interface SessionSummaryModalProps {
   sessionId: Id<"sessions">;
   hasSummary: boolean;
@@ -28,23 +52,11 @@ export function SessionSummaryModal({
   open,
   onClose,
 }: SessionSummaryModalProps) {
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const startSummarize = useMutation(api.summarizeWorkflow.startSummarize);
+  const { startSummary, isSummarizing } = useStartSessionSummary(sessionId);
 
   const handleConfirm = async () => {
-    setIsSummarizing(true);
-    try {
-      await catchMutationError(
-        startSummarize({ sessionId }),
-        "Couldn't generate summary",
-        "session-summarize",
-      );
-      onClose();
-    } catch {
-      setIsSummarizing(false);
-      return;
-    }
-    setIsSummarizing(false);
+    const ok = await startSummary();
+    if (ok) onClose();
   };
 
   return (

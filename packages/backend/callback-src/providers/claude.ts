@@ -29,14 +29,26 @@ import {
 function claudeToolCompleteResult(
   resultText: string,
   isError: boolean,
+  toolUseId: string | undefined,
 ): ToolCompleteResult | undefined {
+  // A blocking AskUserQuestion parks the user's structured answers here (see
+  // runtime/pendingQuestion.ts); hand them to the step and drop the entry.
+  let answers: Record<string, string> | undefined;
+  if (toolUseId !== undefined) {
+    const stored = S.questionAnswers.get(toolUseId);
+    if (stored) {
+      answers = stored;
+      S.questionAnswers.delete(toolUseId);
+    }
+  }
   const output = buildStepOutput(resultText);
-  if (!output && !isError) {
+  if (!output && !isError && !answers) {
     return undefined;
   }
   return {
     output,
     isError: isError ? true : undefined,
+    answers,
   };
 }
 
@@ -190,7 +202,7 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
     if (toolUseId) {
       trackClaudeToolResult(toolUseId, resultText, isError);
     }
-    const result = claudeToolCompleteResult(resultText, isError);
+    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
     events.push(
       result
         ? { kind: "complete_tool", trackingId: toolUseId, result }
@@ -221,7 +233,7 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
             : "";
         const isError = block.is_error === true;
         trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError);
+        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
         events.push(
           result
             ? { kind: "complete_tool", trackingId: toolUseId, result }
@@ -278,7 +290,8 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
       if (
         block.name === "TodoRead" ||
         block.name === "TaskGet" ||
-        block.name === "TaskList"
+        block.name === "TaskList" ||
+        block.name === "ExitPlanMode"
       ) {
         continue;
       }

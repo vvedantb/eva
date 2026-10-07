@@ -22,10 +22,17 @@ import {
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
+import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
+import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
+import {
+  COREPACK_SANDBOX_ENV,
+  renderEvaEnvFile,
+} from "./_sandbox/vercelEnvFile";
 import {
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
   isConvexBackendCommand,
+  CONVEX_FUNCTIONS_READY_ATTEMPTS,
   CONVEX_FUNCTIONS_READY_LOG_LINE,
   CONVEX_LOCAL_BACKEND_HEALTH_URL,
 } from "./_sandbox_runtime/convexLocalBackend";
@@ -35,6 +42,7 @@ import {
   resolveSwapConfig,
 } from "./_sandbox_runtime/swap";
 import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
+import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
 import {
@@ -42,7 +50,6 @@ import {
   CORE_TOOLCHAIN_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
-  sudoNpmInstallGlobal,
 } from "./_sandbox_runtime/packageManager";
 
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
@@ -92,7 +99,7 @@ const OPENCODE_VERSION = "1.18.16";
 // (SDK_VERSION): the callback's stream parsers match one SDK release's message
 // shapes exactly. Bump CLAUDE_CODE_VERSION (_sandbox_runtime/claudeCliVersion)
 // alongside the agent SDK — 0.3.X ships the CLI it spawns, 2.1.X.
-const CLAUDE_AGENT_SDK_VERSION = "0.3.258";
+const CLAUDE_AGENT_SDK_VERSION = "0.3.282";
 const CURSOR_SDK_VERSION = "1.0.28";
 
 /**
@@ -103,9 +110,26 @@ const CURSOR_SDK_VERSION = "1.0.28";
  * silent rather than fatal: the callback's parsers drop every event they do not
  * recognise, so the turn renders no activity at all while still returning its
  * final answer.
+ *
+ * Two roots are tested, because the install below is `sudo npm install -g`,
+ * which writes to node's own prefix (`/vercel/runtimes/node24/lib/node_modules`
+ * on a Vercel sandbox), while this guard runs as the unprivileged sandbox user
+ * whose `npm root -g` is a per-user prefix holding only pnpm. Testing `npm root
+ * -g` alone therefore never matched, so every seed reinstalled the whole
+ * toolchain. Mirrors `globalNpmRoots()` in
+ * callback-src/providers/claudeSdk.ts. The node-derived root is computed inside
+ * node to avoid nesting shell quotes in the `node -p` argument.
+ *
+ * Braced because the caller chains these with `&&` before an `|| sudo npm
+ * install` fallback: a bare `[ a ] || [ b ]` would re-associate and let one
+ * package's second test satisfy another package's first.
  */
 function globalPackageIsVersion(name: string, version: string): string {
-  return `[ "$(node -p "require('$(npm root -g)/${name}/package.json').version" 2>/dev/null)" = "${version}" ]`;
+  const nodePrefixRoot =
+    "require('path').dirname(require('path').dirname(process.execPath)) + '/lib/node_modules'";
+  const atNodePrefix = `"$(node -p "require(${nodePrefixRoot} + '/${name}/package.json').version" 2>/dev/null)"`;
+  const atNpmRoot = `"$(node -p "require('$(npm root -g)/${name}/package.json').version" 2>/dev/null)"`;
+  return `{ [ ${atNodePrefix} = "${version}" ] || [ ${atNpmRoot} = "${version}" ]; }`;
 }
 
 function shouldCaptureSupabaseState(commands: string[]): boolean {
@@ -308,9 +332,15 @@ export const launchSeedRun = internalAction({
       "#!/bin/bash",
       "exec > /tmp/seedrun.log 2>&1",
       "set -x",
-      // Yarn Berry / packageManager pins may prompt Corepack to download —
-      // non-interactive seed must not hang on that prompt.
-      "export COREPACK_ENABLE_DOWNLOAD_PROMPT=0",
+      // Same Corepack env as the session env file: never fetch npm `latest`
+      // for an unpinned repo, never hang on the download prompt.
+      renderEvaEnvFile(COREPACK_SANDBOX_ENV).trimEnd(),
+      // The seed run's `pnpm install` is the single biggest download in the
+      // whole system, and this sandbox holds the cache Drive's read-write
+      // mount — so it must point at the cache, or nothing ever populates it.
+      // The script is detached and does not source EVA_ENV_FILE, hence the
+      // second copy of these exports.
+      renderEvaEnvFile(DRIVE_CACHE_ENV).trimEnd(),
       GITHUB_RELEASE_DOWNLOAD_FUNCTION,
       // Defines eva_pkg_install / _ffmpeg / _chrome / _gh once for the whole
       // script; every stage below installs through it so the seed runs
@@ -346,7 +376,7 @@ export const launchSeedRun = internalAction({
       // ffmpeg for agent-browser WebM recording, baked into the seeded
       // snapshot. Shared with the desktop-start repair so the two cannot drift.
       FFMPEG_INSTALL_SCRIPT,
-      'docker info >/dev/null 2>&1 || sudo setsid dockerd </dev/null >/tmp/dockerd.log 2>&1 & for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done; sudo chmod 666 /var/run/docker.sock 2>/dev/null || true; docker info >/dev/null 2>&1 || { echo "SEEDRUN-FAILED:docker-start"; exit 1; }',
+      buildSeedRunDockerStartCommand(),
       'corepack enable || sudo corepack enable || { echo "SEEDRUN-FAILED:corepack"; exit 1; }',
       'corepack prepare pnpm@10.33.4 --activate || { echo "SEEDRUN-FAILED:pnpm"; exit 1; }',
       // Classic yarn for yarn.lock repos. Soft-fail: yarn installs are best-effort.
@@ -383,13 +413,8 @@ export const launchSeedRun = internalAction({
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
-      // Installed into the sandbox USER's global prefix (sudoNpmInstallGlobal),
-      // which is the root globalPackageIsVersion and every runtime resolver
-      // read from. The Ubuntu managed image preinstalls claude/codex/opencode
-      // there, so eva's pins must land in that same root to replace them —
-      // a plain `sudo npm install -g` would put them where nothing looks.
-      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || ${sudoNpmInstallGlobal(`@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@0.146.0 agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION}`)} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
-      `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || ${sudoNpmInstallGlobal(`opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION}`)} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
+      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
+      `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
       // code-server publishes one artifact per packaging format, and the two
       // asset names differ by more than the extension (`code-server_V_amd64.deb`
       // vs `code-server-V-amd64.rpm`), so the branch is on the filename rather
@@ -456,7 +481,11 @@ export const launchSeedRun = internalAction({
       // Node: lockfile at repo root picks the manager. pnpm stays fatal (existing
       // repos); yarn/npm warn and continue so polyglot / legacy roots can still
       // finish the seed. Markers must never contain the substring SEEDRUN-FAILED.
-      'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile || { echo "SEEDRUN-FAILED:install"; exit 1; }; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
+      // pnpm output is tee'd to /tmp/seed-install.log so fetchSeedDiagnostics
+      // can surface it: pnpm 10+ skips unapproved dependency build scripts with
+      // only a warning and exit 0, which leaves e.g. the `supabase` CLI binary
+      // missing and only fails much later, in a background command.
+      'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile 2>&1 | tee /tmp/seed-install.log; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "SEEDRUN-FAILED:install"; exit 1; }; grep -q "Ignored build scripts" /tmp/seed-install.log && echo "SEEDRUN-WARN:ignored-build-scripts"; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
       // Python: independent of Node. Lazy-install compile deps only when a
       // Python manifest exists (libpq-devel for psycopg2 source builds).
       `if [ -f requirements.txt ] || [ -f pyproject.toml ]; then ${pkgInstall("gcc", "g++", "make", "python3-dev", "libpq-dev")} || true; fi`,
@@ -518,14 +547,15 @@ export const launchSeedRun = internalAction({
         `echo ${cb64} | base64 -d > /tmp/bg-cmd-${i}.sh && chmod +x /tmp/bg-cmd-${i}.sh && setsid nohup bash -l /tmp/bg-cmd-${i}.sh </dev/null > /tmp/bg-${i}.log 2>&1 & echo $! > /tmp/bg-${i}.pid`,
       );
     });
-    // Native Convex readiness gate: seed commands (`npx convex env set`,
-    // `npx convex import`) need a *running backend* — not a completed push.
-    // Gating on the functions-ready line deadlocks every repo whose
-    // auth.config.ts reads a deployment env var: the daemon's first push fails
-    // for the missing value, and the seed commands that would set it run after
-    // this gate. So the fatal wait is on the backend health endpoint, and the
-    // push happens after the seed commands instead (convex-push stage below).
-    // Detached script — a plain bash
+    // Native Convex readiness gate, in two parts. The *fatal* wait is on the
+    // backend health endpoint: seed commands (`npx convex env set`, `npx
+    // convex import`) need a running backend, and making a completed push
+    // mandatory deadlocks every repo whose auth.config.ts reads a deployment
+    // env var — the daemon's first push fails for the missing value, and the
+    // seed commands that would set it run after this gate. So the push happens
+    // after the seed commands instead (convex-push stage below). The second,
+    // non-fatal wait gives a push that *is* going to succeed the chance to
+    // land before the seeds touch the data. Detached script — a plain bash
     // wait has no exec ceiling here. 900s covers cold binary plants; a daemon
     // that exits early ends the wait instead of burning the full window.
     (backgroundCommands ?? []).forEach((command, i) => {
@@ -539,7 +569,25 @@ export const launchSeedRun = internalAction({
         "  sleep 5",
         "done",
         `${backendUp} || { echo "SEEDRUN-FAILED:convex-ready-${i}"; tail -n 60 /tmp/bg-${i}.log 2>/dev/null; exit 1; }`,
-        `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
+        // A live backend is necessary but not sufficient. The daemon's first
+        // push applies schema.ts and backfills its indexes, and `npx convex
+        // import` aborts the whole restore with "Could not complete import
+        // because schema changed" when that lands mid-import (observed
+        // 2026-09-21 on cost-model-ts: import got through every table, then
+        // died on the daemon's push finishing 8s in). So wait for the push
+        // too — but bounded and non-fatal, because the repos this gate was
+        // loosened for never finish that first push: their auth.config.ts
+        // reads an env var only the seed commands set, and their push is
+        // retried after the seeds instead (convex-push stage below). Repos
+        // that push cleanly break out in seconds; the cap is only ever paid
+        // by a repo that was going to skip the push anyway.
+        `echo "SEEDRUN-STAGE:convex-functions-ready-${i}"`,
+        `for s in $(seq 1 ${CONVEX_FUNCTIONS_READY_ATTEMPTS}); do`,
+        `  grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && break`,
+        `  if [ -f /tmp/bg-${i}.pid ] && ! kill -0 "$(cat /tmp/bg-${i}.pid)" 2>/dev/null; then echo "convex-ready-${i}: daemon exited"; break; fi`,
+        "  sleep 5",
+        "done",
+        `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && echo "convex-ready-${i}: functions pushed; safe to import" || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
       );
     });
     // ---- seed (post-daemon) ----
@@ -632,6 +680,19 @@ export const fetchSeedDiagnostics = internalAction({
           "( cd /tmp/repo && git rev-parse --short HEAD 2>&1; git status -s 2>&1 | head -5 )",
           'echo "== convex versions =="',
           "( cd /tmp/repo && npx convex --version 2>&1; ls -la ~/.convex/ 2>&1 | head; ls -la ~/.cache/convex/ 2>&1 | head )",
+          // Which package manager actually ran, and why: Corepack resolves the
+          // repo pin, else its Last Known Good, else (DEFAULT_TO_LATEST) npm
+          // `latest`. The pnpm 12 incident was invisible without these lines.
+          'echo "== toolchain =="',
+          '( cd /tmp/repo && node --version 2>&1; corepack --version 2>&1; echo "pnpm $(pnpm --version 2>&1 | tail -n 1)"; grep -o \'"packageManager": *"[^"]*"\' package.json 2>/dev/null || echo \'packageManager: (none)\'; echo lastKnownGood: $(cat ~/.cache/node/corepack/lastKnownGood.json 2>/dev/null | tr -d \' \\n\') )',
+          // Install warnings pnpm prints and then forgets (ignored build
+          // scripts, peer/engine warnings). Written by the install stage.
+          'echo "== install log (warnings) =="',
+          "grep -aE 'Ignored build|ERR_PNPM|WARN|Done in .* using pnpm' /tmp/seed-install.log 2>/dev/null | tail -n 20",
+          // Fixed 32 GB disk; seeds that import large file storage hit ENOSPC
+          // mid-import and then only time out. Show the headroom at failure.
+          'echo "== disk =="',
+          "df -h / 2>&1; du -xsh /swapfile /tmp/repo/node_modules ~/.local/share/pnpm ~/.cache ~/.convex 2>/dev/null || true",
           'echo "== 3210 listening? =="',
           "curl -s -o /dev/null -w 'backend http:%{http_code}\\n' http://127.0.0.1:3210 2>&1 || echo '3210 unreachable'",
           'echo "== seedrun.log (tail) =="; tail -c 4000 /tmp/seedrun.log 2>/dev/null',
@@ -762,6 +823,12 @@ export const createSeedPrepSandbox = internalAction({
       // 600s per-action ceiling on providers (Vercel) that don't have deps
       // pre-baked into their base snapshot.
       true,
+      undefined, // forkFrom
+      // Cache WRITER: this is the sandbox where the seed run's `pnpm install`
+      // actually downloads the repo's dependency tree, and the snapshot
+      // workflow runs at most one per repo at a time — so it takes the Drive's
+      // single read-write mount and fills the cache every session then reads.
+      DRIVE_CACHE_WRITER,
     );
     return { ok: true, sandboxId: sandbox.id };
   },
@@ -1010,6 +1077,16 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
         {},
       ),
     );
+    // Group seeded snapshots (repoGroups.seededSnapshotName) never appear as a
+    // sandbox's currentSnapshotId or a repo's own seeded/base id, so they need
+    // their own entry in the protected set — otherwise the very first purge
+    // after a group build deletes it as an orphan.
+    for (const name of await ctx.runQuery(
+      internal.repoGroups.listAllGroupSnapshotNames,
+      {},
+    )) {
+      protectedIds.add(name);
+    }
     const knownSandboxIds = new Set(
       await ctx.runQuery(internal.repoSnapshots.listReferencedSandboxIds, {}),
     );

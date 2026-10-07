@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
@@ -29,6 +30,7 @@ import {
   MentionPickerPopup,
   type MentionPopupLayout,
 } from "./MentionPickerPopup";
+import { optionId } from "./mentionOptionId";
 import { MentionRow, type MentionKind } from "./MentionRow";
 import {
   computeMentionPopupPlacement,
@@ -37,7 +39,7 @@ import {
   type MentionPopupPlacement,
 } from "./mentionPopupPosition";
 import { cn } from "@eva/ui";
-import { UserProfileHoverCardBody } from "@eva/shared";
+import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
 
 // The inline AI suggestion renders as an `::after` pseudo-element fed by
@@ -73,6 +75,12 @@ export interface MentionEditorHandle {
   tokenize: (text: string) => string;
   reset: () => void;
   focus: () => void;
+  /**
+   * The editor's root element. Callers that listen on `document` use it to ask
+   * whether this editor is the visible one — several composers stay mounted at
+   * once (see `composerVisibility.ts`).
+   */
+  getElement: () => HTMLElement | null;
   /** Append an @mention chip (and trailing space) to the current draft. */
   insertMention: (item: MentionItem) => void;
   /** Append a /skill chip (and trailing space) to the current draft. */
@@ -307,6 +315,12 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     renderSkillChipHoverCard !== undefined;
   const isPanel = popupLayout === "panel";
   const editorRef = useRef<HTMLDivElement>(null);
+  /**
+   * The listbox this combobox controls. One id is enough: the slash popup and
+   * the mention popup are two `key`s of the same slot and only one trigger can
+   * be open at a time.
+   */
+  const listboxId = useId();
   const [trigger, setTrigger] = useState<TriggerState>(CLOSED_TRIGGER);
   const [selectedIndex, setSelectedIndex] = useState(0);
   /**
@@ -409,13 +423,22 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     }, 250);
   };
 
+  /* eslint-disable no-effect/no-derived-state, no-effect/no-chain-state-updates, no-effect/no-event-handler --
+     `value` is owned by whichever controller wraps the editor (send, draft pull,
+     programmatic seed), so "the input was emptied" has no single call site to
+     drop the token maps from. Clearing them here is the one place that catches
+     every route. */
   useEffect(() => {
     if (value === "" && (mentionMap.size > 0 || skillMap.size > 0)) {
       setMentionMap(new Map());
       setSkillMap(new Map());
     }
   }, [value, mentionMap.size, skillMap.size]);
+  /* eslint-enable no-effect/no-derived-state, no-effect/no-chain-state-updates, no-effect/no-event-handler */
 
+  /* eslint-disable no-effect/no-event-handler --
+     Writes chip HTML into a contenteditable and repositions the caret: the DOM
+     is the external system being synchronised, not React state. */
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -443,6 +466,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     skillChipClassName,
     chipsClickable,
   ]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const appendToken = (
     prefix: "@" | "/",
@@ -501,6 +525,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         setSkillMap(new Map());
       },
       focus: () => editorRef.current?.focus(),
+      getElement: () => editorRef.current,
       insertMention: (item: MentionItem) => appendToken("@", item, "mention"),
       insertSkill: (item: SlashItem) => appendToken("/", item, "skill"),
       addTokenMaps: (mentions, skills) => {
@@ -577,6 +602,11 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     if (item) insertMentionItem(item);
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent, no-effect/no-event-handler --
+     The open trigger is not a pure function of `value`: `insertedTokenRef` has
+     to be released across renders so the chip an accept just wrote is not read
+     back as a trigger the user is typing. Deriving it during render would
+     mutate that ref while rendering. */
   useEffect(() => {
     const next = findActiveTrigger(
       value,
@@ -605,13 +635,20 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     setTrigger(next);
     setSelectedIndex(0);
   }, [value, items.length, slashItems.length, emptySlashContent]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-pass-data-to-parent, no-effect/no-event-handler */
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     Popup placement is measured from live layout (viewport rects, anchor
+     element), so it can only be computed after the browser has laid the trigger
+     out — not during render. */
   useEffect(() => {
     if (!trigger.isOpen) {
       setPopupPlacement(null);
       return;
     }
+    let attached = false;
     const update = () => {
+      if (document.visibilityState !== "visible") return;
       requestAnimationFrame(() => {
         const el = editorRef.current;
         if (!el) return;
@@ -625,14 +662,34 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         );
       });
     };
+    const syncLayoutListeners = () => {
+      const shouldAttach = document.visibilityState === "visible";
+      if (shouldAttach && !attached) {
+        window.addEventListener("scroll", update, true);
+        window.addEventListener("resize", update);
+        attached = true;
+      } else if (!shouldAttach && attached) {
+        window.removeEventListener("scroll", update, true);
+        window.removeEventListener("resize", update);
+        attached = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      syncLayoutListeners();
+      update();
+    };
     update();
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
+    syncLayoutListeners();
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (attached) {
+        window.removeEventListener("scroll", update, true);
+        window.removeEventListener("resize", update);
+      }
     };
   }, [trigger.isOpen, trigger.query, trigger.startIndex, value, isPanel]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   const handleInput = () => {
     const el = editorRef.current;
@@ -648,7 +705,9 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
    * never leaves the editor — the picker has nothing focusable in it — so this
    * is the only path that navigates the list.
    */
-  const handlePickerKeyDown = (e: React.KeyboardEvent<HTMLElement>): boolean => {
+  const handlePickerKeyDown = (
+    e: React.KeyboardEvent<HTMLElement>,
+  ): boolean => {
     if (!trigger.isOpen) return false;
     if (popupItems.length > 0) {
       if (e.key === "ArrowDown") {
@@ -794,17 +853,38 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
 
   useEffect(() => {
     if ((!mentionHover && !contentChipHover) || !mentionHoverRect) return;
+    let attached = false;
     const updateRect = () => {
+      if (document.visibilityState !== "visible") return;
       const chip = mentionHoverChipRef.current;
       if (chip) {
         setMentionHoverRect(chip.getBoundingClientRect());
       }
     };
-    window.addEventListener("scroll", updateRect, true);
-    window.addEventListener("resize", updateRect);
+    const syncLayoutListeners = () => {
+      const shouldAttach = document.visibilityState === "visible";
+      if (shouldAttach && !attached) {
+        window.addEventListener("scroll", updateRect, true);
+        window.addEventListener("resize", updateRect);
+        attached = true;
+      } else if (!shouldAttach && attached) {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+        attached = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      syncLayoutListeners();
+      updateRect();
+    };
+    syncLayoutListeners();
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("scroll", updateRect, true);
-      window.removeEventListener("resize", updateRect);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (attached) {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+      }
     };
   }, [mentionHover, contentChipHover, mentionHoverRect]);
 
@@ -918,8 +998,13 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
 
   const popupTitle = trigger.kind === "slash" ? "Skills" : mentionPopupTitle;
 
+  // The row the arrow keys are on, named for `aria-activedescendant`. Only the
+  // popup that is actually rendered has one.
+  const activeItem = showPopup ? popupItems[selectedIndex] : undefined;
+
   const sharedPopupProps = {
     title: popupTitle,
+    listboxId,
     selectedIndex,
   };
 
@@ -933,9 +1018,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
           items={activeSlashItems}
           renderItem={renderSlashItem}
           onSelectItem={insertSlashItem}
-          emptyContent={
-            slashItems.length === 0 ? emptySlashContent : undefined
-          }
+          emptyContent={slashItems.length === 0 ? emptySlashContent : undefined}
         />
       ) : (
         <MentionPickerPopup
@@ -990,11 +1073,29 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         data-suggestion={suggestion}
         contentEditable={!disabled}
         suppressContentEditableWarning
-        role="textbox"
+        /* ARIA 1.2 combobox: the editor is the input, the picker is the popup
+           it controls, and `aria-activedescendant` is how a screen reader is
+           told which row ArrowUp/ArrowDown moved to — the picker rows keep DOM
+           focus out of it entirely. Without these the popup opened silently. */
+        role="combobox"
         aria-multiline="true"
+        aria-haspopup="listbox"
+        aria-autocomplete="list"
+        aria-expanded={showPopup}
+        aria-controls={showPopup ? listboxId : undefined}
+        aria-activedescendant={
+          activeItem ? optionId(listboxId, activeItem.id) : undefined
+        }
         aria-disabled={disabled ? "true" : undefined}
         aria-label={ariaLabel ?? placeholder ?? "Editor"}
-        className={cn(DEFAULT_EDITOR_CLASS, className)}
+        className={cn(
+          DEFAULT_EDITOR_CLASS,
+          // `role="combobox"` opts into the base-layer pointer cursor meant for
+          // pickers. This one is typed into, so put the caret back — while
+          // leaving a disabled editor on the base `not-allowed`.
+          disabled ? undefined : "cursor-text",
+          className,
+        )}
         onInput={disabled ? undefined : handleInput}
         onKeyDown={disabled ? undefined : handleKeyDown}
         onClick={disabled ? undefined : handleChipClick}
