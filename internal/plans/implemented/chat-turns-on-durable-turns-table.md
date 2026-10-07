@@ -221,9 +221,9 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 ## Follow-ups
 
 1. On or after 2026-10-14 (one more release): delete the no-op stubs listed in the Phase 5 notes.
-2. After `dataMigrations:clear{Session,Task,Project}PendingTurnClaimedAt` has run in production: delete `pendingTurnClaimedAt` from `chatDaemonEntityFields` with a `// schema-narrowing-ok:` marker.
-3. After confirming `dataMigrations:clearTurnSurface` left no row with `surface`: delete `turnFields.surface` and that migration, with a marker.
-4. Phase 6 (quick-task runs on durable turns) is an open, separate project.
+2. Done 2026-10-07. A paged production read found 0 of 472 sessions, 966 tasks and 13 projects with `pendingTurnClaimedAt`. The field and its three migrations are deleted.
+3. Done 2026-10-07. A paged production read found 0 of 1,935 `turns` rows with `surface`. The field and `clearTurnSurface` are deleted.
+4. Phase 6 (quick-task runs on durable turns): `internal/plans/todo/quick-task-runs-on-durable-turns.md`.
 
 ### Phase 6 (optional, separate project): quick-task runs
 

@@ -10,10 +10,15 @@ import {
   renewTurnLease,
 } from "../convex/_chat/turnStore";
 import {
-  chatAdapterForEntity,
   TASK_CHAT_STREAM_PREFIX,
   taskChatAdapter,
+  turnAdapterForEntity,
+  turnOwnerFromStream,
 } from "../convex/_chat/surfaceAdapters";
+import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
+import { sessionSummaryStreamingEntityId } from "../convex/_chat/agentStreamIds";
+import { findOpenTurn } from "../convex/_chat/turnStore";
+import { hasOpenChatTurn } from "../convex/_chat/turnProjection";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
@@ -549,9 +554,7 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(rows.turn?.error).toBe(STALL_ALERT_TEXT);
     expect(rows.placeholder?.content).toBe(STALL_ALERT_TEXT);
     expect(rows.task?.syntheticTurnMessageId).toBeUndefined();
-    expect(scheduled).toEqual([
-      "agentTaskChatWorkflow:retryEmptyStalledTurn",
-    ]);
+    expect(scheduled).toEqual(["agentTaskChatWorkflow:retryEmptyStalledTurn"]);
   });
 
   test("the legacy heartbeat teardown closes the turn it tears down", async () => {
@@ -638,11 +641,170 @@ describe("task chat turns share the session turn lifecycle", () => {
         rawInput: "pick",
         updatedAt: Date.now(),
       });
-      return [sessionId, taskId, projectId, "not-an-id"].map((id) =>
-        chatAdapterForEntity(ctx.db, id, (adapter) => adapter.kind),
-      );
+      const runId = await ctx.db.insert("agentRuns", {
+        taskId,
+        status: "running",
+        logs: [],
+      });
+      const visit = {
+        chat: (adapter: { kind: string }) => adapter.kind,
+        agent: (owner: { kind: string }) => owner.kind,
+      };
+      return [
+        ...[sessionId, taskId, projectId, runId, "not-an-id"].map((entityId) =>
+          turnAdapterForEntity(ctx.db, { entityId }, visit),
+        ),
+        turnAdapterForEntity(
+          ctx.db,
+          { entityId: sessionId, lane: "summary" },
+          visit,
+        ),
+        turnAdapterForEntity(
+          ctx.db,
+          { entityId: projectId, lane: "interview" },
+          visit,
+        ),
+      ];
     });
-    expect(kinds).toEqual(["session", "taskChat", "projectChat", null]);
+    expect(kinds).toEqual([
+      "session",
+      "taskChat",
+      "projectChat",
+      "run",
+      null,
+      "summary",
+      "interview",
+    ]);
+  });
+});
+
+/**
+ * Quick-task runs own a durable turn: the lease fences their heartbeats, and
+ * the reconciler stops a stalled run through `cleanUpStaleRun`.
+ */
+describe("quick-task run as a turn owner", () => {
+  async function createRunTurnFixture() {
+    const { t, repoId, taskId } = await createTaskChatFixture();
+    const ids = await t.run(async (ctx) => {
+      await ctx.db.patch(taskId, { status: "in_progress" });
+      const runId = await ctx.db.insert("agentRuns", {
+        taskId,
+        repoId,
+        status: "running",
+        logs: [],
+        startedAt: Date.now(),
+      });
+      const turnId = await openTurn(ctx, {
+        entityId: runId,
+        streamingEntityId: getTaskRunStreamingEntityId(runId),
+        model: "claude:sonnet",
+        repoId,
+      });
+      const turn = await ctx.db.get(turnId);
+      if (turn) await acquireTurnLease(ctx, turn, "running");
+      return { runId, turnId };
+    });
+    return { t, taskId, ...ids };
+  }
+
+  test("the run streaming id maps back to the run", async () => {
+    const { t, runId } = await createRunTurnFixture();
+    const parsed = await t.run(async (ctx) =>
+      turnOwnerFromStream(ctx.db, getTaskRunStreamingEntityId(runId)),
+    );
+    expect(parsed).toEqual({ entityId: runId, lane: undefined });
+  });
+
+  test("a run turn renews and fences like any other turn", async () => {
+    const { t, runId, turnId } = await createRunTurnFixture();
+    const verdicts = await t.run(async (ctx) => ({
+      current: await renewTurnLease(ctx, {
+        turnId,
+        leaseGeneration: 1,
+        streamingEntityId: getTaskRunStreamingEntityId(runId),
+      }),
+      old: await renewTurnLease(ctx, { turnId, leaseGeneration: 0 }),
+    }));
+    expect(verdicts.current.status).toBe("renewed");
+    expect(verdicts.old).toEqual({ status: "terminal", reason: "superseded" });
+  });
+
+  test("an open run turn rejects the unfenced heartbeat for its stream", async () => {
+    const { t, runId } = await createRunTurnFixture();
+    const accepted = await t.mutation(internal.turns.legacyHeartbeat, {
+      entityId: getTaskRunStreamingEntityId(runId),
+      touchOnly: true,
+    });
+    expect(accepted).toBe(false);
+  });
+
+  test("an expired run turn stops the run with the old watchdog text", async () => {
+    vi.useFakeTimers();
+    try {
+      const { t, runId, turnId, taskId } = await createRunTurnFixture();
+      await t.run(async (ctx) => {
+        await ctx.db.patch(turnId, { leaseExpiresAt: Date.now() - 1 });
+      });
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: "process_dead",
+      });
+      const after = await t.run(async (ctx) => ({
+        turn: await ctx.db.get(turnId),
+        run: await ctx.db.get(runId),
+        task: await ctx.db.get(taskId),
+      }));
+      expect(after.turn?.open).toBe(false);
+      expect(after.turn?.state).toBe("error");
+      expect(after.run?.status).toBe("error");
+      expect(after.run?.exitReason).toBe("watchdog_killed");
+      expect(after.run?.error).toMatch(/^Run killed by watchdog: no heartbeat/);
+      expect(after.task?.status).toBe("todo");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+/**
+ * A one-shot agent on a chat row (session summary, project interview) has a
+ * lane, so its turn never reads as, or is superseded by, the chat's turn.
+ */
+describe("lane turns stay apart from chat turns", () => {
+  test("a summary turn is not the session's chat turn", async () => {
+    const { t, sessionId } = await createSessionFixture();
+    const result = await t.run(async (ctx) => {
+      const session = await ctx.db.get(sessionId);
+      if (!session) throw new Error("missing session");
+      const chatTurn = await findOpenTurn(ctx, sessionId);
+      const summaryTurnId = await openTurn(ctx, {
+        entityId: sessionId,
+        lane: "summary",
+        streamingEntityId: sessionSummaryStreamingEntityId(sessionId),
+        model: "claude:sonnet",
+        repoId: session.repoId,
+      });
+      return {
+        chatTurnId: chatTurn?._id,
+        chatTurnAfter: (await findOpenTurn(ctx, sessionId))?._id,
+        summaryTurn: await findOpenTurn(ctx, sessionId, "summary"),
+        summaryTurnId,
+        hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),
+        streamOwner: turnOwnerFromStream(
+          ctx.db,
+          sessionSummaryStreamingEntityId(sessionId),
+        ),
+      };
+    });
+    // Opening the summary turn did not supersede the chat turn.
+    expect(result.chatTurnAfter).toBe(result.chatTurnId);
+    expect(result.summaryTurn?._id).toBe(result.summaryTurnId);
+    expect(result.summaryTurn?.lane).toBe("summary");
+    expect(result.hasChatTurn).toBe(result.chatTurnId !== undefined);
+    expect(result.streamOwner).toEqual({
+      entityId: sessionId,
+      lane: "summary",
+    });
   });
 });
 

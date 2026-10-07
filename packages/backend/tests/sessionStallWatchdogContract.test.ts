@@ -74,7 +74,9 @@ describe("the lease is the only chat stall check", () => {
 
   test("no adapter or tracker schedules a retired stall check", () => {
     for (const name of RETIRED_STALL_CHECKS) {
-      expect(surfaceAdapters).not.toContain(`internal.workflowWatchdog.${name}`);
+      expect(surfaceAdapters).not.toContain(
+        `internal.workflowWatchdog.${name}`,
+      );
     }
   });
 });
@@ -96,8 +98,19 @@ describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
 
   test("handleStaleSession finalizes via the shared implementation with the session's own timeout alert", () => {
     const handler = definitionBody(workflowWatchdog, "handleStaleSession");
-    expect(handler).toContain("finalizeStaleChatTurn(");
+    expect(handler).toContain("tearDownStaleSessionWorkflow(");
     expect(handler).toContain("sessionChatAdapter.alerts.timeout");
+    // The lease reconciler reuses the same teardown for a stalled summary.
+    const teardownAt = workflowWatchdog.indexOf(
+      "export async function tearDownStaleSessionWorkflow(",
+    );
+    expect(teardownAt).toBeGreaterThan(-1);
+    expect(
+      workflowWatchdog.slice(
+        teardownAt,
+        workflowWatchdog.indexOf("\n}", teardownAt),
+      ),
+    ).toContain("finalizeStaleChatTurn(");
   });
 
   test("a stopped sandbox closes the session and skips the interrupt via a direct kill", () => {
@@ -124,7 +137,7 @@ describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
     expect(adapter).toContain("startNextQueuedSessionMessage(ctx, id)");
     // Only sessions carry a separate summary streaming row alongside the
     // turn's own.
-    expect(adapter).toContain("`summary:${String(id)}`");
+    expect(adapter).toContain("sessionSummaryStreamingEntityId(id)");
   });
 });
 

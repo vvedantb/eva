@@ -87,9 +87,9 @@ test("all three chat surface adapters are registered together in chatSurfaceAdap
  * from the turn's entity id. Naming one surface's adapter in turns.ts is the
  * regression back to session-only turns.
  */
-test("turns.ts dispatches through chatAdapterForEntity, never one fixed surface", () => {
+test("turns.ts dispatches through turnAdapterForEntity, never one fixed surface", () => {
   const turns = readSource("convex/turns.ts");
-  expect(turns).toContain("chatAdapterForEntity(");
+  expect(turns).toContain("turnAdapterForEntity(");
   for (const adapter of [
     "sessionChatAdapter",
     "taskChatAdapter",
