@@ -41,7 +41,9 @@ describe("a working agent marks the card without moving it", () => {
    * it from the server as `isExecuting`, and a single task reads its status.
    */
   it("agent activity is the one sandbox-busy status, not a workflow id", () => {
-    const startAt = activitySource.indexOf("export function useTaskAgentActive");
+    const startAt = activitySource.indexOf(
+      "export function useTaskAgentActive",
+    );
     expect(startAt, "useTaskAgentActive moved or was renamed").toBeGreaterThan(
       -1,
     );
@@ -89,7 +91,8 @@ describe("a working agent marks the card without moving it", () => {
     expect(
       cardSource,
       "the dot must be the else branch of the grid, not a sibling",
-    ).toContain(") : sandboxStatus ? (");
+      // The else branch may add conditions (e.g. `showsSandboxStatusDot`).
+    ).toMatch(/\)\s*:\s*sandboxStatus\b[^?]*\?\s*\(/);
     expect(
       cardSource,
       "a standalone dot branch renders both marks at once again",
@@ -122,7 +125,8 @@ describe("a working agent marks the card without moving it", () => {
       let at = source.indexOf("<QuickTaskCard");
       while (at > -1) {
         const props = source.slice(at, source.indexOf("/>", at));
-        if (props.includes("isAgentActive={task.isExecuting}")) wired.push(path);
+        if (props.includes("isAgentActive={task.isExecuting}"))
+          wired.push(path);
         else bare.push(`${path}:${at}`);
         at = source.indexOf("<QuickTaskCard", at + 1);
       }
@@ -132,8 +136,9 @@ describe("a working agent marks the card without moving it", () => {
       wired.length + bare.length,
       "the card moved or was renamed",
     ).toBeGreaterThan(3);
-    expect(bare, "pass isAgentActive so the card marks while eva works").toEqual(
-      [],
-    );
+    expect(
+      bare,
+      "pass isAgentActive so the card marks while eva works",
+    ).toEqual([]);
   });
 });

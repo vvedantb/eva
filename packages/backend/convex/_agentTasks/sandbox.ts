@@ -22,7 +22,6 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
-import { drainChatQueueQuietly } from "../_queues/helpers";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -622,7 +621,15 @@ export const taskSandboxReady = internalMutation({
     });
     // Sends what was queued while Eva slept. Early + final ready both land
     // here; the second no-ops once the first turn is running.
-    await drainChatQueueQuietly(ctx, args.taskId);
+    // Scheduled, not imported: the queue helpers import this module to wake a
+    // stopped sandbox, so a direct call would make an import cycle.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      {
+        parentId: args.taskId,
+      },
+    );
 
     return null;
   },

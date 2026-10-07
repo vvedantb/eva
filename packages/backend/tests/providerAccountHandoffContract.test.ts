@@ -67,7 +67,8 @@ describe("provider account handoff is one shared contract", () => {
       expect(panel).toContain("isInputDisabled={composer.isInputDisabled}");
     }
     const gate = functionBody(chatBodyUtilsSource, "sandboxComposerState");
-    expect(gate).toContain("isInputDisabled: isAsleep || isSwitchingAccount");
+    // Only the account swap blocks input; a stopped sandbox queues sends (#892).
+    expect(gate).toContain("isInputDisabled: isSwitchingAccount");
   });
 
   test("daemon identity includes both account id and credential revision", () => {
