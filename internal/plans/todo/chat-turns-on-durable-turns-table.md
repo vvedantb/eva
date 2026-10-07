@@ -66,7 +66,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 7. **`applyLegacyHeartbeat`:** map the `task-chat-` / `project-chat-` streaming ids to their entity id, then apply the ownership gate to all three chats.
 8. **`turnProjection.openSessionIdsForRepo`:** keep only ids that `ctx.db.normalizeId("sessions", …)` accepts.
 
-**Check:** add a hand-inserted `taskChat` turn to `turnLifecycleIntegration.test.ts`. Test renew, the generation fence, reconcile/finalise through the adapter, and the legacy-heartbeat gate.
+**Check:** add a hand-inserted task-chat turn (an `agentTasks` id) to `turnLifecycleIntegration.test.ts`. Test renew, the generation fence, reconcile/finalise through the adapter, and the legacy-heartbeat gate.
 
 ### Phase 1: accept fence arguments (compatibility)
 
@@ -147,7 +147,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 - `_chat/pendingTurnRestage.ts` and its test.
 - `pendingTurnClaimedAt`. It is in the shared field spread, so this needs a schema-narrowing marker and a `dataMigrations.ts` unset across all three tables.
 - The task/project `handleStaleSyntheticTurn` 10-minute timers.
-- The task/project `checkStale*ChatHeartbeat` and `probeStale*ChatLiveness`. Leave no-op stubs for one release, because already-scheduled jobs call them.
+- The `checkStale*ChatHeartbeat` and `probeStale*ChatLiveness` handlers for all three chats (decision 2). Leave no-op stubs for one release, because already-scheduled jobs call them.
 
 **Then:**
 - Make `turnId` required on both chat workflows.
@@ -158,7 +158,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 - The drains for `pendingTaskStops`, `cancelRequestedAt` and `usageRefreshRequestedAt`.
 - The background-agent queue gate.
 - `activeChatWorkflowId` as the workflow pointer. Sessions kept `activeWorkflowId` too.
-- `_chat/stallRetry.ts`. Its retry is session-only, and its alert text is shared.
+- `_chat/stallRetry.ts`. Decision 4 extends its retry to all chats, and its alert text is shared.
 - `_chat/cancelRace.ts`. Sessions still use it. It could later compare turn ids instead.
 
 ### Phase 6 (optional, separate project): quick-task runs
