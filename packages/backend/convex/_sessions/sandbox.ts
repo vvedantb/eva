@@ -18,7 +18,6 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
-import { drainChatQueueQuietly } from "../_queues/helpers";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
@@ -134,10 +133,7 @@ export async function requestSessionSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(
-    ctx.db,
-    `session-startup-${session._id}`,
-  );
+  await seedSandboxStartupActivity(ctx.db, `session-startup-${session._id}`);
   const reusableSandboxId = session.sandboxId;
   console.log(
     `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -581,7 +577,15 @@ export const sandboxReady = internalMutation({
     // Early + final ready both call this; second no-ops while activeWorkflowId is set.
     // Starting a sandbox is not a turn ending, so this drain must not wake a
     // watching orchestrator when the queue turns out to be empty.
-    await drainChatQueueQuietly(ctx, args.sessionId);
+    // Scheduled, not imported: the queue helpers import this module to wake a
+    // stopped sandbox, so a direct call would make an import cycle.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      {
+        parentId: args.sessionId,
+      },
+    );
     return null;
   },
 });

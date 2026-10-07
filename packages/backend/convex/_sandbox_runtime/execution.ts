@@ -2158,8 +2158,7 @@ export const prewarmEntityDaemon = internalAction({
  * `timeout` is a hard per-session runtime cap — turns that outlive it are
  * killed mid-work with no snapshot (filesystem rolls back to the pre-turn
  * snapshot on the next resume). A durable turn's lease renewal schedules
- * this (`renewTurnLease`); the quick-task run watchdog (`checkStaleRuns`)
- * does for `agentRuns`. Best-effort: a failed extension must
+ * this (`renewTurnLease`) for every turn, quick-task runs included. Best-effort: a failed extension must
  * never fail the turn, and it must not resume a stopped sandbox (getting a
  * handle does not exec; extendTimeout on a stopped sandbox errors harmlessly).
  */

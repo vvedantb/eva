@@ -114,7 +114,7 @@ export function PresenterView({
 
   return (
     <PresentationDeckProvider value={deckContext}>
-      <div className="flex h-screen flex-col bg-background text-foreground">
+      <div className="flex h-dvh flex-col bg-background text-foreground">
         <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
           <IconNotes size={18} className="shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">

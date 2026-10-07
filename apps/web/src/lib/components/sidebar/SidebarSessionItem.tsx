@@ -22,6 +22,7 @@ import {
   SessionHoverCardBody,
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -77,6 +78,8 @@ interface SidebarSessionItemProps {
   sandboxError?: string;
   /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
+  /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
+  hasUnread?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
@@ -205,6 +208,7 @@ export function SidebarSessionItem({
   status,
   sandboxError,
   isExecuting = false,
+  hasUnread = false,
   isSelected,
   onNavigate,
   prUrl,
@@ -236,6 +240,8 @@ export function SidebarSessionItem({
 
   const showLeading =
     isExecuting || showsSandboxStatusDot(displayStatus, simpleView);
+  // Executing wins: the leading "Working" grid says more than the dot would.
+  const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
   const statusLeading = showLeading ? (
     <SessionStatusLeading
       label={statusLabel}
@@ -258,6 +264,7 @@ export function SidebarSessionItem({
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
+            {unreadDot}
           </div>
           <div
             className={cn(
@@ -294,6 +301,7 @@ export function SidebarSessionItem({
             at={activityAt}
             className="shrink-0 text-2xs text-muted-foreground"
           />
+          {unreadDot}
         </div>
       )}
     </DynamicLink>

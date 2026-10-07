@@ -92,6 +92,7 @@ function SortableTaskWrapper({
           description={task.description}
           status={task.status}
           isAgentActive={task.isExecuting}
+          hasUnread={task.hasUnread}
           hasError={hasError}
           sandboxStatus={task.reviewTaskSandboxStatus}
           numId={task.numId}
@@ -352,6 +353,7 @@ export function ProjectTaskListPanel({
                             description={task.description}
                             status={task.status}
                             isAgentActive={task.isExecuting}
+                            hasUnread={task.hasUnread}
                             hasError={errorTaskIdSet.has(task._id)}
                             sandboxStatus={task.reviewTaskSandboxStatus}
                             numId={task.numId}

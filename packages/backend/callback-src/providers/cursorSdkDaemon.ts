@@ -76,9 +76,6 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-const PROMPT_POLL_IDLE_INTERVAL_MS =
-  DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-const PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 const WATCHDOG_TICK_MS = 5000;
 // Outer bound on one claimed turn. `runCursorSdkAttempt` already enforces the
 // runtime cap and the silence kill itself (cancelling the run so the attempt

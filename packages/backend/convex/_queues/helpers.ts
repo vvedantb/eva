@@ -923,7 +923,11 @@ export async function drainChatQueueQuietly(
   return false;
 }
 
-/** Scheduled resume for a queue held by a usage limit (`usageLimitHoldFor`). */
+/**
+ * Scheduled quiet drain: resumes a queue held by a usage limit
+ * (`usageLimitHoldFor`), and drains after a sandbox start (scheduled by the
+ * sandbox modules, which cannot import these helpers without a cycle).
+ */
 export const drainQueueQuietly = internalMutation({
   args: { parentId: queuedMessageFields.parentId },
   returns: v.null(),

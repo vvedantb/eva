@@ -35,6 +35,7 @@ import {
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { PriorityIcon } from "@/lib/components/priority/PriorityIcon";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import {
   PRIORITY_LABELS,
   type Priority,
@@ -109,6 +110,8 @@ interface QuickTaskCardProps {
    * and status badge stay on `status`.
    */
   isAgentActive?: boolean;
+  /** Finished chat reply the user has not seen. `isAgentActive` hides it. */
+  hasUnread?: boolean;
 }
 
 export function QuickTaskCard({
@@ -142,6 +145,7 @@ export function QuickTaskCard({
   currentUserId,
   projects,
   isAgentActive = false,
+  hasUnread = false,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
@@ -312,6 +316,8 @@ export function QuickTaskCard({
               </TooltipContent>
             </Tooltip>
           ) : null}
+          {/* Executing wins: the dot shows once the turn has ended. */}
+          <UnreadDot show={hasUnread && !isAgentActive} />
           {scheduledAt ? (
             <Tooltip>
               <TooltipTrigger asChild>

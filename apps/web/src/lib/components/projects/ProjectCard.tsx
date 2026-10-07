@@ -44,6 +44,7 @@ import {
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
@@ -65,6 +66,8 @@ interface ProjectCardProps {
   planningMode: "interview" | "tasks_only";
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
+  /** Finished project chat reply the user has not seen (`api.projects.list`). */
+  hasUnread?: boolean;
   isActive?: boolean;
   isSelecting?: boolean;
   isSelected?: boolean;
@@ -96,6 +99,7 @@ export function ProjectCard({
   planningMode,
   isBuilding = false,
   sandboxStatus,
+  hasUnread = false,
   isActive,
   isSelecting,
   isSelected,
@@ -273,6 +277,8 @@ export function ProjectCard({
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {/* `mt-[7px]` centres the 6px dot on the 20px title line. */}
+        <UnreadDot show={hasUnread} className="mt-[7px]" />
       </div>
 
       <div className="flex flex-wrap items-center gap-1">

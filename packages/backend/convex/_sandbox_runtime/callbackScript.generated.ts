@@ -119,7 +119,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
   return useRoot && workspaceRoot ? workspaceRoot : workDir;
 }
 
-// ../../../repo/packages/shared/src/modelPricing.ts
+// ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
 var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
@@ -6079,8 +6079,6 @@ var DAEMON_PID_FILE = daemonPaths.pid;
 var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
@@ -7089,7 +7087,7 @@ async function runSdkDaemon() {
 import { spawn as spawn2 } from "child_process";
 import { createInterface } from "readline";
 
-// ../../../repo/node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
+// ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
@@ -8947,8 +8945,6 @@ function cursorAgentStartupActivity(sessionMode) {
 var IDLE_EXIT_MS3 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 var WATCHDOG_TICK_MS2 = 5e3;
 var TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1e3;
 var CANCEL_SETTLE_TIMEOUT_MS2 = 3e4;

@@ -220,7 +220,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 
 ## Follow-ups
 
-1. On or after 2026-10-14 (one more release): delete the no-op stubs listed in the Phase 5 notes.
+1. ~~On or after 2026-10-14 (one more release): delete the no-op stubs listed in the Phase 5 notes.~~ Done 2026-10-07 (owner decision, PR #894): a production check found 0 scheduled jobs calling any stub, so all stubs were deleted early.
 2. Done 2026-10-07. A paged production read found 0 of 472 sessions, 966 tasks and 13 projects with `pendingTurnClaimedAt`. The field and its three migrations are deleted.
 3. Done 2026-10-07. A paged production read found 0 of 1,935 `turns` rows with `surface`. The field and `clearTurnSurface` are deleted.
 4. Phases 6–7 (quick-task runs and one-shot agents on durable turns): `internal/plans/implemented/quick-task-runs-on-durable-turns.md`.

@@ -40,10 +40,13 @@ export const clearSettings = authMutation({
 });
 
 export const getStored = internalQuery({
-  args: { userId: v.id("users") },
+  // A string, so the MCP tool can pass its token's user id without a cast.
+  args: { userId: v.string() },
   returns: storedWebhookValidator,
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    const userId = ctx.db.normalizeId("users", args.userId);
+    if (!userId) return null;
+    const user = await ctx.db.get(userId);
     if (!user?.grokBotWebhookUrl || !user.grokBotWebhookKey) {
       return null;
     }

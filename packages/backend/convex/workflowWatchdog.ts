@@ -1,9 +1,5 @@
 import { v } from "convex/values";
-import {
-  type MutationCtx,
-  internalAction,
-  internalMutation,
-} from "./_generated/server";
+import { type MutationCtx, internalMutation } from "./_generated/server";
 import { type WorkflowId } from "@convex-dev/workflow";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
@@ -164,40 +160,7 @@ export async function tearDownStaleSessionWorkflow(
   );
 }
 
-/**
- * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before 2026-10-07
- * still call it. Delete on or after 2026-10-14.
- */
-export const checkStaleSessionHeartbeat = internalMutation({
-  args: {
-    sessionId: v.id("sessions"),
-    workflowId: v.string(),
-    turnStartedAt: v.number(),
-    skipLivenessProbe: v.optional(v.boolean()),
-    sandboxStopped: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
-/**
- * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before 2026-10-07
- * still call it. Delete on or after 2026-10-14.
- */
-export const probeStaleSessionLiveness = internalAction({
-  args: {
-    sessionId: v.id("sessions"),
-    workflowId: v.string(),
-    turnStartedAt: v.number(),
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    streamingAgeMs: v.number(),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
 /** Cancels a stale evaluation workflow and marks it as timed out or fix error. */
 export const handleStaleEvaluation = internalMutation({
@@ -332,40 +295,7 @@ export const handleStaleProjectChat = internalMutation({
   },
 });
 
-/**
- * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before 2026-10-07
- * still call it. Delete on or after 2026-10-14.
- */
-export const checkStaleProjectChatHeartbeat = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    workflowId: v.string(),
-    turnStartedAt: v.number(),
-    skipLivenessProbe: v.optional(v.boolean()),
-    sandboxStopped: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
-/**
- * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before 2026-10-07
- * still call it. Delete on or after 2026-10-14.
- */
-export const probeStaleProjectChatLiveness = internalAction({
-  args: {
-    projectId: v.id("projects"),
-    workflowId: v.string(),
-    turnStartedAt: v.number(),
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    streamingAgeMs: v.number(),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
 /** Cancels a stale task chat workflow via the 2-hour workflow-timeout backstop. */
 export const handleStaleAgentTaskChat = internalMutation({
@@ -392,40 +322,7 @@ export const handleStaleAgentTaskChat = internalMutation({
   },
 });
 
-/**
- * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before 2026-10-07
- * still call it. Delete on or after 2026-10-14.
- */
-export const checkStaleAgentTaskChatHeartbeat = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-    workflowId: v.string(),
-    turnStartedAt: v.number(),
-    skipLivenessProbe: v.optional(v.boolean()),
-    sandboxStopped: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
-/**
- * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before 2026-10-07
- * still call it. Delete on or after 2026-10-14.
- */
-export const probeStaleAgentTaskChatLiveness = internalAction({
-  args: {
-    taskId: v.id("agentTasks"),
-    workflowId: v.string(),
-    turnStartedAt: v.number(),
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    streamingAgeMs: v.number(),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
 /** Cancels a stale build workflow and clears the active build reference. */
 export const handleStaleBuild = internalMutation({

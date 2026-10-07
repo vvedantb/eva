@@ -71,36 +71,33 @@ describe("the shared claimed-turn lifecycle", () => {
   test.each([
     "agentTaskChatWorkflow:claimPendingTurn",
     "projectChatWorkflow:claimPendingTurn",
-  ])(
-    "a durable %s claim heartbeats and fences its completion",
-    (claimMutation) => {
-      // Task and project chats now hand out the same durable claim as sessions.
-      const turn = readClaimedTurn({
-        prompt: "Fix it",
-        turnLifecycle: "durable",
-        turnId: "task-turn-1",
-        leaseGeneration: 1,
-        attachmentUrls: [],
-        stopTaskToolUseIds: [],
-        cancelRequested: false,
-        usageRefreshRequested: false,
-      });
-      expect(turn).not.toBeNull();
-      if (turn === null) return;
+  ])("a durable %s claim heartbeats and fences its completion", () => {
+    // Task and project chats now hand out the same durable claim as sessions.
+    const turn = readClaimedTurn({
+      prompt: "Fix it",
+      turnLifecycle: "durable",
+      turnId: "task-turn-1",
+      leaseGeneration: 1,
+      attachmentUrls: [],
+      stopTaskToolUseIds: [],
+      cancelRequested: false,
+      usageRefreshRequested: false,
+    });
+    expect(turn).not.toBeNull();
+    if (turn === null) return;
 
-      startClaimedTurn(turn);
+    startClaimedTurn(turn);
 
-      expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
-      const completion: JsonObject = { taskId: "task-1", success: true };
-      appendClaimedTurnCompletion(completion);
-      expect(completion).toEqual({
-        taskId: "task-1",
-        success: true,
-        turnId: "task-turn-1",
-        leaseGeneration: 1,
-      });
-    },
-  );
+    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
+    const completion: JsonObject = { taskId: "task-1", success: true };
+    appendClaimedTurnCompletion(completion);
+    expect(completion).toEqual({
+      taskId: "task-1",
+      success: true,
+      turnId: "task-turn-1",
+      leaseGeneration: 1,
+    });
+  });
 
   test("claimed turns always run as build", () => {
     const lease = {

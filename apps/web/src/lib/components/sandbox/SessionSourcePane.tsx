@@ -69,11 +69,7 @@ export function SessionSourcePane({
         </div>
       </div>
       <div className="scrollbar scroll-fade min-h-0 flex-1 overflow-y-auto bg-muted/40">
-        {loading ? (
-          <CenteredSpinner label="Loading" />
-        ) : (
-          children
-        )}
+        {loading ? <CenteredSpinner label="Loading" /> : children}
       </div>
     </div>
   );
@@ -88,10 +84,7 @@ export function SessionSourcePane({
 export function useSourcePanelItem<T extends { _id: string }>(
   rows: T[] | undefined,
 ) {
-  const [openId, setOpenId] = useQueryState(
-    "panelItem",
-    sourcePanelItemParser,
-  );
+  const [openId, setOpenId] = useQueryState("panelItem", sourcePanelItemParser);
   const openRow =
     openId === null ? null : (rows?.find((row) => row._id === openId) ?? null);
   return {
@@ -227,7 +220,7 @@ export const SessionSourceRow = forwardRef<
         <IconChevronRight
           size={14}
           aria-hidden
-          className="mt-1.5 shrink-0 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[var(--motion-fast)] ease-[var(--motion-ease-out)] group-hover:translate-x-0.5 group-hover:opacity-100"
+          className="mt-1.5 shrink-0 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[var(--motion-fast)] group-hover:translate-x-0.5 group-hover:opacity-100"
         />
       </div>
     </div>

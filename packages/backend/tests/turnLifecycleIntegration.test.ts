@@ -8,6 +8,7 @@ import {
   openSessionTurn,
   openTurn,
   renewTurnLease,
+  findOpenTurn,
 } from "../convex/_chat/turnStore";
 import {
   TASK_CHAT_STREAM_PREFIX,
@@ -16,17 +17,16 @@ import {
 } from "../convex/_chat/surfaceAdapters";
 import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
 import { sessionSummaryStreamingEntityId } from "../convex/_chat/agentStreamIds";
-import { findOpenTurn } from "../convex/_chat/turnStore";
-import { hasOpenChatTurn } from "../convex/_chat/turnProjection";
-import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
-import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
-import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
-import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
 import {
+  hasOpenChatTurn,
   isLegacySessionExecuting,
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../convex/_chat/turnProjection";
+import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
+import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
+import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
+import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
 import { rollbackQueuedChatStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,

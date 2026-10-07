@@ -1,5 +1,6 @@
 import { LoadingState, Tabs, TabsList, TabsTrigger } from "@eva/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import {
   SANDBOX_STATUS_STYLES,
   showsSandboxStatusDot,
@@ -28,6 +29,7 @@ export function SandboxSurfaceTabs({
   isSandboxStarting,
   isSandboxStopping,
   isAgentActive = false,
+  hasUnread = false,
   onSurfaceChange,
 }: {
   /** Label for the non-sandbox half, e.g. "Task" or "Project". */
@@ -38,6 +40,11 @@ export function SandboxSurfaceTabs({
   isSandboxStopping: boolean;
   /** A turn is in flight — the pixel grid stands in for the status dot. */
   isAgentActive?: boolean;
+  /**
+   * The chat has an unseen reply. The chat lives on the sandbox surface, so
+   * the dot shows only on the other one, and a turn in flight hides it.
+   */
+  hasUnread?: boolean;
   onSurfaceChange: (surface: SandboxSurface) => void;
 }) {
   const simpleView = useSimpleView();
@@ -88,6 +95,9 @@ export function SandboxSurfaceTabs({
               aria-label={SANDBOX_STATUS_STYLES[status].label}
             />
           ) : null}
+          <UnreadDot
+            show={hasUnread && surface !== "sandbox" && !isAgentActive}
+          />
         </TabsTrigger>
       </TabsList>
     </Tabs>

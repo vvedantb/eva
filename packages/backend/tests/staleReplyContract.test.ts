@@ -134,8 +134,17 @@ describe("every turn start clears the streaming row first", () => {
     ["startNextQueuedTaskChatMessage", "taskChatQueueConfig"],
   ])("%s still delegates to the shared dequeue with %s", (name, configName) => {
     const body = functionBody(queueHelpers, `export function ${name}(`);
-    expect(body).toContain(
-      `startNextQueuedChatMessage(ctx, ${name === "startNextQueuedSessionMessage" ? "sessionId" : name === "startNextQueuedProjectChatMessage" ? "projectId" : "taskId"}, ${configName})`,
+    const idArg =
+      name === "startNextQueuedSessionMessage"
+        ? "sessionId"
+        : name === "startNextQueuedProjectChatMessage"
+          ? "projectId"
+          : "taskId";
+    // Formatting-agnostic, and later arguments (the dequeue reason) may follow.
+    expect(body).toMatch(
+      new RegExp(
+        `startNextQueuedChatMessage\\(\\s*ctx,\\s*${idArg},\\s*${configName}\\b`,
+      ),
     );
   });
 });

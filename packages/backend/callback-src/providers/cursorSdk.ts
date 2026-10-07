@@ -30,7 +30,6 @@ import { cursorCompactionEventPhase } from "./cursor.js";
 import { pushNoticeStep, updateThinkingStep } from "../parse/canonical.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import {
-  appendToRawLogFile,
   recordSdkAttemptFailure,
   recordSdkRetry,
   trimBufferHead,

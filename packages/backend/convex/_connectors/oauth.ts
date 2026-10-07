@@ -1,6 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
+import { z } from "zod";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 import type { ActionCtx } from "../_generated/server";
@@ -22,12 +23,46 @@ import {
 const EXPIRY_SKEW_MS = 60 * 1000;
 const DEFAULT_ACCESS_TTL_MS = 24 * 60 * 60 * 1000;
 
-interface TokenResponse {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  scope?: string | string[];
+// Provider responses are parsed at the boundary. Fields are nullish because
+// providers send `null` for absent values; unknown fields are ignored.
+/** Maps a provider's `null` to `undefined`, the shape the token code expects. */
+function orUndefined<T>(value: T | null | undefined): T | undefined {
+  return value ?? undefined;
 }
+
+const tokenResponseSchema = z.object({
+  access_token: z.string().nullish().transform(orUndefined),
+  refresh_token: z.string().nullish().transform(orUndefined),
+  expires_in: z.number().nullish().transform(orUndefined),
+  scope: z
+    .union([z.string(), z.array(z.string())])
+    .nullish()
+    .transform(orUndefined),
+});
+type TokenResponse = z.infer<typeof tokenResponseSchema>;
+
+const linearProfileSchema = z.object({
+  data: z
+    .object({
+      viewer: z
+        .object({
+          id: z.string().nullish(),
+          name: z.string().nullish(),
+          email: z.string().nullish(),
+        })
+        .nullish(),
+      organization: z
+        .object({ id: z.string().nullish(), name: z.string().nullish() })
+        .nullish(),
+    })
+    .nullish(),
+});
+
+const figmaProfileSchema = z.object({
+  id: z.string().nullish(),
+  email: z.string().nullish(),
+  handle: z.string().nullish(),
+});
 
 interface Profile {
   workspaceId: string | null;
@@ -75,7 +110,7 @@ async function postToken(
       `${url} failed (${response.status}): ${text.slice(0, 400)}`,
     );
   }
-  return JSON.parse(text) as TokenResponse;
+  return tokenResponseSchema.parse(JSON.parse(text));
 }
 
 async function fetchProfile(
@@ -90,16 +125,10 @@ async function fetchProfile(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        query:
-          "{ viewer { id name email } organization { id name } }",
+        query: "{ viewer { id name email } organization { id name } }",
       }),
     });
-    const json = (await response.json()) as {
-      data?: {
-        viewer?: { id?: string; name?: string; email?: string };
-        organization?: { id?: string; name?: string };
-      };
-    };
+    const json = linearProfileSchema.parse(await response.json());
     const org = json.data?.organization;
     const viewer = json.data?.viewer;
     return {
@@ -112,11 +141,7 @@ async function fetchProfile(
   const response = await fetch("https://api.figma.com/v1/me", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const json = (await response.json()) as {
-    id?: string;
-    email?: string;
-    handle?: string;
-  };
+  const json = figmaProfileSchema.parse(await response.json());
   return {
     workspaceId: json.id ?? null,
     workspaceName: null,
@@ -182,7 +207,9 @@ export const completeAuthorization = internalAction({
       body,
     );
     if (!token.access_token) {
-      throw new Error(`${CONNECTOR_LABEL[args.provider]} token response had no access_token`);
+      throw new Error(
+        `${CONNECTOR_LABEL[args.provider]} token response had no access_token`,
+      );
     }
     const profile = await fetchProfile(args.provider, token.access_token);
     await storeToken(ctx, {
@@ -207,10 +234,13 @@ export async function resolveUserAccessToken(
   userId: Id<"users">,
   provider: ConnectorProvider,
 ): Promise<string | null> {
-  const stored = await ctx.runQuery(internal._connectors.tokens.getStoredToken, {
-    userId,
-    provider,
-  });
+  const stored = await ctx.runQuery(
+    internal._connectors.tokens.getStoredToken,
+    {
+      userId,
+      provider,
+    },
+  );
   if (!stored) return null;
 
   const now = Date.now();

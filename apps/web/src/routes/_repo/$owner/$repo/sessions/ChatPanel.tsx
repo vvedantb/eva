@@ -437,6 +437,7 @@ export function ChatPanel({
         repo={{ id: repo._id, basePath }}
         conversationId={sessionId}
         chatParentId={sessionId}
+        isRouteActive={isRouteActive}
         messages={messages}
         queuedMessages={queuedMessages}
         queueLabel={queueGate.queueLabel(isExecuting)}

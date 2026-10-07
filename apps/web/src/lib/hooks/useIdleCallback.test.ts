@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createIdleCallback } from "./useIdleCallback";
 
 /**
- * `useIdleCallback` is a thin `useRef` wrapper around this; the timing rules
+ * `useIdleCallback` is a thin `useState` wrapper around this; the timing rules
  * that matter — trailing edge, each call cancelling the last, and the newest
  * render's callback winning — all live in the pure core.
  */
