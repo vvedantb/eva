@@ -11,20 +11,6 @@ import {
   snapshotStreamingActivityToLog,
 } from "./helpers";
 
-/**
- * No-op stub. The run's durable turn lease (`turns.reconcile`) is now the only
- * stall check. Kept for one release because jobs scheduled before durable run
- * turns still call it; delete it one release after this change.
- */
-export const checkStaleRuns = internalMutation({
-  args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    skipLivenessProbe: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async () => null,
-});
 
 /** Hard-timeout handler that kills a run after the maximum allowed duration (2 hours). */
 export const handleStaleRun = internalMutation({

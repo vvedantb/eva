@@ -30,20 +30,18 @@ export function SlideDeck({
   const containerRef = useRef<HTMLDivElement>(null);
   const stageAreaRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const prevSlideRef = useRef(slide);
-  const direction = slide >= prevSlideRef.current ? 1 : -1;
+  // Previous slide in state, not a ref: reading a ref during render makes the
+  // React Compiler skip the whole file. Adjusting state during render is the
+  // supported way to compare against the previous prop.
+  const [prevSlide, setPrevSlide] = useState(slide);
+  const [direction, setDirection] = useState<1 | -1>(1);
+  if (slide !== prevSlide) {
+    setDirection(slide >= prevSlide ? 1 : -1);
+    setPrevSlide(slide);
+  }
   const [step, setStep] = useState(0);
 
   const index = clamp(slide - 1, 0, TOTAL - 1);
-
-  useSyncExternalStore(
-    () => {
-      prevSlideRef.current = slide;
-      return () => {};
-    },
-    () => slide,
-    () => slide,
-  );
 
   useSyncExternalStore(
     () => {
@@ -51,10 +49,9 @@ export function SlideDeck({
       const entry = SLIDES[clamp(slide - 1, 0, TOTAL - 1)];
       if (entry.steps === 0) return () => {};
       const stagger = entry.staggerMs ?? DEFAULT_STAGGER_MS;
-      const timers: number[] = [];
-      for (let s = 1; s <= entry.steps; s++) {
-        timers.push(window.setTimeout(() => setStep(s), stagger * s));
-      }
+      const timers = Array.from({ length: entry.steps }, (_, i) =>
+        window.setTimeout(() => setStep(i + 1), stagger * (i + 1)),
+      );
       return () => timers.forEach((t) => window.clearTimeout(t));
     },
     () => slide,
@@ -197,24 +194,33 @@ export function SlideDeck({
           role="presentation"
         >
           {showOrbs && (
-            <div
-              className="pointer-events-none absolute inset-0"
-              aria-hidden
-            >
+            <div className="pointer-events-none absolute inset-0" aria-hidden>
               <motion.div
                 className="absolute -left-44 -top-40 h-[560px] w-[560px] rounded-full bg-primary/5 blur-[110px]"
                 animate={{ x: [0, 70, 0], y: [0, 50, 0] }}
-                transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 22,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
               <motion.div
                 className="absolute -bottom-52 -right-40 h-[640px] w-[640px] rounded-full bg-primary/4 blur-[120px]"
                 animate={{ x: [0, -80, 0], y: [0, -55, 0] }}
-                transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 28,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
               <motion.div
                 className="absolute left-[52%] top-[58%] h-[380px] w-[380px] rounded-full bg-primary/3 blur-[100px]"
                 animate={{ x: [0, 55, 0], y: [0, -65, 0] }}
-                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 18,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               />
             </div>
           )}

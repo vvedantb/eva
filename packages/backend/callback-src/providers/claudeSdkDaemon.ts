@@ -13,7 +13,6 @@ import {
   MODEL,
   NO_OUTPUT_TIMEOUT_MS,
   OPEN_SYNTHETIC_TURN_MUTATION,
-  RUN_ID,
   UPDATE_BACKGROUND_AGENTS_MUTATION,
   WORK_DIR,
 } from "../config.js";
@@ -130,14 +129,11 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 // Idle backoff for that poll. At 50ms an idle daemon burns ~20 Convex mutation
 // calls/s (~54k per 45-min idle window) purely to notice a turn that is not
 // coming, and those silent executions flood `convex logs`. Once no turn is in
-// flight and nothing has happened for PROMPT_POLL_FAST_WINDOW_MS, poll at the
-// idle interval instead — worst case adds ~1s before an idle daemon claims a
-// fresh send, invisible next to model time-to-first-token. Any in-flight turn
-// keeps the 50ms cadence so cancel/stop-task drains (which ride the same
+// flight and nothing has happened for the fast window, `selectClaimPollIntervalMs`
+// polls at the idle interval instead — worst case adds ~1s before an idle daemon
+// claims a fresh send, invisible next to model time-to-first-token. Any in-flight
+// turn keeps the 50ms cadence so cancel/stop-task drains (which ride the same
 // mutation) stay prompt even through long-silent tool runs.
-const PROMPT_POLL_IDLE_INTERVAL_MS =
-  DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-const PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 
 // Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
 // emitting a result would never send a completion event, so the workflow's

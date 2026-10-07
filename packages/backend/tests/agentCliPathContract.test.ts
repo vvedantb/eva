@@ -29,10 +29,14 @@ const readSource = (rel: string): string =>
 function pathAfterSourcing(envFile: string): string[] {
   const file = join(mkdtempSync(join(tmpdir(), "eva-env-")), ".eva-env.sh");
   writeFileSync(file, envFile);
-  return execFileSync("bash", ["-c", `. "${file}" && printf %s "$PATH"`], {
-    env: { PATH: "/usr/bin:/bin" },
-    encoding: "utf8",
-  }).split(":");
+  // --noprofile --norc: bash started without a terminal can still read the
+  // machine's rc files (e.g. an Eva sandbox's PATH setup). Only the env file
+  // under test may change PATH.
+  return execFileSync(
+    "bash",
+    ["--noprofile", "--norc", "-c", `. "${file}" && printf %s "$PATH"`],
+    { env: { PATH: "/usr/bin:/bin" }, encoding: "utf8" },
+  ).split(":");
 }
 
 describe("terminal shells resolve the launch-installed agent CLIs first", () => {

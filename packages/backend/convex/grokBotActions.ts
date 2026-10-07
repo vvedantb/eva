@@ -71,7 +71,7 @@ export const setWebhook = action({
  */
 export const callWebhook = internalAction({
   args: {
-    userId: v.id("users"),
+    userId: v.string(),
     task: v.string(),
   },
   returns: v.object({

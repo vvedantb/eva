@@ -106,8 +106,11 @@ describe("executeCode", () => {
   });
 
   test("a memory bomb hits the heap cap", async () => {
+    // A doubling array reaches the cap in ~20 native concats. Filling
+    // 1e6-element arrays took ~5s of interpreted work and timed out on slower
+    // machines; a doubling string hits QuickJS's length limit first instead.
     const outcome = await run(
-      `const a = []; while (true) a.push(new Array(1e6).fill(1)); return 1;`,
+      `let a = [1]; while (true) a = a.concat(a); return 1;`,
       { memoryBytes: 16 * 1024 * 1024 },
     );
     expect(outcome.ok).toBe(false);

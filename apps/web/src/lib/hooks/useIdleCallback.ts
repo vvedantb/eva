@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 
 /** Anything worth passing through a debounced callback. */
 type CallbackArgs = ReadonlyArray<string | number | boolean | null | object>;
@@ -31,13 +31,21 @@ export function useIdleCallback<Args extends CallbackArgs>(
   ms: number,
   fn: (...args: Args) => void,
 ): (...args: Args) => void {
-  // The latest-ref write and the lazy init both happen during render, which
-  // `react/refs` flags. `useEffect` and `useMemo` are banned here (CLAUDE.md),
-  // and both writes are idempotent and unread by the render itself, so the
-  // component still paints from props alone. Same shape as `useHeldQuery`.
-  const latest = useRef(fn);
-  latest.current = fn;
-  const debounced = useRef<((...args: Args) => void) | null>(null);
-  debounced.current ??= createIdleCallback(ms, () => latest.current);
-  return debounced.current;
+  // No refs and no direct writes to state: the React Compiler skips a file
+  // that does either during render. The holder keeps the latest `fn` in a
+  // closure; the caller stores it on each call (always an event handler
+  // holding the current render's closure), and the timer reads it on fire.
+  const [idle] = useState(() => {
+    let current = fn;
+    return {
+      setFn: (next: (...args: Args) => void) => {
+        current = next;
+      },
+      run: createIdleCallback<Args>(ms, () => current),
+    };
+  });
+  return (...args: Args) => {
+    idle.setFn(fn);
+    idle.run(...args);
+  };
 }
