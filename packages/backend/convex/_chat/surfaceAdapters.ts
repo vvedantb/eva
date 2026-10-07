@@ -3,7 +3,6 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
-import { getTaskRunStreamingEntityId } from "../_taskWorkflow/helpers";
 import {
   startNextQueuedProjectChatMessage,
   startNextQueuedSessionMessage,
@@ -12,13 +11,20 @@ import {
 import type { WorkflowId } from "@convex-dev/workflow";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import {
+  AUTOMATION_RUN_STREAM_PREFIX,
+  PR_RECAP_STREAM_PREFIX,
+  SESSION_SUMMARY_STREAM_PREFIX,
+  TASK_RUN_STREAM_PREFIX,
+  sessionSummaryStreamingEntityId,
+} from "./agentStreamIds";
+import type { TurnEntityId } from "./turnStore";
+import type { TurnLane } from "../validators";
 
 /** Streaming entityId prefix for project chat workflows. */
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
 /** Streaming entityId prefix for agent task chat workflows. */
 export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
-/** Streaming entityId prefix of `getTaskRunStreamingEntityId` (quick-task runs). */
-const TASK_RUN_STREAM_PREFIX = "task-run-";
 
 /** A standalone system-alert message surfaced when a stale turn is torn down. */
 export type ChatAlert = { text: string; detail?: string };
@@ -124,7 +130,7 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   streamingEntityId: (id) => String(id),
   parseStreamingEntityId: (db, streamingEntityId) =>
     db.normalizeId("sessions", streamingEntityId),
-  extraStreamingClears: (id) => [`summary:${String(id)}`],
+  extraStreamingClears: (id) => [sessionSummaryStreamingEntityId(id)],
   syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
   sandboxId: (session) => session.sandboxId,
   repoId: (session) => session.repoId,
@@ -386,72 +392,140 @@ export const chatSurfaceAdapters = [
 
 export { sessionChatAdapter, taskChatAdapter, projectChatAdapter };
 
-/**
- * The turn owner that is not a chat: a quick-task run (`agentRuns`). It has no
- * placeholder message, queue or synthetic turn, so it does not fit
- * `ChatSurfaceAdapter`. Runs open no turn yet (durable-turns Phase 6).
- */
-export const runTurnAdapter = {
-  kind: "run",
-  logLabel: "task-run",
-  parseId: (db: DatabaseReader, raw: string): Id<"agentRuns"> | null =>
-    db.normalizeId("agentRuns", raw),
-  streamingEntityId: getTaskRunStreamingEntityId,
-  parseStreamingEntityId: (
-    db: DatabaseReader,
-    streamingEntityId: string,
-  ): Id<"agentRuns"> | null =>
-    streamingEntityId.startsWith(TASK_RUN_STREAM_PREFIX)
-      ? db.normalizeId(
-          "agentRuns",
-          streamingEntityId.slice(TASK_RUN_STREAM_PREFIX.length),
-        )
-      : null,
-} as const;
-
 /** Generic over the surface, so one body serves every adapter type-safely. */
 export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
   adapter: ChatSurfaceAdapter<TId, TEntity>,
   id: TId,
 ) => R;
 
+/**
+ * A turn owner that is not a chat: a quick-task run or a one-shot agent. It
+ * has no placeholder, queue or synthetic turn, so it does not fit
+ * `ChatSurfaceAdapter`. `summary` and `interview` work on a chat row and are
+ * told apart from its chat turns by the turn's lane.
+ */
+export type AgentTurnOwner =
+  | { kind: "run"; id: Id<"agentRuns"> }
+  | { kind: "automation"; id: Id<"automationRuns"> }
+  | { kind: "doc"; id: Id<"docs"> }
+  | { kind: "evaluation"; id: Id<"evaluationReports"> }
+  | { kind: "summary"; id: Id<"sessions"> }
+  | { kind: "interview"; id: Id<"projects"> };
+
 /** One handler per kind of turn owner. */
 export type TurnAdapterVisitor<R> = {
   chat: ChatAdapterVisitor<R>;
-  run: (adapter: typeof runTurnAdapter, runId: Id<"agentRuns">) => R;
+  agent: (owner: AgentTurnOwner) => R;
 };
 
+function laneOwner(
+  db: DatabaseReader,
+  entityId: string,
+  lane: TurnLane,
+): AgentTurnOwner | null {
+  if (lane === "summary") {
+    const id = db.normalizeId("sessions", entityId);
+    return id ? { kind: "summary", id } : null;
+  }
+  const id = db.normalizeId("projects", entityId);
+  return id ? { kind: "interview", id } : null;
+}
+
+function laneFreeAgentOwner(
+  db: DatabaseReader,
+  entityId: string,
+): AgentTurnOwner | null {
+  const runId = db.normalizeId("agentRuns", entityId);
+  if (runId) return { kind: "run", id: runId };
+  const automationRunId = db.normalizeId("automationRuns", entityId);
+  if (automationRunId) return { kind: "automation", id: automationRunId };
+  const docId = db.normalizeId("docs", entityId);
+  if (docId) return { kind: "doc", id: docId };
+  const reportId = db.normalizeId("evaluationReports", entityId);
+  if (reportId) return { kind: "evaluation", id: reportId };
+  return null;
+}
+
 /**
- * Picks the adapter for a durable turn's `entityId` by the id's table, then
+ * Picks the adapter for a durable turn by its `entityId` table and lane, then
  * hands it and the parsed id to the matching handler. Null when no turn owner
  * table holds the id.
  */
 export function turnAdapterForEntity<R>(
   db: DatabaseReader,
-  entityId: string,
+  turn: { entityId: string; lane?: TurnLane },
   visit: TurnAdapterVisitor<R>,
 ): R | null {
-  const sessionId = sessionChatAdapter.parseId(db, entityId);
+  if (turn.lane !== undefined) {
+    const owner = laneOwner(db, turn.entityId, turn.lane);
+    return owner ? visit.agent(owner) : null;
+  }
+  const sessionId = sessionChatAdapter.parseId(db, turn.entityId);
   if (sessionId) return visit.chat(sessionChatAdapter, sessionId);
-  const taskId = taskChatAdapter.parseId(db, entityId);
+  const taskId = taskChatAdapter.parseId(db, turn.entityId);
   if (taskId) return visit.chat(taskChatAdapter, taskId);
-  const projectId = projectChatAdapter.parseId(db, entityId);
+  const projectId = projectChatAdapter.parseId(db, turn.entityId);
   if (projectId) return visit.chat(projectChatAdapter, projectId);
-  const runId = runTurnAdapter.parseId(db, entityId);
-  if (runId) return visit.run(runTurnAdapter, runId);
-  return null;
+  const owner = laneFreeAgentOwner(db, turn.entityId);
+  return owner ? visit.agent(owner) : null;
 }
 
-/** The turn owner whose turn writes this streamingActivity row, if any. */
-export function turnEntityIdFromStream(
+/** Stream-id prefixes of agent turns, and the owner each one names. */
+const AGENT_STREAM_PREFIXES: ReadonlyArray<{
+  prefix: string;
+  parse: (db: DatabaseReader, raw: string) => TurnOwnerKey | null;
+}> = [
+  {
+    prefix: TASK_RUN_STREAM_PREFIX,
+    parse: (db, raw) => keyOf(db.normalizeId("agentRuns", raw)),
+  },
+  {
+    prefix: AUTOMATION_RUN_STREAM_PREFIX,
+    parse: (db, raw) => keyOf(db.normalizeId("automationRuns", raw)),
+  },
+  {
+    prefix: PR_RECAP_STREAM_PREFIX,
+    parse: (db, raw) => keyOf(db.normalizeId("docs", raw)),
+  },
+  {
+    prefix: SESSION_SUMMARY_STREAM_PREFIX,
+    parse: (db, raw) => keyOf(db.normalizeId("sessions", raw), "summary"),
+  },
+];
+
+/** What `findOpenTurn` needs to find one owner's open turn. */
+export type TurnOwnerKey = { entityId: TurnEntityId; lane?: TurnLane };
+
+function keyOf(
+  entityId: TurnEntityId | null,
+  lane?: TurnLane,
+): TurnOwnerKey | null {
+  return entityId ? { entityId, lane } : null;
+}
+
+/**
+ * The turn owner whose agent writes this streamingActivity row, if any. Chats
+ * and prefixed agent rows first; a bare doc, report or project id is a doc
+ * agent, an evaluation, or a project interview (a project chat is prefixed).
+ */
+export function turnOwnerFromStream(
   db: DatabaseReader,
   streamingEntityId: string,
-): ChatEntityId | Id<"agentRuns"> | null {
+): TurnOwnerKey | null {
   for (const adapter of chatSurfaceAdapters) {
     const id = adapter.parseStreamingEntityId(db, streamingEntityId);
-    if (id) return id;
+    if (id) return { entityId: id };
   }
-  return runTurnAdapter.parseStreamingEntityId(db, streamingEntityId);
+  for (const { prefix, parse } of AGENT_STREAM_PREFIXES) {
+    if (streamingEntityId.startsWith(prefix)) {
+      return parse(db, streamingEntityId.slice(prefix.length));
+    }
+  }
+  return (
+    keyOf(db.normalizeId("docs", streamingEntityId)) ??
+    keyOf(db.normalizeId("evaluationReports", streamingEntityId)) ??
+    keyOf(db.normalizeId("projects", streamingEntityId), "interview")
+  );
 }
 
 /**

@@ -249,20 +249,35 @@ export const chatTurnEntityIdValidator = v.union(
 );
 
 /**
- * Every durable turn owner: the three chats plus quick-task runs. Runs open no
- * turn yet (Phase 6 of the durable-turns plan); the union deploys first.
+ * Every durable turn owner: the three chats, quick-task runs, and the rows the
+ * one-shot agents work on (automation runs, docs, evaluation reports).
  */
 export const turnEntityIdValidator = v.union(
   v.id("sessions"),
   v.id("agentTasks"),
   v.id("projects"),
   v.id("agentRuns"),
+  v.id("automationRuns"),
+  v.id("docs"),
+  v.id("evaluationReports"),
 );
 
-/** Durable ownership record for one turn (session, task chat, project chat or quick-task run). */
+/**
+ * A one-shot agent that works on a row which also owns chat turns. The lane
+ * keeps its turn apart from the chat's: chat turns leave it unset.
+ */
+export const turnLaneValidator = v.union(
+  v.literal("summary"),
+  v.literal("interview"),
+);
+
+export type TurnLane = Infer<typeof turnLaneValidator>;
+
+/** Durable ownership record for one agent turn: a chat turn, a quick-task run or a one-shot agent. */
 export const turnFields = {
   // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
+  lane: v.optional(turnLaneValidator),
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),

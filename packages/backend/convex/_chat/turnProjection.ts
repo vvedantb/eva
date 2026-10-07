@@ -50,7 +50,12 @@ export async function openChatEntityIdsForRepo(
     .query("turns")
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
-  return new Set(turns.map((turn) => String(turn.entityId)));
+  // A lane turn (summary, interview) is a one-shot agent, not a chat turn.
+  return new Set(
+    turns
+      .filter((turn) => turn.lane === undefined)
+      .map((turn) => String(turn.entityId)),
+  );
 }
 
 /** True while one named chat entity has a turn open. */
@@ -61,7 +66,7 @@ export async function hasOpenChatTurn(
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", entityId).eq("open", true),
+      q.eq("entityId", entityId).eq("lane", undefined).eq("open", true),
     )
     .first();
   return turn !== null;

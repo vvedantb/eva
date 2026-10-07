@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
 import { defineEvent } from "@convex-dev/workflow";
@@ -9,6 +11,7 @@ import {
   aiModelValidator,
   modelTraitsExecutionFields,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
 } from "./validators";
 import {
   clearStreamingActivity,
@@ -32,6 +35,7 @@ import {
   pickDefaultVisibleAppRepo,
   resolveSandboxRepoId,
 } from "./_githubRepos/helpers";
+import { prRecapStreamingEntityId } from "./_chat/agentStreamIds";
 
 const prRecapCompleteEvent = defineEvent({
   name: "prRecapComplete",
@@ -48,6 +52,8 @@ const reviewerFeedbackItemValidator = v.object({
 /** Runs PR recap generation: fetch diff, Claude Code in sandbox, save doc, upsert GitHub comment. */
 export const prRecapWorkflow = workflow.define({
   args: {
+    /** Set by every start since durable agent turns; absent on older runs. */
+    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     repoId: v.id("githubRepos"),
     installationId: v.number(),
@@ -129,31 +135,38 @@ export const prRecapWorkflow = workflow.define({
           repoName: repoData.repoName,
           repoId: sandboxRepoId,
           ephemeral: true,
-          streamingEntityId: `pr-recap:${String(args.docId)}`,
+          streamingEntityId: prRecapStreamingEntityId(args.docId),
           baseBranch: repoData.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
           createRetry: { maxAttempts: 1, initialBackoffMs: 2000, base: 2 },
           // Recap agents only read the diff in-repo; no convex import / dev daemons.
           skipStartupCommands: true,
         }));
 
-        await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-          sandboxId,
-          entityId: String(args.docId),
-          streamingEntityId: `pr-recap:${String(args.docId)}`,
-          prompt,
-          userId: args.userId,
-          completionMutation: "prRecapWorkflow:handleCompletion",
-          entityIdField: "docId",
-          model: args.model,
-          ...buildTraitsExecutionPayload(args.model, {
-            effortLevel: args.reasoningLevel,
-            thinkingEnabled: args.thinkingEnabled,
-            use1mContext: args.use1mContext,
-            fastMode: args.fastMode,
-          }),
-          allowedTools: "",
-          repoId: sandboxRepoId,
-        });
+        await launchAgentStep(
+          step,
+          {
+            sandboxId,
+            entityId: String(args.docId),
+            streamingEntityId: prRecapStreamingEntityId(args.docId),
+            prompt,
+            userId: args.userId,
+            completionMutation: "prRecapWorkflow:handleCompletion",
+            entityIdField: "docId",
+            model: args.model,
+            ...buildTraitsExecutionPayload(args.model, {
+              effortLevel: args.reasoningLevel,
+              thinkingEnabled: args.thinkingEnabled,
+              use1mContext: args.use1mContext,
+              fastMode: args.fastMode,
+            }),
+            allowedTools: "",
+            repoId: sandboxRepoId,
+          },
+          {
+            durable: args.durableTurns === true,
+            entityId: args.docId,
+          },
+        );
 
         const result = await step.awaitEvent(prRecapCompleteEvent);
 
@@ -252,13 +265,25 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.docId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
-    await clearStreamingActivity(ctx, `pr-recap:${String(args.docId)}`);
+    await clearStreamingActivity(ctx, prRecapStreamingEntityId(args.docId));
 
     await sendCompletionEvent(ctx, prRecapCompleteEvent, doc.activeWorkflowId, {
       success: args.success,

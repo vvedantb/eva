@@ -2,6 +2,8 @@ import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { cancelTrackedWorkflow } from "../workflowManager";
 import type { Id } from "../_generated/dataModel";
+import type { TurnState } from "../validators";
+import { closeOpenTurn } from "../_chat/turnStore";
 import {
   clearStreamingActivity,
   getTaskRunStreamingEntityId,
@@ -179,8 +181,80 @@ export async function cleanUpStaleRun(
     );
   }
 
+  // Every stop path ends here: the old chain, the lease reconciler and the
+  // 2-hour backstop. Closing the run's turn keeps the two stall systems from
+  // both acting on one run.
+  await closeOpenTurn(ctx, params.runId, "error", {
+    error: params.errorMessage,
+  });
+
   const runStreamingEntityId = getTaskRunStreamingEntityId(params.runId);
   await snapshotStreamingActivityToLog(ctx, runStreamingEntityId, params.runId);
   await clearStreamingActivity(ctx, runStreamingEntityId);
   await clearStreamingActivity(ctx, String(params.taskId));
+}
+
+/**
+ * The stop text and `exitReason` for a run whose lease expired, by the turn's
+ * phase. The texts are the ones the old `checkStaleRuns` chain wrote, so the
+ * retry rule (`isDaytonaNetworkIssue`) and the UI see no change.
+ */
+export function stalledRunStop(input: {
+  state: TurnState;
+  hasSandbox: boolean;
+  staleSeconds: number;
+}): { errorMessage: string; exitReason: string } {
+  switch (input.state) {
+    case "staged":
+    case "launching":
+      return input.hasSandbox
+        ? {
+            errorMessage: "Run killed by watchdog: sandbox startup stalled",
+            exitReason: "watchdog_startup_stalled",
+          }
+        : {
+            errorMessage: "Run killed by watchdog: sandbox was never attached",
+            exitReason: "watchdog_no_sandbox",
+          };
+    case "finalizing":
+      return {
+        errorMessage: `Run killed by watchdog: finalization stalled (no heartbeat for ${input.staleSeconds}s)`,
+        exitReason: "watchdog_finalizing_stalled",
+      };
+    default:
+      return {
+        errorMessage: `Run killed by watchdog: no heartbeat for ${input.staleSeconds}s`,
+        exitReason: "watchdog_killed",
+      };
+  }
+}
+
+/**
+ * Stops a run the lease reconciler gave up on, through the same
+ * `cleanUpStaleRun` path the old watchdog used (sandbox stop, run error,
+ * one auto-retry). No-op once the run has ended.
+ */
+export async function finalizeStalledRun(
+  ctx: MutationCtx,
+  runId: Id<"agentRuns">,
+  stop: { errorMessage: string; exitReason: string; sandboxId?: string },
+): Promise<void> {
+  const run = await ctx.db.get(runId);
+  if (!run || (run.status !== "queued" && run.status !== "running")) return;
+  const task = await ctx.db.get(run.taskId);
+  if (!task) return;
+  console.log(
+    `[watchdog][kill] runId=${runId} reason=${stop.exitReason} source=lease`,
+  );
+  await cleanUpStaleRun(ctx, {
+    taskId: run.taskId,
+    runId,
+    sandboxId: run.sandboxId ?? stop.sandboxId,
+    repoId: run.repoId,
+    isProjectTask: !!task.projectId,
+    errorMessage: stop.errorMessage,
+    exitReason: stop.exitReason,
+    activeWorkflowId: task.activeWorkflowId,
+    taskStatus: task.status,
+  });
 }

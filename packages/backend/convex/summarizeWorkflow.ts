@@ -1,11 +1,13 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
+import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -14,6 +16,7 @@ import {
   sendCompletionEvent,
 } from "./_taskWorkflow/helpers";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
 
 const summarizeCompleteEvent = defineEvent({
   name: "summarizeComplete",
@@ -25,6 +28,8 @@ const summarizeCompleteEvent = defineEvent({
 /** Runs a session summarization: prepares sandbox, generates bullet-point summary, and saves it. */
 export const summarizeSessionWorkflow = workflow.define({
   args: {
+    /** Set by every start since durable agent turns; absent on older runs. */
+    durableTurns: v.optional(v.boolean()),
     sessionId: v.id("sessions"),
     userId: v.id("users"),
     installationId: v.number(),
@@ -44,23 +49,31 @@ export const summarizeSessionWorkflow = workflow.define({
       repoId: sessionData.repoId,
       sessionPersistenceId: args.sessionId,
       sessionPersistenceKind: "sessions",
-      streamingEntityId: `summary:${args.sessionId}`,
+      streamingEntityId: sessionSummaryStreamingEntityId(args.sessionId),
       ephemeral: false,
     });
 
-    await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-      sandboxId,
-      entityId: args.sessionId,
-      streamingEntityId: `summary:${args.sessionId}`,
-      prompt: sessionData.prompt,
-      userId: args.userId,
-      completionMutation: "summarizeWorkflow:handleCompletion",
-      entityIdField: "sessionId",
-      model: "haiku",
-      allowedTools: "",
-      repoId: sessionData.repoId,
-      sessionPersistenceId: args.sessionId,
-    });
+    await launchAgentStep(
+      step,
+      {
+        sandboxId,
+        entityId: args.sessionId,
+        streamingEntityId: sessionSummaryStreamingEntityId(args.sessionId),
+        prompt: sessionData.prompt,
+        userId: args.userId,
+        completionMutation: "summarizeWorkflow:handleCompletion",
+        entityIdField: "sessionId",
+        model: "haiku",
+        allowedTools: "",
+        repoId: sessionData.repoId,
+        sessionPersistenceId: args.sessionId,
+      },
+      {
+        durable: args.durableTurns === true,
+        entityId: args.sessionId,
+        lane: "summary",
+      },
+    );
 
     const result = await step.awaitEvent(summarizeCompleteEvent);
 
@@ -128,7 +141,7 @@ export const saveResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, `summary:${args.sessionId}`);
+    await clearStreamingActivity(ctx, sessionSummaryStreamingEntityId(args.sessionId));
 
     let summary: string[] = ["No summary available"];
 
@@ -159,11 +172,24 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session || !session.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.sessionId,
+        lane: "summary",
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
     if (session.userId !== ctx.userId) throw new Error("Not authorized");
 
     await sendCompletionEvent(
@@ -208,6 +234,7 @@ export const startSummarize = authMutation({
       ctx,
       internal.summarizeWorkflow.summarizeSessionWorkflow,
       {
+        durableTurns: true,
         sessionId: args.sessionId,
         userId: ctx.userId,
         installationId: repo.installationId,

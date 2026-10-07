@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -6,7 +8,7 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
+import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
 import { trackEvaluationWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -39,6 +41,8 @@ const fixCompleteEvent = defineEvent({
 /** Runs an evaluation: analyzes the codebase against the document and saves a severity-ranked issue list. Fixing issues is opt-in via startFix. */
 export const evaluationWorkflow = workflow.define({
   args: {
+    /** Set by every start since durable agent turns; absent on older runs. */
+    durableTurns: v.optional(v.boolean()),
     reportId: v.id("evaluationReports"),
     docId: v.id("docs"),
     userId: v.id("users"),
@@ -73,17 +77,24 @@ export const evaluationWorkflow = workflow.define({
         baseBranch: args.branchName,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: String(args.reportId),
-        prompt: docData.prompt,
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Read,Glob,Grep",
-        repoId: docData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: String(args.reportId),
+          prompt: docData.prompt,
+          userId: args.userId,
+          completionMutation: "evaluationWorkflow:handleCompletion",
+          entityIdField: "reportId",
+          model: "sonnet",
+          allowedTools: "Read,Glob,Grep",
+          repoId: docData.repoId,
+        },
+        {
+          durable: args.durableTurns === true,
+          entityId: args.reportId,
+        },
+      );
 
       const result = await step.awaitEvent(evalCompleteEvent);
 
@@ -127,6 +138,8 @@ export const evaluationWorkflow = workflow.define({
  */
 export const fixWorkflow = workflow.define({
   args: {
+    /** Set by every start since durable agent turns; absent on older runs. */
+    durableTurns: v.optional(v.boolean()),
     reportId: v.id("evaluationReports"),
     docId: v.id("docs"),
     userId: v.id("users"),
@@ -159,17 +172,24 @@ export const fixWorkflow = workflow.define({
         branchName: args.fixBranchName,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId: fixSandboxId,
-        entityId: String(args.reportId),
-        prompt: fixData.prompt,
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleFixCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-        repoId: fixData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId: fixSandboxId,
+          entityId: String(args.reportId),
+          prompt: fixData.prompt,
+          userId: args.userId,
+          completionMutation: "evaluationWorkflow:handleFixCompletion",
+          entityIdField: "reportId",
+          model: "sonnet",
+          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+          repoId: fixData.repoId,
+        },
+        {
+          durable: args.durableTurns === true,
+          entityId: args.reportId,
+        },
+      );
 
       const fixResult = await step.awaitEvent(fixCompleteEvent);
 
@@ -450,11 +470,23 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.reportId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, evalCompleteEvent, report.activeWorkflowId, {
       success: args.success,
@@ -592,11 +624,23 @@ export const handleFixCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.reportId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, fixCompleteEvent, report.activeWorkflowId, {
       success: args.success,
@@ -668,6 +712,7 @@ export const startEvaluation = authMutation({
       ctx,
       internal.evaluationWorkflow.evaluationWorkflow,
       {
+        durableTurns: true,
         reportId,
         docId: args.docId,
         userId: ctx.userId,
@@ -727,6 +772,7 @@ export const startFix = authMutation({
       ctx,
       internal.evaluationWorkflow.fixWorkflow,
       {
+        durableTurns: true,
         reportId: args.reportId,
         docId: report.docId,
         userId: ctx.userId,

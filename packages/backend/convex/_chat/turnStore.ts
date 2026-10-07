@@ -1,7 +1,7 @@
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { TurnState } from "../validators";
+import type { TurnLane, TurnState } from "../validators";
 import {
   canTransitionTurn,
   isTerminalTurnState,
@@ -45,17 +45,22 @@ export type CompletionTurnResolution =
 /** Every durable turn owner. The id's table picks the surface. */
 export type TurnEntityId = Doc<"turns">["entityId"];
 
-/** Chat entities that own durable turns (every owner but a quick-task run). */
-export type ChatTurnEntityId = Exclude<TurnEntityId, Id<"agentRuns">>;
+/** Chat entities that own durable turns. */
+export type ChatTurnEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
 
+/**
+ * The entity's open turn in one lane. Chat turns, runs and most one-shot
+ * agents have no lane; a summary or interview turn on a chat row has one.
+ */
 export async function findOpenTurn(
   ctx: QueryCtx,
   entityId: TurnEntityId,
+  lane?: TurnLane,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", entityId).eq("open", true),
+      q.eq("entityId", entityId).eq("lane", lane).eq("open", true),
     )
     .first();
 }
@@ -69,21 +74,22 @@ export async function findOpenSessionTurn(
 
 type OpenTurnFields = {
   streamingEntityId: string;
-  placeholderMessageId: Id<"messages">;
-  prompt: string;
+  /** Chat turns only: runs and one-shot agents have no placeholder message. */
+  placeholderMessageId?: Id<"messages">;
+  prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
   model: Doc<"turns">["model"];
   sandboxId?: string;
   repoId: Id<"githubRepos">;
 };
 
-/** Opens a durable turn and supersedes any turn the entity still has open. */
+/** Opens a durable turn and supersedes any turn the entity still has open in that lane. */
 export async function openTurn(
   ctx: MutationCtx,
-  params: OpenTurnFields & { entityId: ChatTurnEntityId },
+  params: OpenTurnFields & { entityId: TurnEntityId; lane?: TurnLane },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenTurn(ctx, params.entityId);
+  const previous = await findOpenTurn(ctx, params.entityId, params.lane);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
@@ -91,6 +97,7 @@ export async function openTurn(
   }
   return await ctx.db.insert("turns", {
     entityId: params.entityId,
+    lane: params.lane,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
     open: true,
@@ -247,7 +254,7 @@ export async function renewTurnLease(
   if (turn.leaseGeneration !== params.leaseGeneration) {
     return { status: "terminal", reason: "superseded" };
   }
-  const current = await findOpenTurn(ctx, turn.entityId);
+  const current = await findOpenTurn(ctx, turn.entityId, turn.lane);
   if (!current || current._id !== turn._id) {
     return { status: "terminal", reason: "superseded" };
   }
@@ -336,12 +343,13 @@ export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
     entityId: TurnEntityId;
+    lane?: TurnLane;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenTurn(ctx, params.entityId);
+  const current = await findOpenTurn(ctx, params.entityId, params.lane);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -369,7 +377,10 @@ export async function closeTurn(
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  if (!turn.open || !canTransitionTurn(turn.state, state)) return;
+  // Re-read: a caller's copy can be stale when an earlier step in the same
+  // mutation already closed the turn.
+  const current = await ctx.db.get(turn._id);
+  if (!current?.open || !canTransitionTurn(current.state, state)) return;
   const finishedAt = Date.now();
   await ctx.db.patch(turn._id, {
     state,
@@ -378,8 +389,14 @@ export async function closeTurn(
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
   // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished". The id's table names the surface.
-  const activityRef = activityRefForParentId(ctx.db, turn.entityId);
+  // sweep learns "the agent finished". The id's table names the surface; a
+  // run counts for its task.
+  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  const run = runId ? await ctx.db.get(runId) : null;
+  const activityRef = activityRefForParentId(
+    ctx.db,
+    run ? run.taskId : turn.entityId,
+  );
   if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }
 
@@ -387,9 +404,9 @@ export async function closeOpenTurn(
   ctx: MutationCtx,
   entityId: TurnEntityId,
   state: TerminalTurnState,
-  patch: { error?: string } = {},
+  patch: { error?: string; lane?: TurnLane } = {},
 ): Promise<void> {
-  const turn = await findOpenTurn(ctx, entityId);
+  const turn = await findOpenTurn(ctx, entityId, patch.lane);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
@@ -403,4 +420,35 @@ export async function closeTurnForWorkflow(
   const turn = await findOpenTurn(ctx, entityId);
   if (!turn || turn.workflowId !== workflowId) return;
   await closeTurn(ctx, turn, state, patch);
+}
+
+/**
+ * The fence check every one-shot agent completion runs first. False: the
+ * completion is from a lease that no longer owns the turn, so the caller
+ * drops it. True: the caller handles it; a current turn is closed here, since
+ * the agent's work is over once it reports (the workflow's own steps after
+ * that are covered by the 2-hour backstop, as before).
+ */
+export async function settleAgentTurnCompletion(
+  ctx: MutationCtx,
+  params: {
+    entityId: TurnEntityId;
+    lane?: TurnLane;
+    turnId?: string;
+    leaseGeneration?: number;
+    success: boolean;
+    error: string | null;
+  },
+): Promise<boolean> {
+  const resolution = await resolveCompletionTurn(ctx, params);
+  if (resolution.status === "stale") return false;
+  if (resolution.status === "current") {
+    await closeTurn(
+      ctx,
+      resolution.turn,
+      params.success ? "done" : "error",
+      params.success ? {} : { error: params.error ?? "Agent failed" },
+    );
+  }
+  return true;
 }

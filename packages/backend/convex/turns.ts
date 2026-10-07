@@ -9,11 +9,24 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import {
+  sessionChatAdapter,
   turnAdapterForEntity,
-  turnEntityIdFromStream,
+  turnOwnerFromStream,
+  type AgentTurnOwner,
   type ChatEntityId,
   type ChatSurfaceAdapter,
 } from "./_chat/surfaceAdapters";
+import {
+  tearDownStaleDocWorkflow,
+  tearDownStaleEvaluationWorkflow,
+  tearDownStaleProjectWorkflow,
+  tearDownStaleSessionWorkflow,
+} from "./workflowWatchdog";
+import { tearDownStaleAutomationRun } from "./_automations/runs";
+import {
+  finalizeStalledRun,
+  stalledRunStop,
+} from "./_taskWorkflow/recovery";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import {
   touchStreamingEntity,
@@ -28,9 +41,11 @@ import {
 import {
   acquireTurnLease,
   advanceTurn,
+  bindTurnWorkflow,
   closeTurn,
   findOpenTurn,
   graceExpiredTurnLease,
+  openTurn,
   renewTurnLease,
   type ChatTurnEntityId,
 } from "./_chat/turnStore";
@@ -42,8 +57,11 @@ import {
 import type { ChatAlert } from "./_chat/surfaceAdapters";
 import {
   chatTurnEntityIdValidator,
+  turnEntityIdValidator,
+  turnLaneValidator,
   turnStateValidator,
 } from "./_validators/tableFields";
+import { normalizeAIModel } from "./_validators/aiModels";
 import {
   isLegacyChatExecuting,
   isLegacySessionExecuting,
@@ -202,8 +220,10 @@ async function applyLegacyHeartbeat(
   ctx: MutationCtx,
   args: Infer<typeof legacyHeartbeatArgsValidator>,
 ): Promise<boolean> {
-  const entityId = turnEntityIdFromStream(ctx.db, args.entityId);
-  if (entityId && (await findOpenTurn(ctx, entityId))) return false;
+  const owner = turnOwnerFromStream(ctx.db, args.entityId);
+  if (owner && (await findOpenTurn(ctx, owner.entityId, owner.lane))) {
+    return false;
+  }
   if (args.touchOnly) {
     await touchStreamingEntity(ctx, args.entityId);
   } else {
@@ -284,6 +304,54 @@ export const markLaunching = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (turn) await advanceTurn(ctx, turn, "launching", args);
+    return null;
+  },
+});
+
+/**
+ * Opens a one-shot agent's turn already leased: the launch that follows starts
+ * the process that owns it. Binds the calling workflow so the reconciler can
+ * tear that workflow down if the agent stalls.
+ */
+export const openAgentTurnLease = internalMutation({
+  args: {
+    entityId: turnEntityIdValidator,
+    lane: v.optional(turnLaneValidator),
+    streamingEntityId: v.string(),
+    model: v.optional(v.string()),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    workflowId: v.string(),
+  },
+  returns: leaseIdentityValidator,
+  handler: async (ctx, args) => {
+    const turnId = await openTurn(ctx, {
+      entityId: args.entityId,
+      lane: args.lane,
+      streamingEntityId: args.streamingEntityId,
+      model: normalizeAIModel(args.model),
+      sandboxId: args.sandboxId,
+      repoId: args.repoId,
+    });
+    await bindTurnWorkflow(ctx, turnId, args.workflowId);
+    const turn = await ctx.db.get(turnId);
+    const lease = turn
+      ? await acquireTurnLease(ctx, turn, "running", {
+          sandboxId: args.sandboxId,
+        })
+      : null;
+    if (!lease) throw new Error("Agent turn lease was not acquired");
+    return lease;
+  },
+});
+
+/** Closes one agent turn, e.g. when its process failed to launch. */
+export const closeAgentTurn = internalMutation({
+  args: { turnId: v.id("turns"), error: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) await closeTurn(ctx, turn, "error", { error: args.error });
     return null;
   },
 });
@@ -419,21 +487,80 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
 }
 
 /**
- * Closes one expired quick-task run turn. No run opens a turn yet, and until
- * durable-turns Phase 6 moves `cleanUpStaleRun` here, `checkStaleRuns` keeps
- * owning the run itself. Closing only the turn keeps the reconciler from
- * retrying it on every tick.
+ * Finalises one expired agent turn (a quick-task run or a one-shot agent)
+ * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
+ * teardown the 2-hour backstop uses for the others.
  */
-async function finalizeExpiredRunTurn(
+async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,
-  runId: Id<"agentRuns">,
+  owner: AgentTurnOwner,
   turn: Doc<"turns">,
   cause: ExpiredTurnLeaseCause,
 ): Promise<void> {
-  console.log(
-    `[watchdog][lease-reconcile] runId=${runId} turnId=${turn._id} cause=${cause} run left to checkStaleRuns`,
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - (turn.leaseExpiresAt - leaseDurationMs)) / 1000),
   );
-  await closeTurn(ctx, turn, "error", { error: `Run lease expired (${cause})` });
+  const error = `Agent stalled: no heartbeat for ${staleSeconds}s (${cause})`;
+  console.log(
+    `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
+  );
+  const workflowId = turn.workflowId;
+  switch (owner.kind) {
+    case "run":
+      await finalizeStalledRun(ctx, owner.id, {
+        ...stalledRunStop({
+          state: turn.state,
+          hasSandbox: turn.sandboxId !== undefined,
+          staleSeconds,
+        }),
+        sandboxId: turn.sandboxId,
+      });
+      break;
+    case "automation":
+      if (workflowId !== undefined) {
+        await tearDownStaleAutomationRun(
+          ctx,
+          owner.id,
+          workflowId,
+          { sandboxId: turn.sandboxId, repoId: turn.repoId },
+          error,
+        );
+      }
+      break;
+    case "doc":
+      if (workflowId !== undefined) {
+        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "evaluation":
+      if (workflowId !== undefined) {
+        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "summary":
+      if (workflowId !== undefined) {
+        await tearDownStaleSessionWorkflow(
+          ctx,
+          owner.id,
+          workflowId,
+          sessionChatAdapter.alerts.stalled(
+            staleSeconds,
+            turn.state,
+            Math.round(leaseDurationMs / 1000),
+          ),
+        );
+      }
+      break;
+    case "interview":
+      if (workflowId !== undefined) {
+        await tearDownStaleProjectWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+  }
+  await clearStreamingActivity(ctx, turn.streamingEntityId);
+  await closeTurn(ctx, turn, "error", { error });
 }
 
 /** Re-reads and converges one expired lease; a concurrent renewal always wins. */
@@ -450,11 +577,11 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    await turnAdapterForEntity(ctx.db, turn.entityId, {
+    await turnAdapterForEntity(ctx.db, turn, {
       chat: (adapter, id) =>
         finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
-      run: (_adapter, runId) =>
-        finalizeExpiredRunTurn(ctx, runId, turn, args.cause),
+      agent: (owner) =>
+        finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
     });
     return null;
   },

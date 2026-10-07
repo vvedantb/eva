@@ -1,11 +1,13 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
+import { turnCheckpointArgs, turnLeaseFenceArgs, workflowCompleteValidator } from "./validators";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import { GENERATE_PROMPT, INTERVIEW_PROMPT } from "./prompts";
 import {
@@ -86,6 +88,8 @@ function updateLastHistoryEntry<
 /** Runs a single interview step: prepares sandbox, asks one question, and saves the result. */
 export const docInterviewWorkflow = workflow.define({
   args: {
+    /** Set by every start since durable agent turns; absent on older runs. */
+    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     docTitle: v.string(),
     previousAnswers: v.array(
@@ -128,17 +132,24 @@ export const docInterviewWorkflow = workflow.define({
       sandboxId,
     });
 
-    await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-      sandboxId,
-      entityId: args.docId,
-      prompt: fullPrompt,
-      userId: args.userId,
-      completionMutation: "docInterviewWorkflow:handleCompletion",
-      entityIdField: "docId",
-      model: "sonnet",
-      allowedTools: "Read,Glob,Grep",
-      repoId: docData.repoId,
-    });
+    await launchAgentStep(
+      step,
+      {
+        sandboxId,
+        entityId: args.docId,
+        prompt: fullPrompt,
+        userId: args.userId,
+        completionMutation: "docInterviewWorkflow:handleCompletion",
+        entityIdField: "docId",
+        model: "sonnet",
+        allowedTools: "Read,Glob,Grep",
+        repoId: docData.repoId,
+      },
+      {
+        durable: args.durableTurns === true,
+        entityId: args.docId,
+      },
+    );
 
     // Step 4: Wait for callback
     const result = await step.awaitEvent(docInterviewCompleteEvent);
@@ -274,11 +285,23 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.docId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(
       ctx,
@@ -327,6 +350,7 @@ export const startInterview = authMutation({
       ctx,
       internal.docInterviewWorkflow.docInterviewWorkflow,
       {
+        durableTurns: true,
         docId: args.docId,
         docTitle: args.docTitle,
         previousAnswers: args.previousAnswers,
@@ -346,6 +370,8 @@ export const startInterview = authMutation({
  */
 export const docGenerateWorkflow = workflow.define({
   args: {
+    /** Set by every start since durable agent turns; absent on older runs. */
+    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     docTitle: v.string(),
     previousAnswers: v.array(
@@ -395,17 +421,24 @@ Output ONLY valid JSON.`;
       sandboxId,
     });
 
-    await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-      sandboxId,
-      entityId: args.docId,
-      prompt,
-      userId: args.userId,
-      completionMutation: "docInterviewWorkflow:handleGenerateCompletion",
-      entityIdField: "docId",
-      model: "sonnet",
-      allowedTools: "Read,Glob,Grep",
-      repoId: docData.repoId,
-    });
+    await launchAgentStep(
+      step,
+      {
+        sandboxId,
+        entityId: args.docId,
+        prompt,
+        userId: args.userId,
+        completionMutation: "docInterviewWorkflow:handleGenerateCompletion",
+        entityIdField: "docId",
+        model: "sonnet",
+        allowedTools: "Read,Glob,Grep",
+        repoId: docData.repoId,
+      },
+      {
+        durable: args.durableTurns === true,
+        entityId: args.docId,
+      },
+    );
 
     const result = await step.awaitEvent(docInterviewCompleteEvent);
 
@@ -428,11 +461,23 @@ export const handleGenerateCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.docId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(
       ctx,
@@ -538,6 +583,7 @@ export const startGenerate = authMutation({
       ctx,
       internal.docInterviewWorkflow.docGenerateWorkflow,
       {
+        durableTurns: true,
         docId: args.docId,
         docTitle: args.docTitle,
         previousAnswers: args.previousAnswers,

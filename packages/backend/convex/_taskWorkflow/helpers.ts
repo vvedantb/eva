@@ -10,6 +10,7 @@ import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
 import { touchAgentFinished } from "../_sandbox/activity";
+import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
 
@@ -46,7 +47,7 @@ export async function resolveTaskSandboxIdForRun(
 
 /** Returns the streaming entity ID used for a task run's activity stream. */
 export function getTaskRunStreamingEntityId(runId: Id<"agentRuns">): string {
-  return `task-run-${String(runId)}`;
+  return `${TASK_RUN_STREAM_PREFIX}${String(runId)}`;
 }
 
 /** Deletes the streaming activity record for a given entity ID. */
