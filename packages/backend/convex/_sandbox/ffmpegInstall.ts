@@ -18,8 +18,23 @@
  *
  * Soft-failing throughout: a dnf mirror hiccup must degrade recording to
  * screenshots, never fail seed prep or block the desktop from starting.
+ *
+ * Distro-aware, because a seeded AL2023 snapshot and a fresh Ubuntu managed
+ * image both restore into this same script. It deliberately does NOT route
+ * through `eva_pkg_install` (_sandbox_runtime/packageManager.ts): that helper
+ * reports success from the package manager's exit code, which is exactly the
+ * signal the libjack bug above proved worthless here.
  */
 export const FFMPEG_INSTALL_SCRIPT = [
+  // Ubuntu managed images carry ffmpeg in universe, so none of the AL2023
+  // repair below applies to them — and since every step is gated on
+  // `ffmpeg -version`, a successful apt install short-circuits all of it. The
+  // dnf steps stay unguarded rather than wrapped in a `command -v dnf` check:
+  // on Ubuntu they are only reached if apt already failed, where a
+  // `dnf: command not found` absorbed by `|| true` is the correct fallback.
+  "if ! ffmpeg -version >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then",
+  "  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg >/tmp/ffmpeg-apt.log 2>&1 || true",
+  "fi",
   // Not in the core AL2023 repos — SPAL carries ffmpeg-free (VP8/VP9/WebM).
   "if ! ffmpeg -version >/dev/null 2>&1; then",
   "  sudo dnf install -y spal-release >/tmp/spal-dnf.log 2>&1 || true",

@@ -127,6 +127,10 @@ export const snapshotBuildWorkflow = workflow.define({
 
     // Bootstrap / toolchain path: rebuild the base Image first
     // (serial — captures contending with the Image builder slow both down).
+    // `config` was read before the base rebuild, so its baseSnapshotId is the
+    // PREVIOUS base — which the rebuild below deletes once the new one is stored.
+    // Seeding after a rebuild must boot from the new id, not that stale one.
+    let rebuiltBaseSnapshotId: string | undefined;
     if (rebuildBaseImage) {
       if (providerKind === "vercel") {
         const baseSnapshotLabel = `base-${config.repoId}`;
@@ -295,6 +299,7 @@ export const snapshotBuildWorkflow = workflow.define({
             repoSnapshotId: args.repoSnapshotId,
             baseSnapshotId: effectiveBaseId,
           });
+          rebuiltBaseSnapshotId = effectiveBaseId;
 
           // New base is stored and bootable — now retire the previous one.
           // Best-effort: a leaked old snapshot is harmless; failing the build
@@ -320,11 +325,22 @@ export const snapshotBuildWorkflow = workflow.define({
             }
           }
 
-          await step.runMutation(internal.repoSnapshots.completeBuild, {
-            buildId: args.buildId,
-            status: "success",
-            logs: `Vercel base Image ${effectiveBaseId} built successfully.\n`,
-          });
+          // Only finish here when nothing follows. completeBuild ignores any
+          // build that is no longer "running", so marking success before the
+          // seed step would hide the seed's own result — and drop the build out
+          // of "running", letting a second Rebuild Now start alongside it.
+          if (hasStopCommands) {
+            await step.runMutation(internal.repoSnapshots.appendLogs, {
+              buildId: args.buildId,
+              chunk: `Vercel base Image ${effectiveBaseId} built successfully; seeding next.\n`,
+            });
+          } else {
+            await step.runMutation(internal.repoSnapshots.completeBuild, {
+              buildId: args.buildId,
+              status: "success",
+              logs: `Vercel base Image ${effectiveBaseId} built successfully.\n`,
+            });
+          }
         } catch (e) {
           if (prepSandboxId) {
             await step.runAction(
@@ -400,7 +416,8 @@ export const snapshotBuildWorkflow = workflow.define({
       // which races toolchain install from scratch and can 404 on flaky
       // project lookups. Daytona used to accept snapshotName directly as its
       // Image name.
-      const seedImageSnapshot = config.baseSnapshotId ?? config.snapshotName;
+      const seedImageSnapshot =
+        rebuiltBaseSnapshotId ?? config.baseSnapshotId ?? config.snapshotName;
       const created = await step.runAction(
         internal.snapshotActions.createSeedPrepSandbox,
         { repoId: appRepoId, imageSnapshot: seedImageSnapshot },

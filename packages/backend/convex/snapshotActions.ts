@@ -45,6 +45,12 @@ import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
 import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
+import {
+  CHROME_RUNTIME_LIBRARY_PACKAGES,
+  CORE_TOOLCHAIN_PACKAGES,
+  PACKAGE_HELPER_SCRIPT,
+  pkgInstall,
+} from "./_sandbox_runtime/packageManager";
 
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
 const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
@@ -52,9 +58,9 @@ const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
 // Pinned Supabase CLI version installed on fresh Vercel sandboxes (no base
 // toolchain baked in).
 const SUPABASE_CLI_VERSION = "2.90.0";
-// Pinned GitHub CLI for Vercel seeds. Amazon Linux dnf repos don't ship it,
-// so we install the official release tarball, then the gh yum repo if that
-// download dies.
+// Pinned GitHub CLI for Vercel seeds. Neither base image's default repos ship
+// it, so we install the official release tarball, then fall back to the vendor
+// apt/yum repo (eva_pkg_install_gh) if that download dies.
 const GH_CLI_VERSION = "2.72.0";
 // GitHub Releases over HTTP/2 from a Vercel sandbox dies mid-transfer
 // (`curl: (56) Connection died, tried 5 times`). HTTP/1.1 has no stream
@@ -75,7 +81,8 @@ const GITHUB_RELEASE_DOWNLOAD_FUNCTION = `github_release_download() {
   ${GITHUB_RELEASE_CURL} -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -o "$output" "$asset_url"
 }`;
 // Search and VCS tooling the agent CLIs shell out to. Like gh, none of these
-// are in the AL2023 repos, so each comes from its pinned upstream tarball.
+// are in the AL2023 repos (and pinning beats Ubuntu's older packaged versions),
+// so each comes from its pinned upstream tarball.
 // Note the differing tag conventions: ripgrep tags have no `v` prefix, and
 // git-lfs drops the `v` from its archive's top-level directory.
 const RIPGREP_VERSION = "15.2.0";
@@ -335,19 +342,23 @@ export const launchSeedRun = internalAction({
       // second copy of these exports.
       renderEvaEnvFile(DRIVE_CACHE_ENV).trimEnd(),
       GITHUB_RELEASE_DOWNLOAD_FUNCTION,
+      // Defines eva_pkg_install / _ffmpeg / _chrome / _gh once for the whole
+      // script; every stage below installs through it so the seed runs
+      // unchanged on an AL2023 warm base and on an Ubuntu managed image.
+      PACKAGE_HELPER_SCRIPT,
       "rm -f /tmp/.seedrun-done",
     ];
     // Daytona used to bake its whole agent-CLI toolchain (claude, codex,
     // opencode, supabase, docker, ...) into the sandbox's Image
     // at build time — every fresh Daytona sandbox already had them.
     //
-    // Vercel has NO equivalent custom Image: a fresh Vercel sandbox boots
-    // bare `node24` with none of this installed. The ONLY place the CLIs get
+    // Vercel has NO equivalent custom Image: a fresh Vercel sandbox boots its
+    // bare base image with none of this installed. The ONLY place the CLIs get
     // installed for Vercel is right here, once, on the seed-prep sandbox —
     // they end up on disk only because this stage runs before the capture
     // below (triggerSeededSnapshot) bakes the whole filesystem into the
     // seeded `snap_*` snapshot. A session sandbox that boots from anything
-    // OTHER than that seeded snapshot (i.e. bare node24, because no seed
+    // OTHER than that seeded snapshot (i.e. the bare base image, because no seed
     // build has completed yet) will NOT have Claude/Codex/etc. (the Cursor
     // SDK is installed via npm in the same global-install line).
     // — this is expected, not a bug; see getRepoSnapshotName.
@@ -358,10 +369,10 @@ export const launchSeedRun = internalAction({
       'echo "SEEDRUN-STAGE:toolchain"',
       "sudo mkdir -p /home/eva/sandbox-config /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva",
       // gcc/make: agentation-mcp → better-sqlite3 node-gyp rebuild. A fresh
-      // node24 sandbox has none of these; without them the global npm install
-      // dies with `gyp ERR! not found: make`.
-      'sudo dnf install -y docker git jq gzip tar procps-ng psmisc tigervnc-server python3 python3-pip xorg-x11-utils xterm dbus-x11 gcc gcc-c++ make || { echo "SEEDRUN-FAILED:toolchain-dnf"; exit 1; }',
-      "sudo dnf install -y gtk3 nss alsa-lib libXtst at-spi2-core libdrm mesa-libgbm libxkbcommon libXdamage libXcomposite libXrandr libXcursor libXinerama cups-libs >/tmp/desktop-gui-dnf.log 2>&1 || true",
+      // sandbox has none of these on any base image; without them the global
+      // npm install dies with `gyp ERR! not found: make`.
+      `${pkgInstall(...CORE_TOOLCHAIN_PACKAGES)} || { echo "SEEDRUN-FAILED:toolchain-packages"; exit 1; }`,
+      `${pkgInstall(...CHROME_RUNTIME_LIBRARY_PACKAGES)} || true`,
       // ffmpeg for agent-browser WebM recording, baked into the seeded
       // snapshot. Shared with the desktop-start repair so the two cannot drift.
       FFMPEG_INSTALL_SCRIPT,
@@ -376,10 +387,11 @@ export const launchSeedRun = internalAction({
       // its absolute /usr/bin/supabase path (to avoid a node_modules/.bin shim).
       // Symlink so both paths resolve to the one binary.
       '[ -e /usr/bin/supabase ] || sudo ln -sf "$(command -v supabase)" /usr/bin/supabase || { echo "SEEDRUN-FAILED:supabase-cli-symlink"; exit 1; }',
-      // GitHub CLI — Daytona Image installs via apt; Vercel AL2023 needs the
-      // release tarball (dnf has no `gh` package by default). Tarball first
-      // (pinned); official gh yum repo if GitHub Releases still flakes.
-      `command -v gh >/dev/null 2>&1 || { github_release_download cli/cli v${GH_CLI_VERSION} gh_${GH_CLI_VERSION}_linux_amd64.tar.gz /tmp/gh.tgz && sudo tar -xzf /tmp/gh.tgz -C /tmp && sudo mv /tmp/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh && rm -rf /tmp/gh.tgz /tmp/gh_${GH_CLI_VERSION}_linux_amd64; } || { sudo dnf install -y 'dnf-command(config-manager)' && sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && sudo dnf install -y gh --repo gh-cli; } || { echo "SEEDRUN-FAILED:gh-cli"; exit 1; }`,
+      // GitHub CLI — neither base image ships a `gh` package in its default
+      // repos. The pinned release tarball is the primary path on both (one
+      // artifact, no repo registration); eva_pkg_install_gh registers the
+      // official apt/yum repo only when that download flakes.
+      `command -v gh >/dev/null 2>&1 || { github_release_download cli/cli v${GH_CLI_VERSION} gh_${GH_CLI_VERSION}_linux_amd64.tar.gz /tmp/gh.tgz && sudo tar -xzf /tmp/gh.tgz -C /tmp && sudo mv /tmp/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh && rm -rf /tmp/gh.tgz /tmp/gh_${GH_CLI_VERSION}_linux_amd64; } || eva_pkg_install_gh || { echo "SEEDRUN-FAILED:gh-cli"; exit 1; }`,
       // ripgrep and fd — every agent CLI reaches for these to search a repo, and
       // fall back to far slower `grep -r`/`find` when they are missing.
       `command -v rg >/dev/null 2>&1 || { github_release_download BurntSushi/ripgrep ${RIPGREP_VERSION} ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl.tar.gz /tmp/rg.tgz && sudo tar -xzf /tmp/rg.tgz -C /tmp && sudo mv /tmp/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl/rg /usr/local/bin/rg && rm -rf /tmp/rg.tgz /tmp/ripgrep-${RIPGREP_VERSION}-x86_64-unknown-linux-musl; } || { echo "SEEDRUN-FAILED:ripgrep"; exit 1; }`,
@@ -403,13 +415,16 @@ export const launchSeedRun = internalAction({
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
-      `command -v code-server >/dev/null 2>&1 || { github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm && sudo rpm -Uvh /tmp/code-server.rpm && rm -f /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
+      // code-server publishes one artifact per packaging format, and the two
+      // asset names differ by more than the extension (`code-server_V_amd64.deb`
+      // vs `code-server-V-amd64.rpm`), so the branch is on the filename rather
+      // than a shared template. Both hand the file to eva_pkg_install_file.
+      `command -v code-server >/dev/null 2>&1 || { if [ "$(eva_pkg_file_ext)" = deb ]; then github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server_${CODE_SERVER_VERSION}_amd64.deb /tmp/code-server.deb; else github_release_download coder/code-server v${CODE_SERVER_VERSION} code-server-${CODE_SERVER_VERSION}-amd64.rpm /tmp/code-server.rpm; fi && eva_pkg_install_file /tmp/code-server.$(eva_pkg_file_ext) && rm -f /tmp/code-server.deb /tmp/code-server.rpm; } || { echo "SEEDRUN-FAILED:code-server"; exit 1; }`,
       'command -v websockify >/dev/null 2>&1 || python3 -m pip install --user --break-system-packages websockify >/tmp/websockify-pip.log 2>&1 || python3 -m pip install --user websockify >/tmp/websockify-pip.log 2>&1 || { echo "SEEDRUN-FAILED:websockify"; exit 1; }',
       "sudo ln -sf $(python3 -m site --user-base)/bin/websockify /usr/local/bin/websockify 2>/dev/null || true",
       // Canonical path matches vercel-sandbox-gui + VercelDesktop (/opt/novnc).
       '[ -d /opt/novnc ] || { sudo rm -rf /opt/noVNC; sudo git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc; } || { echo "SEEDRUN-FAILED:novnc"; exit 1; }',
-      "sudo tee /etc/yum.repos.d/google-chrome.repo >/dev/null <<'EOF'\n[google-chrome]\nname=google-chrome\nbaseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64\nenabled=1\ngpgcheck=1\ngpgkey=https://dl.google.com/linux/linux_signing_key.pub\nEOF",
-      'command -v google-chrome-stable >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1 || sudo dnf install -y google-chrome-stable >/tmp/chrome-dnf.log 2>&1 || sudo dnf install -y chromium >/tmp/chromium-dnf.log 2>&1 || { echo "SEEDRUN-FAILED:chrome"; exit 1; }',
+      'eva_pkg_install_chrome || { echo "SEEDRUN-FAILED:chrome"; exit 1; }',
       "mkdir -p /home/eva/.claude/plugins/marketplaces",
       '[ -d /home/eva/.claude/plugins/marketplaces/claude-plugins-official/.git ] || git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git /home/eva/.claude/plugins/marketplaces/claude-plugins-official || { echo "SEEDRUN-FAILED:claude-plugins"; exit 1; }',
       '[ -d /home/eva/.claude/plugins/marketplaces/Dammyjay93/.git ] || git clone --depth 1 https://github.com/Dammyjay93/interface-design.git /home/eva/.claude/plugins/marketplaces/Dammyjay93 || { echo "SEEDRUN-FAILED:interface-design-plugin"; exit 1; }',
@@ -473,10 +488,10 @@ export const launchSeedRun = internalAction({
       'if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile 2>&1 | tee /tmp/seed-install.log; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "SEEDRUN-FAILED:install"; exit 1; }; grep -q "Ignored build scripts" /tmp/seed-install.log && echo "SEEDRUN-WARN:ignored-build-scripts"; elif [ -f yarn.lock ]; then yarn install || echo "SEEDRUN-WARN:install-yarn"; elif [ -f package-lock.json ]; then npm ci || npm install || echo "SEEDRUN-WARN:install-npm"; elif [ -f package.json ]; then npm install || echo "SEEDRUN-WARN:install-npm"; else echo "SEEDRUN: skip node install (no package manifest)"; fi',
       // Python: independent of Node. Lazy-install compile deps only when a
       // Python manifest exists (libpq-devel for psycopg2 source builds).
-      "if [ -f requirements.txt ] || [ -f pyproject.toml ]; then sudo dnf install -y gcc gcc-c++ make python3-devel libpq-devel >/tmp/py-build-deps-dnf.log 2>&1 || true; fi",
+      `if [ -f requirements.txt ] || [ -f pyproject.toml ]; then ${pkgInstall("gcc", "g++", "make", "python3-dev", "libpq-dev")} || true; fi`,
       'if [ -f requirements.txt ]; then python3 -m pip install --user --break-system-packages -r requirements.txt >/tmp/pip-install.log 2>&1 || python3 -m pip install --user -r requirements.txt >>/tmp/pip-install.log 2>&1 || { tail -50 /tmp/pip-install.log; echo "SEEDRUN-WARN:install-pip"; }; elif [ -f pyproject.toml ]; then python3 -m pip install --user --break-system-packages -e . >/tmp/pip-install.log 2>&1 || python3 -m pip install --user -e . >>/tmp/pip-install.log 2>&1 || { tail -50 /tmp/pip-install.log; echo "SEEDRUN-WARN:install-pip"; }; fi',
     );
-    // Vercel node24 base has no container runtime. Install Docker if missing,
+    // No Vercel base image has a container runtime. Install Docker if missing,
     // then ensure the daemon is running and the socket is group-accessible so
     // startup/background commands can run `docker ps` without sudo. Kept as a
     // defensive re-check even though the toolchain stage above already starts
@@ -485,7 +500,7 @@ export const launchSeedRun = internalAction({
       'echo "SEEDRUN-STAGE:docker-bootstrap"',
       // Install Docker if not already present (skip on warm snapshots that
       // already have it baked in).
-      'command -v docker >/dev/null 2>&1 || { sudo dnf install -y docker 2>&1 || { echo "SEEDRUN-FAILED:docker-install"; exit 1; }; }',
+      `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || { echo "SEEDRUN-FAILED:docker-install"; exit 1; }`,
       // Ensure daemon is running (Vercel does not auto-start dockerd on restore).
       'sudo docker info >/dev/null 2>&1 || sudo systemctl start docker 2>&1 || { echo "SEEDRUN-FAILED:docker-start"; exit 1; }',
       // Open the socket so non-root `docker` commands work (background/startup

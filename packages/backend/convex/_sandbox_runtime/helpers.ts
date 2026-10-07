@@ -26,6 +26,7 @@ import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
 import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
+import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 
 export const WORKSPACE_DIR = "/tmp/repo";
@@ -208,7 +209,8 @@ export async function ensureDockerDaemon(
     await execHandle(
       sandbox,
       [
-        "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker 2>/dev/null || true",
+        PACKAGE_HELPER_SCRIPT,
+        `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || true`,
         "command -v docker >/dev/null 2>&1 || exit 1",
         ...buildDockerdProcessCleanup(),
         "sleep 1",
@@ -218,7 +220,11 @@ export async function ensureDockerDaemon(
         buildDockerInfoWaitLoop(60),
         buildDockerSockPerms(),
         "docker info >/dev/null 2>&1",
-      ].join("; "),
+        // Newline-joined, not "; ": backgrounding `dockerd … &` followed by a
+        // literal `;` is a bash syntax error, so this whole script used to fail
+        // to PARSE — the recovery never ran, it just threw into the catch below
+        // and logged "Docker not available". A newline terminates `&` cleanly.
+      ].join("\n"),
       90,
     );
     console.log(
@@ -252,8 +258,9 @@ export async function bootstrapVercelDocker(
   const script = [
     "set -e",
     'echo "bootstrap-docker:start"',
-    "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker",
-    "command -v docker >/dev/null 2>&1 || { echo \"bootstrap-docker:no-binary\"; exit 1; }",
+    PACKAGE_HELPER_SCRIPT,
+    `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")}`,
+    'command -v docker >/dev/null 2>&1 || { echo "bootstrap-docker:no-binary"; exit 1; }',
     ...buildDockerdProcessCleanup(true),
     buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",
