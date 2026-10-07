@@ -402,6 +402,10 @@ export const launchSeedRun = internalAction({
       // that makes checkout resolve pointers, so it must follow the binary; call
       // the absolute path because sudo's secure_path may exclude /usr/local/bin.
       `command -v git-lfs >/dev/null 2>&1 || { github_release_download git-lfs/git-lfs v${GIT_LFS_VERSION} git-lfs-linux-amd64-v${GIT_LFS_VERSION}.tar.gz /tmp/lfs.tgz && sudo tar -xzf /tmp/lfs.tgz -C /tmp && sudo mv /tmp/git-lfs-${GIT_LFS_VERSION}/git-lfs /usr/local/bin/git-lfs && rm -rf /tmp/lfs.tgz /tmp/git-lfs-${GIT_LFS_VERSION}; } || { echo "SEEDRUN-FAILED:git-lfs"; exit 1; }`,
+      // The Vercel managed Image ships git-lfs from its package manager (not
+      // /usr/local/bin), so the download above is skipped. Symlink so the
+      // absolute path below resolves either way.
+      '[ -e /usr/local/bin/git-lfs ] || sudo ln -sf "$(command -v git-lfs)" /usr/local/bin/git-lfs || { echo "SEEDRUN-FAILED:git-lfs-symlink"; exit 1; }',
       // The Image's primary git is a custom build under /opt/git, so its
       // "system" config resolves to /opt/git/etc/gitconfig — a directory the
       // image does not ship. `git lfs install --system` therefore failed with
