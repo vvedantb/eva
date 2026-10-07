@@ -14,6 +14,7 @@ import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
@@ -149,8 +150,8 @@ function SessionPrIcon({
 
 /**
  * Leading mark: Drive pixel grid while the assistant turn is in flight
- * (replaces sandbox status â€” awaiting a reply already implies sandbox active).
- * Otherwise the sandbox status color dot.
+ * (replaces sandbox status — awaiting a reply already implies sandbox active).
+ * Otherwise the sandbox status color dot (simple view: error only).
  */
 function SessionStatusLeading({
   label,
@@ -214,6 +215,7 @@ export function SidebarSessionItem({
   forkedFromSessionId,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
+  const simpleView = useSimpleView();
   const { settings } = useSessionsSidebarSettings();
   const isFolder = settings.layout === "folder";
   const displayStatus = sandboxDisplayStatus({ status, sandboxError });
@@ -232,13 +234,15 @@ export function SidebarSessionItem({
       : "text-sidebar-foreground/80 hover:text-sidebar-foreground",
   );
 
-  const statusLeading = (
+  const showLeading =
+    isExecuting || showsSandboxStatusDot(displayStatus, simpleView);
+  const statusLeading = showLeading ? (
     <SessionStatusLeading
       label={statusLabel}
       dotClassName={statusStyle.dot}
       isExecuting={isExecuting}
     />
-  );
+  ) : null;
 
   const link = (
     <DynamicLink
@@ -255,7 +259,12 @@ export function SidebarSessionItem({
             <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
           </div>
-          <div className="flex min-w-0 items-center gap-2 pl-4 opacity-60">
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2 opacity-60",
+              showLeading && "pl-4",
+            )}
+          >
             <div className="min-w-0 flex-1">
               {linkedFrom ? (
                 <LinkedFromHint linkedFrom={linkedFrom} />

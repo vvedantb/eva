@@ -24,8 +24,10 @@ import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
 import {
   SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { IconClock, IconDots, IconFolder, IconTag } from "@tabler/icons-react";
 import {
   statusConfig,
@@ -150,6 +152,7 @@ export function QuickTaskCard({
   // A live turn gets the same pixel grid the session rows use instead.
   const isInProgress = !hasError && status === "in_progress";
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
+  const simpleView = useSimpleView();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
@@ -293,7 +296,8 @@ export function QuickTaskCard({
               </TooltipTrigger>
               <TooltipContent>Eva is replying</TooltipContent>
             </Tooltip>
-          ) : sandboxStatus ? (
+          ) : sandboxStatus &&
+            showsSandboxStatusDot(sandboxStatus, simpleView) ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
