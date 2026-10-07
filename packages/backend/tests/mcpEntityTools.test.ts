@@ -469,8 +469,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
         turnLifecycleVersion: 2,
       });
       await ctx.db.insert("turns", {
-        surface: "session",
-        entityId: String(sessionId),
+        entityId: sessionId,
         streamingEntityId: String(sessionId),
         state: "running",
         open: true,

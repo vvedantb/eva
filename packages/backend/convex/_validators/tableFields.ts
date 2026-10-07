@@ -241,10 +241,21 @@ export const turnStateValidator = v.union(
 
 export type TurnState = Infer<typeof turnStateValidator>;
 
-/** Durable ownership record for one session chat turn. */
+/** Chat entities that own durable turns; the id's table picks the surface. */
+export const chatTurnEntityIdValidator = v.union(
+  v.id("sessions"),
+  v.id("agentTasks"),
+  v.id("projects"),
+);
+
+/** Durable ownership record for one chat turn (session, task chat or project chat). */
 export const turnFields = {
-  surface: v.literal("session"),
-  entityId: v.string(),
+  /**
+   * Retired: `entityId` already names the table. No longer written; drained by
+   * `dataMigrations:clearTurnSurface`, then deleted.
+   */
+  surface: v.optional(v.literal("session")),
+  entityId: chatTurnEntityIdValidator,
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -296,6 +307,15 @@ export const sessionDaemonStateFields = {
   // Mirrors sessions.claimPausedUntil — the prewarm kill fence is read off
   // this compact row on the 50ms claim poll.
   claimPausedUntil: v.optional(v.number()),
+};
+
+/**
+ * Task and project chat counterpart of `sessions.turnLifecycleVersion`: set
+ * the first time the chat opens a durable Turn, so projections stop trusting
+ * the legacy `activeChatWorkflowId` / `syntheticTurnMessageId` fields.
+ */
+const chatTurnLifecycleFields = {
+  chatTurnLifecycleVersion: v.optional(v.literal(2)),
 };
 
 export const chatDaemonEntityFields = {
@@ -391,6 +411,7 @@ export const agentTaskFields = {
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   ...chatDaemonEntityFields,
+  ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
   // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
@@ -881,6 +902,7 @@ export const projectFields = {
   // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   ...chatDaemonEntityFields,
+  ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
   // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).

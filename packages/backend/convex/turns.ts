@@ -5,11 +5,16 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
-import { sessionChatAdapter } from "./_chat/surfaceAdapters";
+import {
+  chatAdapterForEntity,
+  chatEntityIdFromStream,
+  type ChatEntityId,
+  type ChatSurfaceAdapter,
+} from "./_chat/surfaceAdapters";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { startNextQueuedSessionMessage } from "./_queues/helpers";
 import {
   touchStreamingEntity,
   upsertStreamingActivity,
@@ -20,6 +25,7 @@ import {
   advanceTurn,
   closeTurn,
   findOpenSessionTurn,
+  findOpenTurn,
   graceExpiredTurnLease,
   renewTurnLease,
 } from "./_chat/turnStore";
@@ -140,8 +146,8 @@ async function applyLegacyHeartbeat(
   ctx: MutationCtx,
   args: Infer<typeof legacyHeartbeatArgsValidator>,
 ): Promise<boolean> {
-  const sessionId = ctx.db.normalizeId("sessions", args.entityId);
-  if (sessionId && (await findOpenSessionTurn(ctx, sessionId))) return false;
+  const entityId = chatEntityIdFromStream(ctx.db, args.entityId);
+  if (entityId && (await findOpenTurn(ctx, entityId))) return false;
   if (args.touchOnly) {
     await touchStreamingEntity(ctx, args.entityId);
   } else {
@@ -182,7 +188,7 @@ export const heartbeatFromCallback = authMutation({
   }),
 });
 
-/** Legacy callbacks may write only while no durable Turn owns the session. */
+/** Legacy callbacks may write only while no durable Turn owns the chat. */
 export const legacyHeartbeat = internalMutation({
   args: legacyHeartbeatArgs,
   returns: v.boolean(),
@@ -300,6 +306,62 @@ export const graceExpired = internalMutation({
   },
 });
 
+/**
+ * Finalises one expired turn for any chat surface. A turn with a workflow
+ * gets the full stale-turn teardown; a turn without one (a synthetic turn)
+ * only closes its placeholder and frees the entity's synthetic slot.
+ */
+async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
+  ctx: MutationCtx,
+  adapter: ChatSurfaceAdapter<TId, TEntity>,
+  id: TId,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  const sandboxStopped = cause === "sandbox_stopped";
+  const entity = await adapter.getEntity(ctx, id);
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - lastLeaseWriteAt) / 1000),
+  );
+  const thresholdSeconds = Math.max(1, Math.round(leaseDurationMs / 1000));
+  const alert = sandboxStopped
+    ? adapter.alerts.sandboxStopped(staleSeconds)
+    : withCauseDetail(
+        adapter.alerts.stalled(staleSeconds, turn.state, thresholdSeconds),
+        cause,
+        turn.silentSince ?? lastLeaseWriteAt,
+      );
+  if (entity && turn.workflowId !== undefined) {
+    await finalizeStaleChatTurn(
+      ctx,
+      adapter,
+      id,
+      entity,
+      turn.workflowId,
+      alert,
+      { sandboxStopped },
+    );
+  } else if (entity && turn.placeholderMessageId !== undefined) {
+    const message = await ctx.db.get(turn.placeholderMessageId);
+    if (message && message.finishedAt === undefined) {
+      await ctx.db.patch(message._id, {
+        content: alert.text,
+        finishedAt: Date.now(),
+      });
+    }
+    await clearStreamingActivity(ctx, turn.streamingEntityId);
+    await adapter.finalizeOrphanTurn(ctx, id);
+    await adapter.drainQueue(ctx, id);
+  }
+  await closeTurn(ctx, turn, "error", { error: alert.text });
+  if (!sandboxStopped && adapter.afterStallFinalize) {
+    await adapter.afterStallFinalize(ctx, id, turn._id);
+  }
+}
+
 /** Re-reads and converges one expired lease; a concurrent renewal always wins. */
 export const finalizeExpired = internalMutation({
   args: {
@@ -314,64 +376,9 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    const sandboxStopped = args.cause === "sandbox_stopped";
-    const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-    const session = sessionId ? await ctx.db.get(sessionId) : null;
-    const leaseDurationMs = turnLeaseDurationMs(turn.state);
-    const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
-    const staleSeconds = Math.max(
-      1,
-      Math.round((Date.now() - lastLeaseWriteAt) / 1000),
+    await chatAdapterForEntity(ctx.db, turn.entityId, (adapter, id) =>
+      finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
     );
-    const thresholdSeconds = Math.max(1, Math.round(leaseDurationMs / 1000));
-    const alert = sandboxStopped
-      ? sessionChatAdapter.alerts.sandboxStopped(staleSeconds)
-      : withCauseDetail(
-          sessionChatAdapter.alerts.stalled(
-            staleSeconds,
-            turn.state,
-            thresholdSeconds,
-          ),
-          args.cause,
-          turn.silentSince ?? lastLeaseWriteAt,
-        );
-    if (sessionId && session && turn.workflowId !== undefined) {
-      await finalizeStaleChatTurn(
-        ctx,
-        sessionChatAdapter,
-        sessionId,
-        session,
-        turn.workflowId,
-        alert,
-        { sandboxStopped },
-      );
-    } else if (sessionId && session && turn.placeholderMessageId !== undefined) {
-      const message = await ctx.db.get(turn.placeholderMessageId);
-      if (message && message.finishedAt === undefined) {
-        await ctx.db.patch(message._id, {
-          content: alert.text,
-          finishedAt: Date.now(),
-        });
-      }
-      await clearStreamingActivity(ctx, turn.streamingEntityId);
-      await ctx.db.patch(sessionId, {
-        syntheticTurnMessageId: undefined,
-        updatedAt: Date.now(),
-      });
-      await startNextQueuedSessionMessage(ctx, sessionId);
-    }
-    await closeTurn(ctx, turn, "error", { error: alert.text });
-    if (sessionId && !sandboxStopped) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal._sessions.execution.retryEmptyStalledSessionTurn,
-        {
-          sessionId,
-          turnId: args.turnId,
-          sandboxStopped,
-        },
-      );
-    }
     return null;
   },
 });
