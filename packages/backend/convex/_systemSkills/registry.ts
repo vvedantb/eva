@@ -4,6 +4,7 @@ import { buildEvaPlanContent } from "./evaPlan";
 import { buildEvaDesignContent } from "./evaDesign";
 import { buildEvaAskContent } from "./evaAsk";
 import { buildEvaGrabProofContent } from "./evaGrabProof";
+import { buildEvaResolveConflictsContent } from "./evaResolveConflicts";
 
 /**
  * Eva-provided ("system") skills. Definitions live here rather than in a table
@@ -17,6 +18,7 @@ export const SYSTEM_SKILL_NAMES = [
   "eva-design",
   "eva-ask",
   "eva-grab-proof",
+  "eva-resolve-conflicts",
 ] as const;
 
 export type SystemSkillName = (typeof SYSTEM_SKILL_NAMES)[number];
@@ -82,6 +84,12 @@ export const SYSTEM_SKILLS: Record<SystemSkillName, SystemSkillDefinition> = {
     description:
       "Grab a screenshot of the current work as proof. Seed mock data if needed, then clean it up.",
     buildContent: buildEvaGrabProofContent,
+  },
+  "eva-resolve-conflicts": {
+    name: "eva-resolve-conflicts",
+    description:
+      "Bring this branch up to date with the base branch on origin and resolve any merge conflicts. Use when the user asks to sync with main, update from origin, or fix merge conflicts.",
+    buildContent: buildEvaResolveConflictsContent,
   },
 };
 
