@@ -1,6 +1,7 @@
 # Move quick-task runs and one-shot agents onto the durable `turns` table (durable-turns Phases 6–7)
 
 Status: implemented in two pull requests, not yet deployed. Written 2026-10-07. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5).
+
 - **PR A (#914):** Phase 6.0–6.3 and Phase 7.0–7.2. Every new run and one-shot agent runs on a turn, and the lease is its stall check. Work in flight at deploy keeps its old path.
 - **PR B (stacked on A):** Phase 6.4, Phase 7.3, the session legacy branches and the old heartbeat path. Merge it only after the deploy check below.
 
@@ -11,6 +12,7 @@ See "Implementation (2026-10-07)" for what changed from the phase text.
 Quick-task and project-task runs (`agentRuns`, `taskExecutionWorkflow`) use the same turn model as the three chats: a `turns` row with a lease, a generation fence and the reconcile cron.
 
 **Why:**
+
 - A run has its own stall system: `_taskWorkflow/watchdog.ts:checkStaleRuns`, a 30 s self-rescheduling chain per run, plus `livenessProbe.ts:probeStaleRunLiveness`.
 - The run has no generation fence. Only `handleCompletion`'s "latest running run" check protects it from an old callback.
 - The run extends its sandbox deadline from the watchdog chain, not from the agent's own heartbeat.
@@ -21,6 +23,7 @@ Quick-task and project-task runs (`agentRuns`, `taskExecutionWorkflow`) use the 
 ## Current state
 
 **Already generic.** These work for a run turn without change (pinned by the Phase 6.0 tests):
+
 - `renewTurnLease`, the generation fence, `graceExpiredTurnLease`, `turns.reconcile` / `listExpired` / `graceExpired`;
 - `turns.markLaunching` and `turns.acquireOneShotLease`;
 - `launchOnExistingSandbox` already sets `TURN_ID` / `TURN_LEASE_GENERATION` when the caller passes `turnId` / `turnLeaseGeneration`;
@@ -28,6 +31,7 @@ Quick-task and project-task runs (`agentRuns`, `taskExecutionWorkflow`) use the 
 - `applyLegacyHeartbeat` now maps `task-run-<runId>` to the run, so an open run turn blocks unfenced writes to its stream.
 
 **Run-specific.** These must change:
+
 - **Start:** seven sites call `workflow.start(taskExecutionWorkflow)` and patch `task.activeWorkflowId` by hand: `_agentTasks/execution.ts`, `_taskWorkflow/scheduling.ts`, `_taskWorkflow/publicMutations.ts`, `buildWorkflow.ts`, `_projects/sandbox.ts`, `evaluationReports.ts`, `_automations/findings.ts`. There is no shared helper.
 - **`openTurn`** requires `placeholderMessageId` and `prompt`. A run has no placeholder message. The schema fields are already optional.
 - **Stall check:** `updateRunToRunning` schedules `checkStaleRuns` after 90 s (`STALE_CHECK_DELAY_MS`) and the 2-hour `handleStaleRun`.
@@ -37,13 +41,13 @@ Quick-task and project-task runs (`agentRuns`, `taskExecutionWorkflow`) use the 
 
 **Thresholds today against the lease:**
 
-| Phase | Run watchdog today | Lease |
-|---|---|---|
-| Startup (no sandbox, or startup activity) | 15 min (`STALE_NO_SANDBOX_THRESHOLD_MS`) | 15 min (`TURN_STARTUP_LEASE_MS`) |
-| Agent running | 5 min, then probe | 2 min, then probe |
-| Process alive but silent | kept alive until the 2-hour backstop | grace for 10 min (`TURN_SILENT_ALIVE_GRACE_MS`), then finalised |
-| Finalizing (after `handleCompletion`) | 10 min (`STALE_FINISHING_THRESHOLD_MS`) | 10 min (`TURN_FINALIZING_LEASE_MS`) |
-| Provider unreachable | kill at 25 min | grace for 10 min, then finalised |
+| Phase                                     | Run watchdog today                       | Lease                                                           |
+| ----------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
+| Startup (no sandbox, or startup activity) | 15 min (`STALE_NO_SANDBOX_THRESHOLD_MS`) | 15 min (`TURN_STARTUP_LEASE_MS`)                                |
+| Agent running                             | 5 min, then probe                        | 2 min, then probe                                               |
+| Process alive but silent                  | kept alive until the 2-hour backstop     | grace for 10 min (`TURN_SILENT_ALIVE_GRACE_MS`), then finalised |
+| Finalizing (after `handleCompletion`)     | 10 min (`STALE_FINISHING_THRESHOLD_MS`)  | 10 min (`TURN_FINALIZING_LEASE_MS`)                             |
+| Provider unreachable                      | kill at 25 min                           | grace for 10 min, then finalised                                |
 
 ## Phases
 
@@ -75,15 +79,18 @@ Ship each phase on its own. Each phase ends in a state you can check.
 ### Phase 6.2: open durable turns for new runs (both stall systems run)
 
 **Store:**
+
 - Make `placeholderMessageId` and `prompt` optional in `OpenTurnFields`. Widen `openTurn` to `TurnEntityId`.
 - `closeTurn`: map a run id to its task's activity ref (kind `task`), so the idle-pause sweep learns "the agent finished". Add the mapping to `runTurnAdapter`, not to `activityRefForParentId`.
 
 **Start** (`startTaskRunWorkflow`):
+
 1. `openTurn({ entityId: runId, streamingEntityId: getTaskRunStreamingEntityId(runId), model, repoId })`.
 2. Start the workflow with `turnId` as a new **optional** argument.
 3. `bindTurnWorkflow` after `workflow.start`.
 
 **Workflow** (`taskExecutionWorkflow`):
+
 - Run the new steps only when `args.turnId !== undefined`. This keeps in-flight journals replayable, the same method as chat Phase 2.
 - Do not reorder existing steps, and do not change the arguments of existing steps.
 - New steps:
@@ -92,12 +99,14 @@ Ship each phase on its own. Each phase ends in a state you can check.
   3. In `finally`, close the run turn after `clearActiveWorkflow`: `done` on success, `error` otherwise. A new step, gated on `args.turnId`.
 
 **Completion** (`taskWorkflow:handleCompletion`):
+
 - After the existing run checks, call `resolveCompletionTurn({ entityId: runId, turnId, leaseGeneration })`.
 - `stale`: ignore the callback, as for any other stale completion.
 - `current`: `advanceTurn(…, "finalizing")`, then schedule `extendSandboxDeadline` for `2 × TURN_FINALIZING_LEASE_MS`. Push, PR and deployment tracking run after the agent exits, and no heartbeat renews the lease then.
 - `legacy`: unchanged (runs started before this phase).
 
 **Exits that must close the turn:**
+
 - `cancelExecution`: `closeTurnForWorkflow(runId, workflowId, "cancelled")`.
 - `cleanUpStaleRun` (watchdog kill): `closeOpenTurn(runId, "error")`, so the two stall systems cannot both act on one run.
 - `handleStaleRun` (2-hour backstop): the same.
@@ -105,6 +114,7 @@ Ship each phase on its own. Each phase ends in a state you can check.
 **Stall checks:** unchanged. `checkStaleRuns` stays the authority. The reconciler's run branch still only closes the turn. The callback exits on that terminal lease, and `checkStaleRuns` then sees a dead process. This is the same parallel state as chat Phase 2.
 
 **Check (production):**
+
 - Start a quick task and a project task. Confirm a `turns` row for the run goes `staged → launching → running → finalizing → done`, with lease generation 1.
 - Confirm the callback heartbeats with `turnId` (the `task-run-…` row updates and `leaseExpiresAt` moves).
 - Kill the agent process mid-run. Confirm both systems act once: the turn closes and the run ends `error` with one alert.
@@ -114,21 +124,23 @@ Ship each phase on its own. Each phase ends in a state you can check.
 
 1. **Reconciler:** `finalizeExpiredRunTurn` calls `cleanUpStaleRun`, then closes the turn. It keeps today's error texts and `exitReason` values (see Decision 3):
 
-   | Turn state and cause | Error text | `exitReason` |
-   |---|---|---|
-   | `staged` / `launching`, no `sandboxId` | Run killed by watchdog: sandbox was never attached | `watchdog_no_sandbox` |
-   | `staged` / `launching`, with `sandboxId` | Run killed by watchdog: sandbox startup stalled | `watchdog_startup_stalled` |
-   | `running` | Run killed by watchdog: no heartbeat for Ns | `watchdog_killed` |
-   | `finalizing` | Run killed by watchdog: finalization stalled (no heartbeat for Ns) | `watchdog_finalizing_stalled` |
-   | any, `silent_timeout` | as the state row, plus the reconciler's silent-cause detail | as the state row |
+   | Turn state and cause                     | Error text                                                         | `exitReason`                  |
+   | ---------------------------------------- | ------------------------------------------------------------------ | ----------------------------- |
+   | `staged` / `launching`, no `sandboxId`   | Run killed by watchdog: sandbox was never attached                 | `watchdog_no_sandbox`         |
+   | `staged` / `launching`, with `sandboxId` | Run killed by watchdog: sandbox startup stalled                    | `watchdog_startup_stalled`    |
+   | `running`                                | Run killed by watchdog: no heartbeat for Ns                        | `watchdog_killed`             |
+   | `finalizing`                             | Run killed by watchdog: finalization stalled (no heartbeat for Ns) | `watchdog_finalizing_stalled` |
+   | any, `silent_timeout`                    | as the state row, plus the reconciler's silent-cause detail        | as the state row              |
 
    Read the task and run inside the mutation. Skip `cleanUpStaleRun` when the run is no longer `queued` / `running`.
+
 2. **Stop the old chain:** `updateRunToRunning` reads `findOpenTurn(runId)`. When a turn owns the run, it does not schedule `checkStaleRuns`. It keeps the 2-hour `handleStaleRun`. No argument change, so the step journal is unchanged (same method as chat Phase 3 `armLegacyStallCheck`).
 3. **Deadline:** `renewTurnLease` already extends the sandbox deadline on a written renewal (at most once per half lease, for `2 × lease`). Phase 6.2 added the finalizing extension. Nothing else is needed.
 4. **Recovery:** `cleanUpStaleRun` stays the one stop path. It stops the quick-task sandbox (with diagnostics), marks the run `error`, and schedules `maybeScheduleQuickTaskRetry` after 20–40 s (`buildQuickTaskRetryDelayMs`). The once-only rule (`auto_retry_scheduled` on the previous run) does not change.
 5. **Workflow tracking lost:** no separate check. A workflow that dies without closing its turn stops renewing, so the lease expires and the reconciler finalises the run.
 
 **Check:**
+
 - Kill the callback mid-run. The reconciler finalises within about 2 min plus the probe, not 5 min.
 - Freeze the callback (`kill -STOP`). The run is finalised after the 10-minute grace, with the silent-cause detail.
 - A network-like failure still schedules exactly one retry 20–40 s later.
@@ -139,15 +151,18 @@ Ship each phase on its own. Each phase ends in a state you can check.
 Do this at least 2 h plus one release after Phase 6.3, or after a production check finds no run in flight without a turn (the chat Phase 5 rule).
 
 **Delete:**
+
 - `checkStaleRuns` and `probeStaleRunLiveness`. Leave no-op stubs with the same argument validators for one release, because scheduled jobs call them.
 - `finalizeExpiredRunTurn`'s close-only body (replaced in 6.3).
 - Staleness helpers with no caller left: `isSandboxStartupActivity`, `isFinalizingActivity`, `hasActiveAgentToolStep`, `staleProbeFollowUp`, `STALE_*` constants, and `staleTurnDecision` (already test-only today). Check each with `knip` first; the chats may still import some.
 - The `legacy` branch of the run's `resolveCompletionTurn` result.
 
 **Then:**
+
 - Make `turnId` required on `taskExecutionWorkflow`. Pin the new journal in `turnLifecycleContract.test.ts`.
 
 **Keep:**
+
 - `handleStaleRun` (2-hour backstop).
 - `cleanUpStaleRun` and `maybeScheduleQuickTaskRetry`.
 - `handleCompletion`'s latest-running-run check. It costs little and also guards a rival run of the same task.
@@ -156,15 +171,15 @@ Do this at least 2 h plus one release after Phase 6.3, or after a production che
 
 Every sandbox agent that `launchOnExistingSandbox` starts opens a turn. Today these agents have only the 2-hour `handleStale*` backstop; nothing reads their heartbeat age.
 
-| Agent | Workflow | Turn owner (`entityId`) | `lane` | Stall teardown today |
-|---|---|---|---|---|
-| Automations | `automationWorkflow.ts` | `automationRuns` id | — | none (add one) |
-| PR recap | `prRecapWorkflow.ts` | `docs` id | — | none (add one) |
-| Doc interview and generate | `docInterviewWorkflow.ts` | `docs` id | — | `handleStaleDoc` |
-| Test generation | `testGenWorkflow.ts` | `docs` id | — | `handleStaleDoc` |
-| Evaluation and eval-fix | `evaluationWorkflow.ts` | `evaluationReports` id | — | `handleStaleEvaluation` |
-| Session summarize | `summarizeWorkflow.ts` | `sessions` id | `summary` | `handleStaleSession` |
-| Project interview and spec | `projectInterviewWorkflow.ts` | `projects` id | `interview` | `handleStaleProject` |
+| Agent                      | Workflow                      | Turn owner (`entityId`) | `lane`      | Stall teardown today    |
+| -------------------------- | ----------------------------- | ----------------------- | ----------- | ----------------------- |
+| Automations                | `automationWorkflow.ts`       | `automationRuns` id     | —           | none (add one)          |
+| PR recap                   | `prRecapWorkflow.ts`          | `docs` id               | —           | none (add one)          |
+| Doc interview and generate | `docInterviewWorkflow.ts`     | `docs` id               | —           | `handleStaleDoc`        |
+| Test generation            | `testGenWorkflow.ts`          | `docs` id               | —           | `handleStaleDoc`        |
+| Evaluation and eval-fix    | `evaluationWorkflow.ts`       | `evaluationReports` id  | —           | `handleStaleEvaluation` |
+| Session summarize          | `summarizeWorkflow.ts`        | `sessions` id           | `summary`   | `handleStaleSession`    |
+| Project interview and spec | `projectInterviewWorkflow.ts` | `projects` id           | `interview` | `handleStaleProject`    |
 
 **Why a lane (Decision 6):** summarize and project interview/spec run against a session or project row that already owns chat turns. Under one key, `getChatStatus` would show "Working…" during a summary, and `openTurn` for a chat would supersede (cancel) the summary turn. The lane keeps the two apart. Chat turns leave it unset.
 
@@ -183,6 +198,7 @@ Every sandbox agent that `launchOnExistingSandbox` starts opens a turn. Today th
 #### Phase 7.1: open turns for one-shot agents (both systems run)
 
 The same method as Phase 6.2, per workflow:
+
 - Open the turn at the start site, start the workflow with an optional `turnId`, bind the workflow.
 - Gated steps: `markLaunching` after sandbox preparation; `acquireOneShotLease` before each `launchOnExistingSandbox`; pass `turnId` / `turnLeaseGeneration`.
 - Workflows with two launches (doc interview then generate, evaluation then eval-fix, interview then spec) open one turn per launch. They close the first before they open the next.
@@ -203,10 +219,12 @@ The same method as Phase 6.2, per workflow:
 ### Deleting the old heartbeat path
 
 `turns.legacyHeartbeat`, `turns.legacyHeartbeatFromCallback` and the no-`turnId` branch of `http.ts` `/api/streaming/heartbeat` write only `streamingActivity` (no lease, no deadline). After Phases 6 and 7, these senders are left:
+
 - Session one-shot workflows without `turnId`, and session claims of a `pendingTurn` without `turnId` (`_sessions/workflow.ts`). Make `turnId` required there, as task and project chats did in chat Phase 5.
 - The Cursor turn worker under a legacy claim (`callback-src/providers/cursorSdkDaemon.ts`). It goes with the session legacy claim.
 
 **Delete, in order, after Phase 7.3 and the session clean-up:**
+
 1. Server: `legacyHeartbeat`, `legacyHeartbeatFromCallback`, `applyLegacyHeartbeat`, and the `http.ts` no-`turnId` branch (answer `terminal: unknown_turn`).
 2. Server: the raw-`entityId` HMAC fallback in `http.ts`.
 3. Callback: the lease-less senders (`identity === null` fallbacks in `http/convexClient.ts`), legacy claim parsing in `claimedTurnLifecycle.ts`, and the Cursor legacy worker.
@@ -219,6 +237,7 @@ The same method as Phase 6.2, per workflow:
 The owner asked for every phase at once, in two deploys (Decision 8). The phase text above is the design; these notes record where the code differs.
 
 **PR A: every new run and one-shot agent on a turn.**
+
 - Phases 6.1–6.3 shipped together. There is no parallel phase: a run started after the deploy is watched by its lease only. `updateRunToRunning` arms `checkStaleRuns` only when the run has no open turn, so runs in flight at the deploy keep the old chain.
 - `startTaskRunWorkflow` (`_taskWorkflow/startRun.ts`) is the one start path for the seven start sites. It opens the run turn, starts the workflow with `turnId`, binds the turn and records `task.activeWorkflowId`.
 - Run stop: `finalizeExpiredAgentTurn` → `finalizeStalledRun` → `cleanUpStaleRun`, with the old texts (`stalledRunStop`). `cleanUpStaleRun` now closes the run turn, so every stop path (old chain, lease, 2-hour backstop, cancel) leaves no open turn.
@@ -233,6 +252,7 @@ The owner asked for every phase at once, in two deploys (Decision 8). The phase 
 - `closeTurn` re-reads the turn, so a second close in one mutation is a no-op. A closed run turn touches its task's idle-pause activity.
 
 **PR B: clean-up.**
+
 - `taskExecutionWorkflow.turnId` is required; the gated steps are unconditional. A run completion without a current lease is ignored.
 - `checkStaleRuns` and `probeStaleRunLiveness` are no-op stubs for one release. The backend staleness helpers are deleted (the web keeps its own copy in `@eva/shared`); `staleness.ts` keeps only `RUN_TIMEOUT_MS`.
 - `durableTurns` is gone: every one-shot agent launches under a turn. A one-shot completion without a current lease is dropped.
@@ -252,21 +272,22 @@ The owner asked for every phase at once, in two deploys (Decision 8). The phase 
 
 ## Risks
 
-| Risk | Control |
-|---|---|
-| Runs in flight at deploy have no `turns` row | Phase 6.2 opens rows only for new starts. The run keeps the old chain until it ends |
-| Workflow replay breaks | Optional `turnId`, gated new steps, no reordering, no argument change to existing steps. Extend `turnLifecycleContract.test.ts` to pin the pre-cutover run journal |
-| An old callback bundle has no lease support | Each run launches a fresh callback (`KILL_PRIOR_AGENT_PROCESSES_CMD`), so every run after the deploy has the current bundle |
-| A start site misses the turn | Phase 6.1 moves every start to one helper, pinned by a contract test |
-| The lease kills a frozen-but-alive run earlier than today | Decision 2 |
-| Post-agent steps (push, PR) outlive the 10-minute finalizing lease | Same limit as today (`STALE_FINISHING_THRESHOLD_MS`). The finalizing deadline extension keeps the sandbox up for it |
-| Reconcile load | The 25-per-tick batch now also covers runs and one-shot agents. Check it against peak open turns |
-| A lane turn shows as a chat turn | Chat readers query `lane === undefined`; a contract test pins every `by_entity_open` reader |
-| Two stall systems act on one run in 6.2 | Every stop path closes the turn; the reconciler only closes the turn |
+| Risk                                                               | Control                                                                                                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Runs in flight at deploy have no `turns` row                       | Phase 6.2 opens rows only for new starts. The run keeps the old chain until it ends                                                                                |
+| Workflow replay breaks                                             | Optional `turnId`, gated new steps, no reordering, no argument change to existing steps. Extend `turnLifecycleContract.test.ts` to pin the pre-cutover run journal |
+| An old callback bundle has no lease support                        | Each run launches a fresh callback (`KILL_PRIOR_AGENT_PROCESSES_CMD`), so every run after the deploy has the current bundle                                        |
+| A start site misses the turn                                       | Phase 6.1 moves every start to one helper, pinned by a contract test                                                                                               |
+| The lease kills a frozen-but-alive run earlier than today          | Decision 2                                                                                                                                                         |
+| Post-agent steps (push, PR) outlive the 10-minute finalizing lease | Same limit as today (`STALE_FINISHING_THRESHOLD_MS`). The finalizing deadline extension keeps the sandbox up for it                                                |
+| Reconcile load                                                     | The 25-per-tick batch now also covers runs and one-shot agents. Check it against peak open turns                                                                   |
+| A lane turn shows as a chat turn                                   | Chat readers query `lane === undefined`; a contract test pins every `by_entity_open` reader                                                                        |
+| Two stall systems act on one run in 6.2                            | Every stop path closes the turn; the reconciler only closes the turn                                                                                               |
 
 ## Tests
 
 **Backend (`packages/backend/tests/`):**
+
 - `turnLifecycleIntegration.test.ts`: run turn open, launch, lease, fenced completion, finalise through `cleanUpStaleRun`.
 - `turnLifecycleContract.test.ts`: pre-cutover run journal; gated steps.
 - `turnDeadlineExtensionContract.test.ts`: run renewal and finalizing extension.
