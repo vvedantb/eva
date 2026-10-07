@@ -6,12 +6,20 @@ import {
   acquireTurnLease,
   graceExpiredTurnLease,
   openSessionTurn,
+  openTurn,
   renewTurnLease,
 } from "../convex/_chat/turnStore";
+import {
+  chatAdapterForEntity,
+  TASK_CHAT_STREAM_PREFIX,
+} from "../convex/_chat/surfaceAdapters";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
 import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
-import { isLegacySessionExecuting } from "../convex/_chat/turnProjection";
+import {
+  isLegacySessionExecuting,
+  openSessionIdsForRepo,
+} from "../convex/_chat/turnProjection";
 import { rollbackQueuedSessionStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,
@@ -54,6 +62,46 @@ async function createSessionFixture() {
       repoId,
     });
     return { sessionId, placeholderMessageId, turnId };
+  });
+  return { t, ...ids };
+}
+
+/** A task chat turn inserted by hand: nothing stages task turns yet. */
+async function createTaskChatFixture() {
+  const t = convexTest(schema, modules);
+  const ids = await t.run(async (ctx) => {
+    const userId = await ctx.db.insert("users", {});
+    const repoId = await ctx.db.insert("githubRepos", {
+      owner: "eva",
+      name: "task-turn-test",
+      installationId: 1,
+    });
+    const now = Date.now();
+    const taskId = await ctx.db.insert("agentTasks", {
+      repoId,
+      title: "Task chat turn",
+      status: "code_review",
+      createdAt: now,
+      updatedAt: now,
+      createdBy: userId,
+    });
+    const placeholderMessageId = await ctx.db.insert("messages", {
+      parentId: taskId,
+      role: "assistant",
+      content: "",
+      timestamp: now,
+    });
+    await ctx.db.patch(taskId, { syntheticTurnMessageId: placeholderMessageId });
+    const streamingEntityId = `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
+    const turnId = await openTurn(ctx, {
+      entityId: taskId,
+      streamingEntityId,
+      placeholderMessageId,
+      prompt: "hi",
+      model: "claude:sonnet",
+      repoId,
+    });
+    return { repoId, taskId, placeholderMessageId, streamingEntityId, turnId };
   });
   return { t, ...ids };
 }
@@ -408,6 +456,117 @@ describe("turn lifecycle integration", () => {
           .unique(),
     );
     expect(after?.lastUpdatedAt).toBe(stamped);
+  });
+});
+
+describe("task chat turns share the session turn lifecycle", () => {
+  test("renewal fences an older lease generation", async () => {
+    const { t, turnId, streamingEntityId } = await createTaskChatFixture();
+    const claim = async () =>
+      await t.run(async (ctx) => {
+        const turn = await ctx.db.get(turnId);
+        if (!turn) throw new Error("missing turn");
+        return (await acquireTurnLease(ctx, turn, "running"))?.leaseGeneration;
+      });
+    const renew = async (leaseGeneration: number) =>
+      await t.run(
+        async (ctx) =>
+          await renewTurnLease(ctx, {
+            turnId: String(turnId),
+            leaseGeneration,
+            streamingEntityId,
+          }),
+      );
+
+    expect(await claim()).toBe(1);
+    expect(await renew(1)).toMatchObject({ status: "renewed" });
+    expect(await claim()).toBe(2);
+    expect(await renew(1)).toEqual({ status: "terminal", reason: "superseded" });
+    expect(await renew(2)).toMatchObject({ status: "renewed" });
+  });
+
+  test("a legacy heartbeat is rejected only while the task turn is open", async () => {
+    const { t, turnId, streamingEntityId } = await createTaskChatFixture();
+    const heartbeat = async () =>
+      await t.mutation(internal.turns.legacyHeartbeat, {
+        entityId: streamingEntityId,
+        touchOnly: false,
+        currentActivity: "legacy activity",
+      });
+
+    expect(await heartbeat()).toBe(false);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, { open: false, state: "done" });
+    });
+    expect(await heartbeat()).toBe(true);
+  });
+
+  test("an expired task turn finalises through the task adapter", async () => {
+    const { t, taskId, placeholderMessageId, turnId } =
+      await createTaskChatFixture();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, {
+        state: "running",
+        leaseExpiresAt: Date.now() - 1,
+      });
+    });
+
+    await t.mutation(internal.turns.finalizeExpired, {
+      turnId,
+      cause: "process_dead",
+    });
+
+    const rows = await t.run(async (ctx) => ({
+      turn: await ctx.db.get(turnId),
+      task: await ctx.db.get(taskId),
+      placeholder: await ctx.db.get(placeholderMessageId),
+      scheduled: await ctx.db.system.query("_scheduled_functions").collect(),
+    }));
+    expect(rows.turn?.open).toBe(false);
+    expect(rows.turn?.error).toBe(STALL_ALERT_TEXT);
+    expect(rows.placeholder?.content).toBe(STALL_ALERT_TEXT);
+    expect(rows.task?.syntheticTurnMessageId).toBeUndefined();
+    // The empty-stall retry is still session-only until Phase 3.
+    expect(rows.scheduled).toEqual([]);
+  });
+
+  test("a task turn never shows up as an open session", async () => {
+    const { t, repoId, taskId } = await createTaskChatFixture();
+    const open = await t.run(async (ctx) => [
+      ...(await openSessionIdsForRepo(ctx.db, repoId)),
+    ]);
+    expect(open).not.toContain(String(taskId));
+    expect(open).toEqual([]);
+  });
+
+  test("the adapter is picked from the entity id's table", async () => {
+    const { t, taskId } = await createTaskChatFixture();
+    const kinds = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {});
+      const repoId = await ctx.db.insert("githubRepos", {
+        owner: "eva",
+        name: "adapter-pick",
+        installationId: 1,
+      });
+      const sessionId = await ctx.db.insert("sessions", {
+        repoId,
+        userId,
+        title: "Pick",
+        status: "active",
+      });
+      const projectId = await ctx.db.insert("projects", {
+        repoId,
+        userId,
+        title: "Pick",
+        phase: "in_progress",
+        rawInput: "pick",
+        updatedAt: Date.now(),
+      });
+      return [sessionId, taskId, projectId, "not-an-id"].map((id) =>
+        chatAdapterForEntity(ctx.db, id, (adapter) => adapter.kind),
+      );
+    });
+    expect(kinds).toEqual(["session", "taskChat", "projectChat", null]);
   });
 });
 

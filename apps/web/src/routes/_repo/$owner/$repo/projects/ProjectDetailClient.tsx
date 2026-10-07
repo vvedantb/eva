@@ -366,6 +366,13 @@ export function ProjectDetailClient({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          project.reviewProjectSandboxStatus === "closed" &&
+          projectSandboxId !== undefined &&
+          canStartSandbox &&
+          project.activeBuildWorkflowId === undefined &&
+          project.activeChatWorkflowId === undefined
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />
@@ -407,6 +414,7 @@ export function ProjectDetailClient({
                     projectId={projectId}
                     isSandboxActive={isSandboxActive}
                     isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
                     onOpenAgentsTab={openAgentsTab}

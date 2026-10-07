@@ -93,13 +93,18 @@ export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
 /**
  * Region for both sandboxes and Drives. Drives are region-pinned and a sandbox
  * can only mount one created in its own region, so the two must be set from a
- * single value — `iad1` is the SDK default for both, making this a no-op pin
- * that stops the pair drifting apart if either default ever moves.
+ * single value.
  */
-const SANDBOX_REGION: SandboxRegion = "iad1";
+const SANDBOX_REGION: SandboxRegion = "cdg1";
+/**
+ * Regions a sandbox may land in when {@link SANDBOX_REGION} has no capacity.
+ * Drives are region-pinned, so a failed-over sandbox cannot mount the cdg1
+ * Drive; if that fails the create, the mount fallback ladder retries without it.
+ */
+const SANDBOX_FAILOVER_REGIONS: SandboxRegion[] = ["iad1"];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
- * bytes ($0.05/GB-month in iad1), so the cap only bounds a runaway cache. The
+ * bytes ($0.05/GB-month), so the cap only bounds a runaway cache. The
  * SDK default is 1 TiB, which is far more headroom than a package store needs.
  */
 const DRIVE_MAX_SIZE_BYTES =
@@ -1237,17 +1242,46 @@ class VercelSandboxClient implements SandboxClient {
     return Object.keys(resolved).length > 0 ? resolved : undefined;
   }
 
+  /**
+   * Region to create in. A snapshot only restores in a region it lives in, and
+   * seed snapshots taken before the move to {@link SANDBOX_REGION} live in
+   * iad1 only — so a snapshot create follows its snapshot. Unknown regions
+   * (lookup failed) keep the default and let the create report the real error.
+   */
+  private async regionFor(
+    params: SandboxCreateParams,
+  ): Promise<SandboxRegion> {
+    if (params.forkFrom || !params.snapshot) return SANDBOX_REGION;
+    try {
+      const { Snapshot } = await import("@vercel/sandbox");
+      const { regions } = await Snapshot.get({
+        ...this.creds,
+        snapshotId: params.snapshot,
+      });
+      return regions.includes(SANDBOX_REGION)
+        ? SANDBOX_REGION
+        : (regions[0] ?? SANDBOX_REGION);
+    } catch {
+      return SANDBOX_REGION;
+    }
+  }
+
   async create(params: SandboxCreateParams): Promise<SandboxHandle> {
     // env is written to a file post-create (see EVA_ENV_FILE) rather than passed
     // here — Vercel's create-time env cap is 4 KB and eva's env exceeds it.
     const persistent = params.lifecycle.ephemeral !== true;
-    const mounts = params.mounts?.length
-      ? await this.resolveMounts(params.mounts)
-      : undefined;
+    const region = await this.regionFor(params);
+    // Drives are region-pinned to SANDBOX_REGION, so a sandbox placed elsewhere
+    // cannot mount them — skip the mounts rather than spend a failed create.
+    const mounts =
+      params.mounts?.length && region === SANDBOX_REGION
+        ? await this.resolveMounts(params.mounts)
+        : undefined;
     const base = {
       ...this.creds,
       onResume: rewireDriveCacheOnResume,
-      region: SANDBOX_REGION,
+      region,
+      failoverRegions: SANDBOX_FAILOVER_REGIONS.filter((r) => r !== region),
       // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
       // hard-kill a long seed build or agent turn mid-run. Floor it to the Pro
@@ -1303,7 +1337,7 @@ class VercelSandboxClient implements SandboxClient {
         throw lastError;
       });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"} mounts=${describeMounts(used)}`,
+        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${params.image ?? "none"} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1326,7 +1360,7 @@ class VercelSandboxClient implements SandboxClient {
         // requestedMounts is what the ladder STARTED from: by the time this
         // throws every weaker stage (including no mounts at all) has already
         // failed too, so mounts are never the remaining suspect.
-        `vercel create failed (forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
+        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${params.image ?? "none"}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }

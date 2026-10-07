@@ -4,7 +4,11 @@ export type { SandboxOwner } from "./convex/_sandbox/owner";
 export { api } from "./convex/_generated/api";
 export { GITHUB_AUTH_REQUIRED } from "./convex/_github/authErrors";
 export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPublish";
-export { parseUsageLimitResetTime } from "./convex/_taskWorkflow/usageLimitReset";
+export {
+  findUsageLimitHold,
+  parseUsageLimitResetTime,
+  type UsageLimitHold,
+} from "./convex/_taskWorkflow/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
   DEFAULT_ISSUE_LABEL,

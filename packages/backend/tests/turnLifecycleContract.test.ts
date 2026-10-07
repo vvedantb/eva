@@ -69,7 +69,7 @@ test("the heartbeat fences stale writers before changing streaming state", () =>
   expect(terminalAt).toBeGreaterThan(renewAt);
   expect(streamAt).toBeGreaterThan(terminalAt);
   expect(http).toContain("internal.turns.legacyHeartbeat");
-  expect(turns).toContain("await findOpenSessionTurn(ctx, sessionId)");
+  expect(turns).toContain("await findOpenTurn(ctx, entityId)");
   const bundle = source(
     "../convex/_sandbox_runtime/callbackScript.generated.ts",
   );
@@ -93,7 +93,10 @@ test("expired leases are reconciled by a level-triggered cron", () => {
   const crons = source("../convex/crons.ts");
   expect(turns).toContain("turn.leaseExpiresAt >= Date.now()");
   expect(turns).toContain("internal.turns.finalizeExpired");
-  expect(turns).toContain("retryEmptyStalledSessionTurn");
+  expect(turns).toContain("adapter.afterStallFinalize");
+  expect(source("../convex/_chat/surfaceAdapters.ts")).toContain(
+    "retryEmptyStalledSessionTurn",
+  );
   expect(turns).toContain("lastLeaseWriteAt");
   expect(crons).toContain('"session turn lease reconcile"');
   expect(crons).toContain("internal.turns.reconcile");

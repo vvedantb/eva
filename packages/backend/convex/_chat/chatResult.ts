@@ -13,7 +13,10 @@ import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { isUsageLimitError } from "../_taskWorkflow/recovery";
+import {
+  isUsageLimitError,
+  parseUsageLimitResetTime,
+} from "../_taskWorkflow/recovery";
 import {
   assistantReplyContent,
   delayedPublishFailureError,
@@ -85,6 +88,7 @@ export type AssistantTurnResultPatch = {
   isSystemAlert?: boolean;
   errorDetail?: string;
   errorType?: Doc<"messages">["errorType"];
+  limitResetAt?: number;
   beforeSha?: string;
   afterSha?: string;
   variations?: Array<{
@@ -179,9 +183,14 @@ export async function applyChatTurnResult(
   // Classify the failure on the row itself so the web usage-limit banner reads
   // a field instead of string-matching the "Error: …" bubble content. Always
   // assigned — an explicit undefined clears a stale stamp on the target row.
-  patch.errorType =
-    !args.success && args.error !== null && isUsageLimitError(args.error)
-      ? "rate_limit"
+  const isUsageLimit =
+    !args.success && args.error !== null && isUsageLimitError(args.error);
+  patch.errorType = isUsageLimit ? "rate_limit" : undefined;
+  // Parsed once, now: the text names a wall-clock hour, so re-parsing it after
+  // the reset passes would roll it to tomorrow. Holds the chat's queue.
+  patch.limitResetAt =
+    isUsageLimit && args.error !== null
+      ? (parseUsageLimitResetTime(args.error) ?? undefined)
       : undefined;
   if (activityLog) patch.activityLog = activityLog;
   if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;

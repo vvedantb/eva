@@ -19,7 +19,10 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
-import { startNextQueuedSessionMessage } from "../_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedSessionMessage,
+} from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
@@ -30,6 +33,7 @@ import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { detectCancelSupersession } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
+import { touchUserActivity } from "../_sandbox/activity";
 import {
   bindTurnWorkflow,
   closeOpenSessionTurn,
@@ -317,6 +321,10 @@ export const startExecute = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
+    await touchUserActivity(ctx, {
+      kind: "session",
+      entityId: String(args.sessionId),
+    });
 
     // Notify before the turn runs or queues so a mention fires either way.
     await notifyChatMentions(ctx, {
@@ -533,6 +541,10 @@ export const enqueueMessage = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
+    await touchUserActivity(ctx, {
+      kind: "session",
+      entityId: String(args.sessionId),
+    });
 
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: args.providerAccountId,
@@ -569,6 +581,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.sessionId);
     return null;
   },
 });

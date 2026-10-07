@@ -122,6 +122,7 @@ export function TaskDetailInline({
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
+    sandboxStartupActivity,
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
@@ -272,6 +273,12 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          task.reviewTaskSandboxStatus === "closed" &&
+          sandboxId !== undefined &&
+          canStartSandbox &&
+          !hasActiveRun
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />
@@ -313,6 +320,7 @@ export function TaskDetailInline({
                     taskId={taskId}
                     isSandboxActive={isSandboxActive}
                     isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
                     onOpenAgentsTab={() => {

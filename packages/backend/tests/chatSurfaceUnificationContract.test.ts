@@ -83,6 +83,23 @@ test("all three chat surface adapters are registered together in chatSurfaceAdap
 });
 
 /**
+ * The lease reconciler serves every chat surface through the adapter picked
+ * from the turn's entity id. Naming one surface's adapter in turns.ts is the
+ * regression back to session-only turns.
+ */
+test("turns.ts dispatches through chatAdapterForEntity, never one fixed surface", () => {
+  const turns = readSource("convex/turns.ts");
+  expect(turns).toContain("chatAdapterForEntity(");
+  for (const adapter of [
+    "sessionChatAdapter",
+    "taskChatAdapter",
+    "projectChatAdapter",
+  ]) {
+    expect(turns, `turns.ts names ${adapter}`).not.toContain(adapter);
+  }
+});
+
+/**
  * The usage-limit retry shipped for sessions only (#734) because nothing
  * pinned the three chat surfaces to the same mutation set. This does.
  */

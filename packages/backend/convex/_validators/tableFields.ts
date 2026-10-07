@@ -241,10 +241,21 @@ export const turnStateValidator = v.union(
 
 export type TurnState = Infer<typeof turnStateValidator>;
 
-/** Durable ownership record for one session chat turn. */
+/** Chat entities that own durable turns; the id's table picks the surface. */
+export const chatTurnEntityIdValidator = v.union(
+  v.id("sessions"),
+  v.id("agentTasks"),
+  v.id("projects"),
+);
+
+/** Durable ownership record for one chat turn (session, task chat or project chat). */
 export const turnFields = {
-  surface: v.literal("session"),
-  entityId: v.string(),
+  /**
+   * Retired: `entityId` already names the table. No longer written; drained by
+   * `dataMigrations:clearTurnSurface`, then deleted.
+   */
+  surface: v.optional(v.literal("session")),
+  entityId: chatTurnEntityIdValidator,
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -296,6 +307,15 @@ export const sessionDaemonStateFields = {
   // Mirrors sessions.claimPausedUntil — the prewarm kill fence is read off
   // this compact row on the 50ms claim poll.
   claimPausedUntil: v.optional(v.number()),
+};
+
+/**
+ * Task and project chat counterpart of `sessions.turnLifecycleVersion`: set
+ * the first time the chat opens a durable Turn, so projections stop trusting
+ * the legacy `activeChatWorkflowId` / `syntheticTurnMessageId` fields.
+ */
+const chatTurnLifecycleFields = {
+  chatTurnLifecycleVersion: v.optional(v.literal(2)),
 };
 
 export const chatDaemonEntityFields = {
@@ -391,6 +411,7 @@ export const agentTaskFields = {
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   ...chatDaemonEntityFields,
+  ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
   // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
@@ -881,6 +902,7 @@ export const projectFields = {
   // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   ...chatDaemonEntityFields,
+  ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
   // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
@@ -1037,6 +1059,9 @@ export const messageFields = {
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
   // stamped today; unclassified failures leave it unset.
   errorType: v.optional(errorTypeValidator),
+  // Usage-limit failures: when the provider said the window resets (ms). Holds
+  // the chat's queue until just after it — see `findUsageLimitHold`.
+  limitResetAt: v.optional(v.number()),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),
@@ -1221,14 +1246,49 @@ export const taskSubscriberFields = {
 // `sandboxAutoStop` cron stops every active sandbox so none are left running
 // overnight. `sandboxAutoStopLastRunDate` is the once-per-day dedup guard
 // (the local date "YYYY-MM-DD" of the last occurrence that was swept).
+// Idle pause (`sandboxIdlePause` cron): `off` is today's behaviour, `dry-run`
+// only logs which sandboxes would pause, `on` pauses them. All three fields are
+// optional so existing rows need no migration; readers default to off / 5 / 20.
+export const sandboxIdlePauseModeValidator = v.union(
+  v.literal("off"),
+  v.literal("dry-run"),
+  v.literal("on"),
+);
+
 export const appSettingsFields = {
   sandboxAutoStopEnabled: v.boolean(),
   sandboxAutoStopTime: v.string(),
   sandboxAutoStopTimeZone: v.string(),
   sandboxAutoStopLastRunDate: v.optional(v.string()),
-  /** Idle sweep (`sandboxIdleStop.ts`). Absent = on, 60 minutes; see `resolveIdleStopSettings`. */
+  sandboxIdlePauseMode: v.optional(sandboxIdlePauseModeValidator),
+  sandboxIdleAfterAgentMinutes: v.optional(v.number()),
+  sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
+  /**
+   * Settings of the earlier idle-stop sweep (2026-10-05), kept so rows saved
+   * before the sweeps were unified keep their behaviour. Read only as a
+   * fallback when `sandboxIdlePauseMode` is unset (`resolveIdleThresholds`);
+   * never written any more.
+   */
   sandboxIdleStopEnabled: v.optional(v.boolean()),
   sandboxIdleStopMinutes: v.optional(v.number()),
+};
+
+// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
+// its own table (not on the session/task/project doc) so the frequent, throttled
+// touches never join the write set of hot entity documents.
+export const sandboxActivityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+
+export const sandboxActivityFields = {
+  kind: sandboxActivityKindValidator,
+  entityId: v.string(),
+  /** Last human interaction: message sent, tab opened, preview traffic, presence. */
+  lastUserActivityAt: v.optional(v.number()),
+  /** Last time an agent turn or run finished for this entity. */
+  lastAgentFinishedAt: v.optional(v.number()),
 };
 
 export const sandboxGitCredentialsFields = {
@@ -1535,6 +1595,58 @@ export const chatUiPanelFields = {
   spec: v.string(),
   elementCount: v.number(),
   createdAt: v.number(),
+};
+
+/**
+ * One agent-authored HTML page (`render_html`). The page itself is a separate
+ * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
+ */
+export const chatHtmlRenderFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the page appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  title: v.string(),
+  /** The agent's frame height in CSS px, used until the page reports its own. */
+  height: v.number(),
+  bodyId: v.id("chatHtmlRenderBodies"),
+  createdAt: v.number(),
+};
+
+/** The page of one HTML render, as the agent wrote it (no bootstrap). */
+export const chatHtmlRenderBodyFields = {
+  html: v.string(),
+};
+
+export const envVarRequestScopeValidator = v.union(
+  v.literal("repo"),
+  v.literal("team"),
+);
+
+/**
+ * One agent request (`request_env_var`) for a secret the user types into an
+ * inline card. The value never touches this row: saving writes it encrypted to
+ * the repo or team env vars and into the live sandbox, and only the status
+ * lands here.
+ */
+export const envVarRequestFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the card appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  key: v.string(),
+  reason: v.string(),
+  scope: envVarRequestScopeValidator,
+  repoId: v.id("githubRepos"),
+  /** Set when `scope` is "team": the repo's team at request time. */
+  teamId: v.optional(v.id("teams")),
+  /** The chat's sandbox at request time, for the live write. */
+  sandboxId: v.optional(v.string()),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("saved"),
+    v.literal("declined"),
+  ),
+  createdAt: v.number(),
+  answeredAt: v.optional(v.number()),
 };
 
 /**

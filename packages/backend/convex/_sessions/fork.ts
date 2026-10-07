@@ -182,7 +182,8 @@ export const copyForkMessages = internalMutation({
 });
 
 /**
- * Copies the cards anchored to messages — plan cards and `render_ui` panels —
+ * Copies the cards anchored to messages — plan cards, `render_ui` panels and
+ * `render_html` pages (whose body row is shared, not copied) —
  * once every message page is in, so their `messageId` can point at the copy.
  * Turn and implementation links are the source's and are dropped.
  */
@@ -225,6 +226,19 @@ export const copyForkCards = internalMutation({
       const { _id, _creationTime, messageId, ...fields } = panel;
       const copy = remap(messageId);
       await ctx.db.insert("chatUiPanels", {
+        ...fields,
+        parentId: args.sessionId,
+        ...(copy ? { messageId: copy } : {}),
+      });
+    }
+    const renders = await ctx.db
+      .query("chatHtmlRenders")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.sourceSessionId))
+      .collect();
+    for (const render of renders) {
+      const { _id, _creationTime, messageId, ...fields } = render;
+      const copy = remap(messageId);
+      await ctx.db.insert("chatHtmlRenders", {
         ...fields,
         parentId: args.sessionId,
         ...(copy ? { messageId: copy } : {}),

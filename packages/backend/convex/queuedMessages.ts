@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
-import { queuedMessageFields } from "./validators";
+import { aiModelValidator, queuedMessageFields } from "./validators";
+import { drainChatQueueQuietly } from "./_queues/helpers";
 
 const parentIdValidator = queuedMessageFields.parentId;
 
@@ -91,6 +92,44 @@ export const remove = authMutation({
       await ctx.storage.delete(storageId);
     }
     await ctx.db.patch(queuedMessage.parentId, { updatedAt: Date.now() });
+    return null;
+  },
+});
+
+/**
+ * Moves every queued message onto another model, then sends the next one if
+ * nothing else holds the queue. The composer calls this when the user switches
+ * provider while the queue waits out a usage limit: the new provider has no
+ * reason to wait, so the queue goes now. The account is the sender's raw pick,
+ * re-resolved against the owner's accounts at dequeue like any queued message.
+ */
+export const switchModel = authMutation({
+  args: {
+    parentId: parentIdValidator,
+    model: aiModelValidator,
+    providerAccountId: v.optional(v.id("userProviderAccounts")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const parent = await ctx.db.get(args.parentId);
+    if (!parent || !parent.repoId) {
+      throw new Error("Queued message parent not found");
+    }
+    if (!(await hasRepoAccess(ctx.db, parent.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+
+    const queued = await ctx.db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", args.parentId))
+      .collect();
+    for (const message of queued) {
+      await ctx.db.patch(message._id, {
+        model: args.model,
+        providerAccountId: args.providerAccountId,
+      });
+    }
+    await drainChatQueueQuietly(ctx, args.parentId);
     return null;
   },
 });

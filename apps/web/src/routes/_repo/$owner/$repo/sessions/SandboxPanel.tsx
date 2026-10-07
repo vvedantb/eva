@@ -86,6 +86,12 @@ interface SandboxPanelProps {
   agentBrowsingAt?: number;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined in
+   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
+   */
+  autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
@@ -113,6 +119,7 @@ export function SandboxPanel({
   agentBrowsingAt,
   onStartSandbox,
   isSandboxStarting,
+  autoWakeEligible,
   collapsed = false,
   onToggle,
   miniPlayer,
@@ -359,6 +366,7 @@ export function SandboxPanel({
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
             repos={sessionRepos}
             activeRoot={filesRoot}
             onRootChange={setFilesRoot}
@@ -400,6 +408,10 @@ export function SandboxPanel({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           onAnnotationSubmit={submitAnnotation}
+          // Only the session on screen holds the idle-pause presence beacon;
+          // cached siblings and a collapsed rail must not keep a VM awake.
+          presenceEnabled={isRouteActive && !collapsed}
+          autoWakeEligible={autoWakeEligible}
           // Multi-repo sessions run a dev server per repo; the Preview port
           // control offers each one instead of only the primary's.
           previewPortOptions={previewPortOptions(

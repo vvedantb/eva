@@ -1,5 +1,4 @@
 import {
-  motionBase,
   PromptInputProvider,
   toast,
   type ModelAccount,
@@ -33,7 +32,6 @@ import {
   tokenizedToEditable,
 } from "@/lib/components/mentions";
 import { useRef, useState, type ReactNode } from "react";
-import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -101,6 +99,8 @@ interface ChatComposerProps {
   repo?: ChatRepo;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something; default "Queued". */
+  queueLabel?: string;
   /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
   heldFollowUps?: ChatHeldFollowUp[];
   messageHistory: string[];
@@ -117,7 +117,6 @@ interface ChatComposerProps {
     attachmentStorageIds?: Id<"_storage">[],
   ) => Promise<void>;
   onCancel: () => Promise<void>;
-  beforeQueuedContent?: React.ReactNode;
   preInputContent?: React.ReactNode;
   /** Live turn activity JSON — its todo snapshot feeds the Tasks panel. */
   streamingActivity?: string;
@@ -141,6 +140,7 @@ export function ChatComposer({
   repo,
   conversationId,
   queuedMessages,
+  queueLabel,
   heldFollowUps = [],
   messageHistory,
   isExecuting,
@@ -151,7 +151,6 @@ export function ChatComposer({
   modelPicker,
   onSend,
   onCancel,
-  beforeQueuedContent,
   preInputContent,
   streamingActivity,
   streamingTurnId,
@@ -304,6 +303,7 @@ export function ChatComposer({
       />
       <QueuedMessagesPanel
         items={queuedMessageItems}
+        {...(queueLabel !== undefined ? { label: queueLabel } : {})}
         renderContent={renderQueuedContent}
         onEdit={async (id, content) => {
           await updateQueuedMessage({ id, content });
@@ -353,18 +353,6 @@ export function ChatComposer({
 
   return (
     <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
-      <AnimatePresence initial={false}>
-        {beforeQueuedContent ? (
-          <m.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={motionBase}
-          >
-            {beforeQueuedContent}
-          </m.div>
-        ) : null}
-      </AnimatePresence>
       {preInputContent}
       {isDraftLoading ? (
         <>

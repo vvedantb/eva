@@ -17,6 +17,7 @@ import {
   roleValidator,
   taskSandboxStatusValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
 import {
@@ -28,7 +29,10 @@ import {
 import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
 import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
 import { finalizeCancelledAssistantMessage } from "./streaming";
-import { startNextQueuedTaskChatMessage } from "./_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedTaskChatMessage,
+} from "./_queues/helpers";
 import {
   trackAgentTaskChatWorkflow,
   TASK_CHAT_STREAM_PREFIX,
@@ -63,6 +67,7 @@ import { composerTraitFields } from "./_shared/composerTraits";
 import { detectCancelSupersession } from "./_chat/cancelRace";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { latestTaskPrUrl } from "./_agentTasks/prUrl";
+import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -345,6 +350,12 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.taskId, { updatedAt: Date.now() });
+    if (role === "user") {
+      await touchUserActivity(ctx, {
+        kind: "task",
+        entityId: String(args.taskId),
+      });
+    }
     return null;
   },
 });
@@ -371,6 +382,10 @@ export const startExecute = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -531,6 +546,10 @@ export const enqueueMessage = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -573,6 +592,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.taskId);
     return null;
   },
 });
@@ -1128,6 +1151,10 @@ export const saveResult = internalMutation({
       pendingTurnClaimedAt: undefined,
       updatedAt: Date.now(),
     });
+    await touchAgentFinished(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
+    });
 
     await startNextQueuedTaskChatMessage(ctx, args.taskId);
     return null;
@@ -1144,6 +1171,9 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
+    // Accepted for daemons that hold a durable lease; unused until task and
+    // project chats open durable turns.
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),

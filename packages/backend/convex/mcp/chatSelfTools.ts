@@ -1,12 +1,8 @@
 import { z } from "zod";
-import type { Spec, UIElement } from "@json-render/core";
-import { chatUiCatalog } from "@eva/shared/generativeUi";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
 import { getEvaBaseUrl } from "../_taskWorkflow/urls";
-import { buildChatUiCandidates } from "../_generativeUi/candidates";
-import type { ChatUiBlock } from "../_generativeUi/schema";
 import {
   entityAccess,
   entityRefArgs,
@@ -74,33 +70,6 @@ function sandboxOwner(target: EntityTarget): Record<string, string> {
 }
 
 /**
- * The fixed request-a-secret panel, laid out here rather than by the layout
- * model: the arrangement never varies, so a model round trip would only add
- * latency and a failure mode. Elements come from the same candidate recipes
- * render_ui uses, so the chat renders them identically.
- */
-function envRequestSpec(blocks: ChatUiBlock[], title: string): Spec {
-  const candidates = buildChatUiCandidates(blocks, title);
-  const elements: Record<string, UIElement> = {};
-  const content: string[] = [];
-  const buttons: string[] = [];
-  blocks.forEach((block, index) => {
-    const candidate = candidates.find((c) => c.id === `block_${index}`);
-    if (!candidate) return;
-    elements[candidate.id] = { ...candidate.element, children: [] };
-    (block.kind === "button" ? buttons : content).push(candidate.id);
-  });
-  const panel = candidates.find((c) => c.id === "layout_panel");
-  const row = candidates.find((c) => c.id === "layout_stack_horizontal");
-  if (panel && row && buttons.length > 0) {
-    elements.buttons = { ...row.element, children: buttons };
-    content.push("buttons");
-  }
-  if (panel) elements.root = { ...panel.element, children: content };
-  return { root: "root", elements };
-}
-
-/**
  * Tools an agent uses on the chat it is running in: what this chat is, what
  * its dev server is doing, how to recover its background and startup
  * commands, which env vars exist, and how to steer the user's Preview tab. Every tool defaults to the caller's own chat and also accepts
@@ -122,10 +91,7 @@ export function chatSelfTools(
     target: EntityTarget,
     action: string,
   ): Promise<string | ReturnType<typeof errorResult>> {
-    if (
-      target.sandboxId === undefined ||
-      target.sandboxStatus !== "active"
-    ) {
+    if (target.sandboxId === undefined || target.sandboxStatus !== "active") {
       return errorResult(
         `This ${target.kind}'s sandbox is "${target.sandboxStatus}". ${action} only runs on an active sandbox; call start_sandbox first, or wait for it to settle.`,
       );
@@ -256,7 +222,10 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
           tmuxSession: details.consoleTmuxSession,
         };
 
-        if (target.sandboxId === undefined || target.sandboxStatus !== "active") {
+        if (
+          target.sandboxId === undefined ||
+          target.sandboxStatus !== "active"
+        ) {
           return textResult({
             ...summary,
             logs: null,
@@ -434,9 +403,9 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
   tools.push(
     defineTool({
       name: "request_env_var",
-      description: `Ask the user to add a missing environment variable. Posts a panel into the chat naming the key and why you need it, with a button to Eva's env settings page and a button the user presses to tell you it is done (that press comes back to you as a chat message).
+      description: `Ask the user for a secret through a private card in the chat. The card names the key and why you need it, and has a masked field: the value the user types is saved encrypted to Eva's env vars and written into the running sandbox's env file. You never see the value in chat. When the user saves or declines, a chat message tells you; saved vars are in new shells, and \`. /vercel/sandbox/.eva-env.sh\` loads them into an open one.
 
-Use it when list_env_vars shows a secret is missing — never ask the user to paste a secret into chat, and never put a value here: this tool takes the name only. A newly added var may only reach your environment after the sandbox restarts. Name no chat and it posts into your own.`,
+Use it when list_env_vars shows a secret is missing. Never ask the user to paste a secret into chat, and never put a value here: this tool takes the name only. Name no chat and it posts into your own.`,
       mutating: true,
       input: {
         ...entityRefArgs,
@@ -463,66 +432,39 @@ Use it when list_env_vars shows a secret is missing — never ask the user to pa
       handler: async ({ key, reason, scope, ...ref }) => {
         const chat = await resolveChat(ref);
         if ("isError" in chat) return chat;
-        const { target } = chat;
-        const settings = envSettingsLink(target, scope);
-
-        const blocks: ChatUiBlock[] = [
-          { kind: "callout", title: key, text: reason, tone: "warning" },
-          {
-            kind: "keyValue",
-            items: [
-              { label: "Key", value: key },
-              {
-                label: "Add it under",
-                value: scope === "team" ? "Team env vars" : "Repo env vars",
-              },
-            ],
-          },
-          {
-            kind: "text",
-            text: "Add the value in Eva settings, not in this chat.",
-            emphasis: "muted",
-          },
-        ];
-        if (settings.url !== undefined) {
-          blocks.push({
-            kind: "button",
-            label: "Open env settings",
-            url: settings.url,
-            variant: "primary",
-          });
-        }
-        blocks.push({
-          kind: "button",
-          label: `I added ${key}`,
-          reply: `I added ${key} in Eva's ${scope} env settings.`,
-          variant: "secondary",
-        });
-        const title = "Environment variable needed";
-        const spec = envRequestSpec(blocks, title);
-        if (!chatUiCatalog.validate(spec).success) {
-          return errorResult("Could not build the request panel.");
+        const { target, details } = chat;
+        if (scope === "team" && details.repoTeamId === undefined) {
+          return errorResult(
+            'This repo has no team, so a "team" var has nowhere to live. Use scope "repo".',
+          );
         }
 
-        const panelId = await ctx.runMutation(internal.chatUi.create, {
-          entityKind: target.kind,
-          entityId: target.targetId,
-          prompt: `request_env_var ${key}`,
-          title,
-          spec: JSON.stringify(spec),
-          elementCount: Object.keys(spec.elements).length,
-        });
-        if (panelId === null) {
+        const requestId = await ctx.runMutation(
+          internal.envVarRequests.create,
+          {
+            entityKind: target.kind,
+            entityId: target.targetId,
+            key,
+            reason,
+            scope,
+            repoId: target.repoId,
+            ...(scope === "team" ? { teamId: details.repoTeamId } : {}),
+            ...(target.sandboxId !== undefined
+              ? { sandboxId: target.sandboxId }
+              : {}),
+          },
+        );
+        if (requestId === null) {
           return errorResult("That chat no longer exists.");
         }
         return textResult({
           ...entitySummary(target),
-          panelId,
+          requestId,
           status: "requested",
           key,
           scope,
-          settings,
-          note: "The user has been asked. Wait for their reply before relying on the var, and restart the sandbox if it must be in your environment.",
+          settings: envSettingsLink(target, scope),
+          note: "The user has been asked. End your turn or continue with other work; their answer arrives as a chat message.",
         });
       },
     }),
@@ -738,7 +680,7 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           return textResult({
             ...summary,
             rerun: "started",
-            note: "The sandbox startup flow is running with startup commands forced. Its status is \"starting\" until it finishes; check get_chat_context, then get_dev_server_logs.",
+            note: 'The sandbox startup flow is running with startup commands forced. Its status is "starting" until it finishes; check get_chat_context, then get_dev_server_logs.',
           });
         }
 

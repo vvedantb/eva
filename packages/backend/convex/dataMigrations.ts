@@ -163,6 +163,15 @@ export const clearProjectOrchestratorWatch = dataMigrations.define({
   },
 });
 
+/** Drains the retired `turns.surface` label before the field is deleted. */
+export const clearTurnSurface = dataMigrations.define({
+  table: "turns",
+  migrateOne: async (_ctx, turn) => {
+    if (turn.surface === undefined) return;
+    return { surface: undefined };
+  },
+});
+
 export const clearQueuedOrchestratorNotification = dataMigrations.define({
   table: "queuedMessages",
   migrateOne: async (_ctx, row) => {

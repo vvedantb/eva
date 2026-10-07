@@ -6,7 +6,9 @@ import { authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
   normalizeAIModel,
+  daemonClaimResultValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "../validators";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
@@ -52,14 +54,7 @@ export const claimPendingTurn = authMutation({
     model: v.optional(aiModelValidator),
     acceptTurn: v.optional(v.boolean()),
   },
-  returns: v.object({
-    prompt: v.union(v.string(), v.null()),
-    turnLifecycle: v.literal("legacy"),
-    attachmentUrls: v.array(v.string()),
-    stopTaskToolUseIds: v.array(v.string()),
-    cancelRequested: v.boolean(),
-    usageRefreshRequested: v.boolean(),
-  }),
+  returns: daemonClaimResultValidator,
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return emptyClaimReturn;
@@ -285,6 +280,9 @@ export const completeSyntheticTurn = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     pendingQuestion: v.optional(v.string()),
+    // Accepted for daemons that hold a durable lease; unused until task and
+    // project chats open durable turns.
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
