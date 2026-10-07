@@ -148,7 +148,7 @@ export function chatSelfTools(
   tools.push(
     defineTool({
       name: "get_chat_context",
-      description: `Everything about the chat you are running in, in one call: what it is (kind, id, number, title, status, Eva path), which repo and branch it works on and off, its pull request if one is open, linked repos cloned beside it, and how its sandbox is set up — status, dev port and command, the repo's startup and background commands, which optional tabs (desktop, editor, custom app tabs) are on, and the tmux session the Preview Console dev server runs in.
+      description: `Everything about the chat you are running in, in one call: what it is (kind, id, number, title, status, Eva path), which repo and branch it works on and off, its main pull request and every other pull request linked to it, linked repos cloned beside it, and how its sandbox is set up — status, dev port and command, the repo's startup and background commands, which optional tabs (desktop, editor, custom app tabs) are on, and the tmux session the Preview Console dev server runs in.
 
 Name no chat and it answers for your own. Use it before guessing at ports, branches or PR numbers. Read-only.`,
       mutating: false,
@@ -168,6 +168,7 @@ Name no chat and it answers for your own. Use it before guessing at ports, branc
                 state: details.prState,
               }
             : null,
+          pullRequests: details.pullRequests,
           linkedRepos: details.linkedRepos,
           sandbox: {
             status: target.sandboxStatus,

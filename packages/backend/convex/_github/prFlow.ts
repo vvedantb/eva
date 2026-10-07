@@ -9,6 +9,8 @@ import { resolveSessionBaseBranch } from "../_sessions/baseBranch";
 import { extractPrNumber } from "./helpers";
 import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
+import type { Doc, Id } from "../_generated/dataModel";
+import { sessionRepoPullRequest } from "../_pullRequests/store";
 
 /**
  * Promotes a session's draft PR to ready-for-review. Called when the user
@@ -36,7 +38,11 @@ export const createSessionPr = action({
 
     const repo = await getActionRepoWithAccess(ctx, session.repoId);
 
-    let prUrl = session.prUrl;
+    const sessionPrs = await ctx.runQuery(
+      internal.pullRequests.listForOwnerInternal,
+      { owner: { kind: "session", sessionId: args.sessionId } },
+    );
+    let prUrl = sessionRepoPullRequest(sessionPrs, undefined)?.prUrl;
     if (prUrl === undefined) {
       // Recovery for sessions that pushed commits before auto-draft existed.
       const created = await ctx.runAction(
@@ -80,8 +86,9 @@ export const createSessionPr = action({
       });
     }
 
-    await ctx.runMutation(internal.sessions.setPrState, {
-      id: args.sessionId,
+    await ctx.runMutation(internal.sessions.setSessionPrState, {
+      sessionId: args.sessionId,
+      prUrl,
       prState: "open",
     });
     return { url: prUrl };
@@ -125,6 +132,34 @@ async function createDraftPrOnGitHub(
 }
 
 /**
+ * "Related pull requests" entries for a new session PR: every PR the session
+ * already holds except the one being opened (`sessionRepoId` names its repo;
+ * undefined is the primary repo).
+ */
+async function siblingPullRequests(
+  ctx: ActionCtx,
+  sessionPrs: Doc<"pullRequests">[],
+  sessionRepoId: Id<"sessionRepos"> | undefined,
+): Promise<SiblingPr[]> {
+  const siblings: SiblingPr[] = [];
+  for (const pr of sessionPrs) {
+    if (pr.owner.kind !== "session") continue;
+    const sameRepoOwnPr =
+      pr.owner.sessionRepoId === sessionRepoId &&
+      (sessionRepoId === undefined ? pr.primary : pr.origin === "eva");
+    if (sameRepoOwnPr) continue;
+    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+      id: pr.repoId,
+    });
+    siblings.push({
+      label: repo ? `${repo.owner}/${repo.name}` : `#${pr.prNumber}`,
+      url: pr.prUrl,
+    });
+  }
+  return siblings;
+}
+
+/**
  * Opens a draft PR for a session branch after the first successful push.
  * Idempotent: returns the existing prUrl when one is already stored.
  * Returns null (no alert) when the branch has no commits ahead of base —
@@ -141,7 +176,12 @@ export const createDraftSessionPr = internalAction({
     });
     if (!session) return null;
     if (!session.branchName) return null;
-    if (session.prUrl) return session.prUrl;
+    const sessionPrs = await ctx.runQuery(
+      internal.pullRequests.listForOwnerInternal,
+      { owner: { kind: "session", sessionId: args.sessionId } },
+    );
+    const existing = sessionRepoPullRequest(sessionPrs, undefined);
+    if (existing) return existing.prUrl;
 
     const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
       id: session.repoId,
@@ -174,27 +214,16 @@ export const createDraftSessionPr = internalAction({
       repo.rootDirectory,
     );
 
-    // Linked repos may already have a draft PR open (multi-repo sessions push
-    // and open each repo's PR independently) — link to whichever are already
-    // known. A sibling opened after this PR is not retrofitted into its body.
-    const linkedRepos = await ctx.runQuery(
-      internal.sessions.listLinkedReposInternal,
-      { sessionId: args.sessionId },
-    );
-    const siblingPrs: SiblingPr[] = linkedRepos.reduce<SiblingPr[]>(
-      (acc, linked) => {
-        if (linked.prUrl !== undefined) {
-          acc.push({ label: `${linked.owner}/${linked.name}`, url: linked.prUrl });
-        }
-        return acc;
-      },
-      [],
-    );
+    // Every other PR the session already holds — each linked repo's, and any
+    // the agent opened on a side branch. One opened after this PR is not
+    // retrofitted into its body.
+    const siblingPrs = await siblingPullRequests(ctx, sessionPrs, undefined);
     const body = appendRelatedPrsSection(
       buildPrBody(sections, evaUrl),
       siblingPrs,
     );
 
+    const baseBranch = resolveSessionBaseBranch(session, repo);
     let result: string;
     try {
       result = await createDraftPrOnGitHub(ctx, {
@@ -202,7 +231,7 @@ export const createDraftSessionPr = internalAction({
         owner: repo.owner,
         name: repo.name,
         branchName: session.branchName,
-        baseBranch: resolveSessionBaseBranch(session, repo),
+        baseBranch,
         title: session.title,
         body,
         labels: ["eva", "session", "draft", ...(appLabel ? [appLabel] : [])],
@@ -217,10 +246,14 @@ export const createDraftSessionPr = internalAction({
       throw error;
     }
 
-    await ctx.runMutation(internal.sessions.setPrUrl, {
-      id: args.sessionId,
+    await ctx.runMutation(internal.sessions.recordSessionPr, {
+      sessionId: args.sessionId,
+      repoId: session.repoId,
       prUrl: result,
       prState: "draft",
+      headBranch: session.branchName,
+      baseBranch,
+      title: session.title,
     });
     console.log(
       `[github] Created draft PR for session ${args.sessionId}: ${result}`,
@@ -246,7 +279,12 @@ export const createDraftSessionRepoPr = internalAction({
       { id: args.sessionRepoId },
     );
     if (!linkedRepo) return null;
-    if (linkedRepo.prUrl) return linkedRepo.prUrl;
+    const sessionPrs = await ctx.runQuery(
+      internal.pullRequests.listForOwnerInternal,
+      { owner: { kind: "session", sessionId: linkedRepo.sessionId } },
+    );
+    const existing = sessionRepoPullRequest(sessionPrs, linkedRepo._id);
+    if (existing) return existing.prUrl;
 
     const session = await ctx.runQuery(internal.sessions.getInternal, {
       id: linkedRepo.sessionId,
@@ -258,23 +296,13 @@ export const createDraftSessionRepoPr = internalAction({
     });
     if (!primaryRepo) return null;
 
-    // Every sibling PR already known: the primary's, plus every other linked
-    // repo's, whichever already exist at this repo's PR-creation time.
-    const otherLinkedRepos = await ctx.runQuery(
-      internal.sessions.listLinkedReposInternal,
-      { sessionId: linkedRepo.sessionId },
+    // Every sibling PR already known: the primary's, every other linked
+    // repo's, and any side-branch PR, whichever exist at this point.
+    const siblingPrs = await siblingPullRequests(
+      ctx,
+      sessionPrs,
+      linkedRepo._id,
     );
-    const siblingPrs: SiblingPr[] = [];
-    if (session.prUrl !== undefined) {
-      siblingPrs.push({
-        label: `${primaryRepo.owner}/${primaryRepo.name}`,
-        url: session.prUrl,
-      });
-    }
-    for (const other of otherLinkedRepos) {
-      if (other._id === linkedRepo._id || other.prUrl === undefined) continue;
-      siblingPrs.push({ label: `${other.owner}/${other.name}`, url: other.prUrl });
-    }
 
     const evaUrl = buildEvaSessionUrl(
       primaryRepo.owner,
@@ -306,10 +334,15 @@ export const createDraftSessionRepoPr = internalAction({
       throw error;
     }
 
-    await ctx.runMutation(internal.sessions.patchSessionRepo, {
-      id: args.sessionRepoId,
+    await ctx.runMutation(internal.sessions.recordSessionPr, {
+      sessionId: linkedRepo.sessionId,
+      sessionRepoId: linkedRepo._id,
+      repoId: linkedRepo.repoId,
       prUrl: result,
       prState: "draft",
+      headBranch: linkedRepo.branchName,
+      baseBranch: linkedRepo.baseBranch,
+      title: session.title,
     });
     console.log(
       `[github] Created draft PR for sessionRepo ${args.sessionRepoId}: ${result}`,

@@ -1,20 +1,21 @@
 import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { DEFAULT_SESSION_TITLE, sessionValidator } from "./helpers";
-import { deploymentStatusValidator, repoShaValidator } from "../validators";
 import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+  deploymentStatusValidator,
+  prStateValidator,
+  repoShaValidator,
+} from "../validators";
+import {
+  detachPullRequest,
+  findPrimaryPullRequest,
+  findPullRequestByUrl,
+  recordPullRequest,
+  setPullRequestState,
+} from "../_pullRequests/store";
+import { reconcileSessionArchiveState } from "./prArchive";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { findOpenSessionTurn } from "../_chat/turnStore";
-
-const prStateValidator = v.union(
-  v.literal("draft"),
-  v.literal("open"),
-  v.literal("merged"),
-  v.literal("closed"),
-);
 
 /** Retrieves a session by ID for internal use (no auth check). */
 export const getInternal = internalQuery({
@@ -60,70 +61,80 @@ export const updateDeploymentStatus = internalMutation({
   },
 });
 
-/** Sets the pull request URL on a session (internal use). */
-export const setPrUrl = internalMutation({
+/**
+ * Records a PR Eva opened for this session (the primary repo's draft, or one
+ * linked repo's), then re-checks the archive rule against every PR it holds.
+ */
+export const recordSessionPr = internalMutation({
   args: {
-    id: v.id("sessions"),
+    sessionId: v.id("sessions"),
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+    repoId: v.id("githubRepos"),
     prUrl: v.string(),
-    prState: v.optional(prStateValidator),
+    prState: prStateValidator,
+    headBranch: v.string(),
+    baseBranch: v.string(),
+    title: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
+    await recordPullRequest(ctx, {
+      owner: {
+        kind: "session",
+        sessionId: args.sessionId,
+        ...(args.sessionRepoId !== undefined
+          ? { sessionRepoId: args.sessionRepoId }
+          : {}),
+      },
+      repoId: args.repoId,
       prUrl: args.prUrl,
-      ...(args.prState !== undefined && { prState: args.prState }),
-      updatedAt: Date.now(),
+      state: args.prState,
+      // Only the primary repo's own PR drives the session's chrome.
+      primary: args.sessionRepoId === undefined,
+      origin: "eva",
+      headBranch: args.headBranch,
+      baseBranch: args.baseBranch,
+      title: args.title,
     });
+    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    await reconcileSessionArchiveState(ctx, args.sessionId);
     return null;
   },
 });
 
-/** Sets only the PR state on a session (internal use). */
-export const setPrState = internalMutation({
+/** Sets one of the session's PRs to a new state, then re-checks the archive rule. */
+export const setSessionPrState = internalMutation({
   args: {
-    id: v.id("sessions"),
+    sessionId: v.id("sessions"),
+    prUrl: v.string(),
     prState: prStateValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.id);
-    if (!session) return null;
-    const isTerminal = args.prState === "merged" || args.prState === "closed";
-    await ctx.db.patch(args.id, {
-      prState: args.prState,
-      ...(isTerminal
-        ? { archived: true }
-        : { archived: false, prStateOnArchive: undefined }),
-      updatedAt: Date.now(),
-    });
-    if (isTerminal) {
-      await scheduleSessionSandboxGraceDelete(ctx, {
-        ...session,
-        archived: true,
-        prState: args.prState,
-      });
-    } else {
-      await cancelSessionSandboxGraceDelete(ctx, args.id);
-    }
+    const row = await findPullRequestByUrl(ctx.db, args.prUrl);
+    if (!row) return null;
+    await setPullRequestState(ctx, row, { state: args.prState });
+    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    await reconcileSessionArchiveState(ctx, args.sessionId);
     return null;
   },
 });
 
-/** Detaches a foreign-auto-merged PR from its session so the session stays writable. No-op if the session's PR has since changed. */
-export const clearPrUrlIfMatches = internalMutation({
-  args: { id: v.id("sessions"), expectedPrUrl: v.string() },
+/**
+ * Detaches a foreign-auto-merged PR from its session so the session stays
+ * writable. No-op when the row has since moved on from merged.
+ */
+export const detachForeignMergedPr = internalMutation({
+  args: { pullRequestId: v.id("pullRequests") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.id);
-    if (!session || session.prUrl !== args.expectedPrUrl) return null;
-    await ctx.db.patch(args.id, {
-      prUrl: undefined,
-      prState: undefined,
-      prStateOnArchive: undefined,
-      archived: false,
-      updatedAt: Date.now(),
-    });
-    await cancelSessionSandboxGraceDelete(ctx, args.id);
+    const row = await ctx.db.get(args.pullRequestId);
+    if (!row || row.state !== "merged" || row.owner.kind !== "session") {
+      return null;
+    }
+    await detachPullRequest(ctx, row);
+    await ctx.db.patch(row.owner.sessionId, { updatedAt: Date.now() });
+    await reconcileSessionArchiveState(ctx, row.owner.sessionId);
     return null;
   },
 });
@@ -235,10 +246,16 @@ export const applyRegeneratedTitle = internalMutation({
       titleRegeneration: undefined,
       ...(shouldApply ? { title, updatedAt: Date.now() } : {}),
     });
-    if (shouldApply && session.prUrl) {
+    const primaryPr = shouldApply
+      ? await findPrimaryPullRequest(ctx.db, {
+          kind: "session",
+          sessionId: session._id,
+        })
+      : null;
+    if (primaryPr && title !== undefined) {
       await schedulePrTitleSync(ctx, {
-        repoId: session.repoId,
-        prUrl: session.prUrl,
+        repoId: primaryPr.repoId,
+        prUrl: primaryPr.prUrl,
         title,
       });
     }

@@ -76,7 +76,7 @@ import {
   resolveCompletionTurn,
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
-import { latestTaskPrUrl } from "./_agentTasks/prUrl";
+import { taskPrUrl } from "./_pullRequests/store";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
@@ -152,7 +152,7 @@ async function buildTaskChatTurnPrompt(
     readableRepos,
     runtime: {
       ownerKey: `task-${args.taskId}`,
-      prUrl: await latestTaskPrUrl(ctx, task._id),
+      prUrl: await taskPrUrl(ctx.db, task),
       devCommand: task.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,

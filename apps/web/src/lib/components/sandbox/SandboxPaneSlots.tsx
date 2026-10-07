@@ -320,6 +320,7 @@ export function SandboxPaneSlots({
       <div className={resolvedTab === "review" ? "h-full" : "hidden"}>
         <SandboxPaneBoundary label="Review">
           <PrPanel
+            owner={owner}
             prUrl={prUrl}
             repoId={repoId}
             isActive={resolvedTab === "review"}

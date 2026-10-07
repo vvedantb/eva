@@ -1,6 +1,6 @@
 import { internal } from "../_generated/api";
+import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { v } from "convex/values";
-import { internalMutation } from "../_generated/server";
 import {
   roleValidator,
   phaseValidator,
@@ -187,16 +187,18 @@ export const update = authMutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
-    if (
-      args.title !== undefined &&
-      args.title !== project.title &&
-      project.prUrl
-    ) {
-      await schedulePrTitleSync(ctx, {
-        repoId: project.repoId,
-        prUrl: project.prUrl,
-        title: args.title,
+    if (args.title !== undefined && args.title !== project.title) {
+      const primaryPr = await findPrimaryPullRequest(ctx.db, {
+        kind: "project",
+        projectId: project._id,
       });
+      if (primaryPr) {
+        await schedulePrTitleSync(ctx, {
+          repoId: primaryPr.repoId,
+          prUrl: primaryPr.prUrl,
+          title: args.title,
+        });
+      }
     }
     if (phase !== undefined && phase !== project.phase) {
       const updated = await ctx.db.get(args.id);
@@ -273,36 +275,6 @@ export const clearMessages = authMutation({
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await setProjectConversation(ctx.db, args.id, []);
-    return null;
-  },
-});
-
-/** Sets the pull request URL on a project. */
-export const updatePrUrl = authMutation({
-  args: {
-    id: v.id("projects"),
-    prUrl: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { prUrl: args.prUrl });
-    return null;
-  },
-});
-
-/** Internal-only setter so server-side actions can persist a project's PR URL
- * without going through user auth. Used by the manual Create PR action. */
-export const setProjectPrUrl = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    prUrl: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) return null;
-    await ctx.db.patch(args.projectId, { prUrl: args.prUrl });
     return null;
   },
 });

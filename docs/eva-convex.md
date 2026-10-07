@@ -4,6 +4,8 @@ Read this when touching `packages/backend` / Convex schema, queries, mutations, 
 
 **Sandbox / Snapshot Storage lifecycle** (never-expire, 48h delete, resume fallthrough, orphan purge): [`docs/sandbox-snapshot-lifecycle.md`](./sandbox-snapshot-lifecycle.md).
 
+**Pull requests (many per session / task / project)** (`pullRequests` table, owner summaries, webhook attachment, backfill): [`docs/pull-requests.md`](./pull-requests.md).
+
 **Multi-repo sessions / codebase groups** (`sessionRepos`, `repoGroups`, `/tmp/workspace` layout, cross-installation git auth, group snapshots): [`docs/multi-repo-sessions.md`](./multi-repo-sessions.md).
 
 ## Types

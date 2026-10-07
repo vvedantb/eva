@@ -5,7 +5,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { sessionPrArchiveNotificationCopy } from "../convex/githubWebhook";
+import { sessionPrArchiveNotificationCopy } from "../convex/_sessions/prArchive";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const testsDir = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +40,19 @@ async function fixture() {
       numId: 42,
       prUrl: PR_URL,
       prState: "open",
+      prCount: 1,
+    });
+    await ctx.db.insert("pullRequests", {
+      repoId,
+      prUrl: PR_URL,
+      prNumber: 664,
+      headBranch: `eva/session-${sessionId}`,
+      state: "open",
+      primary: true,
+      origin: "eva",
+      owner: { kind: "session", sessionId },
+      createdAt: 1,
+      updatedAt: 1,
     });
     return { ownerUserId, repoId, sessionId };
   });
@@ -110,11 +123,10 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
         prs: [{ url: PR_URL, prNumber: 664, merged: true }],
       });
 
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PR_URL,
         action: "closed",
         merged: true,
-        prNumber: 664,
       });
 
       const notifications = await listOwnerNotifications(t, ownerUserId);
@@ -144,11 +156,10 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
         prs: [{ url: PR_URL, prNumber: 664, merged: false }],
       });
 
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PR_URL,
         action: "closed",
         merged: false,
-        prNumber: 664,
       });
 
       const notifications = await listOwnerNotifications(t, ownerUserId);
@@ -170,11 +181,10 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
         prUrl: PR_URL,
         action: "closed" as const,
         merged: true,
-        prNumber: 664,
       };
 
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, payload);
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, payload);
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, payload);
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, payload);
 
       const notifications = await listOwnerNotifications(t, ownerUserId);
       expect(notifications).toHaveLength(1);
@@ -187,17 +197,15 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
     async () => {
       const { t, ownerUserId } = await fixture();
 
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PR_URL,
         action: "closed",
         merged: false,
-        prNumber: 664,
       });
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PR_URL,
         action: "closed",
         merged: true,
-        prNumber: 664,
       });
 
       const notifications = await listOwnerNotifications(t, ownerUserId);
@@ -211,11 +219,10 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
     async () => {
       const { t, ownerUserId } = await fixture();
 
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PR_URL,
         action: "closed",
         merged: true,
-        prNumber: 664,
       });
 
       const emailable = await t.query(
@@ -232,11 +239,10 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
     async () => {
       const { t } = await fixture();
 
-      await t.mutation(internal.githubWebhook.handleSessionPrEvent, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PR_URL,
         action: "closed",
         merged: true,
-        prNumber: 664,
       });
 
       const recipients = await t.query(
@@ -244,6 +250,108 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
         { since: 0 },
       );
       expect(recipients).toEqual([]);
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("a session holding several pull requests", () => {
+  const SIDE_PR_URL = "https://github.com/vvedantb/eva/pull/700";
+
+  async function openSidePr(
+    t: Awaited<ReturnType<typeof fixture>>["t"],
+    sessionId: Awaited<ReturnType<typeof fixture>>["sessionId"],
+  ) {
+    await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+      prUrl: SIDE_PR_URL,
+      action: "opened",
+      draft: false,
+      title: "Ship the login fix on its own",
+      headBranch: `eva/session-${sessionId}-login-fix`,
+      baseBranch: "main",
+      repoOwner: "vvedantb",
+      repoName: "eva",
+      headInSameRepo: true,
+    });
+  }
+
+  test(
+    "a PR the agent opened on a side branch is linked to the session",
+    async () => {
+      const { t, sessionId } = await fixture();
+      await openSidePr(t, sessionId);
+
+      const rows = await t.run(async (ctx) =>
+        ctx.db
+          .query("pullRequests")
+          .withIndex("by_session", (q) => q.eq("owner.sessionId", sessionId))
+          .collect(),
+      );
+      const side = rows.find((row) => row.prUrl === SIDE_PR_URL);
+      expect(side).toMatchObject({
+        primary: false,
+        origin: "agent",
+        state: "open",
+        prNumber: 700,
+      });
+      const session = await t.run(async (ctx) => ctx.db.get(sessionId));
+      // The session's own PR stays the one its chrome links to.
+      expect(session?.prUrl).toBe(PR_URL);
+      expect(session?.prCount).toBe(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a branch from a fork is never linked, whatever it is called",
+    async () => {
+      const { t, sessionId } = await fixture();
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: SIDE_PR_URL,
+        action: "opened",
+        headBranch: `eva/session-${sessionId}-login-fix`,
+        repoOwner: "vvedantb",
+        repoName: "eva",
+        headInSameRepo: false,
+      });
+      const row = await t.run(async (ctx) =>
+        ctx.db
+          .query("pullRequests")
+          .withIndex("by_pr_url", (q) => q.eq("prUrl", SIDE_PR_URL))
+          .first(),
+      );
+      expect(row).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "merging one PR leaves the session live while another is open",
+    async () => {
+      const { t, ownerUserId, sessionId } = await fixture();
+      await openSidePr(t, sessionId);
+
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: PR_URL,
+        action: "closed",
+        merged: true,
+      });
+      let session = await t.run(async (ctx) => ctx.db.get(sessionId));
+      expect(session?.archived).not.toBe(true);
+      expect(session?.prState).toBe("open");
+      expect(await listOwnerNotifications(t, ownerUserId)).toHaveLength(0);
+
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: SIDE_PR_URL,
+        action: "closed",
+        merged: true,
+      });
+      session = await t.run(async (ctx) => ctx.db.get(sessionId));
+      expect(session?.archived).toBe(true);
+      expect(session?.prState).toBe("merged");
+      const notifications = await listOwnerNotifications(t, ownerUserId);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].title).toContain("PR #664, PR #700 merged");
     },
     TIMEOUT_MS,
   );

@@ -109,7 +109,6 @@ export const complete = authMutation({
     id: v.id("agentRuns"),
     success: v.boolean(),
     resultSummary: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
     error: v.optional(v.string()),
     activityLog: v.optional(v.string()),
   },
@@ -124,7 +123,6 @@ export const complete = authMutation({
       finalizingAt: undefined,
       finishedAt: now,
       resultSummary: args.resultSummary,
-      prUrl: args.prUrl,
       error: args.error,
     });
 

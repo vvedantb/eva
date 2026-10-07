@@ -17,6 +17,7 @@ import {
   upsertStreamingActivity,
   upsertActivityLog,
   finalizeRunStatus,
+  recordRunPullRequest,
   sendCompletionEvent,
 } from "./helpers";
 
@@ -105,21 +106,27 @@ export const appendRunLog = internalMutation({
   },
 });
 
-/** Records a PR URL on a specific run — used by the manual Create PR action
- * when the workflow's auto PR step failed and the user retried later. */
-export const setRunPrUrl = internalMutation({
+/** Links a PR the manual Create PR action opened for a task — used when the
+ * workflow's auto PR step failed and the user retried later. Clears the run's
+ * recorded PR failure. */
+export const recordManualTaskPr = internalMutation({
   args: {
-    runId: v.id("agentRuns"),
+    taskId: v.id("agentTasks"),
+    runId: v.optional(v.id("agentRuns")),
     prUrl: v.string(),
+    draft: v.boolean(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run) return null;
-    await ctx.db.patch(args.runId, {
+    await recordRunPullRequest(ctx, {
+      runId: args.runId,
+      taskId: args.taskId,
       prUrl: args.prUrl,
-      prError: undefined,
+      state: args.draft ? "draft" : "open",
     });
+    if (args.runId !== undefined && (await ctx.db.get(args.runId))) {
+      await ctx.db.patch(args.runId, { prError: undefined });
+    }
     return null;
   },
 });
@@ -343,13 +350,7 @@ export const completeRun = internalMutation({
     const project = args.projectId ? await ctx.db.get(args.projectId) : null;
 
     if (project) {
-      const projectPatch: { lastSandboxActivity: number; prUrl?: string } = {
-        lastSandboxActivity: now,
-      };
-      if (args.prUrl) {
-        projectPatch.prUrl = args.prUrl;
-      }
-      await ctx.db.patch(project._id, projectPatch);
+      await ctx.db.patch(project._id, { lastSandboxActivity: now });
     }
 
     await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));

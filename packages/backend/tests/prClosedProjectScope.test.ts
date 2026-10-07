@@ -3,10 +3,11 @@ import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { isFirstTaskOnBranch } from "../convex/functions";
 
 /**
  * Reported bug: closing a project's pull request wiped the project (fix
- * 51cdced9). One PR covers every task in a project, so `handlePrClosed` used
+ * 51cdced9). One PR covers every task in a project, so the closed-PR webhook handler used
  * to walk `by_project` and force each task to done/cancelled — a single
  * "Close pull request" click on GitHub cancelled work that was still in
  * progress, and fanned a notification out per task. A close can be undone on
@@ -98,16 +99,44 @@ async function fixture() {
     });
     await subscribe(quick, ada);
 
-    const run = (taskId: Id<"agentTasks">, prUrl: string) =>
+    const run = (taskId: Id<"agentTasks">) =>
       ctx.db.insert("agentRuns", {
         taskId,
         status: "success" as const,
         logs: [],
-        prUrl,
       });
     // The project's PR was opened by the task that ran first, not by all three.
-    await run(shipped, PROJECT_PR);
-    await run(quick, QUICK_TASK_PR);
+    const shippedRun = await run(shipped);
+    const quickRun = await run(quick);
+    await ctx.db.insert("pullRequests", {
+      repoId,
+      prUrl: PROJECT_PR,
+      prNumber: 900,
+      headBranch: "eva/project-billing-v2",
+      state: "open",
+      primary: true,
+      origin: "eva",
+      owner: {
+        kind: "project",
+        projectId,
+        taskId: shipped,
+        runId: shippedRun,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert("pullRequests", {
+      repoId,
+      prUrl: QUICK_TASK_PR,
+      prNumber: 901,
+      headBranch: `eva/task-${quick}`,
+      state: "open",
+      primary: true,
+      origin: "eva",
+      owner: { kind: "task", taskId: quick, runId: quickRun },
+      createdAt: now,
+      updatedAt: now,
+    });
 
     return { ada, bo, cy, repoId, projectId, shipped, building, queued, quick };
   });
@@ -145,8 +174,9 @@ describe("a project pull request closing without merge", () => {
     "moves the project to cancelled and leaves every task alone",
     async () => {
       const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PROJECT_PR,
+        action: "closed",
         merged: false,
       });
 
@@ -164,8 +194,9 @@ describe("a project pull request closing without merge", () => {
     "notifies each subscriber once about the project, not once per task",
     async () => {
       const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PROJECT_PR,
+        action: "closed",
         merged: false,
       });
 
@@ -193,8 +224,9 @@ describe("a project pull request merging", () => {
     "completes the project and still leaves task statuses untouched",
     async () => {
       const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PROJECT_PR,
+        action: "closed",
         merged: true,
       });
 
@@ -203,11 +235,16 @@ describe("a project pull request merging", () => {
       ).toEqual(["done", "in_progress", "todo"]);
       const project = await t.run((ctx) => ctx.db.get(ids.projectId));
       expect(project?.phase).toBe("completed");
-      // The merged branch is spent: the next build needs a fresh one, and the
-      // old PR must not be reused as this project's live PR.
+      // The merged branch is spent: the next build needs a fresh one. The old
+      // PR stays linked as history, but no longer sits on the live branch, so
+      // the next run opens a new PR instead of refreshing it.
       expect(project?.branchVersion).toBe(3);
-      expect(project?.prUrl).toBeUndefined();
       expect(project?.branchName).not.toBe("eva/project-billing-v2");
+      expect(project?.prState).toBe("merged");
+      const firstOnBranch = await t.run((ctx) =>
+        isFirstTaskOnBranch(ctx.db, ids.building, ids.projectId),
+      );
+      expect(firstOnBranch).toBe(true);
     },
     TIMEOUT_MS,
   );
@@ -216,8 +253,9 @@ describe("a project pull request merging", () => {
     "records the merge on the timeline of the task that opened the PR",
     async () => {
       const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: PROJECT_PR,
+        action: "closed",
         merged: true,
       });
 
@@ -240,8 +278,9 @@ describe("a quick task's pull request", () => {
     "moves the task to done on merge without touching the project's tasks",
     async () => {
       const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: QUICK_TASK_PR,
+        action: "closed",
         merged: true,
       });
 
@@ -260,8 +299,9 @@ describe("a quick task's pull request", () => {
     "moves the task to cancelled when the PR is closed unmerged",
     async () => {
       const { t, ids } = await fixture();
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: QUICK_TASK_PR,
+        action: "closed",
         merged: false,
       });
 
@@ -278,8 +318,9 @@ describe("a quick task's pull request", () => {
         ctx.db.patch(ids.quick, { reviewTaskSandboxStatus: "active" }),
       );
 
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: QUICK_TASK_PR,
+        action: "closed",
         merged: true,
       });
 
@@ -298,8 +339,9 @@ describe("a quick task's pull request", () => {
       const { t, ids } = await fixture();
       await t.run((ctx) => ctx.db.patch(ids.quick, { status: "done" }));
 
-      await t.mutation(internal.githubWebhook.handlePrClosed, {
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
         prUrl: QUICK_TASK_PR,
+        action: "closed",
         merged: false,
       });
 
@@ -312,6 +354,46 @@ describe("a quick task's pull request", () => {
         ctx.db.query("githubWebhookEvents").collect(),
       );
       expect(events.map((event) => event.status)).toEqual(["skipped"]);
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("a quick task holding two pull requests", () => {
+  const SECOND_PR = "https://github.com/vvedantb/eva/pull/902";
+
+  test(
+    "stays put until its last PR lands, then follows the merge",
+    async () => {
+      const { t, ids } = await fixture();
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: SECOND_PR,
+        action: "opened",
+        headBranch: `eva/task-${ids.quick}-split`,
+        repoOwner: "vvedantb",
+        repoName: "eva",
+        headInSameRepo: true,
+      });
+
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: QUICK_TASK_PR,
+        action: "closed",
+        merged: false,
+      });
+      expect(
+        await statuses(t, [ids.quick]),
+        "the second PR is still open",
+      ).toEqual(["in_progress"]);
+
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: SECOND_PR,
+        action: "closed",
+        merged: true,
+      });
+      expect(await statuses(t, [ids.quick])).toEqual(["done"]);
+      const task = await t.run((ctx) => ctx.db.get(ids.quick));
+      expect(task?.prCount).toBe(2);
+      expect(task?.prUrl).toBe(QUICK_TASK_PR);
     },
     TIMEOUT_MS,
   );

@@ -221,8 +221,12 @@ export function isTaskRouteSandboxTab(s: string): s is TaskRouteSandboxTab {
  * The five slugs this replaced (`overview`, `commits`, `checks`, `recap`, and
  * `diffs`) are in links pasted into tasks and PR comments, so
  * `canonicalReviewTab` still answers to every one of them.
+ *
+ * `prs` lists every pull request a session, quick task or project holds, and
+ * picks which one the other three tabs show. Sandbox surfaces only: the
+ * standalone page is already one pull request.
  */
-const reviewTabs = ["summary", "timeline", "diffs"] as const;
+const reviewTabs = ["summary", "timeline", "diffs", "prs"] as const;
 export type ReviewTab = (typeof reviewTabs)[number];
 export const REVIEW_DEFAULT_TAB: ReviewTab = "summary";
 
@@ -242,6 +246,7 @@ export function canonicalReviewTab(s: string): ReviewTab | undefined {
     return "summary";
   }
   if (s === "commits") return "timeline";
+  if (s === "pulls" || s === "pull-requests") return "prs";
   return isReviewTab(s) ? s : undefined;
 }
 
@@ -406,6 +411,10 @@ export const docModeParser = parseAsStringLiteral(docModes)
 
 // Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
 export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
+
+// Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
+// Absent means the chat's primary PR.
+export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
 
 const docCommentFilters = ["open", "resolved"] as const;
 export const docCommentFilterParser = parseAsStringLiteral(docCommentFilters)

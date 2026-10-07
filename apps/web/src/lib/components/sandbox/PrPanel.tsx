@@ -2,14 +2,27 @@
 
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, isViewableRecap, type Id } from "@eva/backend";
-import type { ReviewTab } from "@/lib/search-params";
+import { useQueryState } from "nuqs";
+import {
+  api,
+  isViewableRecap,
+  type Id,
+  type SandboxOwner,
+} from "@eva/backend";
+import { reviewPullRequestParser, type ReviewTab } from "@/lib/search-params";
 import { prNumberFromGithubUrl } from "@/lib/githubPr";
 import { ReviewTabsPanel } from "@/lib/components/reviews/ReviewTabsPanel";
 import { usePrTabParam } from "./usePrTabParam";
 
 interface PrPanelProps {
+  /** The chat whose pull requests this pane reviews. */
+  owner: SandboxOwner;
+  /**
+   * The chat's own PR from its summary. Shown when the chat holds no PR rows
+   * yet (a chat whose PR predates the `pullRequests` backfill).
+   */
   prUrl?: string;
+  /** The chat's repo; a linked repo's PR is reviewed against its own repo. */
   repoId: Id<"githubRepos">;
   isActive: boolean;
 }
@@ -17,26 +30,38 @@ interface PrPanelProps {
 /**
  * Sandbox Review tab. Owns only what is specific to this surface — reading the
  * active tab from the path (`…/review/summary`, `…/review/timeline`,
- * `…/review/diffs/…`, with `?prTab=` as a fallback) and defaulting to Summary,
- * where the recap leads, when a ready recap exists. The tabs themselves come from `ReviewTabsPanel`, shared
- * with the standalone Reviews page.
+ * `…/review/diffs/…`, `…/review/prs`, with `?prTab=` as a fallback),
+ * defaulting to Summary when a ready recap exists, and which of the chat's
+ * pull requests the tabs show (`?pr=`, else the primary). The tabs themselves
+ * come from `ReviewTabsPanel`, shared with the standalone Reviews page.
  */
-export function PrPanel({ prUrl, repoId, isActive }: PrPanelProps) {
+export function PrPanel({ owner, prUrl, repoId, isActive }: PrPanelProps) {
   const { prTab, setPrTab } = usePrTabParam();
+  const pullRequests = useQuery(api.pullRequests.listForOwner, { owner });
+  const [selectedParam, setSelectedParam] = useQueryState(
+    "pr",
+    reviewPullRequestParser,
+  );
+  // Primary first, then newest — so with no choice made, the chat's own PR.
+  const selected =
+    pullRequests?.find((pr) => pr._id === selectedParam) ?? pullRequests?.[0];
+  const reviewUrl = selected?.prUrl ?? prUrl;
+  const reviewRepoId = selected?.repoId ?? repoId;
+
   // Same cached query as ReviewTabsPanel's, so this costs no extra request.
   const recapDoc = useQuery(
     api.docs.getRecapByPrUrl,
-    prUrl ? { repoId, prUrl } : "skip",
+    reviewUrl ? { repoId: reviewRepoId, prUrl: reviewUrl } : "skip",
   );
   const [resolvedDefault, setResolvedDefault] = useState<ReviewTab | null>(
     null,
   );
   const prNumber =
-    prUrl !== undefined ? prNumberFromGithubUrl(prUrl) : undefined;
+    reviewUrl !== undefined ? prNumberFromGithubUrl(reviewUrl) : undefined;
 
   // Resolve the default tab once recap query settles (adjust during render).
   if (isActive && resolvedDefault === null) {
-    if (!prUrl) {
+    if (!reviewUrl) {
       setResolvedDefault("diffs");
     } else if (recapDoc !== undefined) {
       // Only open on Summary when there is a walkthrough to lead it: otherwise
@@ -49,11 +74,22 @@ export function PrPanel({ prUrl, repoId, isActive }: PrPanelProps) {
 
   return (
     <ReviewTabsPanel
-      repoId={repoId}
-      prUrl={prUrl}
+      // A different PR is a different review: drafts, the scoped commit and
+      // scroll belong to the PR they were made on.
+      key={reviewUrl ?? "none"}
+      repoId={reviewRepoId}
+      prUrl={reviewUrl}
       prNumber={prNumber}
       activeTab={prTab ?? resolvedDefault ?? "diffs"}
       onTabChange={setPrTab}
+      pullRequests={{
+        items: pullRequests ?? [],
+        selectedId: selected?._id,
+        onSelect: (id) => {
+          setPrTab("summary");
+          void setSelectedParam(id);
+        },
+      }}
     />
   );
 }

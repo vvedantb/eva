@@ -483,13 +483,25 @@ const prWebhookSchema = z.object({
     title: nullableString,
     merge_commit_sha: nullableString,
     head: z
-      .object({ ref: nullableString, sha: nullableString })
+      .object({
+        ref: nullableString,
+        sha: nullableString,
+        repo: z
+          .object({ full_name: nullableString })
+          .nullable()
+          .catch(null),
+      })
       .nullable()
       .catch(null),
+    base: z.object({ ref: nullableString }).nullable().catch(null),
     user: loginObject,
   }),
   repository: z
-    .object({ name: nullableString, owner: loginObject })
+    .object({
+      name: nullableString,
+      full_name: nullableString,
+      owner: loginObject,
+    })
     .nullable()
     .catch(null),
 });
@@ -633,54 +645,32 @@ http.route({
         return new Response("OK", { status: 200 });
       }
 
-      const merged = pullRequest.merged;
-      const draft = pullRequest.draft;
-
-      // head.ref carries the source branch name. Passed through so the
-      // closed-handler can fall back to branch-based reconciliation when no
-      // run has the PR URL recorded (e.g. if it was lost during PR creation).
-      const branchName = pullRequest.head?.ref ?? null;
-
-      // Always sync session PR state for any state-changing action.
-      const STATE_ACTIONS = new Set([
-        "opened",
-        "reopened",
-        "ready_for_review",
-        "converted_to_draft",
-        "closed",
-      ]);
-      if (STATE_ACTIONS.has(action)) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.githubWebhook.handleSessionPrEvent,
-          {
-            prUrl,
-            action,
-            draft: draft ?? undefined,
-            merged: merged ?? undefined,
-            prNumber: pullRequest.number ?? undefined,
-            mergeCommitSha: pullRequest.merge_commit_sha ?? undefined,
-          },
-        );
-        await ctx.scheduler.runAfter(
-          0,
-          internal.githubWebhook.handleProjectPrEvent,
-          {
-            prUrl,
-            action,
-            draft: draft ?? undefined,
-          },
-        );
-      }
-
-      // agentTasks/projects path stays as-is (close-only).
-      if (action === "closed" && merged !== null) {
-        await ctx.scheduler.runAfter(0, internal.githubWebhook.handlePrClosed, {
+      // One handler for every PR event: it updates (or, for a PR opened on an
+      // Eva branch outside Eva's own flow, creates) the `pullRequests` row,
+      // then lets the session, quick task or project that owns it react.
+      const repository = parsed.data.repository;
+      const headRepo = pullRequest.head?.repo?.full_name ?? null;
+      const baseRepo = repository?.full_name ?? null;
+      await ctx.scheduler.runAfter(
+        0,
+        internal.githubWebhook.handlePullRequestEvent,
+        {
           prUrl,
-          merged,
-          branchName: branchName ?? undefined,
-        });
-      }
+          action,
+          draft: pullRequest.draft ?? undefined,
+          merged: pullRequest.merged ?? undefined,
+          mergeCommitSha: pullRequest.merge_commit_sha ?? undefined,
+          title: pullRequest.title ?? undefined,
+          headBranch: pullRequest.head?.ref ?? undefined,
+          baseBranch: pullRequest.base?.ref ?? undefined,
+          repoOwner: repository?.owner?.login ?? undefined,
+          repoName: repository?.name ?? undefined,
+          headInSameRepo:
+            headRepo !== null && baseRepo !== null
+              ? headRepo.toLowerCase() === baseRepo.toLowerCase()
+              : undefined,
+        },
+      );
     }
 
     if (event === "push") {

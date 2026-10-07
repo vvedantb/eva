@@ -123,7 +123,7 @@ export function entityTools(
       name: "list_entities",
       description: `List the Eva sessions, quick tasks and projects you can reach, most recently updated first. Use it to find something that already exists — and to avoid creating a second copy of work that is already in flight.
 
-Each row carries the Convex "id" and "numId" that send_chat_message, start_sandbox and cancel_queued_message accept, plus "status", "sandboxStatus", "isExecuting" and "prUrl" so you can tell what is safe to merge, retry or leave alone.
+Each row carries the Convex "id" and "numId" that send_chat_message, start_sandbox and cancel_queued_message accept, plus "status", "sandboxStatus", "isExecuting" and "prUrl" so you can tell what is safe to merge, retry or leave alone. A session, quick task or project can hold several pull requests: "prUrl" is its main one, and "prUrls" lists every one when there is more than one. Any of them works as "prUrl" in send_chat_message.
 
 Only entities you could already open in Eva are returned. The page is capped; "truncated" is true when more matched than fit. Listing is per repo, so a project's child task that has no repo of its own is not listed — reach it by id instead.`,
       mutating: false,
@@ -182,6 +182,8 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           isExecuting: entity.isExecuting,
           archived: entity.archived,
           prUrl: entity.prUrl,
+          // Only when the entity holds more than one PR.
+          ...(entity.prUrls ? { prUrls: entity.prUrls } : {}),
           branch: entity.branchName,
           updatedAt: entity.updatedAt,
           repo: `${entity.repoOwner}/${entity.repoName}`,

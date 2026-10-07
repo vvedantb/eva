@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
 import { internal } from "../_generated/api";
 import {
@@ -247,8 +248,12 @@ export const resolveProjectConflicts = authMutation({
       ctx.userId,
     );
 
-    if (!project.prUrl) {
-      throw new Error("Project has no PR to resolve conflicts for");
+    const primaryPr = await findPrimaryPullRequest(ctx.db, {
+      kind: "project",
+      projectId: project._id,
+    });
+    if (!primaryPr || primaryPr.state === "merged" || primaryPr.state === "closed") {
+      throw new Error("Project has no open PR to resolve conflicts for");
     }
     if (project.activeBuildWorkflowId) {
       throw new Error(

@@ -8,6 +8,7 @@ import type { Id } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { useState } from "react";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
+import { taskPrUrl } from "@/lib/githubPr";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
@@ -324,7 +325,7 @@ export function useTaskDetail(
 
   const status = task?.status;
   const canEditText = canEditTaskText(status, Boolean(hasActiveRun));
-  const latestPrUrl = runs?.find((r) => r.prUrl)?.prUrl;
+  const latestPrUrl = taskPrUrl(task, projects);
   const latestPrError = runs?.find((r) => r.prError)?.prError;
   const latestDeployment = runs?.find((r) => r.deploymentStatus);
   const canCreatePr = !latestPrUrl && (runs?.length ?? 0) > 0 && !hasActiveRun;

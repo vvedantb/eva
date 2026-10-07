@@ -28,7 +28,7 @@ import {
   TASK_CHAT_STREAM_PREFIX,
 } from "../_chat/surfaceAdapters";
 import { prStateValidator } from "../validators";
-import type { McpLinkedRepo } from "./queries";
+import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
@@ -1539,6 +1539,8 @@ const orchestratorAgentStateValidator = v.object({
       truncated: v.boolean(),
     }),
   ),
+  /** Every PR the chat holds, primary first, then newest first. */
+  pullRequests: v.array(mcpPullRequestValidator),
   /** Sessions only, and only when it has linked repos beside its primary. */
   linkedRepos: v.optional(
     v.array(
@@ -1615,9 +1617,14 @@ export const orchestratorGetAgentState = internalAction({
       truncated: message.content.length > TRANSCRIPT_CHAR_LIMIT,
     }));
 
+    const pullRequests = await ctx.runQuery(
+      internal.mcp.queries.chatPullRequests,
+      { kind, id },
+    );
     const common = {
       kind,
       id,
+      pullRequests,
       queuedMessageCount,
       transcript,
       currentActivity: streaming?.currentActivity,

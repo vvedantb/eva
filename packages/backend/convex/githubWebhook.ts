@@ -2,539 +2,349 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   notifyProjectSubscribers,
   notifySubscribers,
 } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
-import type { Doc } from "./_generated/dataModel";
 import { preferPersistedSandboxId } from "./_sandbox/resolveExistingSandboxId";
 import { buildProjectBranchName } from "./_projects/helpers";
 import {
   deriveProjectPhaseFromPrEvent,
-  extractPrNumberFromUrl,
   isProjectReviewPhase,
 } from "./_projects/prSync";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
-import { requestSessionSandboxStop } from "./_sessions/sandbox";
+import { scheduleTaskSandboxGraceDelete } from "./sandboxCleanup";
+import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-  scheduleTaskSandboxGraceDelete,
-} from "./sandboxCleanup";
-import { createNotification } from "./notifications";
-import { shouldArchiveSession } from "./_sessions/prArchive";
+  allPullRequestsTerminal,
+  derivePrStateFromEvent,
+  findPullRequestByUrl,
+  listOwnerPullRequests,
+  ownerRef,
+  recordPullRequest,
+  resolvePrOwnerFromBranch,
+  setPullRequestState,
+  type PrState,
+} from "./_pullRequests/store";
 
-const QUICK_TASK_BRANCH_PREFIX = "eva/task-";
-const PROJECT_BRANCH_PREFIX = "eva/project-";
-
-/**
- * Recovers an agentRun from an Eva-conventional branch name when the merge
- * webhook arrives without a PR URL match. Returns the most recent run on the
- * matching task (or any task in the project), or null if the branch doesn't
- * parse or the task/project no longer exists.
- */
-async function findRunByBranchName(
-  ctx: MutationCtx,
-  branchName: string,
-): Promise<Doc<"agentRuns"> | null> {
-  if (branchName.startsWith(QUICK_TASK_BRANCH_PREFIX)) {
-    const candidate = branchName.slice(QUICK_TASK_BRANCH_PREFIX.length);
-    const taskId = ctx.db.normalizeId("agentTasks", candidate);
-    if (!taskId) return null;
-    return await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .order("desc")
-      .first();
-  }
-
-  if (branchName.startsWith(PROJECT_BRANCH_PREFIX)) {
-    // Strip the optional `-vN` suffix so the remainder is the raw project id.
-    const candidate = branchName
-      .slice(PROJECT_BRANCH_PREFIX.length)
-      .replace(/-v\d+$/, "");
-    const projectId = ctx.db.normalizeId("projects", candidate);
-    if (!projectId) return null;
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
-      .collect();
-    for (const task of tasks) {
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .order("desc")
-        .first();
-      if (run) return run;
-    }
-    return null;
-  }
-
-  return null;
-}
-
-/** Maps an incoming GitHub PR webhook event to the session's prState.
- * Returns null when the event doesn't represent a state we track. */
-function deriveSessionPrState(
-  action: string,
-  draft: boolean | undefined,
-  merged: boolean | undefined,
-): "draft" | "open" | "merged" | "closed" | null {
-  if (action === "closed") {
-    return merged ? "merged" : "closed";
-  }
-  if (action === "converted_to_draft") return "draft";
-  if (action === "ready_for_review") return "open";
-  if (action === "opened" || action === "reopened") {
-    return draft ? "draft" : "open";
-  }
-  return null;
-}
-
-/** One pull request Eva opened for a session — primary or a linked repo's. */
-export type SessionArchiveTriggerPr = {
-  url: string;
-  prNumber?: number;
-  merged: boolean;
-};
+/** Webhook actions that can change a PR's tracked state or its title. */
+const TRACKED_ACTIONS = new Set([
+  "opened",
+  "reopened",
+  "ready_for_review",
+  "converted_to_draft",
+  "closed",
+  "edited",
+]);
 
 /**
- * Inbox copy for a session auto-archived because every PR it opened (the
- * primary's, plus one per linked repo for a multi-repo session) is now merged
- * or closed. `prs` is exactly the set of PRs that made the archive rule pass,
- * so a single-repo session's copy is unchanged from before multi-repo PRs
- * existed.
+ * Every `pull_request` webhook lands here (see `http.ts`). The PR row is the
+ * one record of truth, so it is updated first — or created, when the PR was
+ * opened on an Eva branch by the agent (or by hand) rather than by Eva's own
+ * flow — and only then does the owner react, reading the state of every PR it
+ * holds. With one PR per owner this behaves exactly as it always has.
  */
-export function sessionPrArchiveNotificationCopy(args: {
-  sessionTitle: string;
-  prs: SessionArchiveTriggerPr[];
-}): { title: string; message: string } {
-  const refs = args.prs.map((pr) =>
-    pr.prNumber !== undefined ? `PR #${pr.prNumber}` : pr.url,
-  );
-  const refsList = refs.join(", ");
-  const urlsList = args.prs.map((pr) => pr.url).join(", ");
-
-  if (args.prs.length === 1) {
-    const pr = args.prs[0];
-    return pr.merged
-      ? {
-          title: `${refsList} merged — "${args.sessionTitle}" archived`,
-          message: `${refsList} was merged on GitHub (${pr.url}). Your session was archived.`,
-        }
-      : {
-          title: `${refsList} closed — "${args.sessionTitle}" archived`,
-          message: `${refsList} was closed on GitHub without merging (${pr.url}). Your session was archived.`,
-        };
-  }
-
-  const allMerged = args.prs.every((pr) => pr.merged);
-  const verb = allMerged ? "merged" : "closed";
-  return {
-    title: `${refsList} ${verb} — "${args.sessionTitle}" archived`,
-    message: `Your session was archived because every pull request it opened is now closed: ${urlsList}.`,
-  };
-}
-
-/** Inbox-only notice to the session owner. Never emails (see DIGEST_EXCLUDED_TYPES). */
-async function notifySessionOwnerOfPrArchive(
-  ctx: MutationCtx,
-  session: Doc<"sessions">,
-  prs: SessionArchiveTriggerPr[],
-): Promise<void> {
-  if (prs.length === 0) return;
-  const ownerUserId = session.createdBy ?? session.userId;
-  const copy = sessionPrArchiveNotificationCopy({
-    sessionTitle: session.title,
-    prs,
-  });
-  await createNotification(ctx, {
-    userId: ownerUserId,
-    type: "session_archived",
-    title: copy.title,
-    message: copy.message,
-    repoId: session.repoId,
-    sessionId: session._id,
-  });
-}
-
-/**
- * Every PR (primary + linked) a session has opened, with its current state.
- * Called only once `shouldArchiveSession` has confirmed every one of them is
- * terminal, so this doubles as the exact set of PRs that triggered the
- * archive.
- */
-async function collectSessionTerminalPrs(
-  ctx: MutationCtx,
-  session: Doc<"sessions">,
-): Promise<SessionArchiveTriggerPr[]> {
-  const prs: SessionArchiveTriggerPr[] = [];
-  if (session.prUrl !== undefined && session.prState !== undefined) {
-    const prNumber = extractPrNumberFromUrl(session.prUrl);
-    prs.push({
-      url: session.prUrl,
-      ...(prNumber !== null ? { prNumber } : {}),
-      merged: session.prState === "merged",
-    });
-  }
-  const linkedRepos = await ctx.db
-    .query("sessionRepos")
-    .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-    .collect();
-  for (const linked of linkedRepos) {
-    if (linked.prUrl === undefined || linked.prState === undefined) continue;
-    const prNumber = extractPrNumberFromUrl(linked.prUrl);
-    prs.push({
-      url: linked.prUrl,
-      ...(prNumber !== null ? { prNumber } : {}),
-      merged: linked.prState === "merged",
-    });
-  }
-  return prs;
-}
-
-/**
- * Applies the archive/unarchive side effects (sandbox stop, grace-delete
- * scheduling, owner notification) once every PR's `prState` a session opened
- * (primary + linked) is up to date in the database. Shared by the primary-PR
- * and linked-PR webhook paths so a multi-repo session archives exactly once —
- * when EVERY PR it opened is merged or closed, per `shouldArchiveSession`.
- */
-async function reconcileSessionArchiveState(
-  ctx: MutationCtx,
-  session: Doc<"sessions">,
-): Promise<void> {
-  const linkedRepos = await ctx.db
-    .query("sessionRepos")
-    .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-    .collect();
-  const archive = shouldArchiveSession(
-    session.prState,
-    linkedRepos.map((repo) => repo.prState),
-  );
-  const needsArchive = archive && session.archived !== true;
-  const needsUnarchive = !archive && session.archived === true;
-  if (!needsArchive && !needsUnarchive) return;
-
-  await ctx.db.patch(session._id, {
-    archived: needsArchive,
-    ...(needsUnarchive ? { prStateOnArchive: undefined } : {}),
-    updatedAt: Date.now(),
-  });
-
-  if (needsArchive) {
-    const archivedSession: Doc<"sessions"> = { ...session, archived: true };
-    // Merged/closed sessions are read-only — stop any live sandbox so VMs
-    // aren't left running forever after the last PR the session opened lands.
-    if (
-      session.status === "active" ||
-      session.status === "starting" ||
-      session.status === "stopping" ||
-      session.sandboxId !== undefined
-    ) {
-      await requestSessionSandboxStop(ctx, session._id);
-    }
-    await scheduleSessionSandboxGraceDelete(ctx, archivedSession);
-    const triggeringPrs = await collectSessionTerminalPrs(ctx, archivedSession);
-    await notifySessionOwnerOfPrArchive(ctx, session, triggeringPrs);
-  } else if (needsUnarchive) {
-    await cancelSessionSandboxGraceDelete(ctx, session._id);
-  }
-}
-
-/** Syncs a project's phase from GitHub draft/ready PR webhook events. */
-export const handleProjectPrEvent = internalMutation({
-  args: {
-    prUrl: v.string(),
-    action: v.string(),
-    draft: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const nextPhase = deriveProjectPhaseFromPrEvent(args.action, args.draft);
-    if (!nextPhase) return null;
-
-    const project = await ctx.db
-      .query("projects")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first();
-    if (!project || !isProjectReviewPhase(project.phase)) return null;
-    if (project.phase === nextPhase) return null;
-
-    await ctx.db.patch(project._id, { phase: nextPhase });
-    return null;
-  },
-});
-
-/**
- * Syncs a session's prState from a GitHub pull_request webhook event. Every
- * PR webhook for any repo Eva knows about lands here (see `http.ts`), so this
- * first tries the primary session lookup and, when the PR belongs to a linked
- * repo instead, falls back to a `sessionRepos` lookup by the same PR URL.
- * Either path re-checks the full multi-repo archive rule
- * (`reconcileSessionArchiveState`) once its own `prState` is updated —
- * reopening any PR (primary or linked) cancels a pending grace-delete the
- * same way it always has.
- */
-export const handleSessionPrEvent = internalMutation({
+export const handlePullRequestEvent = internalMutation({
   args: {
     prUrl: v.string(),
     action: v.string(),
     draft: v.optional(v.boolean()),
     merged: v.optional(v.boolean()),
-    prNumber: v.optional(v.number()),
     mergeCommitSha: v.optional(v.string()),
+    title: v.optional(v.string()),
+    headBranch: v.optional(v.string()),
+    baseBranch: v.optional(v.string()),
+    /** The repository the PR targets (the webhook's `repository`). */
+    repoOwner: v.optional(v.string()),
+    repoName: v.optional(v.string()),
+    /** False when the head lives in a fork: a fork's branch names prove nothing. */
+    headInSameRepo: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const nextState = deriveSessionPrState(
+    if (!TRACKED_ACTIONS.has(args.action)) return null;
+    const nextState = derivePrStateFromEvent(
       args.action,
       args.draft,
       args.merged,
     );
-    if (!nextState) return null;
 
-    const session = await ctx.db
-      .query("sessions")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first();
-
-    if (session) {
-      const previousState = session.prState;
-      if (previousState !== nextState) {
-        await ctx.db.patch(session._id, {
-          prState: nextState,
-          updatedAt: Date.now(),
-        });
-      }
-      await reconcileSessionArchiveState(ctx, {
-        ...session,
-        prState: nextState,
+    let row = await findPullRequestByUrl(ctx.db, args.prUrl);
+    const previousState: PrState | undefined = row?.state;
+    if (row) {
+      await setPullRequestState(ctx, row, {
+        state: nextState ?? row.state,
+        title: args.title,
+        headBranch: args.headBranch,
+        baseBranch: args.baseBranch,
       });
+      row = await ctx.db.get(row._id);
+      if (!row) return null;
+    } else {
+      row = await attachUntrackedPullRequest(ctx, args, nextState);
+      if (!row) return null;
+    }
+    if (nextState === null || nextState === previousState) return null;
 
-      // A "merged" event can be a false positive: GitHub marks this session's
-      // PR merged whenever its commit SHAs land on the base branch via ANY PR
-      // (a "tip-copy" — e.g. a duplicate PR created from the same branch
-      // tip). Schedule a delayed check that confirms the merge commit is
-      // actually associated with this PR number, and detaches/reopens the
-      // session if not. Only on the transition into merged, so a duplicate
-      // webhook for an already-merged PR does not re-schedule the check.
-      if (
-        nextState === "merged" &&
-        previousState !== "merged" &&
-        args.prNumber !== undefined &&
-        args.mergeCommitSha !== undefined
-      ) {
+    const owner = row.owner;
+    if (owner.kind === "session") {
+      await reconcileSessionArchiveState(ctx, owner.sessionId);
+      // A "merged" event can be a false positive: GitHub marks a PR merged
+      // whenever its commit SHAs land on the base branch via ANY PR (a
+      // "tip-copy"). A delayed check confirms the merge commit belongs to this
+      // PR and detaches it if not. Only on the transition into merged.
+      if (nextState === "merged" && args.mergeCommitSha !== undefined) {
         await ctx.scheduler.runAfter(
           15_000,
           internal.github.verifySessionPrMerged,
-          {
-            sessionId: session._id,
-            prUrl: args.prUrl,
-            prNumber: args.prNumber,
-            mergeCommitSha: args.mergeCommitSha,
-          },
+          { prUrl: row.prUrl, mergeCommitSha: args.mergeCommitSha },
         );
       }
       return null;
     }
 
-    // Not the primary PR of any session — it may be a linked repo's PR
-    // (multi-repo sessions open one PR per `sessionRepos` row).
-    const linkedRepo = await ctx.db
-      .query("sessionRepos")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first();
-    if (!linkedRepo) return null;
-
-    if (linkedRepo.prState !== nextState) {
-      await ctx.db.patch(linkedRepo._id, { prState: nextState });
+    const terminal = nextState === "merged" || nextState === "closed";
+    let finished = false;
+    if (owner.kind === "project") {
+      finished = await applyProjectPrEvent(ctx, owner.projectId, row, {
+        action: args.action,
+        draft: args.draft,
+      });
+    } else if (terminal) {
+      finished = await applyQuickTaskPrClosed(ctx, owner.taskId, row);
     }
-    const parentSession = await ctx.db.get(linkedRepo.sessionId);
-    if (!parentSession) return null;
-    await reconcileSessionArchiveState(ctx, parentSession);
+    if (terminal) {
+      // Audit trail of the close; "skipped" when the owner did not move
+      // (another PR is still live, or it had already finished).
+      await ctx.db.insert("githubWebhookEvents", {
+        event: "pull_request",
+        action: "closed",
+        prUrl: row.prUrl,
+        merged: nextState === "merged",
+        status: finished ? "completed" : "skipped",
+        createdAt: Date.now(),
+        ...(owner.taskId !== undefined ? { taskId: owner.taskId } : {}),
+      });
+    }
     return null;
   },
 });
 
-/** Handles a PR closed webhook event, updating related tasks and projects based on merge status. */
-export const handlePrClosed = internalMutation({
+/**
+ * Links a PR Eva has no row for to the owner its head branch names. Covers a
+ * PR the agent opened from a side branch (`eva/session-<id>-<slug>`), one a
+ * person opened by hand on an Eva branch, and one Eva opened but lost before
+ * recording (its own branch, so it is restored as the primary when the owner
+ * has none).
+ */
+async function attachUntrackedPullRequest(
+  ctx: MutationCtx,
   args: {
-    prUrl: v.string(),
-    merged: v.boolean(),
-    branchName: v.optional(v.string()),
+    prUrl: string;
+    title?: string;
+    headBranch?: string;
+    baseBranch?: string;
+    repoOwner?: string;
+    repoName?: string;
+    headInSameRepo?: boolean;
   },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const eventId = await ctx.db.insert("githubWebhookEvents", {
-      event: "pull_request",
-      action: "closed",
-      prUrl: args.prUrl,
-      merged: args.merged,
-      status: "pending",
-      createdAt: Date.now(),
-    });
+  nextState: PrState | null,
+): Promise<Doc<"pullRequests"> | null> {
+  if (
+    args.headBranch === undefined ||
+    args.repoOwner === undefined ||
+    args.repoName === undefined ||
+    args.headInSameRepo === false
+  ) {
+    return null;
+  }
+  const resolved = await resolvePrOwnerFromBranch(ctx.db, {
+    branch: args.headBranch,
+    repoOwner: args.repoOwner,
+    repoName: args.repoName,
+  });
+  if (!resolved) return null;
+  const existing = await listOwnerPullRequests(
+    ctx.db,
+    ownerRef(resolved.owner),
+  );
+  const ownerHasPrimary = existing.some((row) => row.primary);
+  return await recordPullRequest(ctx, {
+    owner: resolved.owner,
+    repoId: resolved.repoId,
+    prUrl: args.prUrl,
+    state: nextState ?? "open",
+    primary: resolved.isMainBranch && !ownerHasPrimary,
+    origin: resolved.isMainBranch ? "eva" : "agent",
+    headBranch: args.headBranch,
+    baseBranch: args.baseBranch,
+    title: args.title,
+  });
+}
 
-    let run = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_pr_url", (q) => q.eq("prUrl", args.prUrl))
-      .first();
+/**
+ * A project's phase follows its primary PR through draft/ready, and its PRs as
+ * a whole for completion: merged once every PR is terminal and one merged,
+ * cancelled once every PR is closed unmerged. Merging the PR of the current
+ * branch starts a fresh branch version, so the next cycle opens a new PR.
+ * Task statuses are never touched: they are the record of what each task did,
+ * and a merge or close can be undone on GitHub.
+ */
+async function applyProjectPrEvent(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  row: Doc<"pullRequests">,
+  event: { action: string; draft: boolean | undefined },
+): Promise<boolean> {
+  const project = await ctx.db.get(projectId);
+  if (!project) return false;
 
-    // Fallback: no run has this PR URL recorded (e.g. the URL was dropped
-    // during PR creation if a downstream call like addLabels failed). Eva
-    // branches are deterministically named — `eva/task-<taskId>` for quick
-    // tasks and `eva/project-<projectId>[-vN]` for project tasks — so we can
-    // recover the run by parsing the branch and heal the link for next time.
-    if (!run && args.branchName) {
-      run = await findRunByBranchName(ctx, args.branchName);
-      if (run) {
-        await ctx.db.patch(run._id, { prUrl: args.prUrl });
-      }
+  if (row.state !== "merged" && row.state !== "closed") {
+    const nextPhase = deriveProjectPhaseFromPrEvent(event.action, event.draft);
+    if (
+      row.primary &&
+      nextPhase !== null &&
+      isProjectReviewPhase(project.phase) &&
+      project.phase !== nextPhase
+    ) {
+      await ctx.db.patch(projectId, { phase: nextPhase });
     }
+    return false;
+  }
 
-    if (!run) {
-      await ctx.db.patch(eventId, { status: "skipped" });
-      return null;
-    }
-
-    const task = await ctx.db.get(run.taskId);
-    if (!task) {
-      await ctx.db.patch(eventId, { status: "skipped" });
-      return null;
-    }
-
-    const now = Date.now();
-    const projectId = task.projectId;
-
-    if (projectId) {
-      // Project PRs move the project phase only. Task statuses are the record of
-      // what each task actually did, and a merge or close can be undone on
-      // GitHub, so overwriting them would destroy history we cannot restore.
-      const project = await ctx.db.get(projectId);
-      const newPhase = args.merged ? "completed" : "cancelled";
-      if (args.merged && project) {
-        const nextVersion = (project.branchVersion ?? 1) + 1;
-        const deleteId = preferPersistedSandboxId({
-          sandboxId: project.sandboxId,
-        });
-        if (deleteId) {
-          await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-            sandboxId: deleteId,
-            repoId: project.repoId,
-          });
-        }
-        await ctx.db.patch(projectId, {
-          phase: newPhase,
-          sandboxId: undefined,
-
-          lastSandboxActivity: undefined,
-          branchVersion: nextVersion,
-          branchName: buildProjectBranchName(projectId, nextVersion),
-          prUrl: undefined,
-        });
-      } else {
-        await ctx.db.patch(projectId, { phase: newPhase });
-      }
-
-      // One notification for the project as a whole, never one per task, and a
-      // single activity entry on the task that opened the PR so the merge/close
-      // still leaves a trace on a timeline.
-      const projectTitle = project?.title ?? "project";
-      await notifyProjectSubscribers(ctx, {
-        projectId,
-        type: args.merged ? "task_complete" : "system",
-        title: args.merged
-          ? `PR merged — project "${projectTitle}" moved to Merged`
-          : `PR closed — project "${projectTitle}" moved to Cancelled`,
-        message: args.merged
-          ? `GitHub merged ${args.prUrl}. The project moved to merged; its tasks kept their status.`
-          : `GitHub closed ${args.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
-        repoId: task.repoId,
-      });
-      await logTaskActivity(
-        ctx,
-        task._id,
-        undefined,
-        "pr",
-        undefined,
-        args.merged ? "merged" : "closed",
-      );
-
-      await ctx.db.patch(eventId, { status: "completed", taskId: task._id });
-      return null;
-    }
-
-    // Quick task: the PR is the task, so its status follows the PR.
-    if (task.status === "done" || task.status === "cancelled") {
-      await ctx.db.patch(eventId, { status: "skipped" });
-      return null;
-    }
-
-    const newStatus = args.merged ? "done" : "cancelled";
-    await ctx.db.patch(task._id, { status: newStatus, updatedAt: now });
-
-    if (task.scheduledFunctionId) {
-      try {
-        await ctx.scheduler.cancel(task.scheduledFunctionId);
-      } catch {
-        // may have already fired
-      }
-      await ctx.db.patch(task._id, {
-        scheduledAt: undefined,
-        scheduledFunctionId: undefined,
+  const currentBranch =
+    project.branchName ??
+    buildProjectBranchName(projectId, project.branchVersion);
+  if (row.state === "merged" && row.headBranch === currentBranch) {
+    const nextVersion = (project.branchVersion ?? 1) + 1;
+    const deleteId = preferPersistedSandboxId({ sandboxId: project.sandboxId });
+    if (deleteId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+        sandboxId: deleteId,
+        repoId: project.repoId,
       });
     }
-
-    await notifySubscribers(ctx, {
-      taskId: task._id,
-      type: args.merged ? "task_complete" : "system",
-      title: args.merged
-        ? `PR merged — "${task.title}" moved to done`
-        : `PR closed — "${task.title}" moved to cancelled`,
-      message: args.merged
-        ? `GitHub merged ${args.prUrl}. Task moved to done.`
-        : `GitHub closed ${args.prUrl} without merge. Task moved to cancelled.`,
-      repoId: task.repoId,
+    await ctx.db.patch(projectId, {
+      sandboxId: undefined,
+      lastSandboxActivity: undefined,
+      branchVersion: nextVersion,
+      branchName: buildProjectBranchName(projectId, nextVersion),
     });
+  }
 
-    // Record the PR event on the task's activity timeline so the merge/close is
-    // visible there, not just as a notification. System-driven, so no actor.
+  const rows = await listOwnerPullRequests(ctx.db, {
+    kind: "project",
+    projectId,
+  });
+  if (!allPullRequestsTerminal(rows)) return false;
+  const merged = rows.some((pr) => pr.state === "merged");
+  await ctx.db.patch(projectId, { phase: merged ? "completed" : "cancelled" });
+
+  // One notification for the project as a whole, never one per task, and a
+  // single activity entry on the task that opened the PR so the merge/close
+  // still leaves a trace on a timeline.
+  const projectTitle = project.title;
+  await notifyProjectSubscribers(ctx, {
+    projectId,
+    type: merged ? "task_complete" : "system",
+    title: merged
+      ? `PR merged — project "${projectTitle}" moved to Merged`
+      : `PR closed — project "${projectTitle}" moved to Cancelled`,
+    message: merged
+      ? `GitHub merged ${row.prUrl}. The project moved to merged; its tasks kept their status.`
+      : `GitHub closed ${row.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
+    repoId: project.repoId,
+  });
+  if (row.owner.kind === "project" && row.owner.taskId !== undefined) {
     await logTaskActivity(
       ctx,
-      task._id,
+      row.owner.taskId,
       undefined,
       "pr",
       undefined,
-      args.merged ? "merged" : "closed",
+      merged ? "merged" : "closed",
     );
+  }
+  return true;
+}
 
-    // A merged/closed PR makes the task read-only, so stop any live preview
-    // sandbox now (mirrors handleSessionPrEvent) and then grace-delete it.
-    if (
-      task.reviewTaskSandboxStatus === "active" ||
-      task.reviewTaskSandboxStatus === "starting" ||
-      task.reviewTaskSandboxStatus === "stopping" ||
-      task.sandboxId !== undefined
-    ) {
-      await requestTaskSandboxStop(ctx, task._id);
-    }
-    if (task.sandboxId) {
-      await scheduleTaskSandboxGraceDelete(ctx, {
-        ...task,
-        status: newStatus,
-        updatedAt: now,
-      });
-    }
+/**
+ * A quick task's status follows its PRs: done once every PR is terminal and
+ * one merged, cancelled once every PR is closed unmerged. A task with a second
+ * PR still open stays where it is.
+ */
+async function applyQuickTaskPrClosed(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+  row: Doc<"pullRequests">,
+): Promise<boolean> {
+  const task = await ctx.db.get(taskId);
+  if (!task) return false;
+  if (task.status === "done" || task.status === "cancelled") return false;
+  const rows = await listOwnerPullRequests(ctx.db, { kind: "task", taskId });
+  if (!allPullRequestsTerminal(rows)) return false;
+  const merged = rows.some((pr) => pr.state === "merged");
 
-    await ctx.db.patch(eventId, {
-      status: "completed",
-      taskId: task._id,
+  const now = Date.now();
+  const newStatus = merged ? "done" : "cancelled";
+  await ctx.db.patch(task._id, { status: newStatus, updatedAt: now });
+
+  if (task.scheduledFunctionId) {
+    try {
+      await ctx.scheduler.cancel(task.scheduledFunctionId);
+    } catch {
+      // may have already fired
+    }
+    await ctx.db.patch(task._id, {
+      scheduledAt: undefined,
+      scheduledFunctionId: undefined,
     });
+  }
 
-    return null;
-  },
-});
+  await notifySubscribers(ctx, {
+    taskId: task._id,
+    type: merged ? "task_complete" : "system",
+    title: merged
+      ? `PR merged — "${task.title}" moved to done`
+      : `PR closed — "${task.title}" moved to cancelled`,
+    message: merged
+      ? `GitHub merged ${row.prUrl}. Task moved to done.`
+      : `GitHub closed ${row.prUrl} without merge. Task moved to cancelled.`,
+    repoId: task.repoId,
+  });
+
+  // Record the PR event on the task's activity timeline so the merge/close is
+  // visible there, not just as a notification. System-driven, so no actor.
+  await logTaskActivity(
+    ctx,
+    task._id,
+    undefined,
+    "pr",
+    undefined,
+    merged ? "merged" : "closed",
+  );
+
+  // A merged/closed PR makes the task read-only, so stop any live preview
+  // sandbox now (mirrors the session archive) and then grace-delete it.
+  if (
+    task.reviewTaskSandboxStatus === "active" ||
+    task.reviewTaskSandboxStatus === "starting" ||
+    task.reviewTaskSandboxStatus === "stopping" ||
+    task.sandboxId !== undefined
+  ) {
+    await requestTaskSandboxStop(ctx, task._id);
+  }
+  if (task.sandboxId) {
+    await scheduleTaskSandboxGraceDelete(ctx, {
+      ...task,
+      status: newStatus,
+      updatedAt: now,
+    });
+  }
+  return true;
+}
 
 /**
  * On push to a repo's configured base branch, schedule a skill sync when the

@@ -5,6 +5,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { recordPullRequest } from "../convex/_pullRequests/store";
 import {
   decideSandboxStartPlan,
   SANDBOX_SURFACES,
@@ -84,11 +85,18 @@ async function fixture() {
       createdBy: ownerUserId,
       reviewTaskSandboxStatus: "active",
     });
-    await ctx.db.insert("agentRuns", {
+    const runId = await ctx.db.insert("agentRuns", {
       taskId,
       status: "success",
       logs: [],
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "task", taskId, runId },
+      repoId,
       prUrl: TASK_PR_URL,
+      state: "draft",
+      primary: true,
+      origin: "eva",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -202,7 +210,7 @@ describe("list_entities returns what the caller can already open", () => {
     expect(byId.get(f.projectId)?.sandboxStatus).toBe("closed");
   });
 
-  test("a quick task's PR is read off the run that opened it", async () => {
+  test("a quick task reports the PR its run opened", async () => {
     const f = await fixture();
     const { entities } = await listFor(f, { kind: "task" });
     expect(entities).toHaveLength(1);

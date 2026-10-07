@@ -14,7 +14,7 @@ export {
   updateProjectSandbox,
   finalizeRunStreamingPhase,
   completeRun,
-  setRunPrUrl,
+  recordManualTaskPr,
 } from "./_taskWorkflow/runLifecycle";
 
 export { checkStaleRuns, handleStaleRun } from "./_taskWorkflow/watchdog";

@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { recordPullRequest } from "../convex/_pullRequests/store";
 import type { Id } from "../convex/_generated/dataModel";
 import type { RepoEvent } from "../convex/_automationEvents/events";
 import { EVENT_RUN_MAX_WAIT_MS } from "../convex/_automationEvents/events";
@@ -65,12 +66,19 @@ async function fixture() {
       rootDirectory: "apps/web",
       parentRepoId: rootRepoId,
     });
-    await ctx.db.insert("sessions", {
+    const sessionId = await ctx.db.insert("sessions", {
       repoId: appRepoId,
       userId,
       title: "PR owner",
       status: "active",
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "session", sessionId },
+      repoId: appRepoId,
       prUrl: PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
     });
     return { userId, rootRepoId, appRepoId };
   });

@@ -1,68 +1,146 @@
-import type { Infer } from "convex/values";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { extractPrNumberFromUrl } from "../_github/prUrl";
-import { schedulePrLifecycleActions } from "../_github/prLifecycleActions";
-import { prStateValidator } from "../validators";
-
-export type PrState = Infer<typeof prStateValidator>;
+import { createNotification } from "../notifications";
+import {
+  cancelSessionSandboxGraceDelete,
+  scheduleSessionSandboxGraceDelete,
+} from "../sandboxCleanup";
+import {
+  clearArchivedPrStates,
+  listOwnerPullRequests,
+  type PrState,
+} from "../_pullRequests/store";
+import { requestSessionSandboxStop } from "./sandbox";
 
 /**
- * A multi-repo session opens one PR per repo (the primary's `session.prUrl` +
- * one per `sessionRepos` row). It only auto-archives once every PR it opened
- * is terminal (merged or closed) — a single still-open linked PR must keep the
- * whole session live, even after the primary's PR merges.
- *
- * `undefined` for a slot means that repo never opened a PR (e.g. a linked repo
- * with no commits yet) and is ignored — it neither blocks nor triggers an
- * archive. But when EVERY slot is undefined, the session has no PR at all, and
- * this must return false rather than vacuously true.
+ * A session auto-archives only once every PR it holds is terminal (merged or
+ * closed) — the primary's, each linked repo's, and any the agent opened on a
+ * side branch. A single live PR keeps the whole session live. A session with
+ * no PR at all never archives through this rule.
  */
-export function shouldArchiveSession(
-  primaryState: PrState | undefined,
-  linkedStates: Array<PrState | undefined>,
-): boolean {
-  const openedStates: PrState[] = [];
-  if (primaryState !== undefined) openedStates.push(primaryState);
-  for (const state of linkedStates) {
-    if (state !== undefined) openedStates.push(state);
-  }
-  if (openedStates.length === 0) return false;
-  return openedStates.every(
-    (state) => state === "merged" || state === "closed",
+export function shouldArchiveSession(states: readonly PrState[]): boolean {
+  if (states.length === 0) return false;
+  return states.every((state) => state === "merged" || state === "closed");
+}
+
+/** One pull request that took part in a session's auto-archive. */
+export type SessionArchiveTriggerPr = {
+  url: string;
+  prNumber?: number;
+  merged: boolean;
+};
+
+/**
+ * Inbox copy for a session auto-archived because every PR it holds is now
+ * merged or closed. `prs` is exactly the set of PRs that made the archive rule
+ * pass, so a single-PR session reads as it always has.
+ */
+export function sessionPrArchiveNotificationCopy(args: {
+  sessionTitle: string;
+  prs: SessionArchiveTriggerPr[];
+}): { title: string; message: string } {
+  const refs = args.prs.map((pr) =>
+    pr.prNumber !== undefined ? `PR #${pr.prNumber}` : pr.url,
   );
+  const refsList = refs.join(", ");
+  const urlsList = args.prs.map((pr) => pr.url).join(", ");
+
+  if (args.prs.length === 1) {
+    const pr = args.prs[0];
+    return pr.merged
+      ? {
+          title: `${refsList} merged — "${args.sessionTitle}" archived`,
+          message: `${refsList} was merged on GitHub (${pr.url}). Your session was archived.`,
+        }
+      : {
+          title: `${refsList} closed — "${args.sessionTitle}" archived`,
+          message: `${refsList} was closed on GitHub without merging (${pr.url}). Your session was archived.`,
+        };
+  }
+
+  const allMerged = args.prs.every((pr) => pr.merged);
+  const verb = allMerged ? "merged" : "closed";
+  return {
+    title: `${refsList} ${verb} — "${args.sessionTitle}" archived`,
+    message: `Your session was archived because every pull request it opened is now closed: ${urlsList}.`,
+  };
 }
 
-export type LivePrState = "draft" | "open";
-
-/** Open or draft — the only PR states Eva should close on archive. */
-export function livePrState(
-  prState: Doc<"sessions">["prState"],
-): LivePrState | undefined {
-  if (prState === "draft" || prState === "open") return prState;
-  return undefined;
-}
-
-/** Close or reopen the session's GitHub PR. No-op if the URL or repo is missing. */
-export async function scheduleSessionPrSync(
+/** Inbox-only notice to the session owner. Never emails (see DIGEST_EXCLUDED_TYPES). */
+async function notifySessionOwnerOfPrArchive(
   ctx: MutationCtx,
   session: Doc<"sessions">,
-  action: { kind: "close" } | { kind: "reopen"; asReady: boolean },
+  prs: SessionArchiveTriggerPr[],
 ): Promise<void> {
-  if (!session.prUrl) return;
-  const repo = await ctx.db.get(session.repoId);
-  const prNumber = extractPrNumberFromUrl(session.prUrl);
-  if (!repo || prNumber === null) return;
-  await schedulePrLifecycleActions(
-    ctx,
-    {
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      prNumber,
-    },
-    action.kind === "close"
-      ? { kind: "close" }
-      : { kind: "reopen", asReady: action.asReady },
-  );
+  if (prs.length === 0) return;
+  const copy = sessionPrArchiveNotificationCopy({
+    sessionTitle: session.title,
+    prs,
+  });
+  await createNotification(ctx, {
+    userId: session.createdBy ?? session.userId,
+    type: "session_archived",
+    title: copy.title,
+    message: copy.message,
+    repoId: session.repoId,
+    sessionId: session._id,
+  });
+}
+
+/**
+ * Applies the archive/unarchive side effects (sandbox stop, grace-delete,
+ * owner notification) once every PR row the session holds is up to date. The
+ * one place a PR state change moves a session in or out of the archive, so a
+ * multi-PR session archives exactly once — when its last live PR lands.
+ */
+export async function reconcileSessionArchiveState(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (!session) return;
+  const rows = await listOwnerPullRequests(ctx.db, {
+    kind: "session",
+    sessionId,
+  });
+  const archive = shouldArchiveSession(rows.map((row) => row.state));
+  const needsArchive = archive && session.archived !== true;
+  const needsUnarchive = !archive && session.archived === true;
+  if (!needsArchive && !needsUnarchive) return;
+
+  await ctx.db.patch(session._id, {
+    archived: needsArchive,
+    updatedAt: Date.now(),
+  });
+
+  if (needsArchive) {
+    const archivedSession: Doc<"sessions"> = { ...session, archived: true };
+    // Merged/closed sessions are read-only — stop any live sandbox so VMs
+    // aren't left running forever after the last PR the session opened lands.
+    if (
+      session.status === "active" ||
+      session.status === "starting" ||
+      session.status === "stopping" ||
+      session.sandboxId !== undefined
+    ) {
+      await requestSessionSandboxStop(ctx, session._id);
+    }
+    await scheduleSessionSandboxGraceDelete(ctx, archivedSession);
+    // Primary first, then in the order the PRs were opened.
+    const ordered = [...rows].sort(
+      (a, b) => Number(b.primary) - Number(a.primary) || a.createdAt - b.createdAt,
+    );
+    await notifySessionOwnerOfPrArchive(
+      ctx,
+      session,
+      ordered.map((row) => ({
+        url: row.prUrl,
+        prNumber: row.prNumber,
+        merged: row.state === "merged",
+      })),
+    );
+  } else {
+    await clearArchivedPrStates(ctx, { kind: "session", sessionId });
+    await cancelSessionSandboxGraceDelete(ctx, session._id);
+  }
 }

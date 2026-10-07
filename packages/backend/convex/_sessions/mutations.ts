@@ -30,7 +30,11 @@ import {
   cancelSessionSandboxGraceDelete,
   scheduleSessionSandboxGraceDelete,
 } from "../sandboxCleanup";
-import { livePrState, scheduleSessionPrSync } from "./prArchive";
+import {
+  closeLivePullRequests,
+  findPrimaryPullRequest,
+  reopenArchivedPullRequests,
+} from "../_pullRequests/store";
 import {
   composerTraitFields,
   hasComposerTraitUpdate,
@@ -451,13 +455,12 @@ export const updateStatus = authMutation({
   },
 });
 
-/** Updates editable fields (title, branch, PR URL) on a session. */
+/** Updates editable fields (title, branch) on a session. */
 export const update = authMutation({
   args: {
     id: v.id("sessions"),
     title: v.optional(v.string()),
     branchName: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -465,23 +468,23 @@ export const update = authMutation({
     const updates: {
       title?: string;
       branchName?: string;
-      prUrl?: string;
     } = {};
     if (args.title !== undefined) updates.title = args.title;
     if (args.branchName !== undefined) updates.branchName = args.branchName;
-    if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
     await ctx.db.patch(args.id, updates);
 
-    if (
-      args.title !== undefined &&
-      args.title !== session.title &&
-      session.prUrl
-    ) {
-      await schedulePrTitleSync(ctx, {
-        repoId: session.repoId,
-        prUrl: session.prUrl,
-        title: args.title,
+    if (args.title !== undefined && args.title !== session.title) {
+      const primaryPr = await findPrimaryPullRequest(ctx.db, {
+        kind: "session",
+        sessionId: session._id,
       });
+      if (primaryPr) {
+        await schedulePrTitleSync(ctx, {
+          repoId: primaryPr.repoId,
+          prUrl: primaryPr.prUrl,
+          title: args.title,
+        });
+      }
     }
     return null;
   },
@@ -502,8 +505,8 @@ export const updateSummary = authMutation({
 });
 
 /**
- * Archives a session: sandbox to cold storage, open/draft PR closed (merged
- * PRs are left alone), row flagged so the active list drops it.
+ * Archives a session: sandbox to cold storage, every open/draft PR it holds
+ * closed (merged PRs are left alone), row flagged so the active list drops it.
  *
  * Split from the `archive` mutation so server-side callers that already hold
  * the doc and its access check — `resetOrchestratorSession` retiring the old
@@ -521,23 +524,12 @@ export async function archiveSessionDoc(
     });
   }
 
-  const restorePrState = livePrState(session.prState);
-  if (restorePrState) {
-    await scheduleSessionPrSync(ctx, session, { kind: "close" });
-    await ctx.db.patch(session._id, {
-      archived: true,
-      status: "closed",
-      updatedAt: Date.now(),
-      prState: "closed",
-      prStateOnArchive: restorePrState,
-    });
-  } else {
-    await ctx.db.patch(session._id, {
-      archived: true,
-      status: "closed",
-      updatedAt: Date.now(),
-    });
-  }
+  await closeLivePullRequests(ctx, { kind: "session", sessionId: session._id });
+  await ctx.db.patch(session._id, {
+    archived: true,
+    status: "closed",
+    updatedAt: Date.now(),
+  });
   await scheduleSessionSandboxGraceDelete(ctx, {
     ...session,
     archived: true,
@@ -547,7 +539,7 @@ export async function archiveSessionDoc(
 
 /** Archives a session so it no longer appears in the active list.
  * Also archives the sandbox (moves to cold storage for cost savings).
- * Closes an open/draft GitHub PR; merged PRs are left alone. */
+ * Closes every open/draft GitHub PR it holds; merged PRs are left alone. */
 export const archive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
@@ -572,25 +564,11 @@ export const unarchive = authMutation({
       throw new Error("Not authorized");
     }
 
-    const restorePrState = livePrState(session.prStateOnArchive);
-    if (restorePrState !== undefined && session.prState !== "merged") {
-      await ctx.db.patch(args.id, {
-        archived: false,
-        prStateOnArchive: undefined,
-        prState: restorePrState,
-      });
-      await cancelSessionSandboxGraceDelete(ctx, args.id);
-      await scheduleSessionPrSync(ctx, session, {
-        kind: "reopen",
-        asReady: restorePrState === "open",
-      });
-      return null;
-    }
-
-    await ctx.db.patch(args.id, {
-      archived: false,
-      prStateOnArchive: undefined,
+    await reopenArchivedPullRequests(ctx, {
+      kind: "session",
+      sessionId: args.id,
     });
+    await ctx.db.patch(args.id, { archived: false });
     await cancelSessionSandboxGraceDelete(ctx, args.id);
     return null;
   },
