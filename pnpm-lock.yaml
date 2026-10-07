@@ -487,6 +487,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.3.3)
+      tsc-rs:
+        specifier: 0.1.0
+        version: 0.1.0
       typescript:
         specifier: 7.0.1-rc
         version: 7.0.1-rc
@@ -626,6 +629,9 @@ importers:
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
+      tsc-rs:
+        specifier: 0.1.0
+        version: 0.1.0
       typescript:
         specifier: 7.0.1-rc
         version: 7.0.1-rc
@@ -4980,6 +4986,18 @@ packages:
   '@tiptap/starter-kit@3.22.3':
     resolution: {integrity: sha512-vdW/Oo1fdwTL1VOQ5YYbTov00ANeHLquBVEZyL/EkV7Xv5io9rXQsCysJfTSHhiQlyr2MtWFB4+CPGuwXjQWOQ==}
 
+  '@tsc-rs/darwin-arm64@0.1.0':
+    resolution: {integrity: sha512-VgS/GcwcSOOdSlQnpw4etSnL5xFZNwfuPIa7KtBpfC6Qg1Fg0w150s58a00Zs6D6DnDd7yBxx3XgHcyNLjzaPA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tsc-rs/linux-x64@0.1.0':
+    resolution: {integrity: sha512-gzswr3ihKhkviz2ZcmkyVomXY4jqMPT4cWu/rjJqbJtMXJJHuZ9H5Eqv2fcCX9AB0i18EmPNva7Gp7NYaAdpJA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [linux]
+
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
@@ -9064,6 +9082,11 @@ packages:
   ts-dedent@2.2.0:
     resolution: {integrity: sha512-q5W7tVM71e2xjHZTlgfTDoPF/SmqKG5hddq9SzR49CH2hayqRKJtQ4mtRlSxKaJlR/+9rEM+mnBHf7I2/BQcpQ==}
     engines: {node: '>=6.10'}
+
+  tsc-rs@0.1.0:
+    resolution: {integrity: sha512-ibJNjypqagRtvc3wrQALo4VxOd0QmujczOIqMm97ioTkRuMS3UQlmX3f17IkhsLwgQ2az4UuWzfuaYliUdf3xQ==}
+    engines: {node: '>=16.20.0'}
+    hasBin: true
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -13650,6 +13673,12 @@ snapshots:
       '@tiptap/extension-underline': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
       '@tiptap/extensions': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3)
       '@tiptap/pm': 3.22.3
+
+  '@tsc-rs/darwin-arm64@0.1.0':
+    optional: true
+
+  '@tsc-rs/linux-x64@0.1.0':
+    optional: true
 
   '@tybys/wasm-util@0.10.2':
     dependencies:
@@ -18354,6 +18383,11 @@ snapshots:
   ts-algebra@2.0.0: {}
 
   ts-dedent@2.2.0: {}
+
+  tsc-rs@0.1.0:
+    optionalDependencies:
+      '@tsc-rs/darwin-arm64': 0.1.0
+      '@tsc-rs/linux-x64': 0.1.0
 
   tslib@2.8.1: {}
 
