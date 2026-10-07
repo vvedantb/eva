@@ -1,15 +1,8 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type {
-  ActionCtx,
-  DatabaseReader,
-  MutationCtx,
-} from "../_generated/server";
+import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
-import {
-  RUN_TIMEOUT_MS,
-  STALE_CHECK_DELAY_MS,
-} from "../_taskWorkflow/staleness";
+import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import {
   startNextQueuedProjectChatMessage,
   startNextQueuedSessionMessage,
@@ -18,7 +11,6 @@ import {
 import type { WorkflowId } from "@convex-dev/workflow";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
-import { findOpenTurn } from "./turnStore";
 
 /** Streaming entityId prefix for project chat workflows. */
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
@@ -86,30 +78,6 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
     ctx: MutationCtx,
     id: TId,
     turnId: Id<"turns">,
-  ) => Promise<void>;
-  /** Schedules (or re-schedules) this surface's own heartbeat-check Convex function. */
-  scheduleCheck: (
-    ctx: MutationCtx | ActionCtx,
-    id: TId,
-    delayMs: number,
-    args: {
-      workflowId: string;
-      turnStartedAt: number;
-      skipLivenessProbe?: boolean;
-      sandboxStopped?: boolean;
-    },
-  ) => Promise<void>;
-  /** Schedules this surface's own pre-kill liveness probe. */
-  scheduleProbe: (
-    ctx: MutationCtx,
-    id: TId,
-    args: {
-      workflowId: string;
-      turnStartedAt: number;
-      sandboxId: string;
-      repoId: Id<"githubRepos">;
-      streamingAgeMs: number;
-    },
   ) => Promise<void>;
   alerts: {
     timeout: ChatAlert;
@@ -217,27 +185,6 @@ const sessionChatAdapter: ChatSurfaceAdapter<
       { sessionId: id, turnId, sandboxStopped: false },
     );
   },
-  scheduleCheck: (ctx, id, delayMs, args) =>
-    ctx.scheduler
-      .runAfter(delayMs, internal.workflowWatchdog.checkStaleSessionHeartbeat, {
-        sessionId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        skipLivenessProbe: args.skipLivenessProbe,
-        sandboxStopped: args.sandboxStopped,
-      })
-      .then(() => undefined),
-  scheduleProbe: (ctx, id, args) =>
-    ctx.scheduler
-      .runAfter(0, internal.workflowWatchdog.probeStaleSessionLiveness, {
-        sessionId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-        streamingAgeMs: args.streamingAgeMs,
-      })
-      .then(() => undefined),
   alerts: {
     timeout: timeoutAlert,
     sandboxStopped: (staleSeconds) => ({
@@ -325,31 +272,6 @@ const taskChatAdapter: ChatSurfaceAdapter<
       { taskId: id, turnId },
     );
   },
-  scheduleCheck: (ctx, id, delayMs, args) =>
-    ctx.scheduler
-      .runAfter(
-        delayMs,
-        internal.workflowWatchdog.checkStaleAgentTaskChatHeartbeat,
-        {
-          taskId: id,
-          workflowId: args.workflowId,
-          turnStartedAt: args.turnStartedAt,
-          skipLivenessProbe: args.skipLivenessProbe,
-          sandboxStopped: args.sandboxStopped,
-        },
-      )
-      .then(() => undefined),
-  scheduleProbe: (ctx, id, args) =>
-    ctx.scheduler
-      .runAfter(0, internal.workflowWatchdog.probeStaleAgentTaskChatLiveness, {
-        taskId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-        streamingAgeMs: args.streamingAgeMs,
-      })
-      .then(() => undefined),
   alerts: {
     timeout: timeoutAlert,
     sandboxStopped: (staleSeconds) => ({
@@ -438,31 +360,6 @@ const projectChatAdapter: ChatSurfaceAdapter<
       { projectId: id, turnId },
     );
   },
-  scheduleCheck: (ctx, id, delayMs, args) =>
-    ctx.scheduler
-      .runAfter(
-        delayMs,
-        internal.workflowWatchdog.checkStaleProjectChatHeartbeat,
-        {
-          projectId: id,
-          workflowId: args.workflowId,
-          turnStartedAt: args.turnStartedAt,
-          skipLivenessProbe: args.skipLivenessProbe,
-          sandboxStopped: args.sandboxStopped,
-        },
-      )
-      .then(() => undefined),
-  scheduleProbe: (ctx, id, args) =>
-    ctx.scheduler
-      .runAfter(0, internal.workflowWatchdog.probeStaleProjectChatLiveness, {
-        projectId: id,
-        workflowId: args.workflowId,
-        turnStartedAt: args.turnStartedAt,
-        sandboxId: args.sandboxId,
-        repoId: args.repoId,
-        streamingAgeMs: args.streamingAgeMs,
-      })
-      .then(() => undefined),
   alerts: {
     timeout: timeoutAlert,
     sandboxStopped: (staleSeconds) => ({
@@ -523,31 +420,8 @@ export function chatEntityIdFromStream(
 }
 
 /**
- * Arms the old no-heartbeat check chain, but only for a workflow no durable
- * turn owns (a session summarize, say). An owned workflow's turn lease is the
- * only stall check: `turns.reconcile` finalises it through the same adapter.
- */
-async function armLegacyStallCheck<TId extends ChatEntityId, TEntity>(
-  ctx: MutationCtx,
-  adapter: ChatSurfaceAdapter<TId, TEntity>,
-  id: TId,
-  workflowId: string,
-): Promise<void> {
-  const turn = await findOpenTurn(ctx, id);
-  if (turn?.workflowId === workflowId) return;
-  // The in-sandbox callback touches streamingActivity at least every ~15s
-  // while a turn runs, so a silently dead agent process (OOM) shows up as a
-  // stale row within minutes instead of at the 2h backstop.
-  await adapter.scheduleCheck(ctx, id, STALE_CHECK_DELAY_MS, {
-    workflowId,
-    turnStartedAt: Date.now(),
-  });
-}
-
-/**
  * Records a workflow as the active workflow for a session and schedules the
- * 2-hour backstop. Call after `bindTurnWorkflow`, so a turn-owned workflow is
- * recognised and skips the legacy stall chain.
+ * 2-hour backstop. The turn lease (`turns.reconcile`) is the stall check.
  */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,
@@ -562,7 +436,6 @@ export async function trackSessionWorkflow(
     internal.workflowWatchdog.handleStaleSession,
     { sessionId, workflowId: id },
   );
-  await armLegacyStallCheck(ctx, sessionChatAdapter, sessionId, id);
 }
 
 /** Records the active chat workflow for a project; see `trackSessionWorkflow`. */
@@ -579,7 +452,6 @@ export async function trackProjectChatWorkflow(
     internal.workflowWatchdog.handleStaleProjectChat,
     { projectId, workflowId: id },
   );
-  await armLegacyStallCheck(ctx, projectChatAdapter, projectId, id);
 }
 
 /** Records the active chat workflow for an agent task; see `trackSessionWorkflow`. */
@@ -596,5 +468,4 @@ export async function trackAgentTaskChatWorkflow(
     internal.workflowWatchdog.handleStaleAgentTaskChat,
     { taskId, workflowId: id },
   );
-  await armLegacyStallCheck(ctx, taskChatAdapter, taskId, id);
 }

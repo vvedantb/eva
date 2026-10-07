@@ -194,12 +194,21 @@ describe("isTurnClaimed", () => {
 
 describe("every chat restages only when the lease says the turn is unclaimed", () => {
   test.each([
-    ["session", "_sessions/workflow.ts"],
-    ["task chat", "_chat/taskChatDaemon.ts"],
-    ["project chat", "_chat/projectChatDaemon.ts"],
-  ])("%s ensurePendingTurn consults the lease first", (_, path) => {
+    ["session", "_sessions/workflow.ts", "if (isTurnClaimed(openTurn)) return null;"],
+    // Task and project workflows always have a turn: no open turn, no restage.
+    [
+      "task chat",
+      "_chat/taskChatDaemon.ts",
+      "if (!openTurn || isTurnClaimed(openTurn)) return null;",
+    ],
+    [
+      "project chat",
+      "_chat/projectChatDaemon.ts",
+      "if (!openTurn || isTurnClaimed(openTurn)) return null;",
+    ],
+  ])("%s ensurePendingTurn consults the lease first", (_, path, guard) => {
     const restage = definitionBody(readSource(path), "ensurePendingTurn");
-    const guardAt = restage.indexOf("if (isTurnClaimed(openTurn)) return null;");
+    const guardAt = restage.indexOf(guard);
     expect(guardAt, `${path} no longer asks the lease`).toBeGreaterThan(-1);
     // The guard has to precede the restage decision to be worth anything.
     expect(guardAt).toBeLessThan(restage.indexOf("isUnclaimedOpenTurn({"));

@@ -369,6 +369,23 @@ describe.each<ChatSurface>(["task", "project"])(
     );
 
     test(
+      "a staged prompt without a turn id is dropped, not run unfenced",
+      async () => {
+        const { t, claim, read, entityId } =
+          await createStagedChatTurnFixture(surface);
+        await t.run(async (ctx) => {
+          await ctx.db.patch(entityId, {
+            pendingTurn: { prompt: PROMPT, requestedAt: Date.now() },
+          });
+        });
+
+        expect((await claim(true)).prompt).toBeNull();
+        expect((await read()).pendingPrompt).toBeUndefined();
+      },
+      TIMEOUT_MS,
+    );
+
+    test(
       "a second daemon cannot claim a turn that is already running",
       async () => {
         const { t, claim, read, turnId } =

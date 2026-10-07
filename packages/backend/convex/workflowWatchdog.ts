@@ -27,8 +27,6 @@ import {
 import {
   cancelStaleWorkflow,
   finalizeStaleChatTurn,
-  runStaleChatHeartbeatCheck,
-  runStaleChatLivenessProbe,
 } from "./_chat/stallWatchdog";
 import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
 
@@ -151,42 +149,26 @@ export const handleStaleSession = internalMutation({
 });
 
 /**
- * Recurring no-heartbeat check for one session turn. Armed by
- * trackSessionWorkflow, re-schedules itself every STALE_RECHECK_MS while the
- * tracked workflow is still the session's active one, and ends with the turn.
- * See runStaleChatHeartbeatCheck (_chat/stallWatchdog.ts) for the full
- * rationale — shared by all three chat surfaces.
+ * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
+ * stall check. Kept for one release because jobs scheduled before 2026-10-07
+ * still call it. Delete on or after 2026-10-14.
  */
 export const checkStaleSessionHeartbeat = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     workflowId: v.string(),
     turnStartedAt: v.number(),
-    // Set by the liveness probe once it has confirmed the sandbox/callback is
-    // dead, so the kill proceeds without another probe round-trip.
     skipLivenessProbe: v.optional(v.boolean()),
-    // Set by the probe when the sandbox VM itself is no longer running (e.g.
-    // it hit the provider's runtime limit) — the failure message names the
-    // stopped sandbox and the session is closed instead of left "active".
     sandboxStopped: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    await runStaleChatHeartbeatCheck(ctx, sessionChatAdapter, {
-      id: args.sessionId,
-      workflowId: args.workflowId,
-      turnStartedAt: args.turnStartedAt,
-      skipLivenessProbe: args.skipLivenessProbe,
-      sandboxStopped: args.sandboxStopped,
-    });
-    return null;
-  },
+  handler: async () => null,
 });
 
 /**
- * Pre-kill liveness gate for a stale session turn. See
- * runStaleChatLivenessProbe (_chat/stallWatchdog.ts) for the full rationale —
- * shared by all three chat surfaces.
+ * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
+ * stall check. Kept for one release because jobs scheduled before 2026-10-07
+ * still call it. Delete on or after 2026-10-14.
  */
 export const probeStaleSessionLiveness = internalAction({
   args: {
@@ -198,17 +180,7 @@ export const probeStaleSessionLiveness = internalAction({
     streamingAgeMs: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    await runStaleChatLivenessProbe(ctx, sessionChatAdapter, {
-      id: args.sessionId,
-      workflowId: args.workflowId,
-      turnStartedAt: args.turnStartedAt,
-      sandboxId: args.sandboxId,
-      repoId: args.repoId,
-      streamingAgeMs: args.streamingAgeMs,
-    });
-    return null;
-  },
+  handler: async () => null,
 });
 
 /** Cancels a stale evaluation workflow and marks it as timed out or fix error. */
@@ -321,9 +293,9 @@ export const handleStaleProjectChat = internalMutation({
 });
 
 /**
- * Recurring no-heartbeat check for one project chat turn. Same shape as
- * checkStaleSessionHeartbeat — see runStaleChatHeartbeatCheck
- * (_chat/stallWatchdog.ts) for the full rationale.
+ * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
+ * stall check. Kept for one release because jobs scheduled before 2026-10-07
+ * still call it. Delete on or after 2026-10-14.
  */
 export const checkStaleProjectChatHeartbeat = internalMutation({
   args: {
@@ -334,22 +306,13 @@ export const checkStaleProjectChatHeartbeat = internalMutation({
     sandboxStopped: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    await runStaleChatHeartbeatCheck(ctx, projectChatAdapter, {
-      id: args.projectId,
-      workflowId: args.workflowId,
-      turnStartedAt: args.turnStartedAt,
-      skipLivenessProbe: args.skipLivenessProbe,
-      sandboxStopped: args.sandboxStopped,
-    });
-    return null;
-  },
+  handler: async () => null,
 });
 
 /**
- * Pre-kill liveness gate for a stale project chat turn. Same shape as
- * probeStaleSessionLiveness — see runStaleChatLivenessProbe
- * (_chat/stallWatchdog.ts) for the full rationale.
+ * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
+ * stall check. Kept for one release because jobs scheduled before 2026-10-07
+ * still call it. Delete on or after 2026-10-14.
  */
 export const probeStaleProjectChatLiveness = internalAction({
   args: {
@@ -361,17 +324,7 @@ export const probeStaleProjectChatLiveness = internalAction({
     streamingAgeMs: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    await runStaleChatLivenessProbe(ctx, projectChatAdapter, {
-      id: args.projectId,
-      workflowId: args.workflowId,
-      turnStartedAt: args.turnStartedAt,
-      sandboxId: args.sandboxId,
-      repoId: args.repoId,
-      streamingAgeMs: args.streamingAgeMs,
-    });
-    return null;
-  },
+  handler: async () => null,
 });
 
 /** Cancels a stale task chat workflow via the 2-hour workflow-timeout backstop. */
@@ -400,9 +353,9 @@ export const handleStaleAgentTaskChat = internalMutation({
 });
 
 /**
- * Recurring no-heartbeat check for one task chat turn. Same shape as
- * checkStaleSessionHeartbeat — see runStaleChatHeartbeatCheck
- * (_chat/stallWatchdog.ts) for the full rationale.
+ * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
+ * stall check. Kept for one release because jobs scheduled before 2026-10-07
+ * still call it. Delete on or after 2026-10-14.
  */
 export const checkStaleAgentTaskChatHeartbeat = internalMutation({
   args: {
@@ -413,22 +366,13 @@ export const checkStaleAgentTaskChatHeartbeat = internalMutation({
     sandboxStopped: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    await runStaleChatHeartbeatCheck(ctx, taskChatAdapter, {
-      id: args.taskId,
-      workflowId: args.workflowId,
-      turnStartedAt: args.turnStartedAt,
-      skipLivenessProbe: args.skipLivenessProbe,
-      sandboxStopped: args.sandboxStopped,
-    });
-    return null;
-  },
+  handler: async () => null,
 });
 
 /**
- * Pre-kill liveness gate for a stale task chat turn. Same shape as
- * probeStaleSessionLiveness — see runStaleChatLivenessProbe
- * (_chat/stallWatchdog.ts) for the full rationale.
+ * No-op stub. The durable turn's lease (`turns.reconcile`) is now the only
+ * stall check. Kept for one release because jobs scheduled before 2026-10-07
+ * still call it. Delete on or after 2026-10-14.
  */
 export const probeStaleAgentTaskChatLiveness = internalAction({
   args: {
@@ -440,17 +384,7 @@ export const probeStaleAgentTaskChatLiveness = internalAction({
     streamingAgeMs: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    await runStaleChatLivenessProbe(ctx, taskChatAdapter, {
-      id: args.taskId,
-      workflowId: args.workflowId,
-      turnStartedAt: args.turnStartedAt,
-      sandboxId: args.sandboxId,
-      repoId: args.repoId,
-      streamingAgeMs: args.streamingAgeMs,
-    });
-    return null;
-  },
+  handler: async () => null,
 });
 
 /** Cancels a stale build workflow and clears the active build reference. */

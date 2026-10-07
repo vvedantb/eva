@@ -9,7 +9,6 @@ function convexSource(path: string): string {
   return readFileSync(join(testsDir, "../convex", path), "utf8");
 }
 
-const chatWatchdog = convexSource("_chat/stallWatchdog.ts");
 const turnStore = convexSource("_chat/turnStore.ts");
 const taskWatchdog = convexSource("_taskWorkflow/watchdog.ts");
 const staleness = convexSource("_taskWorkflow/staleness.ts");
@@ -24,15 +23,14 @@ const vercelProvider = convexSource("_sandbox/vercelProvider.ts");
  * the work AND the evidence (observed twice in prod on 2026-08-06: a 59-minute
  * cursor turn on task 213, and session 53 the same morning).
  *
- * The guard is that both watchdogs slide the deadline forward on every tick of
- * a live turn. It is invisible until a turn runs long, which is exactly when it
- * is most expensive to get wrong, so the arithmetic is pinned here. The chat
- * watchdog now only runs for workflows no durable turn owns; a durable turn
- * slides the deadline from its lease renewal (see the next block).
+ * The guard is that the quick-task run watchdog slides the deadline forward on
+ * every tick of a live run. It is invisible until a turn runs long, which is
+ * exactly when it is most expensive to get wrong, so the arithmetic is pinned
+ * here. Chat turns slide the deadline from their lease renewal (see the next
+ * block).
  */
 describe("a live turn keeps its sandbox deadline ahead of the watchdog tick", () => {
   const watchdogs = [
-    { name: "chat stall watchdog", source: chatWatchdog, gate: "if (!decision.stale) {" },
     { name: "task run watchdog", source: taskWatchdog, gate: "if (!isStale) {" },
   ];
 

@@ -815,14 +815,9 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
-    // Set for turns staged after the durable-turn cutover. Optional so
-    // workflows started before it still replay.
-    turnId: v.optional(v.id("turns")),
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
-    // Every new durable-turn step is gated on `args.turnId`: steps replay by
-    // order, so a workflow started before the cutover must keep its journal.
-    const turnArgs = args.turnId !== undefined ? { turnId: args.turnId } : {};
     await step.runMutation(
       internal.agentTaskChatWorkflow.addAssistantPlaceholder,
       { taskId: args.taskId },
@@ -856,7 +851,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         } catch (error) {
           await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
             taskId: args.taskId,
-            ...turnArgs,
+            turnId: args.turnId,
             success: false,
             result: null,
             error:
@@ -875,7 +870,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         if (!waited.ready) {
           await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
             taskId: args.taskId,
-            ...turnArgs,
+            turnId: args.turnId,
             success: false,
             result: null,
             error:
@@ -894,7 +889,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       if (decideSandboxStartPlan(data.sandboxStatus) !== "run") {
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
-          ...turnArgs,
+          turnId: args.turnId,
           success: false,
           result: null,
           error:
@@ -908,7 +903,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!data.sandboxId) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
-        ...turnArgs,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -934,7 +929,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     } catch (error) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
-        ...turnArgs,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -950,7 +945,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!activeSandboxId) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
-        ...turnArgs,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -969,7 +964,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!validation.healthy) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
-        ...turnArgs,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -979,12 +974,10 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       return;
     }
 
-    if (args.turnId !== undefined) {
-      await step.runMutation(internal.turns.markLaunching, {
-        turnId: args.turnId,
-        sandboxId: activeSandboxId,
-      });
-    }
+    await step.runMutation(internal.turns.markLaunching, {
+      turnId: args.turnId,
+      sandboxId: activeSandboxId,
+    });
 
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.agentTaskChatWorkflow.ensurePendingTurn, {
@@ -1017,17 +1010,14 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         entityTable: "agentTasks",
       });
     } else {
-      const turnLease =
-        args.turnId === undefined
-          ? null
-          : await step.runMutation(internal.turns.acquireOneShotLease, {
-              turnId: args.turnId,
-              sandboxId: activeSandboxId,
-            });
-      if (args.turnId !== undefined && turnLease === null) {
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId: activeSandboxId },
+      );
+      if (turnLease === null) {
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
-          ...turnArgs,
+          turnId: args.turnId,
           success: false,
           result: null,
           error: "The turn no longer owns this task chat. Please retry.",
@@ -1054,12 +1044,8 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.taskId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
-        ...(turnLease !== null
-          ? {
-              turnId: turnLease.turnId,
-              turnLeaseGeneration: turnLease.leaseGeneration,
-            }
-          : {}),
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
     }
 
@@ -1071,7 +1057,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     // failures become their own alert below.
     await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
       taskId: args.taskId,
-      ...turnArgs,
+      turnId: args.turnId,
       success: result.success,
       result: result.result,
       error: result.error,
@@ -1101,7 +1087,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         );
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
-          ...turnArgs,
+          turnId: args.turnId,
           success: false,
           result: result.result,
           error: publishError,
@@ -1223,8 +1209,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
-    /** The durable turn this result closes; absent on pre-cutover workflows. */
-    turnId: v.optional(v.id("turns")),
+    /** The durable turn this result closes. */
+    turnId: v.id("turns"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -1283,16 +1269,14 @@ export const saveResult = internalMutation({
       entityId: String(args.taskId),
     });
 
-    if (args.turnId !== undefined) {
-      const turn = await ctx.db.get(args.turnId);
-      if (turn) {
-        await closeTurn(
-          ctx,
-          turn,
-          args.success ? "done" : "error",
-          args.error ? { error: args.error } : {},
-        );
-      }
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) {
+      await closeTurn(
+        ctx,
+        turn,
+        args.success ? "done" : "error",
+        args.error ? { error: args.error } : {},
+      );
     }
 
     await startNextQueuedTaskChatMessage(ctx, args.taskId);

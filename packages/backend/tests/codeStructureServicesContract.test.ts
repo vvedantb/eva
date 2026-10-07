@@ -554,11 +554,9 @@ test("stale synthetic-turn heartbeats share isStreamingActivityStale", () => {
   const helper = read("convex/_chat/turnLease.ts");
   expect(helper).toContain("export function isStreamingActivityStale(");
   expect(helper).toContain("TURN_RUNNING_LEASE_MS");
-  for (const path of [
-    "convex/_chat/taskChatDaemon.ts",
-    "convex/_chat/projectChatDaemon.ts",
-    "convex/_sessions/workflow.ts",
-  ] as const) {
+  // Task and project synthetic turns have no timer of their own any more: the
+  // turn lease ends them. Only the session timer still classifies.
+  for (const path of ["convex/_sessions/workflow.ts"] as const) {
     const source = read(path);
     expect(source, `${path} should classify via the shared helper`).toContain(
       "isStreamingActivityStale(",
