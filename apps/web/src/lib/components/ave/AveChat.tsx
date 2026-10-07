@@ -53,6 +53,7 @@ function AveChatBody() {
         onSend={chat.send}
         onCancel={chat.cancel}
         localDraft={chat.localDraft}
+        hideJumpRail
       />
     </div>
   );
