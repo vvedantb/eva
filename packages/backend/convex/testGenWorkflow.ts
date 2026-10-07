@@ -65,8 +65,6 @@ function formatUserFlows(
 /** Runs the test generation workflow: prepares sandbox, generates tests, and creates a PR. */
 export const testGenWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     userId: v.id("users"),
     installationId: v.number(),
@@ -112,7 +110,6 @@ export const testGenWorkflow = workflow.define({
           repoId: docData.repoId,
         },
         {
-          durable: args.durableTurns === true,
           entityId: args.docId,
         },
       );
@@ -427,7 +424,6 @@ export const startTestGen = authMutation({
       ctx,
       internal.testGenWorkflow.testGenWorkflow,
       {
-        durableTurns: true,
         docId: args.docId,
         userId: ctx.userId,
         installationId: repo.installationId,

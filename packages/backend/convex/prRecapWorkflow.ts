@@ -52,8 +52,6 @@ const reviewerFeedbackItemValidator = v.object({
 /** Runs PR recap generation: fetch diff, Claude Code in sandbox, save doc, upsert GitHub comment. */
 export const prRecapWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     repoId: v.id("githubRepos"),
     installationId: v.number(),
@@ -163,7 +161,6 @@ export const prRecapWorkflow = workflow.define({
             repoId: sandboxRepoId,
           },
           {
-            durable: args.durableTurns === true,
             entityId: args.docId,
           },
         );

@@ -32,8 +32,6 @@ const summarizeCompleteEvent = defineEvent({
 /** Runs a session summarization: prepares sandbox, generates bullet-point summary, and saves it. */
 export const summarizeSessionWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     sessionId: v.id("sessions"),
     userId: v.id("users"),
     installationId: v.number(),
@@ -73,7 +71,6 @@ export const summarizeSessionWorkflow = workflow.define({
         sessionPersistenceId: args.sessionId,
       },
       {
-        durable: args.durableTurns === true,
         entityId: args.sessionId,
         lane: "summary",
       },
@@ -241,7 +238,6 @@ export const startSummarize = authMutation({
       ctx,
       internal.summarizeWorkflow.summarizeSessionWorkflow,
       {
-        durableTurns: true,
         sessionId: args.sessionId,
         userId: ctx.userId,
         installationId: repo.installationId,

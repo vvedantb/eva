@@ -59,12 +59,13 @@ const daemonClaimDrainFields = {
 };
 
 /**
- * What a chat daemon's `claimPendingTurn` returns on every surface: a legacy
- * claim (no lease, maybe no prompt) or a durable claim that carries the lease.
+ * What a chat daemon's `claimPendingTurn` returns on every surface: an empty
+ * claim (drains only, no prompt) or a durable claim that carries the lease.
+ * The empty claim keeps the `legacy` tag so every daemon bundle parses it.
  */
 export const daemonClaimResultValidator = v.union(
   v.object({
-    prompt: v.union(v.string(), v.null()),
+    prompt: v.null(),
     turnLifecycle: v.literal("legacy"),
     ...daemonClaimDrainFields,
   }),

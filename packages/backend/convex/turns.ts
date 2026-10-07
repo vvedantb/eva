@@ -11,7 +11,6 @@ import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import {
   stalledAlert,
   turnAdapterForEntity,
-  turnOwnerFromStream,
   type AgentTurnOwner,
   type ChatEntityId,
   type ChatSurfaceAdapter,
@@ -201,36 +200,6 @@ async function applyFencedHeartbeat(
   return lease;
 }
 
-const legacyHeartbeatArgs = {
-  entityId: v.string(),
-  touchOnly: v.boolean(),
-  currentActivity: v.optional(v.string()),
-  currentContent: v.optional(v.string()),
-  pendingQuestion: v.optional(v.string()),
-};
-const legacyHeartbeatArgsValidator = v.object(legacyHeartbeatArgs);
-
-async function applyLegacyHeartbeat(
-  ctx: MutationCtx,
-  args: Infer<typeof legacyHeartbeatArgsValidator>,
-): Promise<boolean> {
-  const owner = turnOwnerFromStream(ctx.db, args.entityId);
-  if (owner && (await findOpenTurn(ctx, owner.entityId, owner.lane))) {
-    return false;
-  }
-  if (args.touchOnly) {
-    await touchStreamingEntity(ctx, args.entityId);
-  } else {
-    await upsertStreamingActivity(ctx, {
-      entityId: args.entityId,
-      currentActivity: args.currentActivity ?? "[]",
-      currentContent: args.currentContent,
-      pendingQuestion: args.pendingQuestion,
-    });
-  }
-  return true;
-}
-
 /** Renews the exact lease generation presented by a sandbox runner. */
 export const renew = internalMutation({
   args: {
@@ -256,34 +225,6 @@ export const heartbeatFromCallback = authMutation({
   handler: async (ctx, args) => ({
     lease: await applyFencedHeartbeat(ctx, args),
   }),
-});
-
-/** Legacy callbacks may write only while no durable Turn owns the chat. */
-export const legacyHeartbeat = internalMutation({
-  args: legacyHeartbeatArgs,
-  returns: v.boolean(),
-  handler: applyLegacyHeartbeat,
-});
-
-/** Authenticated legacy fallback with the same durable ownership gate. */
-const legacyHeartbeatResultValidator = v.object({
-  accepted: v.boolean(),
-  lease: v.union(leaseVerdictValidator, v.null()),
-});
-
-export const legacyHeartbeatFromCallback = authMutation({
-  args: legacyHeartbeatArgs,
-  returns: legacyHeartbeatResultValidator,
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof legacyHeartbeatResultValidator>> => {
-    const accepted = await applyLegacyHeartbeat(ctx, args);
-    return {
-      accepted,
-      lease: accepted ? null : { status: "terminal", reason: "superseded" },
-    };
-  },
 });
 
 /** Records that durable sandbox preparation has reached the launch phase. */

@@ -119,7 +119,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
   return useRoot && workspaceRoot ? workspaceRoot : workDir;
 }
 
-// ../shared/src/modelPricing.ts
+// ../../../repo/packages/shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
 var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
@@ -203,7 +203,6 @@ var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD !== void 0 &
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-var CURSOR_TURN_WORKER_LIFECYCLE = process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
 var CURSOR_TURN_WORKER_TURN_ID = process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
 var parsedCursorWorkerLeaseGeneration = Number(
   process.env.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION
@@ -924,8 +923,8 @@ function releaseTurnLeaseForCompletion() {
 function getCurrentTurnLease() {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
-function canSendTurnHeartbeat(input) {
-  return input.claimMutation === void 0 || input.ownership.status === "owned";
+function canSendTurnHeartbeat(ownership) {
+  return ownership.status === "owned";
 }
 function appendCurrentTurnLease(args) {
   const identity = getCurrentTurnLease();
@@ -1093,6 +1092,7 @@ async function callHarnessSkillCatalogReport(provider, cliVersion, skills) {
 }
 async function callStreamingHeartbeatTouchOnce(entityId) {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -1107,10 +1107,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
     noteHeartbeatResponse(response2, identity);
     return response2;
   }
-  const response = identity === null ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
-    entityId,
-    touchOnly: true
-  }) : await callConvex("mutation", "turns:heartbeatFromCallback", {
+  const response = await callConvex("mutation", "turns:heartbeatFromCallback", {
     entityId,
     touchOnly: true,
     turnId: identity.turnId,
@@ -1121,6 +1118,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
 }
 async function callStreamingHeartbeatOnce(entityId, currentActivity, currentContent, pendingQuestion) {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -1143,17 +1141,18 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
     entityId,
     touchOnly: false,
     currentActivity,
-    currentContent
+    currentContent,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration
   };
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const path3 = identity === null ? "turns:legacyHeartbeatFromCallback" : "turns:heartbeatFromCallback";
-  if (identity !== null) {
-    args.turnId = identity.turnId;
-    args.leaseGeneration = identity.leaseGeneration;
-  }
-  const response = await callConvex("mutation", path3, args);
+  const response = await callConvex(
+    "mutation",
+    "turns:heartbeatFromCallback",
+    args
+  );
   noteHeartbeatResponse(response, identity);
   return response;
 }
@@ -2187,40 +2186,22 @@ function readClaimedTurn(result) {
   const payload = unwrapConvexMutationPayload(result);
   if (!payload || typeof payload.prompt !== "string") return null;
   const lifecycle = payload.turnLifecycle;
-  if (lifecycle !== void 0 && lifecycle !== "legacy" && lifecycle !== "durable") {
-    throw new Error("Claimed turn returned an invalid lifecycle discriminator");
-  }
+  if (lifecycle !== "durable") return null;
   const attachmentUrls = Array.isArray(payload.attachmentUrls) ? payload.attachmentUrls.filter(
     (url) => typeof url === "string"
   ) : [];
   const interactionMode = "default";
   const turnLease = readTurnLeaseIdentity(result);
-  if (lifecycle === "durable" && turnLease === null) {
+  if (turnLease === null) {
     throw new Error("Durable claimed turn did not include a lease identity");
   }
-  if (lifecycle === "legacy" && turnLease !== null) {
-    throw new Error("Legacy claimed turn unexpectedly included a lease identity");
-  }
-  if (turnLease !== null) {
-    return {
-      lifecycle: "durable",
-      prompt: payload.prompt,
-      attachmentUrls,
-      interactionMode,
-      turnLease
-    };
-  }
-  return {
-    lifecycle: "legacy",
-    prompt: payload.prompt,
-    attachmentUrls,
-    interactionMode,
-    turnLease: null
-  };
+  return { prompt: payload.prompt, attachmentUrls, interactionMode, turnLease };
 }
 function startClaimedTurn(turn) {
   if (claimedTurnLifecycleStatus() === "active") {
-    throw new Error("Cannot start a claimed turn while another claim is active");
+    throw new Error(
+      "Cannot start a claimed turn while another claim is active"
+    );
   }
   beginTurnOwnership("claim", turn.turnLease);
   beginTurnCheckpoint();
@@ -2230,10 +2211,8 @@ function appendClaimedTurnCompletion(args) {
   if (ownership.status !== "owned" || ownership.owner !== "claim") {
     throw new Error("Cannot complete a claimed turn before it starts");
   }
-  if (ownership.turnLease !== null) {
-    args.turnId = ownership.turnLease.turnId;
-    args.leaseGeneration = ownership.turnLease.leaseGeneration;
-  }
+  args.turnId = ownership.turnLease.turnId;
+  args.leaseGeneration = ownership.turnLease.leaseGeneration;
 }
 function finishClaimedTurn() {
   endTurnOwnership();
@@ -4598,10 +4577,7 @@ var heartbeatInterval = null;
 var activeFlush = null;
 var flushRequested = false;
 function ownsHeartbeatLease() {
-  return canSendTurnHeartbeat({
-    claimMutation: CLAIM_MUTATION,
-    ownership: getTurnOwnership()
-  });
+  return canSendTurnHeartbeat(getTurnOwnership());
 }
 function buildStreamingPayload() {
   return serializeSteps(
@@ -6625,12 +6601,13 @@ async function ensureSyntheticTurn() {
       entityMutationArgs({ model: MODEL })
     );
     const messageId = readSyntheticTurnMessageId(result);
-    if (messageId === null) {
-      log("daemon: openSyntheticTurn returned no messageId");
+    const syntheticLease = readTurnLeaseIdentity(result);
+    if (messageId === null || syntheticLease === null) {
+      log("daemon: openSyntheticTurn returned no messageId or lease");
       return;
     }
     resetTurnState();
-    beginTurnOwnership("provider", readTurnLeaseIdentity(result));
+    beginTurnOwnership("provider", syntheticLease);
     beginTurnCheckpoint();
     if (!supervisor.startTurn({ kind: "synthetic", messageId })) {
       log("daemon: synthetic turn opened after lifecycle moved; ignoring");
@@ -7112,7 +7089,7 @@ async function runSdkDaemon() {
 import { spawn as spawn2 } from "child_process";
 import { createInterface } from "readline";
 
-// ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
+// ../../../repo/node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
@@ -9003,20 +8980,10 @@ function readCursorTurnWorkerClaim() {
     throw new Error("Cursor turn worker prompt file is missing");
   }
   const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
-  if (CURSOR_TURN_WORKER_LIFECYCLE === "legacy") {
-    return {
-      lifecycle: "legacy",
-      prompt,
-      attachmentUrls: [],
-      interactionMode: "default",
-      turnLease: null
-    };
-  }
-  if (CURSOR_TURN_WORKER_LIFECYCLE !== "durable" || !CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
+  if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
   return {
-    lifecycle: "durable",
     prompt,
     attachmentUrls: [],
     interactionMode: "default",
@@ -9049,17 +9016,11 @@ function buildCursorTurnWorkerEnv(baseEnv, mcpHandoffEnv, turn, promptFile) {
     ...baseEnv,
     ...mcpHandoffEnv,
     EVA_CURSOR_TURN_WORKER_PROMPT_FILE: promptFile,
-    EVA_CURSOR_TURN_WORKER_LIFECYCLE: turn.lifecycle
-  };
-  if (turn.lifecycle === "durable") {
-    workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID = turn.turnLease.turnId;
-    workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION = String(
+    EVA_CURSOR_TURN_WORKER_TURN_ID: turn.turnLease.turnId,
+    EVA_CURSOR_TURN_WORKER_LEASE_GENERATION: String(
       turn.turnLease.leaseGeneration
-    );
-  } else {
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID;
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION;
-  }
+    )
+  };
   return workerEnv;
 }
 function spawnCursorTurnWorker(turn, promptFile) {

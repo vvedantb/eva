@@ -11,14 +11,7 @@ import {
 import type { WorkflowId } from "@convex-dev/workflow";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
-import {
-  AUTOMATION_RUN_STREAM_PREFIX,
-  PR_RECAP_STREAM_PREFIX,
-  SESSION_SUMMARY_STREAM_PREFIX,
-  TASK_RUN_STREAM_PREFIX,
-  sessionSummaryStreamingEntityId,
-} from "./agentStreamIds";
-import type { TurnEntityId } from "./turnStore";
+import { sessionSummaryStreamingEntityId } from "./agentStreamIds";
 import type { TurnLane } from "../validators";
 
 /** Streaming entityId prefix for project chat workflows. */
@@ -468,66 +461,6 @@ export function turnAdapterForEntity<R>(
   if (projectId) return visit.chat(projectChatAdapter, projectId);
   const owner = laneFreeAgentOwner(db, turn.entityId);
   return owner ? visit.agent(owner) : null;
-}
-
-/** Stream-id prefixes of agent turns, and the owner each one names. */
-const AGENT_STREAM_PREFIXES: ReadonlyArray<{
-  prefix: string;
-  parse: (db: DatabaseReader, raw: string) => TurnOwnerKey | null;
-}> = [
-  {
-    prefix: TASK_RUN_STREAM_PREFIX,
-    parse: (db, raw) => keyOf(db.normalizeId("agentRuns", raw)),
-  },
-  {
-    prefix: AUTOMATION_RUN_STREAM_PREFIX,
-    parse: (db, raw) => keyOf(db.normalizeId("automationRuns", raw)),
-  },
-  {
-    prefix: PR_RECAP_STREAM_PREFIX,
-    parse: (db, raw) => keyOf(db.normalizeId("docs", raw)),
-  },
-  {
-    prefix: SESSION_SUMMARY_STREAM_PREFIX,
-    parse: (db, raw) => keyOf(db.normalizeId("sessions", raw), "summary"),
-  },
-];
-
-/** What `findOpenTurn` needs to find one owner's open turn. */
-export type TurnOwnerKey = { entityId: TurnEntityId; lane?: TurnLane };
-
-function keyOf(
-  entityId: TurnEntityId | null,
-  lane?: TurnLane,
-): TurnOwnerKey | null {
-  return entityId ? { entityId, lane } : null;
-}
-
-/**
- * The turn owner whose agent writes this streamingActivity row, if any.
- * Prefixed agent rows, then chats; a bare doc, report or project id is a doc
- * agent, an evaluation, or a project interview (a project chat is prefixed).
- */
-export function turnOwnerFromStream(
-  db: DatabaseReader,
-  streamingEntityId: string,
-): TurnOwnerKey | null {
-  // Agent prefixes first: `summary:<sessionId>` must never parse as the
-  // session's own (bare-id) chat row.
-  for (const { prefix, parse } of AGENT_STREAM_PREFIXES) {
-    if (streamingEntityId.startsWith(prefix)) {
-      return parse(db, streamingEntityId.slice(prefix.length));
-    }
-  }
-  for (const adapter of chatSurfaceAdapters) {
-    const id = adapter.parseStreamingEntityId(db, streamingEntityId);
-    if (id) return { entityId: id };
-  }
-  return (
-    keyOf(db.normalizeId("docs", streamingEntityId)) ??
-    keyOf(db.normalizeId("evaluationReports", streamingEntityId)) ??
-    keyOf(db.normalizeId("projects", streamingEntityId), "interview")
-  );
 }
 
 /**

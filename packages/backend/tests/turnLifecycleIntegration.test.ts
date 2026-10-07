@@ -13,7 +13,6 @@ import {
   TASK_CHAT_STREAM_PREFIX,
   taskChatAdapter,
   turnAdapterForEntity,
-  turnOwnerFromStream,
 } from "../convex/_chat/surfaceAdapters";
 import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
 import { sessionSummaryStreamingEntityId } from "../convex/_chat/agentStreamIds";
@@ -121,37 +120,6 @@ describe("turn lifecycle integration", () => {
     const { t, sessionId } = await createSessionFixture();
     const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
     expect(session?.turnLifecycleVersion).toBe(2);
-  });
-
-  test("an unfenced legacy heartbeat cannot overwrite a durable Turn", async () => {
-    const { t, sessionId } = await createSessionFixture();
-    await t.run(async (ctx) => {
-      await ctx.db.insert("streamingActivity", {
-        entityId: String(sessionId),
-        currentActivity: "old activity",
-        currentContent: "old content",
-        lastUpdatedAt: 1,
-      });
-    });
-
-    const accepted = await t.mutation(internal.turns.legacyHeartbeat, {
-      entityId: String(sessionId),
-      touchOnly: false,
-      currentActivity: "stale activity",
-      currentContent: "stale content",
-    });
-
-    expect(accepted).toBe(false);
-    const streaming = await t.run(
-      async (ctx) =>
-        await ctx.db
-          .query("streamingActivity")
-          .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
-          .unique(),
-    );
-    expect(streaming?.currentActivity).toBe("old activity");
-    expect(streaming?.currentContent).toBe("old content");
-    expect(streaming?.lastUpdatedAt).toBe(1);
   });
 
   test("queued workflow start rollback closes its Turn and removes its placeholder", async () => {
@@ -499,22 +467,6 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(await renew(2)).toMatchObject({ status: "renewed" });
   });
 
-  test("a legacy heartbeat is rejected only while the task turn is open", async () => {
-    const { t, turnId, streamingEntityId } = await createTaskChatFixture();
-    const heartbeat = async () =>
-      await t.mutation(internal.turns.legacyHeartbeat, {
-        entityId: streamingEntityId,
-        touchOnly: false,
-        currentActivity: "legacy activity",
-      });
-
-    expect(await heartbeat()).toBe(false);
-    await t.run(async (ctx) => {
-      await ctx.db.patch(turnId, { open: false, state: "done" });
-    });
-    expect(await heartbeat()).toBe(true);
-  });
-
   test("an expired task turn finalises through the task adapter", async () => {
     const { t, taskId, placeholderMessageId, turnId } =
       await createTaskChatFixture();
@@ -707,14 +659,6 @@ describe("quick-task run as a turn owner", () => {
     return { t, taskId, ...ids };
   }
 
-  test("the run streaming id maps back to the run", async () => {
-    const { t, runId } = await createRunTurnFixture();
-    const parsed = await t.run(async (ctx) =>
-      turnOwnerFromStream(ctx.db, getTaskRunStreamingEntityId(runId)),
-    );
-    expect(parsed).toEqual({ entityId: runId, lane: undefined });
-  });
-
   test("a run turn renews and fences like any other turn", async () => {
     const { t, runId, turnId } = await createRunTurnFixture();
     const verdicts = await t.run(async (ctx) => ({
@@ -727,15 +671,6 @@ describe("quick-task run as a turn owner", () => {
     }));
     expect(verdicts.current.status).toBe("renewed");
     expect(verdicts.old).toEqual({ status: "terminal", reason: "superseded" });
-  });
-
-  test("an open run turn rejects the unfenced heartbeat for its stream", async () => {
-    const { t, runId } = await createRunTurnFixture();
-    const accepted = await t.mutation(internal.turns.legacyHeartbeat, {
-      entityId: getTaskRunStreamingEntityId(runId),
-      touchOnly: true,
-    });
-    expect(accepted).toBe(false);
   });
 
   test("an expired run turn stops the run with the old watchdog text", async () => {
@@ -790,10 +725,6 @@ describe("lane turns stay apart from chat turns", () => {
         summaryTurn: await findOpenTurn(ctx, sessionId, "summary"),
         summaryTurnId,
         hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),
-        streamOwner: turnOwnerFromStream(
-          ctx.db,
-          sessionSummaryStreamingEntityId(sessionId),
-        ),
       };
     });
     // Opening the summary turn did not supersede the chat turn.
@@ -801,10 +732,6 @@ describe("lane turns stay apart from chat turns", () => {
     expect(result.summaryTurn?._id).toBe(result.summaryTurnId);
     expect(result.summaryTurn?.lane).toBe("summary");
     expect(result.hasChatTurn).toBe(result.chatTurnId !== undefined);
-    expect(result.streamOwner).toEqual({
-      entityId: sessionId,
-      lane: "summary",
-    });
   });
 });
 

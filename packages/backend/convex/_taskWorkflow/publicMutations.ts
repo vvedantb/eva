@@ -119,26 +119,21 @@ export const handleCompletion = authMutation({
       turnId: args.turnId,
       leaseGeneration: args.leaseGeneration,
     });
-    if (turn.status === "stale") {
+    // Every run has a turn now, and its callback always sends the lease.
+    if (turn.status !== "current") {
       return ignoreStaleCompletionCallback(
-        `run ${String(args.runId)} completion holds a superseded lease`,
+        `run ${String(args.runId)} completion holds no current lease`,
       );
     }
-    if (turn.status === "current") {
-      await advanceTurn(ctx, turn.turn, "finalizing");
-      // Push, PR and deployment tracking run after the agent exits, and no
-      // heartbeat renews the lease then. Keep the sandbox up for them.
-      if (turn.turn.sandboxId !== undefined) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.sandbox.extendSandboxDeadline,
-          {
-            sandboxId: turn.turn.sandboxId,
-            repoId: turn.turn.repoId,
-            durationMs: 2 * TURN_FINALIZING_LEASE_MS,
-          },
-        );
-      }
+    await advanceTurn(ctx, turn.turn, "finalizing");
+    // Push, PR and deployment tracking run after the agent exits, and no
+    // heartbeat renews the lease then. Keep the sandbox up for them.
+    if (turn.turn.sandboxId !== undefined) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.extendSandboxDeadline, {
+        sandboxId: turn.turn.sandboxId,
+        repoId: turn.turn.repoId,
+        durationMs: 2 * TURN_FINALIZING_LEASE_MS,
+      });
     }
 
     await ctx.db.patch(latestRunningRun._id, {

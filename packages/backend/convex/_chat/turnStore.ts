@@ -427,8 +427,8 @@ export async function closeTurnForWorkflow(
 
 /**
  * The fence check every one-shot agent completion runs first. False: the
- * completion is from a lease that no longer owns the turn, so the caller
- * drops it. True: the caller handles it; a current turn is closed here, since
+ * completion holds no current lease, so the caller drops it. True: the caller
+ * handles it; the turn is closed here, since
  * the agent's work is over once it reports (the workflow's own steps after
  * that are covered by the 2-hour backstop, as before).
  */
@@ -443,15 +443,14 @@ export async function settleAgentTurnCompletion(
     error: string | null;
   },
 ): Promise<boolean> {
+  // Every one-shot agent launches under a turn and always sends its lease.
   const resolution = await resolveCompletionTurn(ctx, params);
-  if (resolution.status === "stale") return false;
-  if (resolution.status === "current") {
-    await closeTurn(
-      ctx,
-      resolution.turn,
-      params.success ? "done" : "error",
-      params.success ? {} : { error: params.error ?? "Agent failed" },
-    );
-  }
+  if (resolution.status !== "current") return false;
+  await closeTurn(
+    ctx,
+    resolution.turn,
+    params.success ? "done" : "error",
+    params.success ? {} : { error: params.error ?? "Agent failed" },
+  );
   return true;
 }

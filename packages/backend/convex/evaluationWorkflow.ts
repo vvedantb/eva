@@ -45,8 +45,6 @@ const fixCompleteEvent = defineEvent({
 /** Runs an evaluation: analyzes the codebase against the document and saves a severity-ranked issue list. Fixing issues is opt-in via startFix. */
 export const evaluationWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     reportId: v.id("evaluationReports"),
     docId: v.id("docs"),
     userId: v.id("users"),
@@ -95,7 +93,6 @@ export const evaluationWorkflow = workflow.define({
           repoId: docData.repoId,
         },
         {
-          durable: args.durableTurns === true,
           entityId: args.reportId,
         },
       );
@@ -142,8 +139,6 @@ export const evaluationWorkflow = workflow.define({
  */
 export const fixWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     reportId: v.id("evaluationReports"),
     docId: v.id("docs"),
     userId: v.id("users"),
@@ -190,7 +185,6 @@ export const fixWorkflow = workflow.define({
           repoId: fixData.repoId,
         },
         {
-          durable: args.durableTurns === true,
           entityId: args.reportId,
         },
       );
@@ -716,7 +710,6 @@ export const startEvaluation = authMutation({
       ctx,
       internal.evaluationWorkflow.evaluationWorkflow,
       {
-        durableTurns: true,
         reportId,
         docId: args.docId,
         userId: ctx.userId,
@@ -776,7 +769,6 @@ export const startFix = authMutation({
       ctx,
       internal.evaluationWorkflow.fixWorkflow,
       {
-        durableTurns: true,
         reportId: args.reportId,
         docId: report.docId,
         userId: ctx.userId,

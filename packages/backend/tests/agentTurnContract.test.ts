@@ -5,8 +5,8 @@ import { expect, test } from "vitest";
 
 /**
  * Quick-task runs and one-shot agents run on durable turns (durable-turns
- * Phases 6 and 7). These pin the shape that keeps in-flight workflows
- * replayable and every start on a turn.
+ * Phases 6 and 7). These pin every start and launch on a turn, and the run
+ * journal that in-flight workflows replay.
  */
 
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
@@ -35,24 +35,20 @@ const stepsOf = (body: string): string[] =>
     ...body.matchAll(/step\.(?:run\w+|awaitEvent)\(\s*(internal\.[\w.]+|\w+)/g),
   ].map((match) => match[1]);
 
-/** Steps a run with a durable turn records; each sits behind `args.turnId`. */
-const RUN_TURN_STEPS = [
-  "internal.turns.markLaunching",
-  "internal.turns.acquireOneShotLease",
-  "internal.taskWorkflow.closeRunTurn",
-];
-
-test("a run started before durable run turns replays its old journal", () => {
+test("every run holds a turn and keeps its journal", () => {
   const body = workflowBody(
     "_taskWorkflow/workflowDefinition.ts",
     "taskExecutionWorkflow",
   );
-  expect(body).toContain('turnId: v.optional(v.id("turns"))');
-  const steps = stepsOf(body);
-  // Old journal: every step except the gated turn steps, in this order.
-  expect(steps.filter((step) => !RUN_TURN_STEPS.includes(step))).toEqual([
+  expect(body).toContain('turnId: v.id("turns")');
+  expect(body).not.toContain("args.turnId !== undefined");
+  // Steps replay by position: this is the journal every run started since
+  // durable run turns has recorded.
+  expect(stepsOf(body)).toEqual([
     "internal.taskWorkflow.updateRunToRunning",
     "internal.taskWorkflow.getTaskData",
+    "internal.turns.markLaunching",
+    "internal.turns.acquireOneShotLease",
     "internal.sandbox.launchOnExistingSandbox",
     "internal.taskWorkflow.saveSandboxId",
     "internal.taskWorkflow.updateProjectSandbox",
@@ -76,14 +72,8 @@ test("a run started before durable run turns replays its old journal", () => {
     "internal.sandbox.stopSandbox",
     "internal.taskWorkflow.markTaskSandboxStopped",
     "internal.taskWorkflow.clearActiveWorkflow",
+    "internal.taskWorkflow.closeRunTurn",
   ]);
-  for (const step of RUN_TURN_STEPS) {
-    const at = body.indexOf(`${step},`);
-    const gate = body.lastIndexOf("if (args.turnId !== undefined)", at);
-    expect(gate, `${step} is not gated on args.turnId`).toBeGreaterThan(-1);
-  }
-  // The launch adds the lease only for a run that has one.
-  expect(body).toContain("...(turnLease\n          ? {");
 });
 
 test("every run starts through startTaskRunWorkflow", () => {
@@ -95,14 +85,10 @@ test("every run starts through startTaskRunWorkflow", () => {
   expect(starters).toEqual(["_taskWorkflow/startRun.ts"]);
 });
 
-test("the run's stall chain is armed only for runs without a turn", () => {
-  const lifecycle = source("_taskWorkflow/runLifecycle.ts");
-  const at = lifecycle.indexOf("internal.taskWorkflow.checkStaleRuns");
-  const gate = lifecycle.lastIndexOf(
-    "if ((await findOpenTurn(ctx, args.runId)) === null)",
-    at,
+test("the lease is a run's only stall check", () => {
+  expect(source("_taskWorkflow/runLifecycle.ts")).not.toContain(
+    "internal.taskWorkflow.checkStaleRuns",
   );
-  expect(gate).toBeGreaterThan(-1);
 });
 
 /** Every one-shot agent workflow, with the turn owner its launch names. */
@@ -123,35 +109,10 @@ test.each(ONE_SHOT_WORKFLOWS)(
   "%s %s launches through launchAgentStep",
   (path, name) => {
     const body = workflowBody(path, name);
-    expect(body).toContain("durableTurns: v.optional(v.boolean())");
     expect(body).toContain("await launchAgentStep(");
-    expect(body).toContain("durable: args.durableTurns === true");
     expect(body).not.toContain("internal.sandbox.launchOnExistingSandbox");
   },
 );
-
-test("every one-shot workflow start asks for durable turns", () => {
-  for (const [, name] of ONE_SHOT_WORKFLOWS) {
-    for (const path of convexFiles()) {
-      const file = source(path);
-      const ref = new RegExp(
-        `workflow\\.start\\(\\s*ctx,\\s*internal\\.\\w+\\.${name},\\s*\\{\\s*durableTurns: true,`,
-        "g",
-      );
-      const starts =
-        file.match(
-          new RegExp(
-            `workflow\\.start\\(\\s*ctx,\\s*internal\\.\\w+\\.${name},`,
-            "g",
-          ),
-        ) ?? [];
-      expect(
-        (file.match(ref) ?? []).length,
-        `${path} starts ${name} without durableTurns`,
-      ).toBe(starts.length);
-    }
-  }
-});
 
 test("every one-shot completion settles its lease fence first", () => {
   const completions: ReadonlyArray<[string, string]> = [
