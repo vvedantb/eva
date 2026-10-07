@@ -1500,7 +1500,6 @@ export {
   claimPendingTurn,
   completeSyntheticTurn,
   ensurePendingTurn,
-  handleStaleSyntheticTurn,
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,

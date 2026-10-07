@@ -11,14 +11,8 @@ const surfaceAdapters = readSource("convex/_chat/surfaceAdapters.ts");
 
 const CHAT_WRAPPER_NAMES = [
   "handleStaleSession",
-  "checkStaleSessionHeartbeat",
-  "probeStaleSessionLiveness",
   "handleStaleProjectChat",
-  "checkStaleProjectChatHeartbeat",
-  "probeStaleProjectChatLiveness",
   "handleStaleAgentTaskChat",
-  "checkStaleAgentTaskChatHeartbeat",
-  "probeStaleAgentTaskChatLiveness",
 ];
 
 /**
@@ -30,7 +24,7 @@ const CHAT_WRAPPER_NAMES = [
  * `_chat/surfaceAdapters.ts` (per-surface adapters); these rules exist to
  * catch a regression back toward duplicated logic in the thin wrappers.
  */
-describe("the nine chat wrappers in workflowWatchdog.ts only delegate", () => {
+describe("the chat wrappers in workflowWatchdog.ts only delegate", () => {
   test.each(CHAT_WRAPPER_NAMES)(
     "%s does not itself patch the entity, insert a message, or finalize a cancelled message",
     (name) => {

@@ -52,9 +52,8 @@ describe("shared chat stall watchdog implementation (_chat/stallWatchdog.ts)", (
 
 /**
  * The durable turn's lease is the only stall check (decision 2 of the
- * durable-turns plan). The old heartbeat chain is retired; its scheduled entry
- * points stay as no-op stubs for one release, because jobs scheduled before the
- * deploy still call them.
+ * durable-turns plan). The old heartbeat chain and its one-release no-op stubs
+ * are deleted; nothing may define or schedule them again.
  */
 const RETIRED_STALL_CHECKS = [
   "checkStaleSessionHeartbeat",
@@ -66,10 +65,8 @@ const RETIRED_STALL_CHECKS = [
 ];
 
 describe("the lease is the only chat stall check", () => {
-  test.each(RETIRED_STALL_CHECKS)("%s is a no-op stub", (name) => {
-    expect(definitionBody(workflowWatchdog, name)).toContain(
-      "handler: async () => null",
-    );
+  test.each(RETIRED_STALL_CHECKS)("%s is no longer defined", (name) => {
+    expect(workflowWatchdog).not.toContain(`export const ${name} =`);
   });
 
   test("no adapter or tracker schedules a retired stall check", () => {

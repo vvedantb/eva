@@ -1,6 +1,6 @@
 # Move quick-task runs and one-shot agents onto the durable `turns` table (durable-turns Phases 6–7)
 
-Status: implemented 2026-10-07 in two pull requests. PR A (#914) moved every new run and one-shot agent onto turns; PR B (this clean-up) requires a turn everywhere and deletes the old heartbeat path. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5). Open follow-up: delete the `checkStaleRuns` and `probeStaleRunLiveness` stubs one release after PR B.
+Status: implemented 2026-10-07 in two pull requests. PR A (#914) moved every new run and one-shot agent onto turns; PR B (this clean-up) requires a turn everywhere and deletes the old heartbeat path. Follows `internal/plans/implemented/chat-turns-on-durable-turns-table.md` (Phases 0–5). The `checkStaleRuns` and `probeStaleRunLiveness` stubs are deleted too: done 2026-10-07 (owner decision, PR #894): a production check found 0 scheduled jobs calling any stub, so all stubs were deleted early.
 
 See "Implementation (2026-10-07)" for what changed from the phase text.
 
@@ -265,7 +265,7 @@ The owner asked for every phase at once, in two deploys (Decision 8). The phase 
    - Open one-shot workflows without a turn: `docs`, `projects`, `evaluationReports`, `automationRuns` and `sessions` (summary) whose `activeWorkflowId` is set and that have no open turn row: must be 0.
    - `sessions` / `sessionDaemonStates` with a `pendingTurn` that has no `turnId`: must be 0.
 3. Merge and deploy PR B.
-4. On or after one release after PR B: delete the `checkStaleRuns` and `probeStaleRunLiveness` stubs. On or after 2026-10-14: delete the chat stubs (chat plan follow-up 1).
+4. ~~Delete the `checkStaleRuns` and `probeStaleRunLiveness` stubs and the chat stubs.~~ Done 2026-10-07 (PR #894), after a production check found 0 scheduled jobs calling them.
 
 ## Risks
 
