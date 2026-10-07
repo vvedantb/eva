@@ -343,7 +343,7 @@ export const chatDaemonEntityFields = {
   // hands back an empty claim so a dying daemon cannot take the turn (and its
   // 2-minute running lease) with it.
   claimPausedUntil: v.optional(v.number()),
-  // `pendingTurnClaimedAt` removed; 0 prod rows held it on 2026-10-07.
+  // The retired claim stamp field is removed; 0 prod rows held it on 2026-10-07.
   // schema-narrowing-ok: clearSessionPendingTurnClaimedAt
   // schema-narrowing-ok: clearTaskPendingTurnClaimedAt
   // schema-narrowing-ok: clearProjectPendingTurnClaimedAt
