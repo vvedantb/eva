@@ -36,11 +36,13 @@ test("pre-cutover workflow replays keep the V1 journal and argument shape", () =
 });
 
 /**
- * The V1 journal of each chat workflow, in source order (every branch). Steps
- * replay by position, so a workflow started before the durable-turn cutover
- * strands if one ungated call is added, removed or moved.
+ * The journal of each chat workflow, in source order (every branch). Steps
+ * replay by position, so an in-flight workflow strands if one call is added,
+ * removed or moved. Every workflow running since the Phase 5 deploy has a
+ * turn, so this is the only journal; it matches what Phase 2 workflows with a
+ * `turnId` already recorded.
  */
-const chatWorkflowV1Steps = {
+const chatWorkflowSteps = {
   "../convex/agentTaskChatWorkflow.ts": [
     "internal.agentTaskChatWorkflow.addAssistantPlaceholder",
     "internal.agentTaskChatWorkflow.getChatData",
@@ -56,8 +58,11 @@ const chatWorkflowV1Steps = {
     "internal.agentTaskChatWorkflow.saveResult",
     "internal.sandbox.validateSandbox",
     "internal.agentTaskChatWorkflow.saveResult",
+    "internal.turns.markLaunching",
     "internal.agentTaskChatWorkflow.ensurePendingTurn",
     "internal.sandbox.prewarmEntityDaemon",
+    "internal.turns.acquireOneShotLease",
+    "internal.agentTaskChatWorkflow.saveResult",
     "internal.sandbox.launchOnExistingSandbox",
     "agentTaskChatCompleteEvent",
     "internal.agentTaskChatWorkflow.saveResult",
@@ -69,8 +74,11 @@ const chatWorkflowV1Steps = {
     "internal.projectChatWorkflow.addAssistantPlaceholder",
     "internal.projectChatWorkflow.getChatData",
     "internal.sandbox.validateSandbox",
+    "internal.turns.markLaunching",
     "internal.projectChatWorkflow.ensurePendingTurn",
     "internal.sandbox.prewarmEntityDaemon",
+    "internal.turns.acquireOneShotLease",
+    "internal.projectChatWorkflow.saveResult",
     "internal.sandbox.launchOnExistingSandbox",
     "projectChatCompleteEvent",
     "internal.projectChatWorkflow.saveResult",
@@ -87,42 +95,24 @@ function workflowBody(path: string): string {
   return file.slice(start, end);
 }
 
-test.each(Object.entries(chatWorkflowV1Steps))(
-  "%s replays a pre-cutover journal unchanged",
-  (path, v1Steps) => {
+test.each(Object.entries(chatWorkflowSteps))(
+  "%s requires a turn and keeps its journal",
+  (path, journal) => {
     const body = workflowBody(path);
-    expect(body).toContain('turnId: v.optional(v.id("turns"))');
-    // The lease-lost early exit only runs for a turn that has an id.
-    const leaseLostGuard =
-      "if (args.turnId !== undefined && turnLease === null) {";
-    expect(body).toContain(leaseLostGuard);
-    const ungated = body.replace(
-      /if \(args\.turnId !== undefined && turnLease === null\) \{[\s\S]*?return;\n\s*\}/,
-      "",
-    );
+    expect(body).toContain('turnId: v.id("turns")');
+    expect(body).not.toContain("args.turnId !== undefined");
+    expect(body).not.toContain("args.turnId === undefined");
     const steps = [
-      ...ungated.matchAll(
+      ...body.matchAll(
         /step\.(?:run\w+|awaitEvent)\(\s*(internal\.[\w.]+|\w+)/g,
       ),
-    ]
-      .map((match) => match[1])
-      .filter((name) => !name.startsWith("internal.turns."));
-    expect(steps).toEqual(v1Steps);
-
-    // Each durable-turn step runs only for a turn staged after the cutover.
-    expect(body).toMatch(
-      /if \(args\.turnId !== undefined\) \{\s*await step\.runMutation\(internal\.turns\.markLaunching,/,
-    );
-    expect(body).toMatch(
-      /args\.turnId === undefined\s*\? null\s*: await step\.runMutation\(internal\.turns\.acquireOneShotLease,/,
-    );
-    expect(body).toContain(
-      "const turnArgs = args.turnId !== undefined ? { turnId: args.turnId } : {};",
-    );
+    ].map((match) => match[1]);
+    expect(steps).toEqual(journal);
     // Every saveResult closes the turn, so each one carries the turn id.
     const saveResults = body.match(/\.saveResult, \{/g) ?? [];
     const withTurn =
-      body.match(/\.saveResult, \{\s*\w+: args\.\w+,\s*\.\.\.turnArgs,/g) ?? [];
+      body.match(/\.saveResult, \{\s*\w+: args\.\w+,\s*turnId: args\.turnId,/g) ??
+      [];
     expect(withTurn.length).toBe(saveResults.length);
   },
 );

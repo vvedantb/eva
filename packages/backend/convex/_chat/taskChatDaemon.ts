@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, hasRepoAccess } from "../functions";
@@ -15,7 +14,6 @@ import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "../_sessions/backgroundAgents";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
 import {
   scheduleQueueDrainAfterBackgroundAgents,
   startNextQueuedTaskChatMessage,
@@ -29,7 +27,6 @@ import {
   isUnclaimedOpenTurn,
 } from "../_sessions/pendingTurnRecovery";
 import { assistantReplyContent } from "../_sessions/resultTarget";
-import { isStreamingActivityStale } from "./turnLease";
 import {
   advanceTurn,
   claimStagedTurn,
@@ -38,7 +35,6 @@ import {
   leaseSyntheticTurn,
   openChatTurn,
   resolveCompletionTurn,
-  type TurnLeaseIdentity,
 } from "./turnStore";
 
 function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
@@ -158,32 +154,33 @@ export const claimPendingTurn = authMutation({
       }
     }
 
-    let turnLease: TurnLeaseIdentity | null = null;
+    // A daemon built before `acceptTurn` cannot hold a lease. Leave the turn
+    // staged: prewarm replaces the stale daemon, and the new one claims it.
+    if (args.acceptTurn === undefined) {
+      return {
+        ...emptyClaimReturn,
+        stopTaskToolUseIds,
+        cancelRequested,
+        usageRefreshRequested,
+      };
+    }
+    // Every chat workflow stages a turn id. A slot without one cannot hold a
+    // lease, so drop it rather than run it unfenced.
     const pendingTurnId = task.pendingTurn.turnId;
-    if (pendingTurnId !== undefined) {
-      // A daemon built before `acceptTurn` cannot hold a lease. Leave the turn
-      // staged: prewarm replaces the stale daemon, and the new one claims it.
-      if (args.acceptTurn === undefined) {
-        return {
-          ...emptyClaimReturn,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
-      }
-      const claim = await claimStagedTurn(ctx, pendingTurnId);
-      if (claim.status === "drop") {
+    const claim =
+      pendingTurnId === undefined
+        ? null
+        : await claimStagedTurn(ctx, pendingTurnId);
+    if (claim?.status !== "leased") {
+      if (claim === null || claim.status === "drop") {
         await ctx.db.patch(args.taskId, { pendingTurn: undefined });
       }
-      if (claim.status !== "leased") {
-        return {
-          ...emptyClaimReturn,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
-      }
-      turnLease = claim.lease;
+      return {
+        ...emptyClaimReturn,
+        stopTaskToolUseIds,
+        cancelRequested,
+        usageRefreshRequested,
+      };
     }
 
     const prompt = task.pendingTurn.prompt;
@@ -199,12 +196,8 @@ export const claimPendingTurn = authMutation({
       cancelRequested,
       usageRefreshRequested,
     };
-    if (turnLease === null) {
-      const turnLifecycle = "legacy" as const;
-      return { ...claimedTurn, turnLifecycle };
-    }
     const turnLifecycle = "durable" as const;
-    return { ...claimedTurn, turnLifecycle, ...turnLease };
+    return { ...claimedTurn, turnLifecycle, ...claim.lease };
   },
 });
 
@@ -319,11 +312,6 @@ export const openSyntheticTurn = authMutation({
       syntheticTurnMessageId: messageId,
       updatedAt: Date.now(),
     });
-    await ctx.scheduler.runAfter(
-      10 * 60 * 1000,
-      internal.agentTaskChatWorkflow.handleStaleSyntheticTurn,
-      { taskId: args.taskId, messageId },
-    );
     return { messageId, ...lease };
   },
 });
@@ -430,54 +418,18 @@ export const completeSyntheticTurn = authMutation({
   },
 });
 
+/**
+ * No-op stub. The durable turn's lease now ends a stalled synthetic turn.
+ * Kept for one release because timers scheduled before 2026-10-07 still call
+ * it. Delete on or after 2026-10-14.
+ */
 export const handleStaleSyntheticTurn = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
     messageId: v.id("messages"),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task || task.syntheticTurnMessageId !== args.messageId) {
-      return null;
-    }
-    const message = await ctx.db.get(args.messageId);
-    if (!message || message.finishedAt !== undefined) {
-      await ctx.db.patch(args.taskId, {
-        syntheticTurnMessageId: undefined,
-        updatedAt: Date.now(),
-      });
-      return null;
-    }
-    const streamingEntityId = taskChatStreamEntityId(args.taskId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-    const streamingStale = isStreamingActivityStale(streaming);
-    if (!streamingStale) {
-      await ctx.scheduler.runAfter(
-        10 * 60 * 1000,
-        internal.agentTaskChatWorkflow.handleStaleSyntheticTurn,
-        { taskId: args.taskId, messageId: args.messageId },
-      );
-      return null;
-    }
-    await finalizeCancelledAssistantMessage(ctx, message, streaming);
-    const openTurn = await findOpenTurn(ctx, args.taskId);
-    if (openTurn?.placeholderMessageId === args.messageId) {
-      await closeTurn(ctx, openTurn, "error", {
-        error: "Synthetic turn stopped reporting activity",
-      });
-    }
-    await clearStreamingActivity(ctx, streamingEntityId);
-    await ctx.db.patch(args.taskId, {
-      syntheticTurnMessageId: undefined,
-      updatedAt: Date.now(),
-    });
-    await startNextQueuedTaskChatMessage(ctx, args.taskId);
-    return null;
-  },
+  handler: async () => null,
 });
 
 /** Re-stages pendingTurn when cancel raced with startExecute. */
@@ -501,7 +453,7 @@ export const ensurePendingTurn = internalMutation({
     // The lease decides: a claimed turn has a daemon on it, and restaging
     // would run it twice. Same rule as the session `ensurePendingTurn`.
     const openTurn = await findOpenTurn(ctx, args.taskId);
-    if (isTurnClaimed(openTurn)) return null;
+    if (!openTurn || isTurnClaimed(openTurn)) return null;
     const last = await ctx.db
       .query("messages")
       .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
@@ -513,7 +465,7 @@ export const ensurePendingTurn = internalMutation({
         // turn: leaving it would block this restage until the lease expires.
         hasPendingTurn: isPendingTurnLive({
           pendingTurn: task.pendingTurn,
-          openTurnId: openTurn?._id,
+          openTurnId: openTurn._id,
         }),
         lastAssistant: last,
       })
@@ -524,9 +476,7 @@ export const ensurePendingTurn = internalMutation({
       pendingTurn: {
         prompt: args.prompt,
         requestedAt: Date.now(),
-        // Without the id the restaged prompt is claimed without a lease, and
-        // its completion is then rejected against the open turn.
-        ...(openTurn ? { turnId: openTurn._id } : {}),
+        turnId: openTurn._id,
         attachmentStorageIds: args.attachmentStorageIds,
         ...(args.model !== undefined
           ? { model: normalizeAIModel(args.model) }

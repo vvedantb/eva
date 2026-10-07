@@ -338,7 +338,8 @@ export const chatDaemonEntityFields = {
   claimPausedUntil: v.optional(v.number()),
   /**
    * Retired: the durable turn's lease now tells "claimed" from "wiped by a
-   * cancel race". No longer written; unset and deleted in the cleanup phase.
+   * cancel race". No longer written or read. Delete after the
+   * `dataMigrations:clear{Session,Task,Project}PendingTurnClaimedAt` runs.
    */
   pendingTurnClaimedAt: v.optional(v.number()),
 };

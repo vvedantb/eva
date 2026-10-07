@@ -786,18 +786,13 @@ export const projectChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
-    // Set for turns staged after the durable-turn cutover. Optional so
-    // workflows started before it still replay.
-    turnId: v.optional(v.id("turns")),
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
-    // Every new durable-turn step is gated on `args.turnId`: steps replay by
-    // order, so a workflow started before the cutover must keep its journal.
-    const turnArgs = args.turnId !== undefined ? { turnId: args.turnId } : {};
     const saveFailure = (error: string) =>
       step.runMutation(internal.projectChatWorkflow.saveResult, {
         projectId: args.projectId,
-        ...turnArgs,
+        turnId: args.turnId,
         success: false,
         result: null,
         error,
@@ -868,12 +863,10 @@ export const projectChatExecuteWorkflow = workflow.define({
       return;
     }
 
-    if (args.turnId !== undefined) {
-      await step.runMutation(internal.turns.markLaunching, {
-        turnId: args.turnId,
-        sandboxId: activeSandboxId,
-      });
-    }
+    await step.runMutation(internal.turns.markLaunching, {
+      turnId: args.turnId,
+      sandboxId: activeSandboxId,
+    });
 
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.projectChatWorkflow.ensurePendingTurn, {
@@ -906,17 +899,14 @@ export const projectChatExecuteWorkflow = workflow.define({
         entityTable: "projects",
       });
     } else {
-      const turnLease =
-        args.turnId === undefined
-          ? null
-          : await step.runMutation(internal.turns.acquireOneShotLease, {
-              turnId: args.turnId,
-              sandboxId: activeSandboxId,
-            });
-      if (args.turnId !== undefined && turnLease === null) {
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId: activeSandboxId },
+      );
+      if (turnLease === null) {
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,
-          ...turnArgs,
+          turnId: args.turnId,
           success: false,
           result: null,
           error: "The turn no longer owns this project chat. Please retry.",
@@ -943,12 +933,8 @@ export const projectChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.projectId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
-        ...(turnLease !== null
-          ? {
-              turnId: turnLease.turnId,
-              turnLeaseGeneration: turnLease.leaseGeneration,
-            }
-          : {}),
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
     }
 
@@ -956,7 +942,7 @@ export const projectChatExecuteWorkflow = workflow.define({
 
     await step.runMutation(internal.projectChatWorkflow.saveResult, {
       projectId: args.projectId,
-      ...turnArgs,
+      turnId: args.turnId,
       success: result.success,
       result: result.result,
       error: result.error,
@@ -986,7 +972,7 @@ export const projectChatExecuteWorkflow = workflow.define({
         );
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,
-          ...turnArgs,
+          turnId: args.turnId,
           success: false,
           result: result.result,
           error: publishError,
@@ -1077,8 +1063,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     projectId: v.id("projects"),
-    /** The durable turn this result closes; absent on pre-cutover workflows. */
-    turnId: v.optional(v.id("turns")),
+    /** The durable turn this result closes. */
+    turnId: v.id("turns"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -1138,16 +1124,14 @@ export const saveResult = internalMutation({
       entityId: String(args.projectId),
     });
 
-    if (args.turnId !== undefined) {
-      const turn = await ctx.db.get(args.turnId);
-      if (turn) {
-        await closeTurn(
-          ctx,
-          turn,
-          args.success ? "done" : "error",
-          args.error ? { error: args.error } : {},
-        );
-      }
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) {
+      await closeTurn(
+        ctx,
+        turn,
+        args.success ? "done" : "error",
+        args.error ? { error: args.error } : {},
+      );
     }
 
     await startNextQueuedProjectChatMessage(ctx, args.projectId);
