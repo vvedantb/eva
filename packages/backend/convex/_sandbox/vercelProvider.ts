@@ -52,10 +52,6 @@ import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
 import {
-  describeVercelSandboxSource,
-  resolveVercelSandboxSource,
-} from "./vercelImage";
-import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
@@ -80,6 +76,18 @@ const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 // repo/team env (~6 KB+). Instead of passing env at create, we write it to this
 // file in the sandbox and source it on every exec — no size cap, and it persists
 // across get()/resume like any other file.
+
+/**
+ * Base image for every sandbox that does not restore from a snapshot: Vercel's
+ * managed Ubuntu image, replacing the deprecated `runtime: "node24"` (Amazon
+ * Linux 2023). Snapshot restores never pass an image — Vercel forbids it — so
+ * seeded AL2023 snapshots keep booting as AL2023 until their repo's base Image
+ * is rebuilt (Rebuild Now), and the install code handles both distros
+ * (_sandbox_runtime/packageManager.ts). `latest` is patched nightly by Vercel;
+ * each snapshot freezes whatever it captured, so drift only reaches a repo on
+ * its next base rebuild.
+ */
+const VERCEL_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
 
 /** Prefix that sources the eva env file (if present) before a command. */
 const SOURCE_ENV = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE};`;
@@ -1206,15 +1214,7 @@ class VercelSandboxHandle implements SandboxHandle {
 class VercelSandboxClient implements SandboxClient {
   readonly kind: SandboxProviderKind = "vercel";
 
-  /**
-   * `sandboxImage` is the repo's own VERCEL_SANDBOX_IMAGE. Kept out of `creds`
-   * on purpose: `creds` is spread into every SDK call, which must not receive
-   * an unknown option.
-   */
-  constructor(
-    private readonly creds: VercelCredentials,
-    private readonly sandboxImage?: string,
-  ) {}
+  constructor(private readonly creds: VercelCredentials) {}
 
   /**
    * Turns neutral {@link SandboxMount}s into the SDK's `mounts` map, resolving
@@ -1275,17 +1275,7 @@ class VercelSandboxClient implements SandboxClient {
     // env is written to a file post-create (see EVA_ENV_FILE) rather than passed
     // here — Vercel's create-time env cap is 4 KB and eva's env exceeds it.
     const persistent = params.lifecycle.ephemeral !== true;
-    // Resolved once per create so the value in the log line and the value in the
-    // failure message are provably the same one that was sent.
-    //
-    // Precedence, most specific first: a caller-supplied VCR image (a
-    // deliberate per-sandbox choice), then the repo's VERCEL_SANDBOX_IMAGE env
-    // var (per-repo canary), then the deployment-wide default.
-    const freshSource = params.image
-      ? { image: params.image }
-      : resolveVercelSandboxSource(
-          this.sandboxImage ?? process.env.VERCEL_SANDBOX_IMAGE,
-        );
+    const image = params.image ?? VERCEL_SANDBOX_IMAGE;
     const region = await this.regionFor(params);
     // Drives are region-pinned to SANDBOX_REGION, so a sandbox placed elsewhere
     // cannot mount them — skip the mounts rather than spend a failed create.
@@ -1322,10 +1312,7 @@ class VercelSandboxClient implements SandboxClient {
               ...opts,
               source: { type: "snapshot", snapshotId: params.snapshot },
             })
-          : // One spread, not two calls: `image` and the legacy `runtime` are
-            // mutually exclusive in the SDK types, and freshSource is already a
-            // union carrying exactly one of them.
-            Sandbox.create({ ...opts, ...freshSource });
+          : Sandbox.create({ ...opts, image });
     };
     // Mounts attach at create, and the Drive write lock is enforced there too —
     // so a read-write request for a Drive an earlier sandbox still holds fails
@@ -1352,7 +1339,7 @@ class VercelSandboxClient implements SandboxClient {
         throw lastError;
       });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} ${describeVercelSandboxSource(freshSource)} mounts=${describeMounts(used)}`,
+        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${image} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1375,7 +1362,7 @@ class VercelSandboxClient implements SandboxClient {
         // requestedMounts is what the ladder STARTED from: by the time this
         // throws every weaker stage (including no mounts at all) has already
         // failed too, so mounts are never the remaining suspect.
-        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, ${describeVercelSandboxSource(freshSource)}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
+        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${image}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${DEFAULT_VCPUS}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }
@@ -1430,9 +1417,6 @@ export function unwrapVercelSandbox(handle: SandboxHandle): Sandbox {
 }
 
 /** Constructs a Vercel-backed {@link SandboxClient} from access-token credentials. */
-export function createVercelClient(
-  creds: VercelCredentials,
-  sandboxImage?: string,
-): SandboxClient {
-  return new VercelSandboxClient(creds, sandboxImage);
+export function createVercelClient(creds: VercelCredentials): SandboxClient {
+  return new VercelSandboxClient(creds);
 }

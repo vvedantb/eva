@@ -298,11 +298,6 @@ export type SandboxCredentials = {
   token: string;
   teamId: string;
   projectId: string;
-  /**
-   * The repo's `VERCEL_SANDBOX_IMAGE` env var, unparsed. Overrides the
-   * deployment-wide default for this repo only (see _sandbox/vercelImage.ts).
-   */
-  sandboxImage?: string;
 };
 
 /**

@@ -129,55 +129,34 @@ the prod answer.
 - Pass `SPIKE_LEGACY_SNAPSHOT_ID=snap_...` (a real eva seeded snapshot) to make
   check 4 conclusive for prod data rather than only for a snapshot the script
   created itself.
-- Do **not** flip `VERCEL_SANDBOX_IMAGE` if `legacyAl2023SnapshotRestores` is
+- Do **not** ship the image change if `legacyAl2023SnapshotRestores` is
   false — that turns a library bump into a repo-by-repo re-seed.
 
-## Phase 2 status — implemented, flip gated
+## Phase 2 status — implemented, on by default
 
-Phase 2 is in the backend and is inert until you set one env var.
+Phase 2 is in the backend and on by default. There is no switch.
 
-| Step                                    | State                                                                                            |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `@vercel/sandbox` 2.4.0 → 3.0.0          | Done. No call-site changes needed, as the type audit above predicted.                             |
-| `runtime` → `image` at create            | Done, behind `VERCEL_SANDBOX_IMAGE` (`convex/_sandbox/vercelImage.ts`). Unset ⇒ `runtime: "node24"`. |
-| dnf → distro-neutral installs            | Done. Every install goes through `convex/_sandbox_runtime/packageManager.ts`; a contract test fails the build on a direct `dnf install` / `apt-get install`. |
-| AL2023 workarounds dropped on Ubuntu     | Done, but kept for dnf: SPAL + libjack (ffmpeg), the gh yum repo, the Chrome `.repo` file, and the code-server `.rpm` all still run when the image is AL2023. |
-| Re-seed every repo                       | **Not needed** — that was the fallback if AL2023 snapshots stopped restoring, which check 4 still has to confirm.  |
+| Step | State |
+| ---- | ----- |
+| `@vercel/sandbox` 2.4.0 → 3.x | Done. No call-site changes were needed, as the type audit above predicted. |
+| `runtime` → `image` at create | Done. Every fresh sandbox boots `vercel/sandbox/universal:latest` (`VERCEL_SANDBOX_IMAGE` in `vercelProvider.ts`). |
+| dnf → distro-neutral installs | Done. Every install goes through `convex/_sandbox_runtime/packageManager.ts`. A contract test fails the build on a direct `dnf install` or `apt-get install`. |
+| AL2023 workarounds | Kept for AL2023 snapshots: SPAL + libjack (ffmpeg), the gh yum repo, the Chrome `.repo` file, the code-server `.rpm`. Ubuntu skips them. |
+| Re-seed every repo | Not needed. AL2023 snapshots restore under v3 (check 4, including a real prod snapshot). |
 
-### Flipping it
+### How repos move to Ubuntu
 
-Per repo (the canary path):
+Snapshot restores never pass an image. A repo moves only when its base Image is
+rebuilt from a fresh sandbox:
 
-1. In eva, open the repo → Settings → Env Vars. Add
-   `VERCEL_SANDBOX_IMAGE` = `vercel/sandbox/universal@sha256:<digest>`.
-2. Settings → Snapshots → **Rebuild Now**. This rebuilds the base Image from a
-   fresh sandbox (now Ubuntu), then re-seeds on top of it.
-3. When the build succeeds, start a session and check it works.
+- Repos **without** Stop Commands rebuild the base on every scheduled build, so
+  they move on their next nightly run.
+- Repos **with** Stop Commands move when someone clicks Settings → Snapshots →
+  **Rebuild Now**. Scheduled builds only re-seed on the existing base.
+- Until then, sessions keep booting the repo's existing AL2023 snapshot, which
+  still works.
 
-Setting it at team level flips every repo in the team. Setting it in the Convex
-deployment env is the global default; a repo's own value overrides it.
+There is no rollback switch. To go back, revert the image constant in code.
 
-Precedence: a per-call image (the orchestrator) → the repo's env var → the
-deployment env → `runtime: node24`.
-
-Pin a digest rather than `universal` bare: `latest` moves under you, and a
-base-image change should not arrive silently. To roll back, delete the env var
-and click Rebuild Now again. Until that rebuild, the repo keeps booting the
-Ubuntu snapshots it already has.
-
-### Order of operations
-
-1. Run this harness (checks 1-7, Q1, Q3) against a throwaway project.
-2. If `legacyAl2023SnapshotRestores` is false, **stop** and re-plan; nothing
-   below is safe.
-3. ~~Reconcile check 5's output against `PACKAGE_ALIASES`~~ — **done**. The
-   primary apt name for every GUI library is now the one apt actually resolved
-   on Ubuntu 26.04, pinned by a contract test. Notable corrections against the
-   documentation-derived guesses: `libgtk-3-0` (not `…-0t64`), `libcups2` (not
-   `…2t64`), `libatspi2.0-0` (not `at-spi2-core`), and `tigervnc-common` is a
-   separate package from `tigervnc-standalone-server`. `libasound2t64` was the
-   one t64 guess that was right.
-4. ~~Confirm `userIsUbuntu` / `legacyWorkdirStillExists`~~ — **done**, see
-   "What differs" above. `/vercel/sandbox` is absent on the managed image but
-   `EVA_ENV_FILE` writes still work, and the `.bashrc` hook now follows `$HOME`.
-5. Flip one low-stakes repo first (steps above); only then roll out.
+`latest` is patched nightly by Vercel. Each snapshot freezes what it captured,
+so an image change reaches a repo only on its next base rebuild.

@@ -5,13 +5,7 @@ export function presentEnv(value: string | undefined): string | undefined {
 }
 
 export type VercelCredentialSelection =
-  | {
-      ok: true;
-      token: string;
-      teamId: string;
-      projectId: string;
-      sandboxImage: string | undefined;
-    }
+  | { ok: true; token: string; teamId: string; projectId: string }
   | { ok: false; missing: string[]; message: string };
 
 export function missingVercelCredentialsMessage(missing: string[]): string {
@@ -53,14 +47,5 @@ export function selectVercelCredentials(
       message: missingVercelCredentialsMessage(missing),
     };
   }
-  return {
-    ok: true,
-    token,
-    teamId,
-    projectId,
-    // Target-only, like the project id: the base image is a per-app choice, and
-    // borrowing a sibling's would flip an app nobody chose to flip. A team-level
-    // value still applies, because targetVars already merges team + repo vars.
-    sandboxImage: presentEnv(targetVars.VERCEL_SANDBOX_IMAGE),
-  };
+  return { ok: true, token, teamId, projectId };
 }

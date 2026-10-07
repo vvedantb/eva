@@ -160,7 +160,6 @@ async function resolveVercelCredentialsForRepo(
     token: selected.token,
     teamId: selected.teamId,
     projectId: selected.projectId,
-    sandboxImage: selected.sandboxImage,
   };
 }
 
@@ -194,7 +193,6 @@ export async function tryResolveSandboxCredentials(
       token: selected.token,
       teamId: selected.teamId,
       projectId: selected.projectId,
-      sandboxImage: selected.sandboxImage,
     },
     sandboxEnvVars,
   };

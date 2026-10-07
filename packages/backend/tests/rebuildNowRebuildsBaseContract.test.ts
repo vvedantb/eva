@@ -10,7 +10,7 @@ const readConvex = (relative: string) =>
 /**
  * The Snapshots page says "Rebuild Now always rebuilds the base Image". For an
  * app with Stop Commands the backend only re-seeded on top of the existing
- * base, so a toolchain or base-image change (VERCEL_SANDBOX_IMAGE) could never
+ * base, so a toolchain or base-image change (the move to Ubuntu) could never
  * reach that app through the UI.
  */
 test("a manual build forces the base Image rebuild", () => {

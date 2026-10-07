@@ -219,7 +219,6 @@ import type * as _sandbox_stickyPreview from "../_sandbox/stickyPreview.js";
 import type * as _sandbox_stopRecovery from "../_sandbox/stopRecovery.js";
 import type * as _sandbox_tags from "../_sandbox/tags.js";
 import type * as _sandbox_vercelEnvFile from "../_sandbox/vercelEnvFile.js";
-import type * as _sandbox_vercelImage from "../_sandbox/vercelImage.js";
 import type * as _sandbox_vercelProvider from "../_sandbox/vercelProvider.js";
 import type * as _sandbox_vercelSnapshotOptions from "../_sandbox/vercelSnapshotOptions.js";
 import type * as _sandbox_runtime_attachments from "../_sandbox_runtime/attachments.js";
@@ -728,7 +727,6 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/stopRecovery": typeof _sandbox_stopRecovery;
   "_sandbox/tags": typeof _sandbox_tags;
   "_sandbox/vercelEnvFile": typeof _sandbox_vercelEnvFile;
-  "_sandbox/vercelImage": typeof _sandbox_vercelImage;
   "_sandbox/vercelProvider": typeof _sandbox_vercelProvider;
   "_sandbox/vercelSnapshotOptions": typeof _sandbox_vercelSnapshotOptions;
   "_sandbox_runtime/attachments": typeof _sandbox_runtime_attachments;
