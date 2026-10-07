@@ -46,6 +46,7 @@ import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useDeferredValue, useState, type ReactNode } from "react";
@@ -99,6 +100,7 @@ interface InlineCard {
   createdAt: number;
   card:
     | { kind: "panel"; spec: string }
+    | { kind: "html"; render: Doc<"chatHtmlRenders"> }
     | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
 }
 
@@ -112,7 +114,8 @@ interface ChatBodyProps {
   conversationId: string;
   /**
    * The same chat, typed as the id its messages hang off. Used to load the
-   * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   * agent-composed UI panels (`render_ui`) and HTML pages (`render_html`)
+   * that belong to this transcript.
    * Absent (Manager Ave): no panels are loaded.
    */
   chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
@@ -464,11 +467,16 @@ function ChatBodyInner({
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
 
-  // Agent-posted inline cards: composed panels (`render_ui`) and secret
-  // requests (`request_env_var`). One query each per chat covers all three
-  // surfaces, since every one of them renders through this component.
+  // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
+  // (`render_html`) and secret requests (`request_env_var`). One query each
+  // per chat covers all three surfaces, since every one of them renders
+  // through this component.
   const chatUiPanels = useQuery(
     api.chatUi.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const htmlRenders = useQuery(
+    api.chatHtml.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
   const envVarRequests = useQuery(
@@ -483,6 +491,14 @@ function ChatBodyInner({
           messageId: panel.messageId,
           createdAt: panel.createdAt,
           card: { kind: "panel", spec: panel.spec },
+        }),
+      ),
+      ...(htmlRenders ?? []).map(
+        (render): InlineCard => ({
+          _id: render._id,
+          messageId: render.messageId,
+          createdAt: render.createdAt,
+          card: { kind: "html", render },
         }),
       ),
       ...(envVarRequests ?? []).map(
@@ -541,21 +557,28 @@ function ChatBodyInner({
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
     panels.length === 0
       ? undefined
-      : panels.map(({ _id, card }) =>
-          card.kind === "panel" ? (
-            <ChatUiPanel
-              key={_id}
-              spec={card.spec}
-              onReply={handlePanelReply}
-            />
-          ) : (
-            <EnvVarRequestCard
-              key={_id}
-              request={card.request}
-              onReply={handlePanelReply}
-            />
-          ),
-        );
+      : panels.map(({ _id, card }) => {
+          switch (card.kind) {
+            case "panel":
+              return (
+                <ChatUiPanel
+                  key={_id}
+                  spec={card.spec}
+                  onReply={handlePanelReply}
+                />
+              );
+            case "html":
+              return <ChatHtmlFrame key={_id} render={card.render} />;
+            case "envVarRequest":
+              return (
+                <EnvVarRequestCard
+                  key={_id}
+                  request={card.request}
+                  onReply={handlePanelReply}
+                />
+              );
+          }
+        });
 
   /**
    * `isBacklog` marks a row the chat opened already scrolled past, which skips
