@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { dependencyInstallCommand } from "../convex/_sandbox_runtime/git";
 
 const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -10,23 +11,37 @@ const sessions = readSource("convex/_sandbox_runtime/sessions.ts");
 const devServer = readSource("convex/_sandbox_runtime/devServer.ts");
 
 /**
- * Bare node24 sandbox images ship npm but no yarn shim, so a plain
- * `yarn install` exits 127 and kills dependency install — on the snapshot
- * path (installSnapshotDependenciesWithRetry) and the fresh-clone path
- * (installDependencies). Both yarn branches must globally install yarn first,
- * mirroring the pnpm branch (fix 820990c4 / 457b046b). A bare `yarn install`
- * is the exact regression these pin.
+ * Both install paths — snapshot (installSnapshotDependenciesWithRetry) and
+ * fresh clone (installDependencies) — build their shell via the one
+ * dependencyInstallCommand helper, so these pin its output directly.
  */
-describe("yarn installs bootstrap the shim first", () => {
-  test("the snapshot install path never runs a bare yarn install", () => {
-    everyYarnInstallBootstrapsTheShim(sessions);
-    // The pnpm branch it mirrors is still there — proves this is the pm switch.
-    expect(sessions).toContain("npm install -g pnpm &&");
+describe("dependency install commands", () => {
+  test("yarn bootstraps the shim first", () => {
+    // Bare node24 images ship no yarn shim, so a bare `yarn install` exits 127
+    // (fix 820990c4 / 457b046b).
+    const command = dependencyInstallCommand("yarn", "/w");
+    expect(command.startsWith("npm install -g yarn &&")).toBe(true);
+    expect(command).toContain("yarn install");
   });
 
-  test("the fresh-clone install path never runs a bare yarn install", () => {
-    everyYarnInstallBootstrapsTheShim(git);
-    expect(git).toContain("npm install -g pnpm &&");
+  test("pnpm may purge node_modules without a TTY prompt", () => {
+    // DRIVE_CACHE_ENV moved the pnpm store, so old snapshots make pnpm purge
+    // node_modules; without this flag it fails with
+    // ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY.
+    const command = dependencyInstallCommand("pnpm", "/w");
+    expect(command.startsWith("npm install -g pnpm &&")).toBe(true);
+    expect(command).toContain(
+      "pnpm install --config.confirm-modules-purge=false",
+    );
+  });
+
+  test("npm installs in place", () => {
+    expect(dependencyInstallCommand("npm", "/w")).toBe("cd /w && npm install");
+  });
+
+  test("the snapshot path uses the shared helper", () => {
+    expect(sessions).toContain("dependencyInstallCommand(pm, installCwd)");
+    expect(sessions).not.toContain("pnpm install");
   });
 });
 
@@ -100,28 +115,6 @@ describe("fresh clones install Python deps best-effort", () => {
     expect(body).toContain("attempted: true, ok: false");
   });
 });
-
-/**
- * Every real `yarn install` in `source` must be preceded (within the same
- * command) by a global yarn install. Scans all occurrences so a second call
- * site cannot regress unnoticed.
- */
-function everyYarnInstallBootstrapsTheShim(source: string): void {
-  const marker = "yarn install";
-  let from = source.indexOf(marker);
-  expect(
-    from,
-    "no yarn install command found — did the branch move?",
-  ).toBeGreaterThan(-1);
-  while (from !== -1) {
-    const window = source.slice(Math.max(0, from - 120), from);
-    expect(
-      window,
-      "a bare `yarn install` regressed — node24 images have no yarn shim",
-    ).toContain("npm install -g yarn");
-    from = source.indexOf(marker, from + marker.length);
-  }
-}
 
 /** Comments name the very calls these rules rule out, so they have to go first. */
 function readSource(relativePath: string): string {

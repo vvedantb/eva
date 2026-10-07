@@ -8,6 +8,7 @@ import {
   SandboxIframeService,
   type StartResult,
 } from "@/lib/components/sandbox/SandboxIframeService";
+import type { SandboxWake } from "@/lib/components/sandbox/SandboxAsleepState";
 
 const AGENT_BROWSING_LOCK_TTL_MS = 30 * 60 * 1000;
 
@@ -27,6 +28,7 @@ interface DesktopPanelProps {
   onReleaseLock?: () => void;
   /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
   externalHref?: string;
+  wake?: SandboxWake;
 }
 
 const SURFACE_COPY = {
@@ -93,6 +95,7 @@ export function DesktopPanel({
   agentBrowsingAt,
   onReleaseLock,
   externalHref,
+  wake,
 }: DesktopPanelProps) {
   const copy = SURFACE_COPY[surface];
   const toggleDesktopServer = useAction(api.sandbox.toggleDesktopServer);
@@ -154,22 +157,13 @@ export function DesktopPanel({
         iframeAllow="clipboard-read; clipboard-write"
         autoStartKey={autoStartKey}
         externalHref={externalHref}
+        wake={wake}
       />
       {showLockOverlay ? (
         <>
-          {/* Browser pane: the colorful composer beam replaces the inset
-              ring. Computer keeps FollowOverlay's static ring — same Chrome,
-              different tab. Overlay so the iframe stays visible through the
-              masked hole; the click layer still swallows taps. */}
-          {beamPane ? (
-            <BorderBeam
-              active
-              colorVariant="colorful"
-              className="beam-inset pointer-events-none absolute inset-0 z-10"
-            >
-              {null}
-            </BorderBeam>
-          ) : null}
+          {/* Browser pane: the colorful beam circles the "Agent is browsing"
+              pill (below) instead of the iframe. Computer keeps a static
+              ring — same Chrome, different tab. The click layer swallows taps. */}
           <div
             className={cn(
               "absolute inset-0 z-10 cursor-not-allowed",
@@ -187,17 +181,23 @@ export function DesktopPanel({
             exit={{ opacity: 0, y: 8 }}
             transition={motionFast}
           >
-            <div className="flex items-center gap-2 rounded-full bg-primary py-1.5 pr-1.5 pl-4 text-sm font-medium text-primary-foreground smooth-shadow-lg">
-              <span>Agent is browsing</span>
-              <Button
-                size="xs"
-                variant="secondary"
-                className="rounded-full"
-                onClick={handleTakeControl}
-              >
-                Take control
-              </Button>
-            </div>
+            <BorderBeam
+              active={beamPane}
+              colorVariant="colorful"
+              className="rounded-full"
+            >
+              <div className="relative flex items-center gap-2 rounded-full bg-primary py-1.5 pr-1.5 pl-4 text-sm font-medium text-primary-foreground smooth-shadow-lg">
+                <span>Agent is browsing</span>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={handleTakeControl}
+                >
+                  Take control
+                </Button>
+              </div>
+            </BorderBeam>
           </m.div>
         ) : null}
       </AnimatePresence>

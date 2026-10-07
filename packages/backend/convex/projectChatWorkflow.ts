@@ -16,6 +16,7 @@ import {
   roleValidator,
   taskSandboxStatusValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
 import {
@@ -24,7 +25,10 @@ import {
   clearStreamingActivity,
 } from "./_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "./streaming";
-import { startNextQueuedProjectChatMessage } from "./_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedProjectChatMessage,
+} from "./_queues/helpers";
 import {
   trackProjectChatWorkflow,
   PROJECT_CHAT_STREAM_PREFIX,
@@ -136,6 +140,7 @@ async function buildProjectChatTurnPrompt(
       devCommand: project.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
     },
   });
   if (prefixBlock) {
@@ -566,6 +571,10 @@ export const enqueueMessage = authMutation({
       ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.projectId);
     return null;
   },
 });
@@ -1028,6 +1037,9 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
+    // Accepted for daemons that hold a durable lease; unused until task and
+    // project chats open durable turns.
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),

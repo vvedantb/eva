@@ -10,7 +10,10 @@ import {
   turnLeaseExpiry,
   type TerminalTurnState,
 } from "./turnLease";
-import { touchAgentFinished } from "../_sandbox/activity";
+import {
+  activityRefForParentId,
+  touchAgentFinished,
+} from "../_sandbox/activity";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -38,44 +41,52 @@ export type CompletionTurnResolution =
   | { status: "legacy" }
   | { status: "stale" };
 
-export async function findOpenSessionTurn(
+/** Chat entities that own durable turns. The id's table picks the surface. */
+export type ChatTurnEntityId = Doc<"turns">["entityId"];
+
+export async function findOpenTurn(
   ctx: QueryCtx,
-  sessionId: Id<"sessions">,
+  entityId: ChatTurnEntityId,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q
-        .eq("surface", "session")
-        .eq("entityId", String(sessionId))
-        .eq("open", true),
+      q.eq("entityId", entityId).eq("open", true),
     )
     .first();
 }
 
-export async function openSessionTurn(
+export async function findOpenSessionTurn(
+  ctx: QueryCtx,
+  sessionId: Id<"sessions">,
+): Promise<Doc<"turns"> | null> {
+  return await findOpenTurn(ctx, sessionId);
+}
+
+type OpenTurnFields = {
+  streamingEntityId: string;
+  placeholderMessageId: Id<"messages">;
+  prompt: string;
+  attachmentStorageIds?: Id<"_storage">[];
+  model: Doc<"turns">["model"];
+  sandboxId?: string;
+  repoId: Id<"githubRepos">;
+};
+
+/** Opens a durable turn and supersedes any turn the entity still has open. */
+export async function openTurn(
   ctx: MutationCtx,
-  params: {
-    sessionId: Id<"sessions">;
-    streamingEntityId: string;
-    placeholderMessageId: Id<"messages">;
-    prompt: string;
-    attachmentStorageIds?: Id<"_storage">[];
-    model: Doc<"turns">["model"];
-    sandboxId?: string;
-    repoId: Id<"githubRepos">;
-  },
+  params: OpenTurnFields & { entityId: ChatTurnEntityId },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenSessionTurn(ctx, params.sessionId);
+  const previous = await findOpenTurn(ctx, params.entityId);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
     });
   }
-  const turnId = await ctx.db.insert("turns", {
-    surface: "session",
-    entityId: String(params.sessionId),
+  return await ctx.db.insert("turns", {
+    entityId: params.entityId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
     open: true,
@@ -93,7 +104,15 @@ export async function openSessionTurn(
     sandboxId: params.sandboxId,
     repoId: params.repoId,
   });
-  await ctx.db.patch(params.sessionId, { turnLifecycleVersion: 2 });
+}
+
+export async function openSessionTurn(
+  ctx: MutationCtx,
+  params: OpenTurnFields & { sessionId: Id<"sessions"> },
+): Promise<Id<"turns">> {
+  const { sessionId, ...turn } = params;
+  const turnId = await openTurn(ctx, { ...turn, entityId: sessionId });
+  await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
   return turnId;
 }
 
@@ -175,9 +194,7 @@ export async function renewTurnLease(
   if (turn.leaseGeneration !== params.leaseGeneration) {
     return { status: "terminal", reason: "superseded" };
   }
-  const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-  if (!sessionId) return { status: "terminal", reason: "unknown_turn" };
-  const current = await findOpenSessionTurn(ctx, sessionId);
+  const current = await findOpenTurn(ctx, turn.entityId);
   if (!current || current._id !== turn._id) {
     return { status: "terminal", reason: "superseded" };
   }
@@ -254,13 +271,13 @@ export async function graceExpiredTurnLease(
 export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
-    sessionId: Id<"sessions">;
+    entityId: ChatTurnEntityId;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenSessionTurn(ctx, params.sessionId);
+  const current = await findOpenTurn(ctx, params.entityId);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -270,7 +287,7 @@ export async function resolveCompletionTurn(
   if (
     !turn ||
     !turn.open ||
-    turn.entityId !== String(params.sessionId) ||
+    turn.entityId !== params.entityId ||
     turn.leaseGeneration !== params.leaseGeneration ||
     !current ||
     current._id !== turn._id ||
@@ -296,13 +313,10 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
-  // Every session turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished" for sessions.
-  await touchAgentFinished(
-    ctx,
-    { kind: turn.surface, entityId: turn.entityId },
-    finishedAt,
-  );
+  // Every durable turn ends here, so this is the one place the idle-pause
+  // sweep learns "the agent finished". The id's table names the surface.
+  const activityRef = activityRefForParentId(ctx.db, turn.entityId);
+  if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }
 
 export async function closeOpenSessionTurn(
@@ -311,18 +325,18 @@ export async function closeOpenSessionTurn(
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, sessionId);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
 export async function closeTurnForWorkflow(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  entityId: ChatTurnEntityId,
   workflowId: string,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, entityId);
   if (!turn || turn.workflowId !== workflowId) return;
   await closeTurn(ctx, turn, state, patch);
 }

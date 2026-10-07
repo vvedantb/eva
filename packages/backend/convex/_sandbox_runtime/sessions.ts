@@ -28,6 +28,7 @@ import {
   recoverUnresolvedGitIndex,
   resolveBaseTarget,
   copySandboxConfigFilesToWorkspace,
+  dependencyInstallCommand,
   SESSION_LIFECYCLE,
 } from "./git";
 import { SandboxGoneError, isSandboxGoneError } from "./sandboxErrors";
@@ -488,12 +489,7 @@ async function installSnapshotDependenciesWithRetry(
   // pnpm workspaces must install from the lockfile root (usually the repo root),
   // not from a nested app rootDirectory that only has package.json.
   const installCwd = pm === "pnpm" ? workspaceRoot : dir;
-  const installCommand =
-    pm === "pnpm"
-      ? `npm install -g pnpm && cd ${installCwd} && pnpm install`
-      : pm === "yarn"
-        ? `npm install -g yarn && cd ${installCwd} && yarn install`
-        : `cd ${installCwd} && npm install`;
+  const installCommand = dependencyInstallCommand(pm, installCwd);
   const timeoutSeconds = pm === "pnpm" ? 240 : 180;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {

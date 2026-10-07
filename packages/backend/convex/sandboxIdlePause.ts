@@ -14,6 +14,7 @@ import { findOpenSessionTurn } from "./_chat/turnStore";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
+import { usageLimitHoldFor } from "./_queues/helpers";
 import {
   getSandboxActivity,
   sandboxActivityRefArgs,
@@ -157,9 +158,13 @@ async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean>
   if (!parentId) return false;
   const queued = await ctx.db
     .query("queuedMessages")
-    .withIndex("by_parent_and_created", (q) => q.eq("parentId", parentId))
+    .withIndex("by_parent_and_order", (q) => q.eq("parentId", parentId))
+    .order("asc")
     .first();
-  return queued !== null;
+  if (queued === null) return false;
+  // A queue waiting out a usage limit sends nothing for hours, so it must not
+  // keep the VM billing; its resume drain wakes the sandbox again.
+  return (await usageLimitHoldFor(ctx, parentId, queued)) === null;
 }
 
 async function inspectSession(

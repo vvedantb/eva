@@ -122,6 +122,7 @@ export function TaskDetailInline({
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
+    sandboxStartupActivity,
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
@@ -319,6 +320,7 @@ export function TaskDetailInline({
                     taskId={taskId}
                     isSandboxActive={isSandboxActive}
                     isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
                     onOpenAgentsTab={() => {

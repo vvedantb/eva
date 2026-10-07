@@ -46,10 +46,17 @@ import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
+import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
+import {
+  api,
+  type BackgroundAgentEntry,
+  type Doc,
+  type Id,
+} from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
@@ -69,6 +76,7 @@ import {
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
+  type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
@@ -85,6 +93,17 @@ export interface ChatSendOptions {
   draftContent?: string;
 }
 
+/** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
+interface InlineCard {
+  _id: string;
+  messageId?: string;
+  createdAt: number;
+  card:
+    | { kind: "panel"; spec: string }
+    | { kind: "html"; render: Doc<"chatHtmlRenders"> }
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
+}
+
 interface ChatBodyProps {
   /**
    * The codebase this chat belongs to. Absent for Manager Ave, which has none:
@@ -95,7 +114,8 @@ interface ChatBodyProps {
   conversationId: string;
   /**
    * The same chat, typed as the id its messages hang off. Used to load the
-   * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   * agent-composed UI panels (`render_ui`) and HTML pages (`render_html`)
+   * that belong to this transcript.
    * Absent (Manager Ave): no panels are loaded.
    */
   chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
@@ -107,6 +127,10 @@ interface ChatBodyProps {
    */
   isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
+  queueLabel?: string;
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
@@ -139,7 +163,8 @@ interface ChatBodyProps {
   disabledReason?: string;
   /**
    * Wakes the sandbox. Set only when it is stopped and not already toggling;
-   * gives the empty state its button and the blocked-send toast its action.
+   * gives the empty state its button. Sending also wakes it (the message
+   * queues until Eva is up), so this is the explicit alternative.
    */
   onStartSandbox?: () => void;
   /** Model, account and trait controls. Absent: no picker (fixed model). */
@@ -156,12 +181,13 @@ interface ChatBodyProps {
   onCancel: () => Promise<void>;
   /** Optional slot inserted above the conversation (session summary accordion). */
   preConversationContent?: React.ReactNode;
-  /** Optional slot inserted above the queued messages panel (session startup streaming). */
-  beforeQueuedContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
-  /** Replaces the default empty-state component when there are zero messages. */
-  emptyStateOverride?: React.ReactNode;
+  /**
+   * Live block at the end of the transcript (session sandbox startup). Takes
+   * the empty state's place when there are no messages yet.
+   */
+  transcriptTail?: React.ReactNode;
   /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
   underCardLeading?: React.ReactNode;
   /**
@@ -228,6 +254,8 @@ function ChatBodyInner({
   messages,
   isLoadingMessages = false,
   queuedMessages,
+  queueLabel,
+  heldFollowUps,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
@@ -245,9 +273,8 @@ function ChatBodyInner({
   onSend,
   onCancel,
   preConversationContent,
-  beforeQueuedContent,
   preInputContent,
-  emptyStateOverride,
+  transcriptTail,
   underCardLeading,
   draft,
   localDraft,
@@ -440,14 +467,49 @@ function ChatBodyInner({
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
 
-  // Agent-composed UI panels (`render_ui`). One query per chat covers all three
-  // surfaces, since every one of them renders through this component.
+  // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
+  // (`render_html`) and secret requests (`request_env_var`). One query each
+  // per chat covers all three surfaces, since every one of them renders
+  // through this component.
   const chatUiPanels = useQuery(
     api.chatUi.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const htmlRenders = useQuery(
+    api.chatHtml.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const envVarRequests = useQuery(
+    api.envVarRequests.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const panelPlacement = placeChatUiPanels(
-    chatUiPanels ?? [],
+    [
+      ...(chatUiPanels ?? []).map(
+        (panel): InlineCard => ({
+          _id: panel._id,
+          messageId: panel.messageId,
+          createdAt: panel.createdAt,
+          card: { kind: "panel", spec: panel.spec },
+        }),
+      ),
+      ...(htmlRenders ?? []).map(
+        (render): InlineCard => ({
+          _id: render._id,
+          messageId: render.messageId,
+          createdAt: render.createdAt,
+          card: { kind: "html", render },
+        }),
+      ),
+      ...(envVarRequests ?? []).map(
+        (request): InlineCard => ({
+          _id: request._id,
+          messageId: request.messageId,
+          createdAt: request.createdAt,
+          card: { kind: "envVarRequest", request },
+        }),
+      ),
+    ],
     new Set(displayMessages.map((message) => message._id)),
   );
 
@@ -495,13 +557,28 @@ function ChatBodyInner({
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
     panels.length === 0
       ? undefined
-      : panels.map((panel) => (
-          <ChatUiPanel
-            key={panel._id}
-            spec={panel.spec}
-            onReply={handlePanelReply}
-          />
-        ));
+      : panels.map(({ _id, card }) => {
+          switch (card.kind) {
+            case "panel":
+              return (
+                <ChatUiPanel
+                  key={_id}
+                  spec={card.spec}
+                  onReply={handlePanelReply}
+                />
+              );
+            case "html":
+              return <ChatHtmlFrame key={_id} render={card.render} />;
+            case "envVarRequest":
+              return (
+                <EnvVarRequestCard
+                  key={_id}
+                  request={card.request}
+                  onReply={handlePanelReply}
+                />
+              );
+          }
+        });
 
   /**
    * `isBacklog` marks a row the chat opened already scrolled past, which skips
@@ -582,14 +659,19 @@ function ChatBodyInner({
           scrollClassName="[container-type:size]"
         >
           {displayMessages.length === 0 ? (
-            (emptyStateOverride ??
-            (isLoadingMessages ? (
+            transcriptTail ? (
+              // Bottom-anchored like a live last turn, so the tail sits in the
+              // same spot above the composer whether or not messages exist.
+              <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
+                {transcriptTail}
+              </div>
+            ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}
                 description={emptyStateDescription}
-                {...(isInputDisabled && onStartSandbox
+                {...(onStartSandbox
                   ? {
                       action: {
                         label: SANDBOX_CHAT_COPY.wakeAction,
@@ -598,7 +680,7 @@ function ChatBodyInner({
                     }
                   : {})}
               />
-            )))
+            )
           ) : lastUserMessageIndex < 0 ? (
             displayMessages.map((message) => renderMessage(message))
           ) : (
@@ -615,6 +697,7 @@ function ChatBodyInner({
               </ChatLastTurn>
             </>
           )}
+          {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
         <ConversationScrollButton resetKey={conversationId} />
@@ -656,6 +739,8 @@ function ChatBodyInner({
                 repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
+                queueLabel={queueLabel}
+                heldFollowUps={heldFollowUps}
                 messageHistory={messageHistory}
                 isExecuting={isExecuting}
                 isInputDisabled={isInputDisabled}
@@ -665,7 +750,6 @@ function ChatBodyInner({
                 modelPicker={modelPicker}
                 onSend={sendWithPendingContext}
                 onCancel={onCancel}
-                beforeQueuedContent={beforeQueuedContent}
                 preInputContent={
                   <>
                     <PendingCitationChips />

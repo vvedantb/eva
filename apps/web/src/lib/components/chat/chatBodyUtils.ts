@@ -85,6 +85,16 @@ export function findDayBoundaryIds(
 
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
 
+/**
+ * A follow-up the server already holds for the next turn, so it cannot be
+ * edited, removed or reordered (Manager Ave). Shown in the same queue panel.
+ */
+export interface ChatHeldFollowUp {
+  id: string;
+  content: string;
+  userId?: Id<"users">;
+}
+
 const SANDBOX_LIFECYCLE_ALERTS = new Set([
   "Sandbox started",
   "Sandbox stopped",
@@ -291,7 +301,10 @@ export const SANDBOX_CHAT_COPY = {
   stoppingTitle: "Putting Eva to sleep…",
   asleepTitle: "Eva is asleep",
   asleepDescription: "Eva's sandbox is asleep.",
-  asleepPlaceholder: "Wake Eva up to send a message…",
+  /** Sending while asleep queues the message and wakes Eva to run it. */
+  asleepPlaceholder: "Send a message to wake Eva up…",
+  /** The last turn hit a usage limit; sends queue until just after the reset. */
+  usageLimitPlaceholder: "Usage limit reached — messages send after the reset…",
   /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
   wakeAction: "Wake up Eva",
@@ -303,37 +316,45 @@ export const SANDBOX_CHAT_COPY = {
 } as const;
 
 /**
- * Whether a sandbox chat composer accepts input, and the copy that goes with
- * it. One rule for all three surfaces: a running turn always takes a follow-up,
- * because that send is queued rather than handed to the sandbox. Sessions got
- * that for free — their sandbox is active whenever a turn runs — while a quick
- * task's first run owns the sandbox before it is marked active, which locked
- * the composer and made queueing impossible there.
+ * Whether a sandbox chat composer accepts input, where its sends go, and the
+ * copy that goes with it. One rule for all three surfaces (session, quick
+ * task, project):
+ * - only an account swap locks the composer. A running turn, a sleeping
+ *   sandbox and a usage limit all take the message into the queue instead.
+ * - `queuesSends` is that queue rule for an idle chat: asleep (the queue wakes
+ *   Eva and sends once she is up) or held by a usage limit on the chosen
+ *   provider (it sends just after the reset). A running turn queues too, but
+ *   each surface already routes that through its own `isExecuting`.
  */
 export function sandboxComposerState({
   isSandboxActive,
   isSwitchingAccount,
   isExecuting,
+  isUsageLimitHeld,
 }: {
   isSandboxActive: boolean;
   isSwitchingAccount: boolean;
   isExecuting: boolean;
+  isUsageLimitHeld: boolean;
 }): {
   isInputDisabled: boolean;
+  queuesSends: boolean;
   placeholder: string;
   disabledReason: string;
 } {
   const isAsleep = !isSandboxActive && !isExecuting;
+  const isHeld = isUsageLimitHeld && !isExecuting;
   return {
-    isInputDisabled: isAsleep || isSwitchingAccount,
-    placeholder: isAsleep
-      ? SANDBOX_CHAT_COPY.asleepPlaceholder
-      : isSwitchingAccount
-        ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-        : SANDBOX_CHAT_COPY.activePlaceholder,
-    disabledReason: isSwitchingAccount
+    isInputDisabled: isSwitchingAccount,
+    queuesSends: isAsleep || isHeld,
+    placeholder: isSwitchingAccount
       ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-      : SANDBOX_CHAT_COPY.asleepDisabledReason,
+      : isHeld
+        ? SANDBOX_CHAT_COPY.usageLimitPlaceholder
+        : isAsleep
+          ? SANDBOX_CHAT_COPY.asleepPlaceholder
+          : SANDBOX_CHAT_COPY.activePlaceholder,
+    disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
   };
 }
 

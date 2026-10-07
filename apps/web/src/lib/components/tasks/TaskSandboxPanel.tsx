@@ -200,6 +200,7 @@ export function TaskSandboxPanel({
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
           />
         </div>
         <div

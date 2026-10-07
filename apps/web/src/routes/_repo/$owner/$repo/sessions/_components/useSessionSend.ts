@@ -93,6 +93,11 @@ interface UseSessionSendParams {
   ) => Id<"userProviderAccounts"> | undefined;
   accounts: ReadonlyArray<ModelAccount>;
   messages: SessionMessage[];
+  /**
+   * An idle chat still queues: Eva is asleep (the queue wakes her) or a usage
+   * limit holds the chosen provider. See `sandboxComposerState`.
+   */
+  queuesSends: boolean;
   /** Cached-hidden shells skip the turn-status subscription. */
   isRouteActive?: boolean;
 }
@@ -106,6 +111,7 @@ export function useSessionSend({
   resolveAccountId,
   accounts,
   messages,
+  queuesSends,
   isRouteActive = true,
 }: UseSessionSendParams) {
   const review = usePendingReviewComments();
@@ -172,7 +178,7 @@ export function useSessionSend({
     // meets expression-level control flow inside one (eva/no-value-block-in-try).
     const enqueueReasoningLevel =
       reasoningLevel ?? executionTraits.reasoningLevel;
-    if (isExecuting) {
+    if (isExecuting || queuesSends) {
       try {
         await enqueueMessage({
           sessionId,

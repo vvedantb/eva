@@ -21,6 +21,7 @@ import {
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
+import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
   silentStreamDelayMs,
   thinkingHeartbeatLabel,
@@ -190,6 +191,10 @@ export function StreamingActivityDisplay({
     );
   }
 
+  if (startingSandbox && isStreaming) {
+    return <SandboxStartupSteps activity={activity} startedAt={startedAt} />;
+  }
+
   const steps = parseActivitySteps(activity);
 
   return (
@@ -212,6 +217,20 @@ export function StreamingActivityDisplay({
       onOpenFile={onOpenFile}
     />
   );
+}
+
+/**
+ * Live sandbox startup block for a chat's `transcriptTail`. Null when hidden
+ * so the transcript's empty state shows instead. Shared by the session,
+ * quick task and project chats so startup renders in one place everywhere.
+ */
+export function sandboxStartupTail(
+  activity: string | undefined,
+  show: boolean,
+): ReactNode {
+  return show ? (
+    <StreamingActivityDisplay activity={activity} isSandboxStartup />
+  ) : null;
 }
 
 /**

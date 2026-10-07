@@ -52,6 +52,8 @@ interface SessionItem {
   linkedFrom?: RepoPathParts;
   /** Linked repos cloned beside the primary; drives the `+N` badge. */
   linkedRepoCount?: number;
+  /** Source of a "Fork session" fork; drives the row's fork glyph. */
+  forkedFromSessionId?: Id<"sessions">;
 }
 
 interface SidebarSessionRowProps<T extends SessionItem> {
@@ -130,6 +132,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 baseBranch={session.baseBranch}
                 linkedFrom={session.linkedFrom}
                 linkedRepoCount={session.linkedRepoCount}
+                forkedFromSessionId={session.forkedFromSessionId}
               />
             </SharedLayoutNavSurface>
           </m.div>

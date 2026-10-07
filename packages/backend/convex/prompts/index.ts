@@ -1,10 +1,14 @@
 export {
+  AGENT_MEMORY_DIR,
+  AGENT_MEMORY_FORMAT,
+  buildAgentMemoryBlock,
   buildRootDirectoryInstruction,
   buildCustomInstructionsBlock,
   buildReadableReposBlock,
   buildSystemPromptBlock,
   buildLinkedReposSection,
   CHAT_UI_INSTRUCTION,
+  COMMUNICATION_STYLE_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
   VISUAL_CHANGE_INSTRUCTION,
 } from "./shared";

@@ -22,8 +22,8 @@ const SANDBOX_REVIEW_PATH = /\/sandbox\/review(?:\/|$)/;
  *
  * Detail lives at `/quick-tasks/$numId` (no tab segment). Sandbox stays at
  * `/quick-tasks/$numId/sandbox/$sandboxTab`, with Review at
- * `/sandbox/review/overview`, `/sandbox/review/diffs/…`, or
- * `/sandbox/review/recap`.
+ * `/sandbox/review/summary`, `/sandbox/review/timeline`, or
+ * `/sandbox/review/diffs/…`.
  */
 export function useQuickTaskRouteState(): QuickTaskRouteState | null {
   const params = useParams({ strict: false });

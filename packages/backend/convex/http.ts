@@ -8,6 +8,10 @@ import {
   previewActivityHmacMessage,
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
+import {
+  parseCiPassed,
+  parseRepoEvents,
+} from "./_automationEvents/events";
 
 const http = httpRouter();
 
@@ -621,6 +625,23 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
+    // Event-triggered automations (CI auto-fix, review responder, issue to
+    // task, user automations). Independent of the state sync below.
+    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.dispatch,
+        { event: repoEvent },
+      );
+    }
+    for (const passed of parseCiPassed(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.noteCiPassed,
+        { passed },
+      );
+    }
+
     if (event === "pull_request") {
       const parsed = prWebhookSchema.safeParse(JSON.parse(body));
       if (!parsed.success) {
@@ -670,24 +691,6 @@ http.route({
             action,
             draft: draft ?? undefined,
           },
-        );
-      }
-
-      // Publish the scope-check warning onto a PR Eva did not open. Eva's own
-      // PRs get it when each verdict lands (`_scopeCheck/mutations.ts`); this
-      // covers a PR someone opened by hand over commits Eva wrote, which is
-      // how the change that motivated the feature reached production.
-      const repoOwnerLogin = parsed.data.repository?.owner?.login ?? null;
-      const repoName = parsed.data.repository?.name ?? null;
-      if (
-        (action === "opened" || action === "reopened") &&
-        repoOwnerLogin !== null &&
-        repoName !== null
-      ) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.github.publishScopeSectionForPr,
-          { prUrl, owner: repoOwnerLogin, name: repoName },
         );
       }
 
@@ -798,6 +801,59 @@ http.route({
     }
 
     return Response.redirect(githubAuthReturnUrl(claim.installationId), 302);
+  }),
+});
+
+function connectorAuthReturnUrl(returnPath: string | null): string {
+  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const path =
+    returnPath && returnPath.startsWith("/settings") && !returnPath.includes("//")
+      ? returnPath
+      : "/settings/connections";
+  return `${webAppUrl}${path}`;
+}
+
+http.route({
+  path: "/api/connectors/oauth/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const requestUrl = new URL(request.url);
+    const params = requestUrl.searchParams;
+    const state = params.get("state");
+    if (!state) {
+      return new Response("Missing state", { status: 400 });
+    }
+
+    const claim = await ctx.runMutation(
+      internal._connectors.tokens.consumeOauthState,
+      { nonce: state },
+    );
+    if (!claim) {
+      return new Response("Authorization request expired. Start again.", {
+        status: 400,
+      });
+    }
+
+    const code = params.get("code");
+    if (!code) {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    const siteUrl = (process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
+    try {
+      await ctx.runAction(internal._connectors.oauth.completeAuthorization, {
+        userId: claim.userId,
+        provider: claim.provider,
+        actor: claim.actor,
+        code,
+        redirectUri: `${siteUrl}/api/connectors/oauth/callback`,
+        codeVerifier: claim.codeVerifier,
+      });
+    } catch {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
   }),
 });
 

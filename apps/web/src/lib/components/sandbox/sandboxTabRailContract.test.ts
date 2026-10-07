@@ -136,10 +136,9 @@ describe("simple view hides exactly the tabs it cannot resolve", () => {
 });
 
 describe("the Browser pane beams while the agent browses", () => {
-  test("the colorful composer beam wraps the desktop panel", () => {
+  test("the colorful composer beam wraps the Agent is browsing pill", () => {
     expect(desktopPanel).toContain("<BorderBeam");
     expect(desktopPanel).toContain('colorVariant="colorful"');
-    expect(desktopPanel).toContain("beam-inset");
     expect(desktopPanel).toContain("beamPane");
   });
 

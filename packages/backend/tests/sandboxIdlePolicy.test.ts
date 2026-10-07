@@ -131,17 +131,46 @@ describe("decideIdlePause", () => {
 });
 
 describe("resolveIdleThresholds", () => {
-  test("no settings row → off with the default graces", () => {
+  test("no settings row → on at the default graces (matches the sweep it replaced)", () => {
     expect(resolveIdleThresholds(null)).toEqual({
       mode: IDLE_PAUSE_DEFAULTS.mode,
       afterAgentMs: IDLE_PAUSE_DEFAULTS.afterAgentMinutes * MIN,
       afterInteractionMs: IDLE_PAUSE_DEFAULTS.afterInteractionMinutes * MIN,
     });
-    expect(IDLE_PAUSE_DEFAULTS.mode).toBe("off");
+    expect(IDLE_PAUSE_DEFAULTS.mode).toBe("on");
+    expect(IDLE_PAUSE_DEFAULTS.afterInteractionMinutes).toBe(60);
   });
 
-  test("a row without the idle fields (pre-feature deployment) is off", () => {
-    expect(resolveIdleThresholds({}).mode).toBe("off");
+  test("a row without any idle fields (pre-feature deployment) is on at 60 min", () => {
+    expect(resolveIdleThresholds({})).toEqual({
+      mode: "on",
+      afterAgentMs: 5 * MIN,
+      afterInteractionMs: 60 * MIN,
+    });
+  });
+
+  test("the earlier idle-stop fields are honoured when the new ones are unset", () => {
+    expect(
+      resolveIdleThresholds({
+        sandboxIdleStopEnabled: false,
+        sandboxIdleStopMinutes: 120,
+      }),
+    ).toEqual({ mode: "off", afterAgentMs: 5 * MIN, afterInteractionMs: 120 * MIN });
+    expect(
+      resolveIdleThresholds({ sandboxIdleStopEnabled: true, sandboxIdleStopMinutes: 30 })
+        .afterInteractionMs,
+    ).toBe(30 * MIN);
+  });
+
+  test("the new fields win over the earlier ones", () => {
+    expect(
+      resolveIdleThresholds({
+        sandboxIdlePauseMode: "dry-run",
+        sandboxIdleAfterInteractionMinutes: 20,
+        sandboxIdleStopEnabled: false,
+        sandboxIdleStopMinutes: 120,
+      }),
+    ).toEqual({ mode: "dry-run", afterAgentMs: 5 * MIN, afterInteractionMs: 20 * MIN });
   });
 
   test("configured minutes are used; sub-minute and NaN values clamp to defaults or 1", () => {

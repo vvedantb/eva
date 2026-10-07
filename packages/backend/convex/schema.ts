@@ -41,6 +41,8 @@ import {
   userProviderAccountFields,
   githubUserTokenFields,
   githubOauthStateFields,
+  connectedAccountFields,
+  connectorOauthStateFields,
   docFields,
   docCommentFields,
   docSubscriberFields,
@@ -57,6 +59,9 @@ import {
   sessionDaemonStateFields,
   turnFields,
   chatUiPanelFields,
+  chatHtmlRenderFields,
+  chatHtmlRenderBodyFields,
+  envVarRequestFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -161,12 +166,7 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields)
-    .index("by_parent", ["parentId"])
-    // Scope verdicts are published to whichever PR contains the turn's commit,
-    // not to the session that produced it: a PR that re-lands those commits on
-    // a fresh branch (an extract) must still carry the warning.
-    .index("by_after_sha", ["afterSha"]),
+  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",
@@ -184,7 +184,8 @@ const schema = defineSchema({
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_sandbox", ["sandboxId"])
+    .index("by_forked_from", ["forkedFromSessionId"]),
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
@@ -200,13 +201,24 @@ const schema = defineSchema({
     .index("by_created_by", ["createdBy"])
     .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
-    .index("by_entity_open", ["surface", "entityId", "open"])
+    .index("by_entity_open", ["entityId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Agent-authored HTML pages, one row per `render_html` call; the page body
+  // is its own row. Same three chat surfaces as `chatUiPanels`.
+  chatHtmlRenders: defineTable(chatHtmlRenderFields).index("by_parent", [
+    "parentId",
+  ]),
+  chatHtmlRenderBodies: defineTable(chatHtmlRenderBodyFields),
+  // Secret requests the agent posts as an inline card (`request_env_var`).
+  // Status only: the value goes to the encrypted env var stores.
+  envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
+    "parentId",
+  ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
   // tab. Short-lived: cleared when the entity's sandbox stops.
   previewToolCalls: defineTable(previewToolCallFields).index(
@@ -441,6 +453,13 @@ const schema = defineSchema({
   githubOauthStates: defineTable(githubOauthStateFields).index("by_nonce", [
     "nonce",
   ]),
+  connectedAccounts: defineTable(connectedAccountFields)
+    .index("by_user", ["userId"])
+    .index("by_user_and_provider", ["userId", "provider"]),
+  connectorOauthStates: defineTable(connectorOauthStateFields).index(
+    "by_nonce",
+    ["nonce"],
+  ),
   teamEnvVars: defineTable({
     teamId: v.id("teams"),
     vars: v.array(
@@ -460,6 +479,8 @@ const schema = defineSchema({
   automationRuns: defineTable(automationRunFields)
     .index("by_automation", ["automationId"])
     .index("by_automation_and_status", ["automationId", "status"])
+    .index("by_automation_and_eventKey", ["automationId", "eventKey"])
+    .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
     .index("by_repo", ["repoId"]),
 
   logs: defineTable(logFields)

@@ -469,6 +469,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.0
         version: 6.1.0(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/plugin-transform-runtime@7.29.7(@babel/core@7.29.7))(@babel/runtime@7.29.7)(rolldown@1.2.2)(vite@8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)))(babel-plugin-react-compiler@1.0.0)(oxc-transform-react@0.145.0)(vite@8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@vvedantb/redline':
+        specifier: 0.1.1
+        version: 0.1.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vite@8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
       agentation:
         specifier: ^3.0.2
         version: 3.0.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -484,6 +487,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.3.3)
+      tsc-rs:
+        specifier: 0.1.0
+        version: 0.1.0
       typescript:
         specifier: 7.0.1-rc
         version: 7.0.1-rc
@@ -566,8 +572,8 @@ importers:
         specifier: ^3.20.1
         version: 3.22.3
       '@vercel/sandbox':
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.5.0
+        version: 3.5.1
       ai:
         specifier: ^7.0.105
         version: 7.0.105(zod@3.25.76)
@@ -623,6 +629,9 @@ importers:
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
+      tsc-rs:
+        specifier: 0.1.0
+        version: 0.1.0
       typescript:
         specifier: 7.0.1-rc
         version: 7.0.1-rc
@@ -4977,6 +4986,18 @@ packages:
   '@tiptap/starter-kit@3.22.3':
     resolution: {integrity: sha512-vdW/Oo1fdwTL1VOQ5YYbTov00ANeHLquBVEZyL/EkV7Xv5io9rXQsCysJfTSHhiQlyr2MtWFB4+CPGuwXjQWOQ==}
 
+  '@tsc-rs/darwin-arm64@0.1.0':
+    resolution: {integrity: sha512-VgS/GcwcSOOdSlQnpw4etSnL5xFZNwfuPIa7KtBpfC6Qg1Fg0w150s58a00Zs6D6DnDd7yBxx3XgHcyNLjzaPA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tsc-rs/linux-x64@0.1.0':
+    resolution: {integrity: sha512-gzswr3ihKhkviz2ZcmkyVomXY4jqMPT4cWu/rjJqbJtMXJJHuZ9H5Eqv2fcCX9AB0i18EmPNva7Gp7NYaAdpJA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [linux]
+
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
@@ -5362,6 +5383,10 @@ packages:
       vue-router:
         optional: true
 
+  '@vercel/detect-agent@1.2.5':
+    resolution: {integrity: sha512-0krENrjuitlW8s6TJu0MlqCevyCU7K7JK63jZAf7xZ6n17tx+vUEwzHT3sTxawtwZxaW21hu+oFUpoOrm49FsQ==}
+    engines: {node: '>=14'}
+
   '@vercel/oidc@3.1.0':
     resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
     engines: {node: '>= 20'}
@@ -5370,8 +5395,8 @@ packages:
     resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
     engines: {node: '>= 20'}
 
-  '@vercel/sandbox@3.0.0':
-    resolution: {integrity: sha512-1pF3id7LIG2GfjkEAZW+ZngMDdywJw7aFLOyIlry/lj8v3b4GMn3WCuBbvG4N4wTmYUfFzHaVHfdwVpqALEFkw==}
+  '@vercel/sandbox@3.5.1':
+    resolution: {integrity: sha512-VHItQtcv4FkSXET29b088p87MNPAIhRscF3ifrup2KkC8ix4hy4NpgCO9F3GI4yOsztgGtuV7bDx29Iufun2hQ==}
 
   '@vitejs/plugin-react-swc@4.3.0':
     resolution: {integrity: sha512-mOkXCII839dHyAt/gpoSlm28JIVDwhZ6tnG6wJxUy2bmOx7UaPjvOyIDf3SFv5s7Eo7HVaq6kRcu6YMEzt5Z7w==}
@@ -5423,6 +5448,27 @@ packages:
 
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
+
+  '@vvedantb/redline@0.1.1':
+    resolution: {integrity: sha512-2F2uy2etE7erbmyTAv6kvmAFt4KubBgXq8g2nyvF8KFkxPG1tleNMM26peRA/ThWi+by8tqZNuqEF3xzEI7r/Q==}
+    hasBin: true
+    peerDependencies:
+      next: '>=13'
+      playwright: '>=1.45'
+      react: 19.3.0
+      react-dom: 19.3.0
+      vite: '>=5'
+    peerDependenciesMeta:
+      next:
+        optional: true
+      playwright:
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      vite:
+        optional: true
 
   '@wallet-standard/app@1.1.0':
     resolution: {integrity: sha512-3CijvrO9utx598kjr45hTbbeeykQrQfKmSnxeWOgU25TOEpvcipD/bYDQWIqUv1Oc6KK4YStokSMu/FBNecGUQ==}
@@ -7455,6 +7501,9 @@ packages:
   loupe@3.2.1:
     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}
 
+  lru-cache@10.4.3:
+    resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
@@ -8143,6 +8192,10 @@ packages:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
 
+  pixelmatch@5.3.0:
+    resolution: {integrity: sha512-o8mkY4E/+LNUf6LzX96ht6k6CEDi65k9G2rjMtBe9Oo+VPKSvl+0GKHuH/AlG+GA5LPG/i5hrekkxUc3s2HU+Q==}
+    hasBin: true
+
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
@@ -8157,6 +8210,14 @@ packages:
   pngjs@5.0.0:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
+
+  pngjs@6.0.0:
+    resolution: {integrity: sha512-TRzzuFRRmEoSW/p1KVAmiOgPco2Irlah+bGFCeNfJXxxYGwSw7YwAOAcd7X28K/m5bjBWKsC29KyoMfHbypayg==}
+    engines: {node: '>=12.13.0'}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   points-on-curve@0.2.0:
     resolution: {integrity: sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==}
@@ -9021,6 +9082,11 @@ packages:
   ts-dedent@2.2.0:
     resolution: {integrity: sha512-q5W7tVM71e2xjHZTlgfTDoPF/SmqKG5hddq9SzR49CH2hayqRKJtQ4mtRlSxKaJlR/+9rEM+mnBHf7I2/BQcpQ==}
     engines: {node: '>=6.10'}
+
+  tsc-rs@0.1.0:
+    resolution: {integrity: sha512-ibJNjypqagRtvc3wrQALo4VxOd0QmujczOIqMm97ioTkRuMS3UQlmX3f17IkhsLwgQ2az4UuWzfuaYliUdf3xQ==}
+    engines: {node: '>=16.20.0'}
+    hasBin: true
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -13608,6 +13674,12 @@ snapshots:
       '@tiptap/extensions': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3)
       '@tiptap/pm': 3.22.3
 
+  '@tsc-rs/darwin-arm64@0.1.0':
+    optional: true
+
+  '@tsc-rs/linux-x64@0.1.0':
+    optional: true
+
   '@tybys/wasm-util@0.10.2':
     dependencies:
       tslib: 2.8.1
@@ -13952,17 +14024,21 @@ snapshots:
     optionalDependencies:
       react: 19.3.0
 
+  '@vercel/detect-agent@1.2.5': {}
+
   '@vercel/oidc@3.1.0': {}
 
   '@vercel/oidc@3.2.0': {}
 
-  '@vercel/sandbox@3.0.0':
+  '@vercel/sandbox@3.5.1':
     dependencies:
+      '@vercel/detect-agent': 1.2.5
       '@vercel/oidc': 3.2.0
       '@workflow/serde': 4.1.0-beta.2
       async-retry: 1.3.3
       jose: 6.2.3
       jsonlines: 0.1.1
+      lru-cache: 10.4.3
       ms: 2.1.3
       picocolors: 1.1.1
       tar-stream: 3.1.7
@@ -14039,6 +14115,18 @@ snapshots:
       '@vitest/pretty-format': 3.2.7
       loupe: 3.2.1
       tinyrainbow: 2.0.0
+
+  '@vvedantb/redline@0.1.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vite@8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))':
+    dependencies:
+      '@babel/parser': 7.29.7
+      diff: 8.0.4
+      magic-string: 0.30.21
+      pixelmatch: 5.3.0
+      pngjs: 7.0.0
+    optionalDependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      vite: 8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
 
   '@wallet-standard/app@1.1.0':
     dependencies:
@@ -16171,6 +16259,8 @@ snapshots:
 
   loupe@3.2.1: {}
 
+  lru-cache@10.4.3: {}
+
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
@@ -17240,6 +17330,10 @@ snapshots:
 
   pirates@4.0.7: {}
 
+  pixelmatch@5.3.0:
+    dependencies:
+      pngjs: 6.0.0
+
   pkce-challenge@5.0.1: {}
 
   pkg-dir@3.0.0:
@@ -17253,6 +17347,10 @@ snapshots:
       pathe: 2.0.3
 
   pngjs@5.0.0: {}
+
+  pngjs@6.0.0: {}
+
+  pngjs@7.0.0: {}
 
   points-on-curve@0.2.0: {}
 
@@ -18285,6 +18383,11 @@ snapshots:
   ts-algebra@2.0.0: {}
 
   ts-dedent@2.2.0: {}
+
+  tsc-rs@0.1.0:
+    optionalDependencies:
+      '@tsc-rs/darwin-arm64': 0.1.0
+      '@tsc-rs/linux-x64': 0.1.0
 
   tslib@2.8.1: {}
 

@@ -1266,8 +1266,7 @@ html[data-blur-pid] [data-pii] {
 }
 
 /* Spinning gradient square, centred on the clip and sized to its diagonal.
- * +12px so `.beam-inset`'s 3px padding, which shrinks the container's content
- * box, still leaves the padding box covered. */
+ * +12px of slack so the padding box stays covered. */
 .beam::before {
   content: "";
   position: absolute;
@@ -1302,20 +1301,6 @@ html[data-blur-pid] [data-pii] {
     rgb(var(--chart-2) / 0.95) var(--beam-spread),
     rgb(var(--chart-5) / 0.75) calc(var(--beam-spread) * 1.5),
     transparent calc(var(--beam-spread) * 2);
-}
-
-/* Inset ring for overflow-hidden panes (Browser lock). Masks the spinning
- * gradient to a 3px inner frame so it can sit on top of the iframe the same
- * way `ring-inset` did — wrapping would paint the beam behind the child, and
- * the pane's overflow-hidden would clip BorderBeam's usual -1px outset. */
-.beam-inset .beam {
-  inset: 0;
-  padding: 3px;
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
 }
 
 /* ───────────────────────────────────────────────────────────────────

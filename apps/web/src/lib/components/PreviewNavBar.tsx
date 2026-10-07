@@ -28,6 +28,10 @@ import {
 import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
+import {
+  setPreviewDocumentLoading,
+  usePreviewDocumentLoading,
+} from "./sandbox/previewDocumentLoading";
 import { normalizePreviewPath } from "./previewPathHistory";
 
 export { normalizePreviewPath };
@@ -160,6 +164,8 @@ export function PreviewNavBar({
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
   }
   const simpleView = useSimpleView();
+  // Host-managed iframes only: a legacy ref can't be read during render.
+  const documentLoading = usePreviewDocumentLoading(iframeElement ?? null);
   const [portInput, setPortInput] = useState(String(port));
   const [pathInput, setPathInput] = useState(path ?? defaultPath);
   // Tracks the last value emitted via onPathChange so the three event sources
@@ -222,16 +228,28 @@ export function PreviewNavBar({
     const iframe =
       iframeElement !== undefined ? iframeElement : iframeRef.current;
     const onLoad = () => {
+      if (iframe) setPreviewDocumentLoading(iframe, false);
       syncPathFromIframeRef.current();
     };
     iframe?.addEventListener("load", onLoad);
 
     function handleMessage(event: MessageEvent) {
+      const source = currentIframeRef.current();
       if (
-        event.source === currentIframeRef.current()?.contentWindow &&
-        typeof event.data === "object" &&
-        event.data !== null &&
-        "type" in event.data &&
+        source === null ||
+        event.source !== source.contentWindow ||
+        typeof event.data !== "object" ||
+        event.data === null ||
+        !("type" in event.data)
+      ) {
+        return;
+      }
+      // The page is leaving for another document (link, form, location.href).
+      if (event.data.type === "eva-preview-unload") {
+        setPreviewDocumentLoading(source, true);
+        return;
+      }
+      if (
         event.data.type === "navigation" &&
         "url" in event.data &&
         typeof event.data.url === "string"
@@ -268,6 +286,7 @@ export function PreviewNavBar({
   function reload() {
     const iframe = currentIframe();
     if (iframe) {
+      setPreviewDocumentLoading(iframe, true);
       // Reassigning the same src forces the iframe to reload its document.
       const currentSrc = iframe.src;
       iframe.src = currentSrc;
@@ -280,6 +299,7 @@ export function PreviewNavBar({
     const nextPath = normalizePreviewPath(path);
     setPathInput(nextPath);
     notifyPathChange(nextPath);
+    setPreviewDocumentLoading(iframe, true);
     iframe.src = buildUrlWithPath(previewUrl, nextPath);
   }
 
@@ -333,7 +353,10 @@ export function PreviewNavBar({
         onClick={isLoading && onRefresh ? onRefresh : reload}
         disabled={isLoading}
       >
-        <RefreshSpinIcon busy={isLoading} className="size-3.5" />
+        <RefreshSpinIcon
+          busy={isLoading || documentLoading}
+          className="size-3.5"
+        />
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}

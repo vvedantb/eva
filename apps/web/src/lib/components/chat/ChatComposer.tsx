@@ -1,5 +1,4 @@
 import {
-  motionBase,
   PromptInputProvider,
   toast,
   type ModelAccount,
@@ -33,7 +32,6 @@ import {
   tokenizedToEditable,
 } from "@/lib/components/mentions";
 import { useRef, useState, type ReactNode } from "react";
-import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -54,6 +52,7 @@ import {
 } from "@/lib/components/chat/_components/ComposerTasksPanel";
 import type {
   ChatBodyQueuedMessage,
+  ChatHeldFollowUp,
   ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
@@ -100,6 +99,10 @@ interface ChatComposerProps {
   repo?: ChatRepo;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something; default "Queued". */
+  queueLabel?: string;
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
   messageHistory: string[];
   isExecuting: boolean;
   isInputDisabled: boolean;
@@ -114,7 +117,6 @@ interface ChatComposerProps {
     attachmentStorageIds?: Id<"_storage">[],
   ) => Promise<void>;
   onCancel: () => Promise<void>;
-  beforeQueuedContent?: React.ReactNode;
   preInputContent?: React.ReactNode;
   /** Live turn activity JSON — its todo snapshot feeds the Tasks panel. */
   streamingActivity?: string;
@@ -138,6 +140,8 @@ export function ChatComposer({
   repo,
   conversationId,
   queuedMessages,
+  queueLabel,
+  heldFollowUps = [],
   messageHistory,
   isExecuting,
   isInputDisabled,
@@ -147,7 +151,6 @@ export function ChatComposer({
   modelPicker,
   onSend,
   onCancel,
-  beforeQueuedContent,
   preInputContent,
   streamingActivity,
   streamingTurnId,
@@ -275,6 +278,23 @@ export function ChatComposer({
       </div>
     );
 
+  const renderQueuedContent = (content: string) => {
+    const stripped = stripReviewCommentBlocks(content);
+    const display = tokenizedToEditable(stripped.text).displayText;
+    const suffix =
+      stripped.reviewCommentCount > 0
+        ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
+        : "";
+    return (
+      <MessageMentionText
+        as="span"
+        text={`${display}${suffix}`}
+        repo={repo}
+        className="text-xs leading-4 text-foreground/90"
+      />
+    );
+  };
+
   const dockPanels = (
     <>
       <ComposerTasksPanel
@@ -283,22 +303,8 @@ export function ChatComposer({
       />
       <QueuedMessagesPanel
         items={queuedMessageItems}
-        renderContent={(content) => {
-          const stripped = stripReviewCommentBlocks(content);
-          const display = tokenizedToEditable(stripped.text).displayText;
-          const suffix =
-            stripped.reviewCommentCount > 0
-              ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
-              : "";
-          return (
-            <MessageMentionText
-              as="span"
-              text={`${display}${suffix}`}
-              repo={repo}
-              className="text-xs leading-4 text-foreground/90"
-            />
-          );
-        }}
+        {...(queueLabel !== undefined ? { label: queueLabel } : {})}
+        renderContent={renderQueuedContent}
         onEdit={async (id, content) => {
           await updateQueuedMessage({ id, content });
         }}
@@ -310,6 +316,10 @@ export function ChatComposer({
           if (!parentId) return;
           await reorderQueuedMessages({ parentId, orderedIds });
         }}
+      />
+      <QueuedMessagesPanel
+        items={heldFollowUps}
+        renderContent={renderQueuedContent}
       />
     </>
   );
@@ -343,18 +353,6 @@ export function ChatComposer({
 
   return (
     <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
-      <AnimatePresence initial={false}>
-        {beforeQueuedContent ? (
-          <m.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={motionBase}
-          >
-            {beforeQueuedContent}
-          </m.div>
-        ) : null}
-      </AnimatePresence>
       {preInputContent}
       {isDraftLoading ? (
         <>

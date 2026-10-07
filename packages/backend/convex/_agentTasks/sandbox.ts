@@ -22,6 +22,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { drainChatQueueQuietly } from "../_queues/helpers";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -83,56 +84,82 @@ export const startTaskSandbox = authMutation({
     const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
-    const branchName = `eva/task-${args.taskId}`;
-    const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
-      ctx.db,
-      task,
-      repo,
-    );
-
-    await ctx.db.patch(args.taskId, {
-      reviewTaskSandboxStatus: "starting",
-      updatedAt: Date.now(),
-    });
-    // Seed startup streaming immediately so the UI shows a real step instead of
-    // the random "Eva is inferring…" spinner while the workflow schedules.
-    await seedSandboxStartupActivity(
-      ctx.db,
-      `task-sandbox-startup-${args.taskId}`,
-    );
-    const reusableSandboxId = task.sandboxId;
-    console.log(
-      `[tasks] startTaskSandbox taskId=${args.taskId} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
-    );
-
-    const startArgs = {
-      taskId: args.taskId,
-      existingSandboxId: task.sandboxId,
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      branchName,
-      baseBranch,
-      repoId: task.repoId,
-    };
-    // Vercel: schedule start action directly (skip ~6s workflow scheduling).
-    if (reusableSandboxId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.startTaskPreviewSandbox,
-        startArgs,
-      );
-    } else {
-      await workflow.start(
-        ctx,
-        internal.taskSandboxWorkflow.taskPreviewSandboxStartupWorkflow,
-        startArgs,
-      );
-    }
-
+    await requestTaskSandboxStart(ctx, task, repo);
     return null;
   },
 });
+
+/**
+ * Marks the task's preview sandbox starting and schedules the start. Shared by
+ * the wake button and the chat queue, which wakes a sleeping sandbox to send
+ * what was queued (`_queues/helpers`). Callers check access and eligibility.
+ */
+export async function requestTaskSandboxStart(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  repo: Doc<"githubRepos">,
+): Promise<void> {
+  const branchName = `eva/task-${task._id}`;
+  const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
+    ctx.db,
+    task,
+    repo,
+  );
+
+  await ctx.db.patch(task._id, {
+    reviewTaskSandboxStatus: "starting",
+    updatedAt: Date.now(),
+  });
+  // Seed startup streaming immediately so the UI shows a real step instead of
+  // the random "Eva is inferring…" spinner while the workflow schedules.
+  await seedSandboxStartupActivity(ctx.db, `task-sandbox-startup-${task._id}`);
+  const reusableSandboxId = task.sandboxId;
+  console.log(
+    `[tasks] startTaskSandbox taskId=${task._id} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
+  );
+
+  const startArgs = {
+    taskId: task._id,
+    existingSandboxId: task.sandboxId,
+    installationId: repo.installationId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    branchName,
+    baseBranch,
+    repoId: repo._id,
+  };
+  // Vercel: schedule start action directly (skip ~6s workflow scheduling).
+  if (reusableSandboxId) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.startTaskPreviewSandbox,
+      startArgs,
+    );
+  } else {
+    await workflow.start(
+      ctx,
+      internal.taskSandboxWorkflow.taskPreviewSandboxStartupWorkflow,
+      startArgs,
+    );
+  }
+}
+
+/**
+ * Wakes a sleeping task sandbox so its queued chat can send. Skipped where the
+ * wake button would refuse, leaving the message queued for a manual wake.
+ */
+export async function wakeTaskSandboxForQueue(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  if (!task.repoId) return;
+  if (!task.sandboxId && !(await isPreviewSandboxAllowed(ctx.db, task))) {
+    return;
+  }
+  const repo = await ctx.db.get(task.repoId);
+  if (!repo) return;
+  await requestTaskSandboxStart(ctx, task, repo);
+}
 
 /**
  * Re-runs startup commands for a task's preview sandbox by kicking off the
@@ -593,6 +620,9 @@ export const taskSandboxReady = internalMutation({
       kind: "task",
       entityId: String(args.taskId),
     });
+    // Sends what was queued while Eva slept. Early + final ready both land
+    // here; the second no-ops once the first turn is running.
+    await drainChatQueueQuietly(ctx, args.taskId);
 
     return null;
   },

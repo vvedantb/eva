@@ -122,6 +122,7 @@ export function SandboxPaneSlots({
   autoWakeEligible,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
+  const wake = { onStartSandbox, isSandboxStarting };
   const resolvedTab =
     simpleView && isSimpleViewHiddenSandboxTab(activeTab)
       ? "preview"
@@ -289,6 +290,7 @@ export function SandboxPaneSlots({
             isActive={isActive}
             repoId={repoId}
             externalHref={wakeHrefForPath?.("/", 8080)}
+            wake={wake}
           />
         </SandboxPaneBoundary>
       </div>
@@ -311,6 +313,7 @@ export function SandboxPaneSlots({
             agentBrowsingAt={agentBrowsingAt}
             onReleaseLock={onReleaseBrowserLock}
             externalHref={wakeHrefForPath?.("/", 6080)}
+            wake={wake}
           />
         </SandboxPaneBoundary>
       </div>
@@ -345,6 +348,7 @@ export function SandboxPaneSlots({
                       `/__tab/${tab.port}/`,
                       preview.effectivePort,
                     )}
+                    wake={wake}
                   />
                 </SandboxPaneBoundary>
               </div>

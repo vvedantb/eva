@@ -68,21 +68,13 @@ export interface UsageLimitRecoveryInputs {
 export interface SandboxChatSurface {
   entity: ChatEntityRef;
   repoId: Id<"githubRepos">;
-  /** The chat's current model — only Claude is offered `/compact`. */
+  /** The chat's current model. */
   model: AIModel;
   /** A running turn owns the context; never interrupt it with an offer. */
   isExecuting: boolean;
   /** The chat cannot be written to at all — hides per-agent stop buttons. */
   isReadOnly: boolean;
-  /**
-   * Whether `/compact` cannot be sent right now. Separate from `isReadOnly`:
-   * sessions wake their sandbox on send (so a stopped sandbox still qualifies),
-   * while task and project chats can only send while the sandbox runs.
-   */
-  compactionReadOnly: boolean;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   /** What the usage-limit recovery card needs, or nothing when it cannot show. */
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
-  /** Sends a harness slash command as a plain user message. */
-  onSendCommand: (command: string) => void;
 }

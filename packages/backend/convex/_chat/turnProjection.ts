@@ -19,7 +19,10 @@ export function isLegacySessionExecuting(
   );
 }
 
-/** One indexed query per list subscription, never one turn lookup per row. */
+/**
+ * One indexed query per list subscription, never one turn lookup per row.
+ * The repo index also holds task and project chat turns; keep sessions only.
+ */
 export async function openSessionIdsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
@@ -28,7 +31,12 @@ export async function openSessionIdsForRepo(
     .query("turns")
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
-  return new Set(turns.map((turn) => turn.entityId));
+  return new Set(
+    turns
+      .map((turn) => db.normalizeId("sessions", turn.entityId))
+      .filter((sessionId) => sessionId !== null)
+      .map(String),
+  );
 }
 
 /** True while one named session has a turn open. */
@@ -39,7 +47,7 @@ export async function sessionHasOpenTurn(
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("surface", "session").eq("entityId", String(sessionId)).eq("open", true),
+      q.eq("entityId", sessionId).eq("open", true),
     )
     .first();
   return turn !== null;

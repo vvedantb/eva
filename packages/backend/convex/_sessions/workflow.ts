@@ -13,8 +13,9 @@ import {
   normalizeAIModel,
   sessionStatusValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
-  interactionModeValidator,
+  daemonClaimResultValidator,
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
@@ -209,6 +210,7 @@ export async function buildSessionPrompt(
       devCommand: session.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
     },
   );
   if (prefixBlock) {
@@ -1083,30 +1085,7 @@ export const claimPendingTurn = authMutation({
     // keep acquiring the running lease (previous behaviour).
     acceptTurn: v.optional(v.boolean()),
   },
-  returns: v.union(
-    v.object({
-      prompt: v.union(v.string(), v.null()),
-      turnLifecycle: v.literal("legacy"),
-      // Resolved download URLs for this turn's input image attachments. The daemon
-      // fetches these and hands the agent local file paths before running the turn.
-      attachmentUrls: v.array(v.string()),
-      stopTaskToolUseIds: v.array(v.string()),
-      cancelRequested: v.boolean(),
-      usageRefreshRequested: v.boolean(),
-      interactionMode: v.optional(interactionModeValidator),
-    }),
-    v.object({
-      prompt: v.string(),
-      turnLifecycle: v.literal("durable"),
-      turnId: v.id("turns"),
-      leaseGeneration: v.number(),
-      attachmentUrls: v.array(v.string()),
-      stopTaskToolUseIds: v.array(v.string()),
-      cancelRequested: v.boolean(),
-      usageRefreshRequested: v.boolean(),
-      interactionMode: v.optional(interactionModeValidator),
-    }),
-  ),
+  returns: daemonClaimResultValidator,
   handler: async (ctx, args) => {
     const emptyClaim = {
       prompt: null,
@@ -1576,14 +1555,13 @@ export const completeSyntheticTurn = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     pendingQuestion: v.optional(v.string()),
-    turnId: v.optional(v.string()),
-    leaseGeneration: v.optional(v.number()),
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const turnResolution = await resolveCompletionTurn(ctx, {
-      sessionId: args.sessionId,
+      entityId: args.sessionId,
       turnId: args.turnId,
       leaseGeneration: args.leaseGeneration,
       placeholderMessageId: args.messageId,
@@ -1739,8 +1717,7 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
-    turnId: v.optional(v.string()),
-    leaseGeneration: v.optional(v.number()),
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
@@ -1752,7 +1729,7 @@ export const handleCompletion = authMutation({
       throw new Error("Not authorized");
 
     const turnResolution = await resolveCompletionTurn(ctx, {
-      sessionId: args.sessionId,
+      entityId: args.sessionId,
       turnId: args.turnId,
       leaseGeneration: args.leaseGeneration,
     });

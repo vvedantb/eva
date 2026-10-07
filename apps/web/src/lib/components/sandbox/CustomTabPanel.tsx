@@ -12,6 +12,10 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import {
+  SandboxAsleepState,
+  type SandboxWake,
+} from "@/lib/components/sandbox/SandboxAsleepState";
 
 type PanelState = "loading" | "running" | "error";
 
@@ -33,6 +37,7 @@ interface CustomTabPanelProps {
   repoId: Id<"githubRepos">;
   /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
   externalHref?: string;
+  wake?: SandboxWake;
 }
 
 const MAX_ATTEMPTS = 40;
@@ -59,6 +64,7 @@ export function CustomTabPanel({
   previewPort,
   repoId,
   externalHref,
+  wake,
 }: CustomTabPanelProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<PanelState>("loading");
@@ -187,9 +193,10 @@ export function CustomTabPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-        Wake Eva up to use {name}.
-      </div>
+      <SandboxAsleepState
+        label={`Wake Eva up to use ${name}.`}
+        wake={isActive ? undefined : wake}
+      />
     );
   }
 

@@ -90,17 +90,43 @@ describe("idle pause sweep", () => {
   });
 
   test(
-    "no settings row means off: the sweep changes nothing",
+    "no settings row means on at 60 min: hours-idle sandboxes pause, a fresh one does not",
     async () => {
       const { t, sessionId, taskId } = await fixture();
       const settings = await t.query(
         internal.sandboxIdlePause.getSettingsInternal,
         {},
       );
-      expect(settings.mode).toBe("off");
+      expect(settings).toEqual({
+        mode: "on",
+        afterAgentMs: 5 * 60_000,
+        afterInteractionMs: 60 * 60_000,
+      });
+      await t.mutation(internal._sandbox.activity.touchUser, {
+        kind: "task",
+        entityId: String(taskId),
+      });
+      await t.action(internal.sandboxIdlePause.run, {});
+      expect(await sessionStatus(t, sessionId)).toBe("stopping");
+      expect(await taskStatus(t, taskId)).toBe("active");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the earlier idle-stop toggle still switches the sweep off",
+    async () => {
+      const { t, sessionId } = await fixture();
+      await t.run(async (ctx) => {
+        await ctx.db.insert("appSettings", {
+          sandboxAutoStopEnabled: false,
+          sandboxAutoStopTime: "22:00",
+          sandboxAutoStopTimeZone: "UTC",
+          sandboxIdleStopEnabled: false,
+        });
+      });
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("active");
-      expect(await taskStatus(t, taskId)).toBe("active");
     },
     TIMEOUT_MS,
   );

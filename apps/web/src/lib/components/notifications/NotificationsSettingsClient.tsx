@@ -6,7 +6,15 @@ import { Spinner, Switch } from "@eva/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
-import { catchMutationError } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  mutationError,
+} from "@/lib/utils/mutationToast";
+import {
+  disableDesktopNotifications,
+  enableDesktopNotifications,
+  useDesktopNotifications,
+} from "@/lib/components/notifications/desktopNotifications";
 
 export function NotificationsSettingsClient() {
   const enabled = useQuery(api.auth.getEmailNotificationsEnabled);
@@ -19,6 +27,21 @@ export function NotificationsSettingsClient() {
       args.enabled,
     );
   });
+  const desktop = useDesktopNotifications();
+
+  const toggleDesktop = async (checked: boolean) => {
+    if (!checked) {
+      disableDesktopNotifications();
+      return;
+    }
+    const result = await enableDesktopNotifications();
+    if (result === "denied") {
+      mutationError(
+        "Notifications are blocked for Eva. Allow them in your browser's site settings, then try again.",
+        "desktop-notifications",
+      );
+    }
+  };
 
   if (enabled === undefined) {
     return (
@@ -51,6 +74,28 @@ export function NotificationsSettingsClient() {
                 )
               }
               aria-label="Email notifications"
+            />
+          }
+        />
+      </SettingsSection>
+      <SettingsSection
+        title="Desktop notifications"
+        description="System pop-ups while Eva is open in the background."
+        bodyVariant="list"
+      >
+        <SettingsToggleRow
+          title="Show pop-ups"
+          description={
+            desktop.supported
+              ? "Show a system pop-up for new notifications when Eva is open but you are in another app. Only on this device."
+              : "This browser does not support desktop notifications."
+          }
+          action={
+            <Switch
+              checked={desktop.enabled}
+              disabled={!desktop.supported}
+              onCheckedChange={(checked) => void toggleDesktop(checked)}
+              aria-label="Desktop notifications"
             />
           }
         />

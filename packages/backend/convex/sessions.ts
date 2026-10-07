@@ -4,6 +4,7 @@ export {
   get,
   getByNumId,
   getFirstMessagePreview,
+  getForkLinks,
   countActive,
 } from "./_sessions/queries";
 
@@ -49,6 +50,8 @@ export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 export {
   getForkSource,
   createForkedSession,
+  copyForkMessages,
+  copyForkCards,
   settleForkSource,
 } from "./_sessions/fork";
 

@@ -27,6 +27,27 @@ export function buildSystemPromptBlock(
   return `\n\n## System Prompt\n${systemPrompt}`;
 }
 
+/** Repo-relative folder holding agent memory when the repo opts in. */
+export const AGENT_MEMORY_DIR = ".eva/memory";
+
+/**
+ * How a memory entry is written, after the Agent Memory Repo spec
+ * (github.com/AgentMemoryRepo/agentmemoryrepo). Shared by the per-turn block
+ * and the dreaming automation so both enforce the same format and rules.
+ */
+export const AGENT_MEMORY_FORMAT = `- \`${AGENT_MEMORY_DIR}/MEMORY.md\` is the short entry point: one-line bullets plus \`[[path]]\` links to topic files in the same folder (e.g. \`[[billing/pricing.md]]\`). Keep it under ~100 lines.
+- One fact per bullet, stated once and linked from elsewhere, with metadata: \`- Fact. [source: <PR, file or chat>, added: YYYY-MM-DD]\`.
+- Worth saving: non-obvious lessons, gotchas, decisions and the reason for them, user preferences, useful queries or commands. Not worth saving: anything the code, git history or CLAUDE.md already records.
+- Never save secrets, tokens, credentials, customer or client data, or anything that identifies a person. Describe the pattern instead.`;
+
+/** Per-turn memory instructions; empty unless the repo opted in. */
+export function buildAgentMemoryBlock(enabled: boolean | undefined): string {
+  if (enabled !== true) return "";
+  return `\n\n## Agent memory (this repo opted in):
+Notes from earlier sessions live in \`${AGENT_MEMORY_DIR}/\` at the repo root. Read \`MEMORY.md\` before starting work and grep the folder or follow links for anything relevant. When you learn something a later session would need, or find an entry is wrong, update the folder in the same turn and commit it with your other changes.
+${AGENT_MEMORY_FORMAT}`;
+}
+
 /** Lists sibling repositories the sandbox's git credentials can read; empty when there are none. */
 export function buildReadableReposBlock(
   repos: ReadonlyArray<{ owner: string; name: string }>,
@@ -52,6 +73,14 @@ export function buildRootDirectoryInstruction(rootDirectory: string): string {
 /** Reply-length constraint appended to every session turn prompt. */
 export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
+
+/**
+ * Writing style for every chat reply: ASD-STE100 Simplified Technical English,
+ * applied loosely. Full STE bans non-dictionary words, which would strip the
+ * domain terms (workflow, lease, commit) a dev reader needs, so those stay.
+ */
+export const COMMUNICATION_STYLE_INSTRUCTION =
+  "\n\nWriting style: follow ASD-STE100 Simplified Technical English about 80% of the way. One idea per sentence, about 20 words or fewer. Active voice, simple present or past tense. One word for one meaning; literal verbs, no idioms. Numbered steps for sequences, bullets for conditions. Keep technical names and domain terms, and keep the reason behind each decision.";
 
 /**
  * Ask before inventing a visual, and name every visual you changed.
@@ -87,13 +116,16 @@ Name every visible change you made, however small, and separately flag the ones 
 - This overrides the reply-length limit: these lines are always in scope.`;
 
 /**
- * Nudge towards `render_ui`. Appended to the shared chat-turn prompt, so
- * sessions, quick tasks and project chat all get it — the tool is available on
- * every sandbox token, and without a prompt line agents never reach for it.
+ * Nudge towards `render_ui` and `render_html`. Appended to the shared
+ * chat-turn prompt, so sessions, quick tasks and project chat all get it — both
+ * tools are on every sandbox token, and without a prompt line agents never
+ * reach for them.
  */
 export const CHAT_UI_INSTRUCTION = `
 
-Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.`;
+Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.
+
+Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.`;
 
 /** One linked repo, as the prompt needs to describe it to the agent. */
 export type LinkedRepoPromptRow = {

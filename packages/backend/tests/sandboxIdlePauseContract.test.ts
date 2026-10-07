@@ -39,10 +39,12 @@ describe("idle pause wiring", () => {
     }
   });
 
-  test("the daily auto-stop sweep is left alone", () => {
+  test("the daily auto-stop sweep has no code dependency on the idle sweep", () => {
     const daily = source("backend/convex/sandboxAutoStop.ts");
-    expect(daily).not.toContain("sandboxIdlePause");
+    // A doc comment may point at the idle sweep; an import or call may not.
+    expect(daily).not.toMatch(/from "\.\/sandboxIdlePause"|internal\.sandboxIdlePause/);
     expect(daily).not.toContain("idlePolicy");
+    expect(daily).not.toContain("idleStop");
   });
 
   test("the sweep never execs into a sandbox (reads only, then the stop helpers)", () => {

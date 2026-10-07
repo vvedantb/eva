@@ -10,10 +10,15 @@
 
 export type SandboxIdlePauseMode = "off" | "dry-run" | "on";
 
+/**
+ * Defaults when nothing is saved. `on` at 60 minutes matches the idle-stop
+ * sweep that shipped on 2026-10-05 (absent = on, 60 min), which this sweep
+ * replaces — a deploy must not silently switch idle stopping off.
+ */
 export const IDLE_PAUSE_DEFAULTS = {
-  mode: "off",
+  mode: "on",
   afterAgentMinutes: 5,
-  afterInteractionMinutes: 20,
+  afterInteractionMinutes: 60,
 } as const satisfies {
   mode: SandboxIdlePauseMode;
   afterAgentMinutes: number;
@@ -53,11 +58,18 @@ export interface IdleThresholds {
   afterInteractionMs: number;
 }
 
-/** Shape of the optional idle fields on the `appSettings` row. */
+/**
+ * Shape of the optional idle fields on the `appSettings` row. The two
+ * `sandboxIdleStop*` fields belong to the earlier idle-stop sweep; they are
+ * read only when the newer `sandboxIdlePause*` fields were never saved, so a
+ * row configured before the sweeps were unified keeps its behaviour.
+ */
 export interface IdleSettingsSource {
   sandboxIdlePauseMode?: SandboxIdlePauseMode;
   sandboxIdleAfterAgentMinutes?: number;
   sandboxIdleAfterInteractionMinutes?: number;
+  sandboxIdleStopEnabled?: boolean;
+  sandboxIdleStopMinutes?: number;
 }
 
 const MINUTE_MS = 60_000;
@@ -71,16 +83,18 @@ function clampMinutes(value: number | undefined, fallback: number): number {
 export function resolveIdleThresholds(
   doc: IdleSettingsSource | null | undefined,
 ): IdleThresholds {
+  const legacyMode: SandboxIdlePauseMode =
+    doc?.sandboxIdleStopEnabled === false ? "off" : IDLE_PAUSE_DEFAULTS.mode;
   const afterAgentMinutes = clampMinutes(
     doc?.sandboxIdleAfterAgentMinutes,
     IDLE_PAUSE_DEFAULTS.afterAgentMinutes,
   );
   const afterInteractionMinutes = clampMinutes(
-    doc?.sandboxIdleAfterInteractionMinutes,
+    doc?.sandboxIdleAfterInteractionMinutes ?? doc?.sandboxIdleStopMinutes,
     IDLE_PAUSE_DEFAULTS.afterInteractionMinutes,
   );
   return {
-    mode: doc?.sandboxIdlePauseMode ?? IDLE_PAUSE_DEFAULTS.mode,
+    mode: doc?.sandboxIdlePauseMode ?? legacyMode,
     afterAgentMs: afterAgentMinutes * MINUTE_MS,
     afterInteractionMs: afterInteractionMinutes * MINUTE_MS,
   };

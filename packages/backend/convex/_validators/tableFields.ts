@@ -146,6 +146,51 @@ export const githubOauthStateFields = {
   expiresAt: v.number(),
 };
 
+export const connectorProviderValidator = v.union(
+  v.literal("linear"),
+  v.literal("figma"),
+);
+
+export const connectorActorValidator = v.union(
+  v.literal("user"),
+  v.literal("app"),
+);
+
+/**
+ * A user's (or team-shared) OAuth connection to Linear or Figma. Tokens are
+ * ciphertext (`encryption.ts`); plaintext exists only inside a node action.
+ * Env-var API keys are not stored here — those stay on team/repo env vars and
+ * are the fallback when no row exists.
+ */
+export const connectedAccountFields = {
+  userId: v.id("users"),
+  provider: connectorProviderValidator,
+  actor: connectorActorValidator,
+  workspaceId: v.optional(v.string()),
+  workspaceName: v.optional(v.string()),
+  accountLabel: v.optional(v.string()),
+  accessToken: v.string(),
+  accessTokenExpiresAt: v.number(),
+  refreshToken: v.optional(v.string()),
+  refreshTokenExpiresAt: v.optional(v.number()),
+  scopes: v.optional(v.string()),
+  shared: v.optional(v.boolean()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+/** CSRF nonce for Linear/Figma OAuth. Consumed on first use, like GitHub. */
+export const connectorOauthStateFields = {
+  nonce: v.string(),
+  userId: v.id("users"),
+  provider: connectorProviderValidator,
+  actor: connectorActorValidator,
+  /** Relative path to bounce back to. Must start with `/settings`. */
+  returnPath: v.optional(v.string()),
+  codeVerifier: v.optional(v.string()),
+  expiresAt: v.number(),
+};
+
 export const repoEntityTypeValidator = v.union(
   v.literal("sessions"),
   v.literal("docs"),
@@ -196,10 +241,21 @@ export const turnStateValidator = v.union(
 
 export type TurnState = Infer<typeof turnStateValidator>;
 
-/** Durable ownership record for one session chat turn. */
+/** Chat entities that own durable turns; the id's table picks the surface. */
+export const chatTurnEntityIdValidator = v.union(
+  v.id("sessions"),
+  v.id("agentTasks"),
+  v.id("projects"),
+);
+
+/** Durable ownership record for one chat turn (session, task chat or project chat). */
 export const turnFields = {
-  surface: v.literal("session"),
-  entityId: v.string(),
+  /**
+   * Retired: `entityId` already names the table. No longer written; drained by
+   * `dataMigrations:clearTurnSurface`, then deleted.
+   */
+  surface: v.optional(v.literal("session")),
+  entityId: chatTurnEntityIdValidator,
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -251,6 +307,15 @@ export const sessionDaemonStateFields = {
   // Mirrors sessions.claimPausedUntil — the prewarm kill fence is read off
   // this compact row on the 50ms claim poll.
   claimPausedUntil: v.optional(v.number()),
+};
+
+/**
+ * Task and project chat counterpart of `sessions.turnLifecycleVersion`: set
+ * the first time the chat opens a durable Turn, so projections stop trusting
+ * the legacy `activeChatWorkflowId` / `syntheticTurnMessageId` fields.
+ */
+const chatTurnLifecycleFields = {
+  chatTurnLifecycleVersion: v.optional(v.literal(2)),
 };
 
 export const chatDaemonEntityFields = {
@@ -346,6 +411,7 @@ export const agentTaskFields = {
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   ...chatDaemonEntityFields,
+  ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
   // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
@@ -735,6 +801,9 @@ export const githubRepoFields = {
   // Opt-out: when true, other sandboxes may not mint read tokens for this
   // repository (see _githubRepos/sandboxRead.ts). Shared across sibling app rows.
   sandboxReadExcluded: v.optional(v.boolean()),
+  // Opt-in: agents read and update `.eva/memory/` in the repo (Agent Memory
+  // Repo spec). Shared across sibling app rows.
+  agentMemoryEnabled: v.optional(v.boolean()),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -833,6 +902,7 @@ export const projectFields = {
   // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   ...chatDaemonEntityFields,
+  ...chatTurnLifecycleFields,
   // Last model used in sandbox chat; page-open prewarm matches the composer.
   lastChatModel: v.optional(aiModelValidator),
   // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
@@ -863,12 +933,38 @@ export const projectDetailsFields = {
   generatedSpec: v.optional(v.string()),
 };
 
+/**
+ * Repo events an automation can react to (see `_automationEvents/events.ts`).
+ * `ci_failed` and `pr_feedback` only ever fire for PRs Eva opened.
+ */
+export const repoEventKindValidator = v.union(
+  v.literal("ci_failed"),
+  v.literal("pr_feedback"),
+  v.literal("issue_labeled"),
+  v.literal("pr_opened"),
+  v.literal("pr_merged"),
+);
+
+/** What starts an automation: its cron schedule, or a repo event. */
+export const automationTriggerValidator = v.union(
+  v.object({ kind: v.literal("cron") }),
+  v.object({
+    kind: v.literal("event"),
+    event: repoEventKindValidator,
+    // `issue_labeled` only: the label that fires it (defaults to "eva").
+    label: v.optional(v.string()),
+  }),
+);
+
 export const automationFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
   title: v.string(),
   description: v.string(),
   cronSchedule: v.string(),
+  // Missing means `{ kind: "cron" }`, so rows from before event triggers
+  // keep their schedule without a migration.
+  trigger: v.optional(automationTriggerValidator),
   model: v.optional(aiModelValidator),
   enabled: v.boolean(),
   readOnly: v.optional(v.boolean()),
@@ -880,7 +976,7 @@ export const automationFields = {
   cronJobId: v.optional(v.string()),
   // Set when this row is a per-repo install of a hardcoded system automation
   // (see _automations/systemAutomations.ts). Content fields hold placeholders;
-  // the catalog overlays title/description/cronSchedule/readOnly/actionsEnabled
+  // the catalog overlays title/description/readOnly/actionsEnabled/trigger
   // at read and run time, so editing the code updates every install at once.
   systemKey: v.optional(v.string()),
   createdBy: v.id("users"),
@@ -902,6 +998,18 @@ export const automationRunFields = {
   activeWorkflowId: v.optional(v.string()),
   activityLog: v.optional(v.string()),
   findings: v.optional(v.array(automationFindingValidator)),
+  // Event-triggered runs only. `eventKey` dedupes a burst of webhooks into one
+  // run; `targetUrl` is the PR or issue the event was about.
+  eventKind: v.optional(repoEventKindValidator),
+  eventKey: v.optional(v.string()),
+  targetUrl: v.optional(v.string()),
+  // Review feedback: GitHub time of the newest comment this run delivered, so
+  // the next run sends only what came after it.
+  eventCursor: v.optional(v.number()),
+  // Issue runs: the quick task created for the issue, so it is never re-made.
+  createdTaskId: v.optional(v.id("agentTasks")),
+  // CI fix attempts stop counting toward the cap once the PR goes green.
+  superseded: v.optional(v.boolean()),
 };
 
 /**
@@ -951,6 +1059,9 @@ export const messageFields = {
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
   // stamped today; unclassified failures leave it unset.
   errorType: v.optional(errorTypeValidator),
+  // Usage-limit failures: when the provider said the window resets (ms). Holds
+  // the chat's queue until just after it — see `findUsageLimitHold`.
+  limitResetAt: v.optional(v.number()),
   variations: v.optional(v.array(variationValidator)),
   imageStorageId: v.optional(v.id("_storage")),
   videoStorageId: v.optional(v.id("_storage")),
@@ -1152,6 +1263,14 @@ export const appSettingsFields = {
   sandboxIdlePauseMode: v.optional(sandboxIdlePauseModeValidator),
   sandboxIdleAfterAgentMinutes: v.optional(v.number()),
   sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
+  /**
+   * Settings of the earlier idle-stop sweep (2026-10-05), kept so rows saved
+   * before the sweeps were unified keep their behaviour. Read only as a
+   * fallback when `sandboxIdlePauseMode` is unset (`resolveIdleThresholds`);
+   * never written any more.
+   */
+  sandboxIdleStopEnabled: v.optional(v.boolean()),
+  sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
 // Per-entity "last interaction" record read by the idle-pause sweep. Lives in
@@ -1476,6 +1595,58 @@ export const chatUiPanelFields = {
   spec: v.string(),
   elementCount: v.number(),
   createdAt: v.number(),
+};
+
+/**
+ * One agent-authored HTML page (`render_html`). The page itself is a separate
+ * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
+ */
+export const chatHtmlRenderFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the page appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  title: v.string(),
+  /** The agent's frame height in CSS px, used until the page reports its own. */
+  height: v.number(),
+  bodyId: v.id("chatHtmlRenderBodies"),
+  createdAt: v.number(),
+};
+
+/** The page of one HTML render, as the agent wrote it (no bootstrap). */
+export const chatHtmlRenderBodyFields = {
+  html: v.string(),
+};
+
+export const envVarRequestScopeValidator = v.union(
+  v.literal("repo"),
+  v.literal("team"),
+);
+
+/**
+ * One agent request (`request_env_var`) for a secret the user types into an
+ * inline card. The value never touches this row: saving writes it encrypted to
+ * the repo or team env vars and into the live sandbox, and only the status
+ * lands here.
+ */
+export const envVarRequestFields = {
+  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  /** The assistant turn the card appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  key: v.string(),
+  reason: v.string(),
+  scope: envVarRequestScopeValidator,
+  repoId: v.id("githubRepos"),
+  /** Set when `scope` is "team": the repo's team at request time. */
+  teamId: v.optional(v.id("teams")),
+  /** The chat's sandbox at request time, for the live write. */
+  sandboxId: v.optional(v.string()),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("saved"),
+    v.literal("declined"),
+  ),
+  createdAt: v.number(),
+  answeredAt: v.optional(v.number()),
 };
 
 /**
