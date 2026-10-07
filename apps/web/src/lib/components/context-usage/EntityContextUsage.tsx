@@ -166,7 +166,7 @@ export function ContextUsageDisplay({
           <ContextCacheReadUsage />
           <ContextCacheWriteUsage />
         </ContextContentBody>
-        <div className="space-y-2 px-3 pb-3 text-[11px] leading-4 text-muted-foreground">
+        <div className="space-y-2 px-3 pb-3 text-2xs leading-4 text-muted-foreground">
           {remainingLabel === null ? null : (
             <p>
               {remainingLabel} tokens left

@@ -288,7 +288,7 @@ function FileList({
         : groups.map((group) => (
             <li key={group.repoName ?? "-"}>
               {group.repoName ? (
-                <div className="px-1.5 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70 first:pt-0">
+                <div className="px-1.5 pb-0.5 pt-1.5 text-3xs font-medium uppercase tracking-wide text-muted-foreground/70 first:pt-0">
                   {group.repoName}/
                 </div>
               ) : null}

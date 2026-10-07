@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   check:
-    name: typecheck / lint / compiler / schema
+    name: typecheck / lint / compiler / design / schema
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -58,6 +58,11 @@ jobs:
       - name: React Compiler bailouts
         if: ${{ !cancelled() }}
         run: node scripts/compiler-check.mjs
+
+      # Fails on new Tailwind/JSX design-system drift that is not in the baseline.
+      - name: Design system drift
+        if: ${{ !cancelled() }}
+        run: node scripts/design-check.mjs
 
       # Blocks a Convex schema field/table/union member being removed while
       # live rows may still hold it. See docs/eva-convex.md > Migrations.

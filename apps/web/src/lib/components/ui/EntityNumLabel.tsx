@@ -16,7 +16,7 @@ export function EntityNumLabel({
   return (
     <span
       className={cn(
-        "shrink-0 font-mono text-[11px] font-normal tabular-nums text-muted-foreground/55",
+        "shrink-0 font-mono text-2xs font-normal tabular-nums text-muted-foreground/55",
         className,
       )}
     >

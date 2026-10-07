@@ -64,7 +64,7 @@ export function PreviewWebMcpDialog({
                       </p>
                     ) : null}
                     {tool.readOnly ? (
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="text-3xs uppercase tracking-wide text-muted-foreground">
                         read-only
                       </span>
                     ) : null}
@@ -72,7 +72,7 @@ export function PreviewWebMcpDialog({
                   <p className="mt-1 text-xs text-muted-foreground">
                     {tool.description}
                   </p>
-                  <pre className="mt-2 overflow-x-auto font-mono text-[11px] text-muted-foreground">
+                  <pre className="mt-2 overflow-x-auto font-mono text-2xs text-muted-foreground">
                     {JSON.stringify(tool.inputSchema)}
                   </pre>
                 </li>

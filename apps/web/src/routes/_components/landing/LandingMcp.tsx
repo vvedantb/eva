@@ -59,7 +59,7 @@ export function LandingMcp() {
                   {card.points.map((point) => (
                     <li
                       key={point}
-                      className="text-pretty text-[13px] leading-relaxed text-muted-foreground"
+                      className="text-pretty text-2sm leading-relaxed text-muted-foreground"
                     >
                       {point}
                     </li>
@@ -95,7 +95,7 @@ function McpCallPanel() {
   return (
     <div className="overflow-hidden rounded-surface bg-card">
       <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-        <p className="font-mono text-[11px] text-muted-foreground">
+        <p className="font-mono text-2xs text-muted-foreground">
           Claude Desktop
         </p>
         <IconArrowRight
@@ -103,8 +103,8 @@ function McpCallPanel() {
           className="text-muted-foreground/60"
           aria-hidden
         />
-        <p className="font-mono text-[11px] text-foreground">eva</p>
-        <span className="ml-auto rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
+        <p className="font-mono text-2xs text-foreground">eva</p>
+        <span className="ml-auto rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-3xs font-medium text-success">
           OAuth 2.1
         </span>
       </div>
@@ -130,14 +130,14 @@ function McpCallPanel() {
             <code className="shrink-0 font-mono text-[11.5px] text-foreground">
               {call.tool}
             </code>
-            <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate text-right text-2xs text-muted-foreground">
               {call.result}
             </span>
           </m.div>
         ))}
       </m.div>
 
-      <p className="border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
+      <p className="border-t border-border px-4 py-2.5 text-2xs text-muted-foreground">
         Around 25 tools, the same ones an agent calls from inside a sandbox.
       </p>
     </div>

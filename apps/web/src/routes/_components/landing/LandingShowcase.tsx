@@ -138,7 +138,7 @@ export function LandingShowcase({
                   className="mt-0.5 shrink-0 text-primary/70"
                   aria-hidden
                 />
-                <span className="text-pretty text-[13px] leading-relaxed text-muted-foreground">
+                <span className="text-pretty text-2sm leading-relaxed text-muted-foreground">
                   {point}
                 </span>
               </li>

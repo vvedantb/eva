@@ -240,7 +240,7 @@ export function NotificationToastStream() {
                       <div className="mt-1 flex items-center gap-2">
                         <Badge
                           variant={config.badgeVariant}
-                          className="h-4 px-1.5 py-0 text-[10px]"
+                          className="h-4 px-1.5 py-0 text-3xs"
                         >
                           {config.label}
                         </Badge>

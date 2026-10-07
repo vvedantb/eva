@@ -47,13 +47,13 @@ export function TimelineBar({ name, phase, progress }: TimelineBarProps) {
             style={{ transform: `scaleX(${pct / 100})` }}
           />
           <span
-            className={`relative z-1 truncate text-[11px] font-medium ${config.text}`}
+            className={`relative z-1 truncate text-2xs font-medium ${config.text}`}
           >
             {name}
           </span>
           {total > 0 && (
             <span
-              className={`relative z-1 ml-auto shrink-0 text-[10px] font-semibold tabular-nums ${config.text}`}
+              className={`relative z-1 ml-auto shrink-0 text-3xs font-semibold tabular-nums ${config.text}`}
             >
               {pct}%
             </span>

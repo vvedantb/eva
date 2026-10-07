@@ -50,7 +50,7 @@ export function ScopeCheckChip({
             // 10px was below the size at which these hues stay legible even
             // once the contrast is fixed, so the chip reads at 11px like the
             // hunk rows it opens.
-            "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium leading-none tabular-nums",
+            "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-2xs font-medium leading-none tabular-nums",
             TONE_CLASS[tone],
           )}
         >
@@ -70,7 +70,7 @@ export function ScopeCheckChip({
               ? `${unmentioned === 1 ? "One change" : `${unmentioned} changes`} you did not ask for, and the reply did not tell you about ${unmentioned === 1 ? "it" : "them"}.`
               : `Jev puts the chance this turn changed things you did not ask for at ${percent}.`}
         </p>
-        <p className="mt-1 text-[11px] text-muted-foreground">
+        <p className="mt-1 text-2xs text-muted-foreground">
           {check.judgedHunks} of {check.totalHunks} changes judged
           {check.partial ? " · diff clipped" : ""}
         </p>
@@ -107,15 +107,15 @@ function FlaggedHunkRow({
   const body = (
     <>
       <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-        <span className="w-full truncate text-left text-[11px] text-foreground">
+        <span className="w-full truncate text-left text-2xs text-foreground">
           {hunkHeadline(hunk)}
         </span>
-        <span className="w-full truncate text-left text-[11px] text-muted-foreground">
+        <span className="w-full truncate text-left text-2xs text-muted-foreground">
           {hunkLocation(hunk)}
           {silent ? " · not mentioned in the reply" : ""}
         </span>
       </span>
-      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+      <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
         {formatPercent(hunkUnrequestedProbability(hunk))}
       </span>
     </>
