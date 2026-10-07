@@ -13,17 +13,6 @@ import {
 const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
 
-// Staleness thresholds live in ./staleness (pure module shared with the
-// session watchdog); re-exported here so existing importers keep working.
-export {
-  STALE_THRESHOLD_MS,
-  STALE_CHECK_DELAY_MS,
-  STALE_RECHECK_MS,
-  STALE_FINISHING_THRESHOLD_MS,
-  STALE_NO_SANDBOX_THRESHOLD_MS,
-  STALE_UNVERIFIED_KILL_THRESHOLD_MS,
-} from "./staleness";
-
 /** Checks whether an error message indicates a sandbox infrastructure/network issue. */
 export function isDaytonaNetworkIssue(errorMsg: string): boolean {
   const message = errorMsg.toLowerCase();

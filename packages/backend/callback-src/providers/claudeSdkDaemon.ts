@@ -135,7 +135,8 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 // fresh send, invisible next to model time-to-first-token. Any in-flight turn
 // keeps the 50ms cadence so cancel/stop-task drains (which ride the same
 // mutation) stay prompt even through long-silent tool runs.
-const PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
+const PROMPT_POLL_IDLE_INTERVAL_MS =
+  DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
 const PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 
 // Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
@@ -937,14 +938,14 @@ async function ensureSyntheticTurn(): Promise<void> {
       entityMutationArgs({ model: MODEL }),
     );
     const messageId = readSyntheticTurnMessageId(result);
-    if (messageId === null) {
-      log("daemon: openSyntheticTurn returned no messageId");
+    const syntheticLease = readTurnLeaseIdentity(result);
+    if (messageId === null || syntheticLease === null) {
+      log("daemon: openSyntheticTurn returned no messageId or lease");
       return;
     }
     resetTurnState();
-    // A synthetic turn owns the heartbeat without occupying the claim slot;
-    // a legacy synthetic turn carries no lease and must still heartbeat.
-    beginTurnOwnership("provider", readTurnLeaseIdentity(result));
+    // A synthetic turn owns the heartbeat without occupying the claim slot.
+    beginTurnOwnership("provider", syntheticLease);
     beginTurnCheckpoint();
     if (!supervisor.startTurn({ kind: "synthetic", messageId })) {
       log("daemon: synthetic turn opened after lifecycle moved; ignoring");
@@ -1434,9 +1435,7 @@ function createWarmAgentRunner(
     log("daemon: interrupt unavailable on SDK query handle");
   };
 
-  const setPermissionMode = async (
-    mode: "plan" | "default",
-  ): Promise<void> => {
+  const setPermissionMode = async (mode: "plan" | "default"): Promise<void> => {
     if (typeof query.setPermissionMode !== "function") {
       log("daemon: setPermissionMode unavailable on SDK query handle");
       return;

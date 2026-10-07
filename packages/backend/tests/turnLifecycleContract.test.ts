@@ -25,14 +25,53 @@ test("a turn is persisted before its workflow is launched", () => {
   expect(openAt).toBeLessThan(startAt);
 });
 
-test("pre-cutover workflow replays keep the V1 journal and argument shape", () => {
-  const workflow = source("../convex/_sessions/workflow.ts");
-  expect(workflow).toContain('turnId: v.optional(v.id("turns"))');
-  expect(workflow).toContain("if (args.turnId !== undefined)");
-  expect(workflow).toContain("args.turnId === undefined\n            ? null");
-  expect(workflow).toContain(
-    "...(args.turnId !== undefined ? { turnId: args.turnId } : {})",
+/**
+ * Every session workflow has held a turn since the session cutover, so the
+ * V1 journal is gone. This is the journal those workflows already record;
+ * steps replay by position, so it must not move.
+ */
+test("the session workflow requires a turn and keeps its journal", () => {
+  const file = source("../convex/_sessions/workflow.ts");
+  const start = file.indexOf(
+    "export const sessionExecuteWorkflow = workflow.define(",
   );
+  const body = file.slice(start, file.indexOf("\nexport const ", start + 1));
+  expect(body).toContain('turnId: v.id("turns")');
+  expect(body).not.toContain("args.turnId !== undefined");
+  expect(body).not.toContain("args.turnId === undefined");
+  expect(
+    [
+      ...body.matchAll(
+        /step\.(?:run\w+|awaitEvent)\(\s*(internal\.[\w.]+|\w+)/g,
+      ),
+    ].map((match) => match[1]),
+  ).toEqual([
+    "internal.sessionWorkflow.addAssistantPlaceholder",
+    "internal.sessionWorkflow.getSessionData",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sandbox.validateSandbox",
+    "internal.sandbox.prepareSessionSandbox",
+    "internal.sessionWorkflow.updateSandboxId",
+    "internal.turns.markLaunching",
+    "internal.sessionWorkflow.clearSessionClosedStatus",
+    "internal.sessionWorkflow.ensurePendingTurn",
+    "internal.sandbox.prewarmSessionDaemon",
+    "internal.turns.acquireOneShotLease",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sandbox.launchOnExistingSandbox",
+    "internal.sessionWorkflow.saveResult",
+    "sessionCompleteEvent",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sandbox.pushSandboxBranch",
+    "internal.sessionWorkflow.saveResult",
+    "internal.sessionWorkflow.scheduleSessionDeploymentTracking",
+    "internal.github.createDraftSessionPr",
+    "internal.sessionWorkflow.postSystemAlert",
+    "internal.sandbox.pushLinkedRepoBranches",
+    "internal.sessionWorkflow.postSystemAlert",
+    "internal.github.createDraftSessionRepoPr",
+    "internal.sessionWorkflow.postSystemAlert",
+  ]);
 });
 
 /**
@@ -111,8 +150,9 @@ test.each(Object.entries(chatWorkflowSteps))(
     // Every saveResult closes the turn, so each one carries the turn id.
     const saveResults = body.match(/\.saveResult, \{/g) ?? [];
     const withTurn =
-      body.match(/\.saveResult, \{\s*\w+: args\.\w+,\s*turnId: args\.turnId,/g) ??
-      [];
+      body.match(
+        /\.saveResult, \{\s*\w+: args\.\w+,\s*turnId: args\.turnId,/g,
+      ) ?? [];
     expect(withTurn.length).toBe(saveResults.length);
   },
 );
@@ -196,12 +236,19 @@ test("the heartbeat fences stale writers before changing streaming state", () =>
   expect(renewAt).toBeGreaterThan(-1);
   expect(terminalAt).toBeGreaterThan(renewAt);
   expect(streamAt).toBeGreaterThan(terminalAt);
-  expect(http).toContain("internal.turns.legacyHeartbeat");
-  expect(turns).toContain("await findOpenTurn(ctx, entityId)");
+  // A heartbeat without a lease belongs to no turn: it is told to stop and
+  // writes nothing.
+  const noLeaseAt = http.indexOf("if (turnId === null)");
+  expect(noLeaseAt).toBeGreaterThan(-1);
+  expect(http.indexOf('reason: "unknown_turn"', noLeaseAt)).toBeGreaterThan(
+    noLeaseAt,
+  );
+  expect(http).not.toContain("legacyHeartbeat");
+  expect(turns).not.toContain("legacyHeartbeat");
   const bundle = source(
     "../convex/_sandbox_runtime/callbackScript.generated.ts",
   );
-  expect(bundle).toContain("turns:legacyHeartbeatFromCallback");
+  expect(bundle).not.toContain("turns:legacyHeartbeatFromCallback");
   expect(bundle).toContain("turns:heartbeatFromCallback");
   expect(bundle).not.toContain('"streaming:touch"');
   expect(bundle).not.toContain('"streaming:set"');
@@ -277,7 +324,7 @@ test("every heartbeat emitter is gated on claimed turn ownership", () => {
     expect(guardAt, emitter + " lost its ownership guard").toBeGreaterThan(-1);
     expect(guardAt).toBeLessThan(bodyEndAt);
   }
-  expect(heartbeats).toContain("ownership: getTurnOwnership()");
+  expect(heartbeats).toContain("canSendTurnHeartbeat(getTurnOwnership())");
 });
 
 test("one ownership state answers both the lease and the heartbeat gate", () => {

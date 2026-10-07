@@ -92,8 +92,6 @@ function updateLastHistoryEntry<
 /** Runs a single interview step: prepares sandbox, asks one question, and saves the result. */
 export const docInterviewWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     docTitle: v.string(),
     previousAnswers: v.array(
@@ -150,7 +148,6 @@ export const docInterviewWorkflow = workflow.define({
         repoId: docData.repoId,
       },
       {
-        durable: args.durableTurns === true,
         entityId: args.docId,
       },
     );
@@ -354,7 +351,6 @@ export const startInterview = authMutation({
       ctx,
       internal.docInterviewWorkflow.docInterviewWorkflow,
       {
-        durableTurns: true,
         docId: args.docId,
         docTitle: args.docTitle,
         previousAnswers: args.previousAnswers,
@@ -374,8 +370,6 @@ export const startInterview = authMutation({
  */
 export const docGenerateWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     docId: v.id("docs"),
     docTitle: v.string(),
     previousAnswers: v.array(
@@ -439,7 +433,6 @@ Output ONLY valid JSON.`;
         repoId: docData.repoId,
       },
       {
-        durable: args.durableTurns === true,
         entityId: args.docId,
       },
     );
@@ -587,7 +580,6 @@ export const startGenerate = authMutation({
       ctx,
       internal.docInterviewWorkflow.docGenerateWorkflow,
       {
-        durableTurns: true,
         docId: args.docId,
         docTitle: args.docTitle,
         previousAnswers: args.previousAnswers,

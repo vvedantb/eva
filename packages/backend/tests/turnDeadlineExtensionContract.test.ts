@@ -10,8 +10,7 @@ function convexSource(path: string): string {
 }
 
 const turnStore = convexSource("_chat/turnStore.ts");
-const taskWatchdog = convexSource("_taskWorkflow/watchdog.ts");
-const staleness = convexSource("_taskWorkflow/staleness.ts");
+const runCompletion = convexSource("_taskWorkflow/publicMutations.ts");
 const execution = convexSource("_sandbox_runtime/execution.ts");
 const provider = convexSource("_sandbox/provider.ts");
 const vercelProvider = convexSource("_sandbox/vercelProvider.ts");
@@ -23,67 +22,29 @@ const vercelProvider = convexSource("_sandbox/vercelProvider.ts");
  * the work AND the evidence (observed twice in prod on 2026-08-06: a 59-minute
  * cursor turn on task 213, and session 53 the same morning).
  *
- * The guard is that the quick-task run watchdog slides the deadline forward on
- * every tick of a live run. It is invisible until a turn runs long, which is
- * exactly when it is most expensive to get wrong, so the arithmetic is pinned
- * here. Chat turns slide the deadline from their lease renewal (see the next
- * block).
+ * Every live turn slides the deadline from its lease renewal (see the next
+ * block). A quick-task run also keeps working after its agent exits (push, PR,
+ * deployment tracking) with nobody renewing, so its completion pushes the
+ * deadline past the whole finalizing lease.
  */
-describe("a live turn keeps its sandbox deadline ahead of the watchdog tick", () => {
-  const watchdogs = [
-    { name: "task run watchdog", source: taskWatchdog, gate: "if (!isStale) {" },
-  ];
-
-  test.each(watchdogs)(
-    "$name extends the deadline only while the turn is alive",
-    ({ source, gate }) => {
-      const gateAt = source.indexOf(gate);
-      expect(gateAt, `the not-stale branch moved: ${gate}`).toBeGreaterThan(-1);
-      const extendAt = source.indexOf(
-        "internal.sandbox.extendSandboxDeadline",
-        gateAt,
-      );
-      expect(
-        extendAt,
-        "a live turn must push the provider's hard runtime cap out or it is killed mid-work",
-      ).toBeGreaterThan(-1);
-      // Inside the not-stale branch, ahead of the reschedule that ends it.
-      const rescheduleAt = source.indexOf("STALE_RECHECK_MS,", gateAt);
-      expect(rescheduleAt).toBeGreaterThan(-1);
-      expect(
-        extendAt,
-        "the extension must sit in the not-stale branch, not on the stale/kill path",
-      ).toBeLessThan(rescheduleAt);
-    },
-  );
-
-  /**
-   * The single number that decides whether this works. Extending by exactly one
-   * tick leaves zero slack, so any delayed or missed check lets the deadline
-   * pass while the turn is still running — the same silent kill this fixed. Two
-   * ticks keeps the deadline sliding ahead through a skipped cycle.
-   */
-  test.each(watchdogs)(
-    "$name extends by more than one recheck interval",
-    ({ source }) => {
-      const args = source.slice(
-        source.indexOf("internal.sandbox.extendSandboxDeadline"),
-      );
-      const duration = args.slice(0, args.indexOf("}")).match(
-        /durationMs:\s*STALE_RECHECK_MS\s*\*\s*(\d+)/,
-      );
-      expect(
-        duration,
-        "the extension must be expressed in ticks, so retuning the tick cannot silently outrun it",
-      ).not.toBeNull();
-      expect(Number(duration?.[1]), "one tick of slack is none").toBeGreaterThan(
-        1,
-      );
-    },
-  );
-
-  test("the recheck interval is short relative to any plausible extension", () => {
-    expect(staleness).toContain("export const STALE_RECHECK_MS = 30_000;");
+describe("a run keeps its sandbox deadline ahead of its post-agent steps", () => {
+  test("a run completion extends the deadline past the finalizing lease", () => {
+    const startAt = runCompletion.indexOf("export const handleCompletion");
+    expect(startAt, "handleCompletion moved or was renamed").toBeGreaterThan(
+      -1,
+    );
+    const body = runCompletion.slice(
+      startAt,
+      runCompletion.indexOf("\n});", startAt),
+    );
+    const advanceAt = body.indexOf('advanceTurn(ctx, turn.turn, "finalizing")');
+    const extendAt = body.indexOf("internal.sandbox.extendSandboxDeadline");
+    expect(advanceAt).toBeGreaterThan(-1);
+    expect(extendAt).toBeGreaterThan(advanceAt);
+    expect(
+      body.slice(extendAt),
+      "two finalizing leases keep the deadline ahead of a late PR step",
+    ).toMatch(/durationMs:\s*2\s*\*\s*TURN_FINALIZING_LEASE_MS/);
   });
 
   /**
@@ -92,15 +53,16 @@ describe("a live turn keeps its sandbox deadline ahead of the watchdog tick", ()
    */
   test("extendSandboxDeadline swallows its own failures", () => {
     const startAt = execution.indexOf("export const extendSandboxDeadline");
-    expect(startAt, "extendSandboxDeadline moved or was renamed").toBeGreaterThan(
-      -1,
-    );
+    expect(
+      startAt,
+      "extendSandboxDeadline moved or was renamed",
+    ).toBeGreaterThan(-1);
     const nextAt = execution.indexOf("\nexport ", startAt + 1);
     const body = execution.slice(startAt, nextAt < 0 ? undefined : nextAt);
     expect(body).toContain("try {");
     expect(
       body,
-      "a failed extension must not propagate into the watchdog tick",
+      "a failed extension must not propagate into the lease renewal",
     ).toContain("} catch (error) {");
     expect(body).toContain("sandbox.extendTimeout(args.durationMs)");
     // Getting a handle does not exec, so this must not be able to wake a
@@ -109,7 +71,9 @@ describe("a live turn keeps its sandbox deadline ahead of the watchdog tick", ()
   });
 
   test("extendTimeout is part of the provider contract", () => {
-    expect(provider).toContain("extendTimeout(durationMs: number): Promise<void>");
+    expect(provider).toContain(
+      "extendTimeout(durationMs: number): Promise<void>",
+    );
     expect(vercelProvider).toContain("async extendTimeout(durationMs: number)");
   });
 
@@ -174,9 +138,9 @@ describe("a durable turn slides its sandbox deadline from the lease", () => {
     const args = renew.slice(
       renew.indexOf("internal.sandbox.extendSandboxDeadline"),
     );
-    const duration = args.slice(0, args.indexOf("}")).match(
-      /durationMs:\s*durationMs\s*\*\s*(\d+)/,
-    );
+    const duration = args
+      .slice(0, args.indexOf("}"))
+      .match(/durationMs:\s*durationMs\s*\*\s*(\d+)/);
     expect(
       duration,
       "the extension must be expressed in lease lengths, so retuning the lease cannot outrun it",
@@ -197,7 +161,8 @@ describe("a durable turn slides its sandbox deadline from the lease", () => {
  * 1cca6aa5), which is what makes the floor worth pinning rather than the value.
  */
 describe("a sandbox is created with a cap longer than a long turn", () => {
-  const FLOOR = /timeout:\s*Math\.max\(\s*params\.lifecycle\.autoStopMinutes,\s*([^)]+)\)([^,\n]*)/;
+  const FLOOR =
+    /timeout:\s*Math\.max\(\s*params\.lifecycle\.autoStopMinutes,\s*([^)]+)\)([^,\n]*)/;
 
   /** "24 * 60" -> 1440. Guards the parse so a reshaped expression cannot read as NaN. */
   function minutes(expression: string): number {

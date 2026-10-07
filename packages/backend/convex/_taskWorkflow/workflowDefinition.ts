@@ -12,7 +12,6 @@ import { buildQuickTaskRetryDelayMs } from "./recovery";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
-import type { Id } from "../_generated/dataModel";
 
 const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
@@ -44,8 +43,8 @@ export const taskExecutionWorkflowArgs = {
 export const taskExecutionWorkflow = workflow.define({
   args: {
     ...taskExecutionWorkflowArgs,
-    /** The run's durable turn. Absent on runs started before durable run turns. */
-    turnId: v.optional(v.id("turns")),
+    /** The run's durable turn, opened by `startTaskRunWorkflow`. */
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
     let sandboxId: string | undefined;
@@ -110,22 +109,16 @@ export const taskExecutionWorkflow = workflow.define({
         sessionPersistenceKind: args.projectId ? "projects" : undefined,
       }));
 
-      // Durable run turn: new steps only when the run has one, so workflows
-      // started before durable run turns replay their journal unchanged.
-      let turnLease: { turnId: Id<"turns">; leaseGeneration: number } | null =
-        null;
-      if (args.turnId !== undefined) {
-        await step.runMutation(internal.turns.markLaunching, {
-          turnId: args.turnId,
-          sandboxId,
-        });
-        turnLease = await step.runMutation(internal.turns.acquireOneShotLease, {
-          turnId: args.turnId,
-          sandboxId,
-        });
-        if (turnLease === null) {
-          throw new Error("The run's turn closed before the agent launched");
-        }
+      await step.runMutation(internal.turns.markLaunching, {
+        turnId: args.turnId,
+        sandboxId,
+      });
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId },
+      );
+      if (turnLease === null) {
+        throw new Error("The run's turn closed before the agent launched");
       }
 
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
@@ -153,12 +146,8 @@ export const taskExecutionWorkflow = workflow.define({
         // point (quick run, queued, scheduled, project build, auto-run from
         // findings) delivers the user's attachments without extra plumbing.
         attachmentStorageIds: data.attachmentStorageIds,
-        ...(turnLease
-          ? {
-              turnId: turnLease.turnId,
-              turnLeaseGeneration: turnLease.leaseGeneration,
-            }
-          : {}),
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
 
       await step.runMutation(internal.taskWorkflow.saveSandboxId, {
@@ -509,12 +498,10 @@ export const taskExecutionWorkflow = workflow.define({
       await step.runMutation(internal.taskWorkflow.clearActiveWorkflow, {
         taskId: args.taskId,
       });
-      if (args.turnId !== undefined) {
-        await step.runMutation(internal.taskWorkflow.closeRunTurn, {
-          runId: args.runId,
-          success: finalSuccess,
-        });
-      }
+      await step.runMutation(internal.taskWorkflow.closeRunTurn, {
+        runId: args.runId,
+        success: finalSuccess,
+      });
     }
   },
 });

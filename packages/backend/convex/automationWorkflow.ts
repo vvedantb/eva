@@ -19,8 +19,6 @@ import { automationRunStreamingEntityId } from "./_chat/agentStreamIds";
 /** Runs an automation: prepares sandbox, executes the prompt, optionally creates a PR, and cleans up. */
 export const automationExecutionWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     runId: v.id("automationRuns"),
     automationId: v.id("automations"),
     repoId: v.id("githubRepos"),
@@ -118,7 +116,6 @@ export const automationExecutionWorkflow = workflow.define({
           requireTaskCommit: !isReadOnly,
         },
         {
-          durable: args.durableTurns === true,
           entityId: args.runId,
         },
       );

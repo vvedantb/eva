@@ -98,8 +98,6 @@ function updateLastConversationEntry<
 /** Runs a single project interview step: prepares sandbox, asks one question, and saves the result. */
 export const projectInterviewWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     projectId: v.id("projects"),
     featureDescription: v.string(),
     previousAnswers: v.array(
@@ -174,7 +172,6 @@ export const projectInterviewWorkflow = workflow.define({
           sessionPersistenceId: args.projectId,
         },
         {
-          durable: args.durableTurns === true,
           entityId: args.projectId,
           lane: "interview",
         },
@@ -376,7 +373,6 @@ export const startSpecWorkflowInternal = internalMutation({
       ctx,
       internal.projectInterviewWorkflow.projectSpecWorkflow,
       {
-        durableTurns: true,
         projectId: args.projectId,
         featureDescription: args.featureDescription,
         userId: args.userId,
@@ -470,7 +466,6 @@ export const startInterview = authMutation({
       ctx,
       internal.projectInterviewWorkflow.projectInterviewWorkflow,
       {
-        durableTurns: true,
         projectId: args.projectId,
         featureDescription: args.featureDescription,
         previousAnswers: args.previousAnswers,
@@ -507,7 +502,6 @@ export const startSpec = authMutation({
       ctx,
       internal.projectInterviewWorkflow.projectSpecWorkflow,
       {
-        durableTurns: true,
         projectId: args.projectId,
         featureDescription: args.featureDescription,
         userId: ctx.userId,
@@ -526,8 +520,6 @@ export const startSpec = authMutation({
 /** Generates an implementation spec from completed interview answers using a sandbox agent. */
 export const projectSpecWorkflow = workflow.define({
   args: {
-    /** Set by every start since durable agent turns; absent on older runs. */
-    durableTurns: v.optional(v.boolean()),
     projectId: v.id("projects"),
     featureDescription: v.string(),
     userId: v.id("users"),
@@ -595,7 +587,6 @@ Output ONLY valid JSON.`;
           sessionPersistenceId: args.projectId,
         },
         {
-          durable: args.durableTurns === true,
           entityId: args.projectId,
           lane: "interview",
         },

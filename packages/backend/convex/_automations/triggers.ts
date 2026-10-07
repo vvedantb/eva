@@ -71,7 +71,6 @@ async function startAutomationRun(
     ctx,
     internal.automationWorkflow.automationExecutionWorkflow,
     {
-      durableTurns: true,
       runId,
       automationId: automation._id,
       repoId: automation.repoId,

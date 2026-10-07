@@ -9,12 +9,8 @@ import {
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { buildTaskDoneEvent } from "./events";
-import { closeOpenTurn, findOpenTurn } from "../_chat/turnStore";
-import {
-  STALE_CHECK_DELAY_MS,
-  isUsageLimitError,
-  parseUsageLimitResetTime,
-} from "./recovery";
+import { closeOpenTurn } from "../_chat/turnStore";
+import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import {
   clearStreamingActivity,
   getTaskRunStreamingEntityId,
@@ -24,7 +20,7 @@ import {
   sendCompletionEvent,
 } from "./helpers";
 
-/** Transitions a queued run to running, sets streaming activity, and schedules watchdog timers. */
+/** Transitions a queued run to running, sets streaming activity, and schedules the 2-hour backstop. */
 export const updateRunToRunning = internalMutation({
   args: {
     runId: v.id("agentRuns"),
@@ -65,20 +61,6 @@ export const updateRunToRunning = internalMutation({
         runId: args.runId,
       },
     );
-
-    // A run with a durable turn is watched by its lease (`turns.reconcile`).
-    // Reading the turn here, not a new argument, keeps this step's journal
-    // unchanged for runs started before durable run turns.
-    if ((await findOpenTurn(ctx, args.runId)) === null) {
-      await ctx.scheduler.runAfter(
-        STALE_CHECK_DELAY_MS,
-        internal.taskWorkflow.checkStaleRuns,
-        {
-          runId: args.runId,
-          taskId: args.taskId,
-        },
-      );
-    }
 
     return null;
   },

@@ -857,7 +857,6 @@ export const startPrRecap = internalMutation({
       ctx,
       internal.prRecapWorkflow.prRecapWorkflow,
       {
-        durableTurns: true,
         docId,
         repoId: workflowRepo._id,
         installationId: args.installationId,
