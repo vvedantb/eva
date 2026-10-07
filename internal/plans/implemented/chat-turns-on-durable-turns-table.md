@@ -1,6 +1,6 @@
 # Move task and project chats onto the durable `turns` table
 
-Status: implemented (Phases 0–5). Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done and verified in production 2026-10-07 (PR #906, deployed about 12:23 UTC; task and project chat both passed). Phases 3 and 4 done 2026-10-07 (PR #909, merged 12:54 UTC). Phase 5 done 2026-10-07 (merge gate: not before 14:54 UTC). Phase 6 is an open, separate project. See "Follow-ups".
+Status: implemented (Phases 0–5). Written 2026-10-06. Phases 0 and 1 done 2026-10-07 (PR #904). Phase 2 done and verified in production 2026-10-07 (PR #906, deployed about 12:23 UTC; task and project chat both passed). Phases 3 and 4 done 2026-10-07 (PR #909, merged 12:54 UTC). Phase 5 done 2026-10-07. Phase 6 is an open, separate project. See "Follow-ups".
 
 ## Goal
 
@@ -208,7 +208,7 @@ Do this at least 2 h plus one release after Phase 3, so that all workflows start
 - 0 of the newest 3,000 `turns` rows still hold `surface`.
 
 **Implementation notes:**
-- **Merge gate:** not before 2026-10-07 14:54 UTC. The production check ran 1 minute after the Phase 3 deploy, so it cannot replace the 2-hour wait.
+- **No time-based merge gate (owner decision, 2026-10-07).** The plan asked for 2 h after Phase 3. The production check found 0 task or project chats in flight, so no workflow without a `turnId` runs. The check is re-run just before merge instead. Scheduled stall-check jobs still reach the no-op stubs.
 - `turnId` is required on both chat workflows and their `saveResult`. The step order did not change, so workflows started since Phase 2 replay their journal. `turnLifecycleContract.test.ts` pins that journal now, not the V1 one.
 - Task and project claims drop a staged prompt without a turn id; they no longer return a `legacy` claim with a prompt. `ensurePendingTurn` restages only for an open, unclaimed turn and always stages its id.
 - Deleted for all three chats: `runStaleChatHeartbeatCheck`, `runStaleChatLivenessProbe`, `armLegacyStallCheck`, and the adapter `scheduleCheck` / `scheduleProbe`. `finalizeStaleChatTurn` stays for the reconciler and the 2-hour backstop.
