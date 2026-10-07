@@ -2,6 +2,8 @@
 
 Status: implemented (Phases 0–3). Written and implemented 2026-10-07 (PR #916). Phase 4 (rail and favicon counts, optimistic update) stays open.
 
+Added the same day: a floating "N new messages" pill (`_components/ChatNewMessagesPill.tsx`) at the top of the thread, shown only while the NEW divider is above the viewport and not yet seen (`useSeenOnce`, an IntersectionObserver in a ref callback). Click jumps to the divider; X dismisses; both latch per boundary id. This replaces the "Scroll" follow-up listed under "Client: 'NEW' divider in the thread".
+
 ## Goal
 
 Show which chats have a new agent reply the current user has not seen yet. One dot, same meaning, on all three surfaces: sessions, quick tasks and projects. Inside the chat, a "NEW" divider marks where the unseen replies start.

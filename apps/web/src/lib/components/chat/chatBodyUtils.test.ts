@@ -7,7 +7,7 @@ import {
   collectQuestionSteps,
   findDayBoundaryIds,
   findHandoffBoundaryIds,
-  findNewBoundaryId,
+  findNewMessageIds,
   findStreamingTargetMessage,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
@@ -199,58 +199,74 @@ const timedReply = (_id: string, timestamp: number, finishedAt?: number) => ({
   finishedAt,
 });
 
-describe("findNewBoundaryId", () => {
-  test("returns undefined without an anchor", () => {
-    expect(findNewBoundaryId([timedReply("a", 10, 20)], undefined, me)).toBe(
-      undefined,
+describe("findNewMessageIds", () => {
+  test("returns nothing without an anchor", () => {
+    expect(findNewMessageIds([timedReply("a", 10, 20)], undefined, me)).toEqual(
+      [],
     );
   });
 
   test("skips own user messages after the anchor and picks the reply", () => {
     expect(
-      findNewBoundaryId(
+      findNewMessageIds(
         [timedReply("a", 1, 2), mine("b", 10), timedReply("c", 11, 30)],
         5,
         me,
       ),
-    ).toBe("c");
+    ).toEqual(["c"]);
   });
 
   test("picks a teammate's message after the anchor", () => {
     expect(
-      findNewBoundaryId(
+      findNewMessageIds(
         [{ _id: "a", role: "user", timestamp: 10, userId: "user-other" }],
         5,
         me,
       ),
-    ).toBe("a");
+    ).toEqual(["a"]);
   });
 
   test("counts a reply by its finish time", () => {
     // Started before the anchor, finished after it: still new.
-    expect(findNewBoundaryId([timedReply("a", 3, 9)], 5, me)).toBe("a");
+    expect(findNewMessageIds([timedReply("a", 3, 9)], 5, me)).toEqual(["a"]);
   });
 
   test("picks a streaming placeholder by its timestamp", () => {
     expect(
-      findNewBoundaryId([timedReply("a", 1, 2), timedReply("b", 8)], 5, me),
-    ).toBe("b");
+      findNewMessageIds([timedReply("a", 1, 2), timedReply("b", 8)], 5, me),
+    ).toEqual(["b"]);
   });
 
   test("skips system alerts", () => {
     expect(
-      findNewBoundaryId(
+      findNewMessageIds(
         [{ ...timedReply("a", 8, 8), isSystemAlert: true }],
         5,
         me,
       ),
-    ).toBe(undefined);
+    ).toEqual([]);
   });
 
-  test("returns undefined when nothing is after the anchor", () => {
+  test("returns nothing when nothing is after the anchor", () => {
     expect(
-      findNewBoundaryId([timedReply("a", 1, 2), mine("b", 3)], 5, me),
-    ).toBe(undefined);
+      findNewMessageIds([timedReply("a", 1, 2), mine("b", 3)], 5, me),
+    ).toEqual([]);
+  });
+
+  test("lists every new reply and teammate turn in thread order, not own messages", () => {
+    expect(
+      findNewMessageIds(
+        [
+          timedReply("old", 1, 2),
+          timedReply("a", 6, 7),
+          mine("b", 8),
+          { _id: "c", role: "user", timestamp: 9, userId: "user-other" },
+          timedReply("d", 10, 12),
+        ],
+        5,
+        me,
+      ),
+    ).toEqual(["a", "c", "d"]);
   });
 });
 
