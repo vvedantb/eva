@@ -4,6 +4,7 @@ import {
   auditSeverityValidator,
   findingSeverityValidator,
   fontFamilyValidator,
+  interactionModeValidator,
   letterSpacingValidator,
   logLevelValidator,
   radiusValidator,
@@ -37,6 +38,44 @@ export const turnCheckpointArgs = {
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
 };
+
+/**
+ * The durable-turn lease a daemon presents with every completion it posts
+ * while it holds one. Every chat completion receiver accepts these, or a
+ * fenced completion fails validation and the reply is lost.
+ */
+export const turnLeaseFenceArgs = {
+  turnId: v.optional(v.string()),
+  leaseGeneration: v.optional(v.number()),
+};
+
+/** Fields every daemon claim returns, whether or not it hands over a prompt. */
+const daemonClaimDrainFields = {
+  attachmentUrls: v.array(v.string()),
+  stopTaskToolUseIds: v.array(v.string()),
+  cancelRequested: v.boolean(),
+  usageRefreshRequested: v.boolean(),
+  interactionMode: v.optional(interactionModeValidator),
+};
+
+/**
+ * What a chat daemon's `claimPendingTurn` returns on every surface: a legacy
+ * claim (no lease, maybe no prompt) or a durable claim that carries the lease.
+ */
+export const daemonClaimResultValidator = v.union(
+  v.object({
+    prompt: v.union(v.string(), v.null()),
+    turnLifecycle: v.literal("legacy"),
+    ...daemonClaimDrainFields,
+  }),
+  v.object({
+    prompt: v.string(),
+    turnLifecycle: v.literal("durable"),
+    turnId: v.id("turns"),
+    leaseGeneration: v.number(),
+    ...daemonClaimDrainFields,
+  }),
+);
 
 export const workflowCompleteValidator = v.object({
   success: v.boolean(),

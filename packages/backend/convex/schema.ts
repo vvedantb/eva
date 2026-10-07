@@ -200,7 +200,7 @@ const schema = defineSchema({
     .index("by_created_by", ["createdBy"])
     .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
-    .index("by_entity_open", ["surface", "entityId", "open"])
+    .index("by_entity_open", ["entityId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),

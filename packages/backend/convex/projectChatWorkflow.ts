@@ -16,6 +16,7 @@ import {
   roleValidator,
   taskSandboxStatusValidator,
   turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
 import {
@@ -1017,6 +1018,9 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
+    // Accepted for daemons that hold a durable lease; unused until task and
+    // project chats open durable turns.
+    ...turnLeaseFenceArgs,
     ...turnCheckpointArgs,
   },
   returns: v.null(),
