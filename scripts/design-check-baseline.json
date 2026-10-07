@@ -32,7 +32,6 @@
   "apps/web/src/lib/components/attachments/AttachmentCard.tsx :: raw-radius",
   "apps/web/src/lib/components/ave/AveLauncherButton.tsx :: raw-button",
   "apps/web/src/lib/components/ave/AvePanel.tsx :: raw-button",
-  "apps/web/src/lib/components/ave/AveResetChatDialog.tsx :: raw-button",
   "apps/web/src/lib/components/chat/AssistantCiteToolbar.tsx :: shadow-outside-overlay",
   "apps/web/src/lib/components/chat/BackgroundAgentsChip.tsx :: raw-button",
   "apps/web/src/lib/components/chat/ChangedFilesCard.tsx :: raw-button",

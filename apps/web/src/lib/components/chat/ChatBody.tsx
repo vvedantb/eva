@@ -237,6 +237,8 @@ interface ChatBodyProps {
     title: string;
     prompt: string;
   }) => Promise<void>;
+  /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
+  hideJumpRail?: boolean;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -289,6 +291,7 @@ function ChatBodyInner({
   allowEmptySubmit,
   afterMessage,
   onForkTranscript,
+  hideJumpRail = false,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -436,7 +439,9 @@ function ChatBodyInner({
 
   const lastUserMessageIndex = findLastUserMessageIndex(displayMessages);
 
-  const jumpRailMessages = buildJumpRailTicks(displayMessages);
+  const jumpRailMessages = hideJumpRail
+    ? []
+    : buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
   const dayBoundaryIds = findDayBoundaryIds(displayMessages);
   const findDocuments = collectThreadFindDocuments(
@@ -705,7 +710,9 @@ function ChatBodyInner({
             `[data-message-id]` from an effect keyed on the (memoised) tick
             array, so binding it before those rows exist would observe nothing
             and never retry. */}
-        {backlogReady ? <ChatJumpRail messages={jumpRailMessages} /> : null}
+        {backlogReady && !hideJumpRail ? (
+          <ChatJumpRail messages={jumpRailMessages} />
+        ) : null}
         {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
       {isArchived ? null : (
