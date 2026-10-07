@@ -75,6 +75,7 @@ import {
   resolveCompletionTurn,
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -363,6 +364,12 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.projectId, { updatedAt: Date.now() });
+    if (role === "user") {
+      await touchUserActivity(ctx, {
+        kind: "project",
+        entityId: String(args.projectId),
+      });
+    }
     return null;
   },
 });
@@ -386,6 +393,10 @@ export const startExecute = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -539,6 +550,10 @@ export const enqueueMessage = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
+    });
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -1080,6 +1095,10 @@ export const saveResult = internalMutation({
       pendingTurnClaimedAt: undefined,
       updatedAt: Date.now(),
       lastSandboxActivity: Date.now(),
+    });
+    await touchAgentFinished(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
     });
 
     if (args.turnId !== undefined) {

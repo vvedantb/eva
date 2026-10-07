@@ -95,6 +95,11 @@ interface SandboxIframeServiceProps {
    * the next signal instead of instantly restarting.
    */
   autoStartKey?: number;
+  /**
+   * Replaces the raw sandbox URL behind "Open in a new tab". With idle pause on
+   * this is the Eva wake link, which survives the sandbox being paused.
+   */
+  externalHref?: string;
   /** Wakes the sandbox from the inactive state (same button as Preview). */
   wake?: SandboxWake;
 }
@@ -128,6 +133,7 @@ export function SandboxIframeService({
   loadFailedError,
   iframeAllow,
   autoStartKey,
+  externalHref,
   wake,
 }: SandboxIframeServiceProps) {
   // Scope the cache key by sandboxId — Vercel signed URLs embed the sandbox
@@ -376,7 +382,7 @@ export function SandboxIframeService({
           </Button>
           <Button size="icon" variant="ghost" className="size-8" asChild>
             <a
-              href={stripPreviewGrant(url)}
+              href={externalHref ?? stripPreviewGrant(url)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open in a new tab"

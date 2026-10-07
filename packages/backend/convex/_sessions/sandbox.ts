@@ -22,6 +22,12 @@ import { drainChatQueueQuietly } from "../_queues/helpers";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+import {
+  stopAlertText,
+  stopReasonValidator,
+  type StopReason,
+} from "../_sandbox/stopReason";
+import { touchUserActivity } from "../_sandbox/activity";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
@@ -239,9 +245,11 @@ export const forcePushBranch = authMutation({
 export async function requestSessionSandboxStop(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
+  options: { stopReason?: StopReason } = {},
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
   if (!session) return;
+  const { stopReason } = options;
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can never
   // be claimed — clear it or it hides the composer forever.
@@ -260,6 +268,7 @@ export async function requestSessionSandboxStop(
         sessionId,
         sandboxId: session.sandboxId,
         repoId: session.repoId,
+        stopReason,
       });
     } else {
       await ctx.db.patch(sessionId, {
@@ -275,6 +284,7 @@ export async function requestSessionSandboxStop(
       sessionId,
       sandboxId: session.sandboxId,
       repoId: session.repoId,
+      stopReason,
     });
   } else {
     // No sandbox to stop — close immediately.
@@ -345,6 +355,7 @@ export async function scheduleFinalizeStop(
     sessionId: Id<"sessions">;
     sandboxId: string;
     repoId: Id<"githubRepos">;
+    stopReason?: StopReason;
   },
 ): Promise<void> {
   await ctx.scheduler.runAfter(
@@ -357,7 +368,7 @@ export async function scheduleFinalizeStop(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._sessions.sandbox.recoverStuckStopping,
-    { sessionId: args.sessionId },
+    { sessionId: args.sessionId, stopReason: args.stopReason },
   );
 }
 
@@ -371,6 +382,7 @@ export const finalizeStopSandbox = internalAction({
     sessionId: v.id("sessions"),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -386,6 +398,7 @@ export const finalizeStopSandbox = internalAction({
     await ctx.runMutation(internal._sessions.sandbox.markSandboxClosed, {
       sessionId: args.sessionId,
       error: stopError,
+      stopReason: args.stopReason,
     });
     return null;
   },
@@ -394,10 +407,12 @@ export const finalizeStopSandbox = internalAction({
 /**
  * Re-issues finalizeStopSandbox if the session is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished.
+ * leave the UI wedged; no-ops if stop already finished. Carries the original
+ * stop reason so the divider matches the request even when this finalize wins
+ * the race against a slow provider stop.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: { sessionId: v.id("sessions"), stopReason: stopReasonValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -411,6 +426,7 @@ export const recoverStuckStopping = internalMutation({
         sessionId: args.sessionId,
         sandboxId: session.sandboxId,
         repoId: session.repoId,
+        stopReason: args.stopReason,
       },
     );
     return null;
@@ -425,6 +441,7 @@ export const markSandboxClosed = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     error: v.optional(v.string()),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -452,7 +469,7 @@ export const markSandboxClosed = internalMutation({
     await ctx.db.insert("messages", {
       parentId: args.sessionId,
       role: "assistant",
-      content: "Sandbox stopped",
+      content: stopAlertText(args.stopReason),
       timestamp: Date.now(),
       isSystemAlert: true,
     });
@@ -553,6 +570,12 @@ export const sandboxReady = internalMutation({
         sandboxSetupPending: true,
       });
     }
+    // A wake is an interaction: the idle sweep must grant a full grace window
+    // before it can pause the sandbox it just brought back.
+    await touchUserActivity(ctx, {
+      kind: "session",
+      entityId: String(args.sessionId),
+    });
     // Drain first-message (and any other) queued turns now that chat can run.
     // Early + final ready both call this; second no-ops while activeWorkflowId is set.
     // Starting a sandbox is not a turn ending, so this drain must not wake a

@@ -10,6 +10,10 @@ import {
   turnLeaseExpiry,
   type TerminalTurnState,
 } from "./turnLease";
+import {
+  activityRefForParentId,
+  touchAgentFinished,
+} from "../_sandbox/activity";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -351,12 +355,17 @@ export async function closeTurn(
   patch: { error?: string } = {},
 ): Promise<void> {
   if (!turn.open || !canTransitionTurn(turn.state, state)) return;
+  const finishedAt = Date.now();
   await ctx.db.patch(turn._id, {
     state,
     open: false,
-    finishedAt: Date.now(),
+    finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
+  // Every durable turn ends here, so this is the one place the idle-pause
+  // sweep learns "the agent finished". The id's table names the surface.
+  const activityRef = activityRefForParentId(ctx.db, turn.entityId);
+  if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }
 
 export async function closeOpenTurn(

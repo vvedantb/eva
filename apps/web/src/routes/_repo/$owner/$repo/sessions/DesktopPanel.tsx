@@ -26,6 +26,8 @@ interface DesktopPanelProps {
    * mutation, provided by the caller). Takeover overlay only renders when set.
    */
   onReleaseLock?: () => void;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
+  externalHref?: string;
   wake?: SandboxWake;
 }
 
@@ -92,6 +94,7 @@ export function DesktopPanel({
   surface = "desktop",
   agentBrowsingAt,
   onReleaseLock,
+  externalHref,
   wake,
 }: DesktopPanelProps) {
   const copy = SURFACE_COPY[surface];
@@ -153,6 +156,7 @@ export function DesktopPanel({
         loadFailedError={copy.loadFailedError}
         iframeAllow="clipboard-read; clipboard-write"
         autoStartKey={autoStartKey}
+        externalHref={externalHref}
         wake={wake}
       />
       {showLockOverlay ? (

@@ -1,6 +1,6 @@
 import { components } from "./_generated/api";
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation, type QueryCtx } from "./_generated/server";
 import { Presence } from "@convex-dev/presence";
 import { authQuery, authMutation } from "./functions";
 import { getCurrentUserId } from "./_auth/currentUser";
@@ -11,6 +11,18 @@ import {
 } from "./_users/lastSeen";
 
 const presence = new Presence(components.presence);
+
+/**
+ * True when at least one user is online in `roomId`. Server-side helper for
+ * sweeps (no room token needed); never expose it directly to clients.
+ */
+export async function isAnyonePresentInRoom(
+  ctx: QueryCtx,
+  roomId: string,
+): Promise<boolean> {
+  const members = await presence.listRoom(ctx, roomId, true, 1);
+  return members.length > 0;
+}
 
 /** Must match ClientProvider's usePresence room — the only heartbeat that owns lastSeenAt. */
 const LAST_SEEN_ROOM_ID = "platform";
