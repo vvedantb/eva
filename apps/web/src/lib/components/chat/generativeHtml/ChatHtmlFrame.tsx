@@ -138,7 +138,7 @@ function HtmlPage({
   return (
     <div
       ref={containerRef}
-      className="group/html-frame relative [&:fullscreen]:bg-background [&:fullscreen]:p-6"
+      className="relative [&:fullscreen]:bg-background [&:fullscreen]:p-6"
       style={{ height: htmlRenderFrameHeight(height, reportedHeight) }}
     >
       <iframe
@@ -152,10 +152,12 @@ function HtmlPage({
         // on the chat background instead of painting an opaque canvas.
         style={{ colorScheme: resolvedTheme }}
       />
+      {/* Always shown: the pointer over a cross-document iframe gives the
+          parent no hover, so a hover-revealed control never appears. */}
       <Button
         size="icon"
         variant="secondary"
-        className="absolute right-2 top-2 size-8 opacity-0 transition-opacity group-hover/html-frame:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+        className="absolute right-2 top-2 size-8"
         aria-label="Toggle fullscreen"
         onClick={toggleFullscreen}
       >
