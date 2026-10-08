@@ -1,12 +1,7 @@
-import { spawnSync } from "child_process";
-import {
-  ENTITY_ID_FIELD,
-  REPO_CHECKOUT_DIRS,
-  RUN_ID,
-  WORK_DIR,
-} from "../config.js";
+import { ENTITY_ID_FIELD, REPO_CHECKOUT_DIRS, RUN_ID } from "../config.js";
 import type { JsonObject } from "../types.js";
 import { readGitHeadSha } from "../utils.js";
+import { readCurrentBranch } from "./gitExec.js";
 
 /**
  * Turn checkpoint: the sandbox HEAD when a turn started and after
@@ -50,15 +45,6 @@ export function resetTurnCheckpoint(): void {
   turnStartShas = [];
 }
 
-function currentBranch(): string {
-  const result = spawnSync(
-    "git",
-    ["-C", WORK_DIR, "rev-parse", "--abbrev-ref", "HEAD"],
-    { encoding: "utf8", timeout: 20_000 },
-  );
-  return result.status === 0 ? (result.stdout || "").trim() : "";
-}
-
 /** Surfaces whose completion path both accepts and persists the shas. */
 const CHECKPOINTED_ENTITY_ID_FIELDS = new Set([
   "sessionId",
@@ -94,7 +80,7 @@ export function appendTurnCheckpoint(args: JsonObject): void {
     return;
   }
   if (RUN_ID || turnStartSha === "") return;
-  if (!currentBranch().startsWith("eva/")) return;
+  if (!readCurrentBranch().startsWith("eva/")) return;
   const afterSha = readGitHeadSha();
   if (afterSha === "") return;
   args.beforeSha = turnStartSha;

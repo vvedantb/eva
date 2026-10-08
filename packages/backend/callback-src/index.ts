@@ -189,20 +189,7 @@ try {
   const firstAttempt = await runProviderAttempt(initialSessionMode);
   await flushStreaming();
 
-  let finalCode = firstAttempt.code;
-  let finalTimedOutForNoOutput = Boolean(firstAttempt.timedOutForNoOutput);
-  let finalTimedOutForMaxRuntime = Boolean(firstAttempt.timedOutForMaxRuntime);
-  let finalTimedOutForFirstEvent = Boolean(firstAttempt.timedOutForFirstEvent);
-  let finalTimedOutForFirstAssistant = Boolean(
-    firstAttempt.timedOutForFirstAssistant,
-  );
-  let finalTimedOutAfterFirstText = Boolean(
-    firstAttempt.timedOutAfterFirstText,
-  );
-  let finalTimedOutForZombie = Boolean(firstAttempt.timedOutForZombie);
-  const finalTerminatedBySignal = firstAttempt.terminatedBySignal;
-  const finalToolStallErrorMessage = firstAttempt.toolStallErrorMessage || "";
-  let finalResultEvent = extractResultEvent(firstAttempt.output);
+  const finalResultEvent = extractResultEvent(firstAttempt.output);
   log(
     "firstAttempt result: code=" +
       firstAttempt.code +
@@ -220,28 +207,16 @@ try {
 
   if (await setFinalizingState()) process.exit(0);
 
-  const finalAttempt = {
-    code: finalCode,
-    terminatedBySignal: finalTerminatedBySignal,
-    output: firstAttempt.output,
-    timedOutForNoOutput: finalTimedOutForNoOutput,
-    timedOutForMaxRuntime: finalTimedOutForMaxRuntime,
-    timedOutForFirstEvent: finalTimedOutForFirstEvent,
-    timedOutForFirstAssistant: finalTimedOutForFirstAssistant,
-    timedOutAfterFirstText: finalTimedOutAfterFirstText,
-    timedOutForZombie: finalTimedOutForZombie,
-    toolStallErrorMessage: finalToolStallErrorMessage,
-  };
   // Cursor can flush partial assistant text while a SIGTERM/SIGKILL is tearing
   // down the process. extractResultEvent deliberately falls back to that text,
   // so without this guard an interrupted recording turn reported its
   // "recording now…" preamble as a successful final answer. Node reports a
   // direct signal with `code=null`; shells can translate it to 137/143. Keep
   // both forms so neither can masquerade as genuine completion.
-  const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt);
-  const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
+  const agentWasInterrupted = providerAttemptWasInterrupted(firstAttempt);
+  const attemptEndedDueToTimeout = providerAttemptTimedOut(firstAttempt);
   const { success: runSucceededWithResult, error: resolvedError } =
-    resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
+    resolveProviderAttemptOutcome(firstAttempt, finalResultEvent);
   let errorValue: string | null = resolvedError;
 
   // The final result text is delivered separately (rendered as the chat
@@ -277,7 +252,7 @@ try {
     ? false
     : finalResultEvent
       ? !finalResultEvent.isError
-      : finalCode === 0;
+      : firstAttempt.code === 0;
   if (attemptEndedDueToTimeout && !runSucceededWithResult) {
     completionSuccess = false;
   }
@@ -302,7 +277,7 @@ try {
     "completion: success=" +
       completionSuccess +
       " code=" +
-      finalCode +
+      firstAttempt.code +
       " hasResult=" +
       Boolean(finalResultEvent) +
       " error=" +
@@ -333,7 +308,7 @@ try {
     await stopStreamingLoops();
     await waitForPendingClaudeUsageReport();
     writeDoneFile(completionSuccess ? "success" : "error", {
-      exitCode: finalCode,
+      exitCode: firstAttempt.code,
       error: errorValue,
     });
     // Hard-exit: a tool step can leave a background child holding our stdio
@@ -347,7 +322,7 @@ try {
     syncProviderStateToPersist("completion-error");
     await stopStreamingLoops();
     writeDoneFile("completion-error", {
-      exitCode: finalCode,
+      exitCode: firstAttempt.code,
       error: e instanceof Error ? e.message : String(e),
     });
     process.exit(1);

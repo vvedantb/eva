@@ -23,9 +23,7 @@ export function readStopTaskToolUseIds(result: JsonValue): string[] {
  * claim-payload readers (the value may live under `.value`).
  */
 export function readCancelRequested(result: JsonValue): boolean {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return false;
-  return payload.cancelRequested === true;
+  return readPayloadFlag(result, "cancelRequested");
 }
 
 /**
@@ -33,9 +31,11 @@ export function readCancelRequested(result: JsonValue): boolean {
  * action clears it. Missing (old servers) is `false`.
  */
 export function readUsageRefreshRequested(result: JsonValue): boolean {
-  const payload = unwrapConvexMutationPayload(result);
-  if (!payload) return false;
-  return payload.usageRefreshRequested === true;
+  return readPayloadFlag(result, "usageRefreshRequested");
+}
+
+function readPayloadFlag(result: JsonValue, key: string): boolean {
+  return unwrapConvexMutationPayload(result)?.[key] === true;
 }
 
 /** Reads the durable turn lease identity returned by claimPendingTurn. */

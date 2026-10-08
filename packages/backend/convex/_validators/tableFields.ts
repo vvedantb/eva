@@ -307,7 +307,7 @@ export const pendingTurnFields = {
   turnId: v.optional(v.id("turns")),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: v.optional(aiModelValidator),
-  /** Build vs plan; the daemon maps this onto Claude `setPermissionMode`. */
+  /** Build vs plan; the daemon ignores this and always runs default mode. */
   interactionMode: v.optional(interactionModeValidator),
 };
 

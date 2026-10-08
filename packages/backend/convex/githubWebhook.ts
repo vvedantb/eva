@@ -28,6 +28,7 @@ import {
   setPullRequestState,
   type PrState,
 } from "./_pullRequests/store";
+import { findReposByOwnerAndName } from "./_githubRepos/helpers";
 
 /** Webhook actions that can change a PR's tracked state or its title. */
 const TRACKED_ACTIONS = new Set([
@@ -360,12 +361,7 @@ export const handlePushForSkillSync = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const siblings = await findReposByOwnerAndName(ctx.db, args);
     if (siblings.length === 0) return null;
 
     const workflowRepo =

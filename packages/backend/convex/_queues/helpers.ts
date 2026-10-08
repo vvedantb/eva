@@ -19,8 +19,8 @@ import {
 } from "../_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
+  projectChatStreamEntityId,
+  taskChatStreamEntityId,
   trackAgentTaskChatWorkflow,
   trackProjectChatWorkflow,
   trackSessionWorkflow,
@@ -635,7 +635,7 @@ const projectChatQueueConfig: ChatQueueConfig<
   wakeSandbox: wakeProjectSandboxForQueue,
   backgroundAgents: (project) => project.backgroundAgents,
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
-  streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+  streamingEntityId: (id) => projectChatStreamEntityId(id),
   fallbackProvider: (project) => getAIModelProvider(project.model),
   prepareGuard: async (ctx, project, next) => ({
     ok: true,
@@ -676,7 +676,7 @@ const projectChatQueueConfig: ChatQueueConfig<
       ctx,
       {
         entityId: id,
-        streamingEntityId: `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+        streamingEntityId: projectChatStreamEntityId(id),
         next,
         sandboxId: project.sandboxId,
         repoId: project.repoId,
@@ -747,7 +747,7 @@ const taskChatQueueConfig: ChatQueueConfig<
   wakeSandbox: wakeTaskSandboxForQueue,
   backgroundAgents: (task) => task.backgroundAgents,
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
-  streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+  streamingEntityId: (id) => taskChatStreamEntityId(id),
   fallbackProvider: (task) => getAIModelProvider(task.model),
   prepareGuard: async (ctx, task, next) => ({
     ok: true,
@@ -791,7 +791,7 @@ const taskChatQueueConfig: ChatQueueConfig<
       ctx,
       {
         entityId: id,
-        streamingEntityId: `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+        streamingEntityId: taskChatStreamEntityId(id),
         next,
         sandboxId: task.sandboxId,
         repoId,

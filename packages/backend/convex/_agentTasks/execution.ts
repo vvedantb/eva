@@ -196,13 +196,7 @@ export const scheduleExecution = authMutation({
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
     }
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    if (
-      existingRuns.some((r) => r.status === "queued" || r.status === "running")
-    ) {
+    if (await hasActiveRun(ctx.db, args.id)) {
       throw new Error("Task already has an active execution");
     }
     if (args.scheduledAt <= Date.now()) {

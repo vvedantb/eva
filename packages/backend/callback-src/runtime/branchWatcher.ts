@@ -2,7 +2,7 @@ import { statSync, watch, type FSWatcher } from "fs";
 import { ENTITY_ID, ENTITY_ID_FIELD, WORK_DIR } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { log } from "../utils.js";
-import { git } from "./gitExec.js";
+import { git, readCurrentBranch } from "./gitExec.js";
 
 /**
  * Reports the branch the sandbox checkout is actually on, so the UI can show it
@@ -64,12 +64,13 @@ export function decideBranchReport(input: {
   return input.current;
 }
 
-function readCurrentBranch(): string | null {
-  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
-  if (!abbrev.ok) return null;
-  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
-  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
-  return formatBranch(abbrev.out, short.ok ? short.out : "");
+function readWatchedBranch(): string | null {
+  const abbrev = readCurrentBranch({ timeoutMs: GIT_TIMEOUT_MS });
+  if (abbrev !== "HEAD") return formatBranch(abbrev, "");
+  const short = git(["rev-parse", "--short", "HEAD"], {
+    timeoutMs: GIT_TIMEOUT_MS,
+  });
+  return formatBranch(abbrev, short.ok ? short.out : "");
 }
 
 let target: BranchTarget | null = null;
@@ -96,7 +97,7 @@ async function runCheckLoop(): Promise<void> {
     while (again) {
       again = false;
       const branch = decideBranchReport({
-        current: readCurrentBranch(),
+        current: readWatchedBranch(),
         lastReported,
       });
       if (branch !== null) {

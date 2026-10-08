@@ -53,105 +53,8 @@ ${prLine} Never run \`gh pr create\` for this branch — Eva opens its PR. A cha
 - Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked; queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
 - Deleting anything through eva MCP (tasks, automations, artifacts, docs) needs the user's explicit yes in chat first. Ask, wait for the answer, then pass \`confirmed: true\`.`;
 }
-/**
- * Session chat no longer injects this block: Cursor resumes one agent and the
- * SDK compacts in place. The helper remains for tests and any caller that
- * still needs an explicit transcript digest.
- */
-const HANDOFF_ENTRY_CHAR_CAP = 1_500;
-const HANDOFF_ASSISTANT_ENTRY_LIMIT = 3;
-const HANDOFF_TOTAL_CHAR_BUDGET = 24_000;
 
-type HandoffMessage = { role: string; content: string };
-type HandoffEntry = { isUser: boolean; line: string };
-
-function handoffElisionMarker(count: number): string {
-  return `[... ${count} earlier ${count === 1 ? "message" : "messages"} elided ...]`;
-}
-
-/** Renders the kept prefix, the elision marker, then the kept suffix. */
-function handoffLines(
-  entries: HandoffEntry[],
-  head: number,
-  tail: number,
-): string[] {
-  const elided = entries.length - head - tail;
-  return [
-    ...entries.slice(0, head).map((entry) => entry.line),
-    ...(elided > 0 ? [handoffElisionMarker(elided)] : []),
-    ...entries.slice(entries.length - tail).map((entry) => entry.line),
-  ];
-}
-
-function handoffCost(
-  entries: HandoffEntry[],
-  head: number,
-  tail: number,
-): number {
-  const lines = handoffLines(entries, head, tail);
-  if (lines.length === 0) return 0;
-  return (
-    lines.reduce((total, line) => total + line.length, 0) +
-    2 * (lines.length - 1)
-  );
-}
-
-/**
- * Builds a chronological transcript digest: every user message plus the last
- * few assistant messages, each capped, trimmed to a total character budget by
- * dropping assistant entries first and then eliding the middle of the user
- * history (earliest and latest messages always survive).
- */
-export function buildSessionHandoff(history: HandoffMessage[]): string {
-  const all: HandoffEntry[] = [];
-  for (const message of history) {
-    const text = stripMentionTokens(message.content)
-      .slice(0, HANDOFF_ENTRY_CHAR_CAP)
-      .trim();
-    if (!text) continue;
-    const isUser = message.role === "user";
-    all.push({ isUser, line: `${isUser ? "User" : "Assistant"}: ${text}` });
-  }
-
-  const keptAssistants = new Set(
-    all
-      .flatMap((entry, index) => (entry.isUser ? [] : [index]))
-      .slice(-HANDOFF_ASSISTANT_ENTRY_LIMIT),
-  );
-  let entries = all.filter(
-    (entry, index) => entry.isUser || keptAssistants.has(index),
-  );
-
-  // Over budget: assistant summaries go first, oldest first.
-  while (
-    handoffCost(entries, entries.length, 0) > HANDOFF_TOTAL_CHAR_BUDGET &&
-    entries.some((entry) => !entry.isUser)
-  ) {
-    const oldestAssistant = entries.findIndex((entry) => !entry.isUser);
-    entries = [
-      ...entries.slice(0, oldestAssistant),
-      ...entries.slice(oldestAssistant + 1),
-    ];
-  }
-
-  let head = entries.length;
-  let tail = 0;
-  if (handoffCost(entries, head, tail) > HANDOFF_TOTAL_CHAR_BUDGET) {
-    // Still over: elide from the middle outwards, keeping both ends.
-    head = Math.ceil(entries.length / 2);
-    tail = entries.length - head;
-    while (
-      handoffCost(entries, head, tail) > HANDOFF_TOTAL_CHAR_BUDGET &&
-      head + tail > 2
-    ) {
-      if (head > tail) head -= 1;
-      else tail -= 1;
-    }
-  }
-
-  return handoffLines(entries, head, tail).join("\n\n");
-}
-
+type DigestEntry = { isUser: boolean; line: string };
 type DigestMessage = { role: string; content: string; isSystemAlert?: boolean };
 type DigestOptions = { totalBudget: number; entryCap: number };
 
@@ -171,7 +74,7 @@ export function buildTitleDigest(
   messages: DigestMessage[],
   opts: DigestOptions = TITLE_DIGEST_DEFAULTS,
 ): string {
-  const entries: HandoffEntry[] = [];
+  const entries: DigestEntry[] = [];
   for (const message of messages) {
     if (message.isSystemAlert === true) continue;
     const text = stripMentionTokens(message.content)
@@ -206,29 +109,36 @@ export function buildTitleDigest(
 }
 
 /** Eva-specific session constraints; exploration is left to the claude_code factory preset. */
-export function buildEditPrompt(
-  repo: { owner: string; name: string; baseBranch?: string },
-  branchName: string,
-  planContent: string,
-  message: string,
-  rootDirectory: string,
-  customInstructionsBlock: string,
-  systemPrompt: string | undefined,
-  devPort?: number,
-  conversationHistory: Array<{ role: string; content: string }> = [],
-  readableRepos: ReadonlyArray<{ owner: string; name: string }> = [],
-  linkedRepos: LinkedRepoPromptRow[] = [],
-  runtime?: ChatRuntimeFacts,
-): string {
+export function buildEditPrompt({
+  repo,
+  branchName,
+  message,
+  rootDirectory,
+  customInstructionsBlock,
+  systemPrompt,
+  devPort,
+  planContent = "",
+  readableRepos = [],
+  linkedRepos = [],
+  runtime,
+}: {
+  repo: { owner: string; name: string; baseBranch?: string };
+  branchName: string;
+  message: string;
+  rootDirectory: string;
+  customInstructionsBlock: string;
+  systemPrompt?: string;
+  devPort?: number;
+  planContent?: string;
+  readableRepos?: ReadonlyArray<{ owner: string; name: string }>;
+  linkedRepos?: LinkedRepoPromptRow[];
+  runtime?: ChatRuntimeFacts;
+}): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
   const baseBranch = repo.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   // Task/project chat reuse this helper and pass spec/description as planContent.
   // Sessions pass "" — leftover plan.md must not become an "Approved plan" block.
   const planContext = planContent ? `\n\nContext:\n${planContent}` : "";
-  const handoff = buildSessionHandoff(conversationHistory);
-  const conversationContext = handoff
-    ? `\n\nPrior instructions from this session (handoff; may overlap provider memory). Earlier instructions still apply unless the user has since changed them — do not undo agreed work:\n${handoff}`
-    : "";
   const devPortText =
     devPort !== undefined ? String(devPort) : "its configured dev port";
   // Agents kept concluding "no dev server is running" seconds after a sandbox
@@ -264,7 +174,7 @@ When the user asks for a recording, walkthrough video, or screenshot:
   const runtimeSection = runtime
     ? buildChatRuntimeSection(runtime, branchName, devPortText)
     : "";
-  return `${message}${planContext}${conversationContext}${devServerSection}${runtimeSection}${browserSection}
+  return `${message}${planContext}${devServerSection}${runtimeSection}${browserSection}
 
 Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.

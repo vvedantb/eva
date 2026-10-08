@@ -12,7 +12,6 @@ export {
   clearTaskSandbox,
   scheduleDeploymentTracking,
   updateProjectSandbox,
-  finalizeRunStreamingPhase,
   completeRun,
   recordManualTaskPr,
 } from "./_taskWorkflow/runLifecycle";

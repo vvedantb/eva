@@ -2,6 +2,7 @@ import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { listAutomationsForRepo } from "../_automations/helpers";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { prOriginValidator, prStateValidator } from "../validators";
@@ -57,38 +58,7 @@ export const getUserByClerkId = internalQuery({
 /** List repos accessible to a user. */
 export const listUserRepos = internalQuery({
   args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    // Get repos connected by this user
-    const connectedRepos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-      .collect();
-
-    // Get repos via team membership
-    const memberships = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-
-    const teamRepoResults = await Promise.all(
-      memberships.map((m) =>
-        ctx.db
-          .query("githubRepos")
-          .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-          .collect(),
-      ),
-    );
-
-    // Dedupe repos
-    const seen = new Set<string>();
-    const result: typeof connectedRepos = [];
-    for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-      if (seen.has(repo._id)) continue;
-      seen.add(repo._id);
-      result.push(repo);
-    }
-    return result;
-  },
+  handler: (ctx, { userId }) => gatherAccessibleRepos(ctx.db, userId, true),
 });
 
 /**
@@ -703,19 +673,27 @@ export const entityIsExecuting = internalQuery({
       if (!sessionId) return false;
       const session = await ctx.db.get(sessionId);
       if (!session) return false;
-      return sessionIsExecuting(session, await openChatEntityIdsFor(ctx.db, sessionId));
+      return sessionIsExecuting(
+        session,
+        await openChatEntityIdsFor(ctx.db, sessionId),
+      );
     }
     if (kind === "task") {
       const taskId = ctx.db.normalizeId("agentTasks", id);
       if (!taskId) return false;
       const task = await ctx.db.get(taskId);
-      return task ? taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId)) : false;
+      return task
+        ? taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId))
+        : false;
     }
     const projectId = ctx.db.normalizeId("projects", id);
     if (!projectId) return false;
     const project = await ctx.db.get(projectId);
     return project
-      ? projectIsExecuting(project, await openChatEntityIdsFor(ctx.db, projectId))
+      ? projectIsExecuting(
+          project,
+          await openChatEntityIdsFor(ctx.db, projectId),
+        )
       : false;
   },
 });

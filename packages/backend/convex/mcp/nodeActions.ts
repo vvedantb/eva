@@ -31,6 +31,7 @@ import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
+import { chatSourceArg } from "./toolShared";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Environment Helpers
@@ -349,8 +350,7 @@ function getBootstrapSecret(): string {
 }
 
 /**
- * Eva's own Convex API URL, used for the `runQueryAsUser`/`runMutationAsUser`
- * calls below.
+ * Eva's own Convex API URL, used for the `runAsUser` calls below.
  *
  * Prefer `CONVEX_CLOUD_URL`, which every deployment sets and which is correct
  * by construction. The `.convex.site` → `.convex.cloud` rewrite only works on
@@ -395,21 +395,16 @@ async function runTestQueryRemote(
   deployKey: string,
   source: string,
 ): Promise<{ value: JsonValue; logLines: string[] }> {
-  const response = await fetch(`${convexUrl}/api/run_test_function`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const result = await postConvex(
+    `${convexUrl}/api/run_test_function`,
+    { "Content-Type": "application/json" },
+    {
       adminKey: deployKey,
       args: {},
       bundle: { path: "testQuery.js", source },
       format: "convex_encoded_json",
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-  }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
+    },
+  );
   return { value: result.value, logLines: result.logLines ?? [] };
 }
 
@@ -468,86 +463,47 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   return jwt;
 }
 
-async function runMutationAsUser(
-  convexUrl: string,
-  clerkUserId: string,
-  functionPath: string,
-  args: Record<string, JsonValue>,
-): Promise<JsonValue> {
-  const jwt = await signUserJwt(clerkUserId);
-  const response = await fetch(`${convexUrl}/api/mutation`, {
+/**
+ * POSTs one request to a Convex HTTP API endpoint and parses the reply. Throws
+ * on a non-2xx status or a Convex error result.
+ */
+async function postConvex(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, JsonValue>,
+) {
+  const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({ path: functionPath, args, format: "json" }),
+    headers,
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
-  return result.value;
+  return parseConvexResponse(jsonValue.parse(await response.json()));
 }
+
+type AsUserType = "query" | "mutation" | "action";
 
 /**
- * Call a Convex query as the given user (mirrors runMutationAsUser but hits
- * /api/query). Reuses the signed user JWT so the query's authQuery wrapper and
- * access checks (hasRepoAccess/hasTeamAccess) apply automatically.
+ * Calls one public Eva function as the given user. Signs the user JWT, so the
+ * function's auth wrapper and access checks (hasRepoAccess/hasTeamAccess)
+ * apply automatically.
  */
-async function runQueryAsUser(
-  convexUrl: string,
+async function runAsUser(
+  type: AsUserType,
   clerkUserId: string,
-  functionPath: string,
+  path: string,
   args: Record<string, JsonValue>,
 ): Promise<JsonValue> {
   const jwt = await signUserJwt(clerkUserId);
-  const response = await fetch(`${convexUrl}/api/query`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({ path: functionPath, args, format: "json" }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-  }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
+  const result = await postConvex(
+    `${getEvaConvexCloudUrl()}/api/${type}`,
+    { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+    { path, args, format: "json" },
+  );
   return result.value;
 }
-
-/** Call a Convex action as the given user (mirrors runMutationAsUser via /api/action). */
-async function runActionAsUser(
-  convexUrl: string,
-  clerkUserId: string,
-  functionPath: string,
-  args: Record<string, JsonValue>,
-): Promise<JsonValue> {
-  const jwt = await signUserJwt(clerkUserId);
-  const response = await fetch(`${convexUrl}/api/action`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({ path: functionPath, args, format: "json" }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-  }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
-  return result.value;
-}
-
-const AS_USER_RUNNERS = {
-  query: runQueryAsUser,
-  mutation: runMutationAsUser,
-  action: runActionAsUser,
-};
 
 /**
  * Runs one public Eva function as the MCP caller, so the tool inherits the
@@ -569,22 +525,14 @@ export const callAsUser = internalAction({
   returns: v.string(),
   handler: async (_ctx, { clerkUserId, type, path, argsJson }) => {
     const args = z.record(z.string(), jsonValue).parse(JSON.parse(argsJson));
-    const value = await AS_USER_RUNNERS[type](
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      path,
-      args,
-    );
+    const value = await runAsUser(type, clerkUserId, path, args);
     return JSON.stringify(value ?? null);
   },
 });
 
-async function ensureUserExists(
-  convexUrl: string,
-  clerkUserId: string,
-): Promise<string> {
-  const result = await runMutationAsUser(
-    convexUrl,
+async function ensureUserExists(clerkUserId: string): Promise<string> {
+  const result = await runAsUser(
+    "mutation",
     clerkUserId,
     "auth:ensureUserExists",
     {},
@@ -605,10 +553,7 @@ export const getContext = internalAction({
   handler: async (_ctx, { clerkUserId }) => {
     const deployKey = await getDeployKey();
     let userId = await resolveUserByClerkId(deployKey, clerkUserId);
-    if (!userId) {
-      const convexUrl = getEvaConvexCloudUrl();
-      userId = await ensureUserExists(convexUrl, clerkUserId);
-    }
+    if (!userId) userId = await ensureUserExists(clerkUserId);
     return { deployKey, userId };
   },
 });
@@ -751,22 +696,11 @@ export const listTables = internalAction({
       .parse(await shapesResponse.json());
 
     // Fetch declared schema
-    const schemaResponse = await fetch(`${convexUrl}/api/query`, {
-      method: "POST",
-      headers: authHeaders(deployKey),
-      body: JSON.stringify({
-        path: "_system/frontend/getSchemas",
-        args: {},
-        format: "json",
-      }),
-    });
-    if (!schemaResponse.ok) {
-      throw new Error(
-        `HTTP ${schemaResponse.status}: ${await schemaResponse.text()}`,
-      );
-    }
-    const schemaJson = await schemaResponse.json();
-    const schemaResult = parseConvexResponse(jsonValue.parse(schemaJson));
+    const schemaResult = await postConvex(
+      `${convexUrl}/api/query`,
+      authHeaders(deployKey),
+      { path: "_system/frontend/getSchemas", args: {}, format: "json" },
+    );
     const schemaValue = z
       .object({ active: z.string().nullable() })
       .parse(schemaResult.value);
@@ -822,20 +756,15 @@ export const queryTable = internalAction({
     _ctx,
     { convexUrl, deployKey, table, order, numItems, cursor },
   ) => {
-    const response = await fetch(`${convexUrl}/api/query`, {
-      method: "POST",
-      headers: authHeaders(deployKey),
-      body: JSON.stringify({
+    const result = await postConvex(
+      `${convexUrl}/api/query`,
+      authHeaders(deployKey),
+      {
         path: "_system/cli/tableData",
         args: { table, order, paginationOpts: { numItems, cursor } },
         format: "json",
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    }
-    const json = await response.json();
-    const result = parseConvexResponse(jsonValue.parse(json));
+      },
+    );
     return paginationResultSchema.parse(result.value);
   },
 });
@@ -866,205 +795,6 @@ export const runTestQuery = internalAction({
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, error: formatConvexQueryError(message) };
     }
-  },
-});
-
-// Task and session creation deliberately take no model: the mutations behind
-// them fall back to `repo.defaultModel`, and that per-repo choice (provider,
-// cost, plan limits) is the one the MCP surface must not override. Per-turn
-// sends (orchestratorSendMessage) keep their model override.
-export const createTask = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    title: v.string(),
-    description: v.string(),
-    baseBranch: v.optional(v.string()),
-    projectId: v.optional(v.string()),
-  },
-  returns: v.string(),
-  handler: async (
-    _ctx,
-    { clerkUserId, repoId, title, description, baseBranch, projectId },
-  ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const mutationArgs: Record<string, JsonValue> = {
-      repoId,
-      title,
-      description,
-    };
-    if (baseBranch) mutationArgs.baseBranch = baseBranch;
-    if (projectId) mutationArgs.projectId = projectId;
-
-    const taskId = await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "_agentTasks/mutations:createQuickTask",
-      mutationArgs,
-    );
-
-    if (typeof taskId !== "string") {
-      throw new Error("Unexpected response from createQuickTask");
-    }
-    return taskId;
-  },
-});
-
-export const startTaskExecution = internalAction({
-  args: { clerkUserId: v.string(), taskId: v.string() },
-  returns: v.null(),
-  handler: async (_ctx, { clerkUserId, taskId }) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "_agentTasks/execution:startExecution",
-      { id: taskId },
-    );
-    return null;
-  },
-});
-
-export const createTasksBatch = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    tasks: v.array(
-      v.object({
-        title: v.string(),
-        description: v.optional(v.string()),
-        dependsOn: v.optional(v.array(v.number())),
-      }),
-    ),
-    projectTitle: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-  },
-  returns: v.any(),
-  handler: async (
-    _ctx,
-    { clerkUserId, repoId, tasks, projectTitle, baseBranch },
-  ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const mutationArgs: Record<string, JsonValue> = {
-      repoId,
-      tasks: tasks.map((t) => ({
-        title: t.title,
-        ...(t.description ? { description: t.description } : {}),
-        ...(t.dependsOn ? { dependsOn: t.dependsOn } : {}),
-      })),
-    };
-    if (projectTitle) mutationArgs.projectTitle = projectTitle;
-    if (baseBranch) mutationArgs.baseBranch = baseBranch;
-
-    const result = await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "_agentTasks/mutations:createBatchWithDependencies",
-      mutationArgs,
-    );
-    return result;
-  },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Eva document (docs table) actions
-//
-// These operate on Eva's OWN docs (design docs/PRDs), not a connected repo's
-// database. Reads use runQueryAsUser and writes use runMutationAsUser, so the
-// docs.ts authQuery/authMutation access checks (hasRepoAccess) apply.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const createEvaDoc = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    title: v.string(),
-    content: v.string(),
-    sourceKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
-    sourceId: v.optional(v.string()),
-  },
-  returns: v.string(),
-  handler: async (
-    _ctx,
-    { clerkUserId, repoId, title, content, sourceKind, sourceId },
-  ) => {
-    const createArgs: Record<string, JsonValue> = { repoId, title, content };
-    if (sourceKind !== undefined && sourceId !== undefined) {
-      createArgs.source =
-        sourceKind === "session"
-          ? { kind: "session", sessionId: sourceId }
-          : sourceKind === "task"
-            ? { kind: "task", taskId: sourceId }
-            : { kind: "project", projectId: sourceId };
-    }
-    const docId = await runMutationAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "docs:create",
-      createArgs,
-    );
-    if (typeof docId !== "string") {
-      throw new Error("Unexpected response from docs:create");
-    }
-    return docId;
-  },
-});
-
-export const getEvaDoc = internalAction({
-  args: { clerkUserId: v.string(), docId: v.string() },
-  returns: v.any(),
-  handler: async (_ctx, { clerkUserId, docId }) => {
-    return runQueryAsUser(getEvaConvexCloudUrl(), clerkUserId, "docs:get", {
-      id: docId,
-    });
-  },
-});
-
-export const listEvaDocs = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    kind: v.optional(v.union(v.literal("document"), v.literal("pr-recap"))),
-  },
-  returns: v.any(),
-  handler: async (_ctx, { clerkUserId, repoId, kind }) => {
-    const args: Record<string, string> = { repoId };
-    if (kind !== undefined) args.kind = kind;
-    return runQueryAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "docs:list",
-      args,
-    );
-  },
-});
-
-export const updateEvaDoc = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    docId: v.string(),
-    title: v.optional(v.string()),
-    content: v.optional(v.string()),
-    description: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (
-    _ctx,
-    { clerkUserId, docId, title, content, description },
-  ) => {
-    const mutationArgs: Record<string, JsonValue> = { id: docId };
-    if (title !== undefined) mutationArgs.title = title;
-    if (content !== undefined) mutationArgs.content = content;
-    if (description !== undefined) mutationArgs.description = description;
-    await runMutationAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "docs:update",
-      mutationArgs,
-    );
-    return null;
   },
 });
 
@@ -1121,11 +851,9 @@ export const createArtifact = internalAction({
       sourceId,
     },
   ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-
     // 1. Get a short-lived storage upload URL (as the user).
-    const uploadUrl = await runMutationAsUser(
-      convexUrl,
+    const uploadUrl = await runAsUser(
+      "mutation",
       clerkUserId,
       "artifacts:generateUploadUrl",
       {},
@@ -1156,15 +884,10 @@ export const createArtifact = internalAction({
     };
     if (description) createArgs.description = description;
     if (sourceKind !== undefined && sourceId !== undefined) {
-      createArgs.source =
-        sourceKind === "session"
-          ? { kind: "session", sessionId: sourceId }
-          : sourceKind === "task"
-            ? { kind: "task", taskId: sourceId }
-            : { kind: "project", projectId: sourceId };
+      createArgs.source = chatSourceArg(sourceKind, sourceId);
     }
-    const artifactId = await runMutationAsUser(
-      convexUrl,
+    const artifactId = await runAsUser(
+      "mutation",
       clerkUserId,
       "artifacts:create",
       createArgs,
@@ -1184,12 +907,9 @@ export const getArtifact = internalAction({
   args: { clerkUserId: v.string(), artifactId: v.string() },
   returns: v.any(),
   handler: async (_ctx, { clerkUserId, artifactId }) => {
-    const artifact = await runQueryAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "artifacts:get",
-      { id: artifactId },
-    );
+    const artifact = await runAsUser("query", clerkUserId, "artifacts:get", {
+      id: artifactId,
+    });
     if (artifact === null) return null;
     return {
       artifact,
@@ -1202,8 +922,8 @@ export const listArtifacts = internalAction({
   args: { clerkUserId: v.string() },
   returns: v.any(),
   handler: async (_ctx, { clerkUserId }) => {
-    const artifacts = await runQueryAsUser(
-      getEvaConvexCloudUrl(),
+    const artifacts = await runAsUser(
+      "query",
       clerkUserId,
       "artifacts:listAll",
       {},
@@ -1228,7 +948,7 @@ export const listArtifacts = internalAction({
 // ─────────────────────────────────────────────────────────────────────────────
 // Orchestrator actions (master session fleet control)
 //
-// Every call below goes through runQueryAsUser / runMutationAsUser, i.e. a
+// Every call below goes through runAsUser, i.e. a
 // signed user JWT hitting authQuery/authMutation. Their hasRepoAccess checks
 // are the ONLY authorisation for orchestrator tools — unlike the repo-scoped
 // tools these deliberately skip the sandbox token's single-repo pin, so the
@@ -1394,7 +1114,7 @@ async function setWatchedByAve(
   const { fn, idArg } = WATCH_MUTATION[kind];
   const args: Record<string, JsonValue> = { [idArg]: id };
   if (aveThreadId !== undefined) args.aveThreadId = aveThreadId;
-  await runMutationAsUser(getEvaConvexCloudUrl(), clerkUserId, fn, args);
+  await runAsUser("mutation", clerkUserId, fn, args);
 }
 
 /** The watch-pointer mutation per surface, and the id argument it takes. */
@@ -1421,12 +1141,7 @@ async function registerWatchIfAve(
   const resolved =
     aveThreadId ??
     aveThreadPointerSchema.parse(
-      await runQueryAsUser(
-        getEvaConvexCloudUrl(),
-        clerkUserId,
-        "ave:getThread",
-        {},
-      ),
+      await runAsUser("query", clerkUserId, "ave:getThread", {}),
     )?._id;
   if (resolved === undefined) return;
   await setWatchedByAve(clerkUserId, kind, id, resolved);
@@ -1444,13 +1159,12 @@ export const orchestratorListAgents = internalAction({
     _ctx,
     { clerkUserId, repos, includeIdle, excludeEntityId },
   ): Promise<OrchestratorAgent[]> => {
-    const convexUrl = getEvaConvexCloudUrl();
     const repoNameById = new Map(repos.map((r) => [r.id, r.fullName]));
 
     const [sessionGroups, rawTasks] = await Promise.all([
       Promise.all(
         repos.map((repo) =>
-          runQueryAsUser(convexUrl, clerkUserId, "_sessions/queries:list", {
+          runAsUser("query", clerkUserId, "_sessions/queries:list", {
             repoId: repo.id,
           }),
         ),
@@ -1458,8 +1172,8 @@ export const orchestratorListAgents = internalAction({
       // Already user-wide, so one call covers every repo. The slim projection
       // keeps the fleet list cheap: full task docs measured up to 38KB each
       // (backgroundAgents, description), all of it discarded below.
-      runQueryAsUser(
-        convexUrl,
+      runAsUser(
+        "query",
         clerkUserId,
         "_agentTasks/queries:getActiveTasksSlim",
         {},
@@ -1567,7 +1281,6 @@ export const orchestratorGetAgentState = internalAction({
     ctx,
     { clerkUserId, kind, id, transcriptTail },
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
-    const convexUrl = getEvaConvexCloudUrl();
     const streamingEntityId =
       kind === "session"
         ? id
@@ -1577,15 +1290,7 @@ export const orchestratorGetAgentState = internalAction({
     // "Not authorized" while the entity read merely returns null, so in a
     // Promise.all the raw throw won the race and the agent saw a stack instead
     // of the sentence below.
-    const rawDoc = await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      CHAT_DOC_QUERY[kind],
-      { id },
-    );
-    if (rawDoc === null) {
-      throw new Error(`No ${kind} ${id} found, or you do not have access.`);
-    }
+    const hit = await readChatDocAsUser(clerkUserId, kind, id);
 
     // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
     // never sets `activeWorkflowId`, so that field alone is not "is executing".
@@ -1594,20 +1299,18 @@ export const orchestratorGetAgentState = internalAction({
       { kind, id },
     );
 
-    const [rawStreaming, rawMessages, rawQueued] = await Promise.all([
-      runQueryAsUser(convexUrl, clerkUserId, "streaming:get", {
+    const [rawStreaming, rawMessages, queued] = await Promise.all([
+      runAsUser("query", clerkUserId, "streaming:get", {
         entityId: streamingEntityId,
       }),
-      runQueryAsUser(convexUrl, clerkUserId, "messages:listByParent", {
+      runAsUser("query", clerkUserId, "messages:listByParent", {
         parentId: id,
       }),
-      runQueryAsUser(convexUrl, clerkUserId, "queuedMessages:listByParent", {
-        parentId: id,
-      }),
+      listQueuedAsUser(clerkUserId, id),
     ]);
 
     const streaming = streamingStateSchema.parse(rawStreaming);
-    const queuedMessageCount = z.array(z.unknown()).parse(rawQueued).length;
+    const queuedMessageCount = queued.length;
     const messages = z.array(transcriptMessageSchema).parse(rawMessages);
     const tail = transcriptTail > 0 ? messages.slice(-transcriptTail) : [];
     const transcript = tail.map((message) => ({
@@ -1633,8 +1336,8 @@ export const orchestratorGetAgentState = internalAction({
       isExecuting,
     };
 
-    if (kind === "session") {
-      const session = sessionDocSchema.parse(rawDoc);
+    if (hit.kind === "session") {
+      const session = hit.doc;
       const linkedRepos: McpLinkedRepo[] | undefined =
         session.linkedRepoCount !== undefined && session.linkedRepoCount > 0
           ? await ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
@@ -1654,8 +1357,8 @@ export const orchestratorGetAgentState = internalAction({
       };
     }
 
-    if (kind === "project") {
-      const project = projectDocSchema.parse(rawDoc);
+    if (hit.kind === "project") {
+      const project = hit.doc;
       return {
         ...common,
         numId: project.numId,
@@ -1669,7 +1372,7 @@ export const orchestratorGetAgentState = internalAction({
       };
     }
 
-    const task = agentTaskSchema.parse(rawDoc);
+    const task = hit.doc;
     return {
       ...common,
       numId: task.numId,
@@ -1687,6 +1390,31 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+type ChatDocHit =
+  | { kind: "session"; doc: z.infer<typeof sessionDocSchema> }
+  | { kind: "task"; doc: z.infer<typeof agentTaskSchema> }
+  | { kind: "project"; doc: z.infer<typeof projectDocSchema> };
+
+/**
+ * Reads one chat's own document as the calling user, so the read doubles as
+ * the access check. Throws one plain sentence when it is missing or hidden.
+ */
+async function readChatDocAsUser(
+  clerkUserId: string,
+  kind: ChatTargetKind,
+  id: string,
+): Promise<ChatDocHit> {
+  const raw = await runAsUser("query", clerkUserId, CHAT_DOC_QUERY[kind], {
+    id,
+  });
+  if (raw === null) {
+    throw new Error(`No ${kind} ${id} found, or you do not have access.`);
+  }
+  if (kind === "session") return { kind, doc: sessionDocSchema.parse(raw) };
+  if (kind === "task") return { kind, doc: agentTaskSchema.parse(raw) };
+  return { kind, doc: projectDocSchema.parse(raw) };
+}
+
 /**
  * Reads one entity's preview sandbox state as the calling user, so the read
  * doubles as the access check. Each surface parks that state somewhere
@@ -1697,25 +1425,14 @@ async function delay(ms: number): Promise<void> {
  * which no per-entity read exposes (see `mcp.queries.entityIsExecuting`).
  */
 async function readEntitySandboxStatus(
-  convexUrl: string,
   clerkUserId: string,
   kind: ChatTargetKind,
   id: string,
 ): Promise<string> {
-  const raw = await runQueryAsUser(
-    convexUrl,
-    clerkUserId,
-    CHAT_DOC_QUERY[kind],
-    { id },
-  );
-  if (raw === null) {
-    throw new Error(`No ${kind} ${id} found, or you do not have access.`);
-  }
-  if (kind === "session") return sessionDocSchema.parse(raw).status;
-  if (kind === "task") {
-    return agentTaskSchema.parse(raw).reviewTaskSandboxStatus ?? "closed";
-  }
-  return projectDocSchema.parse(raw).reviewProjectSandboxStatus ?? "closed";
+  const hit = await readChatDocAsUser(clerkUserId, kind, id);
+  if (hit.kind === "session") return hit.doc.status;
+  if (hit.kind === "task") return hit.doc.reviewTaskSandboxStatus ?? "closed";
+  return hit.doc.reviewProjectSandboxStatus ?? "closed";
 }
 
 /**
@@ -1728,7 +1445,6 @@ async function readEntitySandboxStatus(
  * half-started sandbox — when the VM never comes up.
  */
 async function ensureEntitySandboxActive(
-  convexUrl: string,
   clerkUserId: string,
   kind: ChatTargetKind,
   id: string,
@@ -1736,9 +1452,9 @@ async function ensureEntitySandboxActive(
   const surface = SANDBOX_SURFACES[kind];
   return await awaitSandboxActive({
     kind,
-    readStatus: () => readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
+    readStatus: () => readEntitySandboxStatus(clerkUserId, kind, id),
     start: async () => {
-      await runMutationAsUser(convexUrl, clerkUserId, surface.start, {
+      await runAsUser("mutation", clerkUserId, surface.start, {
         [surface.idArg]: id,
       });
     },
@@ -1754,34 +1470,30 @@ async function ensureEntitySandboxActive(
  * message at once when the chat itself is free.
  */
 function chatDelivery(
-  kind: ChatTargetKind,
-  rawDoc: unknown,
+  hit: ChatDocHit,
   queuedAhead: number,
   requestedModel: string | undefined,
   isExecuting: boolean,
 ): AgentDelivery {
   const isBusy = isExecuting || queuedAhead > 0;
-  if (kind === "session") {
-    const session = sessionDocSchema.parse(rawDoc);
+  if (hit.kind === "session") {
     return resolveAgentDelivery({
       isBusy,
       requestedModel,
-      storedModel: session.lastModel,
+      storedModel: hit.doc.lastModel,
     });
   }
-  if (kind === "task") {
-    const task = agentTaskSchema.parse(rawDoc);
+  if (hit.kind === "task") {
     return resolveAgentDelivery({
       isBusy,
       requestedModel,
-      storedModel: task.lastChatModel ?? task.model,
+      storedModel: hit.doc.lastChatModel ?? hit.doc.model,
     });
   }
-  const project = projectDocSchema.parse(rawDoc);
   return resolveAgentDelivery({
     isBusy,
     requestedModel,
-    storedModel: project.lastChatModel ?? project.model,
+    storedModel: hit.doc.lastChatModel ?? hit.doc.model,
   });
 }
 
@@ -1806,29 +1518,12 @@ export const orchestratorSendMessage = internalAction({
   }),
   handler: async (
     ctx,
-    {
-      clerkUserId,
-      kind,
-      id,
-      message,
-      model,
-      aveThreadId,
-      sentViaOrchestrator,
-    },
+    { clerkUserId, kind, id, message, model, aveThreadId, sentViaOrchestrator },
   ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const rawDoc = await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      CHAT_DOC_QUERY[kind],
-      { id },
-    );
-    if (rawDoc === null) {
-      throw new Error(`No ${kind} ${id} found, or you do not have access.`);
-    }
+    const hit = await readChatDocAsUser(clerkUserId, kind, id);
 
     if (kind === "task") {
-      await ensureEntitySandboxActive(convexUrl, clerkUserId, kind, id);
+      await ensureEntitySandboxActive(clerkUserId, kind, id);
     }
 
     // A child with anything already queued is NOT idle, even with no workflow
@@ -1836,22 +1531,13 @@ export const orchestratorSendMessage = internalAction({
     // its sandbox reports ready. Starting a turn then would run this message
     // ahead of the one the child was created with (observed live: "probe
     // second message" answered while "probe first message" sat queued).
-    const queuedAhead = z
-      .array(z.unknown())
-      .parse(
-        await runQueryAsUser(
-          convexUrl,
-          clerkUserId,
-          "queuedMessages:listByParent",
-          { parentId: id },
-        ),
-      ).length;
+    const queuedAhead = (await listQueuedAsUser(clerkUserId, id)).length;
 
     const isExecuting: boolean = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
       { kind, id },
     );
-    const delivery = chatDelivery(kind, rawDoc, queuedAhead, model, isExecuting);
+    const delivery = chatDelivery(hit, queuedAhead, model, isExecuting);
     for (const call of buildChatMessageCalls({
       kind,
       id,
@@ -1859,7 +1545,7 @@ export const orchestratorSendMessage = internalAction({
       delivery,
       sentViaOrchestrator,
     })) {
-      await runMutationAsUser(convexUrl, clerkUserId, call.fn, call.args);
+      await runAsUser("mutation", clerkUserId, call.fn, call.args);
     }
 
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
@@ -1877,10 +1563,9 @@ export const orchestratorStopAgent = internalAction({
   },
   returns: v.object({ buildRunning: v.boolean() }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
-    const convexUrl = getEvaConvexCloudUrl();
     if (kind === "session") {
-      await runMutationAsUser(
-        convexUrl,
+      await runAsUser(
+        "mutation",
         clerkUserId,
         "_sessions/execution:cancelExecution",
         { sessionId: id },
@@ -1890,35 +1575,29 @@ export const orchestratorStopAgent = internalAction({
     if (kind === "project") {
       // Only the sandbox chat. A running build is its own workflow and is
       // reported back rather than cancelled (cancel_project_build owns that).
-      const rawDoc = await runQueryAsUser(
-        convexUrl,
-        clerkUserId,
-        CHAT_DOC_QUERY.project,
-        { id },
-      );
-      if (rawDoc === null) {
-        throw new Error(`No project ${id} found, or you do not have access.`);
-      }
-      const project = projectDocSchema.parse(rawDoc);
-      await runMutationAsUser(
-        convexUrl,
+      const hit = await readChatDocAsUser(clerkUserId, "project", id);
+      await runAsUser(
+        "mutation",
         clerkUserId,
         "projectChatWorkflow:cancelExecution",
         { projectId: id },
       );
-      return { buildRunning: project.activeBuildWorkflowId !== undefined };
+      return {
+        buildRunning:
+          hit.kind === "project" && hit.doc.activeBuildWorkflowId !== undefined,
+      };
     }
     // A task has two independent workflow slots: its main run and its sandbox
     // chat. Cancelling only the chat one reported success while a run kept
     // going, so stop both — each cancel is a no-op when that slot is idle.
-    await runMutationAsUser(
-      convexUrl,
+    await runAsUser(
+      "mutation",
       clerkUserId,
       "agentTaskChatWorkflow:cancelExecution",
       { taskId: id },
     );
-    await runMutationAsUser(
-      convexUrl,
+    await runAsUser(
+      "mutation",
       clerkUserId,
       "_taskWorkflow/publicMutations:cancelExecution",
       { taskId: id },
@@ -1947,7 +1626,6 @@ export const mcpStartEntitySandbox = internalAction({
   }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     const { startRequested } = await ensureEntitySandboxActive(
-      getEvaConvexCloudUrl(),
       clerkUserId,
       kind,
       id,
@@ -1969,15 +1647,9 @@ export const mcpStopEntitySandbox = internalAction({
     stopRequested: v.boolean(),
   }),
   handler: async (ctx, { clerkUserId, kind, id }) => {
-    const convexUrl = getEvaConvexCloudUrl();
     // Reading the entity as the user is the access check, so it comes first —
     // the turn lookup below runs on an id the caller has already proven.
-    const sandboxStatus = await readEntitySandboxStatus(
-      convexUrl,
-      clerkUserId,
-      kind,
-      id,
-    );
+    const sandboxStatus = await readEntitySandboxStatus(clerkUserId, kind, id);
 
     // Tearing the VM down mid-turn kills the turn. Stopping and cancelling are
     // separate decisions, so this refuses rather than deciding for the caller.
@@ -1996,7 +1668,7 @@ export const mcpStopEntitySandbox = internalAction({
     }
 
     const surface = SANDBOX_SURFACES[kind];
-    await runMutationAsUser(convexUrl, clerkUserId, surface.stop, {
+    await runAsUser("mutation", clerkUserId, surface.stop, {
       [surface.idArg]: id,
     });
 
@@ -2006,7 +1678,7 @@ export const mcpStopEntitySandbox = internalAction({
     let settled = "stopping";
     while (Date.now() < deadline) {
       await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
-      settled = await readEntitySandboxStatus(convexUrl, clerkUserId, kind, id);
+      settled = await readEntitySandboxStatus(clerkUserId, kind, id);
       if (settled !== "stopping") break;
     }
     // A still-`stopping` status is reported as-is: the stop was accepted and
@@ -2022,6 +1694,15 @@ const queuedMessageSchema = z.object({
   order: z.number().optional(),
 });
 
+/** One chat's pending queue, read as the user (the read is the access check). */
+async function listQueuedAsUser(clerkUserId: string, parentId: string) {
+  return z.array(queuedMessageSchema).parse(
+    await runAsUser("query", clerkUserId, "queuedMessages:listByParent", {
+      parentId,
+    }),
+  );
+}
+
 export const mcpCancelQueuedMessages = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -2035,20 +1716,7 @@ export const mcpCancelQueuedMessages = internalAction({
     remaining: v.number(),
   }),
   handler: async (_ctx, { clerkUserId, id, queuedMessageId, all }) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const listQueue = async () =>
-      z
-        .array(queuedMessageSchema)
-        .parse(
-          await runQueryAsUser(
-            convexUrl,
-            clerkUserId,
-            "queuedMessages:listByParent",
-            { parentId: id },
-          ),
-        );
-
-    const queued = await listQueue();
+    const queued = await listQueuedAsUser(clerkUserId, id);
     let doomed = queued;
     if (!all) {
       const match = queued.find((message) => message._id === queuedMessageId);
@@ -2064,7 +1732,7 @@ export const mcpCancelQueuedMessages = internalAction({
     }
 
     for (const message of doomed) {
-      await runMutationAsUser(convexUrl, clerkUserId, "queuedMessages:remove", {
+      await runAsUser("mutation", clerkUserId, "queuedMessages:remove", {
         id: message._id,
       });
     }
@@ -2073,7 +1741,7 @@ export const mcpCancelQueuedMessages = internalAction({
     // its own while this action was deleting others. A drained message is also
     // gone from the queue, which is why the tool tells the caller that a
     // same-instant dequeue cannot be taken back.
-    const remaining = await listQueue();
+    const remaining = await listQueuedAsUser(clerkUserId, id);
     const stillQueued = new Set(remaining.map((message) => message._id));
     return {
       cancelled: doomed
@@ -2136,8 +1804,8 @@ export const orchestratorCreateSession = internalAction({
     }
 
     const created = createdSessionSchema.parse(
-      await runMutationAsUser(
-        getEvaConvexCloudUrl(),
+      await runAsUser(
+        "mutation",
         clerkUserId,
         "_sessions/mutations:create",
         createArgs,
@@ -2200,7 +1868,6 @@ export const resolveSupabaseToken = internalAction({
     if (!userId) return null;
 
     // Get repos and search for SUPABASE_ACCESS_TOKEN
-    const convexUrl = getEvaConvexCloudUrl();
     const source = wrapQueryHandler(
       `const userId = ${JSON.stringify(userId)};
       const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
@@ -2215,7 +1882,11 @@ export const resolveSupabaseToken = internalAction({
       }
       return result;`,
     );
-    const result = await runTestQueryRemote(convexUrl, deployKey, source);
+    const result = await runTestQueryRemote(
+      getEvaConvexCloudUrl(),
+      deployKey,
+      source,
+    );
     const repoIds = z.array(z.string()).parse(result.value);
 
     // Search for Supabase token in each repo's env vars

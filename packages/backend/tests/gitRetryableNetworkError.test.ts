@@ -14,6 +14,10 @@ describe("retryable git network errors", () => {
       "To https://github.com/evalucom/eva.git\n ! [remote rejected] refs/heads/eva/x -> eva/x (Internal Server Error)\nerror: failed to push some refs to 'https://github.com/evalucom/eva.git'",
     ],
     ["an HTTP-status 500", "fatal: unable to access: status code 500"],
+    [
+      "an unreachable network",
+      "fatal: unable to access 'https://github.com/evalucom/eva.git/': Failed to connect to github.com port 443: Network is unreachable",
+    ],
   ])("retries %s", (_label, message) => {
     expect(isRetryableGitNetworkError(message)).toBe(true);
   });

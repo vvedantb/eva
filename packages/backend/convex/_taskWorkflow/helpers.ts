@@ -69,28 +69,6 @@ export async function clearStreamingActivity(
   }
 }
 
-/** Creates or updates the streaming activity record for a given entity. */
-export async function upsertStreamingActivity(
-  ctx: MutationCtx,
-  entityId: string,
-  currentActivity: string,
-): Promise<void> {
-  const existing = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", entityId))
-    .first();
-  const now = Date.now();
-  if (existing) {
-    await ctx.db.patch(existing._id, { currentActivity, lastUpdatedAt: now });
-  } else {
-    await ctx.db.insert("streamingActivity", {
-      entityId,
-      currentActivity,
-      lastUpdatedAt: now,
-    });
-  }
-}
-
 /** Creates or updates a persistent activity log entry for a run. */
 export async function upsertActivityLog(
   ctx: MutationCtx,
@@ -127,6 +105,22 @@ export async function snapshotStreamingActivityToLog(
   if (streaming?.currentActivity) {
     await upsertActivityLog(ctx, runId, streaming.currentActivity);
   }
+}
+
+/** Clears a task run's streaming rows (run stream and task stream), optionally
+ * snapshotting the run stream into its activity log first. */
+export async function clearTaskRunStreaming(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+  runId: Id<"agentRuns">,
+  opts?: { snapshot?: boolean },
+): Promise<void> {
+  const entityId = getTaskRunStreamingEntityId(runId);
+  if (opts?.snapshot) {
+    await snapshotStreamingActivityToLog(ctx, entityId, runId);
+  }
+  await clearStreamingActivity(ctx, entityId);
+  await clearStreamingActivity(ctx, String(taskId));
 }
 
 /** Builds a human-readable summary string for a completed run result. */
@@ -198,9 +192,8 @@ export async function finalizeRunStatus(
     entityId: String(run.taskId),
   });
 
-  // Single terminal-status choke point for a run, and it is guarded above
-  // against re-finalizing — so a watched task's master is woken exactly once
-  // whether the run ended via finalizeRunStreamingPhase or completeRun.
+  // Guarded against re-finalizing, so completeRun wakes the orchestrator
+  // exactly once.
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,

@@ -9,6 +9,15 @@ function read(relative: string): string {
   return readFileSync(join(backendDir, relative), "utf8");
 }
 
+/** Shared warm-daemon boot (pidfile claim, fence, preflight, token refresh). */
+function bootWarmDaemonBody(): string {
+  const source = read("callback-src/runtime/daemonProcess.ts");
+  const startAt = source.indexOf("export async function bootWarmDaemon(");
+  expect(startAt, "bootWarmDaemon moved or was renamed").toBeGreaterThan(-1);
+  const endAt = source.indexOf("\n}\n", startAt);
+  return source.slice(startAt, endAt < 0 ? undefined : endAt);
+}
+
 test("installation-token refresh lives only in githubToken.ts", () => {
   const service = read("callback-src/providers/githubToken.ts");
   expect(service).toContain("export async function fetchInstallationToken(");
@@ -18,14 +27,18 @@ test("installation-token refresh lives only in githubToken.ts", () => {
     "export async function refreshDaemonGithubTokenFromEnv(",
   );
   expect(read("callback-src/index.ts")).toContain("ensureGithubToken(");
+  expect(
+    bootWarmDaemonBody(),
+    "warm-daemon boot should call the shared helper",
+  ).toContain("refreshDaemonGithubTokenFromEnv(");
   for (const path of [
     "callback-src/providers/claudeSdkDaemon.ts",
     "callback-src/providers/cursorSdkDaemon.ts",
     "callback-src/providers/codexAppServerDaemon.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should call the shared helper`).toContain(
-      "refreshDaemonGithubTokenFromEnv(",
+    expect(source, `${path} should boot via bootWarmDaemon`).toContain(
+      "bootWarmDaemon(",
     );
     expect(source, `${path} re-inlined the Convex token action`).not.toContain(
       "github:getInstallationTokenAction",
@@ -245,23 +258,34 @@ test("callback daemons share sleep/pidAlive/stale-bundle checks", () => {
   }
 });
 
-test("callback daemons share pidfile claim, marker cleanup, and mutation args", () => {
+test("callback daemons share boot, marker cleanup, and mutation args", () => {
   const service = read("callback-src/runtime/daemonProcess.ts");
   expect(service).toContain("export function claimDaemonPidfileBoot(");
   expect(service).toContain("export function cleanOwnedDaemonMarkers(");
   expect(service).toContain("export function buildEntityMutationArgs(");
   expect(service).toContain("export function readPidFromFile(");
+  expect(service).toContain("export async function bootWarmDaemon(");
+  expect(service).toContain("export function cleanOwnedMarkers(");
+  expect(service).toContain("export function entityMutationArgs(");
+  expect(service).toContain("export function callbackScriptWentStale(");
+  const boot = bootWarmDaemonBody();
+  expect(boot).toContain("claimDaemonPidfileBoot(");
+  expect(boot).toContain("startDaemonDepositionFence(");
+  expect(boot).toContain("runPreflightHeartbeat(");
   for (const path of [
     "callback-src/providers/claudeSdkDaemon.ts",
     "callback-src/providers/cursorSdkDaemon.ts",
     "callback-src/providers/codexAppServerDaemon.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should claim via the shared helper`).toContain(
-      "claimDaemonPidfileBoot(",
+    expect(source, `${path} should boot via the shared helper`).toContain(
+      "bootWarmDaemon(",
     );
     expect(source, `${path} should clean markers via the shared helper`).toContain(
-      "cleanOwnedDaemonMarkers(",
+      "cleanOwnedMarkers(",
+    );
+    expect(source, `${path} re-declared a shared daemon wrapper`).not.toMatch(
+      /function (entityMutationArgs|cleanOwnedMarkers|refreshGithubToken|callbackScriptWentStale\w*)\(/,
     );
     expect(source, `${path} re-inlined pidfile writes`).not.toContain(
       "writeFileSync(DAEMON_PID_FILE",
@@ -277,14 +301,15 @@ test("callback daemons share GitHub token refresh from env", () => {
   expect(service).toContain(
     "export async function refreshDaemonGithubTokenFromEnv(",
   );
+  expect(bootWarmDaemonBody()).toContain("refreshDaemonGithubTokenFromEnv(");
   for (const path of [
     "callback-src/providers/claudeSdkDaemon.ts",
     "callback-src/providers/cursorSdkDaemon.ts",
     "callback-src/providers/codexAppServerDaemon.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should call the shared refresh`).toContain(
-      "refreshDaemonGithubTokenFromEnv(",
+    expect(source, `${path} should refresh via bootWarmDaemon`).toContain(
+      "bootWarmDaemon(",
     );
     expect(source, `${path} re-inlined ensureGithubToken args`).not.toContain(
       "convexUrl: CONVEX_URL",
@@ -427,13 +452,10 @@ test("claimed-turn failures share postClaimedTurnFailureCompletion", () => {
   );
 });
 
-test("Cursor refresh uses decideCallbackRefresh", () => {
-  expect(read("callback-src/providers/callbackRefresh.ts")).toContain(
-    "export function decideCallbackRefresh(",
-  );
-  expect(read("callback-src/providers/cursorSdkDaemon.ts")).toContain(
-    "decideCallbackRefresh(",
-  );
+test("Cursor refresh uses the shared DaemonSupervisor decision", () => {
+  const daemon = read("callback-src/providers/cursorSdkDaemon.ts");
+  expect(daemon).toContain("supervisor.decideRefresh(");
+  expect(daemon).not.toContain("decideCallbackRefresh(");
 });
 
 test("turn finalize shares drain and persist helpers", () => {
@@ -534,21 +556,35 @@ test("usage-limit retries share selectUsageLimitRetryUserMessage", () => {
   }
 });
 
-test("synthetic-turn completions share assistantReplyContent", () => {
-  const helper = read("convex/_sessions/resultTarget.ts");
-  expect(helper).toContain("export function assistantReplyContent(");
+test("synthetic-turn completions share syntheticTurnCompletionPatch", () => {
+  const helper = read("convex/_chat/chatResult.ts");
+  expect(helper).toContain("export function syntheticTurnCompletionPatch(");
+  expect(helper).toContain("export function turnCheckpointPatch(");
+  expect(helper).toContain("assistantReplyContent(");
   for (const path of [
     "convex/_chat/taskChatDaemon.ts",
     "convex/_chat/projectChatDaemon.ts",
     "convex/_sessions/workflow.ts",
-    "convex/_chat/chatResult.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should format via the shared helper`).toContain(
-      "assistantReplyContent(",
+    expect(source, `${path} should build via the shared helper`).toContain(
+      "syntheticTurnCompletionPatch(",
     );
     expect(source, `${path} re-inlined the empty-success fallback`).not.toContain(
       "I couldn't process your message.",
+    );
+  }
+  for (const path of [
+    "convex/_sessions/workflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+    "convex/projectChatWorkflow.ts",
+  ] as const) {
+    const source = read(path);
+    expect(source, `${path} should pair shas via the shared helper`).toContain(
+      "turnCheckpointPatch(args)",
+    );
+    expect(source, `${path} re-inlined the sha pairing`).not.toContain(
+      "args.beforeShas !== undefined && args.afterShas !== undefined",
     );
   }
 });
@@ -628,16 +664,20 @@ test("composer last-* patches share composerTraitFields", () => {
   }
 });
 
-test("cancel races share detectCancelSupersession", () => {
+test("cancel paths share cancelChatTurn", () => {
   const helper = read("convex/_chat/cancelRace.ts");
   expect(helper).toContain("export function detectCancelSupersession(");
+  expect(helper).toContain("export async function cancelChatTurn<");
   for (const path of [
     "convex/_sessions/execution.ts",
     "convex/projectChatWorkflow.ts",
     "convex/agentTaskChatWorkflow.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should classify via the shared helper`).toContain(
+    expect(source, `${path} should cancel via the shared helper`).toContain(
+      "cancelChatTurn(",
+    );
+    expect(source, `${path} re-inlined the cancel race`).not.toContain(
       "detectCancelSupersession(",
     );
     expect(source, `${path} re-inlined the staged-turn race`).not.toContain(

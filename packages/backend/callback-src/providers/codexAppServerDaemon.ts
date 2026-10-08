@@ -1,31 +1,25 @@
 import {
-  CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
-  DAEMON_OPTS_SIG,
-  ENTITY_ID,
-  ENTITY_ID_FIELD,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
-  RUN_ID,
+  NO_MESSAGE_TIMEOUT_MS,
   SYSTEM_PROMPT,
   WORK_DIR,
   codexReasoningEffort,
   normalizedCodexModel,
 } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
-import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { serializeSteps } from "../parse/stepBudget.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
 import {
-  buildClaudeShapedResult,
-  computeCodexCostUsd,
+  buildCodexResultEvent,
+  buildTurnCompletionPayload,
   deliverCompletionWithMedia,
   drainStreamingAndCompleteSteps,
   reconcileStreamingAndPersist,
 } from "../runtime/completion.js";
 import {
-  runPreflightHeartbeat,
   startStreamingLoops,
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
@@ -34,7 +28,6 @@ import {
   resetDaemonTurnStreamingState,
 } from "../runtime/state.js";
 import { materializeTurnAttachments } from "../runtime/turnAttachments.js";
-import { getCurrentTurnLease } from "../runtime/turnLease.js";
 import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";
 import {
   prepareCodexSessionState,
@@ -42,14 +35,13 @@ import {
   writeCodexSessionState,
 } from "../session/codexSession.js";
 import type { JsonObject, JsonValue, SessionMode } from "../types.js";
-import { asJsonObject, attemptElapsedMs, log } from "../utils.js";
+import { asJsonObject, log } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
-  buildEntityMutationArgs,
-  callbackBundleWentStale,
-  claimDaemonPidfileBoot,
-  cleanOwnedDaemonMarkers,
-  readPidFromFile,
+  bootWarmDaemon,
+  callbackScriptWentStale,
+  cleanOwnedMarkers,
+  entityMutationArgs,
   sleep,
 } from "../runtime/daemonProcess.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
@@ -57,7 +49,7 @@ import {
   appendClaimedTurnCompletion,
   finishClaimedTurn,
   readClaimedTurn,
-  shouldParkClaimedTurn,
+  routeClaimedTurn,
   startClaimedTurn,
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
@@ -69,8 +61,6 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 const POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
-const NO_EVENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 type CodexDaemonTurn = { providerTurnId: string };
 
@@ -87,7 +77,6 @@ let exitWithError = false;
 let threadTotalUsage: JsonObject | null = null;
 let turnStartUsage: JsonObject | null = null;
 
-
 function stringField(value: JsonValue | undefined, field: string): string {
   const object = asJsonObject(value);
   return typeof object[field] === "string" ? object[field] : "";
@@ -95,20 +84,6 @@ function stringField(value: JsonValue | undefined, field: string): string {
 
 function nestedId(value: JsonValue, field: string): string {
   return stringField(asJsonObject(value)[field], "id");
-}
-
-function entityArgs(
-  fields: Record<string, JsonValue>,
-): Record<string, JsonValue> {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-
-function readOwnerPid(): number {
-  return readPidFromFile(paths.pid);
-}
-
-function callbackWentStale(): boolean {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
 }
 
 function resetTurnState(): void {
@@ -198,36 +173,15 @@ async function finalizeTurn(
   const result = finalText || S.currentStreamedContent || S.rawOutput;
   if (await reconcileStreamingAndPersist()) return;
   const usage = computeTurnUsageDelta(turnStartUsage, threadTotalUsage);
-  const completionArgs: JsonObject = {
-    [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+  // codex never sets S.pendingQuestionData (only the Claude parser emits a
+  // question), so the shared envelope adds no pendingQuestion here.
+  const completionArgs = buildTurnCompletionPayload({
     success,
     result,
     error,
     activityLog: serializeSteps(S.accumulatedSteps),
-    ...(RUN_ID ? { runId: RUN_ID } : {}),
-    ...(usage
-      ? {
-          rawResultEvent: buildClaudeShapedResult({
-            provider: "codex",
-            totalCostUsd: computeCodexCostUsd(
-              normalizedCodexModel,
-              usage.inputTokens,
-              usage.cachedInputTokens,
-              usage.outputTokens,
-            ),
-            durationMs: attemptElapsedMs(),
-            inputTokens: Math.max(
-              0,
-              usage.inputTokens - usage.cachedInputTokens,
-            ),
-            outputTokens: usage.outputTokens,
-            cacheReadInputTokens: usage.cachedInputTokens,
-            cacheCreationInputTokens: usage.cacheWriteInputTokens,
-            model: normalizedCodexModel,
-          }),
-        }
-      : {}),
-  };
+    rawResultEvent: usage ? buildCodexResultEvent(usage) : undefined,
+  });
   appendClaimedTurnCompletion(completionArgs);
   await deliverCompletionWithMedia(completionArgs);
   finishClaimedTurn();
@@ -284,10 +238,6 @@ function processNotification(
     resetTurnState();
     supervisor.settleTurn();
   });
-}
-
-async function refreshGithubToken(): Promise<void> {
-  await refreshDaemonGithubTokenFromEnv();
 }
 
 async function establishThread(
@@ -358,38 +308,19 @@ async function startTurn(
   log("codex daemon: turn started " + providerTurnId);
 }
 
-function cleanMarkers(): void {
-  cleanOwnedDaemonMarkers({
-    paths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
-  });
-}
-
 export async function runCodexAppServerDaemon(): Promise<void> {
   if (!CLAIM_MUTATION)
     throw new Error("CLAIM_MUTATION is required for Codex App Server mode");
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG,
-  });
-  if (bootClaim.status === "rival_alive") {
-    log("codex daemon: live rival already owns entity; exiting");
-    process.exit(0);
-  }
-
-  const fence = setInterval(() => {
-    if (readOwnerPid() !== process.pid && !supervisor.hasWork) {
+    logPrefix: "codex daemon",
+    hasActiveWork: () => supervisor.hasWork,
+    onDeposedIdle: () => {
       exitWithError = true;
       supervisor.stop();
-    }
-  }, FENCE_POLL_INTERVAL_MS);
-  fence.unref?.();
-
-  const preflightOk = await runPreflightHeartbeat();
-  if (!preflightOk) process.exit(1);
+    },
+  });
   startStreamingLoops();
-  await refreshGithubToken();
 
   const client = new CodexAppServerClient();
   try {
@@ -405,7 +336,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
     log("codex daemon: app-server ready thread=" + S.activeCodexThreadId);
 
     while (!supervisor.isStopping) {
-      if (callbackWentStale()) supervisor.noticeRefresh();
+      if (callbackScriptWentStale()) supervisor.noticeRefresh();
       const refreshDecision = supervisor.decideRefresh({
         watchedTurnActive: supervisor.currentTurn !== null,
         backgroundAgentCount: 0,
@@ -426,7 +357,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
       const claimed = await callConvexWithRetry(
         "mutation",
         CLAIM_MUTATION,
-        entityArgs({ model: MODEL, acceptTurn }),
+        entityMutationArgs({ model: MODEL, acceptTurn }),
       );
       const providerTurnId = supervisor.currentTurn?.providerTurnId ?? "";
       if (
@@ -450,31 +381,13 @@ export async function runCodexAppServerDaemon(): Promise<void> {
       }
       const claimedTurn = readClaimedTurn(claimed);
       if (claimedTurn) {
-        const currentLease = getCurrentTurnLease();
-        if (
-          shouldParkClaimedTurn({
-            hasActiveRealTurn: supervisor.currentTurn !== null,
-            isCancellationInFlight: supervisor.isCancellationInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null,
-          })
-        ) {
-          // A cancel response can carry the next queued prompt in the same
-          // mutation; claimPendingTurn already cleared it server-side, so
-          // parking is the only lossless option. A follow-up send during
-          // finalizing is a different turn and must be parked too.
-          if (!supervisor.parkClaim(claimedTurn)) {
-            log("codex daemon: duplicate claimed turn ignored");
-          }
-        } else {
-          // Mid-turn claims are the workflow's per-turn re-stage of the
-          // prompt this turn is already running — parking and replaying it
-          // after the turn would execute the same prompt twice.
-          log(
-            "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
-          );
-        }
+        routeClaimedTurn({
+          turn: claimedTurn,
+          hasActiveRealTurn: supervisor.currentTurn !== null,
+          isCancellationInFlight: supervisor.isCancellationInFlight,
+          park: () => supervisor.parkClaim(claimedTurn),
+          logPrefix: "codex daemon",
+        });
       }
       if (supervisor.currentTurn === null && supervisor.pendingClaim !== null) {
         const next = supervisor.takeClaim();
@@ -483,6 +396,13 @@ export async function runCodexAppServerDaemon(): Promise<void> {
       }
 
       const now = Date.now();
+      // App Server emits nothing while a tool runs, so a long silent tool call
+      // is indistinguishable from a hang by event silence alone: while a tool
+      // is in flight only the hard runtime cap applies, and the silence clock
+      // restarts once the tool result lands.
+      if (S.inFlightToolUses > 0) {
+        lastEventAt = now;
+      }
       if (
         supervisor.currentTurn !== null &&
         now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS
@@ -492,7 +412,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         );
       } else if (
         supervisor.currentTurn !== null &&
-        now - lastEventAt > NO_EVENT_TIMEOUT_MS
+        now - lastEventAt > NO_MESSAGE_TIMEOUT_MS
       ) {
         await failActiveTurn(
           "The assistant stopped responding. Please try again.",
@@ -511,7 +431,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
     await failActiveTurn("Codex App Server failed: " + message);
   } finally {
     client.stop();
-    cleanMarkers();
+    cleanOwnedMarkers(paths);
     await stopStreamingLoops();
   }
   process.exit(exitWithError ? 1 : 0);

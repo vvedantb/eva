@@ -91,12 +91,60 @@ export type AssistantTurnResultPatch = {
   limitResetAt?: number;
   beforeSha?: string;
   afterSha?: string;
+  beforeShas?: Doc<"messages">["beforeShas"];
+  afterShas?: Doc<"messages">["afterShas"];
   variations?: Array<{
     label: string;
     route?: string;
     filePath?: string;
   }>;
 };
+
+type TurnCheckpointFields = Pick<
+  AssistantTurnResultPatch,
+  "beforeSha" | "afterSha" | "beforeShas" | "afterShas"
+>;
+
+/** Turn checkpoint fields, keeping only complete before/after pairs. */
+export function turnCheckpointPatch(
+  args: TurnCheckpointFields,
+): TurnCheckpointFields {
+  return {
+    ...(args.beforeSha !== undefined && args.afterSha !== undefined
+      ? { beforeSha: args.beforeSha, afterSha: args.afterSha }
+      : {}),
+    ...(args.beforeShas !== undefined && args.afterShas !== undefined
+      ? { beforeShas: args.beforeShas, afterShas: args.afterShas }
+      : {}),
+  };
+}
+
+/**
+ * Completion patch for a daemon-driven synthetic (`/loop`) turn. A failed
+ * turn drops the open-time model stamp so it never becomes a checkpoint.
+ */
+export function syntheticTurnCompletionPatch(
+  args: {
+    success: boolean;
+    result: string | null;
+    error: string | null;
+    activityLog: string | null;
+    pendingQuestion?: string;
+  } & TurnCheckpointFields,
+): AssistantTurnResultPatch & { finishedAt: number } {
+  return {
+    content: assistantReplyContent({
+      success: args.success,
+      result: args.result,
+      error: args.error,
+    }),
+    finishedAt: Date.now(),
+    ...(args.activityLog ? { activityLog: args.activityLog } : {}),
+    ...(args.pendingQuestion ? { pendingQuestion: args.pendingQuestion } : {}),
+    ...turnCheckpointPatch(args),
+    ...(args.success ? {} : { model: undefined }),
+  };
+}
 
 /**
  * Writes the turn result onto the targeted assistant bubble and deletes

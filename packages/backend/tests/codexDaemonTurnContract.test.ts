@@ -11,6 +11,9 @@ const codexDaemonSource = readSource(
 const claudeDaemonSource = readSource(
   "callback-src/providers/claudeSdkDaemon.ts",
 );
+const claimedTurnLifecycleSource = readSource(
+  "callback-src/providers/claimedTurnLifecycle.ts",
+);
 const bundledScript = readSource(
   "convex/_sandbox_runtime/callbackScript.generated.ts",
 );
@@ -26,7 +29,7 @@ const surfaces: [string, string][] = [
 ];
 
 const DISCARD_LOG =
-  "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)";
+  "claim discarded while real turn active (prompt lost; pendingTurn was already cleared)";
 
 /**
  * claimPendingTurn clears the prompt server-side, so the daemon's only choices
@@ -37,25 +40,22 @@ const DISCARD_LOG =
  * (session 65 stalled when that claim was discarded with a live 2-minute lease).
  */
 describe("a same-turn restage is discarded; a follow-up turn is parked", () => {
-  test.each(surfaces)("the park goes through shouldParkClaimedTurn (%s)", (_l, source) => {
+  test.each(surfaces)("the park goes through routeClaimedTurn (%s)", (_l, source) => {
     const block = codexClaimHandling(source);
-    const guardAt = block.indexOf("shouldParkClaimedTurn(");
     const parkAt = block.indexOf(".parkClaim(claimedTurn)");
-    expect(guardAt, "the park guard moved").toBeGreaterThan(-1);
-    expect(parkAt, "the park moved out of the claim handler").toBeGreaterThan(
-      guardAt,
+    expect(parkAt, "the park moved out of the claim router").toBeGreaterThan(
+      block.indexOf("routeClaimedTurn({"),
     );
   });
 
   test.each(surfaces)("no unguarded park survives (%s)", (_label, source) => {
     // One park site only: a second, ungated one is the regression itself.
-    expect(occurrences(codexClaimHandling(source), "parkClaim(claimedTurn)")).toBe(
-      1,
-    );
+    expect(occurrences(codexClaimHandling(source), "parkClaim(")).toBe(1);
   });
 
-  test.each(surfaces)("the discard is logged, not silent (%s)", (_l, source) => {
-    expect(source).toContain(DISCARD_LOG);
+  test("the shared router logs the discard, not silent", () => {
+    expect(claimedTurnLifecycleSource).toContain(DISCARD_LOG);
+    expect(bundledScript).toContain(DISCARD_LOG);
   });
 
   test.each(surfaces)("idle is the only phase that accepts a turn (%s)", (_l, source) => {
@@ -64,10 +64,7 @@ describe("a same-turn restage is discarded; a follow-up turn is parked", () => {
   });
 
   test("the claude daemon still carries the semantics codex mirrors", () => {
-    expect(claudeDaemonSource).toContain(
-      "daemon: claim discarded while real turn active",
-    );
-    expect(claudeDaemonSource).toContain("shouldParkClaimedTurn");
+    expect(claudeDaemonSource).toContain("routeClaimedTurn(");
     expect(claudeDaemonSource).toContain("acceptTurn");
   });
 });
@@ -134,16 +131,15 @@ describe("codex per-turn usage survives its notification stream", () => {
   );
 });
 
-/** The codex claim handler, anchored on its own discard log. */
+/** The codex claim handler, from its claim read through the router call. */
 function codexClaimHandling(source: string): string {
-  const logAt = source.indexOf(DISCARD_LOG);
-  expect(logAt, "the codex discard log moved").toBeGreaterThan(-1);
-  const startAt = source.lastIndexOf(
-    "const claimedTurn = readClaimedTurn",
-    logAt,
-  );
+  const startAt = source.indexOf("const claimedTurn = readClaimedTurn");
   expect(startAt, "the codex claim read moved").toBeGreaterThan(-1);
-  return source.slice(startAt, logAt);
+  const routeAt = source.indexOf("routeClaimedTurn({", startAt);
+  expect(routeAt, "the codex claim router moved").toBeGreaterThan(-1);
+  const endAt = source.indexOf("});", routeAt);
+  expect(endAt, "the codex claim router call moved").toBeGreaterThan(routeAt);
+  return source.slice(startAt, endAt);
 }
 
 /** The `thread/tokenUsage/updated` branch of processNotification. */

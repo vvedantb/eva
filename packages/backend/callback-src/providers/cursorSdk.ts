@@ -719,12 +719,6 @@ export type CursorAttemptOverrides = {
    * empty prompt) and passes the prompt it claimed instead.
    */
   promptText?: string;
-  /**
-   * Receives a handle that aborts this attempt's run. The daemon calls it when
-   * a claim response drains a user cancel, so the attempt returns instead of
-   * running to completion.
-   */
-  onAbortHandle?: (abort: () => void) => void;
 };
 
 /**
@@ -765,7 +759,6 @@ export async function runCursorSdkAttempt(
   let attemptErrorMessage = "";
   let lastStreamUsage: UsageTokens | null = null;
   let activeRun: SdkRun | null = null;
-  let abortedByCaller = false;
 
   const cancelRun = (): void => {
     if (!activeRun) return;
@@ -773,12 +766,6 @@ export async function runCursorSdkAttempt(
       /* already finished */
     });
   };
-  // Registered before the first await so a cancel racing agent setup is not
-  // dropped: `runTurn` re-applies the abort once the run exists.
-  overrides.onAbortHandle?.(() => {
-    abortedByCaller = true;
-    cancelRun();
-  });
 
   const sdk = await loadCursorSdk();
   const sqlite = await loadCursorSdkSqlite();
@@ -1009,7 +996,6 @@ export async function runCursorSdkAttempt(
       onTimeout: () => activeAgent.close(),
     });
     activeRun = run;
-    if (abortedByCaller) cancelRun();
     updateThinkingStep("Waiting for Grok...", "The model is thinking...");
     const messages = run.stream()[Symbol.asyncIterator]();
     let sawVisibleActivity = false;
@@ -1051,8 +1037,7 @@ export async function runCursorSdkAttempt(
       if (message.type === "usage") {
         lastStreamUsage = readUsageTokens(message.usage) ?? lastStreamUsage;
       }
-      if (timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller)
-        break;
+      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
     const result = await waitForCursorPhase({
       task: run.wait(),
@@ -1109,8 +1094,7 @@ export async function runCursorSdkAttempt(
     emitTurnResult(
       await runTurnWithResourceExhaustedRetries({
         runTurn: () => runTurn(activeAgent, agentIsFresh),
-        aborted: () =>
-          timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller,
+        aborted: () => timedOutForMaxRuntime || timedOutForNoOutput,
         onRetry: (retryDelayMs, attempt) => {
           log(
             "runCursorSdkAttempt: resource_exhausted — retrying in " +

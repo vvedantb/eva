@@ -5,6 +5,8 @@ import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import {
   authMutation,
+  getActiveTaskRun,
+  hasActiveRun,
   hasRepoAccess,
   recomputeProjectPhase,
 } from "./functions";
@@ -116,14 +118,9 @@ export const startTaskForBuild = internalMutation({
     if (!project) throw new Error("Project not found");
 
     // Check for active runs on this task
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    const activeRun = existingRuns.find(
-      (r) => r.status === "queued" || r.status === "running",
-    );
-    if (activeRun) throw new Error("Task already has an active execution");
+    if (await hasActiveRun(ctx.db, args.taskId)) {
+      throw new Error("Task already has an active execution");
+    }
 
     // Compute isFirstTaskOnBranch — check if any task in the project had a successful run
     const projectTasks = await ctx.db
@@ -388,16 +385,7 @@ export const cancelBuild = authMutation({
 
       await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
 
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .filter((q) =>
-          q.or(
-            q.eq(q.field("status"), "queued"),
-            q.eq(q.field("status"), "running"),
-          ),
-        )
-        .first();
+      const run = await getActiveTaskRun(ctx.db, task._id);
 
       if (run) {
         await ctx.db.patch(run._id, {

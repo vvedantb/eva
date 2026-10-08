@@ -16,6 +16,7 @@ import {
   CLAUDE_SYNC_TIMEOUT_MS,
   WORK_DIR,
 } from "./config.js";
+import { git } from "./runtime/gitExec.js";
 import { callbackState as S } from "./runtime/state.js";
 import type { JsonObject, JsonValue } from "./types.js";
 
@@ -186,14 +187,11 @@ export function runTimedBashSync(script: string, label: string): boolean {
  * than distinguishing why.
  */
 export function readGitHeadSha(dir: string = WORK_DIR): string {
-  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
-    encoding: "utf8",
-    timeout: CLAUDE_SYNC_TIMEOUT_MS,
+  const result = git(["rev-parse", "HEAD"], {
+    cwd: dir,
+    timeoutMs: CLAUDE_SYNC_TIMEOUT_MS,
   });
-  if (result.status !== 0) {
-    return "";
-  }
-  return (result.stdout || "").trim();
+  return result.ok ? result.out : "";
 }
 
 /** True when the workspace has at least one commit after baselineHead. */
@@ -205,15 +203,14 @@ export function hasNewTaskCommitSince(baselineHead: string): boolean {
   if (!currentHead || currentHead === baselineHead) {
     return false;
   }
-  const countResult = spawnSync(
-    "git",
-    ["-C", WORK_DIR, "rev-list", "--count", baselineHead + ".." + currentHead],
-    { encoding: "utf8", timeout: CLAUDE_SYNC_TIMEOUT_MS },
+  const countResult = git(
+    ["rev-list", "--count", baselineHead + ".." + currentHead],
+    { timeoutMs: CLAUDE_SYNC_TIMEOUT_MS },
   );
-  if (countResult.status !== 0) {
+  if (!countResult.ok) {
     return true;
   }
-  const count = Number((countResult.stdout || "").trim());
+  const count = Number(countResult.out);
   return Number.isFinite(count) && count > 0;
 }
 

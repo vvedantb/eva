@@ -1,14 +1,12 @@
 import { spawn, type ChildProcess } from "child_process";
 import { readFileSync, unlinkSync, writeFileSync } from "fs";
 import {
-  CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
+  CURSOR_TURN_WORKER_FILE_PREFIX,
   CURSOR_TURN_WORKER_LEASE_GENERATION,
   CURSOR_TURN_WORKER_PROMPT_FILE,
   CURSOR_TURN_WORKER_TURN_ID,
-  DAEMON_OPTS_SIG,
   ENTITY_ID,
-  ENTITY_ID_FIELD,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
 } from "../config.js";
@@ -37,32 +35,29 @@ import {
 } from "../runtime/state.js";
 import { materializeTurnAttachments } from "../runtime/turnAttachments.js";
 import { persistTurnWork } from "../runtime/turnPersist.js";
-import { getCurrentTurnLease } from "../runtime/turnLease.js";
 import {
   prepareCursorSessionState,
   syncCursorStateToPersist,
 } from "../session/cursorSession.js";
-import type { JsonValue, ProviderAttemptResult } from "../types.js";
+import type { ProviderAttemptResult } from "../types.js";
 import { log } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
-  buildEntityMutationArgs,
-  callbackBundleWentStale,
-  claimDaemonPidfileBoot,
-  cleanOwnedDaemonMarkers,
-  readPidFromFile,
+  bootWarmDaemon,
+  callbackScriptWentStale,
+  cleanOwnedMarkers,
+  entityMutationArgs,
   selectClaimPollIntervalMs,
   sleep,
-  startDaemonDepositionFence,
   writeOomScoreAdj,
 } from "../runtime/daemonProcess.js";
-import { decideCallbackRefresh } from "./callbackRefresh.js";
+import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
 import {
   appendClaimedTurnCompletion,
   finishClaimedTurn,
   readClaimedTurn,
-  shouldParkClaimedTurn,
+  routeClaimedTurn,
   startClaimedTurn,
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
@@ -74,7 +69,6 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 // the claim mutation fast while anything is in flight and back off when idle so
 // an idle daemon does not burn ~20 mutations/s for turns that never come.
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 const WATCHDOG_TICK_MS = 5000;
 // Outer bound on one claimed turn. `runCursorSdkAttempt` already enforces the
@@ -87,7 +81,6 @@ const TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1000;
 // Safety net for a cancel whose run never settles (mirrors the Claude daemon's
 // CANCEL_SETTLE_TIMEOUT_MS): exit for respawn rather than wedge.
 const CANCEL_SETTLE_TIMEOUT_MS = 30_000;
-const CURSOR_TURN_WORKER_FILE_PREFIX = "/tmp/eva-cursor-turn-";
 // Cursor's SDK can retain several gigabytes of a long tool-heavy run. The
 // default V8 heap (~4 GB in production) aborted a healthy 17-minute turn, so
 // give the disposable worker room to finish while keeping the supervisor tiny.
@@ -96,17 +89,13 @@ const CURSOR_TURN_WORKER_OOM_SCORE = "300";
 
 const daemonPaths = resolveDaemonPaths();
 
-let daemonExiting = false;
-let callbackRefreshPending = false;
+/** Local lifecycle authority: claimed, running, cancelling, finalizing, stopping. */
+const supervisor = new DaemonSupervisor<ClaimedTurn, { kind: "worker" }>();
 let callbackRefreshDeferralLogged = false;
-let pendingClaimedTurn: ClaimedTurn | null = null;
-let turnActive = false;
 let turnStartedAtMs = 0;
 let lastIdleActivityAtMs = Date.now();
-/** Set when a claim response drained a cancel for the running turn. */
-let cancelInFlight = false;
 let cancelRequestedAtMs = 0;
-/** Aborts the in-flight Cursor run; registered by the attempt each turn. */
+/** Stops the running turn worker; registered by the supervisor each turn. */
 let abortActiveTurn: (() => void) | null = null;
 
 export type CursorTurnWorkerExit =
@@ -135,7 +124,6 @@ function readCursorTurnWorkerClaim(): ClaimedTurn {
   return {
     prompt,
     attachmentUrls: [],
-    interactionMode: "default",
     turnLease: {
       turnId: CURSOR_TURN_WORKER_TURN_ID,
       leaseGeneration: CURSOR_TURN_WORKER_LEASE_GENERATION,
@@ -229,33 +217,9 @@ function spawnCursorTurnWorker(
   return child;
 }
 
-function readDaemonPidFile(): number {
-  return readPidFromFile(daemonPaths.pid);
-}
-
-function entityMutationArgs(
-  fields: Record<string, JsonValue>,
-): Record<string, JsonValue> {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-
-/**
- * True when a newer callback bundle was uploaded while this daemon is running.
- * The daemon then stops claiming, lets active work settle, and exits so the
- * next prewarm spawns with fresh code — a refresh must never lose a turn.
- */
-function callbackScriptWentStaleOnDisk(): boolean {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
-
 /** Clears the per-turn accumulators so the next turn starts clean. */
 function resetTurnState(): void {
   resetDaemonTurnStreamingState();
-}
-
-/** Sessions may push git commits; refresh the installation token like the one-shot path. */
-async function refreshGithubToken(): Promise<void> {
-  await refreshDaemonGithubTokenFromEnv();
 }
 
 /**
@@ -316,17 +280,9 @@ async function failTurnAndExit(error: string): Promise<never> {
   } catch {
     /* best-effort: exit regardless so the daemon does not wedge */
   }
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
   process.exit(1);
-}
-
-/** Removes marker files only while this process still owns the pidfile. */
-function cleanOwnedMarkers(): void {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
-  });
 }
 
 /**
@@ -337,19 +293,21 @@ function cleanOwnedMarkers(): void {
 function startTurnWatchdog(): void {
   const timer = setInterval(() => {
     const now = Date.now();
-    if (cancelInFlight) {
+    if (supervisor.isCancellationInFlight) {
       if (now - cancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS) {
         // The server already finalized this turn when it drained the cancel, so
         // posting a completion here could resolve the NEXT turn's event.
         log("cursor daemon: cancelled turn did not settle in time — exiting");
-        cleanOwnedMarkers();
+        cleanOwnedMarkers(daemonPaths);
         process.exit(1);
       }
       return;
     }
-    if (!turnActive) return;
+    if (supervisor.phase !== "running") return;
     if (now - turnStartedAtMs > TURN_HARD_TIMEOUT_MS) {
-      turnActive = false;
+      // Leaving "running" stops this 5 s tick from re-firing while the
+      // failure completion retries.
+      supervisor.beginFinalizing();
       abortActiveTurn?.();
       void failTurnAndExit("The assistant exceeded the maximum turn runtime.");
     }
@@ -363,17 +321,12 @@ function startTurnWatchdog(): void {
  */
 function startClaimWatcher(): void {
   void (async () => {
-    while (!daemonExiting) {
-      if (callbackScriptWentStaleOnDisk()) callbackRefreshPending = true;
-      const refreshDecision = decideCallbackRefresh({
-        refreshPending: callbackRefreshPending,
-        watchedTurnActive: turnActive,
-        daemonTurnActive: false,
-        claimedTurnPending: pendingClaimedTurn !== null,
-        cancellationInFlight: cancelInFlight,
+    while (!supervisor.isStopping) {
+      if (callbackScriptWentStale()) supervisor.noticeRefresh();
+      const refreshDecision = supervisor.decideRefresh({
+        watchedTurnActive: supervisor.currentTurn !== null,
         backgroundAgentCount: 0,
         sdkMessagePending: false,
-        syntheticTurnOpening: false,
       });
       if (refreshDecision.action === "defer") {
         if (!callbackRefreshDeferralLogged) {
@@ -391,7 +344,8 @@ function startClaimWatcher(): void {
         log(
           "cursor daemon: callback script updated on disk — exiting for respawn",
         );
-        daemonExiting = true;
+        // The main loop sees the stop and cleans owned markers before exiting.
+        supervisor.stop();
         return;
       }
       try {
@@ -401,7 +355,7 @@ function startClaimWatcher(): void {
           entityMutationArgs({
             model: MODEL,
             acceptTurn:
-              !turnActive && pendingClaimedTurn === null && !cancelInFlight,
+              supervisor.phase === "idle" && supervisor.pendingClaim === null,
           }),
         );
         if (readCancelRequested(claimed)) handleCancelRequested();
@@ -409,39 +363,20 @@ function startClaimWatcher(): void {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
-          // claimPendingTurn already cleared the staged turn atomically, so any
-          // branch that neither parks nor starts it loses that prompt. The one
-          // safe discard is a same-turn restage of the prompt already running;
-          // everything else (cancel drains, follow-up sends) parks through the
-          // shared guard the claude and codex daemons use.
-          const currentLease = getCurrentTurnLease();
-          if (
-            shouldParkClaimedTurn({
-              hasActiveRealTurn: turnActive,
-              isCancellationInFlight: cancelInFlight,
-              isFinalizing: false,
-              currentLeaseTurnId: currentLease?.turnId ?? null,
-              claimedLeaseTurnId: turn.turnLease?.turnId ?? null,
-            })
-          ) {
-            if (pendingClaimedTurn === null) {
-              pendingClaimedTurn = turn;
-            } else {
-              log("cursor daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "cursor daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
-            );
-          }
+          routeClaimedTurn({
+            turn,
+            hasActiveRealTurn: supervisor.currentTurn !== null,
+            isCancellationInFlight: supervisor.isCancellationInFlight,
+            park: () => supervisor.parkClaim(turn),
+            logPrefix: "cursor daemon",
+          });
         }
       } catch {
         /* retry on the next poll */
       }
-      const busy = turnActive || pendingClaimedTurn !== null || cancelInFlight;
       await sleep(
         selectClaimPollIntervalMs({
-          busy,
+          busy: supervisor.hasWork,
           lastIdleActivityAtMs,
         }),
       );
@@ -455,12 +390,11 @@ function startClaimWatcher(): void {
  * is posted for it. Idempotent; a stale flag with no running turn is ignored.
  */
 function handleCancelRequested(): void {
-  if (!turnActive) {
+  if (supervisor.currentTurn === null) {
     log("cursor daemon: cancelRequested with no active turn — ignored");
     return;
   }
-  if (cancelInFlight) return;
-  cancelInFlight = true;
+  if (!supervisor.beginCancellation()) return;
   cancelRequestedAtMs = Date.now();
   log("cursor daemon: cancel requested — cancelling the in-flight run");
   abortActiveTurn?.();
@@ -468,9 +402,6 @@ function handleCancelRequested(): void {
 
 /** Runs a claimed turn inside the disposable Cursor worker process. */
 async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
-  turnActive = true;
-  turnStartedAtMs = Date.now();
-  abortActiveTurn = null;
   log("cursor turn worker: turn started");
   try {
     if (!process.env.CURSOR_API_KEY?.trim()) {
@@ -479,26 +410,14 @@ async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
       );
     }
     const sessionMode = prepareCursorSessionState();
+    // The worker runs no claim watcher: the parent cancels it with SIGTERM.
     const attempt = await runCursorSdkAttempt(sessionMode, {
       promptText: turn.prompt,
-      onAbortHandle: (abort) => {
-        abortActiveTurn = abort;
-        // A cancel that arrived while the agent was still being created has no
-        // run to stop yet; apply it as soon as the handle exists.
-        if (cancelInFlight) abort();
-      },
     });
-    turnActive = false;
-    if (cancelInFlight) {
-      log("cursor daemon: cancelled turn settled — no completion posted");
-      return;
-    }
     await finalizeTurn(attempt);
   } catch (error) {
-    turnActive = false;
     const message = error instanceof Error ? error.message : String(error);
     log("cursor daemon: turn failed — " + message);
-    if (cancelInFlight) return;
     try {
       await drainStreamingAndCompleteSteps();
       if (await reconcileStreamingAndPersist()) return;
@@ -513,11 +432,6 @@ async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
     } catch {
       /* best-effort — the watchdog and stall recovery own the rest */
     }
-  } finally {
-    turnActive = false;
-    abortActiveTurn = null;
-    cancelInFlight = false;
-    lastIdleActivityAtMs = Date.now();
   }
 }
 
@@ -535,7 +449,8 @@ export async function runCursorTurnWorker(): Promise<void> {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-    await refreshGithubToken();
+    // Sessions may push git commits; refresh the installation token.
+    await refreshDaemonGithubTokenFromEnv();
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();
@@ -567,12 +482,14 @@ async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {
     "-" +
     String(Date.now()) +
     ".txt";
-  writeFileSync(promptFile, turn.prompt);
-  startClaimedTurn(turn);
-  turnActive = true;
+  if (!supervisor.startTurn({ kind: "worker" })) {
+    throw new Error("cursor daemon: could not enter running state");
+  }
   turnStartedAtMs = Date.now();
   log("cursor daemon: starting isolated turn worker");
   try {
+    writeFileSync(promptFile, turn.prompt);
+    startClaimedTurn(turn);
     const child = spawnCursorTurnWorker(turn, promptFile);
     abortActiveTurn = () => {
       if (child.exitCode === null && child.signalCode === null) {
@@ -580,11 +497,11 @@ async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {
       }
     };
     const outcome = await waitForCursorTurnWorker(child);
-    turnActive = false;
-    if (cancelInFlight) {
+    if (supervisor.isCancellationInFlight) {
       log("cursor daemon: cancelled worker settled — no completion posted");
       return;
     }
+    supervisor.beginFinalizing();
     if (
       outcome.status === "exited" &&
       outcome.code === 0 &&
@@ -602,10 +519,9 @@ async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {
       );
     }
   } finally {
-    turnActive = false;
     abortActiveTurn = null;
-    cancelInFlight = false;
     finishClaimedTurn();
+    supervisor.settleTurn();
     lastIdleActivityAtMs = Date.now();
     try {
       unlinkSync(promptFile);
@@ -627,41 +543,14 @@ export async function runCursorDaemon(): Promise<void> {
     process.exit(1);
   }
 
-  // Single-daemon fence, part 1 (boot claim): a live rival owning the pidfile
-  // wins, and this process exits without touching its markers.
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths: daemonPaths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG,
-  });
-  if (bootClaim.status === "rival_alive") {
-    log(
-      `cursor daemon: rival daemon pid=${bootClaim.rivalPid} already owns ${daemonPaths.pid} — exiting`,
-    );
-    process.exit(0);
-  }
-
-  // Single-daemon fence, part 2: a launch racing past the boot claim (or an
-  // opts-mismatch respawn) overwrites the pidfile; the deposed daemon must exit
-  // or it double-claims turns and flip-flops the shared streaming row. Deferred
-  // while a turn is running so work is never killed mid-flight.
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile,
-    hasActiveWork: () => turnActive,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS,
-    log,
     logPrefix: "cursor daemon",
+    hasActiveWork: () => supervisor.hasWork,
     onDeposedIdle: () => {
       process.exit(0);
     },
   });
-
-  const preflightOk = await runPreflightHeartbeat();
-  if (!preflightOk) {
-    log("cursor daemon: preflight failed");
-    process.exit(1);
-  }
-  await refreshGithubToken();
 
   log(
     "runCursorDaemon started (entityId=" +
@@ -674,10 +563,9 @@ export async function runCursorDaemon(): Promise<void> {
   startClaimWatcher();
 
   try {
-    while (!daemonExiting) {
-      if (pendingClaimedTurn !== null) {
-        const turn = pendingClaimedTurn;
-        pendingClaimedTurn = null;
+    while (!supervisor.isStopping) {
+      const turn = supervisor.takeClaim();
+      if (turn !== null) {
         await runClaimedTurn(turn);
         continue;
       }
@@ -688,8 +576,8 @@ export async function runCursorDaemon(): Promise<void> {
       await sleep(PROMPT_POLL_INTERVAL_MS);
     }
   } finally {
-    daemonExiting = true;
-    cleanOwnedMarkers();
+    supervisor.stop();
+    cleanOwnedMarkers(daemonPaths);
   }
   process.exit(0);
 }

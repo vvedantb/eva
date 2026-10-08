@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation, hasActiveRun, hasRepoAccess } from "../functions";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -135,13 +135,7 @@ export const autoStartTask = internalMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    if (
-      existingRuns.some((r) => r.status === "queued" || r.status === "running")
-    ) {
+    if (await hasActiveRun(ctx.db, args.taskId)) {
       return null;
     }
 

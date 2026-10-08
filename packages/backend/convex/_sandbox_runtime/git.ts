@@ -4,7 +4,6 @@ import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
 import { getInstallationToken } from "../githubAuth";
-import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type {
   SandboxClient,
@@ -30,7 +29,10 @@ import {
 } from "./devServer";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
-import { ensureGitCredentialHelper } from "./gitCredentials";
+import {
+  deleteSandboxAndCredentials,
+  ensureGitCredentialHelper,
+} from "./gitCredentials";
 import { isMissingRemoteRefFetchFailure } from "../_git/remoteRef";
 import { gitRemoteAuthPrefix } from "./gitRemoteCommand";
 import {
@@ -265,7 +267,9 @@ export function isRetryableGitNetworkError(message: string): boolean {
     lower.includes("connection reset by peer") ||
     lower.includes("rpc failed") ||
     lower.includes("early eof") ||
-    lower.includes("http/2 stream")
+    lower.includes("http/2 stream") ||
+    // npm "network request to ... failed", git "Network is unreachable".
+    lower.includes("network")
   );
 }
 
@@ -283,12 +287,13 @@ function isNonFastForwardPushError(message: string): boolean {
   );
 }
 
-/** Retries transient git network operations with short backoff. */
-async function retryGitNetworkOperation<T>(
+/** Retries transient git network operations with linear backoff (`delayStepMs * attempt`). */
+export async function retryGitNetworkOperation<T>(
   label: string,
   details: string,
   fn: () => Promise<T>,
   maxAttempts = 3,
+  delayStepMs = 1000,
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -306,13 +311,11 @@ async function retryGitNetworkOperation<T>(
       if (!shouldRetry) {
         throw error;
       }
-      const delayMs = 1000 * attempt;
+      const delayMs = delayStepMs * attempt;
       logGit(
         `${label} retrying in ${delayMs}ms after attempt ${attempt}/${maxAttempts}${details ? ` (${details})` : ""}: ${message}`,
       );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
+      await sleep(delayMs);
     }
   }
   throw new Error(
@@ -1078,41 +1081,20 @@ export async function cloneRepoInto(
 
   await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
 
-  const maxCloneAttempts = 3;
-  for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
-    try {
-      await execSdkGitOperation(
+  await retryGitNetworkOperation(
+    "cloneRepoInto",
+    `${owner}/${name}`,
+    () =>
+      execSdkGitOperation(
         sandbox,
         `clone ${owner}/${name}`,
         () =>
           sandbox.git.clone(repoUrl, destDir, "x-access-token", githubToken),
         REPO_CLONE_TIMEOUT_SECONDS,
-      );
-      if (attempt > 1) {
-        logGit(
-          `cloneRepoInto: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
-        );
-      }
-      return;
-    } catch (error) {
-      if (!(error instanceof Error)) {
-        throw error;
-      }
-      const shouldRetry =
-        attempt < maxCloneAttempts &&
-        isRetryableGitNetworkError(error.message);
-      if (!shouldRetry) {
-        throw error;
-      }
-      const delayMs = attempt * 2000;
-      logGit(
-        `cloneRepoInto: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
-      );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
-    }
-  }
+      ),
+    3,
+    2000,
+  );
 }
 
 /**
@@ -1507,9 +1489,7 @@ export async function pushBranchToOrigin(
         logGit(
           `pushBranchToOrigin: remote moved or push was transient; refetching in ${delayMs}ms after attempt ${attempt}/${maxAttempts} (${details}): ${message}`,
         );
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, delayMs);
-        });
+        await sleep(delayMs);
       }
     }
     throw new Error(`pushBranchToOrigin exhausted retries (${details})`);
@@ -1737,13 +1717,7 @@ export async function createSandboxAndPrepareRepo(
     );
   } catch (error) {
     if (sandbox) {
-      try {
-        await sandbox.delete();
-      } catch {}
-      // Best-effort cleanup of the credential-helper row. No-op if absent.
-      await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-        sandboxId: sandbox.id,
-      });
+      await deleteSandboxAndCredentials(ctx, sandbox);
     }
     throw error;
   }

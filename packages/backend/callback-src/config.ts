@@ -130,6 +130,11 @@ export const AGENT_CWD = resolveAgentCwd(
 export const NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000",
 );
+/**
+ * Warm-daemon per-turn silence kill: fail a turn that emits no provider event
+ * for this long (in-flight tool calls are exempt; the runtime cap still applies).
+ */
+export const NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 export const FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000",
 );
@@ -172,6 +177,8 @@ export const OUTPUT_BUFFER_MAX_BYTES = Number(
 export const READY_FILE = "/tmp/run-design.ready";
 export const RAW_LOG_FILE = "/tmp/run-design.raw.jsonl";
 export const DONE_FILE = "/tmp/run-design.done";
+/** Prefix of the per-turn prompt file the Cursor daemon hands its worker. */
+export const CURSOR_TURN_WORKER_FILE_PREFIX = "/tmp/eva-cursor-turn-";
 export const CLAUDE_BASE_CONFIG_DIR =
   process.env.CLAUDE_BASE_CONFIG_DIR || "/home/eva/.claude";
 export const CLAUDE_RUNTIME_CONFIG_DIR =

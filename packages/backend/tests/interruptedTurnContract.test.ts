@@ -72,14 +72,14 @@ describe("a signal-killed one-shot turn is never reported as success", () => {
     // The one-shot attempt reads its interruption from the shared predicate and
     // its success from the shared resolver, so it cannot drift from them.
     const defineAt = source.indexOf(
-      "const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt)",
+      "const agentWasInterrupted = providerAttemptWasInterrupted(firstAttempt)",
     );
     expect(
       defineAt,
       "agentWasInterrupted moved or was renamed",
     ).toBeGreaterThan(-1);
     expect(source).toContain(
-      "resolveProviderAttemptOutcome(finalAttempt, finalResultEvent)",
+      "resolveProviderAttemptOutcome(firstAttempt, finalResultEvent)",
     );
 
     // completionSuccess must short-circuit to false on a signal death, ahead of

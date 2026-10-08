@@ -3,6 +3,8 @@ import type { ProgressStep } from "../types.js";
 /** Per-field caps at capture time (chars unless noted). */
 export const STEP_FIELD_CAPS = {
   command: 600,
+  /** One-line bash `detail` shown on the step row (full text rides `command`). */
+  commandDetail: 300,
   output: 1200,
   editSide: 1000,
   editsMax: 4,

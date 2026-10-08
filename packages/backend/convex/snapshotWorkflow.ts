@@ -68,10 +68,6 @@ export const snapshotBuildWorkflow = workflow.define({
     // Rebuild the declarative base Image first (bootstrap / toolchain
     // changes). The nightly cron and Rebuild Now leave this unset.
     forceImageRebuild: v.optional(v.boolean()),
-    // Operational bootstrap path: seed app snapshots from the base Image
-    // instead of their previous seeded snapshots. Use once when a seeded app
-    // snapshot is too stale to boot its local services cleanly.
-    forceBaseSeed: v.optional(v.boolean()),
   },
   handler: async (step, args) => {
     // Resolve config + repo (owner/name/installation drive git fetch auth).

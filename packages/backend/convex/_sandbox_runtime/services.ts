@@ -190,8 +190,6 @@ export const launchChromeInDesktop = action({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);

@@ -299,25 +299,36 @@ export async function getProjectWithAccess(
   return project;
 }
 
-/** Returns true if the given task has any queued or running agent runs. */
-export async function hasActiveRun(
+/**
+ * The task's queued or running agent run, or null. Prefers a queued run over a
+ * running one; every agentRuns insert is guarded by an active-run check, so a
+ * task has at most one active run and the order does not matter.
+ */
+export async function getActiveTaskRun(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
-): Promise<boolean> {
+): Promise<Doc<"agentRuns"> | null> {
   const queued = await db
     .query("agentRuns")
     .withIndex("by_task_and_status", (q) =>
       q.eq("taskId", taskId).eq("status", "queued"),
     )
     .first();
-  if (queued) return true;
-  const running = await db
+  if (queued) return queued;
+  return await db
     .query("agentRuns")
     .withIndex("by_task_and_status", (q) =>
       q.eq("taskId", taskId).eq("status", "running"),
     )
     .first();
-  return running !== null;
+}
+
+/** Returns true if the given task has any queued or running agent runs. */
+export async function hasActiveRun(
+  db: GenericDatabaseReader<DataModel>,
+  taskId: Id<"agentTasks">,
+): Promise<boolean> {
+  return (await getActiveTaskRun(db, taskId)) !== null;
 }
 
 /** True when a later-started run exists on the same task (stale workflow completion). */

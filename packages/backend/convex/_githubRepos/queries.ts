@@ -9,6 +9,7 @@ import {
   githubRepoWithLogoValidator,
   pickDefaultVisibleAppRepo,
   userCanAccessRepo,
+  findReposByOwnerAndName,
 } from "./helpers";
 import {
   getAIProviderAvailability,
@@ -247,12 +248,7 @@ export const getByOwnerAndName = authQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const candidates = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const candidates = await findReposByOwnerAndName(ctx.db, args);
 
     let repo = args.appName
       ? candidates.find(
@@ -316,12 +312,7 @@ export const listRepoIdsByOwnerAndName = internalQuery({
   args: { owner: v.string(), name: v.string() },
   returns: v.array(v.id("githubRepos")),
   handler: async (ctx, args) => {
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const siblings = await findReposByOwnerAndName(ctx.db, args);
     return siblings.map((repo) => repo._id);
   },
 });
@@ -359,12 +350,7 @@ export const listSiblingApps = authQuery({
     const repo = await ctx.db.get(args.repoId);
     if (!repo) return [];
 
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", repo.owner).eq("name", repo.name),
-      )
-      .collect();
+    const siblings = await findReposByOwnerAndName(ctx.db, repo);
 
     return siblings
       .filter((s) => s._id !== args.repoId && s.rootDirectory)
@@ -396,12 +382,7 @@ export const findParentRepoByOwnerAndName = internalQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, args);
     const parent = repos.find((repo) => !repo.rootDirectory);
     return parent ?? repos[0] ?? null;
   },

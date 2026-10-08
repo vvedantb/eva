@@ -21,6 +21,17 @@ type PrEnrichmentData = FunctionReturnType<
   typeof internal.taskWorkflow.getPrEnrichmentData
 >;
 
+/** The terminal fields `completeRun` records for a run. */
+type RunOutcome = {
+  success: boolean;
+  error: string | null;
+  prError: string | null;
+  prUrl: string | null;
+  activityLog: string | null;
+  exitReason?: string;
+  claudeResult?: string;
+};
+
 /** Arguments every start passes; `startTaskRunWorkflow` adds `turnId`. */
 export const taskExecutionWorkflowArgs = {
   runId: v.id("agentRuns"),
@@ -48,18 +59,9 @@ export const taskExecutionWorkflow = workflow.define({
   },
   handler: async (step, args): Promise<void> => {
     let sandboxId: string | undefined;
-
-    let completionSuccess: boolean | undefined;
-    let completionError: string | null = null;
     let completionPrUrl: string | null = null;
-    let completionPrError: string | null = null;
-    let completionActivityLog: string | null = null;
-    let completionResult: string | null = null;
-    let finalSuccess = false;
-    let finalError: string | null = null;
-    let runCompletionRecorded = false;
+    let outcome: RunOutcome | undefined;
     let runFinalized = false;
-    let sandboxStopped = false;
     let preserveSandboxOnFailure = false;
     let keepTaskSandboxActiveAfterRun = false;
 
@@ -103,7 +105,7 @@ export const taskExecutionWorkflow = workflow.define({
         streamingEntityId: getTaskRunStreamingEntityId(args.runId),
         baseBranch: args.baseBranch,
         branchName: data.branchName,
-        createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
+        createRetry: PR_STEP_RETRY.retry,
         skipStartupCommands,
         sessionPersistenceId: args.projectId,
         sessionPersistenceKind: args.projectId ? "projects" : undefined,
@@ -171,12 +173,8 @@ export const taskExecutionWorkflow = workflow.define({
       }
 
       const result = await step.awaitEvent(taskCompleteEvent);
-      completionSuccess = result.success;
-      completionError = result.error;
-      completionActivityLog = result.activityLog;
-      completionResult = result.result;
-      finalSuccess = result.success;
-      finalError = result.error;
+      let finalSuccess = result.success;
+      let finalError = result.error;
 
       console.log(
         `[task-workflow] run=${args.runId} taskId=${args.taskId} projectId=${args.projectId ?? "none"} agentSuccess=${finalSuccess} isFirstTaskOnBranch=${args.isFirstTaskOnBranch} branchName=${data.branchName} baseBranch=${args.baseBranch ?? "(default)"}`,
@@ -233,6 +231,7 @@ export const taskExecutionWorkflow = workflow.define({
       // attempting one against a branch origin may not even have burned
       // compare retries into a spurious "PR creation failed" (404). Transient
       // failures still recover via the next pushing run or the Create PR button.
+      let completionPrError: string | null = null;
       if (finalSuccess && pushedCommits) {
         const createPrAsDraft = true;
         try {
@@ -327,30 +326,20 @@ export const taskExecutionWorkflow = workflow.define({
       // dedicated prError field so the UI can show what went wrong instead of
       // silently dropping it (the run-level `error` field is cleared on success
       // runs by finalizeRunStatus).
-      await step.runMutation(internal.taskWorkflow.finalizeRunStreamingPhase, {
-        runId: args.runId,
-        taskId: args.taskId,
-        projectId: args.projectId,
+      outcome = {
         success: finalSuccess,
         error: finalError,
         prError: completionPrError,
         prUrl: completionPrUrl,
         activityLog: result.activityLog,
         claudeResult: result.result ?? undefined,
-      });
-      runCompletionRecorded = true;
-
+      };
       await step.runMutation(internal.taskWorkflow.completeRun, {
         runId: args.runId,
         taskId: args.taskId,
         projectId: args.projectId,
-        success: finalSuccess,
-        error: finalError,
-        prError: completionPrError,
-        prUrl: completionPrUrl,
-        activityLog: result.activityLog,
         mode: args.mode,
-        claudeResult: result.result ?? undefined,
+        ...outcome,
       });
       runFinalized = true;
 
@@ -377,15 +366,38 @@ export const taskExecutionWorkflow = workflow.define({
           );
         }
       }
+    } catch (error) {
+      outcome = outcome ?? {
+        success: false,
+        error: error instanceof Error ? error.message : "Task workflow failed",
+        prError: null,
+        prUrl: null,
+        activityLog: null,
+        exitReason: "error",
+      };
+    }
 
-      if (!args.projectId && !finalSuccess) {
+    // Single terminal tail for both paths: finalize the run if the try did not,
+    // retry a failed quick task, then stop its sandbox when that is safe.
+    try {
+      if (!runFinalized) {
+        await step.runMutation(internal.taskWorkflow.completeRun, {
+          runId: args.runId,
+          taskId: args.taskId,
+          projectId: args.projectId,
+          mode: args.mode,
+          ...outcome,
+        });
+      }
+
+      if (!args.projectId && !outcome.success) {
         try {
           await step.runMutation(
             internal.taskWorkflow.maybeScheduleQuickTaskRetry,
             {
               taskId: args.taskId,
               runId: args.runId,
-              error: finalError ?? undefined,
+              error: outcome.error ?? undefined,
               delayMs: buildQuickTaskRetryDelayMs(),
             },
           );
@@ -406,84 +418,6 @@ export const taskExecutionWorkflow = workflow.define({
         !preserveSandboxOnFailure &&
         !keepTaskSandboxActiveAfterRun
       ) {
-        await step.runAction(internal.sandbox.stopSandbox, {
-          sandboxId,
-          repoId: args.repoId,
-        });
-        await step.runMutation(internal.taskWorkflow.markTaskSandboxStopped, {
-          taskId: args.taskId,
-        });
-        sandboxStopped = true;
-      }
-    } catch (error) {
-      const workflowError =
-        error instanceof Error ? error.message : "Task workflow failed";
-      const fallbackSuccess = completionSuccess ?? false;
-      const fallbackError = fallbackSuccess
-        ? null
-        : (completionError ?? workflowError);
-      const fallbackExitReason = fallbackSuccess ? "completed" : "error";
-
-      if (!runCompletionRecorded) {
-        await step.runMutation(
-          internal.taskWorkflow.finalizeRunStreamingPhase,
-          {
-            runId: args.runId,
-            taskId: args.taskId,
-            projectId: args.projectId,
-            success: fallbackSuccess,
-            error: fallbackError,
-            prError: completionPrError,
-            prUrl: completionPrUrl,
-            activityLog: completionActivityLog,
-            exitReason: fallbackExitReason,
-            claudeResult: completionResult ?? undefined,
-          },
-        );
-      }
-
-      if (!runFinalized) {
-        await step.runMutation(internal.taskWorkflow.completeRun, {
-          runId: args.runId,
-          taskId: args.taskId,
-          projectId: args.projectId,
-          success: fallbackSuccess,
-          error: fallbackError,
-          prError: completionPrError,
-          prUrl: completionPrUrl,
-          activityLog: completionActivityLog,
-          exitReason: fallbackExitReason,
-          mode: args.mode,
-          claudeResult: completionResult ?? undefined,
-        });
-      }
-
-      if (!args.projectId) {
-        try {
-          await step.runMutation(
-            internal.taskWorkflow.maybeScheduleQuickTaskRetry,
-            {
-              taskId: args.taskId,
-              runId: args.runId,
-              error: fallbackError ?? undefined,
-              delayMs: buildQuickTaskRetryDelayMs(),
-            },
-          );
-        } catch (retryError) {
-          console.error(
-            "Failed to schedule quick-task auto-retry:",
-            retryError,
-          );
-        }
-      }
-
-      if (
-        !args.projectId &&
-        sandboxId &&
-        !sandboxStopped &&
-        !preserveSandboxOnFailure &&
-        !keepTaskSandboxActiveAfterRun
-      ) {
         try {
           await step.runAction(internal.sandbox.stopSandbox, {
             sandboxId,
@@ -500,7 +434,7 @@ export const taskExecutionWorkflow = workflow.define({
       });
       await step.runMutation(internal.taskWorkflow.closeRunTurn, {
         runId: args.runId,
-        success: finalSuccess,
+        success: outcome.success,
       });
     }
   },

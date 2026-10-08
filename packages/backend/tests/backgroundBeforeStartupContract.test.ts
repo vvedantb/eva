@@ -38,10 +38,6 @@ test("sessions.ts runs background before startup for every owner kind", () => {
   for (const owner of [
     "reuseSessionSandbox",
     "newSessionSandbox",
-    "reuseTaskSandbox",
-    "newTaskSandbox",
-    "reuseProjectSandbox",
-    "newProjectSandbox",
   ]) {
     const backgroundStep = `"${owner}.runBackgroundCommands"`;
     const startupStep = `"${owner}.runStartupCommands"`;
@@ -61,6 +57,33 @@ test("sessions.ts runs background before startup for every owner kind", () => {
         `${owner} startup ${i}: needs a background step before it`,
       ).toBeTypeOf("number");
     }
+  }
+});
+
+test("task/project preview prep runs background before startup", () => {
+  const startAt = sessionsSource.indexOf(
+    "async function preparePreviewSandboxInternal(",
+  );
+  expect(startAt, "preparePreviewSandboxInternal moved").toBeGreaterThan(-1);
+  const preview = sessionsSource.slice(
+    startAt,
+    sessionsSource.indexOf("\n}", startAt),
+  );
+  const startupAts = allIndices(preview, "Sandbox.runStartupCommands`");
+  expect(startupAts.length, "reuse (forced) + create startup").toBe(2);
+  for (const phase of ["reuse", "new"]) {
+    const backgroundAt = preview.indexOf(
+      `${phase}\${hooks.label}Sandbox.runBackgroundCommands`,
+    );
+    const startupAt = preview.indexOf(
+      `${phase}\${hooks.label}Sandbox.runStartupCommands`,
+    );
+    expect(backgroundAt, `${phase} missing background step`).toBeGreaterThan(
+      -1,
+    );
+    expect(startupAt, `${phase} missing startup step`).toBeGreaterThan(
+      backgroundAt,
+    );
   }
 });
 

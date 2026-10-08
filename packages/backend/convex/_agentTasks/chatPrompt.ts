@@ -40,18 +40,16 @@ export function buildAgentTaskChatPrompt(
 
 ${args.message}`;
 
-  return buildEditPrompt(
-    { owner: args.repoOwner, name: args.repoName },
-    args.branchName,
-    args.description ?? "",
-    messageWithContext,
-    args.rootDirectory,
-    args.customInstructionsBlock,
-    args.systemPrompt,
-    args.devPort,
-    [],
-    args.readableRepos,
-    [],
-    args.runtime,
-  );
+  return buildEditPrompt({
+    repo: { owner: args.repoOwner, name: args.repoName },
+    branchName: args.branchName,
+    planContent: args.description,
+    message: messageWithContext,
+    rootDirectory: args.rootDirectory,
+    customInstructionsBlock: args.customInstructionsBlock,
+    systemPrompt: args.systemPrompt,
+    devPort: args.devPort,
+    readableRepos: args.readableRepos,
+    runtime: args.runtime,
+  });
 }

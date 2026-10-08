@@ -12,6 +12,7 @@ import {
   withCommentAnchor,
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
+import { repoBasePath } from "./_githubRepos/helpers";
 
 /** Max unread notifications shown per user in the daily digest email. */
 const DIGEST_NOTIFICATION_LIMIT = 50;
@@ -78,17 +79,6 @@ const DIGEST_EXCLUDED_TYPES: ReadonlySet<string> = new Set([
   "session_archived",
 ]);
 
-/** Builds a URL path for a repo, including app name for monorepo sub-apps. */
-function getRepoHref(
-  owner: string,
-  name: string,
-  rootDirectory?: string,
-): string {
-  if (!rootDirectory) return `/${owner}/${name}`;
-  const appName = rootDirectory.split("/").pop();
-  return `/${owner}/${name}/${appName}`;
-}
-
 /**
  * Creates a notification for a user, auto-generating an href from
  * repo/project/task/doc/session context. Returns the new row's id so a caller
@@ -125,7 +115,7 @@ export async function createNotification(
   if (!href && params.repoId) {
     const repo = await ctx.db.get(params.repoId);
     if (repo) {
-      const baseHref = getRepoHref(repo.owner, repo.name, repo.rootDirectory);
+      const baseHref = repoBasePath(repo);
       // Detail routes are keyed by per-repo numId, not by Convex id — a Convex
       // id in the path fails `parseRouteNumId` and renders "not found". An
       // entity still awaiting numId backfill falls through to its section list.
@@ -191,6 +181,34 @@ export async function createNotification(
     );
   }
   return notificationId;
+}
+
+/**
+ * Fans one notification out to `userIds`, skipping the actor and anyone in
+ * `alreadyNotified` (e.g. reached by a higher-signal mention). Returns the
+ * running set of notified ids so callers can chain their own dedup set.
+ */
+export async function notifyUsers(
+  ctx: MutationCtx,
+  userIds: Iterable<Id<"users">>,
+  notification: Omit<Parameters<typeof createNotification>[1], "userId">,
+  opts: { actorId?: Id<"users">; alreadyNotified?: Set<string> } = {},
+): Promise<Set<string>> {
+  const notified = opts.alreadyNotified ?? new Set<string>();
+  for (const userId of userIds) {
+    if (opts.actorId && userId === opts.actorId) continue;
+    if (notified.has(userId)) continue;
+    await createNotification(ctx, { ...notification, userId });
+    notified.add(userId);
+  }
+  return notified;
+}
+
+/** Trims and truncates comment text for a notification message, or null if empty. */
+export function truncateNotificationText(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
 }
 
 const notificationValidator = v.object({

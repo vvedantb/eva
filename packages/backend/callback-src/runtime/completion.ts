@@ -126,6 +126,30 @@ export function buildClaudeShapedResult(args: {
   });
 }
 
+/** One codex turn's usage as the Claude-shaped `result` event the server reads. */
+export function buildCodexResultEvent(usage: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+}): string {
+  return buildClaudeShapedResult({
+    provider: "codex",
+    totalCostUsd: computeCodexCostUsd(
+      normalizedCodexModel,
+      usage.inputTokens,
+      usage.cachedInputTokens,
+      usage.outputTokens,
+    ),
+    durationMs: attemptElapsedMs(),
+    inputTokens: Math.max(0, usage.inputTokens - usage.cachedInputTokens),
+    outputTokens: usage.outputTokens,
+    cacheReadInputTokens: usage.cachedInputTokens,
+    cacheCreationInputTokens: usage.cacheWriteInputTokens,
+    model: normalizedCodexModel,
+  });
+}
+
 type SyntheticResult = {
   sawResult: boolean;
   resultText: string;
@@ -313,24 +337,14 @@ export function extractResultEvent(output: string): ResultEvent | null {
       }
     }
     if (!finalText) return null;
-    const nonCachedInput = Math.max(0, lastInputTokens - lastCachedInputTokens);
     return {
       result: finalText,
       isError: false,
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          lastInputTokens,
-          lastCachedInputTokens,
-          lastOutputTokens,
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: nonCachedInput,
+      rawResultEvent: buildCodexResultEvent({
+        inputTokens: lastInputTokens,
+        cachedInputTokens: lastCachedInputTokens,
+        cacheWriteInputTokens: lastCacheWriteInputTokens,
         outputTokens: lastOutputTokens,
-        cacheReadInputTokens: lastCachedInputTokens,
-        cacheCreationInputTokens: lastCacheWriteInputTokens,
-        model: normalizedCodexModel,
       }),
     };
   }
@@ -528,8 +542,12 @@ export function buildTurnCompletionPayload(params: {
   error: string | null;
   activityLog: string | null;
   resultEvent?: ResultEvent | null;
+  /** For callers that build the usage event themselves (codex app-server). */
+  rawResultEvent?: string;
   entityFieldFallback?: string;
 }): JsonObject {
+  const rawResultEvent =
+    params.resultEvent?.rawResultEvent ?? params.rawResultEvent;
   return buildEntityMutationArgs(
     ENTITY_ID_FIELD ?? params.entityFieldFallback,
     ENTITY_ID,
@@ -539,9 +557,7 @@ export function buildTurnCompletionPayload(params: {
       error: params.error,
       activityLog: params.activityLog,
       ...(RUN_ID ? { runId: RUN_ID } : {}),
-      ...(params.resultEvent?.rawResultEvent
-        ? { rawResultEvent: params.resultEvent.rawResultEvent }
-        : {}),
+      ...(rawResultEvent ? { rawResultEvent } : {}),
       ...(S.pendingQuestionData
         ? { pendingQuestion: S.pendingQuestionData }
         : {}),
@@ -566,13 +582,7 @@ export async function postClaimedTurnFailureCompletion(params: {
     ...(RUN_ID ? { runId: RUN_ID } : {}),
   });
   appendClaimedTurnCompletion(completionArgs);
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
 }
 
 export function appendDiagnosticTail(message: string): string {
@@ -678,6 +688,24 @@ async function attachRunMediaIfAny(
 }
 
 /**
+ * The one send sequence for every turn-closing mutation. The payload must
+ * already carry the lease.
+ */
+export async function sendTurnCompletion(
+  mutation: string,
+  args: JsonObject,
+): Promise<void> {
+  // Every caller runs persistTurnWork() before this, so the checkpoint's
+  // afterSha is the pushed turn-end tip.
+  appendTurnCheckpoint(args);
+  // Stop heartbeating under the lease before the server closes the turn, or a
+  // later heartbeat (e.g. during the chat media upload) comes back `closed` and
+  // reads as a takeover (session 225).
+  releaseTurnLeaseForCompletion();
+  await callConvexWithRetry("mutation", mutation, args);
+}
+
+/**
  * Sends the completion mutation and attaches sandbox media around it.
  *
  * A chat turn harvests after completion, so `screenshots:attachMedia` can patch
@@ -689,19 +717,10 @@ async function attachRunMediaIfAny(
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
 ): Promise<void> {
-  // Every success path runs persistTurnWork() before this, so the checkpoint's
-  // afterSha is the pushed turn-end tip.
-  appendTurnCheckpoint(completionArgs);
-  // The payload already carries the lease; stop heartbeating under it before
-  // the server closes the turn, or the media upload window below emits
-  // heartbeats that come back `closed` and read as a takeover (session 225).
-  releaseTurnLeaseForCompletion();
+  // The run harvest runs while the lease is still held: the server has not
+  // closed the turn yet, so its heartbeats stay valid.
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) await uploadAndAttachSandboxMedia({});
 }
 

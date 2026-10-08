@@ -108,10 +108,12 @@ import {
   checkoutFetchedBaseBranch,
   createSandboxAndPrepareRepo,
   getOrCreateSandbox,
+  isRetryableGitNetworkError,
   pushBranchToOrigin,
   EPHEMERAL_LIFECYCLE,
   SESSION_LIFECYCLE,
 } from "./git";
+import { deleteSandboxAndCredentials } from "./gitCredentials";
 import { startDesktopWithChrome } from "./desktop";
 import {
   ensurePreviewNavigationProxy,
@@ -1125,31 +1127,13 @@ const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
-  if (isDaytonaNetworkIssue(message)) {
-    return true;
-  }
-  const lowered = message.toLowerCase();
-  const gitNetworkMarkers = [
-    "status code 502",
-    "status code 503",
-    "status code 504",
-    "fetch failed",
-    "gnutls recv error",
-    "tls connection was non-properly terminated",
-    "remote end hung up unexpectedly",
-    "http/2 stream",
-    "early eof",
-    "connection reset by peer",
-    "rpc failed",
-  ];
   return (
-    (lowered.includes("sandbox exec") && lowered.includes("timed out")) ||
-    lowered.includes("command execution timeout") ||
+    isDaytonaNetworkIssue(message) ||
+    isRetryableGitNetworkError(message) ||
     // Exit code -1 typically means the command was terminated abnormally
     // (sandbox not yet accepting commands, transport error, killed mid-exec) —
     // this is transient, unlike non-zero exit codes from real command failures.
-    lowered.includes("sandbox command failed with exit code -1") ||
-    gitNetworkMarkers.some((marker) => lowered.includes(marker))
+    message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
 
@@ -1277,14 +1261,7 @@ export const prepareSandbox = internalAction({
           console.warn(
             `[sandbox] prepareSandbox: deleting failed sandbox ${sandbox.id}`,
           );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
+          await deleteSandboxAndCredentials(ctx, sandbox);
         }
 
         const message = errorMessage(error, "Sandbox setup failed");
@@ -1448,14 +1425,7 @@ export const createOrResumeSandbox = internalAction({
           console.warn(
             `[sandbox] createOrResumeSandbox: deleting failed sandbox ${sandbox.id}`,
           );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
+          await deleteSandboxAndCredentials(ctx, sandbox);
         }
 
         const message = errorMessage(error, "Sandbox setup failed");

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildTraitsExecutionPayload,
+  launchTraitsFromEntity,
   launchTraitsFromStored,
 } from "../convex/_validators/aiModels";
 
@@ -35,6 +36,25 @@ describe("launchTraitsFromStored", () => {
     // `||`, and the second prewarm kills the daemon the first just booted.
     expect(launchTraitsFromStored("claude:claude-fable-5-1", stored)).toEqual(
       launchTraitsFromStored("claude:claude-fable-5-1", {}),
+    );
+  });
+
+  test("launchTraitsFromEntity maps an entity's sticky last* traits", () => {
+    const model = "claude:claude-fable-5-1";
+    expect(
+      launchTraitsFromEntity(model, {
+        lastReasoningLevel: "low",
+        lastThinkingEnabled: true,
+        lastUse1mContext: true,
+        lastFastMode: false,
+      }),
+    ).toEqual(
+      launchTraitsFromStored(model, {
+        reasoningLevel: "low",
+        thinkingEnabled: true,
+        use1mContext: true,
+        fastMode: false,
+      }),
     );
   });
 

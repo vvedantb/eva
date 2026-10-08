@@ -42,10 +42,6 @@ export const fetchIssues = action({
     }),
   ),
   handler: async (ctx, args): Promise<LinearIssue[]> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     await getActionRepoWithAccess(ctx, args.repoId);
     const userId = await ctx.runQuery(internal.auth.getUserIdFromIdentity, {});
     if (!userId) {

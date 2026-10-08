@@ -15,7 +15,7 @@ import {
 } from "../_sandbox/startupActivity";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
@@ -297,14 +297,15 @@ export async function requestSessionSandboxStop(
   await clearSandboxStartupActivity(ctx.db, `session-startup-${sessionId}`);
 
   if (session.syntheticTurnMessageId) {
-    const syntheticMessage = await ctx.db.get(session.syntheticTurnMessageId);
-    if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-      const streaming = await ctx.db
-        .query("streamingActivity")
-        .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
-        .first();
-      await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-    }
+    const streaming = await ctx.db
+      .query("streamingActivity")
+      .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
+      .first();
+    await finalizeOpenSyntheticTurnOnCancel(
+      ctx,
+      session.syntheticTurnMessageId,
+      streaming,
+    );
     await clearStreamingActivity(ctx, String(sessionId));
   }
 

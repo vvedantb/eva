@@ -11,10 +11,10 @@ import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
+import { upsertStreamingActivity } from "../streaming";
 import {
-  clearStreamingActivity,
+  clearTaskRunStreaming,
   getTaskRunStreamingEntityId,
-  upsertStreamingActivity,
   upsertActivityLog,
   finalizeRunStatus,
   recordRunPullRequest,
@@ -42,17 +42,16 @@ export const updateRunToRunning = internalMutation({
       status: "in_progress",
       updatedAt: startedAt,
     });
-    await upsertStreamingActivity(
-      ctx,
-      getTaskRunStreamingEntityId(args.runId),
-      JSON.stringify([
+    await upsertStreamingActivity(ctx, {
+      entityId: getTaskRunStreamingEntityId(args.runId),
+      currentActivity: JSON.stringify([
         {
           type: "thinking",
           label: "Starting sandbox...",
           status: "active",
         },
       ]),
-    );
+    });
 
     await ctx.scheduler.runAfter(
       RUN_TIMEOUT_MS,
@@ -256,41 +255,6 @@ export const clearTaskSandbox = internalMutation({
   },
 });
 
-/** Finalizes the run status after streaming completes and cleans up streaming activity. */
-export const finalizeRunStreamingPhase = internalMutation({
-  args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    projectId: v.optional(v.id("projects")),
-    success: v.boolean(),
-    error: v.union(v.string(), v.null()),
-    prError: v.union(v.string(), v.null()),
-    prUrl: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    exitReason: v.optional(v.string()),
-    claudeResult: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await finalizeRunStatus(ctx, {
-      runId: args.runId,
-      projectId: args.projectId,
-      success: args.success,
-      error: args.error,
-      prError: args.prError,
-      prUrl: args.prUrl,
-      exitReason: args.exitReason,
-      claudeResult: args.claudeResult,
-    });
-    if (args.activityLog) {
-      await upsertActivityLog(ctx, args.runId, args.activityLog);
-    }
-    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));
-    await clearStreamingActivity(ctx, String(args.taskId));
-    return null;
-  },
-});
-
 /** Completes a run: finalizes status, updates task, sends notifications, and signals build workflow. */
 export const completeRun = internalMutation({
   args: {
@@ -353,8 +317,7 @@ export const completeRun = internalMutation({
       await ctx.db.patch(project._id, { lastSandboxActivity: now });
     }
 
-    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));
-    await clearStreamingActivity(ctx, String(args.taskId));
+    await clearTaskRunStreaming(ctx, args.taskId, args.runId);
 
     // Run success/failure deliberately sends no notification: the task card and
     // chat already show the outcome, so an inbox row per run is pure noise.

@@ -201,18 +201,7 @@ export const clearActiveWorkflow = internalMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
 
-    const activeRun = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
-
-    if (!activeRun) {
+    if (!(await hasActiveRun(ctx.db, args.taskId))) {
       await ctx.db.patch(args.taskId, { activeWorkflowId: undefined });
       // The run is the only thing the task chat queue waits on while a task is
       // running, and nothing else drains it at this point — a follow-up typed

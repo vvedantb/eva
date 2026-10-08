@@ -99,6 +99,19 @@ export async function mcpCallAsUser<T>(
 }
 
 /**
+ * The `source` arg Eva's docs and artifacts mutations take to link a record to
+ * the chat (session, quick task or project) it came from.
+ */
+export function chatSourceArg(
+  kind: "session" | "task" | "project",
+  id: string,
+): Record<string, string> {
+  if (kind === "session") return { kind, sessionId: id };
+  if (kind === "task") return { kind, taskId: id };
+  return { kind, projectId: id };
+}
+
+/**
  * Required on every tool that deletes or irreversibly removes something. The
  * agent must ask the user in chat first; the literal makes skipping that a
  * visible choice rather than a default.
@@ -202,7 +215,9 @@ export function matchRepoByName(
     // bare `owner/name` list repeated the same string a dozen times and told
     // the caller nothing about which app to ask for.
     const available = repos.map(repoRefLabel).join(", ");
-    return errorResult(`Repo "${repoName}" not found. Your repos: ${available}`);
+    return errorResult(
+      `Repo "${repoName}" not found. Your repos: ${available}`,
+    );
   }
 
   return { repo };

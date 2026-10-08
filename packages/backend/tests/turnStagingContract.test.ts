@@ -103,11 +103,11 @@ test.each([
  * calls to compute the key it clears.
  */
 test.each([
-  { name: "projectChatQueueConfig", prefix: "PROJECT_CHAT_STREAM_PREFIX" },
-  { name: "taskChatQueueConfig", prefix: "TASK_CHAT_STREAM_PREFIX" },
-])("$name's streamingEntityId uses the prefixed key", ({ name, prefix }) => {
+  { name: "projectChatQueueConfig", builder: "projectChatStreamEntityId" },
+  { name: "taskChatQueueConfig", builder: "taskChatStreamEntityId" },
+])("$name's streamingEntityId uses the prefixed key", ({ name, builder }) => {
   const body = configBody(queueHelpersSource, name);
-  expect(body).toContain(`\`\${${prefix}}\${String(id)}\``);
+  expect(body).toContain(`streamingEntityId: (id) => ${builder}(id)`);
 });
 
 /**
