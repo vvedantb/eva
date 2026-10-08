@@ -41,7 +41,16 @@ export function ChatMessageContextMenu({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger
+        asChild
+        onContextMenuCapture={(event) => {
+          // Images keep the native menu (Copy image, Save image as…).
+          // Stop propagation, not default, so Radix never sees the event.
+          if (event.target instanceof HTMLImageElement) event.stopPropagation();
+        }}
+      >
+        {children}
+      </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         {trimmed ? (
           <>
