@@ -39,6 +39,7 @@ import {
   closeTurn,
   findOpenTurn,
   graceExpiredTurnLease,
+  listOpenSessionTurns,
   openTurn,
   renewTurnLease,
   type ChatTurnEntityId,
@@ -141,6 +142,62 @@ export const getSessionStatus = authQuery({
   returns: v.union(chatTurnStatusValidator, v.null()),
   handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
     await readChatStatus(ctx, ctx.userId, args.sessionId),
+});
+
+/**
+ * Open chat turns across one session, for the tab strip's running dots and
+ * the "waiting for a free slot" caption. One indexed read per session, not
+ * one status subscription per tab.
+ */
+export const listSessionChatStatuses = authQuery({
+  args: { sessionId: v.id("sessions") },
+  returns: v.array(
+    v.object({
+      chatId: v.id("sessionChats"),
+      turnId: v.id("turns"),
+      state: turnStateValidator,
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return [];
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
+    const turns = await listOpenSessionTurns(ctx, args.sessionId);
+    const statuses = [];
+    for (const turn of turns) {
+      if (turn.lane !== undefined) continue;
+      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
+      if (!chatId) continue;
+      statuses.push({ chatId, turnId: turn._id, state: turn.state });
+    }
+    return statuses;
+  },
+});
+
+/**
+ * Every session chat in a repo with a turn open, for the sidebar's indented
+ * chat rows. One indexed read per repo group, like the session rows' own
+ * executing projection.
+ */
+export const listRunningChatIdsForRepo = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(v.id("sessionChats")),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const turns = await ctx.db
+      .query("turns")
+      .withIndex("by_repo_open", (q) =>
+        q.eq("repoId", args.repoId).eq("open", true),
+      )
+      .collect();
+    const chatIds = [];
+    for (const turn of turns) {
+      if (turn.lane !== undefined) continue;
+      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
+      if (chatId) chatIds.push(chatId);
+    }
+    return chatIds;
+  },
 });
 
 const leaseIdentityValidator = v.object({

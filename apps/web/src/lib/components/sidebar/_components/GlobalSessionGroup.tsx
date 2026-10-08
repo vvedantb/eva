@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryState } from "nuqs";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -18,11 +19,15 @@ import { AnimatePresence } from "motion/react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
 import { SidebarSessionRow } from "@/lib/components/sidebar/SidebarSessionRow";
+import { SidebarChatRow } from "@/lib/components/sidebar/SidebarChatRow";
+import { chatParser } from "@/lib/search-params";
 import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";
 import {
   repoBasePaths,
   repoSessionsIndexPath,
+  selectedChatNumber,
+  sessionHrefForRow,
   sessionRowMatchesPath,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { previewSessions } from "@/lib/components/sidebar/_utils/sessionListPreview";
@@ -84,6 +89,25 @@ export function GlobalSessionGroup({
     api.sessions.listArchived,
     listMode === "archived" ? { repoId: repo._id } : "skip",
   );
+  // Parallel chats beyond Main, grouped under their session row. One query
+  // per repo group (not per session), plus one for which chats are running.
+  const extraChats = useQuery(
+    api.sessionChats.listExtraForRepo,
+    listMode === "active" ? { repoId: repo._id } : "skip",
+  );
+  const runningChatIds = useQuery(
+    api.turns.listRunningChatIdsForRepo,
+    listMode === "active" ? { repoId: repo._id } : "skip",
+  );
+  const [chatParam] = useQueryState("chat", chatParser);
+  const activeChatNumber = selectedChatNumber(chatParam);
+  const chatsBySessionId = new Map<string, typeof extraChats>();
+  for (const chat of extraChats ?? []) {
+    const list = chatsBySessionId.get(chat.sessionId) ?? [];
+    list.push(chat);
+    chatsBySessionId.set(chat.sessionId, list);
+  }
+  const runningChatIdSet = new Set<string>(runningChatIds ?? []);
   const unarchiveSession = useMutation(api.sessions.unarchive);
   const label = repoDisplayLabel(repo);
   const baseUrl = `${repoBasePaths(repo)[0]}/sessions`;
@@ -210,17 +234,22 @@ export function GlobalSessionGroup({
             >
               <AnimatePresence initial={false}>
                 {visibleSessions.map((session) => {
-                  const isSelected = sessionRowMatchesPath(
+                  const isSessionOpen = sessionRowMatchesPath(
                     repo,
                     session,
                     pathname,
                   );
+                  const sessionChats =
+                    chatsBySessionId.get(session._id) ?? [];
+                  // The session row is Main; a chat row takes the highlight
+                  // while its tab is the one open.
+                  const isSelected = isSessionOpen && activeChatNumber === 1;
                   if (listMode === "archived") {
                     return (
                       <SidebarSessionRow
                         key={session._id}
                         session={session}
-                        isSelected={isSelected}
+                        isSelected={isSessionOpen}
                         repo={repo}
                         onNavigate={onNavigate}
                         onForkNavigate={openFork}
@@ -242,17 +271,35 @@ export function GlobalSessionGroup({
                     );
                   }
                   return (
-                    <SidebarSessionRow
-                      key={session._id}
-                      session={session}
-                      isSelected={isSelected}
-                      repo={repo}
-                      onNavigate={onNavigate}
-                      onRename={async () => {}}
-                      onRenameRequest={(s) => onRenameRequest(s, repo)}
-                      onArchiveRequest={(s) => onArchiveRequest(s, repo)}
-                      onForkNavigate={openFork}
-                    />
+                    <div key={session._id}>
+                      <SidebarSessionRow
+                        session={session}
+                        isSelected={isSelected}
+                        repo={repo}
+                        onNavigate={onNavigate}
+                        onRename={async () => {}}
+                        onRenameRequest={(s) => onRenameRequest(s, repo)}
+                        onArchiveRequest={(s) => onArchiveRequest(s, repo)}
+                        onForkNavigate={openFork}
+                      />
+                      {sessionChats.length > 0 ? (
+                        <div className="mt-1 space-y-1">
+                          {sessionChats.map((chat) => (
+                            <SidebarChatRow
+                              key={chat._id}
+                              chat={chat}
+                              sessionHref={sessionHrefForRow(repo, session)}
+                              isSelected={
+                                isSessionOpen &&
+                                activeChatNumber === chat.number
+                              }
+                              isRunning={runningChatIdSet.has(chat._id)}
+                              onNavigate={onNavigate}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   );
                 })}
               </AnimatePresence>

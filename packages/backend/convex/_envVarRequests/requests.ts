@@ -38,7 +38,7 @@ export const create = internalMutation({
   },
   returns: v.union(v.id("envVarRequests"), v.null()),
   handler: async (ctx, { entityKind, entityId, ...fields }) => {
-    const parentId = resolveChatParent(ctx.db, entityKind, entityId);
+    const parentId = await resolveChatParent(ctx.db, entityKind, entityId);
     if (!parentId) return null;
     const messageId = await latestChatMessageId(ctx.db, parentId);
     return await ctx.db.insert("envVarRequests", {

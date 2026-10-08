@@ -74,7 +74,14 @@ const internalTokenClaims = z.object({
   repoId: z.string(),
   entityId: z.string().optional(),
   entityKind: z.enum(["session", "task", "project"]).optional(),
+  chatId: z.string().optional(),
 });
+
+const mcpEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
 
 type OauthTokens = {
   access_token: string;
@@ -198,9 +205,8 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(
-        v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-      ),
+      entityKind: v.optional(mcpEntityKindValidator),
+      chatId: v.optional(v.string()),
     }),
     v.null(),
   ),
@@ -234,6 +240,7 @@ export const verifyAccessToken = internalAction({
           scopedRepoId: undefined,
           entityId: undefined,
           entityKind: undefined,
+          chatId: undefined,
         };
       }
       // OAuth payload missing sub — fall through to internal token
@@ -269,6 +276,9 @@ export const verifyAccessToken = internalAction({
           : {}),
         ...(claims.data.entityKind !== undefined
           ? { entityKind: claims.data.entityKind }
+          : {}),
+        ...(claims.data.chatId !== undefined
+          ? { chatId: claims.data.chatId }
           : {}),
       };
     } catch (err) {
@@ -1838,6 +1848,8 @@ export const orchestratorSendMessage = internalAction({
     model: v.optional(v.string()),
     /** Session only: which chat (number or exact title). Absent = Main. */
     chat: v.optional(v.string()),
+    /** The caller's own chat: a daemon must not message the chat it runs in. */
+    excludeChatId: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
     /**
      * Stamps the "via MCP" chat badge. True for every MCP send — master
@@ -1861,6 +1873,7 @@ export const orchestratorSendMessage = internalAction({
       message,
       model,
       chat,
+      excludeChatId,
       aveThreadId,
       sentViaOrchestrator,
     },
@@ -1887,6 +1900,11 @@ export const orchestratorSendMessage = internalAction({
         );
       }
       deliveryChat = deliveryChatSchema.parse(rawDoc);
+      if (deliveryChat.chatId === excludeChatId) {
+        throw new Error(
+          "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+        );
+      }
       targetId = deliveryChat.chatId;
     } else {
       rawDoc = await runQueryAsUser(
@@ -2335,9 +2353,8 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    entityKind: v.optional(mcpEntityKindValidator),
+    chatId: v.optional(v.string()),
     body: v.string(),
   },
   returns: v.object({
@@ -2346,7 +2363,7 @@ export const handleMcpRequest = internalAction({
   }),
   handler: async (
     ctx,
-    { clerkUserId, scopedRepoId, entityId, entityKind, body },
+    { clerkUserId, scopedRepoId, entityId, entityKind, chatId, body },
   ) => {
     try {
       const parsedBody = JSON.parse(body);
@@ -2364,6 +2381,7 @@ export const handleMcpRequest = internalAction({
         scopedRepoId,
         entityId,
         entityKind,
+        chatId,
       };
       const tools = buildTools(credentials, ctx);
       let supabase: EvaTool[] = [];

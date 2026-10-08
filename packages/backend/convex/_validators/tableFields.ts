@@ -1624,6 +1624,8 @@ export const draftFields = {
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),
   sessionId: v.optional(v.id("sessions")),
+  // One draft per session chat tab; `sessionId` stays for the index and repo scope.
+  chatId: v.optional(v.id("sessionChats")),
   content: v.string(),
   updatedAt: v.number(),
 };
@@ -1674,6 +1676,7 @@ export const draftTarget = v.union(
   v.object({
     kind: v.literal("sessionChat"),
     sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
   }),
 );
 
@@ -1779,7 +1782,12 @@ export const agentUsageLimitFields = {
  * client boundary (`@eva/shared/generativeUi`).
  */
 export const chatUiPanelFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the panel appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.optional(v.string()),
@@ -1795,7 +1803,12 @@ export const chatUiPanelFields = {
  * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
  */
 export const chatHtmlRenderFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the page appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.string(),
@@ -1822,7 +1835,12 @@ export const envVarRequestScopeValidator = v.union(
  * lands here.
  */
 export const envVarRequestFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the card appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   key: v.string(),
@@ -1850,7 +1868,12 @@ export const envVarRequestFields = {
  * because their shape is the previewed app's business, not the database's.
  */
 export const previewToolCallFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   kind: v.union(v.literal("list"), v.literal("invoke")),
   /** Invoke only: the page tool to run. */
   name: v.optional(v.string()),

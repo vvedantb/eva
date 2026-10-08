@@ -20,7 +20,6 @@ import { resolveSessionBaseBranch } from "./baseBranch";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
@@ -35,10 +34,7 @@ import {
   findPrimaryPullRequest,
   reopenArchivedPullRequests,
 } from "../_pullRequests/store";
-import {
-  composerTraitFields,
-  hasComposerTraitUpdate,
-} from "../_shared/composerTraits";
+import { composerTraitFields } from "../_shared/composerTraits";
 import {
   assertValidRepoGroupMembers,
   getRepoGroupForSession,

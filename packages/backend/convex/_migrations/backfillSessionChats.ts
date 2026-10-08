@@ -35,10 +35,7 @@ export const backfillSessionChats = internalMutation({
       const legacyTurns = await ctx.db
         .query("turns")
         .withIndex("by_entity_open", (q) =>
-          q
-            .eq("surface", "session")
-            .eq("entityId", String(session._id))
-            .eq("open", true),
+          q.eq("entityId", session._id).eq("lane", undefined).eq("open", true),
         )
         .collect();
       for (const turn of legacyTurns) {

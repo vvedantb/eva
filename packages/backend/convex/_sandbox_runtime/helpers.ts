@@ -657,10 +657,18 @@ export async function signAndLaunchScript(
   }
   // The linked-repo workspace description lives on the session, so it is
   // resolved here — the single launch choke point.
-  const launchSession =
-    entityIdField === "sessionId"
-      ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
+  // A session daemon is keyed by its chat; the session comes through the chat.
+  const launchChat =
+    entityIdField === "chatId"
+      ? await ctx.runQuery(internal.sessionChats.getInternal, {
+          chatId: entityId,
+        })
       : null;
+  const launchSession =
+    launchChat?.session ??
+    (entityIdField === "sessionId"
+      ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
+      : null);
 
   // Every launch path (prewarm daemon, launch on an existing sandbox,
   // relaunch/heal) comes through here, so resolving the linked clones once
@@ -685,8 +693,11 @@ export async function signAndLaunchScript(
       userId,
       repoId,
       enableMcp: opts.enableMcp !== false,
-      entityId,
-      ...(entityIdField === "sessionId"
+      // The MCP token names the session (not the chat) so every session-level
+      // tool keeps resolving; the chat rides along as its own claim.
+      entityId: launchSession ? String(launchSession._id) : entityId,
+      ...(launchChat ? { chatId: entityId } : {}),
+      ...(launchSession
         ? { entityKind: "session" as const }
         : entityIdField === "taskId"
           ? { entityKind: "task" as const }
@@ -756,7 +767,11 @@ export async function signAndLaunchScript(
 }
 
 /** Owner id types that can derive a stable per-owner Claude session UUID. */
-type PersistableSessionId = Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+type PersistableSessionId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"projects">
+  | Id<"agentTasks">;
 
 /** Derives a deterministic UUID v4 from a session ID hash for Claude session identification. */
 export function sessionClaudeUuid(sessionId: PersistableSessionId): string {

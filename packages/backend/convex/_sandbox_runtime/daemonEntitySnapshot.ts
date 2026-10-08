@@ -184,6 +184,7 @@ export const readDaemonEntitySnapshot = internalQuery({
 export const isEntitySandboxStopRequested = internalQuery({
   args: {
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -194,6 +195,14 @@ export const isEntitySandboxStopRequested = internalQuery({
   handler: async (ctx, args) => {
     const isStopped = (status: string | undefined) =>
       status === "stopping" || status === "closed";
+    if (args.entityTable === "sessionChats") {
+      // A chat shares its session's sandbox; a closed chat needs no daemon.
+      const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      if (!chat || chat.archived === true) return true;
+      const session = await ctx.db.get(chat.sessionId);
+      return !session || isStopped(session.status);
+    }
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       const doc = id ? await ctx.db.get(id) : null;

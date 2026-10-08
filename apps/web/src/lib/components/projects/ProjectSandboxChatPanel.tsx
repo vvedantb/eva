@@ -190,7 +190,7 @@ export function ProjectSandboxChatPanel({
 
   // The open durable turn is canonical, synthetic turns included; message
   // shape only covers the first render while it loads (same rule as
-  // useSessionSend).
+  // useChatSend).
   const isExecuting = chatTurnOpen ?? isAssistantTurnInProgress(messages ?? []);
 
   const queueGate = useChatQueueGate({
@@ -211,7 +211,7 @@ export function ProjectSandboxChatPanel({
   // A thrown send rolls the whole turn back (no placeholder, no workflow) and
   // the composer has already cleared, so the prompt only exists here. The toast
   // owns the failure and hands the text back through the same `drafts` row the
-  // composer reads (same contract as useSessionSend).
+  // composer reads (same contract as useChatSend).
   const raiseSendFailure = (errorMessage: string, draftContent: string) => {
     toast.error("Couldn't send your message", {
       id: "project-chat-send",
