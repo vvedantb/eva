@@ -17,7 +17,7 @@ import {
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
@@ -313,9 +313,9 @@ export const addMessage = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    const credentialSourceLabel =
+    const credential =
       args.role === "user"
-        ? await resolveCredentialSourceLabel(
+        ? await resolveMessageCredential(
             ctx.db,
             args.providerAccountId ?? session.providerAccountId,
             session.createdBy ?? session.userId,
@@ -330,7 +330,7 @@ export const addMessage = authMutation({
       clientId: args.clientId,
       userId: ctx.userId,
       attachmentStorageIds: args.attachmentStorageIds,
-      credentialSourceLabel,
+      ...credential,
       ...(args.role === "user"
         ? {
             model: args.model,

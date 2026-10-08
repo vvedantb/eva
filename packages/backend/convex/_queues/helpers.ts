@@ -25,7 +25,7 @@ import {
   trackProjectChatWorkflow,
   trackSessionWorkflow,
 } from "../_chat/surfaceAdapters";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
@@ -36,6 +36,7 @@ import {
 import type { OrchestratorNotifyChild } from "../orchestratorShared";
 import {
   findUsageLimitHold,
+  isHeldByUsageLimit,
   type UsageLimitHold,
 } from "../_taskWorkflow/usageLimitReset";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
@@ -116,6 +117,16 @@ type ChatQueueConfig<
    */
   fallbackProvider: (entity: TEntity) => AIProvider | undefined;
   /**
+   * The account `next` runs on (undefined = Team), re-resolved at dequeue
+   * rather than trusted from enqueue time. Resolved before the usage-limit
+   * hold, which only holds the credential that ran out.
+   */
+  turnAccountId: (
+    ctx: MutationCtx,
+    entity: TEntity,
+    next: Doc<"queuedMessages">,
+  ) => Promise<Id<"userProviderAccounts"> | undefined>;
+  /**
    * Validates the entity/message can start a workflow, returning any extra
    * data (e.g. session's repo + narrowed mode/model) the insert/start steps
    * need. Runs BEFORE the streaming row is cleared, matching current
@@ -125,6 +136,7 @@ type ChatQueueConfig<
     ctx: MutationCtx,
     entity: TEntity,
     next: Doc<"queuedMessages">,
+    providerAccountId: Id<"userProviderAccounts"> | undefined,
   ) => Promise<ChatQueueGuardResult<TPrepared>>;
   insertUserMessage: (
     ctx: MutationCtx,
@@ -240,13 +252,15 @@ async function scheduleDrainAtBackgroundAgentExpiry<
 
 /**
  * The usage-limit hold on `next`, if any: the chat's newest turn ran out of
- * usage on the same provider `next` would run on. A message moved to another
- * provider is not held — that is how switching provider sends the queue now.
+ * usage on the credential `next` would run on. A message moved to another
+ * provider or another account is not held — that is how switching either one
+ * sends the queue now.
  */
 export async function usageLimitHoldFor(
   ctx: QueryCtx,
   parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
   next: Doc<"queuedMessages">,
+  providerAccountId: Id<"userProviderAccounts"> | undefined,
 ): Promise<UsageLimitHold | null> {
   const recent = await ctx.db
     .query("messages")
@@ -254,13 +268,13 @@ export async function usageLimitHoldFor(
     .order("desc")
     .take(20);
   const hold = findUsageLimitHold(recent, Date.now());
-  if (hold === null) return null;
-  if (hold.model === undefined) return hold;
-  const heldProvider = getAIModelProvider(normalizeAIModel(hold.model));
-  const nextProvider = getAIModelProvider(
-    normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
-  );
-  return heldProvider === nextProvider ? hold : null;
+  return isHeldByUsageLimit(
+    hold,
+    next.model ?? DEFAULT_AI_MODEL,
+    providerAccountId ?? null,
+  )
+    ? hold
+    : null;
 }
 
 /**
@@ -332,7 +346,12 @@ async function startNextQueuedChatMessage<
   // queue waits for the reset. Every drain that lands here books the resume —
   // duplicates are harmless, since the first to run starts the turn and makes
   // the rest find the surface busy.
-  const hold = await usageLimitHoldFor(ctx, id, nextMessage);
+  const providerAccountId = await config.turnAccountId(
+    ctx,
+    entity,
+    nextMessage,
+  );
+  const hold = await usageLimitHoldFor(ctx, id, nextMessage, providerAccountId);
   if (hold !== null) {
     await ctx.scheduler.runAt(
       hold.resumeAt,
@@ -352,7 +371,12 @@ async function startNextQueuedChatMessage<
 
   await ctx.db.delete(nextMessage._id);
 
-  const guard = await config.prepareGuard(ctx, entity, nextMessage);
+  const guard = await config.prepareGuard(
+    ctx,
+    entity,
+    nextMessage,
+    providerAccountId,
+  );
   if (!guard.ok) {
     await config.recordError(ctx, id, guard.error);
     // The queued turn is consumed and cannot run, so the child is idle again —
@@ -506,7 +530,15 @@ const sessionQueueConfig: ChatQueueConfig<
   syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
   streamingEntityId: (id) => String(id),
   fallbackProvider: (session) => session.provider,
-  prepareGuard: async (ctx, session, next) => {
+  // The queued model may belong to another provider than the stored pick.
+  turnAccountId: (ctx, session, next) =>
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId: next.providerAccountId,
+      ownerUserId: session.createdBy ?? session.userId,
+      model: next.model,
+      changePolicy: "owner-pool",
+    }),
+  prepareGuard: async (ctx, session, next, providerAccountId) => {
     if (!next.model) {
       return { ok: false, error: "Error: Failed to start queued message." };
     }
@@ -517,14 +549,6 @@ const sessionQueueConfig: ChatQueueConfig<
         error: "Error: Repository not found for queued message.",
       };
     }
-    // Re-resolved here rather than trusted from enqueue time: the queued model
-    // may belong to another provider than the stored pick.
-    const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
-      requestedAccountId: next.providerAccountId,
-      ownerUserId: session.createdBy ?? session.userId,
-      model: next.model,
-      changePolicy: "owner-pool",
-    });
     return { ok: true, data: { repo, model: next.model, providerAccountId } };
   },
   insertUserMessage: async (ctx, id, session, next, prepared, now) => {
@@ -535,11 +559,11 @@ const sessionQueueConfig: ChatQueueConfig<
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
         session.createdBy ?? session.userId,
-      ),
+      )),
       model: prepared.model,
       reasoningLevel: next.reasoningLevel,
       orchestratorNotification: next.orchestratorNotification,
@@ -637,22 +661,22 @@ const projectChatQueueConfig: ChatQueueConfig<
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
   streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
   fallbackProvider: (project) => getAIModelProvider(project.model),
-  prepareGuard: async (ctx, project, next) => ({
+  // Owner-only, and a collaborator's stored override is dropped rather than
+  // resolved: raising here would strand the whole queue on one bad row.
+  turnAccountId: (ctx, project, next) =>
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId:
+        next.userId === project.userId ? next.providerAccountId : undefined,
+      ownerUserId: project.userId,
+      currentAccountId: project.providerAccountId,
+      model: next.model,
+      senderUserId: next.userId,
+      changePolicy: "owner-only",
+      ownerNoun: "project owner",
+    }),
+  prepareGuard: async (_ctx, _project, _next, providerAccountId) => ({
     ok: true,
-    data: {
-      // Owner-only, and a collaborator's stored override is dropped rather than
-      // resolved: raising here would strand the whole queue on one bad row.
-      providerAccountId: await resolveTurnProviderAccountId(ctx.db, {
-        requestedAccountId:
-          next.userId === project.userId ? next.providerAccountId : undefined,
-        ownerUserId: project.userId,
-        currentAccountId: project.providerAccountId,
-        model: next.model,
-        senderUserId: next.userId,
-        changePolicy: "owner-only",
-        ownerNoun: "project owner",
-      }),
-    },
+    data: { providerAccountId },
   }),
   insertUserMessage: async (ctx, id, project, next, prepared, now) => {
     await ctx.db.insert("messages", {
@@ -662,11 +686,11 @@ const projectChatQueueConfig: ChatQueueConfig<
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
         project.userId,
-      ),
+      )),
       model: next.model,
       reasoningLevel: next.reasoningLevel,
     });
@@ -749,22 +773,22 @@ const taskChatQueueConfig: ChatQueueConfig<
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
   fallbackProvider: (task) => getAIModelProvider(task.model),
-  prepareGuard: async (ctx, task, next) => ({
+  // Owner-only, and a collaborator's stored override is dropped rather than
+  // resolved: raising here would strand the whole queue on one bad row.
+  turnAccountId: (ctx, task, next) =>
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId:
+        next.userId === task.createdBy ? next.providerAccountId : undefined,
+      ownerUserId: task.createdBy,
+      currentAccountId: task.providerAccountId,
+      model: next.model,
+      senderUserId: next.userId,
+      changePolicy: "owner-only",
+      ownerNoun: "task owner",
+    }),
+  prepareGuard: async (_ctx, _task, _next, providerAccountId) => ({
     ok: true,
-    data: {
-      // Owner-only, and a collaborator's stored override is dropped rather than
-      // resolved: raising here would strand the whole queue on one bad row.
-      providerAccountId: await resolveTurnProviderAccountId(ctx.db, {
-        requestedAccountId:
-          next.userId === task.createdBy ? next.providerAccountId : undefined,
-        ownerUserId: task.createdBy,
-        currentAccountId: task.providerAccountId,
-        model: next.model,
-        senderUserId: next.userId,
-        changePolicy: "owner-only",
-        ownerNoun: "task owner",
-      }),
-    },
+    data: { providerAccountId },
   }),
   insertUserMessage: async (ctx, id, task, next, prepared, now) => {
     await ctx.db.insert("messages", {
@@ -774,11 +798,11 @@ const taskChatQueueConfig: ChatQueueConfig<
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
         task.createdBy,
-      ),
+      )),
       model: next.model,
       reasoningLevel: next.reasoningLevel,
       sentViaOrchestrator: next.sentViaOrchestrator,
