@@ -51,6 +51,7 @@ import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
+import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
@@ -104,18 +105,6 @@ const SNAPSHOT_REQUEST_TIMEOUT_MS = 120_000;
 export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
   3000, 8080, 6080, 54321,
 ];
-/**
- * Region for both sandboxes and Drives. Drives are region-pinned and a sandbox
- * can only mount one created in its own region, so the two must be set from a
- * single value.
- */
-const SANDBOX_REGION: SandboxRegion = "cdg1";
-/**
- * Regions a sandbox may land in when {@link SANDBOX_REGION} has no capacity.
- * Drives are region-pinned, so a failed-over sandbox cannot mount the cdg1
- * Drive; if that fails the create, the mount fallback ladder retries without it.
- */
-const SANDBOX_FAILOVER_REGIONS: SandboxRegion[] = ["iad1"];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
  * bytes ($0.05/GB-month), so the cap only bounds a runaway cache. The
@@ -1250,24 +1239,22 @@ class VercelSandboxClient implements SandboxClient {
   }
 
   /**
-   * Region to create in. A snapshot only restores in a region it lives in, and
-   * seed snapshots taken before the move to {@link SANDBOX_REGION} live in
-   * iad1 only — so a snapshot create follows its snapshot. Unknown regions
-   * (lookup failed) keep the default and let the create report the real error.
+   * Regions the create's snapshot lives in, for {@link sandboxPlacement}.
+   * `undefined` when there is no snapshot to follow or the lookup failed.
    */
-  private async regionFor(params: SandboxCreateParams): Promise<SandboxRegion> {
-    if (params.forkFrom || !params.snapshot) return SANDBOX_REGION;
+  private async snapshotRegions(
+    params: SandboxCreateParams,
+  ): Promise<SandboxRegion[] | undefined> {
+    if (params.forkFrom || !params.snapshot) return undefined;
     try {
       const { Snapshot } = await import("@vercel/sandbox");
       const { regions } = await Snapshot.get({
         ...this.creds,
         snapshotId: params.snapshot,
       });
-      return regions.includes(SANDBOX_REGION)
-        ? SANDBOX_REGION
-        : (regions[0] ?? SANDBOX_REGION);
+      return regions;
     } catch {
-      return SANDBOX_REGION;
+      return undefined;
     }
   }
 
@@ -1276,18 +1263,18 @@ class VercelSandboxClient implements SandboxClient {
     // here — Vercel's create-time env cap is 4 KB and eva's env exceeds it.
     const persistent = params.lifecycle.ephemeral !== true;
     const image = params.image ?? VERCEL_SANDBOX_IMAGE;
-    const region = await this.regionFor(params);
-    // Drives are region-pinned to SANDBOX_REGION, so a sandbox placed elsewhere
-    // cannot mount them — skip the mounts rather than spend a failed create.
+    const { region, failoverRegions, mountDrives } = sandboxPlacement(
+      await this.snapshotRegions(params),
+    );
     const mounts =
-      params.mounts?.length && region === SANDBOX_REGION
+      params.mounts?.length && mountDrives
         ? await this.resolveMounts(params.mounts)
         : undefined;
     const base = {
       ...this.creds,
       onResume: rewireDriveCacheOnResume,
       region,
-      failoverRegions: SANDBOX_FAILOVER_REGIONS.filter((r) => r !== region),
+      failoverRegions,
       // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
       // hard-kill a long seed build or agent turn mid-run. Floor it to the Pro

@@ -239,7 +239,8 @@ function isSafeBranchName(branchName: string): boolean {
   return /^[^\s\\:?*[~^]+$/.test(branchName) && !branchName.includes("..");
 }
 
-function isRetryableGitNetworkError(message: string): boolean {
+/** Transient git failure (network, GitHub 5xx, token race) worth a retry. */
+export function isRetryableGitNetworkError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     isSandboxExecTimeout(message) ||
