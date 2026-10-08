@@ -12,7 +12,7 @@ import {
   reasoningLevelValidator,
 } from "../validators";
 import { sessionValidator } from "./helpers";
-import { isLegacySessionExecuting } from "../_chat/turnProjection";
+import { findMainChat } from "../_sessionChats/helpers";
 
 /**
  * Sidebar list shape: omit heavy session fields (planContent, terminal tail,
@@ -54,20 +54,21 @@ const sessionListItemValidator = v.object({
   /** True for the user's persistent master session (badged in the sidebar). */
   isOrchestrator: v.optional(v.boolean()),
   /**
-   * True while a turn is in flight — either a tracked chat workflow, or a
-   * daemon-minted continuation (`/loop`), which never gets an
-   * `activeWorkflowId`. Same window as composer BorderBeam in practice
-   * (message-level isExecuting needs the open thread; list rows use this field
-   * instead of N+1 into messages).
+   * True while any chat of the session has an open turn — a tracked chat
+   * workflow or a daemon-minted continuation (`/loop`). List rows read this
+   * field instead of N+1 into messages.
    */
   isExecuting: v.boolean(),
+  /** Chats of this session with an open turn right now (sidebar count pop). */
+  runningChats: v.number(),
 });
 
 /** Maps a full session doc to the slim list payload. */
 function toSessionListItem(
   session: Doc<"sessions">,
-  openSessionIds: ReadonlySet<string>,
+  openTurnsBySession: ReadonlyMap<string, number>,
 ) {
+  const runningChats = openTurnsBySession.get(String(session._id)) ?? 0;
   return {
     _id: session._id,
     _creationTime: session._creationTime,
@@ -93,24 +94,29 @@ function toSessionListItem(
     deploymentStatus: session.deploymentStatus,
     deploymentUrl: session.deploymentUrl,
     isOrchestrator: session.isOrchestrator,
-    isExecuting:
-      openSessionIds.has(String(session._id)) ||
-      isLegacySessionExecuting(session),
+    isExecuting: runningChats > 0,
+    runningChats,
   };
 }
 
 /** One indexed query per list subscription, never one turn lookup per row. */
-async function openSessionIdsForRepo(
+async function openTurnsBySessionForRepo(
   ctx: QueryCtx,
   repoId: Id<"githubRepos">,
-): Promise<ReadonlySet<string>> {
+): Promise<ReadonlyMap<string, number>> {
   const turns = await ctx.db
     .query("turns")
     .withIndex("by_repo_open", (q) =>
       q.eq("repoId", repoId).eq("open", true),
     )
     .collect();
-  return new Set(turns.map((turn) => turn.entityId));
+  const counts = new Map<string, number>();
+  for (const turn of turns) {
+    // Pre-chat "session" turns carry the session id as their entityId.
+    const key = turn.sessionId !== undefined ? String(turn.sessionId) : turn.entityId;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** Sorts sessions by most recently updated (falling back to creation time). */
@@ -124,7 +130,7 @@ export const list = authQuery({
   returns: v.array(sessionListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [sessionGroups, openSessionIds] = await Promise.all([
+    const [sessionGroups, openTurnsBySession] = await Promise.all([
       Promise.all(
         [undefined, false].map((archived) =>
           ctx.db
@@ -138,12 +144,12 @@ export const list = authQuery({
             .collect(),
         ),
       ),
-      openSessionIdsForRepo(ctx, args.repoId),
+      openTurnsBySessionForRepo(ctx, args.repoId),
     ]);
     const sessions = sessionGroups.flat();
     return sessions
       .sort(byMostRecentlyUpdated)
-      .map((session) => toSessionListItem(session, openSessionIds));
+      .map((session) => toSessionListItem(session, openTurnsBySession));
   },
 });
 
@@ -153,7 +159,7 @@ export const listArchived = authQuery({
   returns: v.array(sessionListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [sessions, openSessionIds] = await Promise.all([
+    const [sessions, openTurnsBySession] = await Promise.all([
       ctx.db
         .query("sessions")
         .withIndex("by_repo_archived_and_deleted", (q) =>
@@ -163,11 +169,11 @@ export const listArchived = authQuery({
             .eq("deletedAt", undefined),
         )
         .collect(),
-      openSessionIdsForRepo(ctx, args.repoId),
+      openTurnsBySessionForRepo(ctx, args.repoId),
     ]);
     return sessions
       .sort(byMostRecentlyUpdated)
-      .map((session) => toSessionListItem(session, openSessionIds));
+      .map((session) => toSessionListItem(session, openTurnsBySession));
   },
 });
 
@@ -182,7 +188,8 @@ export const getFirstMessagePreview = authQuery({
     const session = await ctx.db.get(args.id);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    return await firstUserMessagePreview(ctx.db, args.id);
+    const mainChat = await findMainChat(ctx.db, args.id);
+    return await firstUserMessagePreview(ctx.db, mainChat?._id ?? args.id);
   },
 });
 

@@ -17,13 +17,11 @@ import { SessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
 import { SessionSummaryModal } from "./_components/SessionSummaryModal";
 import { SessionReviewModal } from "./_components/SessionReviewModal";
-import {
-  useSessionSend,
-  type SessionMessage,
-} from "./_components/useSessionSend";
+import { useChatSend, type SessionMessage } from "./_components/useChatSend";
+import { ChatTabsBar } from "./_components/ChatTabsBar";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
-import { useSessionModel } from "@/lib/hooks/useSessionModel";
+import { useChatModel } from "@/lib/hooks/useChatModel";
 import {
   useAvailableAiModels,
   useSessionOwnerProviderAccounts,
@@ -41,8 +39,21 @@ type QueuedSessionMessage = NonNullable<
   FunctionReturnType<typeof api.queuedMessages.listByParent>
 >[number];
 
+type ChatTurnStatus = FunctionReturnType<
+  typeof api.turns.listSessionChatStatuses
+>[number];
+
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
+  /** The chat tab this panel shows; the transcript, turn and model are its own. */
+  chat: Doc<"sessionChats">;
+  /** Every chat of the session, for the tab strip. */
+  chats: Doc<"sessionChats">[];
+  /** Open turns across the session's chats (tab dots + the slot-wait caption). */
+  chatStatuses: ChatTurnStatus[];
+  onSelectChat: (chat: Doc<"sessionChats">) => void;
+  onCreateChat: () => void;
+  isCreatingChat: boolean;
   title: string;
   branchName?: string;
   prUrl?: string;
@@ -80,11 +91,20 @@ interface ChatPanelProps {
   onOpenPrdTab?: () => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
-  backgroundAgents?: Doc<"sessions">["backgroundAgents"];
+  backgroundAgents?: Doc<"sessionChats">["backgroundAgents"];
 }
+
+/** Sessions run at most this many chats at once; mirrors the server cap. */
+const MAX_PARALLEL_CHATS = 3;
 
 export function ChatPanel({
   sessionId,
+  chat,
+  chats,
+  chatStatuses,
+  onSelectChat,
+  onCreateChat,
+  isCreatingChat,
   title,
   branchName,
   prUrl,
@@ -116,6 +136,7 @@ export function ChatPanel({
   backgroundAgents,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
+  const chatId = chat._id;
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showResetChatDialog, setShowResetChatDialog] = useState(false);
@@ -125,7 +146,7 @@ export function ChatPanel({
   // always runs on the owner's credentials.
   const { options: accounts, resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId);
-  // Model + traits + account are owned by Convex.
+  // Model + traits + account are owned by Convex, per chat tab.
   const {
     model,
     setModel,
@@ -134,7 +155,7 @@ export function ChatPanel({
     providerAccountId: stickyProviderAccountId,
     setProviderAccountId: setStickyProviderAccountId,
     isSwitchingAccount,
-  } = useSessionModel(sessionId, defaultModel);
+  } = useChatModel(chatId, defaultModel);
   const {
     displayTraits,
     executionTraits,
@@ -159,7 +180,7 @@ export function ChatPanel({
   // under so credentials follow the new provider.
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
-  const draftTarget = { kind: "sessionChat" as const, sessionId };
+  const draftTarget = { kind: "sessionChat" as const, sessionId, chatId };
   const draftSeed = useChatDraftSeed(draftTarget);
   const seedChatDraft = useSeedChatDraft(draftTarget);
   const draftBundle = draftSeed.isReady
@@ -174,8 +195,8 @@ export function ChatPanel({
   const review = usePendingReviewComments();
   const hasPendingReviewComments = (review?.comments.length ?? 0) > 0;
 
-  const { isExecuting, handleSend, handleCancel } = useSessionSend({
-    sessionId,
+  const { isExecuting, handleSend, handleCancel } = useChatSend({
+    chatId,
     model,
     executionTraits,
     reasoningLevel: displayTraits.effortLevel,
@@ -186,7 +207,7 @@ export function ChatPanel({
   });
 
   const chatSurface: SandboxChatSurface = {
-    entity: { kind: "session", sessionId },
+    entity: { kind: "session", sessionId, chatId },
     repoId: repo._id,
     model,
     isExecuting,
@@ -202,7 +223,7 @@ export function ChatPanel({
   };
 
   const activeQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: sessionId,
+    entityId: chatId,
   });
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const handleAnswerBlockingQuestion = async (
@@ -211,7 +232,7 @@ export function ChatPanel({
   ) => {
     await catchMutationError(
       answerPendingQuestion({
-        entityId: sessionId,
+        entityId: chatId,
         toolUseId,
         answer: JSON.stringify(answers),
       }),
@@ -232,9 +253,31 @@ export function ChatPanel({
         : (accounts.find((account) => account.id === stickyProviderAccountId)
             ?.label ?? "Selected account");
 
+  const runningChatIds = new Set<string>(
+    chatStatuses.map((status) => status.chatId),
+  );
+  const chatTabs = chatOnly ? undefined : (
+    <ChatTabsBar
+      chats={chats}
+      activeChatId={chatId}
+      runningChatIds={runningChatIds}
+      onSelect={onSelectChat}
+      onCreate={onCreateChat}
+      isReadOnly={isReadOnly}
+      isCreating={isCreatingChat}
+    />
+  );
+  // Queued on this chat while the session's run slots are all taken: the
+  // server parked the send instead of starting it (see `startExecute`).
+  const isWaitingForSlot =
+    !isExecuting &&
+    queuedMessages.length > 0 &&
+    runningChatIds.size >= MAX_PARALLEL_CHATS;
+
   const { headerLeft, headerRight } = SessionChatHeader({
     repoId: repo._id,
     sessionId,
+    chatId,
     title,
     branchName,
     prUrl,
@@ -279,7 +322,14 @@ export function ChatPanel({
     </div>
   ) : null;
 
-  const beforeQueuedContent = isStartupStreaming ? startupStreamingNode : null;
+  const beforeQueuedContent = isStartupStreaming ? (
+    startupStreamingNode
+  ) : isWaitingForSlot ? (
+    <p className="px-1 text-xs text-muted-foreground">
+      Waiting for a free slot — {runningChatIds.size} of {MAX_PARALLEL_CHATS}{" "}
+      chats in this session are running.
+    </p>
+  ) : null;
 
   const hasPlanContent =
     typeof planContent === "string" && planContent.trim().length > 0;
@@ -364,11 +414,12 @@ export function ChatPanel({
       readOnlyMessage={readOnlyMessage}
       headerLeft={headerLeft}
       headerRight={headerRight}
+      tabs={chatTabs}
     >
       <ChatBody
         repoId={repo._id}
         repoBasePath={basePath}
-        conversationId={sessionId}
+        conversationId={chatId}
         messages={messages}
         queuedMessages={queuedMessages}
         streamingActivity={streamingActivity}

@@ -123,25 +123,41 @@ describe("reconcileStoppedSandboxStatus", () => {
   const branches = [
     {
       table: "sessions",
+      // A chat shares its session's sandbox, so both ids resolve to the
+      // session row and the one branch flips the session's status.
+      marker:
+        'if (args.entityTable === "sessionChats" || args.entityTable === "sessions")',
       statusField: "doc.status",
       closed: 'status: "closed"',
     },
     {
       table: "agentTasks",
+      marker: 'if (args.entityTable === "agentTasks")',
       statusField: "doc.reviewTaskSandboxStatus",
       closed: 'reviewTaskSandboxStatus: "closed"',
     },
     {
       table: "projects",
+      marker: 'if (args.entityTable === "projects")',
       statusField: "doc.reviewProjectSandboxStatus",
       closed: 'reviewProjectSandboxStatus: "closed"',
     },
   ];
 
+  test("a chat id resolves to its session before the status is read", () => {
+    const branch = entityBranch(body, branches[0]?.marker ?? "");
+    const chatAt = branch.indexOf('normalizeId("sessionChats", args.entityId)');
+    const sessionAt = branch.indexOf("chat?.sessionId");
+    const statusAt = branch.indexOf('if (doc.status !== "active") return null;');
+    expect(chatAt).toBeGreaterThan(-1);
+    expect(sessionAt).toBeGreaterThan(chatAt);
+    expect(statusAt).toBeGreaterThan(sessionAt);
+  });
+
   test.each(branches)(
     "$table flips only an exactly-active status",
-    ({ table, statusField, closed }) => {
-      const branch = entityBranch(body, table);
+    ({ table, marker, statusField, closed }) => {
+      const branch = entityBranch(body, marker);
       // `!== "active"` and nothing looser: "starting"/"stopping"/"closed" belong
       // to the start and stop flows, which are mid-transition and own the field.
       expect(
@@ -154,8 +170,8 @@ describe("reconcileStoppedSandboxStatus", () => {
 
   test.each(branches)(
     "$table only flips the sandbox the caller observed",
-    ({ table }) => {
-      const branch = entityBranch(body, table);
+    ({ marker }) => {
+      const branch = entityBranch(body, marker);
       // A newer sandbox on the doc means the entity already moved on, and
       // closing it would kill a live sandbox off a stale observation.
       expect(branch).toContain("doc.sandboxId !== args.sandboxId");
@@ -227,8 +243,7 @@ function functionBody(source: string, declaration: string): string {
 }
 
 /** One `if (args.entityTable === "…")` branch, or the trailing else for projects. */
-function entityBranch(body: string, table: string): string {
-  const marker = `if (args.entityTable === "${table}")`;
+function entityBranch(body: string, marker: string): string {
   const startAt = body.indexOf(marker);
   if (startAt > -1) {
     const nextAt = body.indexOf('if (args.entityTable === "', startAt + 1);
@@ -240,7 +255,7 @@ function entityBranch(body: string, table: string): string {
   // latter matched the end of the whole handler, so this returned three lines
   // of tail and every assertion below it passed on nothing.
   const lastAt = body.lastIndexOf('if (args.entityTable === "');
-  expect(lastAt, `${table} has no branch`).toBeGreaterThan(-1);
+  expect(lastAt, `${marker} has no branch`).toBeGreaterThan(-1);
   return body.slice(afterBlock(body, lastAt));
 }
 

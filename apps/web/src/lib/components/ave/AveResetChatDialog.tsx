@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmD
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 /**
- * Confirmation for "Start new chat" in Manager Ave's header menu.
+ * Confirmation for "Reset Ave chat" in Manager Ave's header menu.
  *
  * Lives outside the dropdown because a dialog rendered inside
  * `DropdownMenuContent` unmounts the moment the menu closes; the host owns the
@@ -50,7 +50,7 @@ export function AveResetChatDialog({
       title="Start a new chat?"
       description="Manager Ave forgets this conversation and starts from scratch, on a fresh sandbox."
       detail="The current chat is archived, not deleted — you can still open it from your archived sessions. Agents Ave was watching stop reporting back to it."
-      confirmLabel="Start new chat"
+      confirmLabel="Reset chat"
       variant="destructive"
       onConfirm={() => {
         void handleConfirm();

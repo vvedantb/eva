@@ -29,7 +29,7 @@ function applyAddMessageOptimistically(
 ) {
   if (args.role !== "user") return;
   const existing = localStore.getQuery(api.messages.listByParent, {
-    parentId: args.id,
+    parentId: args.chatId,
   });
   if (existing === undefined) return;
 
@@ -37,7 +37,7 @@ function applyAddMessageOptimistically(
   const userMsg: SessionMessage = {
     _id: optimisticMessageId(),
     _creationTime: now,
-    parentId: args.id,
+    parentId: args.chatId,
     role: "user",
     content: args.content,
     timestamp: now,
@@ -53,13 +53,13 @@ function applyAddMessageOptimistically(
   const assistantPlaceholder: SessionMessage = {
     _id: optimisticMessageId(),
     _creationTime: now + 1,
-    parentId: args.id,
+    parentId: args.chatId,
     role: "assistant",
     content: "",
     timestamp: now + 1,
     activityLog: "",
   };
-  localStore.setQuery(api.messages.listByParent, { parentId: args.id }, [
+  localStore.setQuery(api.messages.listByParent, { parentId: args.chatId }, [
     ...existing,
     userMsg,
     assistantPlaceholder,
@@ -75,8 +75,8 @@ export interface SessionSendOptions {
   skipReviewComments?: boolean;
 }
 
-interface UseSessionSendParams {
-  sessionId: Id<"sessions">;
+interface UseChatSendParams {
+  chatId: Id<"sessionChats">;
   model: AIModel;
   executionTraits: ModelTraitsExecutionArgs;
   /** Effective effort shown in the composer; snapshotted onto the user message. */
@@ -89,8 +89,13 @@ interface UseSessionSendParams {
   messages: SessionMessage[];
 }
 
-export function useSessionSend({
-  sessionId,
+/**
+ * Send / queue / cancel for one chat tab of a session. `startExecute` itself
+ * decides whether the message runs now or waits for a free parallel-chat
+ * slot, so the composer never has to know the session-wide cap.
+ */
+export function useChatSend({
+  chatId,
   model,
   executionTraits,
   reasoningLevel,
@@ -98,7 +103,7 @@ export function useSessionSend({
   resolveAccountId,
   accounts,
   messages,
-}: UseSessionSendParams) {
+}: UseChatSendParams) {
   const review = usePendingReviewComments();
   const addMessage = useMutation(api.sessions.addMessage).withOptimisticUpdate(
     (localStore, args) =>
@@ -109,7 +114,7 @@ export function useSessionSend({
   const cancelExecutionMutation = useMutation(
     api.sessionWorkflow.cancelExecution,
   );
-  const turnStatus = useQuery(api.turns.getSessionStatus, { sessionId });
+  const turnStatus = useQuery(api.turns.getChatStatus, { chatId });
 
   // The persisted open turn is canonical. Message shape only covers the first
   // render while that subscription loads, so a stale empty bubble cannot keep
@@ -132,7 +137,7 @@ export function useSessionSend({
       : content;
     if (isExecuting) {
       await enqueueMessage({
-        sessionId,
+        chatId,
         message: finalContent,
         model,
         ...executionTraits,
@@ -146,7 +151,7 @@ export function useSessionSend({
     const accountId = resolveAccountId(providerAccountId);
     void Promise.all([
       addMessage({
-        id: sessionId,
+        chatId,
         role: "user",
         content: finalContent,
         attachmentStorageIds,
@@ -155,7 +160,7 @@ export function useSessionSend({
         reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
       }),
       startExecution({
-        sessionId,
+        chatId,
         message: finalContent,
         model,
         ...executionTraits,
@@ -168,7 +173,7 @@ export function useSessionSend({
         const errorMessage =
           error instanceof Error ? error.message : "Failed to send message";
         await addMessage({
-          id: sessionId,
+          chatId,
           role: "assistant",
           content: `Error: ${errorMessage}`,
         });
@@ -180,7 +185,7 @@ export function useSessionSend({
 
   const handleCancel = async () => {
     await catchMutationError(
-      cancelExecutionMutation({ sessionId }),
+      cancelExecutionMutation({ chatId }),
       "Couldn't cancel execution",
       "session-cancel-execution",
     );

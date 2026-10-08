@@ -42,6 +42,8 @@ import {
 } from "./_utils/composerPrompts";
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
+  /** The active chat tab; annotations and agent stops route to it. */
+  chatId: Id<"sessionChats">;
   sandboxId: string | undefined;
   isActive: boolean;
   /**
@@ -74,6 +76,7 @@ interface SandboxPanelProps {
 }
 export function SandboxPanel({
   sessionId,
+  chatId,
   sandboxId,
   isActive,
   isRouteActive = true,
@@ -99,10 +102,11 @@ export function SandboxPanel({
 }: SandboxPanelProps) {
   const simpleView = useSimpleView();
   const sessionIdStr = String(sessionId);
-  const submitAnnotation = useSessionAnnotationSend(sessionId);
+  const submitAnnotation = useSessionAnnotationSend(sessionId, chatId);
   const seedChatDraft = useSeedChatDraft({
     kind: "sessionChat",
     sessionId,
+    chatId,
   });
   const latestVariations = getLatestVariations(messages);
   // Both tabs are content-keyed: they appear once the session has produced the
@@ -277,7 +281,7 @@ export function SandboxPanel({
           }
         >
           <SandboxAgentsPanel
-            entity={{ kind: "session", sessionId }}
+            entity={{ kind: "session", sessionId, chatId }}
             agents={agents}
             isReadOnly={isArchived === true}
           />

@@ -20,7 +20,6 @@ import { resolveSessionBaseBranch } from "./baseBranch";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
@@ -31,6 +30,10 @@ import {
   scheduleSessionSandboxGraceDelete,
 } from "../sandboxCleanup";
 import { livePrState, scheduleSessionPrSync } from "./prArchive";
+import {
+  ensureMainChat,
+  getSessionChatOrThrow,
+} from "../_sessionChats/helpers";
 
 /** Loads a session by id, throwing if it does not exist. */
 async function getSessionOrThrow(
@@ -130,6 +133,9 @@ export async function createSession(
   });
   const branchName = `eva/session-${sessionId}`;
   await ctx.db.patch(sessionId, { branchName });
+  const created = await ctx.db.get(sessionId);
+  if (!created) throw new Error("Session was not created");
+  const mainChat = await ensureMainChat(ctx, created);
   await workflow.start(
     ctx,
     internal.sessionWorkflow.sessionSandboxStartupWorkflow,
@@ -150,7 +156,7 @@ export async function createSession(
       throw new Error("model is required when queuing a message");
     }
     await ctx.db.insert("queuedMessages", {
-      parentId: sessionId,
+      parentId: mainChat._id,
       content,
       createdAt: Date.now(),
       order: Date.now(),
@@ -168,14 +174,11 @@ export async function createSession(
     });
     // The first message queues directly rather than going through
     // startExecute, so its mentions are notified here instead.
-    const session = await ctx.db.get(sessionId);
-    if (session) {
-      await notifyChatMentions(ctx, {
-        content,
-        authorUserId: ctx.userId,
-        surface: { kind: "session", session },
-      });
-    }
+    await notifyChatMentions(ctx, {
+      content,
+      authorUserId: ctx.userId,
+      surface: { kind: "session", session: created },
+    });
     if (title === DEFAULT_SESSION_TITLE) {
       await ctx.scheduler.runAfter(0, internal.textGen.generateSessionTitle, {
         sessionId,
@@ -197,10 +200,10 @@ export const create = authMutation({
   handler: async (ctx, args) => await createSession(ctx, args),
 });
 
-/** Adds a message to a session conversation. */
+/** Adds a message to one chat of a session. */
 export const addMessage = authMutation({
   args: {
-    id: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     role: roleValidator,
     content: v.string(),
     activityLog: v.optional(v.string()),
@@ -214,17 +217,20 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     const credentialSourceLabel =
       args.role === "user"
         ? await resolveCredentialSourceLabel(
             ctx.db,
-            args.providerAccountId ?? session.providerAccountId,
+            args.providerAccountId ?? chat.providerAccountId,
             session.createdBy ?? session.userId,
           )
         : undefined;
     await ctx.db.insert("messages", {
-      parentId: args.id,
+      parentId: chat._id,
       role: args.role,
       content: args.content,
       timestamp: Date.now(),
@@ -241,114 +247,9 @@ export const addMessage = authMutation({
           }
         : {}),
     });
-    await ctx.db.patch(args.id, { updatedAt: Date.now() });
-    return null;
-  },
-});
-
-/**
- * Sets the sticky composer model for a session. `lastModel` is the single
- * source of truth for the picker, so this is called directly on change (with a
- * client-side optimistic update) rather than only when a message is sent. Does
- * not touch `updatedAt` — changing the model is not conversation activity and
- * must not reorder the session list. Any visible model is allowed, including one
- * from another provider: the sticky account is reconciled to the new model's
- * provider here, and that provider's CLI is caught up on the conversation so far
- * (see `_shared/modelHandoff.ts`).
- */
-export const setModel = authMutation({
-  args: {
-    id: v.id("sessions"),
-    model: aiModelValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const providerAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      session.createdBy ?? session.userId,
-      args.model,
-      session.providerAccountId,
-    );
-    await ctx.db.patch(args.id, { lastModel: args.model, providerAccountId });
-    return null;
-  },
-});
-
-/**
- * Sets the sticky provider account for a session. Same contract as `setModel`:
- * write on change (optimistic on the client), do not bump `updatedAt`. Pass
- * `null` to clear back to Team.
- *
- * Anyone with repo access may pick, but only from accounts owned by the session
- * owner — a session always runs on one person's credentials, and a collaborator
- * must never be able to attach their own. Without this, a collaborator who
- * changed the model could never get back to the owner's account.
- */
-export const setProviderAccountId = authMutation({
-  args: {
-    id: v.id("sessions"),
-    providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const ownerUserId = session.createdBy ?? session.userId;
-    const providerAccountId = await assertProviderAccountUsableBy(
-      ctx.db,
-      args.providerAccountId,
-      ownerUserId,
-    );
-    await ctx.db.patch(args.id, { providerAccountId });
-    return null;
-  },
-});
-
-/**
- * Sets sticky composer traits for a session (effort / thinking / 1M / Fast). Same
- * contract as `setModel`: write on change (optimistic on the client), do not
- * bump `updatedAt`. Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    id: v.id("sessions"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    if (
-      args.reasoningLevel === undefined &&
-      args.thinkingEnabled === undefined &&
-      args.use1mContext === undefined &&
-      args.fastMode === undefined
-    ) {
-      return null;
-    }
-    await ctx.db.patch(args.id, {
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-    });
+    const now = Date.now();
+    await ctx.db.patch(chat._id, { updatedAt: now });
+    await ctx.db.patch(session._id, { updatedAt: now });
     return null;
   },
 });
@@ -532,19 +433,22 @@ export const updatePlanContent = authMutation({
   },
 });
 
-/** Updates the content or activity log of the most recent message in a session. */
+/** Updates the content or activity log of the most recent message in a chat. */
 export const updateLastMessage = authMutation({
   args: {
-    id: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     content: v.optional(v.string()),
     activityLog: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     const last = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.id))
+      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
       .order("desc")
       .first();
     if (!last) return null;
@@ -552,7 +456,7 @@ export const updateLastMessage = authMutation({
     if (args.content !== undefined) patch.content = args.content;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(args.id, { updatedAt: Date.now() });
+    await ctx.db.patch(chat._id, { updatedAt: Date.now() });
     return null;
   },
 });

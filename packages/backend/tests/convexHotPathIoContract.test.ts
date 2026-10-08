@@ -18,23 +18,58 @@ function definitionBody(path: string, name: string): string {
 }
 
 describe("measured Convex I/O hot paths stay on compact reads", () => {
-  test("claimPendingTurn polls the compact daemon row", () => {
+  test("claimPendingTurn polls only the compact chat row", () => {
+    // The 50ms daemon poll reads the `sessionChats` row by id and nothing
+    // else. The heavyweight session (plan, terminal tail, panes) is read only
+    // once a turn is actually pending, for the sandbox-setup gate.
     const body = definitionBody("_sessions/workflow.ts", "claimPendingTurn");
-    expect(body).toContain('.query("sessionDaemonStates")');
-    expect(body).toContain('withIndex("by_session"');
-    expect(body).toContain("daemonState.pendingTurn");
+    const chatReadAt = body.indexOf("await ctx.db.get(args.chatId)");
+    const ownerFastPathAt = body.indexOf("chat.userId !== ctx.userId");
+    const repoAccessAt = body.indexOf("hasRepoAccess(");
+    const pendingGateAt = body.indexOf("if (!chat.pendingTurn) return drained;");
+    const sessionReadAt = body.indexOf("await ctx.db.get(chat.sessionId)");
+    expect(chatReadAt, "the chat row read moved").toBeGreaterThan(-1);
+    expect(ownerFastPathAt, "the owner fast path moved").toBeGreaterThan(
+      chatReadAt,
+    );
+    expect(repoAccessAt, "repo access must sit behind the owner check").toBeGreaterThan(
+      ownerFastPathAt,
+    );
+    expect(pendingGateAt, "the pendingTurn gate moved").toBeGreaterThan(-1);
+    expect(
+      sessionReadAt,
+      "the session may only be read once a turn is pending",
+    ).toBeGreaterThan(pendingGateAt);
+    expect(body).not.toContain('.query("sessionDaemonStates")');
     expect(body).not.toContain("session.pendingTurn");
   });
 
-  test("every session daemon signal writer mirrors the compact row", () => {
-    for (const path of [
-      "_sessions/execution.ts",
-      "_sessions/sandbox.ts",
-      "_sessions/workflow.ts",
-      "_chat/surfaceAdapters.ts",
-      "usageLimits.ts",
-    ]) {
-      expect(source(path), path).toContain("syncSessionDaemonState");
+  test("daemon signals live on the chat row, with no mirror table", () => {
+    // Daemons poll `sessionChats` directly; `sessionDaemonStates` is a legacy
+    // table only the backfill (which empties it) and repo deletion still touch.
+    const allowed = [
+      "_migrations/backfillSessionChats.ts",
+      "_migrations/deleteRepos.ts",
+    ];
+    const mirrorUsers = convexFiles().filter((path) =>
+      /(?:query|insert)\("sessionDaemonStates"/.test(source(path)),
+    );
+    expect(mirrorUsers.sort()).toEqual(allowed.sort());
+    // Every session daemon signal writer patches the chat it belongs to.
+    expect(source("_sessions/execution.ts")).toContain(
+      "ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() })",
+    );
+    expect(source("_chat/surfaceAdapters.ts")).toContain(
+      "ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() })",
+    );
+    expect(source("usageLimits.ts")).toContain(
+      "ctx.db.patch(chat._id, { usageRefreshRequestedAt: now })",
+    );
+    expect(
+      definitionBody("_sessions/workflow.ts", "requestStopBackgroundAgent"),
+    ).toContain("pendingTaskStops: [...pending, args.toolUseId]");
+    for (const path of convexFiles()) {
+      expect(source(path), path).not.toContain("syncSessionDaemonState");
     }
   });
 

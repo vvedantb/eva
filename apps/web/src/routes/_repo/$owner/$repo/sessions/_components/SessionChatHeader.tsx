@@ -30,6 +30,8 @@ import { prStateIconClass } from "../_utils/-prStateIconClass";
 interface SessionChatHeaderProps {
   repoId: Id<"githubRepos">;
   sessionId: Id<"sessions">;
+  /** The chat tab shown — context usage is per chat, like its transcript. */
+  chatId: Id<"sessionChats">;
   title: string;
   branchName?: string;
   prUrl?: string;
@@ -58,13 +60,14 @@ interface SessionChatHeaderProps {
   onSandboxToggle: (action: "start" | "stop") => void;
   onOpenSummaryModal: () => void;
   onOpenReviewModal: () => void;
-  /** Manager Ave only: offers "Start new chat". Absent on ordinary sessions. */
+  /** Manager Ave only: offers "Reset Ave chat". Absent on ordinary sessions. */
   onOpenResetChatDialog?: () => void;
 }
 
 export function SessionChatHeader({
   repoId,
   sessionId,
+  chatId,
   title,
   branchName,
   prUrl,
@@ -106,7 +109,7 @@ export function SessionChatHeader({
 
   const headerRight = (
     <>
-      <EntityContextUsage repoId={repoId} entityId={sessionId} />
+      <EntityContextUsage repoId={repoId} entityId={chatId} />
       <UsageLimitsIndicator
         repoId={repoId}
         model={model}
@@ -136,7 +139,7 @@ export function SessionChatHeader({
                 disabled={isAssistantResponding}
               >
                 <IconMessagePlus size={14} />
-                Start new chat
+                Reset Ave chat
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>

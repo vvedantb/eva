@@ -117,6 +117,21 @@ function sanitizeCommand(command: string): string {
 }
 
 /** Executes a git command, cleaning up lock files on timeout errors. */
+/**
+ * One lock for every Eva-side git command on a sandbox. Parallel chats share
+ * the working tree, so two turns finishing together used to race their
+ * publishes (`fetch`, `rev-list`, `push`) on the same `.git/index.lock`. The
+ * agents' own in-turn git calls are not serialised — that is the shared-tree
+ * trade-off the user accepted.
+ */
+const SANDBOX_GIT_LOCK_PATH = "/tmp/eva-git.lock";
+
+function withSandboxGitLock(command: string, timeoutSeconds: number): string {
+  // `flock` waits up to the command's own timeout, so a stuck holder fails
+  // the waiter the same way a slow push would, instead of hanging it longer.
+  return `flock -w ${Math.max(1, timeoutSeconds - 1)} ${SANDBOX_GIT_LOCK_PATH} bash -c ${quote([command])}`;
+}
+
 async function execGitCommand(
   sandbox: SandboxHandle,
   command: string,
@@ -126,7 +141,11 @@ async function execGitCommand(
   const startedAt = Date.now();
   logGit(`exec [timeout=${timeoutSeconds}s]: ${sanitized}`);
   try {
-    const result = await execHandle(sandbox, command, timeoutSeconds);
+    const result = await execHandle(
+      sandbox,
+      withSandboxGitLock(command, timeoutSeconds),
+      timeoutSeconds,
+    );
     logGit(
       `exec completed in ${formatDurationMsShort(Date.now() - startedAt)}: ${sanitized}`,
     );

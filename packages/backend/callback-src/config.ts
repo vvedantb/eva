@@ -61,7 +61,8 @@ export const NO_WRITES = process.env.EVA_NO_WRITES === "1";
  * tool except AskUserQuestion (which waits for the user's answer via Convex).
  */
 export const BLOCKING_QUESTIONS_ENABLED =
-  process.env.ENTITY_ID_FIELD === "sessionId";
+  process.env.ENTITY_ID_FIELD === "sessionId" ||
+  process.env.ENTITY_ID_FIELD === "chatId";
 /** Fingerprint of the callback bundle this daemon was started with; exit when disk fp differs. */
 export const CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 /**
@@ -202,7 +203,14 @@ export const CLAUDE_LOCAL_PROJECT_DIR =
   CLAUDE_RUNTIME_CONFIG_DIR + "/projects/" + CLAUDE_SESSION_PROJECT_DIR;
 export const CLAUDE_PERSIST_PROJECT_DIR =
   CLAUDE_PERSIST_DIR + "/projects/" + CLAUDE_SESSION_PROJECT_DIR;
-const CLAUDE_STATE_FILE_NAME = "session-state.json";
+// One resume-pointer file per daemon entity: several session chats run their
+// own Claude daemon on one sandbox, and a shared `session-state.json` let
+// each overwrite the others' `resumeSessionId`. Entities launched without an
+// id (one-shot runs) keep the unsuffixed legacy name.
+const CLAUDE_STATE_FILE_NAME =
+  ENTITY_ID_FIELD !== undefined && ENTITY_ID !== undefined && ENTITY_ID !== ""
+    ? "session-state." + ENTITY_ID_FIELD + "-" + ENTITY_ID + ".json"
+    : "session-state.json";
 export const CLAUDE_LOCAL_STATE_FILE =
   CLAUDE_RUNTIME_CONFIG_DIR + "/" + CLAUDE_STATE_FILE_NAME;
 export const CLAUDE_PERSIST_STATE_FILE =

@@ -176,7 +176,9 @@ describe("every prewarm kill runs behind the claim fence", () => {
       source("../convex/_sandbox_runtime/daemonEntitySnapshot.ts"),
       "export const setDaemonClaimPause = internalMutation({",
     );
-    expect(mutation).toContain("syncSessionDaemonState");
+    // The session chat fence is patched straight onto the chat row the daemon
+    // polls — there is no mirror row to keep in step.
+    expect(mutation).toContain('normalizeId("sessionChats"');
     expect(mutation).toContain('normalizeId("agentTasks"');
     expect(mutation).toContain('normalizeId("projects"');
     expect(source("../convex/sandboxDaemon.ts")).toContain(
@@ -187,7 +189,7 @@ describe("every prewarm kill runs behind the claim fence", () => {
 
 describe("claimPendingTurn honours the fence without stranding signals", () => {
   const surfaces: Array<[string, string, string]> = [
-    ["sessions", "../convex/_sessions/workflow.ts", "daemonState"],
+    ["session chats", "../convex/_sessions/workflow.ts", "chat"],
     ["task chat", "../convex/_chat/taskChatDaemon.ts", "task"],
     ["project chat", "../convex/_chat/projectChatDaemon.ts", "project"],
   ];
@@ -228,7 +230,7 @@ describe("claimPendingTurn honours the fence without stranding signals", () => {
       "export const claimPendingTurn = authMutation({",
     );
     const gateAt = body.indexOf("isDaemonClaimPaused({");
-    const pendingAt = body.indexOf("if (!daemonState.pendingTurn)", gateAt);
+    const pendingAt = body.indexOf("if (!chat.pendingTurn)", gateAt);
     expect(
       pendingAt,
       "the fence must sit before the pendingTurn handoff",
@@ -245,13 +247,12 @@ describe("claimPendingTurn honours the fence without stranding signals", () => {
       fields.indexOf("export const agentTaskFields = {"),
     );
     expect(chatDaemon).toContain("claimPausedUntil: v.optional(v.number())");
-    const daemonState = fields.slice(
-      fields.indexOf("export const sessionDaemonStateFields = {"),
-      fields.indexOf("export const chatDaemonEntityFields = {"),
+    // Session chats carry the fence by spreading the shared daemon fields, so
+    // the row claimPendingTurn polls is the row prewarm pauses.
+    const sessionChat = fields.slice(
+      fields.indexOf("export const sessionChatFields = {"),
+      fields.indexOf("export const agentTaskFields = {"),
     );
-    expect(daemonState).toContain("claimPausedUntil: v.optional(v.number())");
-    expect(source("../convex/_sessions/daemonState.ts")).toContain(
-      "claimPausedUntil",
-    );
+    expect(sessionChat).toContain("...chatDaemonEntityFields,");
   });
 });

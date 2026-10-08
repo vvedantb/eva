@@ -108,13 +108,44 @@ test("the shared dequeue gates on the busy check, not on activeWorkflowId alone"
     queueHelpersSource,
     "isSurfaceBusy must consult still-running subagents",
   ).toContain("runningBackgroundAgents(config.backgroundAgents(entity)");
-  // Every surface config must supply the accessors the gate reads.
-  for (const entity of ["session", "project", "task"]) {
+  // Every surface config must supply the accessors the gate reads. The
+  // session config's entity is a `{ chat, session }` pair, and both daemon
+  // fields live on the chat.
+  for (const [param, holder] of [
+    ["{ chat }", "chat"],
+    ["project", "project"],
+    ["task", "task"],
+  ]) {
     expect(queueHelpersSource).toContain(
-      `backgroundAgents: (${entity}) => ${entity}.backgroundAgents`,
+      `backgroundAgents: (${param}) => ${holder}.backgroundAgents`,
     );
     expect(queueHelpersSource).toContain(
-      `syntheticTurnMessageId: (${entity}) => ${entity}.syntheticTurnMessageId`,
+      `syntheticTurnMessageId: (${param}) => ${holder}.syntheticTurnMessageId`,
     );
   }
+});
+
+/**
+ * Session chats add a second reason to stay parked: the per-session cap on
+ * concurrently running chats. The dequeue has to ask the config, since task
+ * and project chats have no such limit.
+ */
+test("the shared dequeue also gates on the surface's capacity", () => {
+  expect(queueHelpersSource).toContain(
+    "if (!(await config.hasCapacity(ctx, entity))) {",
+  );
+  // One slot check for both the send path and the dequeue, so the cap cannot
+  // drift between them.
+  expect(queueHelpersSource).toContain(
+    "hasCapacity: (ctx, context) => sessionChatHasFreeSlot(ctx.db, context),",
+  );
+  expect(
+    readFileSync(
+      join(testsDir, "../convex/_sessionChats/helpers.ts"),
+      "utf8",
+    ),
+  ).toContain("siblingsRunning < MAX_PARALLEL_CHATS");
+  expect(queueHelpersSource.match(/hasCapacity: async \(\) => true,/g)?.length).toBe(
+    2,
+  );
 });

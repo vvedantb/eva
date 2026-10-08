@@ -26,7 +26,6 @@ import {
   bindTurnWorkflow,
   closeOpenChatTurn,
   closeTurnForWorkflow,
-  listOpenSessionTurns,
   openChatTurn,
 } from "../_chat/turnStore";
 import {
@@ -37,7 +36,7 @@ import {
   getSessionChatOrThrow,
   listLiveSessionChats,
   loadSessionChat,
-  MAX_PARALLEL_CHATS,
+  sessionChatHasFreeSlot,
   sessionChatPersistenceId,
   sessionChatStreamingEntityId,
   type SessionChatContext,
@@ -91,22 +90,6 @@ async function finalizeOpenSyntheticTurnOnCancel(
   if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
     await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
   }
-}
-
-/**
- * Whether another chat of this session may start running right now. Counts
- * the open turns of every sibling chat; this chat's own open turn (if any)
- * is superseded by the new one, so it does not take a slot.
- */
-export async function hasFreeChatSlot(
-  ctx: MutationCtx,
-  context: SessionChatContext,
-): Promise<boolean> {
-  const openTurns = await listOpenSessionTurns(ctx, context.session._id);
-  const siblingsRunning = openTurns.filter(
-    (turn) => turn.entityId !== String(context.chat._id),
-  ).length;
-  return siblingsRunning < MAX_PARALLEL_CHATS;
 }
 
 /** Stages a prompt for the warm daemon, opens the durable turn and starts the workflow. */
@@ -367,7 +350,7 @@ export const startExecute = authMutation({
 
     const { chatId, message, ...settings } = args;
     void chatId;
-    if (!(await hasFreeChatSlot(ctx, context))) {
+    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
       await enqueueChatMessage(ctx, {
         context,
         userId: ctx.userId,
@@ -420,8 +403,10 @@ export const prewarmDaemon = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const context = await loadSessionChat(ctx.db, args.chatId);
-    if (!context || !context.session.sandboxId) return null;
+    if (!context) return null;
     const { chat, session } = context;
+    const sandboxId = session.sandboxId;
+    if (!sandboxId) return null;
     // Never prewarm a stopped/stopping session. prewarmSessionDaemon execs on
     // the sandbox, and on Vercel any exec lazily resumes a stopped VM (SDK
     // withResume) — resurrecting a sandbox the user stopped, invisibly (the
@@ -439,7 +424,7 @@ export const prewarmDaemon = authMutation({
     // forwarded for the same reason.
     const credentialOwnerUserId = session.createdBy ?? session.userId;
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
-      sandboxId: session.sandboxId,
+      sandboxId,
       chatId: chat._id,
       repoId: session.repoId,
       userId: session.userId,

@@ -39,19 +39,25 @@ const taskChatWorkflowSource = readFileSync(
  * turn's placeholder flashes the previous turn's thinking trace. Clearing at
  * staging time makes the placeholder start clean whichever way the race lands.
  */
-test("staging a session turn clears streamingActivity before the placeholder", () => {
+test("staging a chat turn clears streamingActivity before the placeholder", () => {
   const stager = functionBody(
     executionSource,
-    "async function stageAndStartSessionTurn(",
+    "async function stageAndStartChatTurn(",
+  );
+  // The row is keyed by the chat's own streaming entity id, so clearing the
+  // session id would pass the ordering check while leaving the stale row.
+  const keyAt = stager.indexOf(
+    "const streamingEntityId = sessionChatStreamingEntityId(chat._id);",
   );
   const clearAt = stager.indexOf(
-    "await clearStreamingActivity(ctx, String(params.session._id));",
+    "await clearStreamingActivity(ctx, streamingEntityId);",
   );
   const placeholderAt = stager.indexOf('await ctx.db.insert("messages"');
+  expect(keyAt, "the stager must key the clear by the chat").toBeGreaterThan(-1);
   expect(
     clearAt,
-    "the session stager must clear streamingActivity",
-  ).toBeGreaterThan(-1);
+    "the chat stager must clear streamingActivity",
+  ).toBeGreaterThan(keyAt);
   expect(placeholderAt).toBeGreaterThan(-1);
   expect(clearAt).toBeLessThan(placeholderAt);
 });
@@ -84,7 +90,7 @@ test("the shared dequeue clears streamingActivity before staging the user turn",
  * though the shared core now owns the clear-then-insert ordering.
  */
 test.each([
-  "sessionQueueConfig",
+  "sessionChatQueueConfig",
   "projectChatQueueConfig",
   "taskChatQueueConfig",
 ])("%s inserts a user-role message", (name) => {

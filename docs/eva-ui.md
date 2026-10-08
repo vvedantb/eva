@@ -46,7 +46,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 
 - Never use `window.location.href` for navigation. Always use `useNavigate` from `@tanstack/react-router` or the `<Link>` component.
 - `window.location.href` causes a full page reload, losing client-side state. TanStack Router navigation preserves SPA behavior.
-- Primary tabs = path segments + index redirect to default; avoid local-only Tabs when the view must be linkable.
+- Primary tabs = path segments + index redirect to default; avoid local-only Tabs when the view must be linkable. Exception: a session's chat tab is `?chat=N` (`chatParser`), because the chat axis is orthogonal to the `$sandboxTab` / `review/*` segments already under `$numId`.
 
 ## Vite (`apps/web`)
 

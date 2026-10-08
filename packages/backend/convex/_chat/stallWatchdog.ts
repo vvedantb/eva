@@ -27,7 +27,7 @@ export async function cancelStaleWorkflow(
   }
 }
 
-type ChatId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+type ChatId = Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
 
 /**
  * Tears down one tracked chat turn (session, task chat, or project chat):

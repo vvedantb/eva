@@ -1,3 +1,4 @@
+import { listSessionChats } from "./_sessionChats/helpers";
 import { v } from "convex/values";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -6,7 +7,8 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
 import { workflowCompleteValidator } from "./validators";
-import { trackSessionWorkflow } from "./workflowWatchdog";
+import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
+import { cancelStaleWorkflow } from "./_chat/stallWatchdog";
 import {
   clearStreamingActivity,
   extractFirstJsonValue,
@@ -93,10 +95,20 @@ export const getSessionData = internalQuery({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .collect();
+    // Every chat of the session, interleaved by time, so the summary covers
+    // parallel work and not just Main.
+    const chats = await listSessionChats(ctx.db, args.sessionId);
+    const perChat = await Promise.all(
+      chats.map((chat) =>
+        ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
+          .collect(),
+      ),
+    );
+    const messages = perChat
+      .flat()
+      .toSorted((a, b) => a.timestamp - b.timestamp);
 
     const conversation = messages.map((m) => m.content).join("\n\n");
 
@@ -213,8 +225,31 @@ export const startSummarize = authMutation({
       },
     );
 
-    await trackSessionWorkflow(ctx, args.sessionId, workflowId);
+    // The summary is a session-level job, not a chat turn: it holds the
+    // session's own workflow slot (chat turns track on their chat) and gets
+    // the same 2-hour backstop the chat watchdogs give their turns.
+    await ctx.db.patch(args.sessionId, { activeWorkflowId: String(workflowId) });
+    await ctx.scheduler.runAfter(
+      RUN_TIMEOUT_MS,
+      internal.summarizeWorkflow.handleStaleSummary,
+      { sessionId: args.sessionId, workflowId: String(workflowId) },
+    );
 
+    return null;
+  },
+});
+
+/** Clears a summary workflow that never reported back. */
+export const handleStaleSummary = internalMutation({
+  args: { sessionId: v.id("sessions"), workflowId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.activeWorkflowId !== args.workflowId) return null;
+    await cancelStaleWorkflow(ctx, args.workflowId, [
+      `summary:${args.sessionId}`,
+    ]);
+    await ctx.db.patch(args.sessionId, { activeWorkflowId: undefined });
     return null;
   },
 });

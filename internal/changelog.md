@@ -1,5 +1,15 @@
 # Changelog
 
+## Parallel chats inside a session - 2026-10-08
+
+- A session now holds several chats that run at the same time on its one sandbox, branch and checkout: a Main chat (the session's original transcript) plus any number of parallel chats opened from a `+` in a new tab strip under the chat header. Each chat has its own transcript, warm agent daemon, provider conversation, turn and composer settings (model, effort, thinking, 1M, fast, account), so one session can run Claude and Codex side by side without one chat's picks respawning the other's daemon.
+- New `sessionChats` table owns everything that was "the chat" on the session (messages, queue, turn, daemon fields, model picks); the session keeps what is about the sandbox (status, branch, PR, preview, terminal). Every existing session gets a Main chat on first open or via `_migrations/backfillSessionChats`, and its messages move onto it; a backfilled Main keeps the session id as its Claude transcript seed so it resumes where it was instead of starting cold.
+- At most 3 chats of a session run at once; a fourth send parks on its own chat with a "waiting for a free slot" caption and starts when a sibling finishes — the only place the cap is released is the shared turn-ending drain, so nothing is left queued.
+- The sidebar lists open parallel chats indented under their session (the session row is Main); the chrome and session rows report running work from open turns across all chats. Links carry `?chat=N`; plain session links still open Main.
+- Daemons on one sandbox keep separate Claude resume-state files, and Eva's own git publish commands take a per-sandbox lock, so two chats finishing together cannot clobber each other's transcript pointer or race the push.
+- MCP `send_chat_message` gains an optional `chat` (number or title) for sessions and lands in Main otherwise; `stop_agent` on a session stops every chat; Ave wake-ups and system alerts land in Main.
+- Legacy fallbacks removed: the pre-durable-turn execution bridge (`turnProjection`) and the `sessionDaemonStates` mirror — daemons poll the small chat row directly. The table stays in the schema until the migration has emptied it everywhere.
+
 ## Preview pages rewrite loopback Convex URLs - 2026-08-27
 
 A sandbox's local Convex backend mints absolute URLs from its own loopback origin, so `storage.generateUploadUrl()` / `storage.getUrl()` handed the user's browser `http://127.0.0.1:3210/…` addresses it cannot reach — file uploads from previews of guest Convex apps (reported on eProcurement) failed with a network error. The preview proxy's injected script now diverts fetch/XHR/WebSocket calls and `src`/`href` attributes that target loopback ports 3210/3211 onto the existing authenticated `/__convex` and `/__convex-site` prefixes of the page origin, skipping loopback-served pages (in-sandbox browsers). Covered by `previewProxyConvexLoopbackRewrite.test.ts`; `SCRIPT_VERSION` bumped to `stream-v18` so live proxies relaunch.

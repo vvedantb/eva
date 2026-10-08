@@ -1,14 +1,14 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { internal } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
   acquireTurnLease,
-  openSessionTurn,
+  listOpenSessionTurns,
+  openChatTurn,
   renewTurnLease,
 } from "../convex/_chat/turnStore";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
-import { isLegacySessionExecuting } from "../convex/_chat/turnProjection";
 import { rollbackQueuedSessionStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,
@@ -21,14 +21,21 @@ import type { JsonObject } from "../callback-src/types";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
-async function createSessionFixture() {
+const CLERK_ID = "clerk|turn-lifecycle";
+
+/** Loading the session module graph costs seconds on a cold worker. */
+const TIMEOUT_MS = 30_000;
+
+/** A session with its Main chat and one staged turn on that chat. */
+async function createChatFixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
-    const userId = await ctx.db.insert("users", {});
+    const userId = await ctx.db.insert("users", { clerkId: CLERK_ID });
     const repoId = await ctx.db.insert("githubRepos", {
       owner: "eva",
       name: "turn-lifecycle-test",
       installationId: 1,
+      connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
       repoId,
@@ -36,37 +43,69 @@ async function createSessionFixture() {
       title: "Lifecycle test",
       status: "active",
     });
+    const chatId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+    });
     const placeholderMessageId = await ctx.db.insert("messages", {
-      parentId: sessionId,
+      parentId: chatId,
       role: "assistant",
       content: "",
       timestamp: Date.now(),
     });
-    const turnId = await openSessionTurn(ctx, {
+    const turnId = await openChatTurn(ctx, {
+      chatId,
       sessionId,
-      streamingEntityId: String(sessionId),
+      streamingEntityId: String(chatId),
       placeholderMessageId,
       prompt: "hi",
       model: "claude:sonnet",
       repoId,
     });
-    return { sessionId, placeholderMessageId, turnId };
+    return { repoId, sessionId, chatId, placeholderMessageId, turnId };
   });
   return { t, ...ids };
 }
 
 describe("turn lifecycle integration", () => {
-  test("opening the first durable Turn permanently marks the session cutover", async () => {
-    const { t, sessionId } = await createSessionFixture();
-    const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
-    expect(session?.turnLifecycleVersion).toBe(2);
-  });
+  test("an open chat Turn carries its session, and that is what marks the session executing", async () => {
+    // No per-session version bridge any more: the sidebar's executing state
+    // is derived purely from open turns grouped by their `sessionId`.
+    const { t, repoId, sessionId, chatId, turnId } = await createChatFixture();
+
+    const turn = await t.run(async (ctx) => await ctx.db.get(turnId));
+    expect(turn?.surface).toBe("sessionChat");
+    expect(turn?.entityId).toBe(String(chatId));
+    expect(turn?.sessionId).toBe(sessionId);
+
+    const open = await t.run(
+      async (ctx) => await listOpenSessionTurns(ctx, sessionId),
+    );
+    expect(open.map((item) => item._id)).toEqual([turnId]);
+
+    const asUser = t.withIdentity({ subject: CLERK_ID });
+    const before = await asUser.query(api.sessions.list, { repoId });
+    expect(before.map((item) => [item._id, item.isExecuting, item.runningChats]))
+      .toEqual([[sessionId, true, 1]]);
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(turnId, { open: false, state: "done" });
+    });
+    const after = await asUser.query(api.sessions.list, { repoId });
+    expect(after.map((item) => [item.isExecuting, item.runningChats])).toEqual([
+      [false, 0],
+    ]);
+  }, TIMEOUT_MS);
 
   test("an unfenced legacy heartbeat cannot overwrite a durable Turn", async () => {
-    const { t, sessionId } = await createSessionFixture();
+    const { t, chatId } = await createChatFixture();
     await t.run(async (ctx) => {
       await ctx.db.insert("streamingActivity", {
-        entityId: String(sessionId),
+        entityId: String(chatId),
         currentActivity: "old activity",
         currentContent: "old content",
         lastUpdatedAt: 1,
@@ -74,7 +113,7 @@ describe("turn lifecycle integration", () => {
     });
 
     const accepted = await t.mutation(internal.turns.legacyHeartbeat, {
-      entityId: String(sessionId),
+      entityId: String(chatId),
       touchOnly: false,
       currentActivity: "stale activity",
       currentContent: "stale content",
@@ -84,7 +123,7 @@ describe("turn lifecycle integration", () => {
     const streaming = await t.run(async (ctx) =>
       await ctx.db
         .query("streamingActivity")
-        .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
+        .withIndex("by_entity", (q) => q.eq("entityId", String(chatId)))
         .unique(),
     );
     expect(streaming?.currentActivity).toBe("old activity");
@@ -93,13 +132,13 @@ describe("turn lifecycle integration", () => {
   });
 
   test("queued workflow start rollback closes its Turn and removes its placeholder", async () => {
-    const { t, sessionId, placeholderMessageId, turnId } =
-      await createSessionFixture();
+    const { t, chatId, placeholderMessageId, turnId } =
+      await createChatFixture();
 
     await t.run(
       async (ctx) =>
         await rollbackQueuedSessionStart(ctx, {
-          sessionId,
+          chatId,
           turnId,
           placeholderMessageId,
         }),
@@ -115,7 +154,7 @@ describe("turn lifecycle integration", () => {
   });
 
   test("each claim bumps the lease generation and fences the older one", async () => {
-    const { t, turnId } = await createSessionFixture();
+    const { t, turnId } = await createChatFixture();
     const claim = async (): Promise<number | undefined> =>
       await t.run(async (ctx) => {
         const turn = await ctx.db.get(turnId);
@@ -146,7 +185,7 @@ describe("turn lifecycle integration", () => {
   });
 
   test("a heartbeat for a closed or unknown turn is told to stop", async () => {
-    const { t, sessionId, turnId } = await createSessionFixture();
+    const { t, chatId, turnId } = await createChatFixture();
     const closed = await t.run(async (ctx) => {
       await ctx.db.patch(turnId, { open: false, state: "done" });
       return await renewTurnLease(ctx, {
@@ -159,7 +198,7 @@ describe("turn lifecycle integration", () => {
     const unknown = await t.run(
       async (ctx) =>
         await renewTurnLease(ctx, {
-          turnId: String(sessionId),
+          turnId: String(chatId),
           leaseGeneration: 0,
         }),
     );
@@ -167,7 +206,7 @@ describe("turn lifecycle integration", () => {
   });
 
   test("a fresh running lease is not rewritten by a second heartbeat", async () => {
-    const { t, turnId } = await createSessionFixture();
+    const { t, turnId } = await createChatFixture();
     const first = await t.run(async (ctx) => {
       const turn = await ctx.db.get(turnId);
       if (!turn) throw new Error("missing turn");
@@ -200,8 +239,8 @@ describe("turn lifecycle integration", () => {
   });
 
   test("a streaming touch within 2s does not rewrite lastUpdatedAt", async () => {
-    const { t, sessionId } = await createSessionFixture();
-    const entityId = String(sessionId);
+    const { t, chatId } = await createChatFixture();
+    const entityId = String(chatId);
     const stamped = await t.run(async (ctx) => {
       const lastUpdatedAt = Date.now();
       await ctx.db.insert("streamingActivity", {
@@ -296,24 +335,10 @@ describe("turn lease renewal writes", () => {
   });
 });
 
-describe("turn lifecycle rollout", () => {
-  test("legacy execution fields are consulted only before the durable cutover", () => {
-    expect(
-      isLegacySessionExecuting({
-        activeWorkflowId: "legacy-workflow",
-        syntheticTurnMessageId: undefined,
-        turnLifecycleVersion: undefined,
-      }),
-    ).toBe(true);
-    expect(
-      isLegacySessionExecuting({
-        activeWorkflowId: "stale-workflow",
-        syntheticTurnMessageId: undefined,
-        turnLifecycleVersion: 2,
-      }),
-    ).toBe(false);
-  });
-
+// The `isLegacySessionExecuting` rollout bridge was deleted with the chat
+// refactor: chats are always durable, so there is no pre-cutover state left
+// to consult. The first integration test above pins what replaced it.
+describe("turn lifecycle callback lease plumbing", () => {
   test("the shared completion helper carries the current lease into fatal payloads", () => {
     beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 7 });
     const args: JsonObject = { success: false };

@@ -121,6 +121,7 @@ const sessionPersistenceKindValidator = v.union(
 
 const sessionPersistenceIdValidator = v.union(
   v.id("sessions"),
+  v.id("sessionChats"),
   v.id("projects"),
   v.id("agentTasks"),
 );
@@ -1452,7 +1453,7 @@ type PrewarmEntityDaemonBaseParams = {
 };
 
 type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
-  entityTable: "sessions" | "agentTasks" | "projects";
+  entityTable: "sessionChats" | "sessions" | "agentTasks" | "projects";
 };
 
 /** Shared implementation for prewarmEntityDaemon and prewarmSessionDaemon. */
@@ -1780,6 +1781,7 @@ export const prewarmEntityDaemon = internalAction({
     ),
     skipPrewarm: v.optional(v.boolean()),
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -1921,7 +1923,7 @@ export const killEntityDaemon = internalAction({
 export const prewarmSessionDaemon = internalAction({
   args: {
     sandboxId: v.string(),
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     repoId: v.id("githubRepos"),
     userId: v.id("users"),
     model: v.optional(v.string()),
@@ -1938,20 +1940,20 @@ export const prewarmSessionDaemon = internalAction({
   },
   returns: v.object({ prewarmed: v.boolean() }),
   handler: async (ctx, args): Promise<{ prewarmed: boolean }> => {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: args.sessionId,
+    const context = await ctx.runQuery(internal.sessionChats.getInternal, {
+      chatId: args.chatId,
     });
     const skipPrewarm =
-      session === null ||
-      session === undefined ||
-      session.status === "closed" ||
-      session.status === "stopping";
+      context === null ||
+      context.chat.archived === true ||
+      context.session.status === "closed" ||
+      context.session.status === "stopping";
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,
       userId: args.userId,
-      entityId: String(args.sessionId),
-      entityIdField: "sessionId",
+      entityId: String(args.chatId),
+      entityIdField: "chatId",
       completionMutation: "sessionWorkflow:handleCompletion",
       ...SESSION_DAEMON_MUTATIONS,
       model: args.model,
@@ -1966,8 +1968,8 @@ export const prewarmSessionDaemon = internalAction({
       sessionPersistenceId: args.sessionPersistenceId,
       activeWorkflowField: "activeWorkflowId",
       skipPrewarm,
-      skipDocker: session?.isOrchestrator === true,
-      entityTable: "sessions",
+      skipDocker: context?.session.isOrchestrator === true,
+      entityTable: "sessionChats",
     });
   },
 });

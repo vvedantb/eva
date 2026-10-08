@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryState } from "nuqs";
 import { RepoProvider, RepoGate, useRepo } from "@/lib/contexts/RepoContext";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import { useSessionByNumId } from "@/lib/useResolveByNumId";
+import { chatParser } from "@/lib/search-params";
 import { SessionDetailClient } from "../SessionDetailClient";
 import { useSessionRouteSandboxTab } from "../_utils/useSessionRouteSandboxTab";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
@@ -30,9 +32,10 @@ interface CachedSessionShellProps {
 
 /**
  * One kept-alive session detail tree. While `isActiveRoute` is false the shell
- * stays mounted (parent uses `hidden`) and freezes its sandbox tab so the
- * active session's URL does not rewrite sibling caches. Each shell carries its
- * own passive RepoProvider so shells from other apps stay resolvable.
+ * stays mounted (parent uses `hidden`) and freezes its sandbox tab and chat
+ * tab so the active session's URL does not rewrite sibling caches. Each shell
+ * carries its own passive RepoProvider so shells from other apps stay
+ * resolvable.
  */
 export function CachedSessionShell({
   numId,
@@ -74,6 +77,19 @@ function CachedSessionShellInner({
     if (!isActiveRoute) return;
     setSandboxTab(urlSandboxTab);
   }, [isActiveRoute, urlSandboxTab]);
+
+  // `?chat=N` picks the chat tab. Frozen the same way as the sandbox tab:
+  // only the visible shell follows the URL, so a hidden session keeps the
+  // chat it was left on. Render-phase sync, like the layout's cache promotion.
+  const [urlChat, setUrlChat] = useQueryState("chat", chatParser);
+  const [chatNumber, setChatNumber] = useState(urlChat);
+  if (isActiveRoute && chatNumber !== urlChat) {
+    setChatNumber(urlChat);
+  }
+  const onChatChange = (number: number | null) => {
+    // Main is the absent param, so plain session links keep opening Main.
+    void setUrlChat(number === null || number === 1 ? null : number);
+  };
 
   const openFile = (path: string) => {
     if (simpleView) return;
@@ -129,6 +145,8 @@ function CachedSessionShellInner({
       {(sessionDoc) => (
         <SessionDetailClient
           sessionId={sessionDoc._id}
+          chatNumber={chatNumber}
+          onChatChange={onChatChange}
           activeSandboxTab={sandboxTab}
           onSandboxTabChange={onSandboxTabChange}
           onOpenFile={openFile}

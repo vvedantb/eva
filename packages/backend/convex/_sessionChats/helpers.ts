@@ -99,20 +99,25 @@ export async function findChatByNumber(
 }
 
 /**
- * Open turns across every chat of the session. One indexed read; this is
- * what the parallel-chat cap and the sidebar's executing dot both ask.
+ * Whether this chat may take one of the session's `MAX_PARALLEL_CHATS` run
+ * slots. One indexed read over the session's open turns. The chat's own open
+ * turn never counts: at send time the new turn supersedes it, and at dequeue
+ * time the chat is idle so any open turn of its own is a leftover.
  */
-export async function countOpenTurnsForSession(
+export async function sessionChatHasFreeSlot(
   db: DatabaseReader,
-  sessionId: Id<"sessions">,
-): Promise<number> {
-  const turns = await db
+  context: SessionChatContext,
+): Promise<boolean> {
+  const openTurns = await db
     .query("turns")
     .withIndex("by_session_open", (q) =>
-      q.eq("sessionId", sessionId).eq("open", true),
+      q.eq("sessionId", context.session._id).eq("open", true),
     )
     .collect();
-  return turns.length;
+  const siblingsRunning = openTurns.filter(
+    (turn) => turn.entityId !== String(context.chat._id),
+  ).length;
+  return siblingsRunning < MAX_PARALLEL_CHATS;
 }
 
 /**

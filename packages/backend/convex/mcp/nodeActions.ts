@@ -1227,11 +1227,44 @@ const sessionDocSchema = z.object({
   title: z.string(),
   status: z.string(),
   updatedAt: z.number().optional(),
-  lastModel: z.string().optional(),
-  activeWorkflowId: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
 });
+
+/** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
+const deliveryChatSchema = z.object({
+  chatId: z.string(),
+  title: z.string(),
+  number: z.number(),
+  activeWorkflowId: z.string().optional(),
+  lastModel: z.string().optional(),
+});
+
+/** One row of `sessionChats:listForSession`, as much as the fleet tools read. */
+const sessionChatRowSchema = z.object({
+  _id: z.string(),
+  title: z.string(),
+  number: z.number(),
+  isMain: z.boolean(),
+  archived: z.boolean().optional(),
+  activeWorkflowId: z.string().optional(),
+  lastModel: z.string().optional(),
+});
+
+async function loadSessionChatsAsUser(
+  convexUrl: string,
+  clerkUserId: string,
+  sessionId: string,
+) {
+  const rows = z
+    .array(sessionChatRowSchema)
+    .parse(
+      await runQueryAsUser(convexUrl, clerkUserId, "sessionChats:listForSession", {
+        sessionId,
+      }),
+    );
+  return rows.filter((row) => row.archived !== true);
+}
 
 const streamingStateSchema = z
   .object({
@@ -1412,8 +1445,6 @@ export const orchestratorGetAgentState = internalAction({
   }),
   handler: async (_ctx, { clerkUserId, kind, id, transcriptTail }) => {
     const convexUrl = getEvaConvexCloudUrl();
-    const streamingEntityId =
-      kind === "session" ? id : `${TASK_CHAT_STREAM_PREFIX}${id}`;
 
     // The access check runs first, on its own. `messages:listByParent` *throws*
     // "Not authorized" while the entity read merely returns null, so in a
@@ -1429,15 +1460,29 @@ export const orchestratorGetAgentState = internalAction({
       throw new Error(`No ${kind} ${id} found, or you do not have access.`);
     }
 
+    // A session's transcript is its Main chat; the fleet view reports the
+    // session as executing while any of its chats runs.
+    const sessionChats =
+      kind === "session"
+        ? await loadSessionChatsAsUser(convexUrl, clerkUserId, id)
+        : [];
+    const mainChat = sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
+    const transcriptParentId =
+      kind === "session" ? (mainChat?._id ?? id) : id;
+    const streamingEntityId =
+      kind === "session"
+        ? (mainChat?._id ?? id)
+        : `${TASK_CHAT_STREAM_PREFIX}${id}`;
+
     const [rawStreaming, rawMessages, rawQueued] = await Promise.all([
       runQueryAsUser(convexUrl, clerkUserId, "streaming:get", {
         entityId: streamingEntityId,
       }),
       runQueryAsUser(convexUrl, clerkUserId, "messages:listByParent", {
-        parentId: id,
+        parentId: transcriptParentId,
       }),
       runQueryAsUser(convexUrl, clerkUserId, "queuedMessages:listByParent", {
-        parentId: id,
+        parentId: transcriptParentId,
       }),
     ]);
 
@@ -1469,8 +1514,10 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        isExecuting: session.activeWorkflowId !== undefined,
-        model: session.lastModel,
+        isExecuting: sessionChats.some(
+          (chat) => chat.activeWorkflowId !== undefined,
+        ),
+        model: mainChat?.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
@@ -1507,11 +1554,11 @@ function chatDelivery(
   requestedModel: string | undefined,
 ): AgentDelivery {
   if (kind === "session") {
-    const session = sessionDocSchema.parse(rawDoc);
+    const chat = deliveryChatSchema.parse(rawDoc);
     return resolveAgentDelivery({
-      isBusy: session.activeWorkflowId !== undefined || queuedAhead > 0,
+      isBusy: chat.activeWorkflowId !== undefined || queuedAhead > 0,
       requestedModel,
-      storedModel: session.lastModel,
+      storedModel: chat.lastModel,
     });
   }
   if (kind === "task") {
@@ -1537,6 +1584,8 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
+    /** Session only: which chat (number or exact title). Absent = Main. */
+    chat: v.optional(v.string()),
     masterSessionId: v.optional(v.string()),
     /**
      * True only when the master session is sending (drives the "via master"
@@ -1548,6 +1597,8 @@ export const orchestratorSendMessage = internalAction({
   returns: v.object({
     delivered: v.union(v.literal("started"), v.literal("queued")),
     model: v.string(),
+    /** Session only: the chat the message landed in. */
+    chat: v.optional(v.object({ title: v.string(), number: v.number() })),
   }),
   handler: async (
     _ctx,
@@ -1557,19 +1608,44 @@ export const orchestratorSendMessage = internalAction({
       id,
       message,
       model,
+      chat,
       masterSessionId,
       sentViaOrchestrator,
     },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
-    const rawDoc = await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      CHAT_DOC_QUERY[kind],
-      { id },
-    );
-    if (rawDoc === null) {
-      throw new Error(`No ${kind} ${id} found, or you do not have access.`);
+    // A session message lands in one of its chats: the named one, else Main.
+    // From here on `targetId` is that chat; the session id is only kept for
+    // the orchestrator watch pointer.
+    let targetId = id;
+    let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
+    let rawDoc: unknown;
+    if (kind === "session") {
+      rawDoc = await runQueryAsUser(
+        convexUrl,
+        clerkUserId,
+        "sessionChats:resolveDeliveryChat",
+        { sessionId: id, ...(chat !== undefined ? { chat } : {}) },
+      );
+      if (rawDoc === null) {
+        throw new Error(
+          chat === undefined
+            ? `No session ${id} found, or you do not have access.`
+            : `Session ${id} has no open chat named "${chat}".`,
+        );
+      }
+      deliveryChat = deliveryChatSchema.parse(rawDoc);
+      targetId = deliveryChat.chatId;
+    } else {
+      rawDoc = await runQueryAsUser(
+        convexUrl,
+        clerkUserId,
+        CHAT_DOC_QUERY[kind],
+        { id },
+      );
+      if (rawDoc === null) {
+        throw new Error(`No ${kind} ${id} found, or you do not have access.`);
+      }
     }
 
     // A child with anything already queued is NOT idle, even with no workflow
@@ -1584,14 +1660,14 @@ export const orchestratorSendMessage = internalAction({
           convexUrl,
           clerkUserId,
           "queuedMessages:listByParent",
-          { parentId: id },
+          { parentId: targetId },
         ),
       ).length;
 
     const delivery = chatDelivery(kind, rawDoc, queuedAhead, model);
     for (const call of buildChatMessageCalls({
       kind,
-      id,
+      id: targetId,
       message,
       delivery,
       sentViaOrchestrator,
@@ -1606,7 +1682,13 @@ export const orchestratorSendMessage = internalAction({
     }
     const delivered: "queued" | "started" =
       delivery.action === "queue" ? "queued" : "started";
-    return { delivered, model: delivery.model };
+    return {
+      delivered,
+      model: delivery.model,
+      ...(deliveryChat !== undefined
+        ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
+        : {}),
+    };
   },
 });
 
@@ -1620,10 +1702,11 @@ export const orchestratorStopAgent = internalAction({
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     const convexUrl = getEvaConvexCloudUrl();
     if (kind === "session") {
+      // Every chat of the session: a stop means the whole agent goes quiet.
       await runMutationAsUser(
         convexUrl,
         clerkUserId,
-        "_sessions/execution:cancelExecution",
+        "_sessions/execution:cancelSessionExecution",
         { sessionId: id },
       );
       return null;

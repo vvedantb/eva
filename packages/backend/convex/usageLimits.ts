@@ -1,3 +1,4 @@
+import { loadSessionChat } from "./_sessionChats/helpers";
 import { v } from "convex/values";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { internalQuery } from "./_generated/server";
@@ -7,10 +8,6 @@ import {
 } from "./validators";
 import type { Doc, Id } from "./_generated/dataModel";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
-import {
-  ensureSessionDaemonState,
-  syncSessionDaemonState,
-} from "./_sessions/daemonState";
 
 /**
  * Agent plan usage limits. A sandbox turn captures how much of the provider's
@@ -275,44 +272,45 @@ export const getByRepo = authQuery({
 });
 
 const refreshTargetArgs = {
-  sessionId: v.optional(v.id("sessions")),
+  /** The live chat whose daemon reports the reading (its session's sandbox). */
+  chatId: v.optional(v.id("sessionChats")),
   projectId: v.optional(v.id("projects")),
   taskId: v.optional(v.id("agentTasks")),
 };
 
 type RefreshTarget =
-  | { kind: "session"; sessionId: Id<"sessions"> }
+  | { kind: "session"; chatId: Id<"sessionChats"> }
   | { kind: "project"; projectId: Id<"projects"> }
   | { kind: "task"; taskId: Id<"agentTasks"> };
 
 function parseRefreshTarget(args: {
-  sessionId?: Id<"sessions">;
+  chatId?: Id<"sessionChats">;
   projectId?: Id<"projects">;
   taskId?: Id<"agentTasks">;
 }): RefreshTarget {
   if (
-    args.sessionId !== undefined &&
+    args.chatId !== undefined &&
     args.projectId === undefined &&
     args.taskId === undefined
   ) {
-    return { kind: "session", sessionId: args.sessionId };
+    return { kind: "session", chatId: args.chatId };
   }
   if (
     args.projectId !== undefined &&
-    args.sessionId === undefined &&
+    args.chatId === undefined &&
     args.taskId === undefined
   ) {
     return { kind: "project", projectId: args.projectId };
   }
   if (
     args.taskId !== undefined &&
-    args.sessionId === undefined &&
+    args.chatId === undefined &&
     args.projectId === undefined
   ) {
     return { kind: "task", taskId: args.taskId };
   }
   throw new Error(
-    "Refresh needs exactly one of sessionId, projectId, or taskId",
+    "Refresh needs exactly one of chatId, projectId, or taskId",
   );
 }
 
@@ -334,10 +332,11 @@ export const getRefreshSurface = internalQuery({
   handler: async (ctx, args) => {
     const target = parseRefreshTarget(args);
     if (target.kind === "session") {
-      const session = await ctx.db.get(target.sessionId);
-      if (!session || session.repoId !== args.repoId) {
-        throw new Error("Session not found");
+      const context = await loadSessionChat(ctx.db, target.chatId);
+      if (!context || context.session.repoId !== args.repoId) {
+        throw new Error("Chat not found");
       }
+      const { session } = context;
       if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
         throw new Error("Not authorized");
       }
@@ -391,20 +390,18 @@ export const requestRefresh = authMutation({
     const target = parseRefreshTarget(args);
     const now = Date.now();
     if (target.kind === "session") {
-      const session = await ctx.db.get(target.sessionId);
-      if (!session || session.repoId !== args.repoId) {
-        throw new Error("Session not found");
+      const context = await loadSessionChat(ctx.db, target.chatId);
+      if (!context || context.session.repoId !== args.repoId) {
+        throw new Error("Chat not found");
       }
+      const { chat, session } = context;
       if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
         throw new Error("Not authorized");
       }
       if (!session.sandboxId || isStoppedSandbox(session.status)) {
         return false;
       }
-      await ensureSessionDaemonState(ctx, session);
-      await syncSessionDaemonState(ctx, session, {
-        usageRefreshRequestedAt: now,
-      });
+      await ctx.db.patch(chat._id, { usageRefreshRequestedAt: now });
       return true;
     }
     if (target.kind === "project") {
@@ -450,15 +447,13 @@ export const clearRefresh = authMutation({
   handler: async (ctx, args) => {
     const target = parseRefreshTarget(args);
     if (target.kind === "session") {
-      const session = await ctx.db.get(target.sessionId);
-      if (!session) throw new Error("Session not found");
+      const context = await loadSessionChat(ctx.db, target.chatId);
+      if (!context) throw new Error("Chat not found");
+      const { chat, session } = context;
       if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
         throw new Error("Not authorized");
       }
-      await ensureSessionDaemonState(ctx, session);
-      await syncSessionDaemonState(ctx, session, {
-        usageRefreshRequestedAt: undefined,
-      });
+      await ctx.db.patch(chat._id, { usageRefreshRequestedAt: undefined });
       return null;
     }
     if (target.kind === "project") {

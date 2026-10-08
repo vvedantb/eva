@@ -61,7 +61,7 @@ var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
 var NO_WRITES = process.env.EVA_NO_WRITES === "1";
-var BLOCKING_QUESTIONS_ENABLED = process.env.ENTITY_ID_FIELD === "sessionId";
+var BLOCKING_QUESTIONS_ENABLED = process.env.ENTITY_ID_FIELD === "sessionId" || process.env.ENTITY_ID_FIELD === "chatId";
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
@@ -161,7 +161,7 @@ var CURSOR_SDK_STORE_DIR = CURSOR_PERSIST_DIR + "/sdk";
 var CLAUDE_SESSION_PROJECT_DIR = WORK_DIR.replace(/\\//g, "-");
 var CLAUDE_LOCAL_PROJECT_DIR = CLAUDE_RUNTIME_CONFIG_DIR + "/projects/" + CLAUDE_SESSION_PROJECT_DIR;
 var CLAUDE_PERSIST_PROJECT_DIR = CLAUDE_PERSIST_DIR + "/projects/" + CLAUDE_SESSION_PROJECT_DIR;
-var CLAUDE_STATE_FILE_NAME = "session-state.json";
+var CLAUDE_STATE_FILE_NAME = ENTITY_ID_FIELD !== void 0 && ENTITY_ID !== void 0 && ENTITY_ID !== "" ? "session-state." + ENTITY_ID_FIELD + "-" + ENTITY_ID + ".json" : "session-state.json";
 var CLAUDE_LOCAL_STATE_FILE = CLAUDE_RUNTIME_CONFIG_DIR + "/" + CLAUDE_STATE_FILE_NAME;
 var CLAUDE_PERSIST_STATE_FILE = CLAUDE_PERSIST_DIR + "/" + CLAUDE_STATE_FILE_NAME;
 var CLAUDE_SYNC_TIMEOUT_MS = Number(
@@ -2529,7 +2529,7 @@ function trackClaudeToolResult(toolUseId, resultText, isError) {
   });
 }
 function canFlushBackgroundShells() {
-  return PROVIDER === "claude" && ENTITY_ID_FIELD === "sessionId" && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
+  return PROVIDER === "claude" && (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
 }
 async function flushBackgroundShellQueue() {
   if (!canFlushBackgroundShells()) return;
@@ -4774,7 +4774,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
     ENABLE_TOOL_SEARCH: "auto"
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId") {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};
@@ -5131,6 +5131,10 @@ function synchronizeForPush(branch) {
   log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
   return { status: "failed" };
 }
+function tipAlreadyPublished(exclusion) {
+  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
+  return unpushed.ok && unpushed.out === "0";
+}
 function persistTurnWork() {
   if (REQUIRE_TASK_COMMIT || RUN_ID) return;
   const startedAt = Date.now();
@@ -5156,19 +5160,13 @@ function persistTurnWork() {
       );
     }
   }
+  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
   const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const sync = synchronizeForPush(branch.out);
     if (sync.status === "failed") return;
     const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
-    const unpushed = git([
-      "rev-list",
-      "--count",
-      "HEAD",
-      "--not",
-      ...exclusion
-    ]);
-    if (unpushed.ok && unpushed.out === "0") return;
+    if (tipAlreadyPublished(exclusion)) return;
     const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
     if (push.ok) {
       log(
@@ -5481,6 +5479,7 @@ function endWatchedTurn() {
 }
 async function failTurnAndExit(error) {
   log("daemon: failing turn \\u2014 " + error);
+  persistTurnWork();
   try {
     const completionArgs = {
       [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
@@ -5509,6 +5508,7 @@ async function failTurnAndExit(error) {
 }
 async function exitWithoutCompletion(reason) {
   log("daemon: exiting without completion \\u2014 " + reason);
+  persistTurnWork();
   if (readDaemonPidFile() === process.pid) {
     try {
       unlinkSync(DAEMON_PID_FILE);
@@ -5523,6 +5523,7 @@ function startTurnWatchdog() {
     if (supervisor.isCancellationInFlight) {
       if (now - turnCancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS) {
         log("daemon: cancelled turn did not settle in time \\u2014 exiting");
+        persistTurnWork();
         process.exit(1);
       }
       return;
@@ -5991,6 +5992,7 @@ async function failSyntheticTurn(error) {
   }
   log("daemon: failing synthetic turn \\u2014 " + error);
   const messageId = turn.messageId;
+  persistTurnWork();
   try {
     await flushStreaming();
     for (const step of callbackState.accumulatedSteps) {
@@ -6079,6 +6081,7 @@ async function finalizeSyntheticTurn(output) {
     completionArgs.turnId = turnLease.turnId;
     completionArgs.leaseGeneration = turnLease.leaseGeneration;
   }
+  persistTurnWork();
   await callConvexWithRetry(
     "mutation",
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
@@ -6486,6 +6489,7 @@ async function runSdkDaemon() {
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
     log("daemon: query failed \\u2014 " + messageText);
+    persistTurnWork();
     try {
       await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", {
         [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
@@ -7891,6 +7895,7 @@ async function finalizeTurn3(attempt) {
 }
 async function failTurnAndExit2(error) {
   log("cursor daemon: failing turn \\u2014 " + error);
+  persistTurnWork();
   try {
     const completionArgs = entityMutationArgs2({
       success: false,
@@ -8058,6 +8063,7 @@ async function executeClaimedTurn(turn) {
       await flushStreaming();
       for (const step of callbackState.accumulatedSteps) step.status = "complete";
       if (await setFinalizingState()) return;
+      persistTurnWork();
       const completionArgs = {
         [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
         success: false,
@@ -8097,6 +8103,7 @@ async function runCursorTurnWorker() {
 async function reportCursorTurnWorkerFailure(outcome) {
   const error = cursorTurnWorkerFailureMessage(outcome);
   log("cursor daemon: " + error);
+  persistTurnWork();
   const completionArgs = entityMutationArgs2({
     success: false,
     result: null,
@@ -9879,6 +9886,7 @@ try {
     process.exit(1);
   }
 } catch (err) {
+  persistTurnWork();
   syncProviderStateToPersist("fatal-error");
   await stopStreamingLoops();
   writeDoneFile("fatal-error", {

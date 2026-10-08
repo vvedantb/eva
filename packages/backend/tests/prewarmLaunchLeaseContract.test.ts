@@ -86,7 +86,11 @@ describe("orchestrator prewarm does not hold the lease for dockerd", () => {
       executionSource,
       "export const prewarmSessionDaemon = internalAction({",
     );
-    expect(body).toContain("skipDocker: session?.isOrchestrator === true");
+    // A chat shares its session's sandbox, so the flag is read off the
+    // session the chat belongs to.
+    expect(body).toContain(
+      "skipDocker: context?.session.isOrchestrator === true",
+    );
   });
 
   test("the launch-lease holder forwards skipDocker into ensureSandboxRunning", () => {

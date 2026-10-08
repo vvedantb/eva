@@ -24,8 +24,9 @@ const taskPanelSource = readSource(
 const sessionPanelSource = readSource(
   "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/ChatPanel.tsx",
 );
+// The session composer's model/account state is per chat now.
 const sessionModelSource = readSource(
-  "../../../apps/web/src/lib/hooks/useSessionModel.ts",
+  "../../../apps/web/src/lib/hooks/useChatModel.ts",
 );
 
 describe("provider account handoff is one shared contract", () => {
@@ -131,27 +132,36 @@ describe("task chat provider account handoff", () => {
 
 describe("session chat provider account handoff", () => {
   test("the requested account is validated and becomes the staged turn account", () => {
-    // Sessions stage through one shared helper, so the resolution lives there;
-    // startExecute only has to hand the composer's pick to it unchanged.
+    // Session chats stage through one shared helper, so the resolution lives
+    // there; startExecute only hands the composer's settings (the account
+    // pick included) to it unchanged.
     const startExecute = exportBody(sessionExecutionSource, "startExecute");
-    expect(startExecute).toContain("stageAndStartSessionTurn(ctx, {");
-    expect(startExecute).toContain("providerAccountId: args.providerAccountId");
-    const stager = functionBody(
-      sessionExecutionSource,
-      "stageAndStartSessionTurn",
-    );
+    expect(startExecute).toContain("stageAndStartChatTurn(ctx, {");
+    expect(startExecute).toContain("const { chatId, message, ...settings } = args;");
+    expect(startExecute).toContain("settings,");
+    expect(startExecute).not.toContain("void args.providerAccountId");
+    const stager = functionBody(sessionExecutionSource, "stageAndStartChatTurn");
     expect(stager).toContain("resolveTurnProviderAccountId(");
+    expect(stager).toContain("requestedAccountId: settings.providerAccountId");
     expect(stager).toContain('changePolicy: "owner-pool"');
     expect(stager).toContain("providerAccountId: stickyProviderAccountId");
     expect(stager).not.toContain(
       "providerAccountId: session.providerAccountId",
     );
+    expect(stager).not.toContain("providerAccountId: chat.providerAccountId");
   });
 
-  test("queued turns persist the validated account onto the session", () => {
+  test("queued turns persist the validated account onto the chat", () => {
+    // The enqueue mutation delegates to the shared queue helper, which is
+    // where the account is resolved and written to the queued row and chat.
     const enqueueMessage = exportBody(sessionExecutionSource, "enqueueMessage");
-    expect(enqueueMessage).toContain("resolveTurnProviderAccountId(");
-    expect(enqueueMessage).toContain("providerAccountId,");
+    expect(enqueueMessage).toContain("enqueueChatMessage(ctx, {");
+    const helper = functionBody(sessionExecutionSource, "enqueueChatMessage");
+    expect(helper).toContain("resolveTurnProviderAccountId(");
+    expect(helper).toContain("requestedAccountId: settings.providerAccountId");
+    expect(helper).toContain('changePolicy: "owner-pool"');
+    expect(helper).toContain("providerAccountId,");
+    expect(helper).toContain("ctx.db.patch(chat._id, {");
   });
 });
 

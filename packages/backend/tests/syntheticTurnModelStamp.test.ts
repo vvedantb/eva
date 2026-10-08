@@ -21,7 +21,7 @@ const projectDaemonSource = readSource("../convex/_chat/projectChatDaemon.ts");
  * handoff catch-up (see `_shared/modelHandoff.ts`). The sticky composer pick
  * (`lastModel` / `lastChatModel`) can move to another provider while the turn
  * is open, so the stamp must come from the daemon that actually runs it —
- * `session.lastModel` is only the fallback for daemons launched before the
+ * `chat.lastModel` is only the fallback for daemons launched before the
  * protocol carried a model.
  */
 describe("synthetic turn checkpoint stamping", () => {
@@ -37,7 +37,7 @@ describe("synthetic turn checkpoint stamping", () => {
 
   test("every openSyntheticTurn prefers the daemon's model over the sticky pick", () => {
     expect(sessionWorkflowSource).toContain(
-      "normalizeAIModel(args.model ?? session.lastModel)",
+      "normalizeAIModel(args.model ?? chat.lastModel)",
     );
     expect(taskDaemonSource).toContain(
       "normalizeAIModel(args.model ?? task.lastChatModel ?? task.model)",

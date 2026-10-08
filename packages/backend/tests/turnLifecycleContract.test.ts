@@ -11,12 +11,15 @@ test("the schema supports one indexed open turn and lease reconciliation", () =>
   const schema = source("../convex/schema.ts");
   expect(schema).toContain('turns: defineTable(turnFields)');
   expect(schema).toContain('.index("by_entity_open"');
+  // Open turns across every chat of a session answer the parallel-chat cap
+  // and the sidebar's executing state in one indexed read.
+  expect(schema).toContain('.index("by_session_open", ["sessionId", "open"])');
   expect(schema).toContain('.index("by_open_lease"');
 });
 
 test("a turn is persisted before its workflow is launched", () => {
   const execution = source("../convex/_sessions/execution.ts");
-  const openAt = execution.indexOf("await openSessionTurn(");
+  const openAt = execution.indexOf("await openChatTurn(");
   const startAt = execution.indexOf(
     "internal.sessionWorkflow.sessionExecuteWorkflow",
   );
@@ -69,7 +72,7 @@ test("the heartbeat fences stale writers before changing streaming state", () =>
   expect(terminalAt).toBeGreaterThan(renewAt);
   expect(streamAt).toBeGreaterThan(terminalAt);
   expect(http).toContain("internal.turns.legacyHeartbeat");
-  expect(turns).toContain("await findOpenSessionTurn(ctx, sessionId)");
+  expect(turns).toContain("await findOpenChatTurn(ctx, chatId)");
   const bundle = source(
     "../convex/_sandbox_runtime/callbackScript.generated.ts",
   );

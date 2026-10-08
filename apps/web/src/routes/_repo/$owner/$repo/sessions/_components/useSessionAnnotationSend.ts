@@ -5,25 +5,27 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
-import { useSessionModel } from "@/lib/hooks/useSessionModel";
+import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 
 /**
- * Sends an annotation as chat display text + rich agent prompt.
- * Queues with displayContent when a turn is already running.
+ * Sends an annotation as chat display text + rich agent prompt into the
+ * session's active chat tab. Queues with displayContent when a turn is
+ * already running.
  */
 export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
 ): (display: string, full: string) => Promise<void> {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
-  // Model + traits + account are owned by Convex.
+  // Model + traits + account are owned by Convex, per chat.
   const {
     model,
     traits,
     providerAccountId: stickyProviderAccountId,
-  } = useSessionModel(sessionId, defaultModel);
+  } = useChatModel(chatId, defaultModel);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,
@@ -36,10 +38,8 @@ export function useSessionAnnotationSend(
   const { resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId);
 
-  const messages = useQuery(api.messages.listByParent, {
-    parentId: sessionId,
-  });
-  const turnStatus = useQuery(api.turns.getSessionStatus, { sessionId });
+  const messages = useQuery(api.messages.listByParent, { parentId: chatId });
+  const turnStatus = useQuery(api.turns.getChatStatus, { chatId });
   const addMessage = useMutation(api.sessions.addMessage);
   const startExecution = useMutation(api.sessionWorkflow.startExecute);
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
@@ -54,7 +54,7 @@ export function useSessionAnnotationSend(
     const reasoningLevel = displayTraits.effortLevel;
     if (isExecuting) {
       await enqueueMessage({
-        sessionId,
+        chatId,
         message: full,
         displayContent: display,
         model,
@@ -66,7 +66,7 @@ export function useSessionAnnotationSend(
     }
     await Promise.all([
       addMessage({
-        id: sessionId,
+        chatId,
         role: "user",
         content: display,
         providerAccountId: accountId,
@@ -74,21 +74,13 @@ export function useSessionAnnotationSend(
         reasoningLevel,
       }),
       startExecution({
-        sessionId,
+        chatId,
         message: full,
         model,
         ...executionTraits,
         reasoningLevel,
         providerAccountId: accountId,
       }),
-    ]).catch(async (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send annotation";
-      await addMessage({
-        id: sessionId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
-      });
-    });
+    ]);
   };
 }

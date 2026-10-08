@@ -762,9 +762,15 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
     "send_chat_message",
     `Send a chat message into an EXISTING Eva session, quick task or project and run it there, exactly as typing in that chat does. Use this to carry on with a pull request Eva already opened. It never creates a new session, task or project.
 
-Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kind" and a repo. An idle chat starts its sandbox and runs the message straight away; one mid-turn queues it to run next. The reply says which happened.`,
+Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kind" and a repo. A session can hold several parallel chats; "chat" picks one by its number or title, otherwise the message lands in Main. An idle chat starts its sandbox and runs the message straight away; one mid-turn queues it to run next. The reply says which happened.`,
     {
       message: z.string().describe("The message to post into the chat."),
+      chat: z
+        .string()
+        .optional()
+        .describe(
+          'Sessions only: which chat tab to post into, by number ("2") or exact title. Omit for the Main chat.',
+        ),
       id: z
         .string()
         .optional()
@@ -814,6 +820,7 @@ Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kin
     },
     async ({
       message,
+      chat,
       id,
       prUrl,
       numId,
@@ -889,6 +896,7 @@ Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kin
           id: target.targetId,
           message,
           model,
+          ...(target.kind === "session" && chat !== undefined ? { chat } : {}),
           masterSessionId,
           // Only the master's sends carry its badge; a user's own MCP client
           // sends as the user.
@@ -916,6 +924,7 @@ Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kin
         branch: target.branchName,
         delivered: result.delivered,
         model: result.model,
+        ...(result.chat !== undefined ? { chat: result.chat } : {}),
       });
     },
   );

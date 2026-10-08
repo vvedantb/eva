@@ -66,7 +66,7 @@ test("the shared dequeue deletes the queued row exactly once, and never a blob",
  * once per config rather than once per (now-shared) dequeue.
  */
 test.each([
-  "sessionQueueConfig",
+  "sessionChatQueueConfig",
   "projectChatQueueConfig",
   "taskChatQueueConfig",
 ])(

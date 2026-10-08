@@ -137,24 +137,31 @@ describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
       "const taskChatAdapter:",
     );
     // The UI must reflect the stop — users cannot see the provider dashboard.
-    expect(adapter).toContain('patch.status = "closed"');
+    // The sandbox belongs to the session, so the chat's release flips the
+    // status on the session row the chat points at.
+    const releaseAt = adapter.indexOf("release: async (ctx, id, opts) => {");
+    expect(releaseAt).toBeGreaterThan(-1);
+    const release = adapter.slice(releaseAt, adapter.indexOf("drainQueue:"));
+    expect(release).toContain("if (opts.sandboxStopped) {");
+    expect(release).toContain("ctx.db.patch(chat.sessionId, {");
+    expect(release).toContain('status: "closed"');
     expect(adapter).toContain("The session is now closed");
-    // Sessions have no daemon-owning workflow field, so they always kill the
-    // sandbox process directly rather than a named entity daemon.
+    // Session chats have no daemon-owning workflow field, so they always kill
+    // the sandbox process directly rather than a named entity daemon.
     expect(adapter).toContain("killSandboxProcess");
     expect(adapter).not.toContain("killEntityDaemon");
   });
 
-  test("release drains the session's own queue and clears its own extra summary row", () => {
+  test("release drains the whole session's queues and clears no extra streaming rows", () => {
     const adapter = adapterBody(
       surfaceAdapters,
       "sessionChatAdapter",
       "const taskChatAdapter:",
     );
-    expect(adapter).toContain("startNextQueuedSessionMessage(ctx, id)");
-    // Only sessions carry a separate summary streaming row alongside the
-    // turn's own.
-    expect(adapter).toContain("`summary:${String(id)}`");
+    // A finished chat frees one of the session's parallel-run slots, so the
+    // drain offers it to sibling chats too — not only this chat's own queue.
+    expect(adapter).toContain("drainSessionChatQueues(ctx, chat.sessionId, id)");
+    expect(adapter).toContain("extraStreamingClears: () => []");
   });
 });
 

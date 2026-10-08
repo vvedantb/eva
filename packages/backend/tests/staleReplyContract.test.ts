@@ -64,7 +64,7 @@ describe("every turn start clears the streaming row first", () => {
   test("the shared session stager clears before staging the placeholder", () => {
     const body = functionBody(
       sessionExecution,
-      "async function stageAndStartSessionTurn(",
+      "async function stageAndStartChatTurn(",
     );
     const clearAt = body.indexOf("clearStreamingActivity(");
     const placeholderAt = body.indexOf('ctx.db.insert("messages"');
@@ -77,7 +77,7 @@ describe("every turn start clears the streaming row first", () => {
     "%s stages through that helper rather than its own placeholder",
     (name) => {
       const body = definitionBody(sessionExecution, name);
-      expect(body).toContain("stageAndStartSessionTurn(ctx, {");
+      expect(body).toContain("stageAndStartChatTurn(ctx, {");
       expect(body).not.toContain('ctx.db.insert("messages"');
     },
   );
@@ -98,7 +98,7 @@ describe("every turn start clears the streaming row first", () => {
   });
 
   test.each([
-    "sessionQueueConfig",
+    "sessionChatQueueConfig",
     "projectChatQueueConfig",
     "taskChatQueueConfig",
   ])("%s inserts a user-role message when a queued turn starts", (name) => {
@@ -107,14 +107,28 @@ describe("every turn start clears the streaming row first", () => {
   });
 
   test.each([
-    ["startNextQueuedSessionMessage", "sessionQueueConfig"],
-    ["startNextQueuedProjectChatMessage", "projectChatQueueConfig"],
-    ["startNextQueuedTaskChatMessage", "taskChatQueueConfig"],
-  ])("%s still delegates to the shared dequeue with %s", (name, configName) => {
-    const body = functionBody(queueHelpers, `export function ${name}(`);
-    expect(body).toContain(
-      `startNextQueuedChatMessage(ctx, ${name === "startNextQueuedSessionMessage" ? "sessionId" : name === "startNextQueuedProjectChatMessage" ? "projectId" : "taskId"}, ${configName})`,
+    ["startNextQueuedSessionChatMessage", "chatId", "sessionChatQueueConfig"],
+    ["startNextQueuedProjectChatMessage", "projectId", "projectChatQueueConfig"],
+    ["startNextQueuedTaskChatMessage", "taskId", "taskChatQueueConfig"],
+  ])(
+    "%s still delegates to the shared dequeue with %s",
+    (name, idName, configName) => {
+      const body = functionBody(queueHelpers, `export function ${name}(`);
+      expect(body).toContain(
+        `startNextQueuedChatMessage(ctx, ${idName}, ${configName})`,
+      );
+    },
+  );
+
+  // The session-wide drain every chat turn ending calls goes through the same
+  // shared dequeue for the finished chat and then each sibling.
+  test("drainSessionChatQueues dequeues every chat through the shared dequeue", () => {
+    const body = functionBody(
+      queueHelpers,
+      "export async function drainSessionChatQueues(",
     );
+    expect(body).toContain("startNextQueuedChatMessage(ctx, finishedChatId, config)");
+    expect(body).toContain("startNextQueuedChatMessage(ctx, chat._id, config)");
   });
 });
 

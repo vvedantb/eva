@@ -608,11 +608,23 @@ export async function signAndLaunchScript(
     }
   }
   // The orchestrator flag lives on the session, so it is resolved here — the
-  // single launch choke point — and minted into the MCP token as a claim.
-  const launchSession =
-    entityIdField === "sessionId"
-      ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
+  // single launch choke point — and minted into the MCP token as a claim. A
+  // chat daemon is keyed by its chat id but belongs to a session: the MCP
+  // identity (browser lock, fleet tools, "is this my own chat") stays the
+  // session, so the sandbox behaves the same whichever chat is running.
+  const launchChat =
+    entityIdField === "chatId"
+      ? await ctx.runQuery(internal.sessionChats.getInternal, {
+          chatId: entityId,
+        })
       : null;
+  const launchSession =
+    launchChat !== null
+      ? launchChat.session
+      : entityIdField === "sessionId"
+        ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
+        : null;
+  const mcpEntityId = launchSession ? String(launchSession._id) : entityId;
 
   // Mint the sandbox auth token and MCP token in a single node action. This
   // replaces three separate runAction hops across two "use node" isolates, which
@@ -623,8 +635,8 @@ export async function signAndLaunchScript(
       userId,
       repoId,
       enableMcp: opts.enableMcp !== false,
-      entityId,
-      ...(entityIdField === "sessionId"
+      entityId: mcpEntityId,
+      ...(launchSession !== null
         ? { entityKind: "session" as const }
         : entityIdField === "taskId"
           ? { entityKind: "task" as const }
@@ -703,7 +715,11 @@ export async function signAndLaunchScript(
 }
 
 /** Owner id types that can derive a stable per-owner Claude session UUID. */
-type PersistableSessionId = Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+type PersistableSessionId =
+  | Id<"sessions">
+  | Id<"sessionChats">
+  | Id<"projects">
+  | Id<"agentTasks">;
 
 /** Derives a deterministic UUID v4 from a session ID hash for Claude session identification. */
 export function sessionClaudeUuid(sessionId: PersistableSessionId): string {

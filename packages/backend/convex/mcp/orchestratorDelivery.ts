@@ -59,9 +59,9 @@ interface ChatSurfaceMutations {
 
 const CHAT_SURFACES: Record<ChatTargetKind, ChatSurfaceMutations> = {
   session: {
-    idArg: "sessionId",
-    // Sessions are the odd one out: the message insert lives in the sessions
-    // module (and names its id argument `id`), the turn control in execution.
+    // A session message lands in one of its chats, so the id handed to these
+    // mutations is the chat id resolved by `sessionChats:resolveDeliveryChat`.
+    idArg: "chatId",
     addMessage: "_sessions/mutations:addMessage",
     startExecute: "_sessions/execution:startExecute",
     enqueueMessage: "_sessions/execution:enqueueMessage",
@@ -126,9 +126,7 @@ export function buildChatMessageCalls(input: {
     {
       fn: surface.addMessage,
       args: {
-        // Sessions call this argument `id`; task and project chat name it
-        // after their entity, like their other mutations.
-        [kind === "session" ? "id" : surface.idArg]: id,
+        [surface.idArg]: id,
         role: "user",
         content: message,
         model: delivery.model,

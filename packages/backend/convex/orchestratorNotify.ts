@@ -6,6 +6,10 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { workflow } from "./workflowManager";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
+import {
+  ensureMainChat,
+  sessionChatStreamingEntityId,
+} from "./_sessionChats/helpers";
 import { isEntityDeleted } from "./numId";
 import { normalizeAIModel } from "./validators";
 import {
@@ -22,7 +26,10 @@ type ChildSummary = {
   title: string;
   /** Optional because a quick task can exist before a repo is attached. */
   repoId: Id<"githubRepos"> | undefined;
-  parentId: Id<"sessions"> | Id<"agentTasks">;
+  /** The child's own transcript: a session's Main chat or the task itself. */
+  parentId: Id<"sessionChats"> | Id<"agentTasks">;
+  /** Guards against a master watching itself into a self-wake loop. */
+  childSessionId: Id<"sessions"> | undefined;
 };
 
 async function loadChildSummary(
@@ -32,12 +39,14 @@ async function loadChildSummary(
   if (child.kind === "session") {
     const session = await ctx.db.get(child.sessionId);
     if (!session || session.watchedByOrchestrator === undefined) return null;
+    const mainChat = await ensureMainChat(ctx, session);
     return {
       masterSessionId: session.watchedByOrchestrator,
       kindLabel: "session",
       title: session.title,
       repoId: session.repoId,
-      parentId: session._id,
+      parentId: mainChat._id,
+      childSessionId: session._id,
     };
   }
   const task = await ctx.db.get(child.taskId);
@@ -48,6 +57,7 @@ async function loadChildSummary(
     title: task.title,
     repoId: task.repoId,
     parentId: task._id,
+    childSessionId: undefined,
   };
 }
 
@@ -84,7 +94,7 @@ function isLiveMaster(
  */
 async function resolveChildOutcome(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | Id<"agentTasks">,
+  parentId: Id<"sessionChats"> | Id<"agentTasks">,
   reportedStatus: string,
 ): Promise<{ status: string; tail: string | undefined }> {
   const recent = await ctx.db
@@ -129,7 +139,7 @@ export const notifyOrchestratorOfChild = internalMutation({
       return null;
     }
     // A master cannot watch itself into a self-wake loop.
-    if (master._id === summary.parentId) return null;
+    if (master._id === summary.childSessionId) return null;
 
     const repo =
       summary.repoId === undefined ? null : await ctx.db.get(summary.repoId);
@@ -143,25 +153,28 @@ export const notifyOrchestratorOfChild = internalMutation({
     const content =
       outcome.tail === undefined ? headline : `${headline}\n\n${outcome.tail}`;
 
+    // Wake-ups always land in the master's Main chat.
+    const masterChat = await ensureMainChat(ctx, master);
     const ownerUserId = master.createdBy ?? master.userId;
-    const model = normalizeAIModel(master.lastModel);
+    const model = normalizeAIModel(masterChat.lastModel);
     const now = Date.now();
 
-    if (master.activeWorkflowId !== undefined) {
+    if (masterChat.activeWorkflowId !== undefined) {
       await ctx.db.insert("queuedMessages", {
-        parentId: master._id,
+        parentId: masterChat._id,
         content,
         createdAt: now,
         order: now,
         userId: ownerUserId,
         model,
-        providerAccountId: master.providerAccountId,
-        reasoningLevel: master.lastReasoningLevel,
-        thinkingEnabled: master.lastThinkingEnabled,
-        use1mContext: master.lastUse1mContext,
-        fastMode: master.lastFastMode,
+        providerAccountId: masterChat.providerAccountId,
+        reasoningLevel: masterChat.lastReasoningLevel,
+        thinkingEnabled: masterChat.lastThinkingEnabled,
+        use1mContext: masterChat.lastUse1mContext,
+        fastMode: masterChat.lastFastMode,
         orchestratorNotification: true,
       });
+      await ctx.db.patch(masterChat._id, { updatedAt: now });
       await ctx.db.patch(master._id, { updatedAt: now });
       return null;
     }
@@ -172,9 +185,12 @@ export const notifyOrchestratorOfChild = internalMutation({
     // Same order as the queue drain: wipe any stale streaming row before the
     // workflow stages its assistant placeholder, then insert the user row the
     // placeholder answers.
-    await clearStreamingActivity(ctx, String(master._id));
+    await clearStreamingActivity(
+      ctx,
+      sessionChatStreamingEntityId(masterChat._id),
+    );
     await ctx.db.insert("messages", {
-      parentId: master._id,
+      parentId: masterChat._id,
       role: "user",
       content,
       timestamp: now,
@@ -187,24 +203,22 @@ export const notifyOrchestratorOfChild = internalMutation({
       ctx,
       internal.sessionWorkflow.sessionExecuteWorkflow,
       {
-        sessionId: master._id,
+        chatId: masterChat._id,
         message: content,
         model,
-        reasoningLevel: master.lastReasoningLevel,
-        thinkingEnabled: master.lastThinkingEnabled,
-        use1mContext: master.lastUse1mContext,
-        fastMode: master.lastFastMode,
-        providerAccountId: master.providerAccountId,
+        reasoningLevel: masterChat.lastReasoningLevel,
+        thinkingEnabled: masterChat.lastThinkingEnabled,
+        use1mContext: masterChat.lastUse1mContext,
+        fastMode: masterChat.lastFastMode,
+        providerAccountId: masterChat.providerAccountId,
         credentialOwnerUserId: ownerUserId,
         userId: ownerUserId,
         installationId: masterRepo.installationId,
       },
     );
-    await ctx.db.patch(master._id, {
-      updatedAt: now,
-      lastModel: model,
-    });
-    await trackSessionWorkflow(ctx, master._id, workflowId);
+    await ctx.db.patch(masterChat._id, { updatedAt: now, lastModel: model });
+    await ctx.db.patch(master._id, { updatedAt: now });
+    await trackSessionWorkflow(ctx, masterChat._id, workflowId);
     return null;
   },
 });

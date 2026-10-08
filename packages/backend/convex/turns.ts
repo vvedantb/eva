@@ -6,10 +6,11 @@ import {
   internalQuery,
 } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
 import { sessionChatAdapter } from "./_chat/surfaceAdapters";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { startNextQueuedSessionMessage } from "./_queues/helpers";
+import { drainSessionChatQueues } from "./_queues/helpers";
 import {
   touchStreamingEntity,
   upsertStreamingActivity,
@@ -19,48 +20,95 @@ import {
   acquireTurnLease,
   advanceTurn,
   closeTurn,
-  findOpenSessionTurn,
+  findOpenChatTurn,
+  listOpenSessionTurns,
   renewTurnLease,
 } from "./_chat/turnStore";
 import { turnLeaseDurationMs } from "./_chat/turnLease";
 import { turnStateValidator } from "./_validators/tableFields";
-import { isLegacySessionExecuting } from "./_chat/turnProjection";
+import { loadSessionChat } from "./_sessionChats/helpers";
 
-const sessionTurnStatusValidator = v.union(
-  v.object({
-    source: v.literal("durable"),
-    turnId: v.id("turns"),
-    state: turnStateValidator,
-    startedAt: v.number(),
-    leaseExpiresAt: v.number(),
-    placeholderMessageId: v.optional(v.id("messages")),
-  }),
-  v.object({ source: v.literal("legacy") }),
-);
+const chatTurnStatusValidator = v.object({
+  turnId: v.id("turns"),
+  state: turnStateValidator,
+  startedAt: v.number(),
+  leaseExpiresAt: v.number(),
+  placeholderMessageId: v.optional(v.id("messages")),
+});
 
-/** Canonical UI projection for whether one session turn is open. */
-export const getSessionStatus = authQuery({
-  args: { sessionId: v.id("sessions") },
-  returns: v.union(sessionTurnStatusValidator, v.null()),
+/** Canonical UI projection for whether one chat's turn is open. */
+export const getChatStatus = authQuery({
+  args: { chatId: v.id("sessionChats") },
+  returns: v.union(chatTurnStatusValidator, v.null()),
   handler: async (
     ctx,
     args,
-  ): Promise<Infer<typeof sessionTurnStatusValidator> | null> => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    const turn = await findOpenSessionTurn(ctx, args.sessionId);
-    if (!turn) {
-      return isLegacySessionExecuting(session) ? { source: "legacy" } : null;
-    }
+  ): Promise<Infer<typeof chatTurnStatusValidator> | null> => {
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) return null;
+    if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId))) return null;
+    const turn = await findOpenChatTurn(ctx, args.chatId);
+    if (!turn) return null;
     return {
-      source: "durable",
       turnId: turn._id,
       state: turn.state,
       startedAt: turn.turnStartedAt,
       leaseExpiresAt: turn.leaseExpiresAt,
       placeholderMessageId: turn.placeholderMessageId,
     };
+  },
+});
+
+/**
+ * Open turns across every chat of a session, in one indexed read. Feeds the
+ * chat tab strip's running dots and the "waiting for a free slot" caption.
+ */
+export const listSessionChatStatuses = authQuery({
+  args: { sessionId: v.id("sessions") },
+  returns: v.array(
+    v.object({
+      chatId: v.id("sessionChats"),
+      state: turnStateValidator,
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return [];
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
+    const turns = await listOpenSessionTurns(ctx, args.sessionId);
+    const statuses: Array<{
+      chatId: Id<"sessionChats">;
+      state: Infer<typeof turnStateValidator>;
+    }> = [];
+    for (const turn of turns) {
+      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
+      if (chatId) statuses.push({ chatId, state: turn.state });
+    }
+    return statuses;
+  },
+});
+
+/**
+ * Chat ids with an open turn across a repo, for the sidebar's indented chat
+ * rows: one indexed scan per repo group instead of a status query per session.
+ */
+export const listRunningChatIdsForRepo = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(v.id("sessionChats")),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const turns = await ctx.db
+      .query("turns")
+      .withIndex("by_repo_open", (q) =>
+        q.eq("repoId", args.repoId).eq("open", true),
+      )
+      .collect();
+    const chatIds: Id<"sessionChats">[] = [];
+    for (const turn of turns) {
+      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
+      if (chatId) chatIds.push(chatId);
+    }
+    return chatIds;
   },
 });
 
@@ -134,8 +182,8 @@ async function applyLegacyHeartbeat(
   ctx: MutationCtx,
   args: Infer<typeof legacyHeartbeatArgsValidator>,
 ): Promise<boolean> {
-  const sessionId = ctx.db.normalizeId("sessions", args.entityId);
-  if (sessionId && (await findOpenSessionTurn(ctx, sessionId))) return false;
+  const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
+  if (chatId && (await findOpenChatTurn(ctx, chatId))) return false;
   if (args.touchOnly) {
     await touchStreamingEntity(ctx, args.entityId);
   } else {
@@ -176,7 +224,7 @@ export const heartbeatFromCallback = authMutation({
   }),
 });
 
-/** Legacy callbacks may write only while no durable Turn owns the session. */
+/** Legacy callbacks may write only while no durable Turn owns the chat. */
 export const legacyHeartbeat = internalMutation({
   args: legacyHeartbeatArgs,
   returns: v.boolean(),
@@ -269,8 +317,8 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-    const session = sessionId ? await ctx.db.get(sessionId) : null;
+    const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
+    const context = chatId ? await loadSessionChat(ctx.db, chatId) : null;
     const leaseDurationMs = turnLeaseDurationMs(turn.state);
     const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
     const staleSeconds = Math.max(
@@ -285,17 +333,17 @@ export const finalizeExpired = internalMutation({
           turn.state,
           thresholdSeconds,
         );
-    if (sessionId && session && turn.workflowId !== undefined) {
+    if (chatId && context && turn.workflowId !== undefined) {
       await finalizeStaleChatTurn(
         ctx,
         sessionChatAdapter,
-        sessionId,
-        session,
+        chatId,
+        context,
         turn.workflowId,
         alert,
         { sandboxStopped: args.sandboxStopped },
       );
-    } else if (sessionId && session && turn.placeholderMessageId !== undefined) {
+    } else if (chatId && context && turn.placeholderMessageId !== undefined) {
       const message = await ctx.db.get(turn.placeholderMessageId);
       if (message && message.finishedAt === undefined) {
         await ctx.db.patch(message._id, {
@@ -304,19 +352,22 @@ export const finalizeExpired = internalMutation({
         });
       }
       await clearStreamingActivity(ctx, turn.streamingEntityId);
-      await ctx.db.patch(sessionId, {
+      await ctx.db.patch(chatId, {
         syntheticTurnMessageId: undefined,
         updatedAt: Date.now(),
       });
-      await startNextQueuedSessionMessage(ctx, sessionId);
+      await drainSessionChatQueues(ctx, context.session._id, chatId);
+    } else {
+      // A pre-chat "session" turn or an orphan: nothing to salvage into.
+      await clearStreamingActivity(ctx, turn.streamingEntityId);
     }
     await closeTurn(ctx, turn, "error", { error: alert.text });
-    if (sessionId && !args.sandboxStopped) {
+    if (chatId && context && !args.sandboxStopped) {
       await ctx.scheduler.runAfter(
         0,
         internal._sessions.execution.retryEmptyStalledSessionTurn,
         {
-          sessionId,
+          chatId,
           turnId: args.turnId,
           sandboxStopped: args.sandboxStopped,
         },

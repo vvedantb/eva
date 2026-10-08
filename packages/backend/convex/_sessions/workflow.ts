@@ -22,8 +22,8 @@ import {
   extractFirstJsonValue,
 } from "../_taskWorkflow/helpers";
 import {
+  drainSessionChatQueues,
   scheduleQueueDrainAfterBackgroundAgents,
-  startNextQueuedSessionMessage,
 } from "../_queues/helpers";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { buildCustomInstructionsBlock } from "../prompts";
@@ -43,17 +43,21 @@ import { mergeBackgroundAgents } from "./backgroundAgents";
 import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { isDaemonClaimPaused } from "../_chat/daemonClaimPause";
 import {
-  ensureSessionDaemonState,
-  syncSessionDaemonState,
-} from "./daemonState";
-import {
   acquireTurnLease,
   advanceTurn,
   closeTurn,
-  findOpenSessionTurn,
-  openSessionTurn,
+  findOpenChatTurn,
+  openChatTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
+import {
+  ensureMainChat,
+  getSessionChatOrThrow,
+  listLiveSessionChats,
+  loadSessionChat,
+  sessionChatPersistenceId,
+  sessionChatStreamingEntityId,
+} from "../_sessionChats/helpers";
 
 // --- Completion event ---
 
@@ -147,10 +151,10 @@ function parseDesignResult(
 const WORKSPACE_DIR = "/tmp/repo";
 const LEGACY_WORKSPACE_DIR = "/workspace/repo";
 
-/** Finalizes and clears an open synthetic-turn placeholder on session hygiene paths. */
+/** Finalizes and clears an open synthetic-turn placeholder on chat hygiene paths. */
 async function finalizeOpenSyntheticTurn(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
   syntheticTurnMessageId: Id<"messages"> | undefined,
 ): Promise<void> {
   if (syntheticTurnMessageId === undefined) return;
@@ -158,27 +162,38 @@ async function finalizeOpenSyntheticTurn(
   if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
     const streaming = await ctx.db
       .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
+      .withIndex("by_entity", (q) =>
+        q.eq("entityId", sessionChatStreamingEntityId(chatId)),
+      )
       .first();
     await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
   }
-  await ctx.db.patch(sessionId, { syntheticTurnMessageId: undefined });
+  await ctx.db.patch(chatId, { syntheticTurnMessageId: undefined });
 }
 
 /**
- * Builds the agent prompt for a session turn (doc `@` mentions resolved, custom
+ * Added to a turn's prompt while the session has more than one open chat.
+ * Deliberately not a sibling summary (what the other chats are doing) — only
+ * the one fact an agent sharing a working tree needs.
+ */
+const PARALLEL_CHATS_NOTE =
+  "Other chats in this session may edit this checkout at the same time. Do not revert changes you did not make.";
+
+/**
+ * Builds the agent prompt for a chat turn (doc `@` mentions resolved, custom
  * instructions + system prompt folded in). Shared single source of truth so
  * both the workflow's `getSessionData` query and the daemon-pull `startExecute`
  * mutation produce byte-identical prompts — the daemon must run exactly what
  * the workflow would have handed it, never a second variant. Takes
- * already-fetched session/repo/user docs so it works from either a query or a
- * mutation context (MutationCtx satisfies QueryCtx for the read-only mention
- * resolution).
+ * already-fetched session/chat/repo/user docs so it works from either a query
+ * or a mutation context (MutationCtx satisfies QueryCtx for the read-only
+ * mention resolution).
  */
 export async function buildSessionPrompt(
   ctx: QueryCtx,
   args: {
     session: Doc<"sessions">;
+    chat: Doc<"sessionChats">;
     repo: Doc<"githubRepos">;
     user: Doc<"users"> | null;
     message: string;
@@ -186,7 +201,10 @@ export async function buildSessionPrompt(
     model: string;
   },
 ): Promise<{ prompt: string; branchName: string }> {
-  const { session, repo, user } = args;
+  const { session, chat, repo, user } = args;
+  const liveChats = await listLiveSessionChats(ctx.db, session._id);
+  const parallelNote =
+    liveChats.length > 1 ? `\n\n${PARALLEL_CHATS_NOTE}` : "";
   const rootDirectory = repo.rootDirectory ?? "";
   const customInstructionsBlock = buildCustomInstructionsBlock(
     user?.role ?? undefined,
@@ -211,9 +229,9 @@ export async function buildSessionPrompt(
     // Ave can switch providers mid-chat; catch the incoming CLI up the same way.
     prompt = await prependModelHandoffContext(
       ctx,
-      session._id,
+      chat._id,
       args.model,
-      session.provider,
+      chat.provider,
       prompt,
     );
     return { prompt, branchName };
@@ -237,15 +255,16 @@ export async function buildSessionPrompt(
     repo.systemPrompt,
     session.devPort ?? repo.devPort,
   );
+  prompt = `${prompt}${parallelNote}`;
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
   }
   // Last, so the catch-up block leads the whole prompt.
   prompt = await prependModelHandoffContext(
     ctx,
-    session._id,
+    chat._id,
     args.model,
-    session.provider,
+    chat.provider,
     prompt,
   );
   return { prompt, branchName };
@@ -279,10 +298,10 @@ export const sessionSandboxStartupWorkflow = workflow.define({
   },
 });
 
-/** Runs a session message through the sandbox agent. */
+/** Runs one chat's message through the sandbox agent. */
 export const sessionExecuteWorkflow = workflow.define({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     message: v.string(),
     model: aiModelValidator,
     reasoningLevel: v.optional(reasoningLevelValidator),
@@ -299,15 +318,16 @@ export const sessionExecuteWorkflow = workflow.define({
   },
   handler: async (step, args): Promise<void> => {
     await step.runMutation(internal.sessionWorkflow.addAssistantPlaceholder, {
-      sessionId: args.sessionId,
+      chatId: args.chatId,
     });
 
     const data = await step.runQuery(internal.sessionWorkflow.getSessionData, {
-      sessionId: args.sessionId,
+      chatId: args.chatId,
       message: args.message,
       model: args.model,
       userId: args.userId,
     });
+    const sessionId = data.sessionId;
 
     // Daemon-pull dispatch: the prompt is NOT pushed from here. `startExecute`
     // has already staged it in `session.pendingTurn` and scheduled a daemon to
@@ -331,12 +351,12 @@ export const sessionExecuteWorkflow = workflow.define({
         started = await ensureSandboxStartedSteps(step, {
           sandboxId: data.sandboxId,
           repoId: data.repoId,
-          streamingEntityId: args.sessionId,
+          streamingEntityId: args.chatId,
           sandboxRunning: data.status === "active",
         });
       } catch (error) {
         await step.runMutation(internal.sessionWorkflow.saveResult, {
-          sessionId: args.sessionId,
+          chatId: args.chatId,
           ...(args.turnId !== undefined ? { turnId: args.turnId } : {}),
           success: false,
           result: null,
@@ -366,12 +386,12 @@ export const sessionExecuteWorkflow = workflow.define({
       const prepared = await step.runAction(
         internal.sandbox.prepareSessionSandbox,
         {
-          sessionId: args.sessionId,
+          sessionId,
           existingSandboxId: data.sandboxId,
           installationId: args.installationId,
           repoOwner: data.repoOwner,
           repoName: data.repoName,
-          branchName: data.branchName ?? `eva/session-${args.sessionId}`,
+          branchName: data.branchName ?? `eva/session-${sessionId}`,
           baseBranch: data.baseBranch,
           repoId: data.repoId,
           startDesktop: false,
@@ -381,7 +401,7 @@ export const sessionExecuteWorkflow = workflow.define({
       sandboxId = prepared.sandboxId;
 
       await step.runMutation(internal.sessionWorkflow.updateSandboxId, {
-        sessionId: args.sessionId,
+        sessionId,
         sandboxId,
         branchName: data.branchName,
       });
@@ -406,7 +426,7 @@ export const sessionExecuteWorkflow = workflow.define({
     // workflow waits, so restage it before ensuring the warm process.
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.sessionWorkflow.ensurePendingTurn, {
-        sessionId: args.sessionId,
+        chatId: args.chatId,
         prompt: data.prompt,
         attachmentStorageIds: data.attachmentStorageIds,
         model: args.model,
@@ -417,7 +437,7 @@ export const sessionExecuteWorkflow = workflow.define({
     if (usesChatDaemon(data.model)) {
       await step.runAction(internal.sandbox.prewarmSessionDaemon, {
         sandboxId,
-        sessionId: args.sessionId,
+        chatId: args.chatId,
         repoId: data.repoId,
         userId: args.userId,
         model: data.model,
@@ -428,7 +448,7 @@ export const sessionExecuteWorkflow = workflow.define({
         ...sessionTurnTools(data.isOrchestrator),
         providerAccountId: args.providerAccountId,
         credentialOwnerUserId: args.credentialOwnerUserId,
-        sessionPersistenceId: args.sessionId,
+        sessionPersistenceId: data.sessionPersistenceId,
       });
     } else {
       // A failed launch must finalize the turn: without this catch the
@@ -445,22 +465,22 @@ export const sessionExecuteWorkflow = workflow.define({
               });
         if (args.turnId !== undefined && turnLease === null) {
           await step.runMutation(internal.sessionWorkflow.saveResult, {
-            sessionId: args.sessionId,
+            chatId: args.chatId,
             turnId: args.turnId,
             success: false,
             result: null,
-            error: "The turn no longer owns this session. Please retry.",
+            error: "The turn no longer owns this chat. Please retry.",
             activityLog: null,
           });
           return;
         }
         await step.runAction(internal.sandbox.launchOnExistingSandbox, {
           sandboxId,
-          entityId: String(args.sessionId),
+          entityId: String(args.chatId),
           prompt: data.prompt,
           userId: args.userId,
           completionMutation: "sessionWorkflow:handleCompletion",
-          entityIdField: "sessionId",
+          entityIdField: "chatId",
           model: data.model,
           reasoningLevel: args.reasoningLevel,
           thinkingEnabled: args.thinkingEnabled,
@@ -468,8 +488,8 @@ export const sessionExecuteWorkflow = workflow.define({
           fastMode: args.fastMode,
           ...sessionTurnTools(data.isOrchestrator),
           repoId: data.repoId,
-          streamingEntityId: String(args.sessionId),
-          sessionPersistenceId: args.sessionId,
+          streamingEntityId: String(args.chatId),
+          sessionPersistenceId: data.sessionPersistenceId,
           providerAccountId: args.providerAccountId,
           credentialOwnerUserId: args.credentialOwnerUserId,
           attachmentStorageIds: data.attachmentStorageIds,
@@ -482,7 +502,7 @@ export const sessionExecuteWorkflow = workflow.define({
         });
       } catch (error) {
         await step.runMutation(internal.sessionWorkflow.saveResult, {
-          sessionId: args.sessionId,
+          chatId: args.chatId,
           ...(args.turnId !== undefined ? { turnId: args.turnId } : {}),
           success: false,
           result: null,
@@ -520,7 +540,7 @@ export const sessionExecuteWorkflow = workflow.define({
     // streamed tokens may also be empty for short conversational-ish agent
     // turns. Publish failures are patched onto the saved message below.
     await step.runMutation(internal.sessionWorkflow.saveResult, {
-      sessionId: args.sessionId,
+      chatId: args.chatId,
       ...(args.turnId !== undefined ? { turnId: args.turnId } : {}),
       success: result.success,
       result: result.result,
@@ -560,10 +580,10 @@ export const sessionExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = `Session completed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${error instanceof Error ? error.message : String(error)}`;
         console.error(
-          `[sessionWorkflow] pushSandboxBranch failed sessionId=${args.sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[sessionWorkflow] pushSandboxBranch failed chatId=${args.chatId}: ${error instanceof Error ? error.message : String(error)}`,
         );
         await step.runMutation(internal.sessionWorkflow.saveResult, {
-          sessionId: args.sessionId,
+          chatId: args.chatId,
           ...(args.turnId !== undefined ? { turnId: args.turnId } : {}),
           success: false,
           result: result.result,
@@ -579,7 +599,7 @@ export const sessionExecuteWorkflow = workflow.define({
       await step.runMutation(
         internal.sessionWorkflow.scheduleSessionDeploymentTracking,
         {
-          sessionId: args.sessionId,
+          sessionId,
           installationId: args.installationId,
           repoOwner: data.repoOwner,
           repoName: data.repoName,
@@ -598,16 +618,16 @@ export const sessionExecuteWorkflow = workflow.define({
       if (pushedCommits || (branchPublished && data.prUrl === undefined)) {
         try {
           await step.runAction(internal.github.createDraftSessionPr, {
-            sessionId: args.sessionId,
+            sessionId,
           });
         } catch (error) {
           const errorDetail =
             error instanceof Error ? error.message : String(error);
           console.error(
-            `[sessionWorkflow] createDraftSessionPr failed sessionId=${args.sessionId}: ${errorDetail}`,
+            `[sessionWorkflow] createDraftSessionPr failed sessionId=${sessionId}: ${errorDetail}`,
           );
           await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-            sessionId: args.sessionId,
+            chatId: args.chatId,
             content: "Failed to create draft PR",
             errorDetail,
           });
@@ -653,31 +673,48 @@ export const scheduleSessionDeploymentTracking = internalMutation({
 
 // --- Supporting internal functions ---
 
-/** Posts a non-streaming system alert into the session chat (e.g. draft PR failure). */
+/**
+ * Posts a non-streaming system alert into a chat (e.g. draft PR failure).
+ * Session-level callers (PR webhooks) pass `sessionId` and the alert lands in
+ * Main; turn-level callers pass the chat the turn ran in.
+ */
 export const postSystemAlert = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.optional(v.id("sessionChats")),
+    sessionId: v.optional(v.id("sessions")),
     content: v.string(),
     errorDetail: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    let chatId = args.chatId;
+    if (chatId === undefined) {
+      if (args.sessionId === undefined) {
+        throw new Error("postSystemAlert needs a chatId or a sessionId");
+      }
+      const session = await ctx.db.get(args.sessionId);
+      if (!session) return null;
+      chatId = (await ensureMainChat(ctx, session))._id;
+    }
+    const context = await loadSessionChat(ctx.db, chatId);
+    if (!context) return null;
     await ctx.db.insert("messages", {
-      parentId: args.sessionId,
+      parentId: chatId,
       role: "assistant",
       content: args.content,
       timestamp: Date.now(),
       isSystemAlert: true,
       ...(args.errorDetail !== undefined && { errorDetail: args.errorDetail }),
     });
-    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    await ctx.db.patch(chatId, { updatedAt: Date.now() });
+    await ctx.db.patch(context.session._id, { updatedAt: Date.now() });
     return null;
   },
 });
 
-/** Clears stuck empty Working bubbles + leftover streaming for a session. */
+/** Clears stuck empty Working bubbles + leftover streaming for a chat. */
 export const clearStuckWorkingState = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: { chatId: v.id("sessionChats") },
   returns: v.object({
     deletedPlaceholders: v.number(),
     clearedStreaming: v.boolean(),
@@ -685,7 +722,7 @@ export const clearStuckWorkingState = internalMutation({
   handler: async (ctx, args) => {
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
       .collect();
     let deletedPlaceholders = 0;
     for (const message of messages) {
@@ -699,52 +736,49 @@ export const clearStuckWorkingState = internalMutation({
         deletedPlaceholders += 1;
       }
     }
-    const session = await ctx.db.get(args.sessionId);
-    if (session?.syntheticTurnMessageId) {
+    const chat = await ctx.db.get(args.chatId);
+    if (chat?.syntheticTurnMessageId) {
       await finalizeOpenSyntheticTurn(
         ctx,
-        args.sessionId,
-        session.syntheticTurnMessageId,
+        args.chatId,
+        chat.syntheticTurnMessageId,
       );
     }
-    await clearStreamingActivity(ctx, String(args.sessionId));
-    await ctx.db.patch(args.sessionId, {
+    await clearStreamingActivity(ctx, sessionChatStreamingEntityId(args.chatId));
+    await ctx.db.patch(args.chatId, {
       activeWorkflowId: undefined,
       pendingTurn: undefined,
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
     });
-    if (session) {
-      await syncSessionDaemonState(ctx, session, { pendingTurn: undefined });
-      const turn = await findOpenSessionTurn(ctx, args.sessionId);
-      if (turn) {
-        await closeTurn(ctx, turn, "error", {
-          error: "Turn state was cleared during recovery",
-        });
-      }
+    const turn = await findOpenChatTurn(ctx, args.chatId);
+    if (turn) {
+      await closeTurn(ctx, turn, "error", {
+        error: "Turn state was cleared during recovery",
+      });
     }
     return { deletedPlaceholders, clearedStreaming: true };
   },
 });
 
 /**
- * Inserts an empty assistant message into the session for streaming updates.
+ * Inserts an empty assistant message into the chat for streaming updates.
  * Idempotent: the daemon-pull `startExecute` already inserts this placeholder
  * before starting the workflow, so if the last message is already an empty
  * assistant placeholder we skip, avoiding a duplicate.
  */
 export const addAssistantPlaceholder = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new Error("Chat not found");
 
     const recent = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
       .order("desc")
       .take(10);
     // Ignore system alerts (e.g. draft-PR failures) sitting on top — startExecute
@@ -763,26 +797,28 @@ export const addAssistantPlaceholder = internalMutation({
     }
 
     await ctx.db.insert("messages", {
-      parentId: args.sessionId,
+      parentId: args.chatId,
       role: "assistant",
       content: "",
       timestamp: Date.now(),
       activityLog: "",
     });
-    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    await ctx.db.patch(args.chatId, { updatedAt: Date.now() });
     return null;
   },
 });
 
-/** Fetches session and repo data, builds the turn prompt, and resolves branch config. */
+/** Fetches chat, session and repo data, builds the turn prompt, and resolves branch config. */
 export const getSessionData = internalQuery({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     message: v.string(),
     model: aiModelValidator,
     userId: v.id("users"),
   },
   returns: v.object({
+    sessionId: v.id("sessions"),
+    sessionPersistenceId: v.union(v.id("sessions"), v.id("sessionChats")),
     sandboxId: v.optional(v.string()),
     status: sessionStatusValidator,
     repoOwner: v.string(),
@@ -799,8 +835,7 @@ export const getSessionData = internalQuery({
     isOrchestrator: v.optional(v.boolean()),
   }),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -808,6 +843,7 @@ export const getSessionData = internalQuery({
     const user = await ctx.db.get(args.userId);
     const { prompt, branchName } = await buildSessionPrompt(ctx, {
       session,
+      chat,
       repo,
       user,
       message: args.message,
@@ -819,12 +855,14 @@ export const getSessionData = internalQuery({
     // directly in startExecute).
     const triggeringUserMessage = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
       .order("desc")
       .filter((q) => q.eq(q.field("role"), "user"))
       .first();
 
     return {
+      sessionId: session._id,
+      sessionPersistenceId: sessionChatPersistenceId(chat),
       sandboxId: session.sandboxId,
       status: session.status,
       repoOwner: repo.owner,
@@ -867,10 +905,10 @@ export const updateSandboxId = internalMutation({
   },
 });
 
-/** Saves the session execution result, updating the last message and starting queued messages. */
+/** Saves a chat turn's result, updating the last message and starting queued messages. */
 export const saveResult = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     turnId: v.optional(v.id("turns")),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
@@ -883,8 +921,10 @@ export const saveResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    const context = await loadSessionChat(ctx.db, args.chatId);
+    if (!context) return null;
+    const { chat, session } = context;
+    const streamingEntityId = sessionChatStreamingEntityId(chat._id);
 
     // The reply is saved before Eva pushes the branch. If that slower push
     // later fails, a newer turn may already be running. Report the publish
@@ -893,14 +933,14 @@ export const saveResult = internalMutation({
     const publishError = delayedPublishFailureError(args.result, args.error);
     if (publishError !== undefined) {
       await ctx.db.insert("messages", {
-        parentId: args.sessionId,
+        parentId: chat._id,
         role: "assistant",
         content: "Failed to publish session branch",
         timestamp: Date.now(),
         isSystemAlert: true,
         errorDetail: publishError,
       });
-      await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+      await ctx.db.patch(chat._id, { updatedAt: Date.now() });
       return null;
     }
 
@@ -909,14 +949,14 @@ export const saveResult = internalMutation({
     // snapshot when its supervisor reports a null/empty activity log.
     const streaming = await ctx.db
       .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", String(args.sessionId)))
+      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
       .first();
     const activityLog = args.activityLog || streaming?.currentActivity;
-    await clearStreamingActivity(ctx, String(args.sessionId));
+    await clearStreamingActivity(ctx, streamingEntityId);
 
     const recent = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
       .order("desc")
       .take(20);
     const last = resultTargetMessage(recent);
@@ -976,14 +1016,17 @@ export const saveResult = internalMutation({
       await ctx.db.delete(message._id);
     }
 
+    const now = Date.now();
+    await ctx.db.patch(chat._id, {
+      activeWorkflowId: undefined,
+      updatedAt: now,
+    });
     const sessionPatch: {
-      activeWorkflowId?: string;
       updatedAt: number;
       planContent?: string;
       agentBrowsingAt?: undefined;
     } = {
-      activeWorkflowId: undefined,
-      updatedAt: Date.now(),
+      updatedAt: now,
       // Crash hygiene: drop stale soft-lock if the agent forgot browser_unlock.
       agentBrowsingAt: undefined,
     };
@@ -993,7 +1036,7 @@ export const saveResult = internalMutation({
     if (args.planContent && args.planContent !== session.planContent) {
       sessionPatch.planContent = args.planContent;
     }
-    await ctx.db.patch(args.sessionId, sessionPatch);
+    await ctx.db.patch(session._id, sessionPatch);
     if (args.turnId !== undefined) {
       const turn = await ctx.db.get(args.turnId);
       if (turn) {
@@ -1005,14 +1048,14 @@ export const saveResult = internalMutation({
         );
       }
     }
-    await startNextQueuedSessionMessage(ctx, args.sessionId);
+    await drainSessionChatQueues(ctx, session._id, chat._id);
     return null;
   },
 });
 
 /**
  * Daemon-pull turn claim. The warm sandbox daemon polls this every ~50ms; when
- * `startExecute` has staged a prompt in `session.pendingTurn`, this atomically
+ * `startExecute` has staged a prompt in `chat.pendingTurn`, this atomically
  * hands it over and clears the field so the same prompt is never claimed twice
  * (which would double-execute the turn). Returns `{ prompt: null }` when nothing
  * is pending. Also doubles as the interrupt-cancel channel: `cancelRequested`
@@ -1021,10 +1064,14 @@ export const saveResult = internalMutation({
  * (via the sandbox CONVEX_TOKEN identity) to match `handleCompletion` — the
  * daemon calls it over `/api/mutation`, and internal mutations are not
  * reachable there.
+ *
+ * The chat row is small (no plan, terminal tail or panes), so the poll reads
+ * it directly; the session is only read once a turn is actually pending, for
+ * the setup gate.
  */
 export const claimPendingTurn = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     model: v.optional(aiModelValidator),
     // When false, drain cancel/stop/usage only. Old sandboxes omit this and
     // keep acquiring the running lease (previous behaviour).
@@ -1068,57 +1115,38 @@ export const claimPendingTurn = authMutation({
       cancelRequested: boolean;
       usageRefreshRequested: boolean;
     };
-    let daemonState = await ctx.db
-      .query("sessionDaemonStates")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-      .unique();
-    if (!daemonState) {
-      const session = await ctx.db.get(args.sessionId);
-      if (!session) return emptyClaim;
-      await ensureSessionDaemonState(ctx, session);
-      daemonState = await ctx.db
-        .query("sessionDaemonStates")
-        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-        .unique();
-      if (!daemonState) return emptyClaim;
-    }
-    // The normal owner path now reads only this small row, not the session's
-    // plan, terminal history, panes, and other UI state on every 50ms poll.
-    if (daemonState.userId !== ctx.userId) {
-      if (!(await hasRepoAccess(ctx.db, daemonState.repoId, ctx.userId)))
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) return emptyClaim;
+    // The owner path reads only the chat row on every 50ms poll.
+    if (chat.userId !== ctx.userId) {
+      if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
         throw new Error("Not authorized");
     }
 
     // Level-triggered: an old callback that does not read this field must not
     // consume it. The refresh action clears `usageRefreshRequestedAt` when it
     // stops waiting so a failed lookup can retry until then.
-    const usageRefreshRequested =
-      daemonState.usageRefreshRequestedAt !== undefined;
+    const usageRefreshRequested = chat.usageRefreshRequestedAt !== undefined;
 
-    // Withhold the turn while a new session's sandbox is still pulling the
-    // latest base branch and reinstalling drifted deps (flag set at early-ready,
-    // cleared when setup finishes). Returning an empty claim leaves pendingTurn
-    // intact; the daemon keeps polling (45m idle budget) and claims the moment
-    // the gate clears, so the agent never executes against a stale checkout.
-    // The usage flag is still returned: get_usage does not need a user turn.
-    if (daemonState.sandboxSetupPending === true) {
-      return { ...emptyClaim, usageRefreshRequested };
-    }
-
-    const stopTaskToolUseIds = daemonState.pendingTaskStops ?? [];
+    const stopTaskToolUseIds = chat.pendingTaskStops ?? [];
     if (stopTaskToolUseIds.length > 0) {
-      await ctx.db.patch(daemonState._id, { pendingTaskStops: undefined });
-      await ctx.db.patch(args.sessionId, { pendingTaskStops: undefined });
+      await ctx.db.patch(chat._id, { pendingTaskStops: undefined });
     }
 
     // Cancel must drain the same way as stopTaskToolUseIds above: the daemon
     // polls this mutation continuously, including mid-turn, specifically to
     // notice an interrupt — gating the drain on pendingTurn would strand it.
-    const cancelRequested = daemonState.cancelRequestedAt !== undefined;
+    const cancelRequested = chat.cancelRequestedAt !== undefined;
     if (cancelRequested) {
-      await ctx.db.patch(daemonState._id, { cancelRequestedAt: undefined });
-      await ctx.db.patch(args.sessionId, { cancelRequestedAt: undefined });
+      await ctx.db.patch(chat._id, { cancelRequestedAt: undefined });
     }
+
+    const drained = {
+      ...emptyClaim,
+      stopTaskToolUseIds,
+      cancelRequested,
+      usageRefreshRequested,
+    };
 
     // A prewarm is killing this daemon right now (stale callback bundle or a
     // model/tools change). Handing it the turn in the milliseconds before the
@@ -1128,59 +1156,43 @@ export const claimPendingTurn = authMutation({
     // drains above still ran, so a cancel is never stranded by the pause.
     if (
       isDaemonClaimPaused({
-        claimPausedUntil: daemonState.claimPausedUntil,
+        claimPausedUntil: chat.claimPausedUntil,
         now: Date.now(),
       })
     ) {
-      return {
-        ...emptyClaim,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
 
-    if (!daemonState.pendingTurn) {
-      return {
-        ...emptyClaim,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
-    }
+    if (!chat.pendingTurn) return drained;
+
+    // Withhold the turn while a new session's sandbox is still pulling the
+    // latest base branch and reinstalling drifted deps (flag set at early-ready,
+    // cleared when setup finishes). Returning an empty claim leaves pendingTurn
+    // intact; the daemon keeps polling (45m idle budget) and claims the moment
+    // the gate clears, so the agent never executes against a stale checkout.
+    const session = await ctx.db.get(chat.sessionId);
+    if (session?.sandboxSetupPending === true) return drained;
 
     // The daemon is not ready to start (still finalizing, synthetic open, or
     // a real turn in flight). Leave pendingTurn so the 2-minute running lease
     // is not acquired with nobody heartbeating it (session 65 / session 125).
-    if (args.acceptTurn === false) {
-      return {
-        ...emptyClaim,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
-    }
+    if (args.acceptTurn === false) return drained;
 
-    const pendingModel = daemonState.pendingTurn.model;
+    const pendingModel = chat.pendingTurn.model;
     if (pendingModel !== undefined) {
       const claimModel = normalizeAIModel(args.model);
       if (normalizeAIModel(pendingModel) !== claimModel) {
         console.log(
-          `[sessionWorkflow] claimPendingTurn model mismatch sessionId=${args.sessionId} pending=${pendingModel} claim=${claimModel}`,
+          `[sessionWorkflow] claimPendingTurn model mismatch chatId=${args.chatId} pending=${pendingModel} claim=${claimModel}`,
         );
-        return {
-          ...emptyClaim,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
+        return drained;
       }
     }
 
-    const prompt = daemonState.pendingTurn.prompt;
-    const claimWaitMs = Date.now() - daemonState.pendingTurn.requestedAt;
+    const prompt = chat.pendingTurn.prompt;
+    const claimWaitMs = Date.now() - chat.pendingTurn.requestedAt;
     const resolvedUrls = await Promise.all(
-      (daemonState.pendingTurn.attachmentStorageIds ?? []).map((id) =>
+      (chat.pendingTurn.attachmentStorageIds ?? []).map((id) =>
         ctx.storage.getUrl(id),
       ),
     );
@@ -1189,33 +1201,19 @@ export const claimPendingTurn = authMutation({
     );
     let turnLease: { turnId: Id<"turns">; leaseGeneration: number } | null =
       null;
-    const pendingTurnId = daemonState.pendingTurn.turnId;
+    const pendingTurnId = chat.pendingTurn.turnId;
     if (pendingTurnId !== undefined) {
       const turn = await ctx.db.get(pendingTurnId);
       if (!turn || !turn.open || turn.state === "running") {
-        await ctx.db.patch(daemonState._id, { pendingTurn: undefined });
-        await ctx.db.patch(args.sessionId, { pendingTurn: undefined });
-        return {
-          ...emptyClaim,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
+        await ctx.db.patch(chat._id, { pendingTurn: undefined });
+        return drained;
       }
       turnLease = await acquireTurnLease(ctx, turn, "running");
-      if (turnLease === null) {
-        return {
-          ...emptyClaim,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
-      }
+      if (turnLease === null) return drained;
     }
-    await ctx.db.patch(daemonState._id, { pendingTurn: undefined });
-    await ctx.db.patch(args.sessionId, { pendingTurn: undefined });
+    await ctx.db.patch(chat._id, { pendingTurn: undefined });
     console.log(
-      `[sessionWorkflow] claimPendingTurn sessionId=${args.sessionId} claimWaitMs=${claimWaitMs} attachments=${attachmentUrls.length}`,
+      `[sessionWorkflow] claimPendingTurn chatId=${args.chatId} claimWaitMs=${claimWaitMs} attachments=${attachmentUrls.length}`,
     );
     const claimedTurn = {
       prompt,
@@ -1236,30 +1234,30 @@ export const claimPendingTurn = authMutation({
 /** Daemon patches background Agent/Task lifecycle entries (start/settle only). */
 export const updateBackgroundAgents = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     agents: v.array(backgroundAgentEntryValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new Error("Chat not found");
+    if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
       throw new Error("Not authorized");
     if (args.agents.length === 0) return null;
 
     const backgroundAgents = mergeBackgroundAgents(
-      session.backgroundAgents,
+      chat.backgroundAgents,
       args.agents,
     );
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch(chat._id, {
       backgroundAgents,
       updatedAt: Date.now(),
     });
     // Queued messages wait for these agents, so their settling is a queue
-    // release the session itself never signals otherwise.
+    // release the chat itself never signals otherwise.
     await scheduleQueueDrainAfterBackgroundAgents(
       ctx,
-      args.sessionId,
+      chat._id,
       backgroundAgents,
     );
     return null;
@@ -1269,25 +1267,22 @@ export const updateBackgroundAgents = authMutation({
 /** User-facing stop request for a background agent; drained via claimPendingTurn. */
 export const requestStopBackgroundAgent = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     toolUseId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new Error("Chat not found");
+    if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
       throw new Error("Not authorized");
 
-    const pending = session.pendingTaskStops ?? [];
+    const pending = chat.pendingTaskStops ?? [];
     if (pending.includes(args.toolUseId)) return null;
 
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch(chat._id, {
       pendingTaskStops: [...pending, args.toolUseId],
       updatedAt: Date.now(),
-    });
-    await syncSessionDaemonState(ctx, session, {
-      pendingTaskStops: [...pending, args.toolUseId],
     });
     return null;
   },
@@ -1300,31 +1295,31 @@ export const requestStopBackgroundAgent = authMutation({
  */
 export const ensurePendingTurn = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     prompt: v.string(),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     model: v.optional(aiModelValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) return null;
     // One-shot providers push the prompt; restaging would only spam a leftover
-    // A leftover daemon would otherwise emit claimPendingTurn mismatch logs.
+    // daemon with claimPendingTurn mismatch logs.
     if (args.model !== undefined && !usesChatDaemon(args.model)) {
       return null;
     }
 
-    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
+    const openTurn = await findOpenChatTurn(ctx, args.chatId);
     if (openTurn && openTurn.state === "running") return null;
     const last = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
       .order("desc")
       .first();
     if (
       !isUnclaimedOpenTurn({
-        hasPendingTurn: session.pendingTurn !== undefined,
+        hasPendingTurn: chat.pendingTurn !== undefined,
         lastAssistant: last,
       })
     ) {
@@ -1340,38 +1335,37 @@ export const ensurePendingTurn = internalMutation({
         ? { model: normalizeAIModel(args.model) }
         : {}),
     };
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch(args.chatId, {
       pendingTurn,
       updatedAt: Date.now(),
     });
-    await syncSessionDaemonState(ctx, session, { pendingTurn });
     console.log(
-      `[sessionWorkflow] ensurePendingTurn restaged sessionId=${args.sessionId}`,
+      `[sessionWorkflow] ensurePendingTurn restaged chatId=${args.chatId}`,
     );
     return null;
   },
 });
 
 /**
- * Ops/recovery: rebuild and stage pendingTurn for a session stuck on an open
+ * Ops/recovery: rebuild and stage pendingTurn for a chat stuck on an open
  * assistant placeholder (daemon polling empty after a cancel race).
  */
 export const restageOpenTurn = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: { chatId: v.id("sessionChats") },
   returns: v.union(
     v.object({ restaged: v.literal(true) }),
     v.object({ restaged: v.literal(false), reason: v.string() }),
   ),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session)
-      return { restaged: false as const, reason: "session not found" };
-    if (session.pendingTurn)
+    const context = await loadSessionChat(ctx.db, args.chatId);
+    if (!context) return { restaged: false as const, reason: "chat not found" };
+    const { chat, session } = context;
+    if (chat.pendingTurn)
       return { restaged: false as const, reason: "pendingTurn already set" };
 
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
       .order("desc")
       .take(5);
     const lastAssistant = messages.find((m) => m.role === "assistant");
@@ -1380,7 +1374,7 @@ export const restageOpenTurn = internalMutation({
     if (
       lastAssistant === undefined ||
       !isUnclaimedOpenTurn({
-        hasPendingTurn: session.pendingTurn !== undefined,
+        hasPendingTurn: chat.pendingTurn !== undefined,
         lastAssistant,
       }) ||
       lastAssistant.content !== ""
@@ -1405,37 +1399,35 @@ export const restageOpenTurn = internalMutation({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return { restaged: false as const, reason: "repo not found" };
     // Daemon-pull recovery only — one-shot providers push via launch.
-    if (!usesChatDaemon(session.lastModel)) {
+    if (!usesChatDaemon(chat.lastModel)) {
       return {
         restaged: false as const,
-        reason: "not a daemon-pull session",
+        reason: "not a daemon-pull chat",
       };
     }
     const user = await ctx.db.get(session.userId);
     const { prompt } = await buildSessionPrompt(ctx, {
       session,
+      chat,
       repo,
       user,
       message: lastUser.content,
-      model: session.lastModel ?? lastUser.model ?? DEFAULT_AI_MODEL,
+      model: chat.lastModel ?? lastUser.model ?? DEFAULT_AI_MODEL,
     });
 
-    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
+    const openTurn = await findOpenChatTurn(ctx, args.chatId);
     const pendingTurn = {
       prompt,
       requestedAt: Date.now(),
       ...(openTurn ? { turnId: openTurn._id } : {}),
       attachmentStorageIds: lastUser.attachmentStorageIds,
-      ...(session.lastModel !== undefined ? { model: session.lastModel } : {}),
+      ...(chat.lastModel !== undefined ? { model: chat.lastModel } : {}),
     };
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch(args.chatId, {
       pendingTurn,
       updatedAt: Date.now(),
     });
-    await syncSessionDaemonState(ctx, session, { pendingTurn });
-    console.log(
-      `[sessionWorkflow] restageOpenTurn sessionId=${args.sessionId}`,
-    );
+    console.log(`[sessionWorkflow] restageOpenTurn chatId=${args.chatId}`);
     return { restaged: true as const };
   },
 });
@@ -1446,9 +1438,9 @@ export const restageOpenTurn = internalMutation({
  */
 export const openSyntheticTurn = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     // The daemon's own model. Optional only for daemons launched before the
-    // field existed; those fall back to `session.lastModel`, which the picker
+    // field existed; those fall back to `chat.lastModel`, which the picker
     // can move mid-flight and may therefore mis-attribute the checkpoint.
     model: v.optional(aiModelValidator),
   },
@@ -1458,14 +1450,13 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
 
-    const turnModel = normalizeAIModel(args.model ?? session.lastModel);
+    const turnModel = normalizeAIModel(args.model ?? chat.lastModel);
     const messageId = await ctx.db.insert("messages", {
-      parentId: args.sessionId,
+      parentId: chat._id,
       role: "assistant",
       content: "",
       timestamp: Date.now(),
@@ -1476,9 +1467,10 @@ export const openSyntheticTurn = authMutation({
       // `completeSyntheticTurn` clears it again if the turn fails.
       model: turnModel,
     });
-    const turnId = await openSessionTurn(ctx, {
-      sessionId: args.sessionId,
-      streamingEntityId: String(args.sessionId),
+    const turnId = await openChatTurn(ctx, {
+      chatId: chat._id,
+      sessionId: session._id,
+      streamingEntityId: sessionChatStreamingEntityId(chat._id),
       placeholderMessageId: messageId,
       prompt: "[synthetic continuation]",
       model: turnModel,
@@ -1489,14 +1481,14 @@ export const openSyntheticTurn = authMutation({
     if (!turn) throw new Error("Synthetic turn was not created");
     const lease = await acquireTurnLease(ctx, turn, "running");
     if (!lease) throw new Error("Synthetic turn lease was not acquired");
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch(chat._id, {
       syntheticTurnMessageId: messageId,
       updatedAt: Date.now(),
     });
     await ctx.scheduler.runAfter(
       10 * 60 * 1000,
       internal.sessionWorkflow.handleStaleSyntheticTurn,
-      { sessionId: args.sessionId, messageId },
+      { chatId: chat._id, messageId },
     );
     return { messageId, ...lease };
   },
@@ -1505,7 +1497,7 @@ export const openSyntheticTurn = authMutation({
 /** Finalizes a synthetic continuation turn by messageId (never recency). */
 export const completeSyntheticTurn = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     messageId: v.id("messages"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
@@ -1517,8 +1509,10 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const { chat, session } = context;
     const turnResolution = await resolveCompletionTurn(ctx, {
-      sessionId: args.sessionId,
+      chatId: chat._id,
       turnId: args.turnId,
       leaseGeneration: args.leaseGeneration,
       placeholderMessageId: args.messageId,
@@ -1527,15 +1521,15 @@ export const completeSyntheticTurn = authMutation({
     if (turnResolution.status === "current") {
       await advanceTurn(ctx, turnResolution.turn, "finalizing");
     }
-    await clearStreamingActivity(ctx, String(args.sessionId));
+    await clearStreamingActivity(ctx, sessionChatStreamingEntityId(chat._id));
 
     const message = await ctx.db.get(args.messageId);
     if (
       !message ||
-      message.parentId !== args.sessionId ||
+      message.parentId !== chat._id ||
       message.finishedAt !== undefined
     ) {
-      await ctx.db.patch(args.sessionId, {
+      await ctx.db.patch(chat._id, {
         syntheticTurnMessageId: undefined,
         updatedAt: Date.now(),
       });
@@ -1544,7 +1538,7 @@ export const completeSyntheticTurn = authMutation({
           error: "Synthetic turn placeholder was no longer available",
         });
       }
-      await startNextQueuedSessionMessage(ctx, args.sessionId);
+      await drainSessionChatQueues(ctx, session._id, chat._id);
       return null;
     }
 
@@ -1572,8 +1566,11 @@ export const completeSyntheticTurn = authMutation({
     }
     await ctx.db.patch(args.messageId, patch);
 
-    await ctx.db.patch(args.sessionId, {
+    await ctx.db.patch(chat._id, {
       syntheticTurnMessageId: undefined,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.patch(session._id, {
       updatedAt: Date.now(),
       agentBrowsingAt: undefined,
     });
@@ -1585,7 +1582,7 @@ export const completeSyntheticTurn = authMutation({
         args.error ? { error: args.error } : {},
       );
     }
-    await startNextQueuedSessionMessage(ctx, args.sessionId);
+    await drainSessionChatQueues(ctx, session._id, chat._id);
     return null;
   },
 });
@@ -1593,28 +1590,29 @@ export const completeSyntheticTurn = authMutation({
 /** Crash hygiene for daemon-minted continuations left open after daemon death. */
 export const handleStaleSyntheticTurn = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     messageId: v.id("messages"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session || session.syntheticTurnMessageId !== args.messageId) {
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat || chat.syntheticTurnMessageId !== args.messageId) {
       return null;
     }
 
     const message = await ctx.db.get(args.messageId);
     if (!message || message.finishedAt !== undefined) {
-      await ctx.db.patch(args.sessionId, {
+      await ctx.db.patch(chat._id, {
         syntheticTurnMessageId: undefined,
         updatedAt: Date.now(),
       });
       return null;
     }
 
+    const streamingEntityId = sessionChatStreamingEntityId(chat._id);
     const streaming = await ctx.db
       .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", String(args.sessionId)))
+      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
       .first();
     const streamingStale =
       streaming === null ||
@@ -1624,32 +1622,32 @@ export const handleStaleSyntheticTurn = internalMutation({
       await ctx.scheduler.runAfter(
         10 * 60 * 1000,
         internal.sessionWorkflow.handleStaleSyntheticTurn,
-        { sessionId: args.sessionId, messageId: args.messageId },
+        { chatId: chat._id, messageId: args.messageId },
       );
       return null;
     }
 
     await finalizeCancelledAssistantMessage(ctx, message, streaming);
-    const openTurn = await findOpenSessionTurn(ctx, args.sessionId);
+    const openTurn = await findOpenChatTurn(ctx, chat._id);
     if (openTurn?.placeholderMessageId === args.messageId) {
       await closeTurn(ctx, openTurn, "error", {
         error: "Synthetic turn stopped reporting activity",
       });
     }
-    await clearStreamingActivity(ctx, String(args.sessionId));
-    await ctx.db.patch(args.sessionId, {
+    await clearStreamingActivity(ctx, streamingEntityId);
+    await ctx.db.patch(chat._id, {
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
     });
-    await startNextQueuedSessionMessage(ctx, args.sessionId);
+    await drainSessionChatQueues(ctx, chat.sessionId, chat._id);
     return null;
   },
 });
 
-/** Receives sandbox completion callback and forwards the event to the active session workflow. */
+/** Receives sandbox completion callback and forwards the event to the chat's active workflow. */
 export const handleCompletion = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -1662,13 +1660,16 @@ export const handleCompletion = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const completionStartedAt = Date.now();
-    const session = await ctx.db.get(args.sessionId);
-    if (!session || !session.activeWorkflowId) return null;
+    const context = await loadSessionChat(ctx.db, args.chatId);
+    if (!context) return null;
+    const { chat, session } = context;
+    const activeWorkflowId = chat.activeWorkflowId;
+    if (activeWorkflowId === undefined) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
 
     const turnResolution = await resolveCompletionTurn(ctx, {
-      sessionId: args.sessionId,
+      chatId: chat._id,
       turnId: args.turnId,
       leaseGeneration: args.leaseGeneration,
     });
@@ -1678,39 +1679,33 @@ export const handleCompletion = authMutation({
     }
 
     console.log(
-      `[sessionWorkflow] handleCompletion received sessionId=${args.sessionId} success=${args.success} workflowId=${session.activeWorkflowId}`,
+      `[sessionWorkflow] handleCompletion received chatId=${args.chatId} success=${args.success} workflowId=${activeWorkflowId}`,
     );
 
     // One-shot providers never claimPendingTurn, so clear any leftover staged
     // prompt here. Persistent chat daemons already cleared it on claim.
-    if (session.pendingTurn !== undefined) {
-      await ctx.db.patch(args.sessionId, { pendingTurn: undefined });
-      await syncSessionDaemonState(ctx, session, { pendingTurn: undefined });
+    if (chat.pendingTurn !== undefined) {
+      await ctx.db.patch(chat._id, { pendingTurn: undefined });
     }
 
-    await sendCompletionEvent(
-      ctx,
-      sessionCompleteEvent,
-      session.activeWorkflowId,
-      {
-        success: args.success,
-        result: args.result,
-        error: args.error,
-        activityLog: args.activityLog,
-        pendingQuestion: args.pendingQuestion,
-      },
-    );
+    await sendCompletionEvent(ctx, sessionCompleteEvent, activeWorkflowId, {
+      success: args.success,
+      result: args.result,
+      error: args.error,
+      activityLog: args.activityLog,
+      pendingQuestion: args.pendingQuestion,
+    });
 
     await recordCompletionLog(ctx, {
       entityType: "session",
-      entityId: String(args.sessionId),
-      entityTitle: session.title,
+      entityId: String(chat._id),
+      entityTitle: chat.isMain ? session.title : `${session.title} · ${chat.title}`,
       repoId: session.repoId,
       rawResultEvent: args.rawResultEvent,
     });
 
     console.log(
-      `[sessionWorkflow] handleCompletion finished in ${Date.now() - completionStartedAt}ms sessionId=${args.sessionId}`,
+      `[sessionWorkflow] handleCompletion finished in ${Date.now() - completionStartedAt}ms chatId=${args.chatId}`,
     );
 
     return null;

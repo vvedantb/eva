@@ -125,23 +125,20 @@ export async function trackProjectBuildWorkflow(
 /** Cancels a stale chat session workflow and starts the next queued message. */
 export const handleStaleSession = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     workflowId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await sessionChatAdapter.getEntity(ctx, args.sessionId);
-    if (
-      !session ||
-      sessionChatAdapter.activeWorkflowId(session) !== args.workflowId
-    )
+    const chat = await sessionChatAdapter.getEntity(ctx, args.chatId);
+    if (!chat || sessionChatAdapter.activeWorkflowId(chat) !== args.workflowId)
       return null;
 
     await finalizeStaleChatTurn(
       ctx,
       sessionChatAdapter,
-      args.sessionId,
-      session,
+      args.chatId,
+      chat,
       args.workflowId,
       sessionChatAdapter.alerts.timeout,
     );
@@ -159,7 +156,7 @@ export const handleStaleSession = internalMutation({
  */
 export const checkStaleSessionHeartbeat = internalMutation({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     workflowId: v.string(),
     turnStartedAt: v.number(),
     // Set by the liveness probe once it has confirmed the sandbox/callback is
@@ -173,7 +170,7 @@ export const checkStaleSessionHeartbeat = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await runStaleChatHeartbeatCheck(ctx, sessionChatAdapter, {
-      id: args.sessionId,
+      id: args.chatId,
       workflowId: args.workflowId,
       turnStartedAt: args.turnStartedAt,
       skipLivenessProbe: args.skipLivenessProbe,
@@ -190,7 +187,7 @@ export const checkStaleSessionHeartbeat = internalMutation({
  */
 export const probeStaleSessionLiveness = internalAction({
   args: {
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     workflowId: v.string(),
     turnStartedAt: v.number(),
     sandboxId: v.string(),
@@ -200,7 +197,7 @@ export const probeStaleSessionLiveness = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     await runStaleChatLivenessProbe(ctx, sessionChatAdapter, {
-      id: args.sessionId,
+      id: args.chatId,
       workflowId: args.workflowId,
       turnStartedAt: args.turnStartedAt,
       sandboxId: args.sandboxId,

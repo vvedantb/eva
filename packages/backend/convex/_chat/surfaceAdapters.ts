@@ -7,13 +7,17 @@ import {
   STALE_CHECK_DELAY_MS,
 } from "../_taskWorkflow/staleness";
 import {
+  drainSessionChatQueues,
   startNextQueuedProjectChatMessage,
-  startNextQueuedSessionMessage,
   startNextQueuedTaskChatMessage,
 } from "../_queues/helpers";
 import type { WorkflowId } from "@convex-dev/workflow";
-import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import {
+  loadSessionChat,
+  sessionChatStreamingEntityId,
+  type SessionChatContext,
+} from "../_sessionChats/helpers";
 
 /** Streaming entityId prefix for project chat workflows. */
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
@@ -33,10 +37,10 @@ export type ChatAlert = { text: string; detail?: string };
  * instead of writing table-specific patches itself.
  */
 export type ChatSurfaceAdapter<
-  TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  TId extends Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">,
   TEntity,
 > = {
-  kind: "session" | "taskChat" | "projectChat";
+  kind: "sessionChat" | "taskChat" | "projectChat";
   /** Console-log prefix, e.g. "session", "task-chat", "project-chat". */
   logLabel: string;
   /** Console-log key for the id, e.g. "sessionId". */
@@ -114,24 +118,22 @@ const timeoutAlert: ChatAlert = {
 };
 
 const sessionChatAdapter: ChatSurfaceAdapter<
-  Id<"sessions">,
-  Doc<"sessions">
+  Id<"sessionChats">,
+  SessionChatContext
 > = {
-  kind: "session",
-  logLabel: "session",
-  idLogLabel: "sessionId",
-  getEntity: (ctx, id) => ctx.db.get(id),
-  activeWorkflowId: (session) => session.activeWorkflowId,
-  streamingEntityId: (id) => String(id),
-  extraStreamingClears: (id) => [`summary:${String(id)}`],
-  syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
-  sandboxId: (session) => session.sandboxId,
-  repoId: (session) => session.repoId,
-  interrupt: async (ctx, session) => {
-    if (getAIModelProvider(normalizeAIModel(session.lastModel)) === "claude") {
-      const cancelRequestedAt = Date.now();
-      await ctx.db.patch(session._id, { cancelRequestedAt });
-      await syncSessionDaemonState(ctx, session, { cancelRequestedAt });
+  kind: "sessionChat",
+  logLabel: "session-chat",
+  idLogLabel: "chatId",
+  getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
+  activeWorkflowId: ({ chat }) => chat.activeWorkflowId,
+  streamingEntityId: (id) => sessionChatStreamingEntityId(id),
+  extraStreamingClears: () => [],
+  syntheticTurnMessageId: ({ chat }) => chat.syntheticTurnMessageId,
+  sandboxId: ({ session }) => session.sandboxId,
+  repoId: ({ session }) => session.repoId,
+  interrupt: async (ctx, { chat, session }) => {
+    if (getAIModelProvider(normalizeAIModel(chat.lastModel)) === "claude") {
+      await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
     } else if (session.sandboxId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
         sandboxId: session.sandboxId,
@@ -140,30 +142,35 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     }
   },
   release: async (ctx, id, opts) => {
-    const patch: {
-      activeWorkflowId: undefined;
-      syntheticTurnMessageId: undefined;
-      updatedAt: number;
-      status?: "closed";
-    } = {
+    await ctx.db.patch(id, {
       activeWorkflowId: undefined,
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
-    };
+    });
     if (opts.sandboxStopped) {
       // Surfaces the stop in the UI — users cannot see the provider
       // dashboard, and an "active" session with a dead VM just looks
       // frozen. "closed" is also what stops page-open prewarm from
       // silently resurrecting the VM (see prewarmDaemon's status guard).
-      patch.status = "closed";
+      const chat = await ctx.db.get(id);
+      if (chat) {
+        await ctx.db.patch(chat.sessionId, {
+          status: "closed",
+          updatedAt: Date.now(),
+        });
+      }
     }
-    await ctx.db.patch(id, patch);
   },
-  drainQueue: (ctx, id) => startNextQueuedSessionMessage(ctx, id),
+  drainQueue: async (ctx, id) => {
+    const chat = await ctx.db.get(id);
+    if (!chat) return false;
+    await drainSessionChatQueues(ctx, chat.sessionId, id);
+    return true;
+  },
   scheduleCheck: (ctx, id, delayMs, args) =>
     ctx.scheduler
       .runAfter(delayMs, internal.workflowWatchdog.checkStaleSessionHeartbeat, {
-        sessionId: id,
+        chatId: id,
         workflowId: args.workflowId,
         turnStartedAt: args.turnStartedAt,
         skipLivenessProbe: args.skipLivenessProbe,
@@ -173,7 +180,7 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   scheduleProbe: (ctx, id, args) =>
     ctx.scheduler
       .runAfter(0, internal.workflowWatchdog.probeStaleSessionLiveness, {
-        sessionId: id,
+        chatId: id,
         workflowId: args.workflowId,
         turnStartedAt: args.turnStartedAt,
         sandboxId: args.sandboxId,
@@ -387,19 +394,19 @@ export const chatSurfaceAdapters = [
 
 export { sessionChatAdapter, taskChatAdapter, projectChatAdapter };
 
-/** Records a workflow as the active workflow for a session and schedules a stale handler. */
+/** Records a workflow as the active workflow for a session chat and schedules a stale handler. */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
   workflowId: WorkflowId,
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(sessionId, { activeWorkflowId: id });
+  await ctx.db.patch(chatId, { activeWorkflowId: id });
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleSession,
-    { sessionId, workflowId: id },
+    { chatId, workflowId: id },
   );
   // No-heartbeat watchdog: the in-sandbox callback touches streamingActivity
   // at least every ~15s while a turn runs, so a silently dead agent process
@@ -408,7 +415,7 @@ export async function trackSessionWorkflow(
   await ctx.scheduler.runAfter(
     STALE_CHECK_DELAY_MS,
     internal.workflowWatchdog.checkStaleSessionHeartbeat,
-    { sessionId, workflowId: id, turnStartedAt: Date.now() },
+    { chatId, workflowId: id, turnStartedAt: Date.now() },
   );
 }
 

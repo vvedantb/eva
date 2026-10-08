@@ -1,7 +1,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
+import type { Doc, Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./ChatPanel";
 import { SandboxPanel } from "./SandboxPanel";
@@ -18,6 +18,8 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export function SessionDetailClient({
   sessionId,
+  chatNumber,
+  onChatChange,
   activeSandboxTab,
   onSandboxTabChange,
   onOpenFile,
@@ -26,6 +28,9 @@ export function SessionDetailClient({
   hideTitle = false,
 }: {
   sessionId: Id<"sessions">;
+  /** Chat tab from the URL (`?chat=N`); null means Main. */
+  chatNumber: number | null;
+  onChatChange: (number: number | null) => void;
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeSandboxTab: string;
   onSandboxTabChange: (tab: string) => void;
@@ -43,13 +48,29 @@ export function SessionDetailClient({
 }) {
   const { basePath, repo } = useRepo();
   const session = useQuery(api.sessions.get, { id: sessionId });
-  const messages = useQuery(api.messages.listByParent, {
-    parentId: sessionId,
+  // The session's chats: Main plus any parallel chats. The URL picks one;
+  // a missing or closed number falls back to Main server-side.
+  const chats = useQuery(api.sessionChats.listForSession, { sessionId });
+  const activeChat = useQuery(api.sessionChats.resolveForSession, {
+    sessionId,
+    ...(chatNumber !== null ? { number: chatNumber } : {}),
   });
-  const queuedMessages = useQuery(api.queuedMessages.listByParent, {
-    parentId: sessionId,
+  const chatStatuses = useQuery(api.turns.listSessionChatStatuses, {
+    sessionId,
   });
-  const streaming = useQuery(api.streaming.get, { entityId: sessionId });
+  const chatId = activeChat?._id;
+  const messages = useQuery(
+    api.messages.listByParent,
+    chatId ? { parentId: chatId } : "skip",
+  );
+  const queuedMessages = useQuery(
+    api.queuedMessages.listByParent,
+    chatId ? { parentId: chatId } : "skip",
+  );
+  const streaming = useQuery(
+    api.streaming.get,
+    chatId ? { entityId: chatId } : "skip",
+  );
   const summaryStreaming = useQuery(api.streaming.get, {
     entityId: `summary:${sessionId}`,
   });
@@ -58,11 +79,23 @@ export function SessionDetailClient({
   });
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
+  const ensureMainChat = useMutation(api.sessionChats.ensureMain);
+  const createChat = useMutation(api.sessionChats.create);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
-  // Pre-warm the Claude daemon as soon as the session opens (once its sandbox is
-  // known), so the user's first message is warm instead of paying a ~20s cold
-  // respawn. Idempotent server-side (skips if a daemon is already alive), so
-  // re-firing when the sandbox id resolves is cheap.
+  // A session created before chats existed has no Main chat row yet; opening
+  // it is what creates one (and moves its transcript onto it). Keyed on the
+  // boolean so it fires once per empty result, not on every chats update.
+  const needsMainChat = chats !== undefined && chats.length === 0;
+  useEffect(() => {
+    if (!needsMainChat) return;
+    void ensureMainChat({ sessionId });
+  }, [needsMainChat, sessionId, ensureMainChat]);
+
+  // Pre-warm the active chat's daemon as soon as it is known (once the sandbox
+  // is), so the user's first message is warm instead of paying a ~20s cold
+  // respawn. Only the visible tab: idle daemons for every chat would hold
+  // memory the running ones need. Idempotent server-side.
   const prewarmDaemon = useMutation(api.sessionWorkflow.prewarmDaemon);
   const sandboxId = session?.sandboxId;
   // A closed/stopping session keeps its sandboxId, so gate on status too:
@@ -75,13 +108,13 @@ export function SessionDetailClient({
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
   const sessionPrState = session?.prState;
   useEffect(() => {
-    if (!sandboxId) return;
+    if (!sandboxId || !chatId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
     // Don't prewarm (which resumes the VM) when the PR is already terminal —
     // auto-stop below owns teardown for merged/closed sessions.
     if (isSessionPrReadOnly(sessionPrState)) return;
-    void prewarmDaemon({ sessionId });
-  }, [sessionId, sandboxId, sandboxStatus, sessionPrState, prewarmDaemon]);
+    void prewarmDaemon({ chatId });
+  }, [chatId, sandboxId, sandboxStatus, sessionPrState, prewarmDaemon]);
 
   // Recover sandboxes left running after a PR merge/close (webhook may have
   // only patched prState before auto-stop existed, or the stop raced).
@@ -168,7 +201,32 @@ export function SessionDetailClient({
     setExpandRightSignal((n) => n + 1);
   }, [agentBrowsingAt, onSandboxTabChange, isRouteActive, chatOnly]);
 
-  if (session === undefined) {
+  const handleCreateChat = async () => {
+    if (isCreatingChat) return;
+    setIsCreatingChat(true);
+    try {
+      const created = await withMutationToast(
+        createChat({
+          sessionId,
+          ...(chatId ? { fromChatId: chatId } : {}),
+        }),
+        "New chat opened",
+        "Couldn't open a new chat",
+        "session-chat-create",
+      );
+      onChatChange(created.number);
+    } catch {
+      setIsCreatingChat(false);
+      return;
+    }
+    setIsCreatingChat(false);
+  };
+
+  const handleSelectChat = (chat: Doc<"sessionChats">) => {
+    onChatChange(chat.number);
+  };
+
+  if (session === undefined || activeChat === undefined) {
     return (
       <div className="flex h-full items-center justify-center">
         <Spinner size="lg" />
@@ -182,6 +240,15 @@ export function SessionDetailClient({
     );
   }
 
+  // Main is being created by the effect above (legacy session on first open).
+  if (activeChat === null) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
   const isSandboxActive = session.status === "active";
   const isArchived = session.archived === true;
   // Archive + PR terminal states share the same UI gates; PR reopen clears lock.
@@ -190,6 +257,12 @@ export function SessionDetailClient({
   const chatPanel = (sandboxCollapsed?: boolean) => (
     <ChatPanel
       sessionId={sessionId}
+      chat={activeChat}
+      chats={chats ?? []}
+      chatStatuses={chatStatuses ?? []}
+      onSelectChat={handleSelectChat}
+      onCreateChat={() => void handleCreateChat()}
+      isCreatingChat={isCreatingChat}
       title={session.title}
       branchName={session.branchName}
       prUrl={session.prUrl}
@@ -240,7 +313,7 @@ export function SessionDetailClient({
               setExpandRightSignal((n) => n + 1);
             }
       }
-      backgroundAgents={session.backgroundAgents}
+      backgroundAgents={activeChat.backgroundAgents}
     />
   );
 
@@ -271,6 +344,7 @@ export function SessionDetailClient({
             rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
               <SandboxPanel
                 sessionId={sessionId}
+                chatId={activeChat._id}
                 sandboxId={session.sandboxId}
                 isActive={isSandboxActive}
                 isRouteActive={isRouteActive}
@@ -285,7 +359,7 @@ export function SessionDetailClient({
                 terminalPanel={terminalPanel}
                 planContent={session.planContent}
                 messages={messages ?? []}
-                backgroundAgents={session.backgroundAgents}
+                backgroundAgents={activeChat.backgroundAgents}
                 streamingActivity={streaming?.currentActivity}
                 isArchived={isReadOnly}
                 activeTab={activeSandboxTab}

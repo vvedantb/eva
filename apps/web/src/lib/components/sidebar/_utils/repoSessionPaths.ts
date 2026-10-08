@@ -41,3 +41,12 @@ export function sessionMatchesPath(
     return pathname === href || pathname.startsWith(`${href}/`);
   });
 }
+
+/**
+ * Which row of a session is selected for the current URL: the session row
+ * while Main (no `?chat` or `?chat=1`) is open, otherwise the chat row with
+ * that number. Both never highlight at once.
+ */
+export function selectedChatNumber(chatParam: number | null): number {
+  return chatParam === null ? 1 : chatParam;
+}
