@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalReviewTab,
   isSessionSandboxTab,
   isTaskRouteSandboxTab,
   parseDiffSearchFields,
+  sandboxTabIdFromParam,
   splitCorruptedSandboxTabParam,
 } from "./search-params";
 
@@ -12,6 +14,8 @@ describe("isTaskRouteSandboxTab", () => {
     expect(isTaskRouteSandboxTab("pr")).toBe(false);
     expect(isTaskRouteSandboxTab("browser")).toBe(true);
     expect(isTaskRouteSandboxTab("files")).toBe(true);
+    expect(isTaskRouteSandboxTab("artifacts")).toBe(true);
+    expect(isTaskRouteSandboxTab("documents")).toBe(true);
     expect(isTaskRouteSandboxTab("terminal")).toBe(false);
   });
 
@@ -29,6 +33,8 @@ describe("isTaskRouteSandboxTab", () => {
 describe("isSessionSandboxTab", () => {
   it("keeps terminals out of the right-panel route vocabulary", () => {
     expect(isSessionSandboxTab("preview")).toBe(true);
+    expect(isSessionSandboxTab("artifacts")).toBe(true);
+    expect(isSessionSandboxTab("documents")).toBe(true);
     expect(isSessionSandboxTab("terminal")).toBe(false);
   });
 });
@@ -48,6 +54,7 @@ describe("splitCorruptedSandboxTabParam", () => {
       tab: "diffs",
       diffFile: path,
       diffView: "split",
+      file: undefined,
     });
   });
 
@@ -59,7 +66,30 @@ describe("splitCorruptedSandboxTabParam", () => {
       tab: "diffs",
       diffFile: "apps/web/foo.tsx",
       diffView: undefined,
+      file: undefined,
     });
+  });
+
+  it("peels a file-viewer path trapped in the files tab", () => {
+    expect(
+      splitCorruptedSandboxTabParam(
+        "files?file=/vercel/sandbox/apps/web/src/foo.tsx",
+      ),
+    ).toEqual({
+      tab: "files",
+      diffFile: undefined,
+      diffView: undefined,
+      file: "/vercel/sandbox/apps/web/src/foo.tsx",
+    });
+  });
+});
+
+describe("sandboxTabIdFromParam", () => {
+  it("returns a clean tab id when nuqs stuffed search into the segment", () => {
+    expect(
+      sandboxTabIdFromParam("files?file=/vercel/sandbox/package.json"),
+    ).toBe("files");
+    expect(sandboxTabIdFromParam("preview")).toBe("preview");
   });
 });
 
@@ -74,17 +104,17 @@ describe("parseDiffSearchFields", () => {
     ).toEqual({
       diffFile: "apps/web/foo.tsx",
       diffView: "split",
-      prTab: "recap",
+      prTab: "summary",
     });
 
     expect(
       parseDiffSearchFields({
-        prTab: "overview",
+        prTab: "commits",
       }),
     ).toEqual({
       diffFile: undefined,
       diffView: undefined,
-      prTab: "overview",
+      prTab: "timeline",
     });
 
     expect(parseDiffSearchFields({ diffView: "nope", prTab: "junk" })).toEqual({
@@ -92,5 +122,20 @@ describe("parseDiffSearchFields", () => {
       diffView: undefined,
       prTab: undefined,
     });
+  });
+});
+
+describe("canonicalReviewTab", () => {
+  it("answers to the Pull requests tab and its spelled-out slugs", () => {
+    expect(canonicalReviewTab("prs")).toBe("prs");
+    expect(canonicalReviewTab("pulls")).toBe("prs");
+    expect(canonicalReviewTab("pull-requests")).toBe("prs");
+  });
+
+  it("still maps the slugs the three-tab layout replaced", () => {
+    expect(canonicalReviewTab("overview")).toBe("summary");
+    expect(canonicalReviewTab("commits")).toBe("timeline");
+    expect(canonicalReviewTab("changes")).toBe("diffs");
+    expect(canonicalReviewTab("nope")).toBeUndefined();
   });
 });

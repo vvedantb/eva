@@ -101,7 +101,7 @@ always returns to the full frame, so nothing is permanently hidden.
 
 1. **Pin down the feature and the flow.** Name the 3–5 concrete steps: start state → actions →
    payoff state. Write them out before touching the browser. `git log --oneline -15` or
-   `internal/changelog.md` if the user hasn't said which feature.
+   `internal/changelog/` (newest month file) if the user hasn't said which feature.
 
 2. **Set up the browser** (`.claude/skills/eva-launch-video/references/capture-workflow.md` §1–2):
 

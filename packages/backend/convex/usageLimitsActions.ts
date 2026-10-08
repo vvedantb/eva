@@ -21,9 +21,16 @@ import {
 } from "./_usageLimits/claudeUsage";
 
 /**
- * Pulling a plan-usage reading on demand, rather than waiting for the next turn
+ * Pulling plan-usage readings on demand, rather than waiting for the next turn
  * to report one. The card's refresh button calls this; everything else about
  * the feature still arrives from the sandbox.
+ *
+ * One button, every credential: `refreshAll` fans out over exactly the
+ * credentials the card lists (its own accounts, teammates' shared ones, and the
+ * shared team token) and probes them in parallel. Per-credential, because a
+ * reading measures one plan — and one dead credential must not cost the others
+ * their refresh, so each target's failure is reported beside its label rather
+ * than thrown.
  *
  * One path: a 1-token Messages call, read for its
  * `anthropic-ratelimit-unified-*` headers. `GET /api/oauth/usage` is gone — it
@@ -71,6 +78,9 @@ const USAGE_PROBE_MODELS = [
 ] as const;
 
 type UsageProvider = Infer<typeof usageLimitProviderValidator>;
+
+/** The only provider with plan windows, so the only one the fan-out probes. */
+const USAGE_PROVIDER: UsageProvider = usageLimitProviderValidator.value;
 
 /** Why a refresh produced nothing, in the vocabulary the toast copy speaks. */
 type RefreshFailure =
@@ -269,9 +279,23 @@ async function requestInferenceUsage(token: string): Promise<UsageFetch> {
   return { kind: "network" };
 }
 
+/** One credential to probe, as `usageLimits.listRefreshTargetsInternal` names it. */
+type RefreshTarget = {
+  providerAccountId?: Id<"userProviderAccounts">;
+  teamId?: Id<"teams">;
+  accountLabel: string;
+};
+
+/** One credential's outcome, labelled so the toast can say which one failed. */
+type RefreshResult = {
+  accountLabel: string;
+  ok: boolean;
+  reason?: RefreshFailure;
+};
+
 /**
- * Reads the provider's plan usage now, so a card opened long after the last turn
- * can be brought up to date without running one.
+ * Reads one credential's plan usage now, so a card opened long after the last
+ * turn can be brought up to date without running one.
  *
  * The reading is always a merge, never a replacing snapshot: the probe's headers
  * name 5h, weekly-all and Fable and nothing else, so replacing would delete the
@@ -280,71 +304,99 @@ async function requestInferenceUsage(token: string): Promise<UsageFetch> {
  * No status is reported: the probe returns numbers, not a verdict on whether the
  * plan would accept work.
  */
-export const refresh = authAction({
-  args: {
-    repoId: v.id("githubRepos"),
-    provider: usageLimitProviderValidator,
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    // Older chip clients still send a sandbox target; refresh is Convex HTTP
-    // now and does not need one, so these are accepted and ignored.
-    sessionId: v.optional(v.id("sessions")),
-    projectId: v.optional(v.id("projects")),
-    taskId: v.optional(v.id("agentTasks")),
-  },
-  returns: v.object({ ok: v.boolean(), reason: v.optional(v.string()) }),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ ok: boolean; reason?: RefreshFailure }> => {
-    void args.sessionId;
-    void args.projectId;
-    void args.taskId;
+async function refreshOne(
+  ctx: ActionCtx & { userId: Id<"users"> },
+  repoId: Id<"githubRepos">,
+  target: RefreshTarget,
+): Promise<{ ok: boolean; reason?: RefreshFailure }> {
+  const accountId = target.providerAccountId;
+  // A refresh is not a launch: the account's `lastUsedAt` stays where the
+  // last real turn left it.
+  const lookup =
+    accountId === undefined
+      ? await teamToken(ctx, repoId, USAGE_PROVIDER)
+      : await accountToken(ctx, accountId, USAGE_PROVIDER, ctx.userId);
+  if (lookup.kind === "missing") return { ok: false, reason: "no-token" };
+
+  const result = await requestInferenceUsage(lookup.token);
+  if (result.kind === "unauthorized") {
+    return { ok: false, reason: "unauthorized" };
+  }
+  if (result.kind === "rate-limited") {
+    return { ok: false, reason: "rate-limited" };
+  }
+  if (result.kind === "network") return { ok: false, reason: "network" };
+  // Headers that named no window at all are not a reading, so nothing is
+  // written — a stored row keeps the numbers a real turn reported.
+  if (!hasPlanRateLimits(result.body)) {
+    return { ok: false, reason: "unavailable" };
+  }
+
+  const windows: UsageWindow[] = readClaudeUsageWindows(result.body);
+  const accountArg =
+    accountId === undefined ? {} : { providerAccountId: accountId };
+  // The probe never names the plan, so the stored plan name is carried forward
+  // rather than dropped. Keyed by credential, so the team row is named by its
+  // team and the account row by its account.
+  const stored = await ctx.runQuery(internal.usageLimits.getReadingInternal, {
+    provider: USAGE_PROVIDER,
+    ...accountArg,
+    ...(target.teamId === undefined ? {} : { teamId: target.teamId }),
+  });
+  const subscriptionType = stored?.subscriptionType;
+  // `report` still takes the repo — it authorises the call, and for the shared
+  // credential it is how the team behind the token is resolved.
+  //
+  // Partial, always: the probe sees three windows, so `snapshotComplete` here
+  // would wipe the Opus/Sonnet weeklies a real turn captured.
+  await ctx.runMutation(api.usageLimits.report, {
+    repoId,
+    provider: USAGE_PROVIDER,
+    ...accountArg,
+    capturedAt: Date.now(),
+    completeness: "partial",
+    windows,
+    ...(subscriptionType === undefined ? {} : { subscriptionType }),
+  });
+  return { ok: true };
+}
+
+/**
+ * Refreshes every credential the caller may run on in this repo, in parallel.
+ *
+ * The target list comes from `usageLimits.listRefreshTargetsInternal`, the same
+ * builder `usageLimits.getForViewer` uses, so the button and the card can never
+ * disagree about which credentials exist.
+ *
+ * Each result carries its credential's label so the toast can name the one that
+ * failed. A rejected probe is a result, not an exception: one expired token must
+ * not cost every other credential its reading.
+ */
+export const refreshAll = authAction({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.object({
+    results: v.array(
+      v.object({
+        accountLabel: v.string(),
+        ok: v.boolean(),
+        reason: v.optional(v.string()),
+      }),
+    ),
+  }),
+  // Annotated because the handler calls back into `internal.usageLimits`, and
+  // an inferred return type would make this module's type depend on itself.
+  handler: async (ctx, args): Promise<{ results: RefreshResult[] }> => {
     await getActionRepoWithAccess(ctx, args.repoId);
-    const accountId = args.providerAccountId;
-    // A refresh is not a launch: the account's `lastUsedAt` stays where the
-    // last real turn left it.
-    const lookup =
-      accountId === undefined
-        ? await teamToken(ctx, args.repoId, args.provider)
-        : await accountToken(ctx, accountId, args.provider, ctx.userId);
-    if (lookup.kind === "missing") return { ok: false, reason: "no-token" };
-
-    const result = await requestInferenceUsage(lookup.token);
-    if (result.kind === "unauthorized") {
-      return { ok: false, reason: "unauthorized" };
-    }
-    if (result.kind === "rate-limited") {
-      return { ok: false, reason: "rate-limited" };
-    }
-    if (result.kind === "network") return { ok: false, reason: "network" };
-    // Headers that named no window at all are not a reading, so nothing is
-    // written — a stored row keeps the numbers a real turn reported.
-    if (!hasPlanRateLimits(result.body)) {
-      return { ok: false, reason: "unavailable" };
-    }
-
-    const windows: UsageWindow[] = readClaudeUsageWindows(result.body);
-    const accountArg =
-      accountId === undefined ? {} : { providerAccountId: accountId };
-    // The probe never names the plan, so the stored plan name is carried forward
-    // rather than dropped.
-    const stored = await ctx.runQuery(internal.usageLimits.getReadingInternal, {
-      repoId: args.repoId,
-      provider: args.provider,
-      ...accountArg,
-    });
-    const subscriptionType = stored?.subscriptionType;
-    // Partial, always: the probe sees three windows, so `snapshotComplete` here
-    // would wipe the Opus/Sonnet weeklies a real turn captured.
-    await ctx.runMutation(api.usageLimits.report, {
-      repoId: args.repoId,
-      provider: args.provider,
-      ...accountArg,
-      capturedAt: Date.now(),
-      completeness: "partial",
-      windows,
-      ...(subscriptionType === undefined ? {} : { subscriptionType }),
-    });
-    return { ok: true };
+    const targets: RefreshTarget[] = await ctx.runQuery(
+      internal.usageLimits.listRefreshTargetsInternal,
+      { userId: ctx.userId, repoId: args.repoId },
+    );
+    const results = await Promise.all(
+      targets.map(async (target): Promise<RefreshResult> => ({
+        accountLabel: target.accountLabel,
+        ...(await refreshOne(ctx, args.repoId, target)),
+      })),
+    );
+    return { results };
   },
 });

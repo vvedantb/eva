@@ -2,10 +2,20 @@
 
 import { ActionCache } from "@convex-dev/action-cache";
 import { generateText } from "ai";
-import { parseGeneratedTags } from "@eva/shared";
+import {
+  isTitleRegenerating,
+  selectTagsByProbability,
+  TASK_TAGS,
+  TASK_TAG_DESCRIPTIONS,
+  type TaskTag,
+} from "@eva/shared";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
+import { getActionRepoWithAccess } from "./functions";
+import { readBoolean } from "./_jev/answers";
+import { evaluateDecision } from "./_jev/client";
+import { buildTitleDigest } from "./_sessions/prompts";
 
 /** Cheap gateway model for session titles — one-line change later. */
 const TEXT_GEN_MODEL = "openai/gpt-5-nano";
@@ -65,8 +75,73 @@ export const generateSessionTitle = internalAction({
 });
 
 /**
- * Suggests up to three vocabulary tags for a newly created task. Background /
- * flex tier — failures leave the task untagged rather than blocking create.
+ * Re-titles a session from its whole conversation, on demand from the session
+ * context menu. Unlike `generateSessionTitle` this overwrites a manual title —
+ * the user asked for it — and runs while they wait, so failures surface as a
+ * toast rather than being swallowed. The in-progress flag is cleared on every
+ * exit so a crashed run cannot leave the action disabled.
+ */
+export const regenerateSessionTitle = action({
+  args: { sessionId: v.id("sessions") },
+  returns: v.object({ title: v.string() }),
+  handler: async (ctx, args): Promise<{ title: string }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const context = await ctx.runQuery(internal.sessions.getTitleContext, {
+      sessionId: args.sessionId,
+    });
+    if (!context) throw new Error("Session not found");
+    await getActionRepoWithAccess(ctx, context.repoId);
+    if (isTitleRegenerating(context.titleRegeneration, Date.now())) {
+      throw new Error("Title regeneration already running");
+    }
+    const digest = buildTitleDigest(context.messages);
+    if (!digest) throw new Error("Nothing to title yet");
+
+    await ctx.runMutation(internal.sessions.markTitleRegenerating, {
+      sessionId: args.sessionId,
+      startedAt: Date.now(),
+    });
+    let title: string;
+    try {
+      const { text } = await generateText({
+        model: TEXT_GEN_MODEL,
+        prompt: `Write a new title for this coding session based on the whole conversation below. The title should describe the work the session is about — not claim it is finished. 3-8 words, under 40 characters. Reply with the title only — plain text, no quotes, no trailing punctuation.
+
+Previous title: ${context.title}
+
+Conversation:
+${digest}`,
+        providerOptions: {
+          gateway: {
+            serviceTier: "flex",
+          },
+        },
+      });
+      title = cleanGeneratedTitle(text);
+    } catch (error) {
+      await ctx.runMutation(internal.sessions.applyRegeneratedTitle, {
+        sessionId: args.sessionId,
+        title: undefined,
+      });
+      throw error;
+    }
+    await ctx.runMutation(internal.sessions.applyRegeneratedTitle, {
+      sessionId: args.sessionId,
+      title,
+    });
+    if (!title) throw new Error("The model returned an empty title");
+    return { title };
+  },
+});
+
+/**
+ * Suggests up to three vocabulary tags for a newly created task.
+ *
+ * One Jev boolean per candidate tag rather than a prose prompt: each tag is
+ * judged against its own rubric, and the probabilities let the threshold and
+ * the cap be applied here instead of trusting the model to count. Background
+ * work — failures leave the task untagged rather than blocking create.
  */
 export const generateTaskTags = internalAction({
   args: {
@@ -78,37 +153,51 @@ export const generateTaskTags = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const already =
-        args.existingTags.length > 0 ? args.existingTags.join(", ") : "none";
-      const description =
-        args.description !== undefined && args.description.trim().length > 0
-          ? args.description.slice(0, 2000)
-          : "(none)";
-      const { text } = await generateText({
-        model: TEXT_GEN_MODEL,
-        prompt: `Pick 0-3 tags that best describe this coding task. Choose only from the list below — never invent a tag. Prefer fewer precise tags over three loose ones. Reply with nothing if none clearly fit.
+      const applied = new Set(
+        args.existingTags.map((tag) => tag.trim().toLowerCase()),
+      );
+      const asked = TASK_TAGS.filter((tag) => !applied.has(tag));
+      if (asked.length === 0) {
+        return null;
+      }
 
-Type: bug, feature, refactor, docs, testing, chore, migration
-Quality: performance, security, accessibility, reliability, design, ux
-Area: frontend, backend, database, infra, ci, auth, dependencies, config, integration
+      const questions: Record<
+        string,
+        { type: "boolean"; instructions: string }
+      > = {};
+      for (const tag of asked) {
+        questions[tag] = {
+          type: "boolean",
+          instructions: `Does this coding task fit the tag '${tag}': ${TASK_TAG_DESCRIPTIONS[tag]}?`,
+        };
+      }
 
-Already applied — do not repeat these: ${already}
-
-Reply with the tags on one line, comma separated, no other text.
-
-Title: ${args.title}
-Description: ${description}`,
-        providerOptions: {
-          gateway: {
-            serviceTier: "flex",
+      const outcome = await evaluateDecision(
+        {
+          state: {
+            title: args.title,
+            description: (args.description ?? "").slice(0, 2000),
           },
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
+          questions,
         },
-      });
-      const tags = parseGeneratedTags(text, args.existingTags);
+        { tag: "eva-task-tags" },
+      );
+      if (!outcome.ok) {
+        console.error(
+          "[textGen.generateTaskTags]",
+          outcome.errorCode,
+          outcome.error,
+        );
+        return null;
+      }
+
+      const probabilities: Partial<Record<TaskTag, number>> = {};
+      for (const tag of asked) {
+        const probability = readBoolean(outcome, tag);
+        if (probability !== null) probabilities[tag] = probability;
+      }
+
+      const tags = selectTagsByProbability(probabilities, args.existingTags);
       if (tags.length === 0) {
         return null;
       }

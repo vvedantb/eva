@@ -257,6 +257,9 @@ export function ModelPickerContent<TModel extends string>({
       setIndicatorTop(null);
       return;
     }
+    // With a scrolling rail the active provider can open off-screen; `nearest`
+    // is a no-op when it is already visible.
+    selectedButton.scrollIntoView({ block: "nearest" });
     const contentRect = content.getBoundingClientRect();
     const buttonRect = selectedButton.getBoundingClientRect();
     setIndicatorTop(
@@ -298,7 +301,10 @@ export function ModelPickerContent<TModel extends string>({
         ) : null}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {!isSearching ? (
-          <div className="w-12 shrink-0 overflow-hidden border-r border-border bg-muted/30">
+          // The rail grows with every provider + personal account, so it has to
+          // scroll on its own once it outruns the panel — `overflow-hidden`
+          // simply clipped the tail off.
+          <div className="w-12 shrink-0 overflow-y-auto overscroll-contain border-r border-border bg-muted/30 scrollbar-none">
             <div
               ref={railContentRef}
               className="relative flex flex-col gap-1 px-1 pb-1 pt-0.5"

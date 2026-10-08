@@ -57,6 +57,30 @@ export async function getInstallationToken(
   return installationAuth.token;
 }
 
+/**
+ * Read-only token for exactly one repository in an installation (contents +
+ * metadata read). Used when a sandbox asks for credentials for a repository
+ * other than its own, so the token cannot write and cannot reach the rest of
+ * the installation. Scopes by repository id when known; GitHub also accepts the
+ * repository name for installations whose id we never recorded.
+ */
+export async function getReadOnlyRepoInstallationToken(
+  installationId: number,
+  repo: { githubId: number | undefined; name: string },
+): Promise<string> {
+  const creds = getGitHubCredentials();
+  const auth = createAppAuth(creds);
+  const installationAuth = await auth({
+    type: "installation",
+    installationId,
+    permissions: { contents: "read", metadata: "read" },
+    ...(repo.githubId !== undefined
+      ? { repositoryIds: [repo.githubId] }
+      : { repositoryNames: [repo.name] }),
+  });
+  return installationAuth.token;
+}
+
 /** Creates an Octokit client authenticated as a specific GitHub App installation. */
 export async function getInstallationOctokit(
   installationId: number,
@@ -80,5 +104,21 @@ export const mintInstallationToken = internalAction({
   returns: v.string(),
   handler: async (_ctx, args) => {
     return await getInstallationToken(args.installationId);
+  },
+});
+
+/** Internal action wrapper for the single-repository read-only token. */
+export const mintReadOnlyRepoToken = internalAction({
+  args: {
+    installationId: v.number(),
+    githubId: v.optional(v.number()),
+    name: v.string(),
+  },
+  returns: v.string(),
+  handler: async (_ctx, args) => {
+    return await getReadOnlyRepoInstallationToken(args.installationId, {
+      githubId: args.githubId,
+      name: args.name,
+    });
   },
 });

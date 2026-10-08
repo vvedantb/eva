@@ -65,6 +65,12 @@ export const SHORTCUT_DEFS = {
     group: "Global",
     defaultHotkey: "Control+Alt+B",
   },
+  showShortcuts: {
+    name: "Show keyboard shortcuts",
+    description: "Open the shortcut cheatsheet.",
+    group: "Global",
+    defaultHotkey: "Mod+/",
+  },
   jumpToApp: {
     name: "Jump to app 1–9",
     description:
@@ -78,6 +84,18 @@ export const SHORTCUT_DEFS = {
     description: "Open the new quick task dialog.",
     group: "Navigation",
     defaultHotkey: "Alt+N",
+  },
+  focusComposer: {
+    name: "Focus chat composer",
+    description: "Move focus into the chat input.",
+    group: "Chat",
+    defaultHotkey: "Alt+C",
+  },
+  cancelTurn: {
+    name: "Stop the running turn",
+    description: "Cancel the turn Eva is currently working on.",
+    group: "Chat",
+    defaultHotkey: "Alt+X",
   },
   stashDraft: {
     name: "Stash composer draft",

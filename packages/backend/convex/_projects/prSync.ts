@@ -1,12 +1,7 @@
-import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-
-/** Extracts the PR number from a GitHub pull request URL. */
-export function extractPrNumberFromUrl(prUrl: string): number | null {
-  const match = prUrl.match(/\/pull\/(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
-}
+import { selectPrLifecycleTransition } from "../_github/prLifecycleActions";
+import { applyPrLifecycleTransition } from "../_pullRequests/store";
 
 type ProjectPhase = Doc<"projects">["phase"];
 
@@ -16,8 +11,8 @@ const REVIEW_PHASES: ReadonlySet<ProjectPhase> = new Set([
 ]);
 
 /**
- * Mirrors quick-task PR sync for the single project PR: business_review ↔ draft,
- * code_review ↔ ready for review.
+ * Mirrors quick-task PR sync for a project's PRs: business_review ↔ draft and
+ * code_review ↔ ready on the primary PR; cancelling closes every live PR.
  */
 export async function scheduleProjectPrSync(
   ctx: MutationCtx,
@@ -25,8 +20,6 @@ export async function scheduleProjectPrSync(
   previousPhase: ProjectPhase,
   newPhase: ProjectPhase,
 ): Promise<void> {
-  if (!project.prUrl) return;
-
   const enteringCodeReview =
     newPhase === "code_review" && previousPhase !== "code_review";
   const enteringCancelled =
@@ -50,44 +43,20 @@ export async function scheduleProjectPrSync(
     return;
   }
 
-  const prNumber = extractPrNumberFromUrl(project.prUrl);
-  if (!prNumber) return;
+  const transition = selectPrLifecycleTransition({
+    enteringCancelled,
+    leavingCancelled,
+    enteringCodeReview,
+    leavingCodeReview,
+    asReadyOnReopen: newPhase === "code_review",
+  });
+  if (!transition) return;
 
-  const repo = await ctx.db.get(project.repoId);
-  if (!repo) return;
-
-  const baseArgs = {
-    installationId: repo.installationId,
-    repoOwner: repo.owner,
-    repoName: repo.name,
-    prNumber,
-  };
-
-  if (enteringCancelled) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.closePullRequest,
-      baseArgs,
-    );
-  } else if (leavingCancelled) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.reopenPullRequest,
-      { ...baseArgs, asReady: newPhase === "code_review" },
-    );
-  } else if (enteringCodeReview) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.markPrReadyForReview,
-      baseArgs,
-    );
-  } else if (leavingCodeReview) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflowActions.convertPrToDraft,
-      baseArgs,
-    );
-  }
+  await applyPrLifecycleTransition(
+    ctx,
+    { kind: "project", projectId: project._id },
+    transition,
+  );
 }
 
 /** Maps GitHub PR webhook actions to project review phases (inbound sync). */

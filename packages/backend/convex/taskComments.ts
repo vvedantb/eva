@@ -129,6 +129,7 @@ export const create = authMutation({
         repoId: task.repoId,
         projectId: task.projectId,
         taskId: args.taskId,
+        commentId,
         message: buildCommentNotificationMessage(args.content, task.projectId),
       });
       notifiedUserIds.add(parent.authorId);
@@ -162,6 +163,7 @@ export const create = authMutation({
           repoId: task.repoId,
           projectId: task.projectId,
           taskId: args.taskId,
+          commentId,
           message: mentionMessage,
         });
         notifiedUserIds.add(mentionedUserId);
@@ -184,6 +186,7 @@ export const create = authMutation({
         : buildCommentNotificationMessage(args.content, task.projectId),
       repoId: task.repoId,
       projectId: task.projectId,
+      commentId,
       actorId: ctx.userId,
       alreadyNotified: notifiedUserIds,
     });

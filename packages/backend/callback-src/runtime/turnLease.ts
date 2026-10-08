@@ -23,17 +23,15 @@ export type LeaseTerminalReason =
 export type TurnOwner = "claim" | "provider";
 
 /**
- * The single fact behind "does this process own a turn": ownership plus, for
- * durable turns, the lease that fences its writes. A legacy claim owns a turn
- * with no lease at all, so ownership cannot be inferred from the lease alone —
- * doing that is what silenced legacy daemons (fix 56530596d).
+ * The single fact behind "does this process own a turn": ownership plus the
+ * durable lease that fences its writes. Every agent turn holds a lease.
  */
 export type TurnOwnership =
   | { status: "idle" }
   | {
       status: "owned";
       owner: TurnOwner;
-      turnLease: TurnLeaseIdentity | null;
+      turnLease: TurnLeaseIdentity;
     };
 
 let turnOwnership: TurnOwnership =
@@ -53,7 +51,7 @@ export function getTurnOwnership(): TurnOwnership {
 /** Installs ownership before execution or heartbeat emission begins. */
 export function beginTurnOwnership(
   owner: TurnOwner,
-  turnLease: TurnLeaseIdentity | null,
+  turnLease: TurnLeaseIdentity,
 ): void {
   turnOwnership = { status: "owned", owner, turnLease };
   terminalReason = null;
@@ -65,18 +63,29 @@ export function endTurnOwnership(): void {
   terminalReason = null;
 }
 
+/**
+ * The completion mutation is the last fenced write of a turn, and the server
+ * closes the turn as part of handling it. Call this once the completion payload
+ * carries the lease and before the request is sent: from that point every
+ * heartbeat this process could still emit would be answered `terminal: closed`
+ * for a turn it has already finished, and `noteHeartbeatResponse` must be able
+ * to tell that apart from a rival taking the turn over.
+ */
+export function releaseTurnLeaseForCompletion(): void {
+  endTurnOwnership();
+}
+
 export function getCurrentTurnLease(): TurnLeaseIdentity | null {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
 
-/** Daemons must not heartbeat until a claim grants turn ownership. */
-export function canSendTurnHeartbeat(input: {
-  claimMutation: string | undefined;
-  ownership: TurnOwnership;
-}): boolean {
-  return (
-    input.claimMutation === undefined || input.ownership.status === "owned"
-  );
+/**
+ * Only an owned turn heartbeats: the server answers a heartbeat without a
+ * lease with a terminal verdict. A daemon owns one once a claim grants it; a
+ * one-shot runner owns one from launch (`TURN_ID`).
+ */
+export function canSendTurnHeartbeat(ownership: TurnOwnership): boolean {
+  return ownership.status === "owned";
 }
 
 /** Adds the current fence to any callback mutation payload when one is owned. */
@@ -89,6 +98,15 @@ export function appendCurrentTurnLease(args: JsonObject): void {
 
 export function getLeaseTerminalReason(): LeaseTerminalReason | null {
   return terminalReason;
+}
+
+/** Two legacy (lease-less) owners compare equal; otherwise id and generation must match. */
+export function isSameTurnLease(
+  a: TurnLeaseIdentity | null,
+  b: TurnLeaseIdentity | null,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
 }
 
 export type TurnLeaseExitDecision =
@@ -123,7 +141,21 @@ function parseTerminalReason(value: JsonValue): LeaseTerminalReason | null {
   return null;
 }
 
-export function noteHeartbeatResponse(response: string | JsonValue): boolean {
+/**
+ * Records a terminal lease verdict, but only for the lease this process still
+ * owns. `sentUnder` is the identity the heartbeat carried when it left: a
+ * heartbeat can be answered after this daemon has itself completed that turn
+ * (the server closes a synthetic turn inside `completeSyntheticTurn`, and the
+ * workflow closes a real one moments after `handleCompletion`), and the reply
+ * is then `terminal: closed` for a lease nobody here holds any more. Treating
+ * that as "a rival owns this turn" exited the daemon 400ms after it had minted
+ * the next synthetic turn, which stalled with no heartbeater (session 225,
+ * 21 Sep 2026).
+ */
+export function noteHeartbeatResponse(
+  response: string | JsonValue,
+  sentUnder: TurnLeaseIdentity | null,
+): boolean {
   if (terminalReason !== null) return true;
   let parsed: JsonValue;
   if (typeof response === "string") {
@@ -150,12 +182,20 @@ export function noteHeartbeatResponse(response: string | JsonValue): boolean {
     return false;
   }
   if (lease.status !== "terminal") return false;
-  terminalReason = parseTerminalReason(lease.reason) ?? "closed";
-  log(
-    "turn lease terminal (" +
-      terminalReason +
-      ") turnId=" +
-      String(getCurrentTurnLease()?.turnId),
-  );
+  const reason = parseTerminalReason(lease.reason) ?? "closed";
+  const current = getCurrentTurnLease();
+  if (!isSameTurnLease(sentUnder, current)) {
+    log(
+      "stale turn lease verdict ignored (" +
+        reason +
+        ") sentUnder=" +
+        String(sentUnder?.turnId) +
+        " current=" +
+        String(current?.turnId),
+    );
+    return false;
+  }
+  terminalReason = reason;
+  log("turn lease terminal (" + reason + ") turnId=" + String(current?.turnId));
   return true;
 }

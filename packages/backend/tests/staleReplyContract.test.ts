@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const daemonSource = readSource("callback-src/providers/claudeSdkDaemon.ts");
+const completionSource = readSource("callback-src/runtime/completion.ts");
 const oneShotSource = readSource("callback-src/index.ts");
 const bundledScript = readSource(
   "convex/_sandbox_runtime/callbackScript.generated.ts",
@@ -28,7 +29,7 @@ describe("no streaming write after completion is delivered", () => {
     ["deployed bundle", bundledScript],
   ])("finalizeTurn reconciles before completing (%s)", (_label, source) => {
     const body = functionBody(source, "async function finalizeTurn(");
-    const reconcileAt = body.indexOf("await setFinalizingState()");
+    const reconcileAt = body.indexOf("await reconcileStreamingAndPersist()");
     const completionAt = body.indexOf("await deliverCompletionWithMedia(");
     expect(reconcileAt, "the final reconcile moved").toBeGreaterThan(-1);
     expect(completionAt, "the completion call moved").toBeGreaterThan(-1);
@@ -36,9 +37,30 @@ describe("no streaming write after completion is delivered", () => {
 
     const afterCompletion = body.slice(completionAt);
     expect(afterCompletion).not.toContain("setFinalizingState");
+    expect(afterCompletion).not.toContain("reconcileStreamingAndPersist");
     expect(afterCompletion).not.toContain("sendStreamingHeartbeatUpdate");
     expect(afterCompletion).not.toContain("flushStreaming(");
   });
+
+  test.each([
+    ["callback source", completionSource],
+    ["deployed bundle", bundledScript],
+  ])(
+    "the shared reconcile claims the finalizing state before persisting (%s)",
+    (_label, source) => {
+      // Claiming the state is what makes the reconcile a gate: a turn that
+      // loses the claim returns early instead of persisting over the winner.
+      const body = functionBody(
+        source,
+        "async function reconcileStreamingAndPersist(",
+      );
+      const finalizingAt = body.indexOf("setFinalizingState()");
+      const persistAt = body.indexOf("persistTurnWork()");
+      expect(finalizingAt, "the finalizing claim moved").toBeGreaterThan(-1);
+      expect(persistAt, "the turn-work persist moved").toBeGreaterThan(-1);
+      expect(finalizingAt).toBeLessThan(persistAt);
+    },
+  );
 
   test("the one-shot attempt reconciles before completing", () => {
     const reconcileAt = oneShotSource.indexOf("await setFinalizingState()");
@@ -64,7 +86,7 @@ describe("every turn start clears the streaming row first", () => {
   test("the shared session stager clears before staging the placeholder", () => {
     const body = functionBody(
       sessionExecution,
-      "async function stageAndStartChatTurn(",
+      "async function stageAndStartSessionTurn(",
     );
     const clearAt = body.indexOf("clearStreamingActivity(");
     const placeholderAt = body.indexOf('ctx.db.insert("messages"');
@@ -77,7 +99,7 @@ describe("every turn start clears the streaming row first", () => {
     "%s stages through that helper rather than its own placeholder",
     (name) => {
       const body = definitionBody(sessionExecution, name);
-      expect(body).toContain("stageAndStartChatTurn(ctx, {");
+      expect(body).toContain("stageAndStartSessionTurn(ctx, {");
       expect(body).not.toContain('ctx.db.insert("messages"');
     },
   );
@@ -98,7 +120,7 @@ describe("every turn start clears the streaming row first", () => {
   });
 
   test.each([
-    "sessionChatQueueConfig",
+    "sessionQueueConfig",
     "projectChatQueueConfig",
     "taskChatQueueConfig",
   ])("%s inserts a user-role message when a queued turn starts", (name) => {
@@ -107,28 +129,23 @@ describe("every turn start clears the streaming row first", () => {
   });
 
   test.each([
-    ["startNextQueuedSessionChatMessage", "chatId", "sessionChatQueueConfig"],
-    ["startNextQueuedProjectChatMessage", "projectId", "projectChatQueueConfig"],
-    ["startNextQueuedTaskChatMessage", "taskId", "taskChatQueueConfig"],
-  ])(
-    "%s still delegates to the shared dequeue with %s",
-    (name, idName, configName) => {
-      const body = functionBody(queueHelpers, `export function ${name}(`);
-      expect(body).toContain(
-        `startNextQueuedChatMessage(ctx, ${idName}, ${configName})`,
-      );
-    },
-  );
-
-  // The session-wide drain every chat turn ending calls goes through the same
-  // shared dequeue for the finished chat and then each sibling.
-  test("drainSessionChatQueues dequeues every chat through the shared dequeue", () => {
-    const body = functionBody(
-      queueHelpers,
-      "export async function drainSessionChatQueues(",
+    ["startNextQueuedSessionMessage", "sessionQueueConfig"],
+    ["startNextQueuedProjectChatMessage", "projectChatQueueConfig"],
+    ["startNextQueuedTaskChatMessage", "taskChatQueueConfig"],
+  ])("%s still delegates to the shared dequeue with %s", (name, configName) => {
+    const body = functionBody(queueHelpers, `export function ${name}(`);
+    const idArg =
+      name === "startNextQueuedSessionMessage"
+        ? "sessionId"
+        : name === "startNextQueuedProjectChatMessage"
+          ? "projectId"
+          : "taskId";
+    // Formatting-agnostic, and later arguments (the dequeue reason) may follow.
+    expect(body).toMatch(
+      new RegExp(
+        `startNextQueuedChatMessage\\(\\s*ctx,\\s*${idArg},\\s*${configName}\\b`,
+      ),
     );
-    expect(body).toContain("startNextQueuedChatMessage(ctx, finishedChatId, config)");
-    expect(body).toContain("startNextQueuedChatMessage(ctx, chat._id, config)");
   });
 });
 

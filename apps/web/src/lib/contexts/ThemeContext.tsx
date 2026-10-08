@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import {
-  isPersistedTheme,
-  useThemeMode,
-  type ThemeMode,
-} from "@/lib/hooks/useThemeMode";
+import { useThemeMode, type ThemeMode } from "@/lib/hooks/useThemeMode";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -27,7 +23,6 @@ export type {
   FontFamily,
   LetterSpacing,
   CustomTheme,
-  ResolvedCustomTheme,
 } from "@/lib/contexts/themeTokens";
 
 /** Next Light → Neutral → Dark → Light. System uses resolved appearance as the start. */
@@ -165,15 +160,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyCustomThemeVars(customTheme, appearance !== "light");
   }, [syncedCustomTheme, appearance]);
 
+  // Every mode persists, System included — it is a preference ("follow the OS"),
+  // not a resolved appearance, so it has to survive a reload like the others.
   const setTheme = (next: ThemeMode) => {
     setNextTheme(next);
-    if (isPersistedTheme(next)) {
-      void catchMutationError(
-        setThemeMutation({ theme: next }),
-        "Couldn't save theme",
-        "theme-mode",
-      );
-    }
+    void catchMutationError(
+      setThemeMutation({ theme: next }),
+      "Couldn't save theme",
+      "theme-mode",
+    );
   };
 
   const toggleTheme = () => {

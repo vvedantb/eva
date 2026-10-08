@@ -1,4 +1,7 @@
-import { buildEditPrompt } from "../_sessions/prompts";
+import {
+  buildEditPrompt,
+  type ChatRuntimeFacts,
+} from "../_sessions/prompts";
 
 interface BuildProjectChatPromptArgs {
   repoOwner: string;
@@ -12,6 +15,8 @@ interface BuildProjectChatPromptArgs {
   customInstructionsBlock: string;
   systemPrompt: string | undefined;
   devPort: number | undefined;
+  readableRepos: ReadonlyArray<{ owner: string; name: string }>;
+  runtime: ChatRuntimeFacts;
 }
 
 /**
@@ -39,5 +44,9 @@ ${args.message}`;
     args.customInstructionsBlock,
     args.systemPrompt,
     args.devPort,
+    [],
+    args.readableRepos,
+    [],
+    args.runtime,
   );
 }

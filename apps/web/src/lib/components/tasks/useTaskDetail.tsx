@@ -8,12 +8,14 @@ import type { Id } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { useState } from "react";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
+import { taskPrUrl } from "@/lib/githubPr";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
   canEditTaskText,
   type TaskDetailTab,
 } from "./_components/task-detail-constants";
+import { taskRunStreamingEntityId } from "./firstRunChatTurn";
 
 const PREVIEW_SANDBOX_ALLOWED_STATUSES = [
   "code_review",
@@ -33,6 +35,8 @@ type QuickTaskSandboxRouting = {
   onExitSandboxView: () => void;
   /** Opens Files tab with `?file=` set (chat file chips). */
   onOpenFile: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
+  onViewDiff: (repoRelativePath?: string) => void;
 };
 
 type ProjectTaskDetailRouting = {
@@ -67,7 +71,7 @@ export function useTaskDetail(
   );
   const streaming = useQuery(
     api.streaming.get,
-    activeRun ? { entityId: `task-run-${activeRun._id}` } : "skip",
+    activeRun ? { entityId: taskRunStreamingEntityId(activeRun._id) } : "skip",
   );
   const users = useQuery(api.users.listAll);
   const projects = useQuery(
@@ -95,17 +99,19 @@ export function useTaskDetail(
   );
   const createTaskPrAction = useAction(api.taskWorkflowActions.createTaskPr);
 
-  const [baseBranch, setBaseBranch] = useState(FALLBACK_GIT_BASE_BRANCH);
-  const derivedBaseBranch =
+  /**
+   * Read straight off the task row — never mirrored into local state. A mirror
+   * had to be re-seeded whenever the row changed, and any render that seeded it
+   * before `task` arrived took the repo default instead: that is how the
+   * Properties column showed `staging` for a task whose own base branch is
+   * `main`, until a reload happened to seed it in the right order. The picker
+   * writes through `updateTask`, whose optimistic update patches this same
+   * query, so the value still changes the instant it is picked.
+   */
+  const baseBranch =
     task?.baseBranch?.trim() ||
     repoForTask?.defaultBaseBranch?.trim() ||
     FALLBACK_GIT_BASE_BRANCH;
-  const [prevDerivedBaseBranch, setPrevDerivedBaseBranch] =
-    useState(derivedBaseBranch);
-  if (derivedBaseBranch !== prevDerivedBaseBranch) {
-    setPrevDerivedBaseBranch(derivedBaseBranch);
-    setBaseBranch(derivedBaseBranch);
-  }
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
   const [isSandboxStarting, setIsSandboxStarting] = useState(false);
   const [isSandboxStopping, setIsSandboxStopping] = useState(false);
@@ -185,9 +191,13 @@ export function useTaskDetail(
     setIsStopping(false);
   };
 
+  // A task moved back to `todo` after it already ran keeps its branch, so it
+  // previews like a reviewed task rather than offering a first run again.
+  // Mirrors `isPreviewSandboxAllowed` in the backend.
   const canStartSandbox =
     task?.status !== undefined &&
-    PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status);
+    (PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status) ||
+      (task.status === "todo" && hasRuns));
 
   const isSandboxActive = task?.reviewTaskSandboxStatus === "active";
   const isSandboxStartingFromStatus =
@@ -315,7 +325,7 @@ export function useTaskDetail(
 
   const status = task?.status;
   const canEditText = canEditTaskText(status, Boolean(hasActiveRun));
-  const latestPrUrl = runs?.find((r) => r.prUrl)?.prUrl;
+  const latestPrUrl = taskPrUrl(task, projects);
   const latestPrError = runs?.find((r) => r.prError)?.prError;
   const latestDeployment = runs?.find((r) => r.deploymentStatus);
   const canCreatePr = !latestPrUrl && (runs?.length ?? 0) > 0 && !hasActiveRun;
@@ -361,7 +371,6 @@ export function useTaskDetail(
     activeTab,
     setActiveTab,
     baseBranch,
-    setBaseBranch,
     executionError,
     setExecutionError,
     showStopConfirm,

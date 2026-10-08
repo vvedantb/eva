@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { m } from "motion/react";
-import { IconSearch } from "@tabler/icons-react";
 import { motionFast } from "@eva/ui";
 import type { MentionPopupPlacement } from "./mentionPopupPosition";
+import { optionId } from "./mentionOptionId";
 
 /**
  * `caret` is the compact list next to the caret (comment boxes, modals, task
- * descriptions). `panel` is the full-width sheet above the chat composer, which
- * owns a real focusable search field.
+ * descriptions). `panel` is the full-width sheet anchored above the composer
+ * card.
  */
 export type MentionPopupLayout = "caret" | "panel";
 
 interface MentionPickerPopupProps<TItem extends { id: string }> {
   title: string;
-  layout: MentionPopupLayout;
+  /**
+   * Id of the `listbox` element. The editor owns it (one `useId` per editor)
+   * because it is the combobox pointing here through `aria-controls` and
+   * `aria-activedescendant`.
+   */
+  listboxId: string;
   placement: MentionPopupPlacement;
   items: TItem[];
   selectedIndex: number;
@@ -23,32 +28,17 @@ interface MentionPickerPopupProps<TItem extends { id: string }> {
   onSelectItem: (item: TItem) => void;
   /** Shown when there is nothing to list at all; otherwise "No matches". */
   emptyContent?: ReactNode;
-  /** Text the list is filtered by — typed after `@`/`/`, or in the search field. */
-  query: string;
-  /** `panel` only: the search field is the live filter. */
-  onQueryChange: (query: string) => void;
-  /** `panel` only: arrow/enter/escape from the search field. */
-  onQueryKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
-  /** Focus left the picker for something that is not the editor. */
-  onDismiss: () => void;
-  /** `caret` only: returns the caret to the editor so typing keeps filtering. */
-  onRefocusEditor: () => void;
 }
 
 export function MentionPickerPopup<TItem extends { id: string }>({
   title,
-  layout,
+  listboxId,
   placement,
   items,
   selectedIndex,
   renderItem,
   onSelectItem,
   emptyContent,
-  query,
-  onQueryChange,
-  onQueryKeyDown,
-  onDismiss,
-  onRefocusEditor,
 }: MentionPickerPopupProps<TItem>) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +52,6 @@ export function MentionPickerPopup<TItem extends { id: string }>({
   }, [selectedIndex, items.length]);
 
   const isAbove = placement.placement === "above";
-  const searchPlaceholder = `Search ${title.toLowerCase()}…`;
 
   return (
     /**
@@ -74,23 +63,12 @@ export function MentionPickerPopup<TItem extends { id: string }>({
      * sliding the popup across the caret.
      */
     <div
-      data-mention-picker="true"
       className="fixed z-50"
       style={{
         left: placement.left,
         top: placement.top,
         width: placement.width,
         transform: isAbove ? "translateY(-100%)" : undefined,
-      }}
-      onBlur={(e) => {
-        const next = e.relatedTarget;
-        if (
-          next instanceof Element &&
-          next.closest("[data-mention-picker]") !== null
-        ) {
-          return;
-        }
-        onDismiss();
       }}
     >
       {/*
@@ -116,45 +94,10 @@ export function MentionPickerPopup<TItem extends { id: string }>({
           (isAbove ? "origin-bottom" : "origin-top")
         }
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
-          <IconSearch size={14} className="shrink-0 text-muted-foreground" />
-          {layout === "panel" ? (
-            // The caret stays in the editor (that is where the chip lands), so
-            // the field owns the filter instead of mirroring the typed text.
-            // Spaces work here, which they cannot in the editor — a space ends
-            // the `@`/`/` trigger.
-            <input
-              // Opening the picker is the user asking to search, so typing has
-              // to land here rather than back in the draft.
-              autoFocus
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              onKeyDown={onQueryKeyDown}
-              placeholder={searchPlaceholder}
-              aria-label={searchPlaceholder}
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-hidden placeholder:text-muted-foreground/70"
-            />
-          ) : (
-            // Compact layout keeps the caret in the editor — inside a modal the
-            // focus trap would pull focus straight back out of a real field —
-            // so this is a live view of the filter rather than an input.
-            <span
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onRefocusEditor();
-              }}
-              className={
-                "min-w-0 flex-1 truncate text-sm " +
-                (query ? "text-foreground" : "text-muted-foreground/70")
-              }
-            >
-              {query || searchPlaceholder}
-            </span>
-          )}
-        </div>
         {items.length > 0 ? (
           <div
             ref={listRef}
+            id={listboxId}
             role="listbox"
             aria-label={title}
             className="scrollbar scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"
@@ -164,6 +107,7 @@ export function MentionPickerPopup<TItem extends { id: string }>({
               return (
                 <button
                   key={item.id}
+                  id={optionId(listboxId, item.id)}
                   type="button"
                   role="option"
                   aria-selected={isSelected}

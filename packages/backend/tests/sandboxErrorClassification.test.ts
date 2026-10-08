@@ -2,10 +2,12 @@ import { describe, expect, test } from "vitest";
 import { SandboxProviderError } from "../convex/_sandbox/provider";
 import {
   SandboxCommandFailedError,
+  SandboxExecTimeoutError,
   SandboxGoneError,
   classifyProviderDetail,
   classifySandboxError,
   isSandboxGoneError,
+  isSandboxUnresponsiveError,
 } from "../convex/_sandbox_runtime/sandboxErrors";
 
 /**
@@ -188,6 +190,41 @@ describe("provider message fallback", () => {
     expect(classifyProviderDetail("did not reach running within 180s")).toBe(
       "unknown",
     );
+  });
+});
+
+describe("unresponsive-VM signals", () => {
+  // The prod fingerprint this guards: exit 137 on `echo 1` and 25s exec
+  // timeouts from an OOM-wedged VM (silver-strategic-buzzard, 2026-09-01).
+  // These mean "restart or report unhealthy", never "mint a replacement".
+  test("exit 137 on a trivial command is unresponsive, never gone", () => {
+    const error = new SandboxCommandFailedError(
+      'Sandbox command failed with exit code 137 (cmd="echo 1")',
+      { exitCode: 137, output: "" },
+    );
+    expect(isSandboxUnresponsiveError(error)).toBe(true);
+    expect(isSandboxGoneError(error)).toBe(false);
+  });
+
+  test("a client-side exec timeout is unresponsive, never gone", () => {
+    const error = new SandboxExecTimeoutError(
+      "Sandbox exec (10s) timed out after 25000ms",
+    );
+    expect(isSandboxUnresponsiveError(error)).toBe(true);
+    expect(isSandboxGoneError(error)).toBe(false);
+  });
+
+  test("ordinary command failures are not unresponsive", () => {
+    expect(
+      isSandboxUnresponsiveError(
+        new SandboxCommandFailedError("Sandbox command failed (exit 1): nope", {
+          exitCode: 1,
+          output: "nope",
+        }),
+      ),
+    ).toBe(false);
+    expect(isSandboxUnresponsiveError(new Error("anything else"))).toBe(false);
+    expect(isSandboxUnresponsiveError(new FakeApiError(400))).toBe(false);
   });
 });
 

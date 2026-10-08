@@ -11,9 +11,13 @@ import {
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuCheckboxItem,
+  CrossfadeIcon,
+  motionFast,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconBell, IconBellOff, IconUserPlus } from "@tabler/icons-react";
-import { UserInitials, getUserInitials } from "@eva/shared";
+import { getUserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import { getUserDisplayName } from "./task-detail-constants";
 
@@ -63,15 +67,34 @@ export function TaskSubscribers({
           void setSubscription({ taskId, subscribed: !isSubscribed })
         }
       >
-        {isSubscribed ? <IconBellOff size={14} /> : <IconBell size={14} />}
+        <CrossfadeIcon
+          show={isSubscribed}
+          variant="soft"
+          trueKey="subscribed"
+          falseKey="subscribe"
+          className="relative flex size-3.5 shrink-0 items-center justify-center"
+          whenTrue={<IconBellOff size={14} />}
+          whenFalse={<IconBell size={14} />}
+        />
         {isSubscribed ? "Subscribed" : "Subscribe"}
       </Button>
 
       {subscribedUsers.length > 0 && (
         <div className="flex items-center -space-x-1">
-          {subscribedUsers.map((user) => (
-            <UserInitials key={user._id} user={user} size="sm" hideLastSeen />
-          ))}
+          <AnimatePresence initial={false} mode="popLayout">
+            {subscribedUsers.map((user) => (
+              <m.span
+                key={user._id}
+                className="inline-flex"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={motionFast}
+              >
+                <UserInitials user={user} size="sm" hideLastSeen />
+              </m.span>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 

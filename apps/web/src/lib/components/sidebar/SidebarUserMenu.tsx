@@ -14,9 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  CircleSpinner,
 } from "@eva/ui";
 import { useClerk } from "@clerk/clerk-react";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import {
   IconUserCog,
   IconLogout,
@@ -24,10 +25,15 @@ import {
   IconSun,
   IconMoon,
   IconCircleHalf,
-  IconLoader2,
 } from "@tabler/icons-react";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
 interface SidebarUserMenuProps {
   name: string;
@@ -48,6 +54,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
   const { openSearch } = useSearch();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const altHeld = useAltHeld();
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -123,11 +130,21 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={() => setConfirmOpen(true)}
+            onSelect={() =>
+              requestConfirm(
+                altHeld,
+                () => setConfirmOpen(true),
+                () => {
+                  void handleSignOut();
+                },
+              )
+            }
             className="text-destructive focus:text-destructive"
+            title={skipConfirmTitle("Sign out")}
           >
             <IconLogout size={16} className="mr-2" />
             Sign out
+            <ConfirmSkipHint />
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -159,9 +176,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
               onClick={() => void handleSignOut()}
               disabled={isSigningOut}
             >
-              {isSigningOut && (
-                <IconLoader2 size={16} className="animate-spin" />
-              )}
+              {isSigningOut && <CircleSpinner size="sm" />}
               Sign out
             </Button>
           </DialogFooter>

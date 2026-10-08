@@ -11,7 +11,8 @@ function readSource(path: string): string {
 
 /**
  * One `UsageLimitsIndicator` everywhere. Call sites pass model + account; only
- * the chip bar changes. The popover always reads the same `getByRepo` rows.
+ * the chip bar changes. The popover always reads the same `getForViewer`
+ * entries — every credential the viewer can run on, on every surface.
  */
 describe("plan-usage is one shared indicator", () => {
   test("session, project, and task headers mount UsageLimitsIndicator with model + account", () => {
@@ -42,14 +43,27 @@ describe("plan-usage is one shared indicator", () => {
     expect(task).not.toContain("claudeUsageAccountScope");
   });
 
-  test("the indicator scopes the chip but always passes every row to the popover", () => {
+  test("the indicator scopes the chip but always passes every account to the popover", () => {
     const indicator = readSource(
       "lib/components/usage-limits/UsageLimitsIndicator.tsx",
     );
     expect(indicator).toContain("chipSummaryForActive(chipRows, now, model)");
     expect(indicator).toContain(
-      "<UsageLimitsDetails repoId={repoId} rows={rows} now={now} />",
+      "<UsageLimitsDetails repoId={repoId} entries={entries} now={now} />",
     );
-    expect(indicator).not.toContain("rows={chipRows}");
+    expect(indicator).not.toContain("entries={chipRows}");
+  });
+
+  test("the popover refreshes every account from one button", () => {
+    const details = readSource(
+      "lib/components/usage-limits/UsageLimitsDetails.tsx",
+    );
+    const section = readSource(
+      "lib/components/usage-limits/UsageProviderSection.tsx",
+    );
+    expect(details).toContain("<UsageRefreshButton repoId={repoId} />");
+    // Per-row refresh is gone: the rows include accounts with no reading, and
+    // refreshing them one at a time is a click per credential.
+    expect(section).not.toContain("UsageRefreshButton");
   });
 });

@@ -131,7 +131,7 @@ export function StatsPreview() {
               <span className="min-w-0 flex-1 truncate text-[10.5px] text-foreground">
                 {person.name}
               </span>
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+              <span className="font-mono text-3xs tabular-nums text-muted-foreground">
                 {person.merged}
               </span>
             </div>
@@ -193,7 +193,7 @@ export function InboxPreview() {
                 <p className="truncate text-[11.5px] font-medium text-foreground">
                   {notification.title}
                 </p>
-                <p className="truncate text-[10px] text-muted-foreground">
+                <p className="truncate text-3xs text-muted-foreground">
                   {notification.meta}
                 </p>
               </div>
@@ -252,16 +252,16 @@ export function TeamsPreview() {
         <div className="mt-2 space-y-1.5">
           {SECRETS.map((secret) => (
             <div key={secret} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground">
+              <span className="min-w-0 flex-1 truncate font-mono text-3xs text-foreground">
                 {secret}
               </span>
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span className="font-mono text-3xs text-muted-foreground">
                 ••••••••
               </span>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-muted-foreground">
+        <p className="mt-2 text-3xs text-muted-foreground">
           Encrypted at rest, decrypted only inside your sandboxes.
         </p>
       </div>

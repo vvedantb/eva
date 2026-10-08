@@ -229,3 +229,37 @@ export function buildAutomationEmailHtml(opts: AutomationEmailOptions): string {
       "You are receiving this email because email notifications are enabled. Open the app to manage them.",
   });
 }
+
+export interface AgentEmailOptions {
+  recipientName?: string;
+  /** Base URL of the web app, e.g. https://app.example.com (no trailing slash needed). */
+  appUrl: string;
+  subject: string;
+  /** Body already converted from markdown to HTML by the caller. */
+  contentHtml: string;
+}
+
+/**
+ * The shell for the MCP `send_email` tool: an agent mailing its own user a
+ * result. The caller renders the markdown body, so this stays a pure module.
+ */
+export function buildAgentEmailHtml(opts: AgentEmailOptions): string {
+  const greeting = renderGreeting(opts.recipientName);
+
+  const bodyHtml = `
+    <p style="margin:0 0 4px;font-size:15px;line-height:22px;color:${TEXT};">${greeting}</p>
+    <h1 style="margin:0 0 20px;font-size:20px;line-height:28px;font-weight:700;color:${TEXT};">${escapeHtml(opts.subject)}</h1>
+    <div style="font-size:14px;line-height:22px;color:${TEXT};">${opts.contentHtml}</div>
+    <p style="margin:24px 0 0;">
+      <a href="${escapeHtml(stripTrailingSlash(opts.appUrl))}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">Open the app</a>
+    </p>
+  `;
+
+  return wrapEmailLayout({
+    title: opts.subject,
+    bodyHtml,
+    appUrl: opts.appUrl,
+    footerText:
+      "An Eva agent you were running sent this email at your request.",
+  });
+}

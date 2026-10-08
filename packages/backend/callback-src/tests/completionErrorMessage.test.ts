@@ -133,6 +133,6 @@ describe("one-shot completion errors", () => {
   test("keeps ordinary non-zero exits diagnosable", () => {
     expect(
       buildErrorMessage(23, "", "", false, false, false, false, false, false),
-    ).toBe("Claude CLI exited with code 23");
+    ).toMatch(/exited with code 23$/);
   });
 });

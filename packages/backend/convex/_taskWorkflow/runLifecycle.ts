@@ -1,32 +1,27 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { createNotification } from "../notifications";
 import { runModeValidator } from "../validators";
-import type { Id } from "../_generated/dataModel";
 import {
   hasActiveRun,
   isSupersededTaskRun,
   recomputeProjectPhase,
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
-import { buildWorkflowRunNotificationMessage } from "./prompts";
 import { buildTaskDoneEvent } from "./events";
-import {
-  STALE_CHECK_DELAY_MS,
-  isUsageLimitError,
-  parseUsageLimitResetTime,
-} from "./recovery";
+import { closeOpenTurn } from "../_chat/turnStore";
+import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import {
   clearStreamingActivity,
   getTaskRunStreamingEntityId,
   upsertStreamingActivity,
   upsertActivityLog,
   finalizeRunStatus,
+  recordRunPullRequest,
   sendCompletionEvent,
 } from "./helpers";
 
-/** Transitions a queued run to running, sets streaming activity, and schedules watchdog timers. */
+/** Transitions a queued run to running, sets streaming activity, and schedules the 2-hour backstop. */
 export const updateRunToRunning = internalMutation({
   args: {
     runId: v.id("agentRuns"),
@@ -68,15 +63,21 @@ export const updateRunToRunning = internalMutation({
       },
     );
 
-    await ctx.scheduler.runAfter(
-      STALE_CHECK_DELAY_MS,
-      internal.taskWorkflow.checkStaleRuns,
-      {
-        runId: args.runId,
-        taskId: args.taskId,
-      },
-    );
+    return null;
+  },
+});
 
+/** Closes a run's durable turn when its workflow ends. */
+export const closeRunTurn = internalMutation({
+  args: { runId: v.id("agentRuns"), success: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await closeOpenTurn(
+      ctx,
+      args.runId,
+      args.success ? "done" : "error",
+      args.success ? {} : { error: "Run failed" },
+    );
     return null;
   },
 });
@@ -105,21 +106,27 @@ export const appendRunLog = internalMutation({
   },
 });
 
-/** Records a PR URL on a specific run — used by the manual Create PR action
- * when the workflow's auto PR step failed and the user retried later. */
-export const setRunPrUrl = internalMutation({
+/** Links a PR the manual Create PR action opened for a task — used when the
+ * workflow's auto PR step failed and the user retried later. Clears the run's
+ * recorded PR failure. */
+export const recordManualTaskPr = internalMutation({
   args: {
-    runId: v.id("agentRuns"),
+    taskId: v.id("agentTasks"),
+    runId: v.optional(v.id("agentRuns")),
     prUrl: v.string(),
+    draft: v.boolean(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run) return null;
-    await ctx.db.patch(args.runId, {
+    await recordRunPullRequest(ctx, {
+      runId: args.runId,
+      taskId: args.taskId,
       prUrl: args.prUrl,
-      prError: undefined,
+      state: args.draft ? "draft" : "open",
     });
+    if (args.runId !== undefined && (await ctx.db.get(args.runId))) {
+      await ctx.db.patch(args.runId, { prError: undefined });
+    }
     return null;
   },
 });
@@ -326,6 +333,14 @@ export const completeRun = internalMutation({
       await ctx.db.patch(args.taskId, {
         status: args.success ? "business_review" : "todo",
         updatedAt: now,
+        // Released with the status, not in the workflow's `finally`: the
+        // remaining steps (PR description, sandbox stop) run for tens of
+        // seconds after this patch, and a set `activeWorkflowId` on a task that
+        // has already left `in_progress` shows the card the "Eva is replying"
+        // grid long after eva stopped. The `finally` stays as the safety net
+        // for runs that never reach here. Guarded by `staleCompletion`, so a
+        // queued or superseding run keeps its own id.
+        activeWorkflowId: undefined,
       });
       if (task.projectId) {
         await recomputeProjectPhase(ctx, task.projectId);
@@ -335,43 +350,14 @@ export const completeRun = internalMutation({
     const project = args.projectId ? await ctx.db.get(args.projectId) : null;
 
     if (project) {
-      const projectPatch: { lastSandboxActivity: number; prUrl?: string } = {
-        lastSandboxActivity: now,
-      };
-      if (args.prUrl) {
-        projectPatch.prUrl = args.prUrl;
-      }
-      await ctx.db.patch(project._id, projectPatch);
+      await ctx.db.patch(project._id, { lastSandboxActivity: now });
     }
 
     await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));
     await clearStreamingActivity(ctx, String(args.taskId));
 
-    if (task) {
-      const scopeLabel = task.projectId ? "Task" : "Quick task";
-      const statusText = args.success ? "completed" : "failed";
-      const notifyUsers = new Set(
-        [task.createdBy, task.assignedTo].filter(
-          (id): id is Id<"users"> => id !== undefined,
-        ),
-      );
-      for (const userId of notifyUsers) {
-        await createNotification(ctx, {
-          userId,
-          type: args.success ? "run_completed" : "run_failed",
-          title: `${scopeLabel} ${statusText}: ${task.title}`,
-          repoId: task.repoId,
-          projectId: task.projectId,
-          taskId: args.taskId,
-          message: buildWorkflowRunNotificationMessage({
-            success: args.success,
-            projectId: task.projectId,
-            error: args.error,
-            prUrl: args.prUrl,
-          }),
-        });
-      }
-    }
+    // Run success/failure deliberately sends no notification: the task card and
+    // chat already show the outcome, so an inbox row per run is pure noise.
 
     // Auto-schedule retry on usage-limit errors
     if (!args.success && args.error && isUsageLimitError(args.error)) {

@@ -1,5 +1,10 @@
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
-import { SANDBOX_STATUS_STYLES } from "./sandboxStatusStyles";
+import { LoadingState, Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
+import {
+  SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
+} from "./sandboxStatusStyles";
 
 /**
  * Which half of an entity a surface-owning page is showing: its own detail view
@@ -23,6 +28,8 @@ export function SandboxSurfaceTabs({
   isSandboxActive,
   isSandboxStarting,
   isSandboxStopping,
+  isAgentActive = false,
+  hasUnread = false,
   onSurfaceChange,
 }: {
   /** Label for the non-sandbox half, e.g. "Task" or "Project". */
@@ -31,17 +38,29 @@ export function SandboxSurfaceTabs({
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
+  /** A turn is in flight — the pixel grid stands in for the status dot. */
+  isAgentActive?: boolean;
+  /**
+   * The chat has an unseen reply. The chat lives on the sandbox surface, so
+   * the dot shows only on the other one, and a turn in flight hides it.
+   */
+  hasUnread?: boolean;
   onSurfaceChange: (surface: SandboxSurface) => void;
 }) {
+  const simpleView = useSimpleView();
   // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
   // can still read true while the sandbox is on its way up or down.
-  const status = isSandboxStopping
+  const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
       ? "starting"
       : isSandboxActive
         ? "active"
         : null;
+  const status =
+    liveStatus && showsSandboxStatusDot(liveStatus, simpleView)
+      ? liveStatus
+      : null;
 
   return (
     <Tabs
@@ -58,13 +77,27 @@ export function SandboxSurfaceTabs({
         <TabsTrigger value="main">{mainLabel}</TabsTrigger>
         <TabsTrigger value="sandbox" className="gap-1.5">
           Sandbox
-          {status ? (
+          {/* Same swap the session rows make: a turn in flight already implies
+              an active sandbox, so the grid stands in for the dot. */}
+          {isAgentActive ? (
+            <span className="flex shrink-0 items-center" title="Working">
+              <LoadingState
+                label="Working"
+                variant="Drive"
+                size="sm"
+                iconOnly
+              />
+            </span>
+          ) : status ? (
             <span
               className={`size-2 shrink-0 rounded-full ${SANDBOX_STATUS_STYLES[status].dot}`}
               title={SANDBOX_STATUS_STYLES[status].label}
               aria-label={SANDBOX_STATUS_STYLES[status].label}
             />
           ) : null}
+          <UnreadDot
+            show={hasUnread && surface !== "sandbox" && !isAgentActive}
+          />
         </TabsTrigger>
       </TabsList>
     </Tabs>

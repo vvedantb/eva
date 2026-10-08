@@ -2,30 +2,29 @@
 
 import { api, normalizeAIModel, type Id } from "@eva/backend";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
-import { useChatModel } from "@/lib/hooks/useChatModel";
+import { useSessionModel } from "@/lib/hooks/useSessionModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 
 /**
- * Sends an annotation as chat display text + rich agent prompt into the
- * session's active chat tab. Queues with displayContent when a turn is
- * already running.
+ * Sends an annotation as chat display text + rich agent prompt.
+ * Queues with displayContent when a turn is already running.
  */
 export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
-  chatId: Id<"sessionChats">,
+  isRouteActive = true,
 ): (display: string, full: string) => Promise<void> {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
-  // Model + traits + account are owned by Convex, per chat.
+  // Model + traits + account are owned by Convex.
   const {
     model,
     traits,
     providerAccountId: stickyProviderAccountId,
-  } = useChatModel(chatId, defaultModel);
+  } = useSessionModel(sessionId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,
@@ -36,10 +35,16 @@ export function useSessionAnnotationSend(
   // Owner-scoped, matching the composer picker — resolving against the
   // viewer's own accounts would drop the sticky account to Team.
   const { resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
 
-  const messages = useQuery(api.messages.listByParent, { parentId: chatId });
-  const turnStatus = useQuery(api.turns.getChatStatus, { chatId });
+  const messages = useHeldQuery(
+    api.messages.listByParent,
+    isRouteActive ? { parentId: sessionId } : "skip",
+  );
+  const turnStatus = useHeldQuery(
+    api.turns.getSessionStatus,
+    isRouteActive ? { sessionId } : "skip",
+  );
   const addMessage = useMutation(api.sessions.addMessage);
   const startExecution = useMutation(api.sessionWorkflow.startExecute);
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
@@ -54,7 +59,7 @@ export function useSessionAnnotationSend(
     const reasoningLevel = displayTraits.effortLevel;
     if (isExecuting) {
       await enqueueMessage({
-        chatId,
+        sessionId,
         message: full,
         displayContent: display,
         model,
@@ -66,7 +71,7 @@ export function useSessionAnnotationSend(
     }
     await Promise.all([
       addMessage({
-        chatId,
+        id: sessionId,
         role: "user",
         content: display,
         providerAccountId: accountId,
@@ -74,13 +79,21 @@ export function useSessionAnnotationSend(
         reasoningLevel,
       }),
       startExecution({
-        chatId,
+        sessionId,
         message: full,
         model,
         ...executionTraits,
         reasoningLevel,
         providerAccountId: accountId,
       }),
-    ]);
+    ]).catch(async (error) => {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to send annotation";
+      await addMessage({
+        id: sessionId,
+        role: "assistant",
+        content: `Error: ${errorMessage}`,
+      });
+    });
   };
 }

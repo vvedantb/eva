@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePromptInputController } from "@eva/ui";
 import { isEditorValueEmpty } from "@/lib/components/mentions";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
+import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";
 
 interface ChatTypeToFocusProps {
   /** Ref to the mention editor so a stray keystroke can focus it. */
@@ -21,6 +22,14 @@ interface ChatTypeToFocusProps {
  * ChatDraftSync) so it can drive the shared text-input controller. It only
  * mounts when the composer itself is rendered, which naturally excludes the
  * archived / pending-question / draft-loading states.
+ *
+ * Mounted is not the same as visible, though: the sessions layout keeps up to
+ * three session shells alive under `display: none` / `aria-hidden`, and Manager
+ * Ave's panel never unmounts. A `document` listener therefore runs once per
+ * mounted composer, so one keystroke was appended to every mounted draft — and
+ * ChatDraftSync then persisted each of them. The handler asks
+ * `isComposerVisible` whether this editor is the one on screen before it writes
+ * anything, and a backgrounded tab owns no composer at all.
  *
  * Deliberately not gated on the composer's send-disabled state: the editor stays
  * contentEditable while a sandbox is stopped, so drafting must keep working
@@ -52,6 +61,8 @@ export function ChatTypeToFocus({ mentionRef }: ChatTypeToFocusProps) {
       // Never steal input that is already going somewhere editable — the
       // composer itself, terminals, other inputs, or dialog fields.
       if (isEditableTarget(event.target)) return;
+      // Only the composer the user can see may claim the keystroke.
+      if (!isComposerVisible(mentionRef.current?.getElement())) return;
 
       // Cancel the default insertion (which would land on <body> and be lost),
       // then append the character and focus so subsequent keys flow in order.

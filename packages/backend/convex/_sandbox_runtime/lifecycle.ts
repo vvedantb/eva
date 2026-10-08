@@ -10,6 +10,8 @@ import {
   withTimeout,
 } from "./helpers";
 import { releaseSwapFile } from "./swap";
+import { isSandboxGoneError } from "./sandboxErrors";
+import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -25,22 +27,20 @@ const STOP_SANDBOX_BUDGET_MS = 480_000;
 const REFRESH_BUDGET_MS = 30_000;
 /** Bound on the pre-stop swap release (script exec timeout is 120s). */
 const SWAP_RELEASE_BUDGET_MS = 150_000;
-const CALLBACK_LIVENESS_COMMAND = [
-  "test -f /tmp/run-design.pid",
-  "test ! -f /tmp/run-design.done",
-  'pid="$(cat /tmp/run-design.pid)"',
-  'kill -0 "$pid" 2>/dev/null',
-  'state="$(ps -p "$pid" -o stat= 2>/dev/null | tr -d " ")"',
-  'case "$state" in Z*) exit 1 ;; *) exit 0 ;; esac',
-].join(" && ");
 /** Agent still running even if callback PID bookkeeping is stale. Cursor and
  * OpenCode drive their turns from inside the callback (run-design.mjs) since
  * the SDK migrations, so the callback process itself counts as agent liveness;
  * cursor-agent and `opencode run` stay for pre-migration sandboxes. OpenCode's
  * `opencode serve` is deliberately absent: it idles between turns, so matching
- * it would report every sandbox alive forever. */
+ * it would report every sandbox alive forever.
+ *
+ * Every alternative brackets its first character (`[c]laude-code`, `/[.]claude/`)
+ * for the same reason KILL_PRIOR_AGENT_PROCESSES_CMD in helpers.ts does: exec
+ * wraps this in `bash -lc "<cmd>"`, so the wrapper's own cmdline contains the
+ * pattern text and an unbracketed pattern always matched itself — every probe
+ * reported the agent alive and the stall watchdog never killed a dead run. */
 const AGENT_PROCESS_LIVENESS_COMMAND =
-  "pgrep -f 'claude-code|cursor-agent|codex run|opencode run|/\\.claude/|run-design\\.mjs' >/dev/null 2>&1";
+  "pgrep -f '[c]laude-code|[c]ursor-agent|[c]odex run|[o]pencode run|/[.]claude/|[r]un-design[.]mjs' >/dev/null 2>&1";
 
 /**
  * Verifies whether a sandbox and its callback runner are alive.
@@ -233,10 +233,21 @@ export const stopSandbox = internalAction({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // Already gone / already idle — treat as success so finalize can close.
+      //
+      // The structured verdict comes first. The provider's own 404 carries no
+      // prose at all — the SDK message is the bare status line ("Status code
+      // 404 is not ok") — so the regex below never matched it and every Stop
+      // click failed, finalize reverted the entity to "active", and the user
+      // could never stop a sandbox Vercel had already dropped (prod, 23 Sep
+      // 2026: quick task 107, gray-precise-lungfish-2cEbcB, nine failed stops).
+      // A sandbox record the provider no longer has cannot be running, so this
+      // is the one case where closing without a confirmed stop is honest.
       const benign =
-        /already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
+        isSandboxGoneError(error) ||
+        (/already.?stopped|not found|does not exist|no active session|destroyed|gone/i.test(
           message,
-        ) && !/did not reach a terminal stopped state/i.test(message);
+        ) &&
+          !/did not reach a terminal stopped state/i.test(message));
       if (benign) {
         console.log(
           `[sandbox] stopSandbox ignored benign error for ${args.sandboxId}: ${message}`,
@@ -254,18 +265,57 @@ export const stopSandbox = internalAction({
   },
 });
 
-// Evidence of why a run's callback process died, gathered before the sandbox
-// (and with it /tmp and the kernel log) is destroyed. The dmesg grep directly
-// confirms or rules out OOM kills; a missing done file means the callback was
-// SIGKILLed (its exit handler never ran); the log tail shows its last words.
+// Evidence of why a run's callback process died — or stopped heartbeating —
+// gathered before the sandbox (and with it /tmp and the kernel log) is
+// destroyed. The dmesg grep directly confirms or rules out OOM kills; a missing
+// done file means the callback was SIGKILLed (its exit handler never ran); the
+// log tail shows its last words. The resource block distinguishes a dead
+// process from a live one starved by swap, which is what froze a session
+// daemon for six minutes and cost it its turn (see captureStalledTurnDiagnostics).
 const KILL_DIAGNOSTICS_COMMAND = [
   "echo '--- oom (dmesg) ---'",
   "(dmesg 2>/dev/null | grep -iE 'out of memory|oom[-_ ]kill|killed process' | tail -n 12) || true",
+  "echo '--- memory/swap (free -m) ---'",
+  "free -m 2>/dev/null || true",
+  "echo '--- disk (/tmp) ---'",
+  "df -h /tmp 2>/dev/null || true",
+  "echo '--- load ---'",
+  "cat /proc/loadavg 2>/dev/null || true",
+  "echo '--- top rss ---'",
+  "(ps -eo pid,rss,stat,etime,args --sort=-rss 2>/dev/null | head -n 8) || true",
   "echo '--- done file ---'",
   "cat /tmp/run-design.done 2>/dev/null || echo '(missing: callback died without running its exit handler, e.g. SIGKILL/OOM)'",
   "echo; echo '--- callback log tail ---'",
   "tail -n 30 /tmp/design.log 2>/dev/null || true",
 ].join("; ");
+
+/**
+ * Read-only post-mortem for a session turn whose lease expired on a sandbox
+ * that is still running. The sandbox is left running — this only reads
+ * evidence (OOM lines, memory/swap, load, top processes, callback log) so the
+ * stall can be root-caused without manual sandbox access. Never throws: a
+ * failed capture must not block finalising the turn.
+ */
+export const captureStalledTurnDiagnostics = internalAction({
+  args: {
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    try {
+      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      const diagnostics = await execHandle(
+        sandbox,
+        KILL_DIAGNOSTICS_COMMAND,
+        15,
+      );
+      return diagnostics.trim().slice(0, 4000);
+    } catch (error) {
+      return `diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  },
+});
 
 /**
  * Captures post-mortem diagnostics from a sandbox whose run was killed by the

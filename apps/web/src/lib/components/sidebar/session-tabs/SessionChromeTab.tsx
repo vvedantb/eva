@@ -4,33 +4,25 @@ import type { Id } from "@eva/backend";
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
   LoadingState,
   cn,
-  toast,
 } from "@eva/ui";
-import {
-  IconArchive,
-  IconClipboard,
-  IconCopy,
-  IconExternalLink,
-  IconGitBranch,
-  IconGitPullRequest,
-  IconLink,
-  IconPencil,
-  IconX,
-} from "@tabler/icons-react";
+import { IconGitPullRequest, IconX } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import {
   SANDBOX_STATUS_STYLES,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { SessionHoverCardBody } from "@/lib/components/sidebar/SidebarListHoverCard";
+import { TitleRegeneratingHint } from "@/lib/components/sidebar/SidebarSessionItem";
+import {
+  SessionMenuItems,
+  useIsRegeneratingTitle,
+} from "@/lib/components/sidebar/SessionMenuItems";
 import type { TabGroupColor } from "@/lib/components/sidebar/session-tabs/tabGroupColors";
 
 /**
@@ -40,20 +32,23 @@ import type { TabGroupColor } from "@/lib/components/sidebar/session-tabs/tabGro
  */
 export const TAB_PREFERRED_WIDTH_REM = 14;
 
-export interface ChromeTabSession {
+interface ChromeTabSession {
   _id: Id<"sessions">;
   _creationTime: number;
   numId?: number;
   title: string;
+  titleRegeneration?: { startedAt: number };
   status: SandboxStatus;
   isExecuting?: boolean;
   userId: Id<"users">;
   branchName?: string;
+  baseBranch?: string;
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
+  sandboxId?: string;
 }
 
-interface SessionChromeTabProps {
+export interface SessionChromeTabProps {
   session: ChromeTabSession;
   href: string;
   isSelected: boolean;
@@ -63,8 +58,9 @@ interface SessionChromeTabProps {
   groupColor: TabGroupColor;
   onRenameRequest: () => void;
   onArchiveRequest: () => void;
-  onDuplicate: () => Promise<string>;
-  onDuplicateNavigate: (pathSegment: string) => void;
+  /** Dismisses the tab locally — the session keeps running. */
+  onClose: () => void;
+  onForkNavigate: (pathSegment: string) => void;
 }
 
 function prStateIconColor(
@@ -105,10 +101,11 @@ export function SessionChromeTab({
   groupColor,
   onRenameRequest,
   onArchiveRequest,
-  onDuplicate,
-  onDuplicateNavigate,
+  onClose,
+  onForkNavigate,
 }: SessionChromeTabProps) {
   const statusStyle = SANDBOX_STATUS_STYLES[session.status];
+  const isRegeneratingTitle = useIsRegeneratingTitle(session);
 
   // Longer open delay than the house default on purpose: tabs sit shoulder to
   // shoulder, so the pointer crosses several on its way to the one it wants.
@@ -118,14 +115,11 @@ export function SessionChromeTab({
         <ContextMenuTrigger asChild>
           <HoverCardTrigger asChild>
             <div
-              style={{ flexBasis: `${TAB_PREFERRED_WIDTH_REM}rem` }}
               className={cn(
-                // Tabs shrink from the shared preferred width down to min-w-8,
-                // which is the sandbox status and nothing else. container-type
-                // makes the tab a query container for the detail ladder below,
-                // and drops its intrinsic width, so a long title cannot resist
-                // shrinking.
-                "group relative flex h-9 min-w-8 items-center rounded-t-[0.625rem] transition-colors @container",
+                // Width is owned by the motion wrapper in SessionChromeTabGroup
+                // (`flexBasis` + `layout`) so add/close can animate the chip
+                // without resizing the whole strip. min-w-8 is the squeezed floor.
+                "group relative flex h-9 w-full min-w-8 items-center rounded-t-[0.625rem] transition-colors @container",
                 isSelected
                   ? // Chrome stroke: left/top/right in the group accent — bottom
                     // stays open so the tab merges into the page; the sides meet
@@ -136,6 +130,19 @@ export function SessionChromeTab({
                     )
                   : "text-muted-foreground hover:bg-foreground/6 hover:text-foreground",
               )}
+              // Middle-click closes the tab, as in every browser. The
+              // matching mouse-down is swallowed because button 1 otherwise
+              // starts the platform's autoscroll, which leaves a scroll cursor
+              // stuck on the page after the tab has gone.
+              onMouseDown={(e) => {
+                if (e.button === 1) e.preventDefault();
+              }}
+              onAuxClick={(e) => {
+                if (e.button !== 1) return;
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
             >
               {showSeparator ? (
                 <span
@@ -207,6 +214,10 @@ export function SessionChromeTab({
                 <span className="min-w-0 flex-1 truncate font-medium [@container(max-width:4.5rem)]:hidden">
                   {session.title}
                 </span>
+                <TitleRegeneratingHint
+                  show={isRegeneratingTitle}
+                  className="[@container(max-width:11rem)]:hidden"
+                />
                 {session.prUrl ? (
                   <IconGitPullRequest
                     size={14}
@@ -219,16 +230,15 @@ export function SessionChromeTab({
               </DynamicLink>
               <button
                 type="button"
-                aria-label={`Archive ${session.title}`}
-                title="Archive session"
+                aria-label={`Close ${session.title}`}
+                title="Close tab"
                 className={cn(
                   // `motion-press` rather than the hand-rolled
-                  // `transition-[color,background-color,opacity]`: archiving is
-                  // a one-click, state-changing action on a 24px target, so the
-                  // press is the only acknowledgement it gets before the tab
-                  // leaves the strip. The utility already covers colour, and
-                  // opacity is in its property list too, so the reveal still
-                  // fades.
+                  // `transition-[color,background-color,opacity]`: closing is
+                  // a one-click action on a 24px target, so the press is the
+                  // only acknowledgement it gets before the tab leaves the
+                  // strip. The utility already covers colour, and opacity is in
+                  // its property list too, so the reveal still fades.
                   "max-sm:hit-target motion-press mr-2 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:scale-[0.92] focus-visible:opacity-100 [@container(max-width:7.5rem)]:hidden",
                   isSelected
                     ? "opacity-100"
@@ -242,7 +252,7 @@ export function SessionChromeTab({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onArchiveRequest();
+                  onClose();
                 }}
               >
                 <IconX size={14} />
@@ -251,67 +261,14 @@ export function SessionChromeTab({
           </HoverCardTrigger>
         </ContextMenuTrigger>
         <ContextMenuContent onClick={(e) => e.stopPropagation()}>
-          <ContextMenuItem onSelect={onRenameRequest}>
-            <IconPencil size={16} />
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() => {
-              void onDuplicate().then((segment) => {
-                onDuplicateNavigate(segment);
-              });
-            }}
-          >
-            <IconCopy size={16} />
-            Duplicate
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() => {
-              void navigator.clipboard.writeText(session.title);
-            }}
-          >
-            <IconClipboard size={16} />
-            Copy title
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() => {
-              void navigator.clipboard.writeText(window.location.origin + href);
-            }}
-          >
-            <IconLink size={16} />
-            Copy link
-          </ContextMenuItem>
-          {session.branchName ? (
-            <ContextMenuItem
-              onSelect={() => {
-                const branchName = session.branchName;
-                if (!branchName) return;
-                void navigator.clipboard.writeText(branchName).then(() => {
-                  toast.success("Branch name copied");
-                });
-              }}
-            >
-              <IconGitBranch size={16} />
-              Copy branch name
-            </ContextMenuItem>
-          ) : null}
-          {session.prUrl ? (
-            <ContextMenuItem
-              onSelect={() => {
-                const prUrl = session.prUrl;
-                if (!prUrl) return;
-                window.open(prUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <IconExternalLink size={16} />
-              Open PR
-            </ContextMenuItem>
-          ) : null}
-          <ContextMenuSeparator />
-          <ContextMenuItem className="text-warning" onSelect={onArchiveRequest}>
-            <IconArchive size={16} />
-            Archive
-          </ContextMenuItem>
+          <SessionMenuItems
+            session={session}
+            href={href}
+            isRegeneratingTitle={isRegeneratingTitle}
+            onRenameRequest={onRenameRequest}
+            onForkNavigate={onForkNavigate}
+            onArchiveRequest={onArchiveRequest}
+          />
         </ContextMenuContent>
       </ContextMenu>
       <HoverCardContent
@@ -325,6 +282,7 @@ export function SessionChromeTab({
           sessionId={session._id}
           createdAt={session._creationTime}
           userId={session.userId}
+          baseBranch={session.baseBranch}
         />
       </HoverCardContent>
     </HoverCard>

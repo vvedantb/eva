@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
+import { CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV } from "../callback-src/providers/cursorSdk.js";
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
 
@@ -18,11 +20,54 @@ const snapshotActions = readFileSync(
   join(testsDir, "../convex/snapshotActions.ts"),
   "utf8",
 );
+const claudeCliVersionModule = readFileSync(
+  join(testsDir, "../convex/_sandbox_runtime/claudeCliVersion.ts"),
+  "utf8",
+);
+const launchRuntime = readFileSync(
+  join(testsDir, "../convex/_sandbox_runtime/launch.ts"),
+  "utf8",
+);
+const codexCliVersionModule = readFileSync(
+  join(testsDir, "../convex/_sandbox_runtime/codexCliVersion.ts"),
+  "utf8",
+);
+const codexLoader = readFileSync(
+  join(testsDir, "../callback-src/providers/codexSdk.ts"),
+  "utf8",
+);
+const codexAppServerClient = readFileSync(
+  join(testsDir, "../callback-src/providers/codexAppServerClient.ts"),
+  "utf8",
+);
+
+// The published bundle Eva actually imports (`dist/esm` next to the resolved
+// CommonJS entry), read so a contract can be asserted against the pinned code.
+const cursorSdkBundle = readFileSync(
+  join(
+    dirname(createRequire(import.meta.url).resolve("@cursor/sdk")),
+    "../esm/index.js",
+  ),
+  "utf8",
+);
+const cursorSdkSqliteBundle = readFileSync(
+  join(
+    dirname(createRequire(import.meta.url).resolve("@cursor/sdk")),
+    "../esm/sqlite.js",
+  ),
+  "utf8",
+);
+const callbackBundle = readFileSync(
+  join(testsDir, "../convex/_sandbox_runtime/callbackScript.generated.ts"),
+  "utf8",
+);
+
+const CLAUDE_AGENT_SDK_PIN = "0.3.282";
 
 const sdkVersions = [
   {
     packageName: "@anthropic-ai/claude-agent-sdk",
-    version: "0.3.201",
+    version: CLAUDE_AGENT_SDK_PIN,
     versionConstant: "CLAUDE_AGENT_SDK_VERSION",
     loader: claudeLoader,
   },
@@ -36,9 +81,7 @@ const sdkVersions = [
 
 test("provider SDK dependencies match the callback loader versions", () => {
   for (const sdk of sdkVersions) {
-    expect(backendPackage).toContain(
-      `"${sdk.packageName}": "${sdk.version}"`,
-    );
+    expect(backendPackage).toContain(`"${sdk.packageName}": "${sdk.version}"`);
     expect(sdk.loader).toContain(`const SDK_PACKAGE = "${sdk.packageName}"`);
     expect(sdk.loader).toContain(`const SDK_VERSION = "${sdk.version}"`);
   }
@@ -71,6 +114,138 @@ test("new snapshots preinstall both provider SDKs at the loader versions", () =>
   }
 });
 
+test("the CLI floor is never older than the agent SDK's own build", () => {
+  // Sandboxes run the registry's latest CLI, resolved per launch. This constant
+  // is the floor a failed lookup falls back to, and what the snapshot seed bakes
+  // — so it must still satisfy the SDK, which spawns the binary and whose models
+  // are gated on its version. Agent SDK 0.3.X ships CLI 2.1.X, hence the shared
+  // patch component.
+  const pinned = /CLAUDE_CODE_VERSION = "([^"]+)"/.exec(claudeCliVersionModule);
+  const cliVersion = pinned?.[1];
+  expect(cliVersion).toMatch(/^2\.1\.\d+$/);
+  expect(cliVersion?.split(".").at(2)).toBe(
+    CLAUDE_AGENT_SDK_PIN.split(".").at(2),
+  );
+
+  // One source of truth: the seed and the launch-time resolver both import it.
+  expect(snapshotActions).toContain(
+    'import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion"',
+  );
+  expect(launchRuntime).toContain(
+    'import { CLAUDE_CODE_VERSION } from "./claudeCliVersion"',
+  );
+
+  // The seed stays version-pinned, guard included: an image resolves `@latest`
+  // once and then freezes it, so a floating seed is what leaves an old snapshot
+  // serving a CLI too old for the model (2.1.246, changelog 2026-09-02).
+  expect(snapshotActions).toContain(
+    'globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)',
+  );
+  expect(snapshotActions).toContain(
+    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}",
+  );
+  // No unpinned install survives anywhere. The launch install interpolates the
+  // version resolved for *this* launch — never a bare package or a literal
+  // `@latest`, which would leave the guards below nothing to compare against.
+  expect(launchRuntime).toContain("${cli.packageName}@${cli.version}");
+  expect(snapshotActions).not.toMatch(/@anthropic-ai\/claude-code(?![@"])/);
+  expect(launchRuntime).not.toMatch(/@anthropic-ai\/claude-code(?![@"])/);
+  expect(launchRuntime).not.toContain("claude-code@latest");
+});
+
+test("the launch-resolved CLI version reaches both the install and the callback", () => {
+  // Launch-time provisioning is version-aware, not existence-only: a live
+  // sandbox whose global CLI predates this launch's version gets that build
+  // under the fallback prefix, and the callback prefers it over the drifted
+  // global (session 62, 2026-09-02: a 14 Aug snapshot's 2.1.232 failed every
+  // Fable 5.1 turn while the guard only fired when `claude` was missing).
+  expect(launchRuntime).toContain("cli_version()");
+  // Launch and callback judge the same copy: the one `command -v` finds. A
+  // `claude update` copy in the user's npm prefix, behind the image's stale
+  // CLI on PATH, used to skip the install while the callback ran the stale one.
+  expect(launchRuntime).toContain("function pinnedCliInstallCommand(");
+  expect(launchRuntime).toContain('bin_path="$(command -v');
+  expect(launchRuntime).not.toContain("npm root -g)/");
+  expect(claudeLoader).toContain(
+    "const globalVersion = binPackageVersion(globalBin, cli.packageName);",
+  );
+
+  // One resolver call feeds the install and the env var, so the callback can
+  // never be told to expect a version this launch did not install.
+  expect(launchRuntime).toContain("async function resolveLatestCliVersion(");
+  expect(launchRuntime).toContain("export function resolveClaudeCliVersion()");
+  expect(launchRuntime).toContain("export function resolveCodexCliVersion()");
+  // Kept off the critical path: the lookup starts as a promise that overlaps
+  // the uploads, rather than an await that stalls every other prep task.
+  expect(launchRuntime).toContain("? resolveClaudeCliVersion()");
+  expect(launchRuntime).toContain("? resolveCodexCliVersion()");
+  expect(launchRuntime).toContain("await cliVersionPromise");
+  expect(launchRuntime).toContain(
+    "CLAUDE_CLI_PINNED_VERSION=${quote([claudeCliVersion])}",
+  );
+  expect(launchRuntime).toContain(
+    "CODEX_CLI_PINNED_VERSION=${quote([codexCliVersion])}",
+  );
+
+  // The lookup must never fail a launch, and must never move the floor down.
+  expect(launchRuntime).toContain("let resolved = floor;");
+  expect(launchRuntime).toContain(
+    "isNewerVersion(parsed.data.version, resolved)",
+  );
+
+  // One drift check, shared. Both providers are an SDK compiled into this
+  // bundle spawning a separately installed binary whose version this launch
+  // chose, so a second copy of the comparison is a second place to get it wrong.
+  expect(claudeLoader).toContain("export function resolvePinnedCliBinary(");
+  expect(claudeLoader).toContain(
+    "if (pinned === null || globalVersion === pinned) return globalBin;",
+  );
+  expect(claudeLoader).toContain("process.env.CLAUDE_CLI_PINNED_VERSION");
+  expect(codexLoader).toContain("process.env.CODEX_CLI_PINNED_VERSION");
+  expect(codexLoader).toContain("resolvePinnedCliBinary({");
+  expect(codexLoader).toContain('binName: "codex"');
+
+  // Existence-only binary selection is what let a stale global win. Neither
+  // codex call site may go back to testing the path alone.
+  expect(codexLoader).toContain("codexPathOverride: codexExecutablePath()");
+  expect(codexAppServerClient).toContain(
+    "const command = codexExecutablePath();",
+  );
+  expect(codexLoader).not.toContain("existsSync(CODEX_BIN_PATH)");
+  expect(codexAppServerClient).not.toContain("existsSync(CODEX_BIN_PATH)");
+});
+
+test("the Codex CLI floor is pinned, guarded in the seed, and floated at launch", () => {
+  // Same contract as Claude's: the seed bakes an exact version behind a
+  // version-aware guard, and launch.ts installs the registry's latest above it.
+  const floor = /CODEX_CLI_VERSION = "([^"]+)"/.exec(
+    codexCliVersionModule,
+  )?.[1];
+  expect(floor).toMatch(/^\d+\.\d+\.\d+$/);
+  // OpenAI publishes the CLI and its SDK under one version number and the SDK
+  // spawns the binary, so a floor behind the SDK leaves a registry outage
+  // driving a mismatched pair.
+  expect(backendPackage).toContain(`"@openai/codex-sdk": "${floor}"`);
+
+  expect(snapshotActions).toContain(
+    'import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion"',
+  );
+  expect(launchRuntime).toContain(
+    'import { CODEX_CLI_VERSION } from "./codexCliVersion"',
+  );
+  expect(snapshotActions).toContain(
+    'globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)',
+  );
+  expect(snapshotActions).toContain("@openai/codex@${CODEX_CLI_VERSION}");
+  expect(launchRuntime).toContain("packageName: CODEX_CLI_PACKAGE,");
+  // No unpinned or hardcoded install survives.
+  expect(snapshotActions).not.toMatch(/@openai\/codex@0\./);
+  expect(launchRuntime).not.toMatch(/@openai\/codex@0\./);
+  expect(launchRuntime).not.toContain("codex@latest");
+  // The guard is version-aware, not the old `if ! command -v codex` test.
+  expect(launchRuntime).not.toContain("if ! command -v codex");
+});
+
 test("both loaders resolve their pin through one version-aware helper", () => {
   // The helper lives in the Claude loader; the others import it.
   expect(claudeLoader).toContain("export function resolvePinnedSdkEntry(");
@@ -79,6 +254,44 @@ test("both loaders resolve their pin through one version-aware helper", () => {
     expect(sdk.loader).toContain("resolvePinnedSdkEntry({");
     expect(sdk.loader).toContain("version: SDK_VERSION,");
   }
+});
+
+test("the Cursor SDK still reads the model catalog Eva hands it", () => {
+  // Undocumented env var: the SDK reads it in Agent.create/Agent.resume in
+  // place of its own listModels() network call, which is the round trip that
+  // timed out on CURSOR_AGENT_SETUP_TIMEOUT_MS in prod. An SDK bump that
+  // renames or drops it silently restores that remote dependency, so pin the
+  // literal against the bundle — and against the constant, so a rename on our
+  // side is caught too.
+  expect(CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV).toBe(
+    "CURSOR_SDK_LOCAL_MODEL_CATALOG_JSON",
+  );
+  expect(cursorSdkBundle).toContain(CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV);
+  expect(cursorLoader).toContain(
+    "process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog",
+  );
+});
+
+// The JSONL store rewrites its whole file on every append and re-parses it on
+// every get, and a resumed `send()` issues one `checkpoints.get` per stored
+// conversation blob — so resume cost grew quadratically and stalled prod turns
+// on the 60s send budget (3 Sep 2026, sessions 174 and 176). Pin the SQLite
+// store here so nothing quietly reintroduces the JSONL one.
+test("the Cursor callback persists agents in the SDK's SQLite store, never the JSONL store", () => {
+  // The pinned SDK still exports the class from its separate sqlite entry.
+  expect(cursorSdkSqliteBundle).toContain("as SqliteLocalAgentStore}");
+
+  expect(cursorLoader).toContain(
+    'const SDK_SQLITE_ENTRY_RELPATH = "/dist/esm/sqlite.js"',
+  );
+  expect(cursorLoader).toContain("SqliteLocalAgentStore.open({");
+  expect(cursorLoader).toContain("stateRoot: CURSOR_SDK_STORE_DIR");
+  expect(cursorLoader).not.toContain("JsonlLocalAgentStore");
+
+  // The sandbox runs the generated bundle, not the source: a stale bundle would
+  // keep shipping the JSONL store no matter what the loader says.
+  expect(callbackBundle).not.toContain("JsonlLocalAgentStore");
+  expect(callbackBundle).toContain("SqliteLocalAgentStore");
 });
 
 test("older snapshots retain the user-local SDK fallback", () => {

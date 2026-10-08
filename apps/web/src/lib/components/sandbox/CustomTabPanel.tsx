@@ -12,6 +12,10 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import {
+  SandboxAsleepState,
+  type SandboxWake,
+} from "@/lib/components/sandbox/SandboxAsleepState";
 
 type PanelState = "loading" | "running" | "error";
 
@@ -25,14 +29,25 @@ interface CustomTabPanelProps {
    * (parent hides this panel) but pauses readiness polling.
    */
   isForeground?: boolean;
+  /**
+   * App Preview port; custom tabs are served through the Preview's auth proxy
+   * under /__tab/<port>/ because Vercel exposes a single public app slot.
+   */
+  previewPort: number;
   repoId: Id<"githubRepos">;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
+  externalHref?: string;
+  wake?: SandboxWake;
 }
 
 const MAX_ATTEMPTS = 40;
 
 /**
- * Renders a user-defined custom tab: a fixed sandbox port resolved through the
- * same auth proxy as the Preview tab and shown in an iframe. Unlike the Editor /
+ * Renders a user-defined custom tab: a fixed sandbox port shown in an iframe.
+ * Vercel sandboxes expose a single public app slot, so the tab is not given its
+ * own public origin — it is served by the Preview's auth proxy under
+ * `/__tab/<port>/`, which is why this asks for the Preview port and passes the
+ * tab's own port as `customTabPort`. Unlike the Editor /
  * Desktop panels there is no start/stop gate — the service (Supabase, Convex,
  * ...) is started by the app's own dev / startup commands, so this auto-polls
  * `getPreviewUrl` until the port is reachable.
@@ -46,7 +61,10 @@ export function CustomTabPanel({
   sandboxId,
   isActive,
   isForeground = true,
+  previewPort,
   repoId,
+  externalHref,
+  wake,
 }: CustomTabPanelProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<PanelState>("loading");
@@ -75,6 +93,9 @@ export function CustomTabPanel({
     pollTimer.current = undefined;
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     The reset also cancels the in-flight poll and bumps a generation counter,
+     so it has to happen as a side effect rather than during render. */
   // Clear cached URL when the sandbox / port identity changes (not on tab hide).
   useEffect(() => {
     generation.current += 1;
@@ -84,7 +105,8 @@ export function CustomTabPanel({
     setError(null);
     setState("loading");
     return stopPolling;
-  }, [isActive, sandboxId, port, retryNonce]);
+  }, [isActive, sandboxId, port, previewPort, retryNonce]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   // Poll only while the sandbox is up and this tab is foreground; keep iframe
   // state when the user switches away.
@@ -108,7 +130,8 @@ export function CustomTabPanel({
       try {
         const data = await getPreviewUrl({
           sandboxId,
-          port,
+          port: previewPort,
+          customTabPort: port,
           checkReady: true,
           repoId,
         });
@@ -145,6 +168,7 @@ export function CustomTabPanel({
     isActive,
     sandboxId,
     port,
+    previewPort,
     isForeground,
     url,
     state,
@@ -169,9 +193,10 @@ export function CustomTabPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-        Wake Eva up to use {name}.
-      </div>
+      <SandboxAsleepState
+        label={`Wake Eva up to use ${name}.`}
+        wake={isActive ? undefined : wake}
+      />
     );
   }
 
@@ -199,7 +224,7 @@ export function CustomTabPanel({
           </Button>
           <Button size="icon" variant="ghost" className="size-8" asChild>
             <a
-              href={stripPreviewGrant(url)}
+              href={externalHref ?? stripPreviewGrant(url)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open ${name} in a new tab`}

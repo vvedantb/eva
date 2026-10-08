@@ -10,35 +10,41 @@ import {
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { ensureSwapFile } from "./swap";
+import { EVA_ENV_FILE } from "../_sandbox/vercelEnvFile";
 
 const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
 const SUPABASE_RESTORE_MARKER = "/tmp/.eva-supabase-db-web-restored";
 
-/** Absolute shell path to the package root, defaulting to the workspace root. */
-function packageDirShell(rootDir: string): string {
-  const workspaceRoot = workspaceDirShell();
-  return rootDir ? `${workspaceRoot}/${rootDir}` : workspaceRoot;
+/** Absolute shell path to the package root, defaulting to `baseDir`. */
+function packageDirShell(rootDir: string, baseDir: string): string {
+  return rootDir ? `${baseDir}/${rootDir}` : baseDir;
 }
 
-/** Detects the package manager (pnpm, yarn, or npm) by checking lock files. */
+/**
+ * Detects the package manager (pnpm, yarn, or npm) by checking lock files.
+ *
+ * `baseDir` defaults to the primary repo's workspace root; a linked repo's
+ * prep passes its own clone directory instead so detection never looks at
+ * `/tmp/repo`. `rootDir` stays relative to `baseDir` for monorepo apps.
+ */
 export async function detectPackageManager(
   sandbox: SandboxHandle,
   rootDir = "",
+  baseDir: string = workspaceDirShell(),
 ): Promise<string> {
-  const workspaceRoot = workspaceDirShell();
-  const dir = packageDirShell(rootDir);
-  // Prefer the package rootDir, then fall back to the workspace root — monorepos
-  // often keep pnpm-lock.yaml at the repo root while rootDirectory points at an app.
+  const dir = packageDirShell(rootDir, baseDir);
+  // Prefer the package rootDir, then fall back to baseDir — monorepos often
+  // keep pnpm-lock.yaml at the repo root while rootDirectory points at an app.
   // Also treat packageManager / workspace: deps as pnpm so npm never hits workspace:*.
   const detection = (
     await execHandle(
       sandbox,
       [
-        `if [ -f ${dir}/pnpm-lock.yaml ] || [ -f ${workspaceRoot}/pnpm-lock.yaml ]; then echo pnpm;`,
-        `elif [ -f ${dir}/yarn.lock ] || [ -f ${workspaceRoot}/yarn.lock ]; then echo yarn;`,
-        `elif grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' ${dir}/package.json ${workspaceRoot}/package.json 2>/dev/null; then echo pnpm;`,
-        `elif grep -q 'workspace:' ${dir}/package.json ${workspaceRoot}/package.json 2>/dev/null; then echo pnpm;`,
+        `if [ -f ${dir}/pnpm-lock.yaml ] || [ -f ${baseDir}/pnpm-lock.yaml ]; then echo pnpm;`,
+        `elif [ -f ${dir}/yarn.lock ] || [ -f ${baseDir}/yarn.lock ]; then echo yarn;`,
+        `elif grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' ${dir}/package.json ${baseDir}/package.json 2>/dev/null; then echo pnpm;`,
+        `elif grep -q 'workspace:' ${dir}/package.json ${baseDir}/package.json 2>/dev/null; then echo pnpm;`,
         `else echo npm; fi`,
       ].join(" "),
       5,
@@ -50,19 +56,20 @@ export async function detectPackageManager(
 }
 
 /**
- * Detects a Python install manifest at the workspace root.
- * `requirements.txt` wins over `pyproject.toml` when both exist.
+ * Detects a Python install manifest at `baseDir` (default: the primary
+ * repo's workspace root). `requirements.txt` wins over `pyproject.toml` when
+ * both exist.
  */
 export async function detectPythonManifest(
   sandbox: SandboxHandle,
+  baseDir: string = workspaceDirShell(),
 ): Promise<"requirements" | "pyproject" | null> {
-  const workspaceRoot = workspaceDirShell();
   const detection = (
     await execHandle(
       sandbox,
       [
-        `if [ -f ${workspaceRoot}/requirements.txt ]; then echo requirements;`,
-        `elif [ -f ${workspaceRoot}/pyproject.toml ]; then echo pyproject;`,
+        `if [ -f ${baseDir}/requirements.txt ]; then echo requirements;`,
+        `elif [ -f ${baseDir}/pyproject.toml ]; then echo pyproject;`,
         `else echo none; fi`,
       ].join(" "),
       5,
@@ -76,22 +83,23 @@ export async function detectPythonManifest(
 const PIP_INSTALL_TIMEOUT_SECONDS = 900;
 
 /**
- * Best-effort `pip install --user` for root requirements.txt / pyproject.toml.
- * Fresh sandboxes may lack gcc/libpq-devel — failures must not kill the caller.
- * Returns whether an install was attempted and whether it succeeded.
+ * Best-effort `pip install --user` for `baseDir`'s requirements.txt /
+ * pyproject.toml (default: the primary repo's workspace root). Fresh sandboxes
+ * may lack gcc/libpq-devel — failures must not kill the caller. Returns
+ * whether an install was attempted and whether it succeeded.
  */
 export async function installPythonDependenciesBestEffort(
   sandbox: SandboxHandle,
+  baseDir: string = workspaceDirShell(),
 ): Promise<{ attempted: boolean; ok: boolean }> {
-  const kind = await detectPythonManifest(sandbox);
+  const kind = await detectPythonManifest(sandbox, baseDir);
   if (!kind) return { attempted: false, ok: true };
-  const workspaceRoot = workspaceDirShell();
   const pipArgs = kind === "requirements" ? "-r requirements.txt" : "-e .";
   try {
     await execHandle(
       sandbox,
       // Match websockify / seed: --break-system-packages then plain --user.
-      `cd ${workspaceRoot} && (python3 -m pip install --user --break-system-packages ${pipArgs} || python3 -m pip install --user ${pipArgs})`,
+      `cd ${baseDir} && (python3 -m pip install --user --break-system-packages ${pipArgs} || python3 -m pip install --user ${pipArgs})`,
       PIP_INSTALL_TIMEOUT_SECONDS,
     );
     return { attempted: true, ok: true };
@@ -123,7 +131,7 @@ export async function detectDevPort(
   sandbox: SandboxHandle,
   rootDir: string,
 ): Promise<number> {
-  const dir = packageDirShell(rootDir);
+  const dir = packageDirShell(rootDir, workspaceDirShell());
   try {
     const raw = await execHandle(
       sandbox,
@@ -162,8 +170,8 @@ export async function startSessionServices(
   sandbox: SandboxHandle,
   rootDir: string,
   overrides?: { devPort?: number; devCommand?: string },
-): Promise<{ port: number; devCommand: string }> {
-  await restoreSeededRuntimeState(sandbox);
+): Promise<{ port: number; devCommand: string; restoreError?: string }> {
+  const restoreError = await restoreSeededRuntimeState(sandbox);
 
   const port =
     overrides?.devPort !== undefined
@@ -174,19 +182,24 @@ export async function startSessionServices(
     return {
       port,
       devCommand: `cd ${workspaceDirShell()} && HOSTNAME=0.0.0.0 PORT=${port} ${overrides.devCommand}`,
+      restoreError,
     };
   }
 
   const pm = await detectPackageManager(sandbox, rootDir);
-  const dir = packageDirShell(rootDir);
+  const dir = packageDirShell(rootDir, workspaceDirShell());
   const devCommand = `cd ${dir} && HOSTNAME=0.0.0.0 PORT=${port} ${pm} run dev`;
-  return { port, devCommand };
+  return { port, devCommand, restoreError };
 }
 
-/** Restores service state that was exported into a seeded snapshot filesystem. */
+/**
+ * Restores service state that was exported into a seeded snapshot filesystem.
+ * Returns the dump-restore error instead of throwing, so callers can alert the
+ * chat and still launch the dev server.
+ */
 export async function restoreSeededRuntimeState(
   sandbox: SandboxHandle,
-): Promise<void> {
+): Promise<string | undefined> {
   try {
     await execHandle(sandbox, `test -f ${SUPABASE_DUMP_PATH}`, 5);
   } catch {
@@ -209,6 +222,25 @@ export async function restoreSeededRuntimeState(
     );
     return;
   }
+  // Non-fatal: every caller runs this before the dev server resolves, so a
+  // throw here (e.g. a repo whose `supabase` CLI never installed, exit 127)
+  // left the Preview Console with no dev server at all. Background/startup
+  // commands still own Supabase and surface their own failures.
+  try {
+    await restoreSeededSupabaseDump(sandbox);
+    return undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${message}`,
+    );
+    return message;
+  }
+}
+
+async function restoreSeededSupabaseDump(
+  sandbox: SandboxHandle,
+): Promise<void> {
   await execHandle(
     sandbox,
     [
@@ -254,13 +286,6 @@ export async function restoreSeededRuntimeState(
     600,
   );
 }
-
-/** Stable default terminal pane id — must match `sandboxPanes.defaultPane`. */
-export function defaultTerminalPtyId(ownerKey: string): string {
-  return `${ownerKey}-terminal-default`;
-}
-
-const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 
 const DEVSERVER_LOCK = "/tmp/eva-devserver.lock";
 const DEVSERVER_LAST_LAUNCH = "/tmp/eva-devserver-last-launch";

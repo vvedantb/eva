@@ -38,7 +38,7 @@ export const sortDirParser = parseAsStringLiteral(sortDirections)
   .withDefault("desc")
   .withOptions(searchOptions);
 
-const timeRanges = ["7d", "30d", "90d", "all"] as const;
+const timeRanges = ["24h", "7d", "30d", "90d", "all"] as const;
 export const timeRangeParser = parseAsStringLiteral(timeRanges)
   .withDefault("30d")
   .withOptions(searchOptions);
@@ -65,8 +65,12 @@ export const quickTaskSortDirParser =
   parseAsStringLiteral(sortDirections).withOptions(searchOptions);
 
 // Quick Tasks default to "all time" (unlike the generic timeRangeParser's
-// "30d" default used elsewhere), so it needs its own default.
-export const quickTaskTimeRangeParser = parseAsStringLiteral(timeRanges)
+// "30d" default used elsewhere) and have no hourly view, so they keep their
+// own vocabulary and default.
+const quickTaskTimeRanges = ["7d", "30d", "90d", "all"] as const;
+export const quickTaskTimeRangeParser = parseAsStringLiteral(
+  quickTaskTimeRanges,
+)
   .withDefault("all")
   .withOptions(searchOptions);
 
@@ -129,6 +133,8 @@ const sandboxTabs = [
   "agents",
   "prd",
   "designs",
+  "artifacts",
+  "documents",
 ] as const;
 export type SandboxTab = (typeof sandboxTabs)[number];
 
@@ -147,6 +153,27 @@ export const markdownViewParser = parseAsStringLiteral(markdownViews)
 
 export function isSessionSandboxTab(s: string): s is SandboxTab {
   return sandboxTabs.some((tab) => tab === s);
+}
+
+/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
+const NON_VM_SANDBOX_TABS = new Set([
+  "review",
+  "agents",
+  "prd",
+  "designs",
+  "artifacts",
+  "documents",
+]);
+
+/**
+ * True for a tab that talks to the sandbox VM itself (preview, browser,
+ * editor, computer, files, and any custom tab slug). The idle-pause presence
+ * beacon and wake-on-tab-open key off this, so a user reading the Review tab
+ * neither keeps a sandbox awake nor wakes a paused one.
+ */
+export function isSandboxVmTab(tab: string): boolean {
+  const id = sandboxTabIdFromParam(tab);
+  return id.length > 0 && !NON_VM_SANDBOX_TABS.has(id);
 }
 
 /** Old Computer-tab URL segment; redirect to `computer`. */
@@ -172,6 +199,8 @@ const taskRouteSandboxTabs = [
   "review",
   "files",
   "agents",
+  "artifacts",
+  "documents",
 ] as const;
 export type TaskRouteSandboxTab = (typeof taskRouteSandboxTabs)[number];
 
@@ -184,30 +213,40 @@ export function isTaskRouteSandboxTab(s: string): s is TaskRouteSandboxTab {
  * (`/reviews/$prNumber/$reviewTab`) and the sandbox Review tab
  * (`…/review/$tab`). One union so the two surfaces cannot drift apart.
  *
- * The ids are URL slugs and outlive their labels: `overview` is presented as
- * "Activity" and `diffs` as "Changes" (see `REVIEW_TAB_META`). Renaming the
- * slugs would break every link anybody has pasted into a task or a PR comment
- * for the sake of two words nothing renders, so the labels moved and the slugs
- * stayed. `canonicalReviewTab` accepts the label-shaped spellings too.
+ * Three tabs, as t3code lays a pull request out: Summary (metadata, recap,
+ * description, checks, comments), Timeline (everything that happened, in
+ * order), and Code. Code keeps the `diffs` slug because its layout segment
+ * (`…/review/diffs/unified|split`) is nested under it on every sandbox surface.
+ *
+ * The five slugs this replaced (`overview`, `commits`, `checks`, `recap`, and
+ * `diffs`) are in links pasted into tasks and PR comments, so
+ * `canonicalReviewTab` still answers to every one of them.
+ *
+ * `prs` lists every pull request a session, quick task or project holds, and
+ * picks which one the other three tabs show. Sandbox surfaces only: the
+ * standalone page is already one pull request.
  */
-const reviewTabs = [
-  "overview",
-  "commits",
-  "checks",
-  "diffs",
-  "recap",
-] as const;
+const reviewTabs = ["summary", "timeline", "diffs", "prs"] as const;
 export type ReviewTab = (typeof reviewTabs)[number];
-export const REVIEW_DEFAULT_TAB: ReviewTab = "overview";
+export const REVIEW_DEFAULT_TAB: ReviewTab = "summary";
 
 export function isReviewTab(s: string): s is ReviewTab {
   return reviewTabs.some((tab) => tab === s);
 }
 
-/** Slugs a tab used to answer to, or is labelled as, redirected to canonical. */
+/** Slugs a tab used to answer to, or is labelled as, mapped to canonical. */
 export function canonicalReviewTab(s: string): ReviewTab | undefined {
-  if (s === "diff" || s === "changes") return "diffs";
-  if (s === "activity") return "overview";
+  if (s === "diff" || s === "changes" || s === "code") return "diffs";
+  if (
+    s === "overview" ||
+    s === "activity" ||
+    s === "checks" ||
+    s === "recap"
+  ) {
+    return "summary";
+  }
+  if (s === "commits") return "timeline";
+  if (s === "pulls" || s === "pull-requests") return "prs";
   return isReviewTab(s) ? s : undefined;
 }
 
@@ -219,8 +258,8 @@ export function isDiffView(s: string): s is DiffView {
 }
 
 export type ReviewPathTarget =
-  | { kind: "overview" }
-  | { kind: "recap" }
+  | { kind: "summary" }
+  | { kind: "timeline" }
   | { kind: "diffs"; diffView: DiffView };
 
 /**
@@ -231,10 +270,12 @@ export function reviewPathFromSearch(search: {
   prTab?: unknown;
   diffView?: unknown;
 }): ReviewPathTarget {
-  if (typeof search.prTab === "string" && isReviewTab(search.prTab)) {
-    if (search.prTab === "overview") return { kind: "overview" };
-    if (search.prTab === "recap") return { kind: "recap" };
-  }
+  const tab =
+    typeof search.prTab === "string"
+      ? canonicalReviewTab(search.prTab)
+      : undefined;
+  if (tab === "summary") return { kind: "summary" };
+  if (tab === "timeline") return { kind: "timeline" };
   const diffView =
     typeof search.diffView === "string" && isDiffView(search.diffView)
       ? search.diffView
@@ -242,37 +283,46 @@ export function reviewPathFromSearch(search: {
   return { kind: "diffs", diffView };
 }
 /**
- * Nuqs's TanStack adapter used to do `to: pathname + '?diffFile=…'`. TanStack
- * resolvePath keeps the `?…` inside `$sandboxTab`, so beforeLoad must peel it
- * off and redirect to a clean tab + real search params.
+ * Nuqs's TanStack adapter concatenates `pathname + '?file=…'`. TanStack
+ * resolvePath keeps the `?…` inside `$sandboxTab`, so the tab id must be
+ * peeled before comparing or falling back to Preview.
+ */
+export function sandboxTabIdFromParam(raw: string): string {
+  const q = raw.indexOf("?");
+  return q === -1 ? raw : raw.slice(0, q);
+}
+
+function decodeCorruptedSearchValue(raw: string | null): string | undefined {
+  if (raw === null) return undefined;
+  try {
+    return raw.includes("%") ? decodeURIComponent(raw) : raw;
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Peel a corrupted `$sandboxTab` (`files?file=/abs/path`) into a clean tab
+ * plus the search keys that were trapped in the segment.
  */
 export function splitCorruptedSandboxTabParam(raw: string): {
   tab: string;
   diffFile?: string;
   diffView?: DiffView;
+  file?: string;
 } | null {
   const q = raw.indexOf("?");
   if (q === -1) return null;
   const tab = raw.slice(0, q);
   const params = new URLSearchParams(raw.slice(q + 1));
-  const diffFileRaw = params.get("diffFile");
-  let diffFile: string | undefined;
-  if (diffFileRaw !== null) {
-    try {
-      // Old nuqs serialize double-encoded; decode until stable or one pass.
-      diffFile = diffFileRaw.includes("%")
-        ? decodeURIComponent(diffFileRaw)
-        : diffFileRaw;
-    } catch {
-      diffFile = diffFileRaw;
-    }
-  }
+  const diffFile = decodeCorruptedSearchValue(params.get("diffFile"));
+  const file = decodeCorruptedSearchValue(params.get("file"));
   const diffViewRaw = params.get("diffView");
   const diffView: DiffView | undefined =
     diffViewRaw === "unified" || diffViewRaw === "split"
       ? diffViewRaw
       : undefined;
-  return { tab, diffFile, diffView };
+  return { tab, diffFile, diffView, file };
 }
 
 /** Search fields used by the PR/Diffs tab (quick-tasks validateSearch must allow these). */
@@ -292,10 +342,25 @@ export function parseDiffSearchFields(search: {
         ? search.diffView
         : undefined,
     prTab:
-      typeof search.prTab === "string" && isReviewTab(search.prTab)
-        ? search.prTab
+      typeof search.prTab === "string"
+        ? canonicalReviewTab(search.prTab)
         : undefined,
   };
+}
+
+/**
+ * The comment anchor a notification click-through carries. A route with a
+ * `validateSearch` drops any key it does not name, so every route a comment
+ * notification can land on has to spread this in — otherwise TanStack strips
+ * the param before nuqs ever sees it.
+ */
+export function parseCommentAnchorSearchField(search: { comment?: string }): {
+  comment?: string;
+} {
+  // Optional rather than `comment: string | undefined`: TanStack derives the
+  // route's search type from this return, and a required-but-undefined key
+  // would force every `navigate({ search })` under the route to restate it.
+  return typeof search.comment === "string" ? { comment: search.comment } : {};
 }
 
 export const designVariationParser = parseAsString
@@ -344,6 +409,13 @@ export const docModeParser = parseAsStringLiteral(docModes)
   .withDefault("editing")
   .withOptions(searchOptions);
 
+// Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
+export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
+
+// Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
+// Absent means the chat's primary PR.
+export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
+
 const docCommentFilters = ["open", "resolved"] as const;
 export const docCommentFilterParser = parseAsStringLiteral(docCommentFilters)
   .withDefault("open")
@@ -358,15 +430,39 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
-const inboxFilters = ["all", "unread"] as const;
+// "archived" is a separate list rather than a third state of the same one: the
+// backend splits the 100-row window on `archivedAt`, so Unread only ever means
+// "unread and not archived".
+export const inboxFilters = ["all", "unread", "archived"] as const;
 export type InboxFilter = (typeof inboxFilters)[number];
 export const inboxFilterParser = parseAsStringLiteral(inboxFilters)
   .withDefault("all")
   .withOptions(searchOptions);
 
+export function isInboxFilter(s: string): s is InboxFilter {
+  return inboxFilters.some((filter) => filter === s);
+}
+
+// How the inbox list is sectioned. Presentation, but shareable: "group by repo"
+// is part of what you are looking at, so it rides the URL with the filter.
+export const inboxGroups = ["day", "repo", "type", "urgency"] as const;
+export type InboxGroup = (typeof inboxGroups)[number];
+export const inboxGroupParser = parseAsStringLiteral(inboxGroups)
+  .withDefault("day")
+  .withOptions(searchOptions);
+
+export function isInboxGroup(s: string): s is InboxGroup {
+  return inboxGroups.some((group) => group === s);
+}
+
 // Selected notification id in the two-pane inbox, kept in the URL so the
 // selection survives reload and a notification can be linked directly.
 export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
+
+// The comment a notification click-through is aimed at. Written by the backend
+// into the notification href (`?comment=<id>`), never by the UI, so it replaces
+// rather than pushes — going back should leave the page, not the highlight.
+export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 
 const pullRequestListStates = ["open", "closed", "all"] as const;
 export type PullRequestListState = (typeof pullRequestListStates)[number];
@@ -411,11 +507,33 @@ export function isTeamDetailTab(s: string): s is TeamDetailTab {
   return teamDetailTabs.some((tab) => tab === s);
 }
 
-export const logEntityTypesParser = parseAsArrayOf(parseAsString)
+const logViews = ["overview", "type", "project"] as const;
+export const logViewParser = parseAsStringLiteral(logViews)
+  .withDefault("overview")
+  .withOptions(searchOptions);
+
+// New-session "linked codebases" picker (multi-repo sessions). Comma-separated
+// repo ids resolved against `githubRepos.list` by the picker — stale/unknown
+// ids are dropped rather than passed into `sessions.create` unbranded. Saved
+// codebase groups whose primary is a DIFFERENT repo deep-link here with these
+// same keys prefilled (see CodebasesPicker.tsx).
+export const linkedRepoIdsParser = parseAsArrayOf(parseAsString)
   .withDefault([])
   .withOptions(searchOptions);
 
-const logViews = ["type", "project"] as const;
-export const logViewParser = parseAsStringLiteral(logViews)
-  .withDefault("type")
+export const repoGroupIdParser = parseAsString
+  .withDefault("")
+  .withOptions(searchOptions);
+
+const installDependenciesValues = ["1", "0"] as const;
+export const installDependenciesParser = parseAsStringLiteral(
+  installDependenciesValues,
+)
+  .withDefault("1")
+  .withOptions(searchOptions);
+
+// Session Files tab root selector (multi-repo sessions): "" is the primary
+// repo (/tmp/repo), otherwise a linked repo's sandbox path.
+export const filesRootParser = parseAsString
+  .withDefault("")
   .withOptions(searchOptions);

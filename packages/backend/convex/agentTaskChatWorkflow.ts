@@ -1,19 +1,23 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
+import { decideSandboxStartPlan } from "./mcp/orchestratorDelivery";
 import { authAction, authMutation, hasRepoAccess } from "./functions";
 import {
   aiModelValidator,
   getAIModelProvider,
+  launchTraitsFromStored,
   reasoningLevelValidator,
   workflowCompleteValidator,
   normalizeAIModel,
   roleValidator,
   taskSandboxStatusValidator,
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
 import {
@@ -22,41 +26,58 @@ import {
   clearStreamingActivity,
   resolveTaskBranchName,
 } from "./_taskWorkflow/helpers";
+import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
+import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
 import { finalizeCancelledAssistantMessage } from "./streaming";
-import { startNextQueuedTaskChatMessage } from "./_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedTaskChatMessage,
+} from "./_queues/helpers";
 import {
   trackAgentTaskChatWorkflow,
   TASK_CHAT_STREAM_PREFIX,
 } from "./workflowWatchdog";
 import { buildAgentTaskChatPrompt } from "./_agentTasks/chatPrompt";
+import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
 import { resolveCredentialSourceLabel } from "./_userProviderAccounts/credentialSource";
-import { resolveTurnProviderAccountId } from "./_userProviderAccounts/defaults";
+import {
+  assertProviderAccountUsableBy,
+  reconcileProviderAccountForModel,
+  resolveTurnProviderAccountId,
+} from "./_userProviderAccounts/defaults";
 import type { Doc, Id } from "./_generated/dataModel";
 import { TASK_CHAT_DAEMON_MUTATIONS } from "./_sandbox_runtime/daemonPaths";
 import {
-  delayedPublishFailureError,
-  orphanPlaceholderMessages,
-  resultTargetMessage,
+  formatDelayedPublishFailureError,
+  selectUsageLimitRetryUserMessage,
 } from "./_sessions/resultTarget";
+import {
+  applyChatTurnResult,
+  finalizeOpenSyntheticTurnOnCancel,
+  insertAssistantPlaceholderIfNeeded,
+} from "./_chat/chatResult";
 import {
   maybeInsertModelHandoffAlert,
   prependModelHandoffContext,
 } from "./_shared/modelHandoff";
-
-async function finalizeOpenSyntheticTurnOnCancel(
-  ctx: MutationCtx,
-  syntheticTurnMessageId: Id<"messages"> | undefined,
-  streaming: Doc<"streamingActivity"> | null,
-): Promise<void> {
-  if (syntheticTurnMessageId === undefined) return;
-  const syntheticMessage = await ctx.db.get(syntheticTurnMessageId);
-  if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-    await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-  }
-}
+import { composerTraitFields } from "./_shared/composerTraits";
+import { detectCancelSupersession } from "./_chat/cancelRace";
+import { emptyStallRetryPrompt } from "./_chat/stallRetry";
+import {
+  advanceTurn,
+  bindTurnWorkflow,
+  closeOpenTurn,
+  closeTurn,
+  closeTurnForWorkflow,
+  openChatTurn,
+  resolveCompletionTurn,
+} from "./_chat/turnStore";
+import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import { taskPrUrl } from "./_pullRequests/store";
+import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -106,6 +127,14 @@ async function buildTaskChatTurnPrompt(
 
   const branchName = await resolveTaskBranchName(ctx.db, task);
 
+  // Sibling repositories this sandbox's git credentials can read (owner is the
+  // task owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    task.createdBy,
+    repo._id,
+  );
+
   let prompt = buildAgentTaskChatPrompt({
     repoOwner: repo.owner,
     repoName: repo.name,
@@ -120,6 +149,15 @@ async function buildTaskChatTurnPrompt(
     customInstructionsBlock,
     systemPrompt: repo.systemPrompt,
     devPort: task.devPort ?? repo.devPort,
+    readableRepos,
+    runtime: {
+      ownerKey: `task-${args.taskId}`,
+      prUrl: await taskPrUrl(ctx.db, task),
+      devCommand: task.devCommand ?? repo.devCommand,
+      startupCommands: repo.startupCommands,
+      backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
+    },
   });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
@@ -137,6 +175,138 @@ async function buildTaskChatTurnPrompt(
     prompt,
     attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
   };
+}
+
+/**
+ * Opens the assistant placeholder, stages the pending turn and starts the chat
+ * workflow. Shared by the composer (`startExecute`) and the usage-limit retry
+ * so the two cannot drift.
+ */
+async function stageAndStartTaskChatTurn(
+  ctx: MutationCtx,
+  params: {
+    task: Doc<"agentTasks">;
+    actingUserId: Id<"users">;
+    message: string;
+    model: Infer<typeof aiModelValidator>;
+    reasoningLevel?: Infer<typeof reasoningLevelValidator>;
+    thinkingEnabled?: boolean;
+    use1mContext?: boolean;
+    fastMode?: boolean;
+    /** Already resolved by the caller; undefined = Team. */
+    providerAccountId: Id<"userProviderAccounts"> | undefined;
+  },
+): Promise<void> {
+  const task = params.task;
+  const taskId = task._id;
+  // The prompt build rejects a repo-less task too; this narrows for the turn.
+  const repoId = task.repoId;
+  if (!repoId) throw new Error("Task is not associated with a repo");
+  const normalizedModel = normalizeAIModel(params.model);
+  // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
+  // in `prewarmChatDaemon` below): the composer can send a model default
+  // explicitly (e.g. reasoning "high", its display value), and forwarding it
+  // verbatim gives this turn's prewarm and the workflow's prewarm a different
+  // daemon opts sig from the page-open one — killing the daemon just booted.
+  const launchTraits = launchTraitsFromStored(normalizedModel, {
+    reasoningLevel: params.reasoningLevel,
+    thinkingEnabled: params.thinkingEnabled,
+    use1mContext: params.use1mContext,
+    fastMode: params.fastMode,
+  });
+
+  const placeholderMessageId = await ctx.db.insert("messages", {
+    parentId: taskId,
+    role: "assistant",
+    content: "",
+    timestamp: Date.now(),
+    activityLog: "",
+  });
+
+  const { prompt, attachmentStorageIds } = await buildTaskChatTurnPrompt(ctx, {
+    taskId,
+    message: params.message,
+    model: normalizedModel,
+    userId: params.actingUserId,
+  });
+
+  const usesDaemonPull = usesChatDaemon(normalizedModel);
+  const turnId = await openChatTurn(ctx, {
+    entityId: taskId,
+    streamingEntityId: chatStreamEntityId(taskId),
+    placeholderMessageId,
+    prompt,
+    attachmentStorageIds,
+    model: normalizedModel,
+    sandboxId: task.sandboxId,
+    repoId,
+  });
+  await ctx.db.patch(taskId, {
+    ...(usesDaemonPull
+      ? {
+          pendingTurn: {
+            prompt,
+            requestedAt: Date.now(),
+            turnId,
+            attachmentStorageIds,
+            model: normalizedModel,
+          },
+        }
+      : { pendingTurn: undefined }),
+    lastChatModel: normalizedModel,
+    providerAccountId: params.providerAccountId,
+    ...composerTraitFields(params),
+    updatedAt: Date.now(),
+  });
+
+  if (
+    usesDaemonPull &&
+    task.sandboxId &&
+    task.repoId &&
+    task.reviewTaskSandboxStatus !== "closed" &&
+    task.reviewTaskSandboxStatus !== "stopping"
+  ) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.prewarmEntityDaemon, {
+      sandboxId: task.sandboxId,
+      repoId: task.repoId,
+      userId: params.actingUserId,
+      entityId: String(taskId),
+      streamingEntityId: chatStreamEntityId(taskId),
+      entityIdField: "taskId",
+      completionMutation: "agentTaskChatWorkflow:handleCompletion",
+      ...TASK_CHAT_DAEMON_MUTATIONS,
+      model: normalizedModel,
+      ...launchTraits,
+      allowedTools: CHAT_ALLOWED_TOOLS,
+      providerAccountId: params.providerAccountId,
+      credentialOwnerUserId: task.createdBy,
+      sessionPersistenceId: taskId,
+      activeWorkflowField: "activeChatWorkflowId",
+      skipPrewarm: false,
+      entityTable: "agentTasks",
+    });
+  }
+
+  const workflowId = await workflow.start(
+    ctx,
+    internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow,
+    {
+      taskId,
+      message: params.message,
+      model: params.model,
+      // Same normalisation as the prewarm above: the workflow forwards these
+      // straight back into `prewarmEntityDaemon`.
+      ...launchTraits,
+      providerAccountId: params.providerAccountId,
+      credentialOwnerUserId: task.createdBy,
+      userId: params.actingUserId,
+      turnId,
+    },
+  );
+
+  await bindTurnWorkflow(ctx, turnId, String(workflowId));
+
+  await trackAgentTaskChatWorkflow(ctx, taskId, workflowId);
 }
 
 // --- Completion event ---
@@ -207,6 +377,13 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.taskId, { updatedAt: Date.now() });
+    if (role === "user") {
+      await touchUserActivity(
+        ctx,
+        { kind: "task", entityId: String(args.taskId) },
+        { source: "chat", userId: ctx.userId },
+      );
+    }
     return null;
   },
 });
@@ -233,6 +410,11 @@ export const startExecute = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(
+      ctx,
+      { kind: "task", entityId: String(args.taskId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -260,94 +442,153 @@ export const startExecute = authMutation({
       getAIModelProvider(task.model),
     );
 
-    await ctx.db.insert("messages", {
-      parentId: args.taskId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      activityLog: "",
-    });
-
-    const { prompt, attachmentStorageIds } = await buildTaskChatTurnPrompt(
-      ctx,
-      {
-        taskId: args.taskId,
-        message: args.message,
-        model: normalizedModel,
-        userId: ctx.userId,
-      },
-    );
-
-    const usesDaemonPull = usesChatDaemon(normalizedModel);
-    await ctx.db.patch(args.taskId, {
-      ...(usesDaemonPull
-        ? {
-            pendingTurn: {
-              prompt,
-              requestedAt: Date.now(),
-              attachmentStorageIds,
-              model: normalizedModel,
-            },
-          }
-        : { pendingTurn: undefined }),
-      lastChatModel: normalizedModel,
+    await stageAndStartTaskChatTurn(ctx, {
+      task,
+      actingUserId: ctx.userId,
+      message: args.message,
+      model: args.model,
+      reasoningLevel: args.reasoningLevel,
+      thinkingEnabled: args.thinkingEnabled,
+      use1mContext: args.use1mContext,
+      fastMode: args.fastMode,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-      updatedAt: Date.now(),
     });
+    return null;
+  },
+});
 
-    if (usesDaemonPull && task.sandboxId && task.repoId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.prewarmEntityDaemon, {
-        sandboxId: task.sandboxId,
-        repoId: task.repoId,
-        userId: ctx.userId,
-        entityId: String(args.taskId),
-        streamingEntityId: chatStreamEntityId(args.taskId),
-        entityIdField: "taskId",
-        completionMutation: "agentTaskChatWorkflow:handleCompletion",
-        ...TASK_CHAT_DAEMON_MUTATIONS,
-        model: normalizedModel,
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-        allowedTools: CHAT_ALLOWED_TOOLS,
-        providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        sessionPersistenceId: args.taskId,
-        activeWorkflowField: "activeChatWorkflowId",
-        skipPrewarm: false,
-        entityTable: "agentTasks",
-      });
+/**
+ * Re-run the last user prompt on a different provider account after a
+ * usage-limit failure. No new user bubble: the original message stays, its
+ * credential label moves to the new account, and a fresh placeholder opens
+ * below the failed reply — which dismisses the recovery banner because the
+ * failed reply is no longer the newest message. Same model and reasoning as
+ * the failed turn; other traits come from the task's sticky fields.
+ */
+export const retryLastTurnWithAccount = authMutation({
+  args: {
+    taskId: v.id("agentTasks"),
+    /** null = the team credential. */
+    providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+    if (
+      !task.repoId ||
+      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+    ) {
+      throw new Error("Not authorized");
+    }
+    // Task chat is owner-sticky: only the owner picks the billed account (the
+    // "owner-only" policy in `resolveTurnProviderAccountId`).
+    if (ctx.userId !== task.createdBy) {
+      throw new Error("Only the task owner can change the provider account");
+    }
+    if (
+      task.activeChatWorkflowId !== undefined ||
+      task.pendingTurn !== undefined
+    ) {
+      throw new Error("A turn is already running");
     }
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow,
-      {
-        taskId: args.taskId,
-        message: args.message,
-        model: args.model,
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-        providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: ctx.userId,
-      },
-    );
+    const recent = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
+      .order("desc")
+      .take(20);
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
 
-    await trackAgentTaskChatWorkflow(ctx, args.taskId, workflowId);
+    const model = normalizeAIModel(
+      userMessage.model ?? task.lastChatModel ?? task.model,
+    );
+    // null = Team. A concrete account must be usable by the owner and is
+    // reconciled to the model's provider like every other turn.
+    const providerAccountId =
+      args.providerAccountId === null
+        ? undefined
+        : await reconcileProviderAccountForModel(
+            ctx.db,
+            task.createdBy,
+            model,
+            await assertProviderAccountUsableBy(
+              ctx.db,
+              args.providerAccountId,
+              task.createdBy,
+            ),
+          );
+
+    await ctx.db.patch(userMessage._id, {
+      credentialSourceLabel: await resolveCredentialSourceLabel(
+        ctx.db,
+        providerAccountId,
+        task.createdBy,
+      ),
+    });
+
+    // No attachment handling needed: `buildTaskChatTurnPrompt` reads the newest
+    // user message's attachments itself.
+    await stageAndStartTaskChatTurn(ctx, {
+      task,
+      actingUserId: ctx.userId,
+      message: userMessage.content,
+      model,
+      reasoningLevel: userMessage.reasoningLevel ?? task.lastReasoningLevel,
+      thinkingEnabled: task.lastThinkingEnabled,
+      use1mContext: task.lastUse1mContext,
+      fastMode: task.lastFastMode,
+      providerAccountId,
+    });
+    console.log(
+      `[task-chat] retryLastTurnWithAccount taskId=${args.taskId} providerAccountId=${String(args.providerAccountId)}`,
+    );
+    return null;
+  },
+});
+
+/**
+ * Restages the last user prompt once after an empty stall, so the question is
+ * not lost. Scheduled by the lease reconciler through the adapter's
+ * `afterStallFinalize`; same rule as `retryEmptyStalledSessionTurn`.
+ */
+export const retryEmptyStalledTurn = internalMutation({
+  args: {
+    taskId: v.id("agentTasks"),
+    turnId: v.id("turns"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    const turn = await ctx.db.get(args.turnId);
+    if (!task || !turn) return null;
+    const message = await emptyStallRetryPrompt(ctx.db, {
+      parentId: args.taskId,
+      sandboxStopped: false,
+      // One sandbox-busy rule: the task's main run blocks the retry as a
+      // newer chat turn does.
+      hasActiveWorkflow:
+        task.activeChatWorkflowId !== undefined ||
+        task.activeWorkflowId !== undefined ||
+        task.pendingTurn !== undefined,
+    });
+    if (message === null) return null;
+    // No attachment handling needed: the prompt build reads the newest user
+    // message's attachments itself.
+    await stageAndStartTaskChatTurn(ctx, {
+      task,
+      actingUserId: task.createdBy,
+      message,
+      model: turn.model,
+      reasoningLevel: task.lastReasoningLevel,
+      thinkingEnabled: task.lastThinkingEnabled,
+      use1mContext: task.lastUse1mContext,
+      fastMode: task.lastFastMode,
+      providerAccountId: task.providerAccountId,
+    });
+    console.log(
+      `[task-chat] retryEmptyStalledTurn taskId=${args.taskId} turnId=${args.turnId}`,
+    );
     return null;
   },
 });
@@ -380,6 +621,11 @@ export const enqueueMessage = authMutation({
     ) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(
+      ctx,
+      { kind: "task", entityId: String(args.taskId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -419,18 +665,13 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.taskId, {
       lastChatModel: normalizedModel,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.taskId);
     return null;
   },
 });
@@ -479,6 +720,16 @@ export const cancelExecution = authMutation({
       }
     }
 
+    if (workflowIdToCancel !== undefined) {
+      await closeTurnForWorkflow(
+        ctx,
+        args.taskId,
+        workflowIdToCancel,
+        "cancelled",
+        { error: "Cancelled by the user" },
+      );
+    }
+
     const streamingEntityId = chatStreamEntityId(args.taskId);
     const streaming = await ctx.db
       .query("streamingActivity")
@@ -488,14 +739,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.taskId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeChatWorkflowId !== undefined &&
-      latest.activeChatWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+      latestPendingTurn: latest.pendingTurn,
+      cancelPendingRequestedAt: pendingRequestedAt,
+      latestActiveWorkflowId: latest.activeChatWorkflowId,
+      cancelWorkflowId: workflowIdToCancel,
+    });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -515,6 +766,9 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
+      await closeOpenTurn(ctx, args.taskId, "cancelled", {
+        error: "Cancelled by the user",
+      });
     }
 
     await clearStreamingActivity(ctx, streamingEntityId);
@@ -538,7 +792,7 @@ export const cancelExecution = authMutation({
     ) {
       taskPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       taskPatch.syntheticTurnMessageId = undefined;
     }
 
@@ -564,6 +818,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
     await step.runMutation(
@@ -571,19 +826,87 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       { taskId: args.taskId },
     );
 
-    const data = await step.runQuery(
-      internal.agentTaskChatWorkflow.getChatData,
-      {
+    let data = await step.runQuery(internal.agentTaskChatWorkflow.getChatData, {
+      taskId: args.taskId,
+      message: args.message,
+      model: args.model,
+      userId: args.userId,
+    });
+
+    const sandboxPlan = decideSandboxStartPlan(data.sandboxStatus);
+    if (sandboxPlan !== "run") {
+      if (sandboxPlan === "start") {
+        await step.runMutation(
+          internal.agentTaskChatWorkflow.markTaskSandboxStartingForChat,
+          { taskId: args.taskId },
+        );
+        try {
+          await step.runAction(internal.sandbox.startTaskPreviewSandbox, {
+            taskId: args.taskId,
+            existingSandboxId: data.sandboxId,
+            installationId: data.installationId,
+            repoOwner: data.repoOwner,
+            repoName: data.repoName,
+            branchName: `eva/task-${args.taskId}`,
+            baseBranch: data.baseBranch,
+            repoId: data.repoId,
+          });
+        } catch (error) {
+          await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
+            taskId: args.taskId,
+            turnId: args.turnId,
+            success: false,
+            result: null,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Task sandbox could not be started. Please retry.",
+            activityLog: null,
+          });
+          return;
+        }
+      } else {
+        const waited = await step.runAction(
+          internal._agentTasks.sandbox.waitForTaskPreviewSandboxActive,
+          { taskId: args.taskId },
+        );
+        if (!waited.ready) {
+          await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
+            taskId: args.taskId,
+            turnId: args.turnId,
+            success: false,
+            result: null,
+            error:
+              "Task sandbox did not become ready. Start it from the sandbox panel and retry.",
+            activityLog: null,
+          });
+          return;
+        }
+      }
+      data = await step.runQuery(internal.agentTaskChatWorkflow.getChatData, {
         taskId: args.taskId,
         message: args.message,
         model: args.model,
         userId: args.userId,
-      },
-    );
+      });
+      if (decideSandboxStartPlan(data.sandboxStatus) !== "run") {
+        await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
+          taskId: args.taskId,
+          turnId: args.turnId,
+          success: false,
+          result: null,
+          error:
+            "Task sandbox did not become ready. Start it from the sandbox panel and retry.",
+          activityLog: null,
+        });
+        return;
+      }
+    }
 
     if (!data.sandboxId) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -609,6 +932,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     } catch (error) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -624,6 +948,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!activeSandboxId) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -642,6 +967,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     if (!validation.healthy) {
       await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
         taskId: args.taskId,
+        turnId: args.turnId,
         success: false,
         result: null,
         error:
@@ -650,6 +976,11 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       });
       return;
     }
+
+    await step.runMutation(internal.turns.markLaunching, {
+      turnId: args.turnId,
+      sandboxId: activeSandboxId,
+    });
 
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.agentTaskChatWorkflow.ensurePendingTurn, {
@@ -682,6 +1013,21 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         entityTable: "agentTasks",
       });
     } else {
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId: activeSandboxId },
+      );
+      if (turnLease === null) {
+        await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
+          taskId: args.taskId,
+          turnId: args.turnId,
+          success: false,
+          result: null,
+          error: "The turn no longer owns this task chat. Please retry.",
+          activityLog: null,
+        });
+        return;
+      }
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
         sandboxId: activeSandboxId,
         entityId: args.taskId,
@@ -701,6 +1047,8 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.taskId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
     }
 
@@ -712,12 +1060,17 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
     // failures become their own alert below.
     await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
       taskId: args.taskId,
+      turnId: args.turnId,
       success: result.success,
       result: result.result,
       error: result.error,
       activityLog: result.activityLog,
       model: args.model,
       pendingQuestion: result.pendingQuestion,
+      beforeSha: result.beforeSha,
+      afterSha: result.afterSha,
+      beforeShas: result.beforeShas,
+      afterShas: result.afterShas,
     });
 
     if (result.success && activeSandboxId && data.branchName) {
@@ -731,12 +1084,13 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
           branchName: data.branchName,
         });
       } catch (error) {
-        const publishError = `Chat completed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${error instanceof Error ? error.message : String(error)}`;
+        const publishError = formatDelayedPublishFailureError("chat", error);
         console.error(
           `[agentTaskChatWorkflow] pushSandboxBranch failed taskId=${String(args.taskId)}: ${error instanceof Error ? error.message : String(error)}`,
         );
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
+          turnId: args.turnId,
           success: false,
           result: result.result,
           error: publishError,
@@ -758,30 +1112,36 @@ export const addAssistantPlaceholder = internalMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
 
-    const recent = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
-      .order("desc")
-      .take(5);
-    const lastTurnMessage = recent[0];
-    if (
-      lastTurnMessage &&
-      lastTurnMessage.role === "assistant" &&
-      lastTurnMessage.content === "" &&
-      lastTurnMessage.finishedAt === undefined &&
-      lastTurnMessage.isSyntheticTurn !== true
-    ) {
-      return null;
-    }
-
-    await ctx.db.insert("messages", {
+    await insertAssistantPlaceholderIfNeeded(ctx, {
       parentId: args.taskId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      activityLog: "",
+      recentLimit: 5,
+      skipSystemAlerts: false,
     });
-    await ctx.db.patch(args.taskId, { updatedAt: Date.now() });
+    return null;
+  },
+});
+
+/**
+ * Flips a closed preview sandbox to `starting` so `taskSandboxReady` will
+ * accept the subsequent start. Without this, ready is ignored on `closed`
+ * and the chat stays on "Resuming sandbox…".
+ */
+export const markTaskSandboxStartingForChat = internalMutation({
+  args: { taskId: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+    if (task.reviewTaskSandboxStatus === "active") return null;
+    if (task.reviewTaskSandboxStatus === "starting") return null;
+    await ctx.db.patch(args.taskId, {
+      reviewTaskSandboxStatus: "starting",
+      updatedAt: Date.now(),
+    });
+    await seedSandboxStartupActivity(
+      ctx.db,
+      `task-sandbox-startup-${args.taskId}`,
+    );
     return null;
   },
 });
@@ -802,6 +1162,7 @@ export const getChatData = internalQuery({
     repoId: v.id("githubRepos"),
     installationId: v.number(),
     branchName: v.string(),
+    baseBranch: v.string(),
     prompt: v.string(),
     model: aiModelValidator,
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
@@ -825,6 +1186,11 @@ export const getChatData = internalQuery({
     );
 
     const branchName = await resolveTaskBranchName(ctx.db, task);
+    const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
+      ctx.db,
+      task,
+      repo,
+    );
 
     return {
       sandboxId: task.sandboxId,
@@ -834,6 +1200,7 @@ export const getChatData = internalQuery({
       repoId: task.repoId,
       installationId: repo.installationId,
       branchName,
+      baseBranch,
       prompt,
       model: normalizeAIModel(args.model),
       attachmentStorageIds,
@@ -845,6 +1212,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
+    /** The durable turn this result closes. */
+    turnId: v.id("turns"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -852,70 +1221,66 @@ export const saveResult = internalMutation({
     /** Stamped onto the reply on success, making it this provider's checkpoint. */
     model: v.optional(aiModelValidator),
     pendingQuestion: v.optional(v.string()),
+    /** Turn checkpoint from the callback (see messageFields.beforeSha). */
+    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const publishError = delayedPublishFailureError(args.result, args.error);
-    if (publishError !== undefined) {
-      await ctx.db.insert("messages", {
-        parentId: args.taskId,
-        role: "assistant",
-        content: "Failed to publish task branch",
-        timestamp: Date.now(),
-        isSystemAlert: true,
-        errorDetail: publishError,
-      });
-      await ctx.db.patch(args.taskId, { updatedAt: Date.now() });
-      return null;
-    }
-
-    const streamingEntityId = chatStreamEntityId(args.taskId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-    const activityLog = args.activityLog || streaming?.currentActivity;
-    await clearStreamingActivity(ctx, streamingEntityId);
-
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
 
-    const recent = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
-      .order("desc")
-      .take(20);
-    const last = resultTargetMessage(recent);
-    if (last) {
-      const patch: {
-        content: string;
-        activityLog?: string;
-        finishedAt: number;
-        pendingQuestion?: string;
-        model?: Doc<"messages">["model"];
-      } = {
-        content: args.success
-          ? args.result || "I couldn't process your message."
-          : `Error: ${args.error || "Unknown error during execution."}`,
-        finishedAt: Date.now(),
-      };
-      if (activityLog) patch.activityLog = activityLog;
-      if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;
-      // Only a successful reply is a checkpoint: a failed turn's provider never
-      // saw the conversation, so it must not suppress a later catch-up.
-      if (args.success && args.model !== undefined) {
-        patch.model = normalizeAIModel(args.model);
-      }
-      await ctx.db.patch(last._id, patch);
-      for (const message of orphanPlaceholderMessages(recent, last)) {
-        await ctx.db.delete(message._id);
-      }
+    // A typed local, not an inline literal: `AssistantTurnResultPatch` declares
+    // only the scalar shas, so excess-property checking would reject the
+    // per-repo arrays at the call site. Each pair is copied only when both
+    // halves are present — a lone `afterSha` would make the turn look like it
+    // changed code from nothing.
+    const extraPatch: {
+      beforeSha?: string;
+      afterSha?: string;
+      beforeShas?: Array<{ path: string; sha: string }>;
+      afterShas?: Array<{ path: string; sha: string }>;
+    } = {};
+    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
+      extraPatch.beforeSha = args.beforeSha;
+      extraPatch.afterSha = args.afterSha;
     }
+    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
+      extraPatch.beforeShas = args.beforeShas;
+      extraPatch.afterShas = args.afterShas;
+    }
+
+    const outcome = await applyChatTurnResult(ctx, {
+      parentId: args.taskId,
+      streamingEntityId: chatStreamEntityId(args.taskId),
+      success: args.success,
+      result: args.result,
+      error: args.error,
+      activityLog: args.activityLog,
+      alertTitle: "Failed to publish task branch",
+      pendingQuestion: args.pendingQuestion,
+      model: args.model,
+      extraPatch,
+    });
+    if (outcome === "publish-failure") return null;
 
     await ctx.db.patch(args.taskId, {
       activeChatWorkflowId: undefined,
       updatedAt: Date.now(),
     });
+    await touchAgentFinished(ctx, {
+      kind: "task",
+      entityId: String(args.taskId),
+    });
+
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) {
+      await closeTurn(
+        ctx,
+        turn,
+        args.success ? "done" : "error",
+        args.error ? { error: args.error } : {},
+      );
+    }
 
     await startNextQueuedTaskChatMessage(ctx, args.taskId);
     return null;
@@ -932,6 +1297,8 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
+    ...turnLeaseFenceArgs,
+    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -940,6 +1307,16 @@ export const handleCompletion = authMutation({
     if (!task.repoId) return null;
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
       throw new Error("Not authorized");
+    }
+
+    const turnResolution = await resolveCompletionTurn(ctx, {
+      entityId: args.taskId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+    });
+    if (turnResolution.status === "stale") return null;
+    if (turnResolution.status === "current") {
+      await advanceTurn(ctx, turnResolution.turn, "finalizing");
     }
 
     if (task.pendingTurn !== undefined) {
@@ -956,6 +1333,10 @@ export const handleCompletion = authMutation({
         error: args.error,
         activityLog: args.activityLog,
         pendingQuestion: args.pendingQuestion,
+        beforeSha: args.beforeSha,
+        afterSha: args.afterSha,
+        beforeShas: args.beforeShas,
+        afterShas: args.afterShas,
       },
     );
 
@@ -983,15 +1364,13 @@ export const prewarmChatDaemon = authMutation({
     // the sandbox, and on Vercel any exec lazily resumes a stopped VM —
     // resurrecting a sandbox the user stopped, invisibly (same guard as
     // sessions' prewarmDaemon).
-    if (
-      task.reviewTaskSandboxStatus === "closed" ||
-      task.reviewTaskSandboxStatus === "stopping"
-    ) {
+    if (isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return null;
     }
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    const normalizedModel = normalizeAIModel(task.lastChatModel ?? task.model);
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmEntityDaemon, {
       sandboxId: task.sandboxId,
       repoId: task.repoId,
@@ -1001,14 +1380,19 @@ export const prewarmChatDaemon = authMutation({
       entityIdField: "taskId",
       completionMutation: "agentTaskChatWorkflow:handleCompletion",
       ...TASK_CHAT_DAEMON_MUTATIONS,
-      model: normalizeAIModel(task.lastChatModel ?? task.model),
-      // Forward the sticky traits so the prewarm's opts sig matches the turn
-      // path — omitting them makes every page-open prewarm mismatch a
-      // trait-launched daemon and kill+respawn it (see sessions' prewarmDaemon).
-      reasoningLevel: task.lastReasoningLevel,
-      thinkingEnabled: task.lastThinkingEnabled,
-      use1mContext: task.lastUse1mContext,
-      fastMode: task.lastFastMode,
+      model: normalizedModel,
+      // Forward the sticky traits normalised through the same helper as the
+      // composer so the prewarm's opts sig matches the turn path. The send path
+      // omits defaults, so passing the stored values verbatim (e.g. reasoning
+      // "high", the Claude default, or `fastMode: false` on a model with no Fast
+      // trait) mismatches a trait-launched daemon and kill+respawns it on every
+      // page open (see sessions' prewarmDaemon).
+      ...launchTraitsFromStored(normalizedModel, {
+        reasoningLevel: task.lastReasoningLevel,
+        thinkingEnabled: task.lastThinkingEnabled,
+        use1mContext: task.lastUse1mContext,
+        fastMode: task.lastFastMode,
+      }),
       allowedTools: CHAT_ALLOWED_TOOLS,
       providerAccountId: task.providerAccountId,
       credentialOwnerUserId: task.createdBy,
@@ -1091,20 +1475,25 @@ export const getChatPrewarmData = internalQuery({
     }
     if (
       !task.sandboxId ||
-      task.reviewTaskSandboxStatus === "closed" ||
-      task.reviewTaskSandboxStatus === "stopping"
+      isSandboxClosingStatus(task.reviewTaskSandboxStatus)
     ) {
       return null;
     }
+    const normalizedModel = normalizeAIModel(task.lastChatModel ?? task.model);
     return {
       sandboxId: task.sandboxId,
       repoId: task.repoId,
       ownerUserId: task.createdBy,
-      model: normalizeAIModel(task.lastChatModel ?? task.model),
-      reasoningLevel: task.lastReasoningLevel,
-      thinkingEnabled: task.lastThinkingEnabled,
-      use1mContext: task.lastUse1mContext,
-      fastMode: task.lastFastMode,
+      model: normalizedModel,
+      // Normalised here, not in the caller: the traits must be exactly what the
+      // composer sends (defaults omitted) or the prewarm's opts sig differs from
+      // the turn path's and kills the warm daemon.
+      ...launchTraitsFromStored(normalizedModel, {
+        reasoningLevel: task.lastReasoningLevel,
+        thinkingEnabled: task.lastThinkingEnabled,
+        use1mContext: task.lastUse1mContext,
+        fastMode: task.lastFastMode,
+      }),
       providerAccountId: task.providerAccountId,
     };
   },
@@ -1114,7 +1503,6 @@ export {
   claimPendingTurn,
   completeSyntheticTurn,
   ensurePendingTurn,
-  handleStaleSyntheticTurn,
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,

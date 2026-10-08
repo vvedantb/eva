@@ -117,7 +117,9 @@ export function useQuickTaskFilters(): [
   return [filters, setParams];
 }
 
-type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
+export type QuickTask = FunctionReturnType<
+  typeof api.agentTasks.getAllTasks
+>[number];
 
 function applyQuickTaskFilters(
   tasks: QuickTask[],

@@ -14,15 +14,18 @@ const SIMPLE_VIEW_SANDBOX_TABS = new Set([
   "browser",
   "prd",
   "designs",
+  "artifacts",
+  "documents",
 ]);
 
-/** Anything outside Preview / Browser / Plan / Designs bounces to Preview. */
+/** Anything outside Preview / Browser / Plan / Designs / Artifacts / Documents bounces to Preview. */
 export function isSimpleViewHiddenSandboxTab(tab: string): boolean {
   return !SIMPLE_VIEW_SANDBOX_TABS.has(tab);
 }
 
 const SIMPLE_VIEW_HIDDEN_GLOBAL_SETTINGS_HREFS = [
   "/settings/sandboxes",
+  "/settings/sandbox-status",
   "/settings/sync",
 ] as const;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 interface PageTitleContextType {
   pageTitle: string;
@@ -31,4 +31,19 @@ export function usePageTitle() {
     throw new Error("usePageTitle must be used within a PageTitleProvider");
   }
   return context;
+}
+
+/**
+ * Publishes the page title to the mobile top bar (which renders it in place of
+ * the logo) while the caller is mounted. `PageWrapper` does this for ordinary
+ * pages; views that lay out their own header call it directly.
+ */
+export function usePageTitleSync(title: React.ReactNode) {
+  const { setPageTitle } = usePageTitle();
+  const isStringTitle = typeof title === "string";
+
+  useEffect(() => {
+    setPageTitle(isStringTitle ? title : "");
+    return () => setPageTitle("");
+  }, [title, isStringTitle, setPageTitle]);
 }

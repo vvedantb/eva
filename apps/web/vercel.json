@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "eva/**": false
+    }
+  },
   "installCommand": "cd ../.. && HUSKY=0 pnpm install --frozen-lockfile --filter @eva/web...",
   "rewrites": [
     {

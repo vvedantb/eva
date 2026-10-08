@@ -7,6 +7,7 @@ import {
   DialogFooter,
   Button,
   Input,
+  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -40,7 +41,10 @@ import {
   useProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 import { useBaseBranchState } from "@/lib/hooks/useBaseBranchState";
-import { defaultProviderAccountId } from "@/lib/utils/defaultProviderAccount";
+import {
+  defaultProviderAccountId,
+  providerAccountIdForModel,
+} from "@/lib/utils/defaultProviderAccount";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
@@ -54,7 +58,6 @@ import {
   IconInfoCircle,
   IconMicrophone,
   IconPlayerStop,
-  IconLoader2,
 } from "@tabler/icons-react";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
@@ -69,12 +72,23 @@ import { tokenizedToEditable } from "@/lib/components/mentions";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
 import type { Priority } from "@/lib/components/priority/priorityMeta";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
+import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
+import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
 import { AssigneeSelector } from "./_components/AssigneeSelector";
 import { ProjectPicker } from "./_components/ProjectPicker";
 import { TaskFilesSection } from "./_components/TaskFilesSection";
 import { useTaskAttachments } from "./useTaskAttachments";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  draftCountAfterRemove,
+  draftsAfterRemove,
+  visibleDrafts,
+} from "./_utils/draftVisibility";
+import {
+  catchMutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -130,6 +144,7 @@ export function QuickTaskModal({
   );
   const [confirmDeleteId, setConfirmDeleteId] =
     useState<Id<"agentTasks"> | null>(null);
+  const altHeld = useAltHeld();
   const [selectedProjectId, setSelectedProjectId] = useState<
     Id<"projects"> | undefined
   >(initialDraft?.projectId ?? projectId);
@@ -153,6 +168,7 @@ export function QuickTaskModal({
     value: description,
     setInput: setDescription,
   });
+  const readiness = useDraftReadiness();
 
   // Seed the mention/skill maps from the initial draft's tokenized description
   // so that @-mention and /skill chips render correctly on deep-link open.
@@ -166,8 +182,34 @@ export function QuickTaskModal({
   const createQuickTask = useMutation(api.agentTasks.createQuickTask);
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
-  const removeDraft = useMutation(api.agentTasks.remove);
-  const drafts = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
+  const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.agentTasks.listDrafts, {
+        repoId: repo._id,
+      });
+      if (current !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.listDrafts,
+          { repoId: repo._id },
+          draftsAfterRemove(current, args.id),
+        );
+      }
+      const count = localStore.getQuery(api.agentTasks.countDrafts, {
+        repoId: repo._id,
+      });
+      if (count !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.countDrafts,
+          { repoId: repo._id },
+          draftCountAfterRemove(count),
+        );
+      }
+    },
+  );
+  const draftRows = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
+  // `remove` only sets `deletedAt`; until listDrafts is deployed with that
+  // index range, the query still returns the row and the trash looks broken.
+  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
 
   const attachments = useTaskAttachments();
   // Files already saved on the open draft, so reopening it keeps them.
@@ -205,10 +247,13 @@ export function QuickTaskModal({
     ready: accountsReady,
   } = useProviderAccounts();
 
-  // Once accounts load, default to the creator's personal account for the
-  // selected model provider (Team when none match). Adjust during render.
+  // Once accounts load, default to the creator's own account for the selected
+  // model provider (Team when none match), leaving an existing pick that still
+  // resolves alone. Adjust during render.
   if (accountsReady && !accountDefaulted) {
-    setProviderAccountId(defaultProviderAccountId(accounts, model));
+    if (!accounts.some((account) => account.id === providerAccountId)) {
+      setProviderAccountId(defaultProviderAccountId(accounts, model));
+    }
     setAccountDefaulted(true);
   }
 
@@ -241,6 +286,7 @@ export function QuickTaskModal({
     setPriority(undefined);
     setHydratedDraftId(null);
     attachments.reset();
+    readiness.reset();
   };
 
   const handleClose = async () => {
@@ -279,7 +325,7 @@ export function QuickTaskModal({
       const attachmentStorageIds = await attachments.upload();
       const taskAttachmentIds = undefinedIfEmpty(attachmentStorageIds);
       if (activeDraftId) {
-        await withMutationToast(
+        await catchMutationError(
           activateDraft({
             id: activeDraftId,
             title: title.trim(),
@@ -292,12 +338,11 @@ export function QuickTaskModal({
             assignedTo,
             attachmentStorageIds: taskAttachmentIds,
           }),
-          "Task created",
           "Couldn't create task",
           "task-create",
         );
       } else {
-        await withMutationToast(
+        await catchMutationError(
           createQuickTask({
             repoId: repo._id,
             title: title.trim(),
@@ -312,7 +357,6 @@ export function QuickTaskModal({
             priority,
             attachmentStorageIds: taskAttachmentIds,
           }),
-          "Task created",
           "Couldn't create task",
           "task-create",
         );
@@ -333,13 +377,25 @@ export function QuickTaskModal({
     setActiveDraftId(draft._id);
     setSelectedProjectId(draft.projectId ?? projectId);
     setSelectedTags(draft.tags ?? []);
+    // The loaded text has not been judged; the previous draft's verdict must
+    // not carry over onto it.
+    readiness.reset();
   };
 
   const handleDeleteDraft = async (draftId: Id<"agentTasks">) => {
-    await removeDraft({ id: draftId });
-    setConfirmDeleteId(null);
-    if (activeDraftId === draftId) {
-      resetForm();
+    try {
+      await withMutationToast(
+        removeDraft({ id: draftId }),
+        "Draft deleted",
+        "Couldn't delete draft",
+        "draft-delete",
+      );
+      setConfirmDeleteId(null);
+      if (activeDraftId === draftId) {
+        resetForm();
+      }
+    } catch {
+      return;
     }
   };
 
@@ -418,7 +474,10 @@ export function QuickTaskModal({
               <DescriptionMentionEditor
                 ref={editorRef}
                 value={description}
-                onValueChange={setDescription}
+                onValueChange={(next) => {
+                  setDescription(next);
+                  readiness.noteChange(next, title);
+                }}
                 placeholder="Add description... @ for data, / for skills."
                 minHeight="min-h-[160px]"
                 className="rounded-none border-0 px-0 py-2 shadow-none focus-visible:ring-0"
@@ -435,6 +494,11 @@ export function QuickTaskModal({
                 }
               />
             </div>
+
+            <DraftReadinessBanner
+              result={readiness.resultFor(description)}
+              onDismiss={readiness.dismiss}
+            />
 
             <TaskFilesSection
               attachments={attachments.attachments}
@@ -469,7 +533,7 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (
@@ -505,7 +569,9 @@ export function QuickTaskModal({
               options={modelOptions}
               onValueChange={(next) => {
                 setModel(next);
-                setProviderAccountId(defaultProviderAccountId(accounts, next));
+                setProviderAccountId(
+                  providerAccountIdForModel(accounts, providerAccountId, next),
+                );
               }}
               accounts={accounts}
               accountId={providerAccountId}
@@ -633,7 +699,7 @@ export function QuickTaskModal({
                   <Badge
                     key={tag}
                     variant="secondary"
-                    className="text-[10px] h-8 gap-0.5 pr-0.5 sm:h-5"
+                    className="text-3xs h-8 gap-0.5 pr-0.5 sm:h-5"
                   >
                     {tag}
                     <button
@@ -724,8 +790,17 @@ export function QuickTaskModal({
                               <button
                                 type="button"
                                 aria-label={`Delete draft ${draft.title || "Untitled"}`}
+                                title={skipConfirmTitle("Delete draft")}
                                 className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
-                                onClick={() => setConfirmDeleteId(draft._id)}
+                                onClick={() =>
+                                  requestConfirm(
+                                    altHeld,
+                                    () => setConfirmDeleteId(draft._id),
+                                    () => {
+                                      void handleDeleteDraft(draft._id);
+                                    },
+                                  )
+                                }
                               >
                                 <IconTrash size={14} />
                               </button>

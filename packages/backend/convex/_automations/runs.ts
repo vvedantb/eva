@@ -1,11 +1,19 @@
 import { v } from "convex/values";
+import { settleAgentTurnCompletion } from "../_chat/turnStore";
 import type { GenericDatabaseReader } from "convex/server";
-import { internalMutation, internalQuery } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
   automationRunFields,
   automationFindingValidator,
+  findingTriageValidator,
   runStatusValidator,
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { cancelTrackedWorkflow } from "../workflowManager";
@@ -14,7 +22,7 @@ import {
   gatherAccessibleRepos,
   resolveSandboxRepoId,
 } from "../_githubRepos/helpers";
-import { resolveAutomationDoc } from "./systemAutomations";
+import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 
 /** Loads a run and its automation, throwing unless the user can access the repo. */
 async function loadRunWithAccess(
@@ -33,10 +41,12 @@ async function loadRunWithAccess(
 }
 import { taskCompleteEvent } from "../_taskWorkflow/events";
 import {
+  clearStreamingActivity,
   recordCompletionLog,
   sendCompletionEvent,
 } from "../_taskWorkflow/helpers";
 import { listAutomationsForRepo } from "./helpers";
+import { automationRunStreamingEntityId } from "../_chat/agentStreamIds";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
 export const listRuns = authQuery({
@@ -49,6 +59,11 @@ export const listRuns = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    const automation = await ctx.db.get(args.automationId);
+    if (!automation) return [];
+    if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     return await ctx.db
       .query("automationRuns")
       .withIndex("by_automation", (q) =>
@@ -204,17 +219,36 @@ export const updateRunStatus = internalMutation({
     if (args.prUrl !== undefined) patch.prUrl = args.prUrl;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     if (args.findings !== undefined) patch.findings = args.findings;
-    if (args.status === "success" || args.status === "error") {
+    if (
+      args.status === "success" ||
+      args.status === "error" ||
+      args.status === "cancelled"
+    ) {
       patch.finishedAt = Date.now();
     }
     await ctx.db.patch(args.runId, patch);
+
+    // Findings land unranked and possibly duplicating open work. Triage runs
+    // out of band so the run finishes at the same speed either way.
+    if (args.findings !== undefined && args.findings.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.automationTriage.triageFindings,
+        { runId: args.runId },
+      );
+    }
 
     // When a run succeeds and the automation opts into email, broadcast its
     // result summary to all users with email notifications enabled.
     if (args.status === "success") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
-      if (automation?.sendEmail === true) {
+      // Event presets settle through `settleEventRun` and never email; this
+      // guards a preset row reaching here by any other path.
+      if (
+        automation?.sendEmail === true &&
+        automationAction(automation) === "run"
+      ) {
         await ctx.scheduler.runAfter(
           0,
           internal.automationEmail.sendAutomationEmail,
@@ -222,6 +256,53 @@ export const updateRunStatus = internalMutation({
         );
       }
     }
+    return null;
+  },
+});
+
+/**
+ * A run's repo and findings for the triage action. Null when the run is gone
+ * or produced nothing to triage.
+ */
+export const getRunForTriage = internalQuery({
+  args: { runId: v.id("automationRuns") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      repoId: v.id("githubRepos"),
+      findings: v.array(automationFindingValidator),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || !run.findings || run.findings.length === 0) return null;
+    return { repoId: run.repoId, findings: run.findings };
+  },
+});
+
+/**
+ * Stamps triage verdicts onto a run's findings. Re-reads the run rather than
+ * taking the array the action saw, so a `taskId` linked while Jev was thinking
+ * survives the write.
+ */
+export const setFindingsTriage = internalMutation({
+  args: {
+    runId: v.id("automationRuns"),
+    triage: v.array(
+      v.object({ id: v.string(), triage: findingTriageValidator }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || !run.findings) return null;
+    const byId = new Map(args.triage.map((entry) => [entry.id, entry.triage]));
+    await ctx.db.patch(args.runId, {
+      findings: run.findings.map((finding) => {
+        const triage = byId.get(finding.id);
+        return triage ? { ...finding, triage } : finding;
+      }),
+    });
     return null;
   },
 });
@@ -251,7 +332,7 @@ export const cancelRun = authMutation({
       activeWorkflowId: undefined,
     });
 
-    const streamingEntityId = `automation-run-${String(args.runId)}`;
+    const streamingEntityId = automationRunStreamingEntityId(args.runId);
     const streaming = await ctx.db
       .query("streamingActivity")
       .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
@@ -272,11 +353,24 @@ export const handleCompletion = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
+    ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.automationRunId);
     if (!run || !run.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.automationRunId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, taskCompleteEvent, run.activeWorkflowId, {
       success: args.success,
@@ -299,3 +393,34 @@ export const handleCompletion = authMutation({
     return null;
   },
 });
+
+/**
+ * Tears down an automation run whose agent stalled (the lease reconciler gave
+ * up on it). Cancelling the workflow skips its `finally`, so the ephemeral
+ * sandbox is deleted here too.
+ */
+export async function tearDownStaleAutomationRun(
+  ctx: MutationCtx,
+  runId: Id<"automationRuns">,
+  workflowId: string,
+  sandbox: { sandboxId: string | undefined; repoId: Id<"githubRepos"> },
+  error: string,
+): Promise<void> {
+  const run = await ctx.db.get(runId);
+  if (!run || run.activeWorkflowId !== workflowId) return;
+
+  await cancelTrackedWorkflow(ctx, workflowId);
+  await ctx.db.patch(runId, {
+    status: "error",
+    error,
+    finishedAt: Date.now(),
+    activeWorkflowId: undefined,
+  });
+  await clearStreamingActivity(ctx, automationRunStreamingEntityId(runId));
+  if (sandbox.sandboxId !== undefined) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+      sandboxId: sandbox.sandboxId,
+      repoId: sandbox.repoId,
+    });
+  }
+}

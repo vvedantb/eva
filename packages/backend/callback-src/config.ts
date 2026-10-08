@@ -1,5 +1,6 @@
 import { existsSync } from "fs";
 import { hasEvaMcpConfig } from "./evaMcp.js";
+import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
 export const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL || CONVEX_URL;
@@ -38,31 +39,37 @@ export const MODEL =
   process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 export const ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
 /**
- * This turn may not modify the workspace (set for Manager Ave, the master
- * session, which supervises agents and never implements).
- *
- * Provider-agnostic on purpose: `ALLOWED_TOOLS` above is Claude's tool
- * vocabulary and only `claudeSdk.ts` can read it, so every other adapter keys
- * off this boolean and applies its own restriction — Cursor `disallowedTools`,
- * Codex `sandboxMode: "read-only"`. On Claude and Cursor, shell and MCP stay
- * fully available: the master reads production logs through the shell and
- * orchestrates the fleet through MCP. Codex restricts at the sandbox instead of
- * per tool, so see `codexSdk.ts` for what that does and does not guarantee.
- * OpenCode has no restriction — its SDK is fetched at runtime and exposes no
- * verified tool-permission option, so there the prompt is the only gate.
+ * Surfaces whose chat panel renders a blocking question and writes the answer
+ * back: session `ChatPanel.tsx`, `TaskSandboxChatPanel.tsx` and
+ * `ProjectSandboxChatPanel.tsx` all query `pendingQuestions.getActive` on the
+ * entity id and call `pendingQuestions.answer`, and all three clear their rows
+ * when the sandbox stops. Anything else has nobody to answer.
  */
-export const NO_WRITES = process.env.EVA_NO_WRITES === "1";
+const QUESTION_ANSWERING_ENTITY_FIELDS = new Set([
+  "sessionId",
+  "taskId",
+  "projectId",
+]);
 /**
  * Human-in-the-loop AskUserQuestion. The Agent SDK exposes the `canUseTool`
- * pause needed to block a turn on an answer, and only sessions currently wire the
- * answering UI — so this is gated to session runs. Elsewhere AskUserQuestion
- * stays the old fire-and-forget metadata (surfaced after the turn). When enabled
- * the SDK drops `bypassPermissions` for a `canUseTool` gate that auto-allows every
- * tool except AskUserQuestion (which waits for the user's answer via Convex).
+ * pause needed to block a turn on an answer. Elsewhere AskUserQuestion stays
+ * the old fire-and-forget metadata (surfaced after the turn).
+ *
+ * Scope is only that question behaviour. Every agent turn installs `canUseTool`
+ * regardless (see `providers/claudeSdk.ts`) — it is what grants MCP tools, which
+ * `bypassPermissions` does not. Do not fold the two concerns back together.
+ *
+ * Never on a run (`RUN_ID`). A run is autonomous — a quick task's first
+ * execution, an automation, a batch — so a blocking question would wait for an
+ * answer nobody is there to give, and the pause suspends the turn watchdog, so
+ * the turn would hang until someone stopped the sandbox. Runs must pick a
+ * sensible default and report the choice instead (see the prompt's
+ * "Visual decisions" block).
  */
 export const BLOCKING_QUESTIONS_ENABLED =
-  process.env.ENTITY_ID_FIELD === "sessionId" ||
-  process.env.ENTITY_ID_FIELD === "chatId";
+  RUN_ID === null &&
+  ENTITY_ID_FIELD !== undefined &&
+  QUESTION_ANSWERING_ENTITY_FIELDS.has(ENTITY_ID_FIELD);
 /** Fingerprint of the callback bundle this daemon was started with; exit when disk fp differs. */
 export const CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 /**
@@ -74,8 +81,6 @@ export const DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 /** Internal process-isolation handoff used by the Cursor daemon. */
 export const CURSOR_TURN_WORKER_PROMPT_FILE =
   process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-export const CURSOR_TURN_WORKER_LIFECYCLE =
-  process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
 export const CURSOR_TURN_WORKER_TURN_ID =
   process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
 const parsedCursorWorkerLeaseGeneration = Number(
@@ -93,6 +98,35 @@ export const WORK_DIR = existsSync("/tmp/repo")
   : existsSync("/workspace/repo")
     ? "/workspace/repo"
     : "/tmp/repo";
+
+/**
+ * Multi-repo sessions only: root of the linked-repo clones
+ * (`/tmp/workspace/<name>`, plus a `<primaryName> -> WORK_DIR` symlink for the
+ * primary). Both this and `LINKED_REPOS` are null/empty for ordinary
+ * single-repo sessions.
+ */
+export const WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
+/** Linked repo clones for this session (empty for single-repo sessions). */
+export const LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
+/** Every checked-out repo for this session: the primary first, then linked repos. */
+export const REPO_CHECKOUT_DIRS = [
+  WORK_DIR,
+  ...LINKED_REPOS.map((repo) => repo.path),
+];
+/**
+ * Env-only escape hatch (no rebuild needed): root the agent harness's cwd at
+ * `WORKSPACE_ROOT` instead of `WORK_DIR` when a harness's manual smoke test
+ * (see `tests/linkedReposHarness.manual.md`) shows it cannot edit outside its
+ * configured cwd even when told about the extra directories another way.
+ */
+export const LINKED_REPOS_CWD_ROOT =
+  process.env.EVA_LINKED_REPOS_CWD_ROOT === "1";
+/** The agent harness's working directory — see `resolveAgentCwd`. */
+export const AGENT_CWD = resolveAgentCwd(
+  WORK_DIR,
+  WORKSPACE_ROOT,
+  LINKED_REPOS_CWD_ROOT,
+);
 export const NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000",
 );
@@ -195,22 +229,18 @@ export const CURSOR_LOCAL_STATE_FILE =
   CURSOR_RUNTIME_HOME_DIR + "/" + CURSOR_STATE_FILE;
 export const CURSOR_PERSIST_STATE_FILE =
   CURSOR_PERSIST_DIR + "/" + CURSOR_STATE_FILE;
-/** Cursor SDK JSONL agent store — on the persist volume so conversation state
- * (agents/runs/checkpoints) survives sandbox stop/resume. */
+/** State root for the Cursor SDK's SQLite agent store (`index.db` plus a
+ * per-agent `store.db`) — on the persist volume so conversation state
+ * (agents/runs/checkpoints) survives sandbox stop/resume. Sandboxes that ran
+ * the earlier JSONL store may still hold its `*.ndjson` files here; they are
+ * ignored. */
 export const CURSOR_SDK_STORE_DIR = CURSOR_PERSIST_DIR + "/sdk";
 const CLAUDE_SESSION_PROJECT_DIR = WORK_DIR.replace(/\//g, "-");
 export const CLAUDE_LOCAL_PROJECT_DIR =
   CLAUDE_RUNTIME_CONFIG_DIR + "/projects/" + CLAUDE_SESSION_PROJECT_DIR;
 export const CLAUDE_PERSIST_PROJECT_DIR =
   CLAUDE_PERSIST_DIR + "/projects/" + CLAUDE_SESSION_PROJECT_DIR;
-// One resume-pointer file per daemon entity: several session chats run their
-// own Claude daemon on one sandbox, and a shared `session-state.json` let
-// each overwrite the others' `resumeSessionId`. Entities launched without an
-// id (one-shot runs) keep the unsuffixed legacy name.
-const CLAUDE_STATE_FILE_NAME =
-  ENTITY_ID_FIELD !== undefined && ENTITY_ID !== undefined && ENTITY_ID !== ""
-    ? "session-state." + ENTITY_ID_FIELD + "-" + ENTITY_ID + ".json"
-    : "session-state.json";
+const CLAUDE_STATE_FILE_NAME = "session-state.json";
 export const CLAUDE_LOCAL_STATE_FILE =
   CLAUDE_RUNTIME_CONFIG_DIR + "/" + CLAUDE_STATE_FILE_NAME;
 export const CLAUDE_PERSIST_STATE_FILE =
@@ -259,7 +289,8 @@ export const claudeEffort =
     : "";
 
 const CODEX_REASONING_EFFORT: Record<string, string> = {
-  // GPT-5.5: none/low/medium/high/xhigh. GPT-5.6 also accepts `max`.
+  // GPT-5.6 Sol/Terra/Luna: none through `max`. GPT-6 Astra accepts
+  // low through `max` — the picker never offers "off" for it.
   off: "none",
   low: "low",
   medium: "medium",
@@ -275,6 +306,11 @@ export const cursorFastMode = PROVIDER === "cursor" && AI_FAST_MODE === "1";
 export const cursorUse1mContext =
   PROVIDER === "cursor" && AI_CONTEXT_1M === "1";
 
+/** User turned thinking off (traits toggle or Claude effort "off"). */
+export const claudeThinkingDisabled =
+  AI_THINKING_ENABLED === "0" ||
+  (PROVIDER === "claude" && REASONING_EFFORT === "off");
+
 function buildSettingsJson(): string {
   const settings: {
     attribution: { commit: string; pr: string };
@@ -282,10 +318,7 @@ function buildSettingsJson(): string {
   } = {
     attribution: { commit: "", pr: "" },
   };
-  const thinkingDisabled =
-    AI_THINKING_ENABLED === "0" ||
-    (PROVIDER === "claude" && REASONING_EFFORT === "off");
-  if (thinkingDisabled) {
+  if (claudeThinkingDisabled) {
     settings.alwaysThinkingEnabled = false;
   }
   return JSON.stringify(settings);
@@ -307,11 +340,11 @@ export const normalizedCodexModel = MODEL.startsWith("codex:")
 export const normalizedOpencodeModel = MODEL.startsWith("opencode:")
   ? MODEL.slice("opencode:".length)
   : MODEL;
-// Eva's cursor model ids bake a reasoning level into the slug (grok-4.5-low,
-// gpt-5.5-low). The SDK rejects those: its model list carries base ids only
-// (grok-4.5, gpt-5.5), with reasoning exposed as a per-model parameter. Split
-// here; the runner discovers the parameter id at runtime and degrades to the
-// base id when the model has none (resolveCursorModelSelection).
+// Legacy Eva cursor model ids baked a reasoning level into the slug (the
+// retired grok-4.5-low, gpt-5.5-low). The SDK rejects those: its model list
+// carries base ids only, with reasoning exposed as a per-model parameter.
+// Split here; the runner discovers the parameter id at runtime and degrades
+// to the base id when the model has none (resolveCursorModelSelection).
 // xhigh before high: "grok-4.6-xhigh".endsWith("-high") is also true.
 const CURSOR_REASONING_LEVELS = ["xhigh", "medium", "low", "high"];
 
@@ -376,24 +409,9 @@ export const TOOL_STEP_TYPES = new Set([
   "todos",
 ]);
 
-export const CODEX_PRICING_PER_MILLION: Record<
-  string,
-  { input: number; cached: number; output: number }
-> = {
-  // OpenAI API list prices (per 1M tokens).
-  "gpt-5.6-sol": { input: 5.0, cached: 0.5, output: 30.0 },
-  "gpt-5.6-terra": { input: 2.0, cached: 0.2, output: 12.0 },
-  "gpt-5.6-luna": { input: 0.2, cached: 0.02, output: 1.2 },
-  "gpt-5.5": { input: 5.0, cached: 0.5, output: 30.0 },
-  // Legacy — kept so in-flight sandboxes still cost-account correctly.
-  "gpt-5.5-pro": { input: 30.0, cached: 30.0, output: 180.0 },
-
-  "gpt-5.4": { input: 1.25, cached: 0.125, output: 10.0 },
-  "gpt-5.4-mini": { input: 0.25, cached: 0.025, output: 2.0 },
-  "gpt-5.3-codex": { input: 1.25, cached: 0.125, output: 10.0 },
-  "gpt-5.2-codex": { input: 1.25, cached: 0.125, output: 10.0 },
-  "gpt-5-codex": { input: 1.25, cached: 0.125, output: 10.0 },
-};
+// Pricing lives in @eva/shared so the web Usage page and this bundle read
+// one table. Re-exported to keep `computeCodexCostUsd` imports unchanged.
+export { CODEX_PRICING_PER_MILLION } from "@eva/shared/modelPricing";
 
 export const completedLabels: Record<string, string> = {
   "Preparing Claude session...": "Prepared Claude session",

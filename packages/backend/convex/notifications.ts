@@ -4,9 +4,13 @@ import {
   internalMutation,
 } from "./_generated/server";
 import { v, type Infer } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { notificationTypeValidator } from "./validators";
+import {
+  notificationTypeValidator,
+  notificationUrgencyValidator,
+  withCommentAnchor,
+} from "./validators";
 import { authQuery, authMutation } from "./functions";
 
 /** Max unread notifications shown per user in the daily digest email. */
@@ -39,10 +43,18 @@ const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
  * Delay before an instant notification email is sent. Acts as a debounce: a
  * burst of activity within this window is swept into a single email, and the
  * send is skipped entirely if the user reads the notification in-app first.
- * Set to 30 minutes so that comment fan-out to a task's subscribers collapses
+ * Set to 15 minutes so that comment fan-out to a task's subscribers collapses
  * into one email per window rather than one per comment.
  */
-const EMAIL_SEND_DELAY_MS = 30 * 60 * 1000;
+export const EMAIL_SEND_DELAY_MS = 15 * 60 * 1000;
+
+/**
+ * Delay before the instant email for a `high` urgency notification. Much
+ * shorter than {@link EMAIL_SEND_DELAY_MS} because routing has already spent a
+ * few seconds deciding, and "the author asked you a question" is the one case
+ * worth interrupting someone for.
+ */
+export const HIGH_URGENCY_EMAIL_DELAY_MS = 60_000;
 
 /**
  * How many unread notifications to scan per user before filtering. Larger than
@@ -62,6 +74,8 @@ const DIGEST_EXCLUDED_TYPES: ReadonlySet<string> = new Set([
   // Change requests show in-app only — they re-run Eva, which is low-signal in
   // an email summary.
   "changes_requested",
+  // Session auto-archive on PR close/merge is inbox-only; never email.
+  "session_archived",
 ]);
 
 /** Builds a URL path for a repo, including app name for monorepo sub-apps. */
@@ -75,7 +89,11 @@ function getRepoHref(
   return `/${owner}/${name}/${appName}`;
 }
 
-/** Creates a notification for a user, auto-generating an href from repo/project/task/doc/session context. */
+/**
+ * Creates a notification for a user, auto-generating an href from
+ * repo/project/task/doc/session context. Returns the new row's id so a caller
+ * that routes the notification afterwards (mentions → urgency) can name it.
+ */
 export async function createNotification(
   ctx: MutationCtx,
   params: {
@@ -89,8 +107,11 @@ export async function createNotification(
     taskId?: Id<"agentTasks">;
     docId?: Id<"docs">;
     sessionId?: Id<"sessions">;
+    // Set by the comment paths (task comments, doc comments). Anchors the
+    // click-through to the exact comment rather than the top of the page.
+    commentId?: Id<"taskComments"> | Id<"docComments">;
   },
-) {
+): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
 
   // Fetched once and shared: the href and the context label below are both
@@ -124,6 +145,13 @@ export async function createNotification(
     }
   }
 
+  // Anchor the click-through to the comment that caused the notification. Done
+  // after href resolution so it covers both the derived href and one passed in
+  // by the caller.
+  if (href && params.commentId) {
+    href = withCommentAnchor(href, params.commentId);
+  }
+
   // Snapshot a human-readable context label for the notification card, but only
   // for types whose title does not already name the entity.
   let contextLabel: string | undefined;
@@ -138,7 +166,7 @@ export async function createNotification(
       contextLabel = session.title;
     }
   }
-  await ctx.db.insert("notifications", {
+  const notificationId = await ctx.db.insert("notifications", {
     userId: params.userId,
     type,
     title: params.title,
@@ -146,19 +174,23 @@ export async function createNotification(
     href,
     repoId: params.repoId,
     contextLabel,
+    commentId: params.commentId,
     read: false,
     createdAt: Date.now(),
   });
 
   // High-signal types get an instant email after a short debounce. The send is
   // skipped if the user reads it in-app first (see notificationEmail.ts).
-  if (EMAIL_NOTIFICATION_TYPES.has(type)) {
+  // Mentions are the exception: routing (mentionRouting.routeMentions) decides
+  // whether they warrant an email at all, and schedules one itself.
+  if (EMAIL_NOTIFICATION_TYPES.has(type) && type !== "mention") {
     await ctx.scheduler.runAfter(
       EMAIL_SEND_DELAY_MS,
       internal.notificationEmail.sendUnreadForUser,
       { userId: params.userId },
     );
   }
+  return notificationId;
 }
 
 const notificationValidator = v.object({
@@ -174,18 +206,110 @@ const notificationValidator = v.object({
   createdAt: v.number(),
   contextLabel: v.optional(v.string()),
   emailedAt: v.optional(v.number()),
+  commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
+  archivedAt: v.optional(v.number()),
+  // Undefined = not yet routed (a mention whose routing action has not landed)
+  // or legacy; treated as normal everywhere it is read.
+  urgency: v.optional(notificationUrgencyValidator),
 });
 
-/** Lists the 100 most recent notifications for the current user. */
+/**
+ * Records the urgency mention routing decided on, and — for `high` — schedules
+ * the instant email `createNotification` deliberately skipped. `normal` falls
+ * through to the daily digest and `low` stays in the inbox only.
+ *
+ * Internal use only (mentionRouting.routeMentions). Exempt from the per-row
+ * owner check every public notification function makes: the id comes from the
+ * routing action that was handed it at creation, not from a caller.
+ */
+export const setUrgency = internalMutation({
+  args: {
+    notificationId: v.id("notifications"),
+    urgency: notificationUrgencyValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const notification = await ctx.db.get(args.notificationId);
+    // Archived or deleted between creation and routing: nothing left to route.
+    if (!notification) return null;
+    await ctx.db.patch(args.notificationId, { urgency: args.urgency });
+    if (args.urgency === "high") {
+      await ctx.scheduler.runAfter(
+        HIGH_URGENCY_EMAIL_DELAY_MS,
+        internal.notificationEmail.sendUnreadForUser,
+        { userId: notification.userId },
+      );
+    }
+    return null;
+  },
+});
+
+/**
+ * Falls back to the pre-routing behaviour when Jev could not judge a mention:
+ * the same 15-minute debounced instant email every other high-signal type
+ * gets. Leaves `urgency` unset, which reads as normal.
+ *
+ * Internal use only (mentionRouting.routeMentions).
+ */
+export const scheduleLegacyMentionEmail = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.scheduler.runAfter(
+      EMAIL_SEND_DELAY_MS,
+      internal.notificationEmail.sendUnreadForUser,
+      { userId: args.userId },
+    );
+    return null;
+  },
+});
+
+/** Max ids a single bulk notification mutation will accept. */
+const BULK_ID_LIMIT = 100;
+
+/**
+ * The caller's own notifications, for a bulk mutation. Ids that belong to
+ * somebody else (or no longer exist) are skipped rather than thrown on: the
+ * same owner check `markAsRead` makes, applied per row, so one stale id in a
+ * selection cannot fail the whole action.
+ */
+async function ownedNotifications(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  ids: Id<"notifications">[],
+) {
+  if (ids.length > BULK_ID_LIMIT) {
+    throw new Error(
+      `Too many notifications: ${ids.length} (max ${BULK_ID_LIMIT})`,
+    );
+  }
+  const owned = [];
+  for (const id of ids) {
+    const notification = await ctx.db.get(id);
+    if (!notification || notification.userId !== userId) continue;
+    owned.push(notification);
+  }
+  return owned;
+}
+
+/**
+ * Lists the current user's inbox: the 100 most recent notifications, then
+ * split by archive state (`archived: true` returns only archived rows, the
+ * default only unarchived ones). The window is taken before the split, so a
+ * large run of archived rows shortens the list rather than paging past them —
+ * acceptable while archiving is an inbox-sized action.
+ */
 export const list = authQuery({
-  args: {},
+  args: { archived: v.optional(v.boolean()) },
   returns: v.array(notificationValidator),
-  handler: async (ctx) => {
-    return await ctx.db
+  handler: async (ctx, args) => {
+    const recent = await ctx.db
       .query("notifications")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
+    const wantArchived = args.archived === true;
+    return recent.filter((n) => (n.archivedAt !== undefined) === wantArchived);
   },
 });
 
@@ -200,7 +324,11 @@ export const get = authQuery({
   },
 });
 
-/** Returns the number of unread notifications for the current user (capped at 100). */
+/**
+ * Returns the number of unread notifications for the current user (capped at
+ * 100). Archived rows are excluded — archiving marks a notification read, so
+ * they should never sit behind the inbox badge.
+ */
 export const countUnread = authQuery({
   args: {},
   returns: v.number(),
@@ -211,7 +339,7 @@ export const countUnread = authQuery({
         q.eq("userId", ctx.userId).eq("read", false),
       )
       .take(100);
-    return unread.length;
+    return unread.filter((n) => n.archivedAt === undefined).length;
   },
 });
 
@@ -230,7 +358,29 @@ export const markAsRead = authMutation({
   },
 });
 
-/** Marks all unread notifications as read for the current user. */
+/**
+ * Marks a single notification as unread again (inbox right-click menu). Read
+ * state is the `read` boolean alone — there is no timestamp to clear.
+ */
+export const markAsUnread = authMutation({
+  args: { id: v.id("notifications") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const notification = await ctx.db.get(args.id);
+    if (!notification || notification.userId !== ctx.userId)
+      throw new Error("Not found");
+    if (notification.read) {
+      await ctx.db.patch(args.id, { read: false });
+    }
+    return null;
+  },
+});
+
+/**
+ * Marks all unread notifications as read for the current user. Archived rows
+ * are left alone: they are out of the inbox, and touching them here would
+ * quietly change what the archived view shows.
+ */
 export const markAllAsRead = authMutation({
   args: {},
   returns: v.null(),
@@ -242,7 +392,72 @@ export const markAllAsRead = authMutation({
       )
       .collect();
     for (const n of unread) {
+      if (n.archivedAt !== undefined) continue;
       await ctx.db.patch(n._id, { read: true });
+    }
+    return null;
+  },
+});
+
+/** Marks every given notification the caller owns as read (inbox bulk bar). */
+export const markManyAsRead = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    for (const n of owned) {
+      if (!n.read) await ctx.db.patch(n._id, { read: true });
+    }
+    return null;
+  },
+});
+
+/** Marks every given notification the caller owns as unread. */
+export const markManyAsUnread = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    for (const n of owned) {
+      if (n.read) await ctx.db.patch(n._id, { read: false });
+    }
+    return null;
+  },
+});
+
+/**
+ * Archives notifications out of the inbox. Reversible (see `unarchiveMany`):
+ * the row stays and only `archivedAt` is stamped. Archiving also marks the
+ * notification read, so an archived item cannot keep counting as unread.
+ */
+export const archiveMany = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    const now = Date.now();
+    for (const n of owned) {
+      if (n.archivedAt !== undefined) continue;
+      await ctx.db.patch(n._id, { archivedAt: now, read: true });
+    }
+    return null;
+  },
+});
+
+/**
+ * Puts archived notifications back in the inbox. Read state is left as it is —
+ * archiving marked them read, and undoing the archive should not resurface
+ * them as unread.
+ */
+export const unarchiveMany = authMutation({
+  args: { ids: v.array(v.id("notifications")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const owned = await ownedNotifications(ctx, ctx.userId, args.ids);
+    for (const n of owned) {
+      if (n.archivedAt === undefined) continue;
+      // `undefined` removes the field, which is what "not archived" means.
+      await ctx.db.patch(n._id, { archivedAt: undefined });
     }
     return null;
   },
@@ -290,6 +505,8 @@ export const getDigestRecipients = internalQuery({
           (n) =>
             n.createdAt >= args.since &&
             !DIGEST_EXCLUDED_TYPES.has(n.type) &&
+            // Routing judged this one incidental: inbox only, never emailed.
+            n.urgency !== "low" &&
             n.emailedAt === undefined,
         )
         .slice(0, DIGEST_NOTIFICATION_LIMIT);
@@ -310,6 +527,17 @@ export const getDigestRecipients = internalQuery({
     return recipients;
   },
 });
+
+/**
+ * Whether a notification belongs in an instant email. Only mentions carry an
+ * urgency, and only a `high` one earns the interruption; `normal` waits for the
+ * daily digest and `low` never leaves the inbox. An unrouted mention (urgency
+ * undefined) still emails, so a routing failure degrades to the old behaviour.
+ */
+function isInstantEmailable(notification: Doc<"notifications">): boolean {
+  if (notification.type !== "mention") return true;
+  return notification.urgency === "high" || notification.urgency === undefined;
+}
 
 /**
  * For an instant notification email: returns the user's unread, not-yet-emailed,
@@ -351,7 +579,10 @@ export const getUnreadEmailableForUser = internalQuery({
       .order("desc")
       .take(DIGEST_SCAN_LIMIT);
     const relevant = unread.filter(
-      (n) => EMAIL_NOTIFICATION_TYPES.has(n.type) && n.emailedAt === undefined,
+      (n) =>
+        EMAIL_NOTIFICATION_TYPES.has(n.type) &&
+        n.emailedAt === undefined &&
+        isInstantEmailable(n),
     );
     if (relevant.length === 0) return null;
 

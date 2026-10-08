@@ -8,6 +8,25 @@ import { toast } from "@eva/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { ConfirmDialog } from "./ConfirmDialog";
 
+/** Deletes a quick task. Shared by the confirm dialog and Alt-click bypass. */
+export function useDeleteAgentTask() {
+  const { repoId } = useRepo();
+  return useMutation(api.agentTasks.deleteCascade).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
+        repoId,
+      });
+      if (current !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.getAllTasks,
+          { repoId },
+          current.filter((task) => task._id !== args.id),
+        );
+      }
+    },
+  );
+}
+
 interface DeleteTaskDialogProps {
   open: boolean;
   onClose: () => void;
@@ -21,19 +40,7 @@ export function DeleteTaskDialog({
   taskId,
   taskTitle,
 }: DeleteTaskDialogProps) {
-  const { repoId } = useRepo();
-  const deleteTask = useMutation(
-    api.agentTasks.deleteCascade,
-  ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.filter((task) => task._id !== args.id),
-      );
-    }
-  });
+  const deleteTask = useDeleteAgentTask();
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {

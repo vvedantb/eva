@@ -60,7 +60,7 @@ export type LandingPreviewKey =
  * both satisfy. Features that exist in the product nav reuse that exact icon so
  * the marketing page and the app agree; the rest fall back to Tabler.
  */
-export type LandingIcon = ComponentType<{
+type LandingIcon = ComponentType<{
   size?: number;
   className?: string;
 }>;

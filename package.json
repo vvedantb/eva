@@ -15,6 +15,7 @@
     "lint": "oxlint -c .oxlintrc.json .",
     "typecheck": "pnpm --filter @eva/web typecheck && pnpm --filter @eva/backend typecheck && pnpm --filter @eva/backend typecheck:callback && pnpm --filter @eva/backend typecheck:annotation",
     "compiler:check": "node scripts/compiler-check.mjs",
+    "design:check": "node scripts/design-check.mjs",
     "test:oxlint-plugin": "node --test scripts/oxlint-plugin-eva/test/rules.test.mjs",
     "test:schema-narrowing": "node --test scripts/check-schema-narrowing.test.mjs",
     "check:schema-narrowing": "node scripts/check-schema-narrowing.mjs",
@@ -33,8 +34,10 @@
       "@clerk/clerk-js": "5.125.10",
       "@clerk/clerk-react": "5.61.6",
       "@clerk/shared": "3.47.5",
-      "@types/react": "19.0.10",
-      "@types/react-dom": "19.0.4",
+      "@types/react": "19.3.0",
+      "@types/react-dom": "19.3.0",
+      "react": "19.3.0",
+      "react-dom": "19.3.0",
       "axios": "1.18.0",
       "brace-expansion@1.1.15": "1.1.18",
       "convex-helpers": "0.1.114",
@@ -64,11 +67,24 @@
         "peerDependencies": {
           "@tiptap/pm": "*"
         }
+      },
+      "eslint-plugin-react-you-might-not-need-an-effect": {
+        "peerDependenciesMeta": {
+          "eslint": {
+            "optional": true
+          }
+        }
       }
+    },
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "eslint"
+      ]
     }
   },
   "devDependencies": {
     "@oxlint/plugins": "1.79.0",
+    "eslint-plugin-react-you-might-not-need-an-effect": "1.0.2",
     "husky": "^9.1.7",
     "knip": "6.27.0",
     "lint-staged": "^16.2.7",

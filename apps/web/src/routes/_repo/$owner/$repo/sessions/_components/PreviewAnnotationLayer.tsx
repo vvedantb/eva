@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence } from "motion/react";
 import { useWebPreview } from "@eva/ui";
 import {
   buildAnnotationDisplay,
@@ -72,9 +73,9 @@ export function PreviewAnnotationLayer({
       // Real height once the card is mounted: opening the details accordion
       // grows it well past any constant, and a stale guess pushes the buttons
       // off the bottom of the panel.
-      const cardHeight = cardEl
-        ? cardEl.getBoundingClientRect().height
-        : CARD_ESTIMATED_HEIGHT;
+      // Layout height, not getBoundingClientRect: the card springs scale on
+      // mount, and a transformed height would re-clamp the position mid-enter.
+      const cardHeight = cardEl ? cardEl.offsetHeight : CARD_ESTIMATED_HEIGHT;
       const maxTop = Math.max(minTop, layerRect.bottom - cardHeight - 8);
       const next = {
         left: Math.min(Math.max(minLeft, left), maxLeft),
@@ -101,33 +102,39 @@ export function PreviewAnnotationLayer({
 
   return (
     <div ref={layerRef} className="pointer-events-none absolute inset-0 z-10">
-      {pending && cardPosition
+      {/* Presence stays portalled so cancel/submit can play the card exit. */}
+      {typeof document !== "undefined"
         ? createPortal(
-            <div className="pointer-events-none fixed inset-0 z-50">
-              <AnnotationCommentCard
-                cardRef={setCardEl}
-                context={pending.context}
-                position={cardPosition}
-                isSubmitting={isSubmitting}
-                onCancel={clearPending}
-                onSubmit={(feedback) => {
-                  const display = buildAnnotationDisplay(
-                    feedback,
-                    pending.context,
-                  );
-                  const full = buildAnnotationPrompt(feedback, pending.context);
-                  setIsSubmitting(true);
-                  void onSubmit(display, full)
-                    .then(() => {
-                      clearPending();
-                      onModeChange(false);
-                    })
-                    .finally(() => {
-                      setIsSubmitting(false);
-                    });
-                }}
-              />
-            </div>,
+            <AnimatePresence>
+              {pending && cardPosition ? (
+                <AnnotationCommentCard
+                  cardRef={setCardEl}
+                  context={pending.context}
+                  position={cardPosition}
+                  isSubmitting={isSubmitting}
+                  onCancel={clearPending}
+                  onSubmit={(feedback) => {
+                    const display = buildAnnotationDisplay(
+                      feedback,
+                      pending.context,
+                    );
+                    const full = buildAnnotationPrompt(
+                      feedback,
+                      pending.context,
+                    );
+                    setIsSubmitting(true);
+                    void onSubmit(display, full)
+                      .then(() => {
+                        clearPending();
+                        onModeChange(false);
+                      })
+                      .finally(() => {
+                        setIsSubmitting(false);
+                      });
+                  }}
+                />
+              ) : null}
+            </AnimatePresence>,
             document.body,
           )
         : null}

@@ -11,14 +11,8 @@ const surfaceAdapters = readSource("convex/_chat/surfaceAdapters.ts");
 
 const CHAT_WRAPPER_NAMES = [
   "handleStaleSession",
-  "checkStaleSessionHeartbeat",
-  "probeStaleSessionLiveness",
   "handleStaleProjectChat",
-  "checkStaleProjectChatHeartbeat",
-  "probeStaleProjectChatLiveness",
   "handleStaleAgentTaskChat",
-  "checkStaleAgentTaskChatHeartbeat",
-  "probeStaleAgentTaskChatLiveness",
 ];
 
 /**
@@ -30,7 +24,7 @@ const CHAT_WRAPPER_NAMES = [
  * `_chat/surfaceAdapters.ts` (per-surface adapters); these rules exist to
  * catch a regression back toward duplicated logic in the thin wrappers.
  */
-describe("the nine chat wrappers in workflowWatchdog.ts only delegate", () => {
+describe("the chat wrappers in workflowWatchdog.ts only delegate", () => {
   test.each(CHAT_WRAPPER_NAMES)(
     "%s does not itself patch the entity, insert a message, or finalize a cancelled message",
     (name) => {
@@ -80,6 +74,43 @@ test("all three chat surface adapters are registered together in chatSurfaceAdap
   expect(body).toContain("sessionChatAdapter");
   expect(body).toContain("taskChatAdapter");
   expect(body).toContain("projectChatAdapter");
+});
+
+/**
+ * The lease reconciler serves every chat surface through the adapter picked
+ * from the turn's entity id. Naming one surface's adapter in turns.ts is the
+ * regression back to session-only turns.
+ */
+test("turns.ts dispatches through turnAdapterForEntity, never one fixed surface", () => {
+  const turns = readSource("convex/turns.ts");
+  expect(turns).toContain("turnAdapterForEntity(");
+  for (const adapter of [
+    "sessionChatAdapter",
+    "taskChatAdapter",
+    "projectChatAdapter",
+  ]) {
+    expect(turns, `turns.ts names ${adapter}`).not.toContain(adapter);
+  }
+});
+
+/**
+ * The usage-limit retry shipped for sessions only (#734) because nothing
+ * pinned the three chat surfaces to the same mutation set. This does.
+ */
+test("every chat surface's workflow module exposes the same user-facing recovery mutations", () => {
+  for (const module of [
+    "convex/sessionWorkflow.ts",
+    "convex/agentTaskChatWorkflow.ts",
+    "convex/projectChatWorkflow.ts",
+  ]) {
+    const source = readSource(module);
+    expect(source, `${module} is missing retryLastTurnWithAccount`).toContain(
+      "retryLastTurnWithAccount",
+    );
+    expect(source, `${module} is missing requestStopBackgroundAgent`).toContain(
+      "requestStopBackgroundAgent",
+    );
+  }
 });
 
 /** Comments name the very calls these rules rule out, so they have to go first. */

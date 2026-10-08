@@ -5,13 +5,13 @@ import type { SandboxTab } from "@/lib/search-params";
 
 /**
  * Tab order matches `SandboxTabBar`'s always-visible rail (Preview, Browser,
- * Review). Editor / Computer are only cyclable when pinned from `+`.
+ * Review). Editor / Computer follow when the surface enables them.
  */
 const SANDBOX_TAB_BAR_ORDER: SandboxTab[] = ["preview", "browser", "review"];
 
 /**
  * Returns the Shift+Tab cycle order: enabled builtins, then Editor/Computer
- * when open, then File Viewer / PRD if shown, then custom tab slugs.
+ * when shown, then File Viewer / PRD if shown, then custom tab slugs.
  */
 function getCyclableSandboxTabs(
   enabledTabs?: ReadonlyArray<SandboxTab>,
@@ -22,6 +22,8 @@ function getCyclableSandboxTabs(
   showComputerTab?: boolean,
   showEditorTab?: boolean,
   showAgentsTab?: boolean,
+  showArtifactsTab?: boolean,
+  showDocumentsTab?: boolean,
 ): string[] {
   const tabs = enabledTabs
     ? SANDBOX_TAB_BAR_ORDER.filter((tab) => enabledTabs.includes(tab))
@@ -34,8 +36,14 @@ function getCyclableSandboxTabs(
   const withAgents = showAgentsTab ? [...withFiles, "agents"] : withFiles;
   const withPrd = showPrdTab ? [...withAgents, "prd"] : withAgents;
   const withDesigns = showDesignsTab ? [...withPrd, "designs"] : withPrd;
-  if (!customTabSlugs || customTabSlugs.length === 0) return withDesigns;
-  return [...withDesigns, ...customTabSlugs];
+  const withArtifacts = showArtifactsTab
+    ? [...withDesigns, "artifacts"]
+    : withDesigns;
+  const withDocuments = showDocumentsTab
+    ? [...withArtifacts, "documents"]
+    : withArtifacts;
+  if (!customTabSlugs || customTabSlugs.length === 0) return withDocuments;
+  return [...withDocuments, ...customTabSlugs];
 }
 
 /** Cycles the visible right-panel tabs with `cycleSandboxTab`. */
@@ -50,6 +58,8 @@ export function useCycleSandboxTabHotkey({
   showComputerTab,
   showEditorTab,
   showAgentsTab,
+  showArtifactsTab,
+  showDocumentsTab,
   enabled = true,
 }: {
   activeTab: string;
@@ -62,6 +72,8 @@ export function useCycleSandboxTabHotkey({
   showComputerTab?: boolean;
   showEditorTab?: boolean;
   showAgentsTab?: boolean;
+  showArtifactsTab?: boolean;
+  showDocumentsTab?: boolean;
   enabled?: boolean;
 }) {
   const cyclableTabs = getCyclableSandboxTabs(
@@ -73,6 +85,8 @@ export function useCycleSandboxTabHotkey({
     showComputerTab,
     showEditorTab,
     showAgentsTab,
+    showArtifactsTab,
+    showDocumentsTab,
   );
 
   useShortcut(

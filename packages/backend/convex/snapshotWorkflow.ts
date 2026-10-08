@@ -127,6 +127,10 @@ export const snapshotBuildWorkflow = workflow.define({
 
     // Bootstrap / toolchain path: rebuild the base Image first
     // (serial — captures contending with the Image builder slow both down).
+    // `config` was read before the base rebuild, so its baseSnapshotId is the
+    // PREVIOUS base — which the rebuild below deletes once the new one is stored.
+    // Seeding after a rebuild must boot from the new id, not that stale one.
+    let rebuiltBaseSnapshotId: string | undefined;
     if (rebuildBaseImage) {
       if (providerKind === "vercel") {
         const baseSnapshotLabel = `base-${config.repoId}`;
@@ -149,6 +153,15 @@ export const snapshotBuildWorkflow = workflow.define({
             { repoId: appRepoId, imageSnapshot: config.snapshotName },
             { retry: { maxAttempts: 4, initialBackoffMs: 15000, base: 2 } },
           );
+          if (!created.ok) {
+            await step.runMutation(internal.repoSnapshots.completeBuild, {
+              buildId: args.buildId,
+              status: "error",
+              logs: "",
+              error: created.error,
+            });
+            return;
+          }
           prepSandboxId = created.sandboxId;
 
           await step.runAction(
@@ -286,6 +299,7 @@ export const snapshotBuildWorkflow = workflow.define({
             repoSnapshotId: args.repoSnapshotId,
             baseSnapshotId: effectiveBaseId,
           });
+          rebuiltBaseSnapshotId = effectiveBaseId;
 
           // New base is stored and bootable — now retire the previous one.
           // Best-effort: a leaked old snapshot is harmless; failing the build
@@ -311,11 +325,22 @@ export const snapshotBuildWorkflow = workflow.define({
             }
           }
 
-          await step.runMutation(internal.repoSnapshots.completeBuild, {
-            buildId: args.buildId,
-            status: "success",
-            logs: `Vercel base Image ${effectiveBaseId} built successfully.\n`,
-          });
+          // Only finish here when nothing follows. completeBuild ignores any
+          // build that is no longer "running", so marking success before the
+          // seed step would hide the seed's own result — and drop the build out
+          // of "running", letting a second Rebuild Now start alongside it.
+          if (hasStopCommands) {
+            await step.runMutation(internal.repoSnapshots.appendLogs, {
+              buildId: args.buildId,
+              chunk: `Vercel base Image ${effectiveBaseId} built successfully; seeding next.\n`,
+            });
+          } else {
+            await step.runMutation(internal.repoSnapshots.completeBuild, {
+              buildId: args.buildId,
+              status: "success",
+              logs: `Vercel base Image ${effectiveBaseId} built successfully.\n`,
+            });
+          }
         } catch (e) {
           if (prepSandboxId) {
             await step.runAction(
@@ -391,12 +416,17 @@ export const snapshotBuildWorkflow = workflow.define({
       // which races toolchain install from scratch and can 404 on flaky
       // project lookups. Daytona used to accept snapshotName directly as its
       // Image name.
-      const seedImageSnapshot = config.baseSnapshotId ?? config.snapshotName;
+      const seedImageSnapshot =
+        rebuiltBaseSnapshotId ?? config.baseSnapshotId ?? config.snapshotName;
       const created = await step.runAction(
         internal.snapshotActions.createSeedPrepSandbox,
         { repoId: appRepoId, imageSnapshot: seedImageSnapshot },
         { retry: { maxAttempts: 4, initialBackoffMs: 15000, base: 2 } },
       );
+      if (!created.ok) {
+        await failBuild(created.error);
+        return;
+      }
       prepSandboxId = created.sandboxId;
 
       // Fresh refs for the detached script's hard reset (owns git auth).
@@ -552,6 +582,28 @@ export const snapshotBuildWorkflow = workflow.define({
         status: "success",
         logs: `Seeded snapshot ${effectiveSeededName} built for this app.\n`,
       });
+
+      // This app's own seeded snapshot just moved — any codebase group that
+      // uses it as its primary has a stale fingerprint now, so schedule each
+      // one to rebuild. Best-effort: buildGroupSnapshot logs and no-ops on its
+      // own failures, so a lookup/schedule failure here must not fail the build.
+      try {
+        const groupIdsToRebuild = await step.runQuery(
+          internal.repoGroups.listGroupsByPrimaryRepo,
+          { primaryRepoId: appRepoId },
+        );
+        for (const groupId of groupIdsToRebuild) {
+          await step.runMutation(internal.repoGroups.scheduleGroupRebuild, {
+            groupId,
+          });
+        }
+      } catch (e) {
+        console.error(
+          `[snapshot] failed to schedule repo group rebuilds for repo ${appRepoId}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
 
       // Best-effort: delete the previous snapshot if it differed from the new one
       // (keep-last-good already swapped above, so failures here just leave a stray

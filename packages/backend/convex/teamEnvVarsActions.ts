@@ -3,7 +3,8 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { encryptValue, decryptValue } from "./encryption";
+import { encryptValue } from "./encryption";
+import { decryptStoredEntry } from "./_envVars/encryptedEntries";
 import { assertActionTeamAccess } from "./functions";
 
 /** Decrypts and reveals the plaintext value of a specific team env var. */
@@ -23,8 +24,7 @@ export const revealValue = action({
       internal.teamEnvVars.getAllInternal,
       { teamId: args.teamId },
     );
-    const entry = vars.find((v) => v.key === args.key);
-    return entry ? decryptValue(entry.value) : null;
+    return decryptStoredEntry(vars, args.key);
   },
 });
 

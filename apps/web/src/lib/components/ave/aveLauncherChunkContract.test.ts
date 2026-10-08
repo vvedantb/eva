@@ -7,6 +7,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (file: string) => readFileSync(join(here, file), "utf8");
 
 const provider = read("AveLauncherProvider.tsx");
+/**
+ * The provider owns open/closed state; `AveLauncherSurface` owns where the
+ * launcher sits and mounts the two surfaces, so it is what imports them.
+ */
+const surface = read("AveLauncherSurface.tsx");
 const panel = read("AvePanel.tsx");
 const button = read("AveLauncherButton.tsx");
 
@@ -20,11 +25,13 @@ const button = read("AveLauncherButton.tsx");
  * the delay back with nothing failing, so pin the boundary here.
  */
 test("the popover chrome is eager and only the body is lazy", () => {
-  expect(provider).toMatch(
+  expect(surface).toMatch(
     /import \{ AvePanel \} from "@\/lib\/components\/ave\/AvePanel"/,
   );
-  expect(provider).not.toContain("lazy(");
-  expect(provider).not.toContain("Suspense");
+  for (const source of [provider, surface]) {
+    expect(source).not.toContain("lazy(");
+    expect(source).not.toContain("Suspense");
+  }
 
   expect(panel).toMatch(/lazy\(\s*\(\) =>\s*import\([^)]*AvePanelBody/);
   expect(panel).toContain("Suspense");
@@ -32,9 +39,20 @@ test("the popover chrome is eager and only the body is lazy", () => {
 
 /** Hover/focus starts the body chunk so the first click rarely waits at all. */
 test("the launcher preloads the body on intent", () => {
-  expect(provider).toMatch(/import\([^)]*AvePanelBody/);
-  expect(provider).toContain("onIntent={preloadAvePanelBody}");
+  expect(surface).toMatch(/import\([^)]*AvePanelBody/);
+  expect(surface).toContain("onIntent={preloadAvePanelBody}");
 
   expect(button).toContain("onMouseEnter={onIntent}");
   expect(button).toContain("onFocus={onIntent}");
+});
+
+/**
+ * The assertions above read `AveLauncherSurface`, so a provider that stopped
+ * rendering it would leave them passing against a file nothing mounts.
+ */
+test("the provider mounts the launcher surface", () => {
+  expect(provider).toMatch(
+    /import \{ AveLauncherSurface \} from "@\/lib\/components\/ave\/AveLauncherSurface"/,
+  );
+  expect(provider).toContain("<AveLauncherSurface");
 });

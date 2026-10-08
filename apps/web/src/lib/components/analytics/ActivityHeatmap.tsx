@@ -14,6 +14,7 @@ import {
 import type { Activity } from "@eva/ui";
 import { IconFlame } from "@tabler/icons-react";
 import { Widget } from "@/lib/components/Widget";
+import { useCountUpDisplay } from "./useCountUpDisplay";
 
 interface ActivityHeatmapProps {
   data: Array<{ date: string; count: number }>;
@@ -103,6 +104,7 @@ function formatDate(dateStr: string): string {
 export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
   const { activities, totalCount } = toActivities(data);
   const { currentStreak, longestStreak } = computeStreak(data);
+  const countedTotal = useCountUpDisplay(totalCount);
 
   return (
     <Widget
@@ -111,7 +113,7 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
     >
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <p className="text-3xl font-bold tabular-nums text-foreground">
-          {totalCount}
+          {countedTotal}
         </p>
         <div className="flex items-center gap-4">
           {currentStreak > 0 && (
@@ -148,7 +150,10 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
                       activity={activity}
                       dayIndex={dayIndex}
                       weekIndex={weekIndex}
-                      className="cursor-pointer"
+                      className="t-heatmap-cell cursor-pointer"
+                      style={{
+                        animationDelay: `${Math.min(weekIndex * 20, 200)}ms`,
+                      }}
                     />
                   </g>
                 </TooltipTrigger>

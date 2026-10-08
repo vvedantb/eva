@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -9,11 +9,14 @@ import { authAction, authMutation, hasRepoAccess } from "./functions";
 import {
   aiModelValidator,
   getAIModelProvider,
+  launchTraitsFromStored,
   reasoningLevelValidator,
   workflowCompleteValidator,
   normalizeAIModel,
   roleValidator,
   taskSandboxStatusValidator,
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
 import {
@@ -22,12 +25,16 @@ import {
   clearStreamingActivity,
 } from "./_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "./streaming";
-import { startNextQueuedProjectChatMessage } from "./_queues/helpers";
+import {
+  drainChatQueueQuietly,
+  startNextQueuedProjectChatMessage,
+} from "./_queues/helpers";
 import {
   trackProjectChatWorkflow,
   PROJECT_CHAT_STREAM_PREFIX,
 } from "./workflowWatchdog";
 import { buildProjectChatPrompt } from "./_projects/chatPrompt";
+import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import {
   buildProjectBranchName,
   getProjectGeneratedSpec,
@@ -36,30 +43,40 @@ import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
 import { resolveCredentialSourceLabel } from "./_userProviderAccounts/credentialSource";
-import { resolveTurnProviderAccountId } from "./_userProviderAccounts/defaults";
+import {
+  assertProviderAccountUsableBy,
+  reconcileProviderAccountForModel,
+  resolveTurnProviderAccountId,
+} from "./_userProviderAccounts/defaults";
 import type { Doc, Id } from "./_generated/dataModel";
 import { PROJECT_CHAT_DAEMON_MUTATIONS } from "./_sandbox_runtime/daemonPaths";
 import {
-  delayedPublishFailureError,
-  orphanPlaceholderMessages,
-  resultTargetMessage,
+  formatDelayedPublishFailureError,
+  selectUsageLimitRetryUserMessage,
 } from "./_sessions/resultTarget";
+import {
+  applyChatTurnResult,
+  finalizeOpenSyntheticTurnOnCancel,
+  insertAssistantPlaceholderIfNeeded,
+} from "./_chat/chatResult";
 import {
   maybeInsertModelHandoffAlert,
   prependModelHandoffContext,
 } from "./_shared/modelHandoff";
-
-async function finalizeOpenSyntheticTurnOnCancel(
-  ctx: MutationCtx,
-  syntheticTurnMessageId: Id<"messages"> | undefined,
-  streaming: Doc<"streamingActivity"> | null,
-): Promise<void> {
-  if (syntheticTurnMessageId === undefined) return;
-  const syntheticMessage = await ctx.db.get(syntheticTurnMessageId);
-  if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-    await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-  }
-}
+import { composerTraitFields } from "./_shared/composerTraits";
+import { detectCancelSupersession } from "./_chat/cancelRace";
+import { emptyStallRetryPrompt } from "./_chat/stallRetry";
+import {
+  advanceTurn,
+  bindTurnWorkflow,
+  closeOpenTurn,
+  closeTurn,
+  closeTurnForWorkflow,
+  openChatTurn,
+  resolveCompletionTurn,
+} from "./_chat/turnStore";
+import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
 const CHAT_ALLOWED_TOOLS = "Read,Write,Edit,Bash,Glob,Grep";
 
@@ -106,6 +123,14 @@ async function buildProjectChatTurnPrompt(
     project.branchName ??
     buildProjectBranchName(args.projectId, project.branchVersion);
 
+  // Sibling repositories this sandbox's git credentials can read (owner is the
+  // project owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    project.userId,
+    repo._id,
+  );
+
   let prompt = buildProjectChatPrompt({
     repoOwner: repo.owner,
     repoName: repo.name,
@@ -118,6 +143,15 @@ async function buildProjectChatTurnPrompt(
     customInstructionsBlock,
     systemPrompt: repo.systemPrompt,
     devPort: project.devPort ?? repo.devPort,
+    readableRepos,
+    runtime: {
+      ownerKey: `project-${args.projectId}`,
+      prUrl: project.prUrl,
+      devCommand: project.devCommand ?? repo.devCommand,
+      startupCommands: repo.startupCommands,
+      backgroundCommands: repo.backgroundCommands,
+      agentMemoryEnabled: repo.agentMemoryEnabled,
+    },
   });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
@@ -140,6 +174,133 @@ async function buildProjectChatTurnPrompt(
 /** Streaming-activity entity id for a project chat. */
 function chatStreamEntityId(projectId: Id<"projects">): string {
   return `${PROJECT_CHAT_STREAM_PREFIX}${String(projectId)}`;
+}
+
+/**
+ * Opens the assistant placeholder, stages the pending turn and starts the chat
+ * workflow. Shared by the composer (`startExecute`) and the usage-limit retry
+ * so the two cannot drift.
+ */
+async function stageAndStartProjectChatTurn(
+  ctx: MutationCtx,
+  params: {
+    project: Doc<"projects">;
+    actingUserId: Id<"users">;
+    message: string;
+    model: Infer<typeof aiModelValidator>;
+    reasoningLevel?: Infer<typeof reasoningLevelValidator>;
+    thinkingEnabled?: boolean;
+    use1mContext?: boolean;
+    fastMode?: boolean;
+    /** Already resolved by the caller; undefined = Team. */
+    providerAccountId: Id<"userProviderAccounts"> | undefined;
+  },
+): Promise<void> {
+  const project = params.project;
+  const projectId = project._id;
+  const repoId = project.repoId;
+  const normalizedModel = normalizeAIModel(params.model);
+  // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
+  // in `prewarmChatDaemon` below): the composer can send a model default
+  // explicitly (e.g. reasoning "high", its display value), and forwarding it
+  // verbatim gives this turn's prewarm and the workflow's prewarm a different
+  // daemon opts sig from the page-open one — killing the daemon just booted.
+  const launchTraits = launchTraitsFromStored(normalizedModel, {
+    reasoningLevel: params.reasoningLevel,
+    thinkingEnabled: params.thinkingEnabled,
+    use1mContext: params.use1mContext,
+    fastMode: params.fastMode,
+  });
+
+  const placeholderMessageId = await ctx.db.insert("messages", {
+    parentId: projectId,
+    role: "assistant",
+    content: "",
+    timestamp: Date.now(),
+    activityLog: "",
+  });
+
+  const { prompt, attachmentStorageIds } = await buildProjectChatTurnPrompt(
+    ctx,
+    {
+      projectId,
+      message: params.message,
+      model: normalizedModel,
+      userId: params.actingUserId,
+    },
+  );
+
+  const usesDaemonPull = usesChatDaemon(normalizedModel);
+  const turnId = await openChatTurn(ctx, {
+    entityId: projectId,
+    streamingEntityId: chatStreamEntityId(projectId),
+    placeholderMessageId,
+    prompt,
+    attachmentStorageIds,
+    model: normalizedModel,
+    sandboxId: project.sandboxId,
+    repoId,
+  });
+  await ctx.db.patch(projectId, {
+    ...(usesDaemonPull
+      ? {
+          pendingTurn: {
+            prompt,
+            requestedAt: Date.now(),
+            turnId,
+            attachmentStorageIds,
+            model: normalizedModel,
+          },
+        }
+      : { pendingTurn: undefined }),
+    lastChatModel: normalizedModel,
+    providerAccountId: params.providerAccountId,
+    ...composerTraitFields(params),
+    updatedAt: Date.now(),
+  });
+
+  if (usesDaemonPull && project.sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.prewarmEntityDaemon, {
+      sandboxId: project.sandboxId,
+      repoId: project.repoId,
+      userId: params.actingUserId,
+      entityId: String(projectId),
+      streamingEntityId: chatStreamEntityId(projectId),
+      entityIdField: "projectId",
+      completionMutation: "projectChatWorkflow:handleCompletion",
+      ...PROJECT_CHAT_DAEMON_MUTATIONS,
+      model: normalizedModel,
+      ...launchTraits,
+      allowedTools: CHAT_ALLOWED_TOOLS,
+      providerAccountId: params.providerAccountId,
+      credentialOwnerUserId: project.userId,
+      sessionPersistenceId: projectId,
+      activeWorkflowField: "activeChatWorkflowId",
+      skipPrewarm: false,
+      entityTable: "projects",
+    });
+  }
+
+  const workflowId = await workflow.start(
+    ctx,
+    internal.projectChatWorkflow.projectChatExecuteWorkflow,
+    {
+      projectId,
+      message: params.message,
+      model: params.model,
+      // Same normalisation as the prewarm above: the workflow forwards these
+      // straight back into `prewarmEntityDaemon`.
+      ...launchTraits,
+      providerAccountId: params.providerAccountId,
+      credentialOwnerUserId: project.userId,
+      userId: params.actingUserId,
+      turnId,
+    },
+  );
+
+  await bindTurnWorkflow(ctx, turnId, String(workflowId));
+
+  await trackProjectChatWorkflow(ctx, projectId, workflowId);
 }
 
 // --- Completion event ---
@@ -204,6 +365,13 @@ export const addMessage = authMutation({
         : {}),
     });
     await ctx.db.patch(args.projectId, { updatedAt: Date.now() });
+    if (role === "user") {
+      await touchUserActivity(
+        ctx,
+        { kind: "project", entityId: String(args.projectId) },
+        { source: "chat", userId: ctx.userId },
+      );
+    }
     return null;
   },
 });
@@ -227,6 +395,11 @@ export const startExecute = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(
+      ctx,
+      { kind: "project", entityId: String(args.projectId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -254,95 +427,148 @@ export const startExecute = authMutation({
       getAIModelProvider(project.model),
     );
 
-    await ctx.db.insert("messages", {
-      parentId: args.projectId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      activityLog: "",
-    });
-
-    const { prompt, attachmentStorageIds } = await buildProjectChatTurnPrompt(
-      ctx,
-      {
-        projectId: args.projectId,
-        message: args.message,
-        model: normalizedModel,
-        userId: ctx.userId,
-      },
-    );
-
-    const usesDaemonPull = usesChatDaemon(normalizedModel);
-    await ctx.db.patch(args.projectId, {
-      ...(usesDaemonPull
-        ? {
-            pendingTurn: {
-              prompt,
-              requestedAt: Date.now(),
-              attachmentStorageIds,
-              model: normalizedModel,
-            },
-          }
-        : { pendingTurn: undefined }),
-      lastChatModel: normalizedModel,
+    await stageAndStartProjectChatTurn(ctx, {
+      project,
+      actingUserId: ctx.userId,
+      message: args.message,
+      model: args.model,
+      reasoningLevel: args.reasoningLevel,
+      thinkingEnabled: args.thinkingEnabled,
+      use1mContext: args.use1mContext,
+      fastMode: args.fastMode,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-      updatedAt: Date.now(),
     });
 
-    if (usesDaemonPull && project.sandboxId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.prewarmEntityDaemon, {
-        sandboxId: project.sandboxId,
-        repoId: project.repoId,
-        userId: ctx.userId,
-        entityId: String(args.projectId),
-        streamingEntityId: chatStreamEntityId(args.projectId),
-        entityIdField: "projectId",
-        completionMutation: "projectChatWorkflow:handleCompletion",
-        ...PROJECT_CHAT_DAEMON_MUTATIONS,
-        model: normalizedModel,
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-        allowedTools: CHAT_ALLOWED_TOOLS,
-        providerAccountId,
-        credentialOwnerUserId: project.userId,
-        sessionPersistenceId: args.projectId,
-        activeWorkflowField: "activeChatWorkflowId",
-        skipPrewarm: false,
-        entityTable: "projects",
-      });
+    return null;
+  },
+});
+
+/**
+ * Re-run the last user prompt on a different provider account after a
+ * usage-limit failure. No new user bubble: the original message stays, its
+ * credential label moves to the new account, and a fresh placeholder opens
+ * below the failed reply — which dismisses the recovery banner because the
+ * failed reply is no longer the newest message. Same model and reasoning as
+ * the failed turn; other traits come from the project's sticky fields.
+ */
+export const retryLastTurnWithAccount = authMutation({
+  args: {
+    projectId: v.id("projects"),
+    /** null = the team credential. */
+    providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    // Project chat is owner-sticky: only the owner picks the billed account
+    // (the "owner-only" policy in `resolveTurnProviderAccountId`).
+    if (ctx.userId !== project.userId) {
+      throw new Error("Only the project owner can change the provider account");
+    }
+    if (
+      project.activeChatWorkflowId !== undefined ||
+      project.pendingTurn !== undefined
+    ) {
+      throw new Error("A turn is already running");
     }
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.projectChatWorkflow.projectChatExecuteWorkflow,
-      {
-        projectId: args.projectId,
-        message: args.message,
-        model: args.model,
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-        providerAccountId,
-        credentialOwnerUserId: project.userId,
-        userId: ctx.userId,
-      },
+    const recent = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
+      .order("desc")
+      .take(20);
+    const userMessage = selectUsageLimitRetryUserMessage(recent);
+
+    const model = normalizeAIModel(
+      userMessage.model ?? project.lastChatModel ?? project.model,
     );
+    // null = Team. A concrete account must be usable by the owner and is
+    // reconciled to the model's provider like every other turn.
+    const providerAccountId =
+      args.providerAccountId === null
+        ? undefined
+        : await reconcileProviderAccountForModel(
+            ctx.db,
+            project.userId,
+            model,
+            await assertProviderAccountUsableBy(
+              ctx.db,
+              args.providerAccountId,
+              project.userId,
+            ),
+          );
 
-    await trackProjectChatWorkflow(ctx, args.projectId, workflowId);
+    await ctx.db.patch(userMessage._id, {
+      credentialSourceLabel: await resolveCredentialSourceLabel(
+        ctx.db,
+        providerAccountId,
+        project.userId,
+      ),
+    });
 
+    // No attachment handling needed: `buildProjectChatTurnPrompt` reads the
+    // newest user message's attachments itself.
+    await stageAndStartProjectChatTurn(ctx, {
+      project,
+      actingUserId: ctx.userId,
+      message: userMessage.content,
+      model,
+      reasoningLevel: userMessage.reasoningLevel ?? project.lastReasoningLevel,
+      thinkingEnabled: project.lastThinkingEnabled,
+      use1mContext: project.lastUse1mContext,
+      fastMode: project.lastFastMode,
+      providerAccountId,
+    });
+    console.log(
+      `[project-chat] retryLastTurnWithAccount projectId=${args.projectId} providerAccountId=${String(args.providerAccountId)}`,
+    );
+    return null;
+  },
+});
+
+/**
+ * Restages the last user prompt once after an empty stall, so the question is
+ * not lost. Scheduled by the lease reconciler through the adapter's
+ * `afterStallFinalize`; same rule as `retryEmptyStalledSessionTurn`.
+ */
+export const retryEmptyStalledTurn = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    turnId: v.id("turns"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    const turn = await ctx.db.get(args.turnId);
+    if (!project || !turn) return null;
+    const message = await emptyStallRetryPrompt(ctx.db, {
+      parentId: args.projectId,
+      sandboxStopped: false,
+      hasActiveWorkflow:
+        project.activeChatWorkflowId !== undefined ||
+        project.pendingTurn !== undefined,
+    });
+    if (message === null) return null;
+    // No attachment handling needed: the prompt build reads the newest user
+    // message's attachments itself.
+    await stageAndStartProjectChatTurn(ctx, {
+      project,
+      actingUserId: project.userId,
+      message,
+      model: turn.model,
+      reasoningLevel: project.lastReasoningLevel,
+      thinkingEnabled: project.lastThinkingEnabled,
+      use1mContext: project.lastUse1mContext,
+      fastMode: project.lastFastMode,
+      providerAccountId: project.providerAccountId,
+    });
+    console.log(
+      `[project-chat] retryEmptyStalledTurn projectId=${args.projectId} turnId=${args.turnId}`,
+    );
     return null;
   },
 });
@@ -370,6 +596,11 @@ export const enqueueMessage = authMutation({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await touchUserActivity(
+      ctx,
+      { kind: "project", entityId: String(args.projectId) },
+      { source: "chat", userId: ctx.userId },
+    );
 
     const normalizedModel = normalizeAIModel(args.model);
     const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -408,18 +639,13 @@ export const enqueueMessage = authMutation({
     await ctx.db.patch(args.projectId, {
       lastChatModel: normalizedModel,
       providerAccountId,
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+      ...composerTraitFields(args),
       updatedAt: Date.now(),
     });
+    // Sends at once when the chat is idle. Otherwise the queue waits: behind
+    // the running turn, for a usage-limit reset, or for Eva to wake — a
+    // sleeping sandbox is woken here and its ready drain sends the message.
+    await drainChatQueueQuietly(ctx, args.projectId);
     return null;
   },
 });
@@ -465,6 +691,16 @@ export const cancelExecution = authMutation({
       }
     }
 
+    if (workflowIdToCancel !== undefined) {
+      await closeTurnForWorkflow(
+        ctx,
+        args.projectId,
+        workflowIdToCancel,
+        "cancelled",
+        { error: "Cancelled by the user" },
+      );
+    }
+
     const streamingEntityId = chatStreamEntityId(args.projectId);
     const streaming = await ctx.db
       .query("streamingActivity")
@@ -474,14 +710,14 @@ export const cancelExecution = authMutation({
     const latest = await ctx.db.get(args.projectId);
     if (!latest) return null;
 
-    const newerTurnStaged =
-      latest.pendingTurn !== undefined &&
-      latest.pendingTurn.requestedAt !== pendingRequestedAt;
-    const newerWorkflowTracked =
-      latest.activeChatWorkflowId !== undefined &&
-      latest.activeChatWorkflowId !== workflowIdToCancel;
+    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+      latestPendingTurn: latest.pendingTurn,
+      cancelPendingRequestedAt: pendingRequestedAt,
+      latestActiveWorkflowId: latest.activeChatWorkflowId,
+      cancelWorkflowId: workflowIdToCancel,
+    });
 
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       const syntheticTurnMessageId = latest.syntheticTurnMessageId;
       const last = await ctx.db
         .query("messages")
@@ -501,6 +737,9 @@ export const cancelExecution = authMutation({
         syntheticTurnMessageId,
         streaming,
       );
+      await closeOpenTurn(ctx, args.projectId, "cancelled", {
+        error: "Cancelled by the user",
+      });
     }
 
     await clearStreamingActivity(ctx, streamingEntityId);
@@ -524,7 +763,7 @@ export const cancelExecution = authMutation({
     ) {
       projectPatch.pendingTurn = undefined;
     }
-    if (!newerTurnStaged && !newerWorkflowTracked) {
+    if (cancelOwnsCurrentTurn) {
       projectPatch.syntheticTurnMessageId = undefined;
     }
 
@@ -550,11 +789,13 @@ export const projectChatExecuteWorkflow = workflow.define({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     userId: v.id("users"),
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
     const saveFailure = (error: string) =>
       step.runMutation(internal.projectChatWorkflow.saveResult, {
         projectId: args.projectId,
+        turnId: args.turnId,
         success: false,
         result: null,
         error,
@@ -625,6 +866,11 @@ export const projectChatExecuteWorkflow = workflow.define({
       return;
     }
 
+    await step.runMutation(internal.turns.markLaunching, {
+      turnId: args.turnId,
+      sandboxId: activeSandboxId,
+    });
+
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.projectChatWorkflow.ensurePendingTurn, {
         projectId: args.projectId,
@@ -656,6 +902,21 @@ export const projectChatExecuteWorkflow = workflow.define({
         entityTable: "projects",
       });
     } else {
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId: activeSandboxId },
+      );
+      if (turnLease === null) {
+        await step.runMutation(internal.projectChatWorkflow.saveResult, {
+          projectId: args.projectId,
+          turnId: args.turnId,
+          success: false,
+          result: null,
+          error: "The turn no longer owns this project chat. Please retry.",
+          activityLog: null,
+        });
+        return;
+      }
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
         sandboxId: activeSandboxId,
         entityId: args.projectId,
@@ -675,6 +936,8 @@ export const projectChatExecuteWorkflow = workflow.define({
         sessionPersistenceId: args.projectId,
         streamingEntityId,
         attachmentStorageIds: data.attachmentStorageIds,
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
     }
 
@@ -682,12 +945,17 @@ export const projectChatExecuteWorkflow = workflow.define({
 
     await step.runMutation(internal.projectChatWorkflow.saveResult, {
       projectId: args.projectId,
+      turnId: args.turnId,
       success: result.success,
       result: result.result,
       error: result.error,
       activityLog: result.activityLog,
       model: args.model,
       pendingQuestion: result.pendingQuestion,
+      beforeSha: result.beforeSha,
+      afterSha: result.afterSha,
+      beforeShas: result.beforeShas,
+      afterShas: result.afterShas,
     });
 
     if (result.success && activeSandboxId && data.branchName) {
@@ -701,12 +969,13 @@ export const projectChatExecuteWorkflow = workflow.define({
           branchName: data.branchName,
         });
       } catch (error) {
-        const publishError = `Chat completed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${error instanceof Error ? error.message : String(error)}`;
+        const publishError = formatDelayedPublishFailureError("chat", error);
         console.error(
           `[projectChatWorkflow] pushSandboxBranch failed projectId=${String(args.projectId)}: ${error instanceof Error ? error.message : String(error)}`,
         );
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,
+          turnId: args.turnId,
           success: false,
           result: result.result,
           error: publishError,
@@ -728,30 +997,11 @@ export const addAssistantPlaceholder = internalMutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    const recent = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
-      .order("desc")
-      .take(5);
-    const lastTurnMessage = recent[0];
-    if (
-      lastTurnMessage &&
-      lastTurnMessage.role === "assistant" &&
-      lastTurnMessage.content === "" &&
-      lastTurnMessage.finishedAt === undefined &&
-      lastTurnMessage.isSyntheticTurn !== true
-    ) {
-      return null;
-    }
-
-    await ctx.db.insert("messages", {
+    await insertAssistantPlaceholderIfNeeded(ctx, {
       parentId: args.projectId,
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      activityLog: "",
+      recentLimit: 5,
+      skipSystemAlerts: false,
     });
-    await ctx.db.patch(args.projectId, { updatedAt: Date.now() });
     return null;
   },
 });
@@ -816,6 +1066,8 @@ export const getChatData = internalQuery({
 export const saveResult = internalMutation({
   args: {
     projectId: v.id("projects"),
+    /** The durable turn this result closes. */
+    turnId: v.id("turns"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -823,71 +1075,67 @@ export const saveResult = internalMutation({
     /** Stamped onto the reply on success, making it this provider's checkpoint. */
     model: v.optional(aiModelValidator),
     pendingQuestion: v.optional(v.string()),
+    /** Turn checkpoint from the callback (see messageFields.beforeSha). */
+    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const publishError = delayedPublishFailureError(args.result, args.error);
-    if (publishError !== undefined) {
-      await ctx.db.insert("messages", {
-        parentId: args.projectId,
-        role: "assistant",
-        content: "Failed to publish project branch",
-        timestamp: Date.now(),
-        isSystemAlert: true,
-        errorDetail: publishError,
-      });
-      await ctx.db.patch(args.projectId, { updatedAt: Date.now() });
-      return null;
-    }
-
-    const streamingEntityId = chatStreamEntityId(args.projectId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-    const activityLog = args.activityLog || streaming?.currentActivity;
-    await clearStreamingActivity(ctx, streamingEntityId);
-
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
 
-    const recent = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
-      .order("desc")
-      .take(20);
-    const last = resultTargetMessage(recent);
-    if (last) {
-      const patch: {
-        content: string;
-        activityLog?: string;
-        finishedAt: number;
-        pendingQuestion?: string;
-        model?: Doc<"messages">["model"];
-      } = {
-        content: args.success
-          ? args.result || "I couldn't process your message."
-          : `Error: ${args.error || "Unknown error during execution."}`,
-        finishedAt: Date.now(),
-      };
-      if (activityLog) patch.activityLog = activityLog;
-      if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;
-      // Only a successful reply is a checkpoint: a failed turn's provider never
-      // saw the conversation, so it must not suppress a later catch-up.
-      if (args.success && args.model !== undefined) {
-        patch.model = normalizeAIModel(args.model);
-      }
-      await ctx.db.patch(last._id, patch);
-      for (const message of orphanPlaceholderMessages(recent, last)) {
-        await ctx.db.delete(message._id);
-      }
+    // A typed local, not an inline literal: `AssistantTurnResultPatch` declares
+    // only the scalar shas, so excess-property checking would reject the
+    // per-repo arrays at the call site. Each pair is copied only when both
+    // halves are present — a lone `afterSha` would make the turn look like it
+    // changed code from nothing.
+    const extraPatch: {
+      beforeSha?: string;
+      afterSha?: string;
+      beforeShas?: Array<{ path: string; sha: string }>;
+      afterShas?: Array<{ path: string; sha: string }>;
+    } = {};
+    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
+      extraPatch.beforeSha = args.beforeSha;
+      extraPatch.afterSha = args.afterSha;
     }
+    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
+      extraPatch.beforeShas = args.beforeShas;
+      extraPatch.afterShas = args.afterShas;
+    }
+
+    const outcome = await applyChatTurnResult(ctx, {
+      parentId: args.projectId,
+      streamingEntityId: chatStreamEntityId(args.projectId),
+      success: args.success,
+      result: args.result,
+      error: args.error,
+      activityLog: args.activityLog,
+      alertTitle: "Failed to publish project branch",
+      pendingQuestion: args.pendingQuestion,
+      model: args.model,
+      extraPatch,
+    });
+    if (outcome === "publish-failure") return null;
 
     await ctx.db.patch(args.projectId, {
       activeChatWorkflowId: undefined,
       updatedAt: Date.now(),
       lastSandboxActivity: Date.now(),
     });
+    await touchAgentFinished(ctx, {
+      kind: "project",
+      entityId: String(args.projectId),
+    });
+
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) {
+      await closeTurn(
+        ctx,
+        turn,
+        args.success ? "done" : "error",
+        args.error ? { error: args.error } : {},
+      );
+    }
 
     await startNextQueuedProjectChatMessage(ctx, args.projectId);
     return null;
@@ -904,6 +1152,8 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     pendingQuestion: v.optional(v.string()),
+    ...turnLeaseFenceArgs,
+    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -911,6 +1161,16 @@ export const handleCompletion = authMutation({
     if (!project || !project.activeChatWorkflowId) return null;
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
+    }
+
+    const turnResolution = await resolveCompletionTurn(ctx, {
+      entityId: args.projectId,
+      turnId: args.turnId,
+      leaseGeneration: args.leaseGeneration,
+    });
+    if (turnResolution.status === "stale") return null;
+    if (turnResolution.status === "current") {
+      await advanceTurn(ctx, turnResolution.turn, "finalizing");
     }
 
     if (project.pendingTurn !== undefined) {
@@ -927,6 +1187,10 @@ export const handleCompletion = authMutation({
         error: args.error,
         activityLog: args.activityLog,
         pendingQuestion: args.pendingQuestion,
+        beforeSha: args.beforeSha,
+        afterSha: args.afterSha,
+        beforeShas: args.beforeShas,
+        afterShas: args.afterShas,
       },
     );
 
@@ -954,15 +1218,15 @@ export const prewarmChatDaemon = authMutation({
     // the sandbox, and on Vercel any exec lazily resumes a stopped VM —
     // resurrecting a sandbox the user stopped, invisibly (same guard as
     // sessions' prewarmDaemon).
-    if (
-      project.reviewProjectSandboxStatus === "closed" ||
-      project.reviewProjectSandboxStatus === "stopping"
-    ) {
+    if (isSandboxClosingStatus(project.reviewProjectSandboxStatus)) {
       return null;
     }
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    const normalizedModel = normalizeAIModel(
+      project.lastChatModel ?? project.model,
+    );
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmEntityDaemon, {
       sandboxId: project.sandboxId,
       repoId: project.repoId,
@@ -972,14 +1236,19 @@ export const prewarmChatDaemon = authMutation({
       entityIdField: "projectId",
       completionMutation: "projectChatWorkflow:handleCompletion",
       ...PROJECT_CHAT_DAEMON_MUTATIONS,
-      model: normalizeAIModel(project.lastChatModel ?? project.model),
-      // Forward the sticky traits so the prewarm's opts sig matches the turn
-      // path — omitting them makes every page-open prewarm mismatch a
-      // trait-launched daemon and kill+respawn it (see sessions' prewarmDaemon).
-      reasoningLevel: project.lastReasoningLevel,
-      thinkingEnabled: project.lastThinkingEnabled,
-      use1mContext: project.lastUse1mContext,
-      fastMode: project.lastFastMode,
+      model: normalizedModel,
+      // Forward the sticky traits normalised through the same helper as the
+      // composer so the prewarm's opts sig matches the turn path. The send path
+      // omits defaults, so passing the stored values verbatim (e.g. reasoning
+      // "high", the Claude default, or `fastMode: false` on a model with no Fast
+      // trait) mismatches a trait-launched daemon and kill+respawns it on every
+      // page open (see sessions' prewarmDaemon).
+      ...launchTraitsFromStored(normalizedModel, {
+        reasoningLevel: project.lastReasoningLevel,
+        thinkingEnabled: project.lastThinkingEnabled,
+        use1mContext: project.lastUse1mContext,
+        fastMode: project.lastFastMode,
+      }),
       allowedTools: CHAT_ALLOWED_TOOLS,
       providerAccountId: project.providerAccountId,
       credentialOwnerUserId: project.userId,
@@ -1059,20 +1328,27 @@ export const getChatPrewarmData = internalQuery({
     }
     if (
       !project.sandboxId ||
-      project.reviewProjectSandboxStatus === "closed" ||
-      project.reviewProjectSandboxStatus === "stopping"
+      isSandboxClosingStatus(project.reviewProjectSandboxStatus)
     ) {
       return null;
     }
+    const normalizedModel = normalizeAIModel(
+      project.lastChatModel ?? project.model,
+    );
     return {
       sandboxId: project.sandboxId,
       repoId: project.repoId,
       ownerUserId: project.userId,
-      model: normalizeAIModel(project.lastChatModel ?? project.model),
-      reasoningLevel: project.lastReasoningLevel,
-      thinkingEnabled: project.lastThinkingEnabled,
-      use1mContext: project.lastUse1mContext,
-      fastMode: project.lastFastMode,
+      model: normalizedModel,
+      // Normalised here, not in the caller: the traits must be exactly what the
+      // composer sends (defaults omitted) or the prewarm's opts sig differs from
+      // the turn path's and kills the warm daemon.
+      ...launchTraitsFromStored(normalizedModel, {
+        reasoningLevel: project.lastReasoningLevel,
+        thinkingEnabled: project.lastThinkingEnabled,
+        use1mContext: project.lastUse1mContext,
+        fastMode: project.lastFastMode,
+      }),
       providerAccountId: project.providerAccountId,
     };
   },
@@ -1082,7 +1358,6 @@ export {
   claimPendingTurn,
   completeSyntheticTurn,
   ensurePendingTurn,
-  handleStaleSyntheticTurn,
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,

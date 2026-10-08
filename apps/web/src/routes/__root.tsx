@@ -7,10 +7,12 @@ import {
 import { useAuth } from "@clerk/clerk-react";
 import { NuqsAdapter } from "nuqs/adapters/tanstack-router";
 import { Analytics } from "@vercel/analytics/react";
+import { TooltipProvider } from "@eva/ui";
 import { ClientProvider } from "@/lib/components/ClientProvider";
 import { AppToaster } from "@/lib/components/AppToaster";
 import { AppShell } from "@/lib/components/AppShell";
 import { PreviewIframeHost } from "@/lib/components/sandbox/previewIframeHost";
+import { PreviewMiniPlayer } from "@/lib/components/sandbox/PreviewMiniPlayer";
 import { ChangelogDialogGate } from "@/lib/components/ChangelogDialogGate";
 import { IS_EMBEDDED } from "@/lib/embed/embedded";
 import { EmbedNavigationBridge } from "@/lib/embed/EmbedNavigationBridge";
@@ -29,6 +31,15 @@ const DevAgentation = import.meta.env.DEV
   ? lazy(() =>
       import("@/lib/components/DevAgentation").then((m) => ({
         default: m.DevAgentation,
+      })),
+    )
+  : null;
+
+/** Lazy so @vvedantb/redline stays out of the production bundle. */
+const DevRedline = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/lib/components/DevRedline").then((m) => ({
+        default: m.DevRedline,
       })),
     )
   : null;
@@ -52,6 +63,9 @@ function RootComponent() {
         <AppShell>
           <Outlet />
         </AppShell>
+        {/* The floating preview window sits on the host's z layer and just
+            before it in DOM order, so the hosted iframe paints over its body. */}
+        <PreviewMiniPlayer />
         {/* Preview iframes survive ALL route changes by living here, outside
             the router. Mounted after AppShell so equal-z fixed layers paint
             above routed content; Radix portals (z-50) still stack above. */}
@@ -66,18 +80,30 @@ function RootComponent() {
           <DevAgentation />
         </Suspense>
       ) : null}
+      {DevRedline ? (
+        <Suspense fallback={null}>
+          <DevRedline />
+        </Suspense>
+      ) : null}
     </>
   );
 
-  if (anonymousLanding) {
-    return app;
-  }
-
+  // One provider above everything, including the layers outside the app shell:
+  // the preview mini player, the What's New dialog and the routes without
+  // chrome (preview-auth, mcp/oauth) all render tooltips, and Radix throws
+  // outright when a Tooltip has no Provider above it. Context only — no DOM,
+  // so the anonymous landing pays nothing for it.
   return (
-    <ClientProvider>
-      {app}
-      {/* The What's New dialog belongs to the top-level window, not previews. */}
-      {IS_EMBEDDED ? null : <ChangelogDialogGate />}
-    </ClientProvider>
+    <TooltipProvider>
+      {anonymousLanding ? (
+        app
+      ) : (
+        <ClientProvider>
+          {app}
+          {/* The What's New dialog belongs to the top-level window, not previews. */}
+          {IS_EMBEDDED ? null : <ChangelogDialogGate />}
+        </ClientProvider>
+      )}
+    </TooltipProvider>
   );
 }

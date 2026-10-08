@@ -153,6 +153,38 @@ export function renderEditorChipHtml(
     .join("");
 }
 
+/** Where the last accepted picker item put its chip, and what it inserted. */
+export interface InsertedToken {
+  startIndex: number;
+  /** The visible token, e.g. `/caveman-help` or `@Design doc`. */
+  token: string;
+}
+
+/**
+ * True when the trigger just found is nothing but the chip the last accept
+ * inserted, still intact.
+ *
+ * A chip's own text is indistinguishable from an in-progress trigger — `/label`
+ * with no whitespace after it — so whenever the trailing space that accepting
+ * inserts goes missing, the picker reopens filtering by the chip's own label.
+ * The space can go missing for reasons outside this module: a surface that
+ * overrides `white-space` to a collapsing value lets the browser's editing
+ * engine drop it on the next keystroke.
+ *
+ * Gated on the token still being present at that index, so backspacing into a
+ * chip (a deliberate way to re-open the picker and pick something else) still
+ * works — the value stops matching, and the trigger is honoured again.
+ */
+export function isInsertedTokenTrigger(
+  value: string,
+  triggerStartIndex: number,
+  inserted: InsertedToken | null,
+): boolean {
+  if (inserted === null) return false;
+  if (triggerStartIndex !== inserted.startIndex) return false;
+  return value.startsWith(inserted.token, inserted.startIndex);
+}
+
 /**
  * True when an editor value renders as empty. Clearing a contentEditable leaves
  * a browser-inserted bogus `<br>` behind, which round-trips through

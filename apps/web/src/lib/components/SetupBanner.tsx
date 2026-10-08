@@ -126,11 +126,11 @@ export function SetupBanner() {
                       {entry.keys.join(" or ")}
                     </code>
                     {entry.required ? (
-                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
+                      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-3xs font-medium text-destructive">
                         Required
                       </span>
                     ) : (
-                      <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
+                      <span className="rounded-full bg-warning/10 px-2 py-0.5 text-3xs font-medium text-warning">
                         Optional
                       </span>
                     )}

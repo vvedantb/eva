@@ -1,26 +1,46 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import type { Id } from "@eva/backend";
 import { cn, Spinner, Button, WebPreview } from "@eva/ui";
 import { useSessionStorage } from "usehooks-ts";
-import { IconPlayerPlay, IconRefresh, IconWorld } from "@tabler/icons-react";
+import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
+import { IconRefresh, IconWorld } from "@tabler/icons-react";
 import {
   buildUrlWithPath,
   normalizePreviewPath,
+  type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
 import {
   PersistentPreviewBody,
   useFullscreenElement,
   usePreviewIframeElement,
 } from "@/lib/components/sandbox/previewIframeHost";
+import {
+  PreviewToolCallExecutor,
+  type PreviewToolCallParentId,
+} from "@/lib/components/sandbox/PreviewToolCallExecutor";
+import { resolveMiniPlayerLogicalSize } from "@/lib/components/sandbox/previewContain";
+import {
+  closePreviewMiniPlayer,
+  openPreviewMiniPlayer,
+  usePreviewMiniPlayer,
+} from "@/lib/components/sandbox/previewMiniPlayerStore";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
+import { PreviewFloatingPlaceholder } from "./_components/PreviewFloatingPlaceholder";
 import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
 import { PreviewViewportFrame } from "./_components/PreviewViewportFrame";
 import {
   FILL_PREVIEW_VIEWPORT,
+  framedPreviewViewport,
+  parsePreviewContainSize,
   parsePreviewViewport,
   readStoredPreviewViewport,
+  serializePreviewContainSize,
   serializePreviewViewport,
-  snapshotFillViewport,
+  togglePreviewContain,
+  togglePreviewDevice,
+  type PreviewFramingChange,
   type PreviewViewport,
 } from "./_utils/previewViewport";
 
@@ -39,7 +59,11 @@ interface WebPreviewPanelProps {
   onRefresh: () => void;
   port: number;
   onPortChange: (port: number) => void;
+  /** Multi-repo sessions: one dev-server port per checked-out repo. */
+  portOptions?: readonly PreviewPortOption[];
   pathStorageKey: string;
+  /** The chat that owns this sandbox: agent page-tool calls are queued on it. */
+  toolCallParentId: PreviewToolCallParentId;
   /**
    * When set (sessions), Preview path is sticky on Convex. `undefined` while
    * the session query loads — falls back to sessionStorage until then.
@@ -54,6 +78,17 @@ interface WebPreviewPanelProps {
    * annotation. When absent, the select-element toggle is hidden.
    */
   onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
+  /**
+   * Session-only, set while this pane is the visible preview: lets it float
+   * into the mini-player when the user leaves the sessions area or pops it out.
+   */
+  miniPlayer?: {
+    sessionId: Id<"sessions">;
+    returnTo: string;
+    title: string;
+  };
+  /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
+  externalHrefForPath?: (path: string) => string;
 }
 
 export function WebPreviewPanel({
@@ -66,15 +101,27 @@ export function WebPreviewPanel({
   onRefresh,
   port,
   onPortChange,
+  portOptions,
   pathStorageKey,
+  toolCallParentId,
   stickyPath,
   onStickyPathChange,
   onStartSandbox,
   isSandboxStarting = false,
   onAnnotationSubmit,
+  miniPlayer,
+  externalHrefForPath,
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
+  // The mini-player is a desktop affordance: on a phone there is no "beside".
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  const floating = usePreviewMiniPlayer();
+  const isFloating = floating?.entryKey === pathStorageKey;
+  const miniPlayerSource =
+    miniPlayer !== undefined && isDesktop && sandboxId !== undefined
+      ? { ...miniPlayer, sandboxId }
+      : undefined;
   // The live iframe lives in the global PreviewIframeHost (fixed overlay),
   // so it survives route changes. Nav bar / annotation consumers get the
   // element via this subscription instead of an in-tree ref.
@@ -106,10 +153,7 @@ export function WebPreviewPanel({
   const viewportStorageKey = `${pathStorageKey}:viewport`;
   const [viewport, setViewport] = useSessionStorage<PreviewViewport>(
     viewportStorageKey,
-    readStoredPreviewViewport(
-      viewportStorageKey,
-      `${pathStorageKey}:device`,
-    ),
+    readStoredPreviewViewport(viewportStorageKey, `${pathStorageKey}:device`),
     {
       serializer: serializePreviewViewport,
       deserializer: parsePreviewViewport,
@@ -121,18 +165,49 @@ export function WebPreviewPanel({
     setAspectKey(pathStorageKey);
     setAspectRatio(null);
   }
+  const containStorageKey = `${pathStorageKey}:contain`;
+  const [contain, setContain] = useSessionStorage(containStorageKey, false, {
+    serializer: (value) => (value ? "1" : "0"),
+    deserializer: (value) => value === "1",
+  });
+  const containSizeStorageKey = `${pathStorageKey}:contain-size`;
+  const [containSize, setContainSize] = useSessionStorage(
+    containSizeStorageKey,
+    { width: 1280, height: 800 },
+    {
+      serializer: serializePreviewContainSize,
+      deserializer: parsePreviewContainSize,
+    },
+  );
+  const framedViewport: PreviewViewport = framedPreviewViewport(
+    viewport,
+    contain,
+    containSize,
+  );
   const previewPath = normalizePreviewPath(stickyPath ?? localPath);
 
   // iframeSrc is recomputed only at remount points (previewInfo change,
   // storage-key change, or iframeKey bump from a refresh). previewPath is
-  // intentionally excluded from deps so the src stays stable while the user
+  // intentionally NOT part of the key so the src stays stable while the user
   // navigates inside the iframe — otherwise we'd fight the iframe with
-  // declarative src updates.
-  const iframeSrc = useMemo(() => {
-    if (!previewInfo) return undefined;
-    return buildUrlWithPath(previewInfo.url, previewPath);
-    // eslint-disable-next-line react/exhaustive-deps
-  }, [previewInfo, pathStorageKey, iframeKey]);
+  // declarative src updates. Render-phase state adjustment, not useMemo.
+  const srcKey = `${previewInfo?.url ?? ""}|${pathStorageKey}|${iframeKey}`;
+  const [srcState, setSrcState] = useState<{
+    key: string;
+    src: string | undefined;
+  }>(() => ({
+    key: srcKey,
+    src: previewInfo
+      ? buildUrlWithPath(previewInfo.url, previewPath)
+      : undefined,
+  }));
+  let iframeSrc = srcState.src;
+  if (srcState.key !== srcKey) {
+    iframeSrc = previewInfo
+      ? buildUrlWithPath(previewInfo.url, previewPath)
+      : undefined;
+    setSrcState({ key: srcKey, src: iframeSrc });
+  }
 
   function handlePathChange(path: string) {
     const next = normalizePreviewPath(path);
@@ -142,44 +217,74 @@ export function WebPreviewPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
-          <IconWorld className="w-12 h-12 opacity-50" />
-          <p className="text-sm">
-            {!isActive
-              ? "Wake Eva up to preview your app"
-              : "Waiting for sandbox..."}
-          </p>
-          {!isActive && onStartSandbox ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onStartSandbox}
-              disabled={isSandboxStarting}
-            >
-              <IconPlayerPlay size={14} />
-              {isSandboxStarting ? "Starting..." : "Wake up Eva"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      <SandboxAsleepState
+        icon={IconWorld}
+        label={
+          !isActive
+            ? "Wake Eva up to preview your app"
+            : "Waiting for sandbox..."
+        }
+        wake={!isActive ? { onStartSandbox, isSandboxStarting } : undefined}
+      />
     );
   }
 
+  function applyFraming(next: PreviewFramingChange) {
+    setViewport(next.viewport);
+    setContain(next.contain);
+    setContainSize(next.containSize);
+    if (next.resetAspectRatio) setAspectRatio(null);
+  }
+
   function handleToggleDevice() {
-    if (viewport.mode !== "fill") {
-      setViewport(FILL_PREVIEW_VIEWPORT);
-      setAspectRatio(null);
-      return;
-    }
     const rect = iframeElement?.getBoundingClientRect();
-    setViewport(
-      snapshotFillViewport({
-        width: rect?.width ?? 1280,
-        height: rect?.height ?? 800,
-      }),
+    applyFraming(
+      togglePreviewDevice(
+        { viewport, contain, containSize },
+        rect ? { width: rect.width, height: rect.height } : null,
+      ),
     );
   }
+
+  function handleToggleContain() {
+    applyFraming(togglePreviewContain({ viewport, contain, containSize }));
+  }
+
+  // Manual pop-out: the pane hands its anchor to the mini-player and shows a
+  // placeholder until the preview comes back (one anchor per hosted iframe).
+  const popOut =
+    miniPlayerSource !== undefined && iframeSrc !== undefined
+      ? {
+          active: isFloating,
+          onToggle: () => {
+            if (isFloating) {
+              closePreviewMiniPlayer();
+              return;
+            }
+            const fillBox = iframeElement?.getBoundingClientRect();
+            openPreviewMiniPlayer({
+              ...miniPlayerSource,
+              entryKey: pathStorageKey,
+              group: `${sandboxId}:${port}`,
+              src: iframeSrc,
+              epoch: iframeKey,
+              mode: "manual",
+              logicalSize: resolveMiniPlayerLogicalSize(
+                framedViewport.mode === "fill"
+                  ? null
+                  : {
+                      width: framedViewport.width,
+                      height: framedViewport.height,
+                    },
+                fillBox
+                  ? { width: fillBox.width, height: fillBox.height }
+                  : null,
+              ),
+            });
+          },
+        }
+      : undefined;
+  const showPlaceholder = isFloating && floating.mode === "manual";
 
   return (
     <WebPreview
@@ -199,15 +304,24 @@ export function WebPreviewPanel({
         onToggleFullscreen={toggleFullscreen}
         port={port}
         onPortChange={onPortChange}
+        portOptions={portOptions}
+        externalHrefForPath={externalHrefForPath}
         previewPath={previewPath}
         onPathChange={handlePathChange}
         viewport={viewport}
         onToggleDevice={handleToggleDevice}
+        contain={contain}
+        onToggleContain={handleToggleContain}
         annotationMode={annotationMode}
         onAnnotationModeChange={setAnnotationMode}
         showAnnotationToggle={Boolean(onAnnotationSubmit)}
+        popOut={popOut}
       />
-      {viewport.mode !== "fill" ? (
+      <PreviewToolCallExecutor
+        parentId={toolCallParentId}
+        iframeElement={iframeElement}
+      />
+      {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar
           viewport={viewport}
           aspectRatio={aspectRatio}
@@ -216,57 +330,70 @@ export function WebPreviewPanel({
           onFill={() => {
             setViewport(FILL_PREVIEW_VIEWPORT);
             setAspectRatio(null);
+            setContain(false);
           }}
         />
       ) : null}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <PreviewViewportFrame
-          viewport={viewport}
-          aspectRatio={aspectRatio}
-          onResize={(size) =>
-            setViewport({
-              mode: "freeform",
-              width: size.width,
-              height: size.height,
-            })
-          }
-        >
-          <PersistentPreviewBody
-            entryKey={pathStorageKey}
-            group={`${sandboxId}:${port}`}
-            src={iframeSrc}
-            epoch={iframeKey}
-            covered={error !== null}
-            logicalSize={
-              viewport.mode === "fill"
-                ? null
-                : { width: viewport.width, height: viewport.height }
-            }
-            loading={
-              isLoading && !previewInfo ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-secondary">
-                  <Spinner size="lg" />
-                </div>
-              ) : error ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <p className="text-sm text-destructive">{error}</p>
-                  <Button size="sm" variant="secondary" onClick={onRefresh}>
-                    <IconRefresh className="w-4 h-4" />
-                    Retry
-                  </Button>
-                </div>
-              ) : undefined
-            }
-          />
-        </PreviewViewportFrame>
-        {onAnnotationSubmit ? (
-          <PreviewAnnotationLayer
-            mode={annotationMode}
-            onModeChange={setAnnotationMode}
-            onSubmit={onAnnotationSubmit}
-          />
-        ) : null}
-      </div>
+      {showPlaceholder ? (
+        <PreviewFloatingPlaceholder />
+      ) : (
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <PreviewViewportFrame
+            viewport={framedViewport}
+            aspectRatio={aspectRatio}
+            onResize={(size) => {
+              if (viewport.mode === "fill" && contain) {
+                setContainSize(size);
+                return;
+              }
+              setViewport({
+                mode: "freeform",
+                width: size.width,
+                height: size.height,
+              });
+            }}
+          >
+            <PersistentPreviewBody
+              entryKey={pathStorageKey}
+              group={`${sandboxId}:${port}`}
+              src={iframeSrc}
+              epoch={iframeKey}
+              covered={error !== null}
+              miniPlayer={miniPlayerSource}
+              logicalSize={
+                framedViewport.mode === "fill"
+                  ? null
+                  : {
+                      width: framedViewport.width,
+                      height: framedViewport.height,
+                    }
+              }
+              loading={
+                isLoading && !previewInfo ? (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-secondary">
+                    <Spinner size="lg" />
+                  </div>
+                ) : error ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                    <p className="text-sm text-destructive">{error}</p>
+                    <Button size="sm" variant="secondary" onClick={onRefresh}>
+                      <IconRefresh className="w-4 h-4" />
+                      Retry
+                    </Button>
+                  </div>
+                ) : undefined
+              }
+            />
+          </PreviewViewportFrame>
+          {onAnnotationSubmit ? (
+            <PreviewAnnotationLayer
+              mode={annotationMode}
+              onModeChange={setAnnotationMode}
+              onSubmit={onAnnotationSubmit}
+            />
+          ) : null}
+        </div>
+      )}
     </WebPreview>
   );
 }

@@ -11,6 +11,7 @@ import { taskCompleteEvent } from "./events";
 import { buildQuickTaskRetryDelayMs } from "./recovery";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
+import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
 
 const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
@@ -20,23 +21,30 @@ type PrEnrichmentData = FunctionReturnType<
   typeof internal.taskWorkflow.getPrEnrichmentData
 >;
 
+/** Arguments every start passes; `startTaskRunWorkflow` adds `turnId`. */
+export const taskExecutionWorkflowArgs = {
+  runId: v.id("agentRuns"),
+  taskId: v.id("agentTasks"),
+  repoId: v.id("githubRepos"),
+  installationId: v.number(),
+  projectId: v.optional(v.id("projects")),
+  branchName: v.optional(v.string()),
+  baseBranch: v.optional(v.string()),
+  isFirstTaskOnBranch: v.boolean(),
+  model: v.optional(aiModelValidator),
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  /** Entity owner for personal-credential decrypt (task.createdBy). */
+  credentialOwnerUserId: v.optional(v.id("users")),
+  userId: v.id("users"),
+  mode: v.optional(runModeValidator),
+};
+
 /** Main durable workflow that orchestrates sandbox setup, task execution, PR creation, and cleanup. */
 export const taskExecutionWorkflow = workflow.define({
   args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    installationId: v.number(),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    /** Entity owner for personal-credential decrypt (task.createdBy). */
-    credentialOwnerUserId: v.optional(v.id("users")),
-    userId: v.id("users"),
-    mode: v.optional(runModeValidator),
+    ...taskExecutionWorkflowArgs,
+    /** The run's durable turn, opened by `startTaskRunWorkflow`. */
+    turnId: v.id("turns"),
   },
   handler: async (step, args): Promise<void> => {
     let sandboxId: string | undefined;
@@ -101,6 +109,18 @@ export const taskExecutionWorkflow = workflow.define({
         sessionPersistenceKind: args.projectId ? "projects" : undefined,
       }));
 
+      await step.runMutation(internal.turns.markLaunching, {
+        turnId: args.turnId,
+        sandboxId,
+      });
+      const turnLease = await step.runMutation(
+        internal.turns.acquireOneShotLease,
+        { turnId: args.turnId, sandboxId },
+      );
+      if (turnLease === null) {
+        throw new Error("The run's turn closed before the agent launched");
+      }
+
       await step.runAction(internal.sandbox.launchOnExistingSandbox, {
         sandboxId,
         entityId: String(args.taskId),
@@ -126,6 +146,8 @@ export const taskExecutionWorkflow = workflow.define({
         // point (quick run, queued, scheduled, project build, auto-run from
         // findings) delivers the user's attachments without extra plumbing.
         attachmentStorageIds: data.attachmentStorageIds,
+        turnId: turnLease.turnId,
+        turnLeaseGeneration: turnLease.leaseGeneration,
       });
 
       await step.runMutation(internal.taskWorkflow.saveSandboxId, {
@@ -178,7 +200,7 @@ export const taskExecutionWorkflow = workflow.define({
         } catch (error) {
           preserveSandboxOnFailure = true;
           finalSuccess = false;
-          finalError = `Task committed locally, but Eva could not publish the branch to GitHub. The sandbox was preserved for recovery. ${error instanceof Error ? error.message : String(error)}`;
+          finalError = formatDelayedPublishFailureError("task", error);
           console.error(
             `[task-workflow] run=${args.runId} pushSandboxBranch failed: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -332,6 +354,30 @@ export const taskExecutionWorkflow = workflow.define({
       });
       runFinalized = true;
 
+      // Project tasks only. A quick task lands in business_review here, so its
+      // diff is not final yet — its description is written when the reviewer
+      // moves the task to code_review (`agentTasks.updateStatus`), the same
+      // point a session writes one on "Send for review". Project tasks share
+      // one PR across many tasks and never make that transition, so they keep
+      // writing it per run, on the still-running sandbox. Best-effort: the
+      // static body stays if this fails.
+      if (args.projectId && completionPrUrl && sandboxId) {
+        try {
+          await step.runAction(internal.github.generatePrDescription, {
+            installationId: args.installationId,
+            repoOwner: data.repoOwner,
+            repoName: data.repoName,
+            prUrl: completionPrUrl,
+            sandboxId,
+            repoId: args.repoId,
+          });
+        } catch (descriptionError) {
+          console.error(
+            `[task-workflow] run=${args.runId} generatePrDescription failed: ${descriptionError instanceof Error ? descriptionError.message : String(descriptionError)}`,
+          );
+        }
+      }
+
       if (!args.projectId && !finalSuccess) {
         try {
           await step.runMutation(
@@ -451,6 +497,10 @@ export const taskExecutionWorkflow = workflow.define({
     } finally {
       await step.runMutation(internal.taskWorkflow.clearActiveWorkflow, {
         taskId: args.taskId,
+      });
+      await step.runMutation(internal.taskWorkflow.closeRunTurn, {
+        runId: args.runId,
+        success: finalSuccess,
       });
     }
   },

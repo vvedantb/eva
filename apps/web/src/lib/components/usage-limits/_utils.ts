@@ -2,18 +2,53 @@ import type { FunctionReturnType } from "convex/server";
 import { getAIModelProvider, type api, type Id } from "@eva/backend";
 
 /**
- * One account's latest reading, minus the fields only the table row carries.
- * Derived from the query's return type rather than restated, so a schema change
- * fails here instead of drifting — while still letting a test build one from a
- * literal. Taken from the query rather than the Doc because `accountLabel` is
- * resolved on read and exists only in the query's result.
+ * One credential the viewer can run on, with its latest reading or `null` when
+ * it has never reported (or reported too long ago to be evidence of anything).
+ * Every account is an entry, so the card lists a credential before its first
+ * turn rather than only after one.
  */
-export type UsageSnapshot = Omit<
-  FunctionReturnType<typeof api.usageLimits.getByRepo>[number],
-  "_id" | "_creationTime" | "repoId"
->;
+export type UsageAccountEntry = FunctionReturnType<
+  typeof api.usageLimits.getForViewer
+>[number];
+
+/**
+ * One reading, flattened onto the account it belongs to — the shape every chip
+ * and tone helper reads. Derived from the query's return type rather than
+ * restated, so a schema change fails here instead of drifting, while still
+ * letting a test build one from a literal.
+ */
+export type UsageSnapshot = NonNullable<UsageAccountEntry["reading"]> & {
+  providerAccountId?: UsageAccountEntry["providerAccountId"];
+  accountLabel?: UsageAccountEntry["accountLabel"];
+};
 
 export type UsageWindow = NonNullable<UsageSnapshot["windows"]>[number];
+
+/** The entry's reading as a snapshot, or nothing when it has none. */
+export function snapshotOf(
+  entry: UsageAccountEntry,
+): UsageSnapshot | undefined {
+  const reading = entry.reading;
+  if (reading === null) return undefined;
+  return {
+    ...reading,
+    providerAccountId: entry.providerAccountId,
+    accountLabel: entry.accountLabel,
+  };
+}
+
+/**
+ * The readings among a list of accounts. The chip measures readings, not
+ * credentials, so an account that has never reported simply is not in it.
+ */
+export function snapshotsOf(
+  entries: readonly UsageAccountEntry[],
+): UsageSnapshot[] {
+  return entries.flatMap((entry) => {
+    const snapshot = snapshotOf(entry);
+    return snapshot === undefined ? [] : [snapshot];
+  });
+}
 
 /**
  * The one credential a surface's usage belongs to. Branded rather than a bare
@@ -40,11 +75,11 @@ export function claudeUsageAccountScope(
 }
 
 /** Utilisation at which a window stops reading as routine. */
-export const WARNING_UTILIZATION = 80;
+const WARNING_UTILIZATION = 80;
 /** Utilisation at which it reads as about to be refused. */
-export const DANGER_UTILIZATION = 95;
-/** Mirrors the server-side freshness gate in `usageLimits.getByRepo`. */
-export const USAGE_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const DANGER_UTILIZATION = 95;
+/** Mirrors the server-side freshness gate in `usageLimits.getForViewer`. */
+const USAGE_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type UsageTone = "neutral" | "warning" | "danger";
 
@@ -71,7 +106,7 @@ export function toneForUtilization(utilization: number): UsageTone {
 }
 
 /** The provider's own verdict, which is all a windowless reading reports. */
-export function toneForStatus(status: UsageSnapshot["status"]): UsageTone {
+function toneForStatus(status: UsageSnapshot["status"]): UsageTone {
   if (status === "rejected") return "danger";
   if (status === "allowed_warning") return "warning";
   return "neutral";
@@ -120,7 +155,7 @@ export function maxUtilization(
 }
 
 /** Status remains meaningful until its associated windows have all reset. */
-export function activeUsageStatus(
+function activeUsageStatus(
   snapshot: UsageSnapshot,
   now: number,
 ): UsageSnapshot["status"] {
@@ -224,10 +259,7 @@ export function chipSummaryForActive(
       for (const window of reportedWindows(row, now)) {
         if (window.utilization === undefined) continue;
         if (!windowMatchesScopedName(window.key, scopedName)) continue;
-        if (
-          match === undefined ||
-          window.utilization > match.utilization
-        ) {
+        if (match === undefined || window.utilization > match.utilization) {
           match = {
             utilization: window.utilization,
             tone: worseTone(
@@ -317,39 +349,6 @@ export function providerHeading(snapshot: UsageSnapshot): string {
   const plan = snapshot.subscriptionType;
   if (!plan) return provider;
   return `${provider} · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan`;
-}
-
-/**
- * Identity of one section: a provider can appear once per connected account, so
- * the provider alone is not a stable React key. Structural rather than taking a
- * whole snapshot — the id is only ever read as a string here.
- */
-export function sectionKey(snapshot: {
-  provider: UsageProvider;
-  providerAccountId?: string;
-}): string {
-  return `${snapshot.provider}:${snapshot.providerAccountId ?? ""}`;
-}
-
-/**
- * Sections in display order. Rows arrive newest-first, which would let one
- * provider's reading land between two of another's accounts; grouping keeps one
- * provider's accounts adjacent while leaving both the provider order and the
- * order of accounts within a provider as captured — freshest first.
- */
-export function orderedSections<Row extends { provider: UsageProvider }>(
-  rows: readonly Row[],
-): Row[] {
-  const byProvider = new Map<UsageProvider, Row[]>();
-  for (const row of rows) {
-    const group = byProvider.get(row.provider);
-    if (group) {
-      group.push(row);
-    } else {
-      byProvider.set(row.provider, [row]);
-    }
-  }
-  return [...byProvider.values()].flat();
 }
 
 /** The freshest reading across providers, for the card's single footer. */

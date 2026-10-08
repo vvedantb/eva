@@ -92,6 +92,27 @@ export const listEmailRecipients = internalQuery({
 });
 
 /**
+ * Email and display name for one user, the recipient lookup for the MCP
+ * `send_email` tool. It ignores `emailNotificationsEnabled` because that flag
+ * governs broadcasts, not mail the user's own agent was asked to send.
+ */
+export const getEmailRecipientById = internalQuery({
+  // A string, not v.id: MCP's getContext hands back the user id as a string.
+  args: { userId: v.string() },
+  returns: v.union(
+    v.object({ email: v.string(), name: v.optional(v.string()) }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("users", args.userId);
+    if (!id) return null;
+    const user = await ctx.db.get(id);
+    if (!user?.email) return null;
+    return { email: user.email, name: user.firstName ?? user.fullName };
+  },
+});
+
+/**
  * Lists the current user's team name and all teammates, sorted by name.
  *
  * Who counts as "online" is decided by the caller from `lastSeenAt`, not here:

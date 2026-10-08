@@ -30,6 +30,7 @@ import {
   PROJECT_PHASES,
   type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
@@ -187,9 +188,14 @@ export function ProjectCardMenuItems({
         </Item>
       ) : null}
       <MenuSeparator />
-      <Item className="text-destructive" onClick={onDelete}>
+      <Item
+        className="text-destructive"
+        onClick={onDelete}
+        title={skipConfirmTitle("Delete")}
+      >
         <IconTrash className="size-4" />
         Delete
+        <ConfirmSkipHint />
       </Item>
     </>
   );

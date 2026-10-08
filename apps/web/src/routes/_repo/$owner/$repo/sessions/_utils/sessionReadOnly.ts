@@ -10,18 +10,28 @@ export function isSessionPrReadOnly(
 /**
  * Session still in play for sidebar badges: not manually archived, and PR is
  * still draft/open (or no PR yet).
- *
- * Manager Ave never counts. It is always `active` by design, so including
- * it made every badge read one higher than the work actually in flight.
  */
 export function isSessionSidebarActive(session: {
   archived?: boolean;
   prState?: SessionPrState;
-  isOrchestrator?: boolean;
 }): boolean {
   if (session.archived === true) return false;
-  if (session.isOrchestrator === true) return false;
   return !isSessionPrReadOnly(session.prState);
+}
+
+/**
+ * "Send for Review" opens (or un-drafts) this session's PR, so it needs a
+ * branch to open one from and a PR that is not already out for review.
+ *
+ * Shared by the session chat header and the sessions sidebar row so the two
+ * entry points cannot offer the action under different conditions.
+ */
+export function canSendSessionForReview(session: {
+  branchName?: string;
+  prState?: SessionPrState;
+}): boolean {
+  if (!session.branchName) return false;
+  return session.prState === undefined || session.prState === "draft";
 }
 
 /**

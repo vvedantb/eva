@@ -38,6 +38,16 @@ export const CONVEX_LOCAL_BACKEND_HEALTH_URL = "http://127.0.0.1:3210/version";
 export const CONVEX_FUNCTIONS_READY_LOG_LINE = "Convex functions ready";
 
 /**
+ * 5s polls the seed run spends waiting for that line before importing data.
+ *
+ * Bounded because the wait is non-fatal: a repo whose first push cannot
+ * succeed until the seeds run never prints it, and pays the whole cap once
+ * per build. 300s is well clear of an observed cold push (8s on cost-model-ts,
+ * ~60s on CarePulse) while staying cheaper than the failed build it prevents.
+ */
+export const CONVEX_FUNCTIONS_READY_ATTEMPTS = 60;
+
+/**
  * Shell lines that push the repo's functions onto the already-running local
  * backend, for the seed script to run *after* its seed commands.
  *

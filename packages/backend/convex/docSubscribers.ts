@@ -52,6 +52,9 @@ export async function notifyDocSubscribers(
     title: string;
     message?: string;
     repoId?: Id<"githubRepos">;
+    // Set when the event is a new comment, so each subscriber's click-through
+    // lands on that comment rather than the top of the document.
+    commentId?: Id<"docComments">;
     actorId?: Id<"users">;
     alreadyNotified?: Set<string>;
   },
@@ -72,6 +75,7 @@ export async function notifyDocSubscribers(
       message: params.message,
       repoId: params.repoId,
       docId: params.docId,
+      commentId: params.commentId,
     });
     notified.add(sub.userId);
   }

@@ -28,12 +28,14 @@ import {
   IconClipboard,
   IconExternalLink,
   IconFolder,
+  IconGitPullRequest,
   IconLink,
   IconPlayerPlay,
   IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react";
 import { useMutation } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   statusConfig,
   TASK_STATUSES,
@@ -45,6 +47,7 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
@@ -142,12 +145,26 @@ export function TaskCardMenuItems({
   const { options: accounts, resolveId: resolveAccountId } =
     useTaskOwnerProviderAccounts(id);
 
+  // A card only needs runs and PRs once the menu is open — Radix mounts menu
+  // content on demand, so these stay per opened menu rather than per card on
+  // the board. PRs come primary first; a project task links its project's.
+  const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
+  const taskPrs = useQuery(api.pullRequests.listForOwner, {
+    owner: { kind: "task", taskId: id },
+  });
+  const latestPrUrl =
+    taskPrs?.[0]?.prUrl ??
+    projects?.find((project) => project._id === projectId)?.prUrl;
+
   const isOwner =
     currentUserId !== undefined &&
     createdBy !== undefined &&
     currentUserId === createdBy;
 
-  const canRun = status === "todo" || status === "in_progress";
+  // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
+  const canRun =
+    (status === "todo" && runs !== undefined && runs.length === 0) ||
+    status === "in_progress";
   const StatusIcon = statusConfig[status].icon;
 
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
@@ -192,16 +209,28 @@ export function TaskCardMenuItems({
         </>
       )}
 
-      {href ? (
+      {href || latestPrUrl ? (
         <>
-          <Item
-            onSelect={() => {
-              window.open(href, "_blank");
-            }}
-          >
-            <IconExternalLink size={16} />
-            Open in new tab
-          </Item>
+          {href ? (
+            <Item
+              onSelect={() => {
+                window.open(href, "_blank");
+              }}
+            >
+              <IconExternalLink size={16} />
+              Open in new tab
+            </Item>
+          ) : null}
+          {latestPrUrl ? (
+            <Item
+              onSelect={() => {
+                window.open(latestPrUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              <IconGitPullRequest size={16} />
+              View PR
+            </Item>
+          ) : null}
           <MenuSeparator />
         </>
       ) : null}
@@ -353,11 +382,13 @@ export function TaskCardMenuItems({
                   return (
                     <Item
                       key={app._id}
+                      title={skipConfirmTitle("Move")}
                       onSelect={() => {
                         onMove(app._id);
                       }}
                     >
                       {codebase.displayName}
+                      <ConfirmSkipHint />
                     </Item>
                   );
                 }
@@ -373,12 +404,14 @@ export function TaskCardMenuItems({
                       {availableApps.map((app) => (
                         <Item
                           key={app._id}
+                          title={skipConfirmTitle("Move")}
                           onSelect={(e) => {
                             e.preventDefault();
                             onMove(app._id);
                           }}
                         >
                           {app.appName}
+                          <ConfirmSkipHint />
                         </Item>
                       ))}
                     </SubContent>
@@ -399,27 +432,34 @@ export function TaskCardMenuItems({
         <IconClipboard size={16} />
         Copy title
       </Item>
-      <Item
-        onSelect={() => {
-          navigator.clipboard.writeText(
-            window.location.origin + window.location.pathname,
-          );
-        }}
-      >
-        <IconLink size={16} />
-        Copy task link
-      </Item>
+      {href ? (
+        /*
+         * The card hosting this menu sits in a list or on the board, so the
+         * current pathname is that list — not the task. Copy the card's own
+         * href (already the public display-form path) instead.
+         */
+        <Item
+          onSelect={() => {
+            void navigator.clipboard.writeText(window.location.origin + href);
+          }}
+        >
+          <IconLink size={16} />
+          Copy task link
+        </Item>
+      ) : null}
 
       <MenuSeparator />
 
       <Item
         className="text-destructive focus:text-destructive"
+        title={skipConfirmTitle("Delete")}
         onSelect={() => {
           onDelete();
         }}
       >
         <IconTrash size={16} />
         Delete
+        <ConfirmSkipHint />
       </Item>
     </>
   );

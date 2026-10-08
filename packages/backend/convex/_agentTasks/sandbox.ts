@@ -5,7 +5,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
@@ -15,6 +15,13 @@ import {
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
+import {
+  stopAlertText,
+  stopReasonValidator,
+  type StopReason,
+} from "../_sandbox/stopReason";
+import { touchUserActivity } from "../_sandbox/activity";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -22,16 +29,36 @@ const PREVIEW_ALLOWED_STATUSES = [
   "done",
 ] as const;
 
-function assertPreviewSandboxAllowed(task: {
-  status: string;
-  sandboxId?: string;
-}): void {
+/**
+ * Review statuses always allow a preview. A task moved back to `todo` after it
+ * already ran keeps its branch, so it previews like a reviewed task instead of
+ * offering a first run again (mirrors `canStartSandbox` in `useTaskDetail`).
+ */
+async function isPreviewSandboxAllowed(
+  db: MutationCtx["db"],
+  task: Doc<"agentTasks">,
+): Promise<boolean> {
+  if (PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
+    return true;
+  }
+  if (task.status !== "todo") return false;
+  const run = await db
+    .query("agentRuns")
+    .withIndex("by_task", (q) => q.eq("taskId", task._id))
+    .first();
+  return run !== null;
+}
+
+async function assertPreviewSandboxAllowed(
+  db: MutationCtx["db"],
+  task: Doc<"agentTasks">,
+): Promise<void> {
   if (task.sandboxId) {
     return;
   }
-  if (!PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
+  if (!(await isPreviewSandboxAllowed(db, task))) {
     throw new Error(
-      `Task must be in code_review, business_review or done status to start sandbox. Current status: ${task.status}`,
+      `Task must be in code_review, business_review or done status, or have run before, to start sandbox. Current status: ${task.status}`,
     );
   }
 }
@@ -48,7 +75,7 @@ export const startTaskSandbox = authMutation({
 
     if (!task.repoId) throw new Error("Task has no associated repository");
 
-    assertPreviewSandboxAllowed(task);
+    await assertPreviewSandboxAllowed(ctx.db, task);
 
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -56,56 +83,82 @@ export const startTaskSandbox = authMutation({
     const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
-    const branchName = `eva/task-${args.taskId}`;
-    const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
-      ctx.db,
-      task,
-      repo,
-    );
-
-    await ctx.db.patch(args.taskId, {
-      reviewTaskSandboxStatus: "starting",
-      updatedAt: Date.now(),
-    });
-    // Seed startup streaming immediately so the UI shows a real step instead of
-    // the random "Eva is inferring…" spinner while the workflow schedules.
-    await seedSandboxStartupActivity(
-      ctx.db,
-      `task-sandbox-startup-${args.taskId}`,
-    );
-    const reusableSandboxId = task.sandboxId;
-    console.log(
-      `[tasks] startTaskSandbox taskId=${args.taskId} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
-    );
-
-    const startArgs = {
-      taskId: args.taskId,
-      existingSandboxId: task.sandboxId,
-      installationId: repo.installationId,
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      branchName,
-      baseBranch,
-      repoId: task.repoId,
-    };
-    // Vercel: schedule start action directly (skip ~6s workflow scheduling).
-    if (reusableSandboxId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.startTaskPreviewSandbox,
-        startArgs,
-      );
-    } else {
-      await workflow.start(
-        ctx,
-        internal.taskSandboxWorkflow.taskPreviewSandboxStartupWorkflow,
-        startArgs,
-      );
-    }
-
+    await requestTaskSandboxStart(ctx, task, repo);
     return null;
   },
 });
+
+/**
+ * Marks the task's preview sandbox starting and schedules the start. Shared by
+ * the wake button and the chat queue, which wakes a sleeping sandbox to send
+ * what was queued (`_queues/helpers`). Callers check access and eligibility.
+ */
+export async function requestTaskSandboxStart(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  repo: Doc<"githubRepos">,
+): Promise<void> {
+  const branchName = `eva/task-${task._id}`;
+  const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
+    ctx.db,
+    task,
+    repo,
+  );
+
+  await ctx.db.patch(task._id, {
+    reviewTaskSandboxStatus: "starting",
+    updatedAt: Date.now(),
+  });
+  // Seed startup streaming immediately so the UI shows a real step instead of
+  // the random "Eva is inferring…" spinner while the workflow schedules.
+  await seedSandboxStartupActivity(ctx.db, `task-sandbox-startup-${task._id}`);
+  const reusableSandboxId = task.sandboxId;
+  console.log(
+    `[tasks] startTaskSandbox taskId=${task._id} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
+  );
+
+  const startArgs = {
+    taskId: task._id,
+    existingSandboxId: task.sandboxId,
+    installationId: repo.installationId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    branchName,
+    baseBranch,
+    repoId: repo._id,
+  };
+  // Vercel: schedule start action directly (skip ~6s workflow scheduling).
+  if (reusableSandboxId) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.startTaskPreviewSandbox,
+      startArgs,
+    );
+  } else {
+    await workflow.start(
+      ctx,
+      internal.taskSandboxWorkflow.taskPreviewSandboxStartupWorkflow,
+      startArgs,
+    );
+  }
+}
+
+/**
+ * Wakes a sleeping task sandbox so its queued chat can send. Skipped where the
+ * wake button would refuse, leaving the message queued for a manual wake.
+ */
+export async function wakeTaskSandboxForQueue(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  if (!task.repoId) return;
+  if (!task.sandboxId && !(await isPreviewSandboxAllowed(ctx.db, task))) {
+    return;
+  }
+  const repo = await ctx.db.get(task.repoId);
+  if (!repo) return;
+  await requestTaskSandboxStart(ctx, task, repo);
+}
 
 /**
  * Re-runs startup commands for a task's preview sandbox by kicking off the
@@ -127,7 +180,7 @@ export const retryStartupCommands = authMutation({
 
     if (!task.repoId) throw new Error("Task has no associated repository");
 
-    assertPreviewSandboxAllowed(task);
+    await assertPreviewSandboxAllowed(ctx.db, task);
 
     if (
       task.reviewTaskSandboxStatus === "starting" ||
@@ -196,9 +249,9 @@ export const runDevServer = authMutation({
       throw new Error("Start the sandbox before running the dev server");
     }
 
-    if (!PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
+    if (!(await isPreviewSandboxAllowed(ctx.db, task))) {
       throw new Error(
-        `Task must be in code_review, business_review or done status. Current status: ${task.status}`,
+        `Task must be in code_review, business_review or done status, or have run before. Current status: ${task.status}`,
       );
     }
 
@@ -271,6 +324,65 @@ export const patchTaskDevServer = internalMutation({
 });
 
 /**
+ * Shared stop path for the user Stop button, the idle auto-stop sweep and the
+ * PR-merge webhook. Marks the task `"stopping"` then schedules provider
+ * teardown (mirrors requestSessionSandboxStop in _sessions/sandbox.ts).
+ */
+export async function requestTaskSandboxStop(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+  options: { stopReason?: StopReason } = {},
+): Promise<void> {
+  const task = await ctx.db.get(taskId);
+  if (!task || !task.repoId) return;
+  const { stopReason } = options;
+
+  if (!task.sandboxId) {
+    // Nothing to stop — close immediately.
+    await ctx.db.patch(taskId, {
+      reviewTaskSandboxStatus: "closed",
+      updatedAt: Date.now(),
+    });
+    return;
+  }
+
+  if (task.reviewTaskSandboxStatus === "stopping") {
+    // Already stopping — but a previous finalize may have stalled (e.g. its
+    // action was killed while a racing resume held the VM). Re-issue the
+    // idempotent finalize so stopping again recovers a stuck `stopping` row
+    // instead of being a no-op that leaves it wedged forever.
+    await scheduleFinalizeStopTask(ctx, {
+      taskId,
+      sandboxId: task.sandboxId,
+      repoId: task.repoId,
+      stopReason,
+    });
+    return;
+  }
+
+  await scheduleFinalizeStopTask(ctx, {
+    taskId,
+    sandboxId: task.sandboxId,
+    repoId: task.repoId,
+    stopReason,
+  });
+
+  // Clear leftover start steps so stop does not re-show startup activity.
+  await clearSandboxStartupActivity(ctx.db, `task-sandbox-startup-${taskId}`);
+
+  // Stopping kills the paused turn, so any blocking AskUserQuestion can
+  // never be claimed — clear it or it hides the composer forever.
+  await clearPendingQuestionsForEntity(ctx.db, String(taskId));
+  await clearPreviewToolCallsForParent(ctx.db, taskId);
+
+  // Keep sandboxId so we can resume the stopped sandbox later.
+  await ctx.db.patch(taskId, {
+    reviewTaskSandboxStatus: "stopping",
+    updatedAt: Date.now(),
+  });
+}
+
+/**
  * Stops the preview sandbox. Keeps `sandboxId` so the reviewer
  * can resume the same paused filesystem (DB state intact) on next start.
  *
@@ -292,36 +404,7 @@ export const stopTaskSandbox = authMutation({
     const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
-    if (!task.sandboxId) {
-      // Nothing to stop — close immediately.
-      await ctx.db.patch(args.taskId, {
-        reviewTaskSandboxStatus: "closed",
-        updatedAt: Date.now(),
-      });
-      return null;
-    }
-
-    await scheduleFinalizeStopTask(ctx, {
-      taskId: args.taskId,
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-
-    // Clear leftover start steps so stop does not re-show startup activity.
-    await clearSandboxStartupActivity(
-      ctx.db,
-      `task-sandbox-startup-${args.taskId}`,
-    );
-
-    // Stopping kills the paused turn, so any blocking AskUserQuestion can
-    // never be claimed — clear it or it hides the composer forever.
-    await clearPendingQuestionsForEntity(ctx.db, String(args.taskId));
-
-    // Keep sandboxId so we can resume the stopped sandbox later.
-    await ctx.db.patch(args.taskId, {
-      reviewTaskSandboxStatus: "stopping",
-      updatedAt: Date.now(),
-    });
+    await requestTaskSandboxStop(ctx, args.taskId);
 
     return null;
   },
@@ -338,6 +421,7 @@ export async function scheduleFinalizeStopTask(
     taskId: Id<"agentTasks">;
     sandboxId: string;
     repoId: Id<"githubRepos">;
+    stopReason?: StopReason;
   },
 ): Promise<void> {
   await ctx.scheduler.runAfter(
@@ -348,17 +432,19 @@ export async function scheduleFinalizeStopTask(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._agentTasks.sandbox.recoverStuckStopping,
-    { taskId: args.taskId },
+    { taskId: args.taskId, stopReason: args.stopReason },
   );
 }
 
 /**
  * Re-issues finalizeStopTaskSandbox if the task is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished.
+ * leave the UI wedged; no-ops if stop already finished. Carries the original
+ * stop reason so the divider matches the request even when this finalize wins
+ * the race against a slow provider stop.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { taskId: v.id("agentTasks") },
+  args: { taskId: v.id("agentTasks"), stopReason: stopReasonValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -377,6 +463,7 @@ export const recoverStuckStopping = internalMutation({
         taskId: args.taskId,
         sandboxId: task.sandboxId,
         repoId: task.repoId,
+        stopReason: args.stopReason,
       },
     );
     return null;
@@ -393,6 +480,7 @@ export const finalizeStopTaskSandbox = internalAction({
     taskId: v.id("agentTasks"),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -408,6 +496,7 @@ export const finalizeStopTaskSandbox = internalAction({
     await ctx.runMutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
       taskId: args.taskId,
       error: stopError,
+      stopReason: args.stopReason,
     });
     return null;
   },
@@ -421,6 +510,7 @@ export const markTaskSandboxClosed = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
     error: v.optional(v.string()),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -457,7 +547,7 @@ export const markTaskSandboxClosed = internalMutation({
     await ctx.db.insert("messages", {
       parentId: args.taskId,
       role: "assistant",
-      content: "Sandbox stopped",
+      content: stopAlertText(args.stopReason),
       timestamp: Date.now(),
       isSystemAlert: true,
     });
@@ -524,6 +614,23 @@ export const taskSandboxReady = internalMutation({
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
     });
+    // A wake is an interaction: the idle sweep grants a full grace window.
+    await touchUserActivity(
+      ctx,
+      { kind: "task", entityId: String(args.taskId) },
+      { source: "start" },
+    );
+    // Sends what was queued while Eva slept. Early + final ready both land
+    // here; the second no-ops once the first turn is running.
+    // Scheduled, not imported: the queue helpers import this module to wake a
+    // stopped sandbox, so a direct call would make an import cycle.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      {
+        parentId: args.taskId,
+      },
+    );
 
     return null;
   },
@@ -564,5 +671,36 @@ export const taskSandboxError = internalMutation({
     });
 
     return null;
+  },
+});
+
+/**
+ * Polls until a preview sandbox is `active` or has failed back to `closed`.
+ * Used when a start is already in flight so we do not kick off a second one.
+ */
+export const waitForTaskPreviewSandboxActive = internalAction({
+  args: {
+    taskId: v.id("agentTasks"),
+    timeoutMs: v.optional(v.number()),
+  },
+  returns: v.object({ ready: v.boolean() }),
+  handler: async (ctx, args) => {
+    const deadline = Date.now() + (args.timeoutMs ?? 240_000);
+    while (Date.now() < deadline) {
+      const task = await ctx.runQuery(internal.agentTasks.getInternal, {
+        id: args.taskId,
+      });
+      if (task?.reviewTaskSandboxStatus === "active") {
+        return { ready: true };
+      }
+      if (
+        task?.reviewTaskSandboxStatus === "closed" ||
+        task?.reviewTaskSandboxStatus === undefined
+      ) {
+        return { ready: false };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    return { ready: false };
   },
 });

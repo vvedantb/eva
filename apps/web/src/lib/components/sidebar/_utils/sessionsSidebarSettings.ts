@@ -10,7 +10,7 @@ export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
 export const SESSION_SORT_ORDERS = ["updated_at", "created_at"] as const;
 export type SessionSortOrder = (typeof SESSION_SORT_ORDERS)[number];
 
-export const SESSION_LIST_MODES = ["active", "archived"] as const;
+const SESSION_LIST_MODES = ["active", "archived"] as const;
 export type SessionListMode = (typeof SESSION_LIST_MODES)[number];
 
 /** Row density: single-line list vs two-line folder. */
@@ -98,31 +98,18 @@ export function sessionActivityAt(session: {
 }
 
 /**
- * Orders a repo's sessions for any sidebar list, and drops Manager Ave.
- *
- * Manager Ave is one persistent session per user reached from the floating
- * launcher, not a piece of work in a repo — listed here it sat at the top of every
- * list forever. Excluded at this single choke point because every sidebar
- * surface (global list, chrome tabs, session switcher) sorts through it;
- * filtering in `sessions:list` instead would add a post-read filter to a query
- * whose I/O discipline is pinned by `convexHotPathIoContract`.
+ * Orders a repo's sessions for any sidebar list. Every sidebar surface (global
+ * list, chrome tabs, session switcher) sorts through it.
  */
 export function sortSessionsForSidebar<
-  T extends {
-    updatedAt?: number;
-    _creationTime: number;
-    isOrchestrator?: boolean;
-  },
+  T extends { updatedAt?: number; _creationTime: number },
 >(sessions: T[], order: SessionSortOrder): T[] {
-  const listed = sessions.filter(
-    (session) => session.isOrchestrator !== true,
-  );
   if (order === "updated_at") {
-    return listed.toSorted(
+    return sessions.toSorted(
       (a, b) => sessionActivityAt(b) - sessionActivityAt(a),
     );
   }
-  return listed.toSorted((a, b) => b._creationTime - a._creationTime);
+  return sessions.toSorted((a, b) => b._creationTime - a._creationTime);
 }
 
 export function sortAppsForSidebar<

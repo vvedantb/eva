@@ -31,15 +31,12 @@ describe("the shared claimed-turn lifecycle", () => {
     ).toThrow("Durable claimed turn did not include a lease identity");
   });
 
-  test("rejects a lease on a claim explicitly marked legacy", () => {
-    expect(() =>
-      readClaimedTurn({
-        prompt: "Fix it",
-        turnLifecycle: "legacy",
-        turnId: "turn-1",
-        leaseGeneration: 2,
-      }),
-    ).toThrow("Legacy claimed turn unexpectedly included a lease identity");
+  test("a prompt without a durable lease is no claim", () => {
+    // Every chat turn is durable; the server drops a slot without a turn.
+    expect(
+      readClaimedTurn({ prompt: "Fix it", turnLifecycle: "legacy" }),
+    ).toBeNull();
+    expect(readClaimedTurn({ prompt: "Fix it" })).toBeNull();
   });
 
   test("preserves durable ownership across heartbeat and completion", () => {
@@ -55,12 +52,7 @@ describe("the shared claimed-turn lifecycle", () => {
     startClaimedTurn(turn);
 
     expect(claimedTurnLifecycleStatus()).toBe("active");
-    expect(
-      canSendTurnHeartbeat({
-        claimMutation: "sessions:claimPendingTurn",
-        ownership: getTurnOwnership(),
-      }),
-    ).toBe(true);
+    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
     const completion: JsonObject = { success: true };
     appendClaimedTurnCompletion(completion);
     expect(completion).toEqual({
@@ -73,42 +65,56 @@ describe("the shared claimed-turn lifecycle", () => {
 
     expect(claimedTurnLifecycleStatus()).toBe("idle");
     expect(getCurrentTurnLease()).toBeNull();
-    expect(
-      canSendTurnHeartbeat({
-        claimMutation: "sessions:claimPendingTurn",
-        ownership: getTurnOwnership(),
-      }),
-    ).toBe(false);
+    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(false);
   });
 
-  test("keeps explicitly legacy claims unfenced", () => {
+  test.each([
+    "agentTaskChatWorkflow:claimPendingTurn",
+    "projectChatWorkflow:claimPendingTurn",
+  ])("a durable %s claim heartbeats and fences its completion", () => {
+    // Task and project chats now hand out the same durable claim as sessions.
     const turn = readClaimedTurn({
-      prompt: "Legacy task chat",
-      turnLifecycle: "legacy",
+      prompt: "Fix it",
+      turnLifecycle: "durable",
+      turnId: "task-turn-1",
+      leaseGeneration: 1,
+      attachmentUrls: [],
+      stopTaskToolUseIds: [],
+      cancelRequested: false,
+      usageRefreshRequested: false,
     });
     expect(turn).not.toBeNull();
     if (turn === null) return;
 
     startClaimedTurn(turn);
-    const completion: JsonObject = { success: true };
+
+    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(true);
+    const completion: JsonObject = { taskId: "task-1", success: true };
     appendClaimedTurnCompletion(completion);
+    expect(completion).toEqual({
+      taskId: "task-1",
+      success: true,
+      turnId: "task-turn-1",
+      leaseGeneration: 1,
+    });
+  });
 
-    expect(getCurrentTurnLease()).toBeNull();
+  test("claimed turns always run as build", () => {
+    const lease = {
+      turnLifecycle: "durable",
+      turnId: "turn-1",
+      leaseGeneration: 1,
+    };
     expect(
-      canSendTurnHeartbeat({
-        claimMutation: "projectChatWorkflow:claimPendingTurn",
-        ownership: getTurnOwnership(),
+      readClaimedTurn({
+        prompt: "Plan the checkout",
+        interactionMode: "plan",
+        ...lease,
       }),
-    ).toBe(true);
-    expect(completion).toEqual({ success: true });
-
-    finishClaimedTurn();
-    expect(
-      canSendTurnHeartbeat({
-        claimMutation: "projectChatWorkflow:claimPendingTurn",
-        ownership: getTurnOwnership(),
-      }),
-    ).toBe(false);
+    ).toMatchObject({ interactionMode: "default" });
+    expect(readClaimedTurn({ prompt: "Ship it", ...lease })).toMatchObject({
+      interactionMode: "default",
+    });
   });
 
   test("fences the completion from the same state that gates heartbeats", () => {
@@ -140,12 +146,7 @@ describe("the shared claimed-turn lifecycle", () => {
 
     finishClaimedTurn();
 
-    expect(
-      canSendTurnHeartbeat({
-        claimMutation: "sessions:claimPendingTurn",
-        ownership: getTurnOwnership(),
-      }),
-    ).toBe(false);
+    expect(canSendTurnHeartbeat(getTurnOwnership())).toBe(false);
     expect(() => appendClaimedTurnCompletion({ success: false })).toThrow(
       "Cannot complete a claimed turn before it starts",
     );
@@ -177,8 +178,6 @@ describe("the shared claimed-turn lifecycle", () => {
 });
 
 describe("canSendTurnHeartbeat follows claim ownership", () => {
-  const CLAIM = "sessionWorkflow:claimPendingTurn";
-
   function claim(payload: JsonObject): void {
     const turn = readClaimedTurn(payload);
     expect(turn).not.toBeNull();
@@ -186,25 +185,14 @@ describe("canSendTurnHeartbeat follows claim ownership", () => {
     startClaimedTurn(turn);
   }
 
-  function allowed(claimMutation: string | undefined): boolean {
-    return canSendTurnHeartbeat({
-      claimMutation,
-      ownership: getTurnOwnership(),
-    });
+  function allowed(): boolean {
+    return canSendTurnHeartbeat(getTurnOwnership());
   }
 
-  test("a one-shot job with no claim mutation always heartbeats", () => {
-    expect(allowed(undefined)).toBe(true);
-  });
-
-  test("an idle daemon that has claimed nothing stays silent", () => {
-    expect(allowed(CLAIM)).toBe(false);
-  });
-
-  test("a legacy claim heartbeats even though it carries no lease", () => {
-    claim({ prompt: "Legacy task chat", turnLifecycle: "legacy" });
-    expect(getCurrentTurnLease()).toBeNull();
-    expect(allowed(CLAIM)).toBe(true);
+  test("a process that owns no turn stays silent", () => {
+    // A one-shot runner owns its turn from launch (TURN_ID); without one, and
+    // for an idle daemon, the server would only answer terminal.
+    expect(allowed()).toBe(false);
   });
 
   test("a durable claim heartbeats while it holds the lease", () => {
@@ -218,7 +206,7 @@ describe("canSendTurnHeartbeat follows claim ownership", () => {
       turnId: "turn-1",
       leaseGeneration: 2,
     });
-    expect(allowed(CLAIM)).toBe(true);
+    expect(allowed()).toBe(true);
   });
 
   test("a durable claim goes silent again once the lease is released", () => {
@@ -230,7 +218,7 @@ describe("canSendTurnHeartbeat follows claim ownership", () => {
     });
     finishClaimedTurn();
     expect(getCurrentTurnLease()).toBeNull();
-    expect(allowed(CLAIM)).toBe(false);
+    expect(allowed()).toBe(false);
   });
 });
 

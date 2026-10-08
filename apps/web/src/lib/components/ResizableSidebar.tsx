@@ -27,6 +27,11 @@ interface ResizableSidebarProps {
   /** Labels for the below-`md` pane switcher. */
   mobilePaneLabels?: MobilePaneLabels;
   /**
+   * Which side the sidebar sits on, on desktop. Ignored below `md`, where the
+   * two panes are shown one at a time and neither is beside the other.
+   */
+  side?: "left" | "right";
+  /**
    * Bump this value to show the content pane on a phone — call sites do it when
    * the sidebar selection changes, so tapping a file in the tree shows the file
    * instead of appearing to do nothing. Only ever reveals content, never the
@@ -55,10 +60,11 @@ export function ResizableSidebar({
   minSidebarWidthPx = 160,
   minContentWidthPx = 320,
   mobilePaneLabels = DEFAULT_MOBILE_PANE_LABELS,
+  side = "left",
   showContentSignal,
 }: ResizableSidebarProps) {
   "use no memo";
-  const { initialSize, onLayoutChanged } = usePersistentPanelSize({
+  const { savedSize, onLayoutChanged } = usePersistentPanelSize({
     storageKey,
     panel: "left",
     defaultSize: defaultWidth,
@@ -101,35 +107,71 @@ export function ResizableSidebar({
     );
   }
 
+  // `LEFT_PANEL_ID`/`RIGHT_PANEL_ID` are layout keys, not positions: the sidebar
+  // keeps the "left" id on either side, so the percentage `usePersistentPanelSize`
+  // stores keeps describing the sidebar's own width whichever side it is on, and
+  // a swap does not lose the width the user dragged to.
+  const sidebarPanel = (
+    <Panel
+      id={LEFT_PANEL_ID}
+      // `savedSize`, not `initialSize`. Checked against react-resizable-panels
+      // 4.10.0: a `Group` caches its committed layout per panel-id set, and a
+      // re-registered panel reads that cache before it looks at `defaultSize` —
+      // so feeding the live stored size cannot fight a drag in progress. It only
+      // takes effect through the `key={side}` remount below, which is exactly
+      // when we want the freshly ordered group to restore the dragged width
+      // rather than snapping back to the width at mount time.
+      defaultSize={savedSize}
+      minSize={minSidebarWidthPx}
+      className="flex min-h-0 flex-col"
+    >
+      {sidebar}
+    </Panel>
+  );
+  const contentPanel = (
+    <Panel
+      id={RIGHT_PANEL_ID}
+      minSize={minContentWidthPx}
+      className="flex min-h-0 flex-col"
+    >
+      {children}
+    </Panel>
+  );
+  // Hairline divider that doubles as the drag handle; the library widens the
+  // pointer target beyond the visible pixel, so no grip affordance is needed.
+  // The grab colour is exempt from the transition so it lands on pointer-down
+  // rather than fading in behind the drag.
+  const separator = (
+    <Separator className="w-px shrink-0 bg-border transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none" />
+  );
+
   return (
     // No `id` — see `ResizablePanelLayout`. Two kept-alive session shells both
     // render a file tree, and a shared group id makes the library resolve both
     // to whichever mounted first.
+    //
+    // `key={side}` remounts the group on a swap: panel order is DOM order to the
+    // library, so reordering the children in place would leave it reconciling a
+    // group whose panels changed sides under it.
     <Group
+      key={side}
       orientation="horizontal"
       className="h-full min-h-0"
       onLayoutChanged={onLayoutChanged}
     >
-      <Panel
-        id={LEFT_PANEL_ID}
-        defaultSize={initialSize}
-        minSize={minSidebarWidthPx}
-        className="flex min-h-0 flex-col"
-      >
-        {sidebar}
-      </Panel>
-      {/* Hairline divider that doubles as the drag handle; the library widens the
-          pointer target beyond the visible pixel, so no grip affordance is needed.
-          The grab colour is exempt from the transition so it lands on
-          pointer-down rather than fading in behind the drag. */}
-      <Separator className="w-px shrink-0 bg-border transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none" />
-      <Panel
-        id={RIGHT_PANEL_ID}
-        minSize={minContentWidthPx}
-        className="flex min-h-0 flex-col"
-      >
-        {children}
-      </Panel>
+      {side === "right" ? (
+        <>
+          {contentPanel}
+          {separator}
+          {sidebarPanel}
+        </>
+      ) : (
+        <>
+          {sidebarPanel}
+          {separator}
+          {contentPanel}
+        </>
+      )}
     </Group>
   );
 }

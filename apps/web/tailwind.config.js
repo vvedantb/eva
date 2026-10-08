@@ -54,9 +54,15 @@ export const themeExtend = {
     destructive: {
       DEFAULT: c("destructive"),
       foreground: c("destructive-foreground"),
+      bg: c("destructive-bg"),
+      strong: c("destructive-strong"),
     },
     success: { DEFAULT: c("success"), foreground: c("success-foreground") },
-    warning: { DEFAULT: c("warning"), foreground: c("warning-foreground") },
+    warning: {
+      DEFAULT: c("warning"),
+      foreground: c("warning-foreground"),
+      strong: c("warning-strong"),
+    },
     muted: { DEFAULT: c("muted"), foreground: c("muted-foreground") },
     accent: { DEFAULT: c("accent"), foreground: c("accent-foreground") },
     popover: { DEFAULT: c("popover"), foreground: c("popover-foreground") },
@@ -77,6 +83,18 @@ export const themeExtend = {
       3: c("chart-3"),
       4: c("chart-4"),
       5: c("chart-5"),
+    },
+    // Muted categorical ramp for hash-assigned identity colour (tab groups,
+    // repo tiles, avatars) — not for status; status uses `status-*`.
+    cat: {
+      1: c("cat-1"),
+      2: c("cat-2"),
+      3: c("cat-3"),
+      4: c("cat-4"),
+      5: c("cat-5"),
+      6: c("cat-6"),
+      7: c("cat-7"),
+      8: c("cat-8"),
     },
     "warning-bg": c("warning-bg"),
     "success-bg": c("success-bg"),
@@ -124,9 +142,11 @@ export const themeExtend = {
     "2xl": "var(--shadow-2xl)",
   },
   borderRadius: {
-    surface: "clamp(0.75rem, var(--radius), 1.25rem)",
-    control: "min(var(--radius), 1.25rem)",
-    "menu-item": "min(var(--radius), 0.75rem)",
+    // Controls stay ~10px, surfaces 12–16px, menu items tighter still. Capped
+    // so the "Full" radius theme (--radius: 9999px) cannot turn these into pills.
+    surface: "clamp(0.75rem, var(--radius), 1rem)",
+    control: "min(var(--radius), 0.625rem)",
+    "menu-item": "min(var(--radius), 0.5rem)",
     "2xl": "calc(var(--radius) + 8px)",
     xl: "calc(var(--radius) + 4px)",
     lg: "var(--radius)",
@@ -150,7 +170,13 @@ export const themeExtend = {
   // Line heights repeat the Tailwind defaults so only tracking changes here.
   // An explicit `tracking-*`/`leading-*` utility still wins — both are emitted
   // after `font-size` in the core plugin order.
+  // `3xs`/`2xs`/`2sm` fill the gap below `text-sm` so call sites stop reaching
+  // for arbitrary `text-[11px]`-style classes. Tracking matches the 10–13px
+  // optical-sizing block in globals.css.
   fontSize: {
+    "3xs": ["0.625rem", { lineHeight: "0.875rem", letterSpacing: "0.01em" }],
+    "2xs": ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.01em" }],
+    "2sm": ["0.8125rem", { lineHeight: "1.125rem", letterSpacing: "0.005em" }],
     xs: ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.005em" }],
     sm: ["0.875rem", { lineHeight: "1.25rem", letterSpacing: "0em" }],
     base: ["1rem", { lineHeight: "1.5rem", letterSpacing: "-0.006em" }],

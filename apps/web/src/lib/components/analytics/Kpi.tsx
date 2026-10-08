@@ -1,13 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Card, CardContent, cn } from "@eva/ui";
+import { Children, type ReactNode } from "react";
+import { m } from "motion/react";
+import { Card, CardContent, cn, motionBase, motionStagger } from "@eva/ui";
 import {
   type Icon as TablerIcon,
   IconTrendingUp,
   IconTrendingDown,
   IconMinus,
 } from "@tabler/icons-react";
+import { useCountUpDisplay } from "./useCountUpDisplay";
 
 interface KpiProps {
   /** Optional leading icon shown in a rounded pill next to the label. */
@@ -93,6 +95,7 @@ export function Kpi({
   size = "default",
 }: KpiProps) {
   const showTrend = previousValue !== undefined && currentValue !== undefined;
+  const displayValue = useCountUpDisplay(value);
 
   if (layout === "row") {
     return (
@@ -110,7 +113,7 @@ export function Kpi({
                 size === "lg" ? "text-xl sm:text-3xl" : "text-lg sm:text-2xl",
               )}
             >
-              {value}
+              {displayValue}
             </p>
             <div className="flex items-baseline gap-1.5">
               <p className="text-xs text-muted-foreground sm:text-sm">
@@ -153,7 +156,7 @@ export function Kpi({
               size === "lg" ? "text-4xl sm:text-5xl" : "text-3xl",
             )}
           >
-            {value}
+            {displayValue}
           </p>
           {subtitle && (
             <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
@@ -182,7 +185,15 @@ export function KpiGroup({
         className,
       )}
     >
-      {children}
+      {Children.map(children, (child, index) => (
+        <m.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...motionBase, delay: motionStagger(index) }}
+        >
+          {child}
+        </m.div>
+      ))}
     </div>
   );
 }

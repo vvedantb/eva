@@ -1,9 +1,17 @@
 import {
   IconClipboardList,
+  IconClipboardListFilled,
   IconCode,
   IconDeviceDesktop,
+  IconDeviceDesktopFilled,
   IconFileText,
+  IconFileTextFilled,
+  IconFile,
+  IconFileFilled,
+  IconLayoutDashboard,
+  IconLayoutDashboardFilled,
   IconPalette,
+  IconPaletteFilled,
   IconRobot,
 } from "@tabler/icons-react";
 import type { Doc } from "@eva/backend";
@@ -16,11 +24,7 @@ interface BuildSandboxTabDescriptorsArgs {
   baseTabs: ReadonlyArray<SandboxCommandTab>;
   showBrowserActivity: boolean;
   showEditorTab: boolean;
-  onCloseEditor: (() => void) | undefined;
   showComputerTab: boolean;
-  /** True while Computer is starting/running — closing it is blocked. */
-  computerRunning: boolean;
-  onCloseComputer: (() => void) | undefined;
   showFilesTab: boolean;
   showAgentsTab: boolean;
   /** True while any sub-agent is running — pulses the Agents tab dot. */
@@ -29,24 +33,27 @@ interface BuildSandboxTabDescriptorsArgs {
   hasPrdContent: boolean;
   showDesignsTab: boolean;
   hasDesignsContent: boolean;
+  showArtifactsTab: boolean;
+  /** Artifacts in this chat; `undefined` while the query is still loading. */
+  artifactCount: number | undefined;
+  showDocumentsTab: boolean;
+  /** Documents in this chat; `undefined` while the query is still loading. */
+  documentCount: number | undefined;
   customTabs: ReadonlyArray<Doc<"appTabs">>;
 }
 
 /**
  * One ordered list for the whole strip. The bar used to hand-roll a
  * `TabsTrigger` per conditional tab — eight near-identical blocks that each had
- * to remember the icon size, the indicator dot and the close-button pointer
- * dance. Order here is the strip's order, and must stay in step with
- * `SANDBOX_TAB_BAR_ORDER` in `useCycleSandboxTabHotkey`.
+ * to remember the icon size and the indicator dot. Order here is the strip's
+ * order, and must stay in step with `SANDBOX_TAB_BAR_ORDER` in
+ * `useCycleSandboxTabHotkey`.
  */
 export function buildSandboxTabDescriptors({
   baseTabs,
   showBrowserActivity,
   showEditorTab,
-  onCloseEditor,
   showComputerTab,
-  computerRunning,
-  onCloseComputer,
   showFilesTab,
   showAgentsTab,
   hasRunningAgents,
@@ -54,6 +61,10 @@ export function buildSandboxTabDescriptors({
   hasPrdContent,
   showDesignsTab,
   hasDesignsContent,
+  showArtifactsTab,
+  artifactCount,
+  showDocumentsTab,
+  documentCount,
   customTabs,
 }: BuildSandboxTabDescriptorsArgs): SandboxTabDescriptor[] {
   const descriptors: SandboxTabDescriptor[] = baseTabs.map((tab) => {
@@ -61,7 +72,7 @@ export function buildSandboxTabDescriptors({
     return {
       value: tab.value,
       label: tab.label,
-      icon: { kind: "component", Icon: tab.icon },
+      icon: { kind: "component", Icon: tab.icon, ActiveIcon: tab.activeIcon },
       indicator: live ? "activity" : undefined,
       indicatorLabel: live ? "Agent is browsing" : undefined,
     };
@@ -72,7 +83,6 @@ export function buildSandboxTabDescriptors({
       value: "editor",
       label: "Editor",
       icon: { kind: "component", Icon: IconCode },
-      onClose: () => onCloseEditor?.(),
     });
   }
 
@@ -80,11 +90,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "computer",
       label: "Computer",
-      icon: { kind: "component", Icon: IconDeviceDesktop },
-      onClose: computerRunning ? undefined : () => onCloseComputer?.(),
-      closeBlockedReason: computerRunning
-        ? "Stop Computer before closing this tab"
-        : undefined,
+      icon: {
+        kind: "component",
+        Icon: IconDeviceDesktop,
+        ActiveIcon: IconDeviceDesktopFilled,
+      },
     });
   }
 
@@ -92,7 +102,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "files",
       label: "Files",
-      icon: { kind: "component", Icon: IconFileText },
+      icon: {
+        kind: "component",
+        Icon: IconFileText,
+        ActiveIcon: IconFileTextFilled,
+      },
     });
   }
 
@@ -110,7 +124,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "prd",
       label: "Plan",
-      icon: { kind: "component", Icon: IconClipboardList },
+      icon: {
+        kind: "component",
+        Icon: IconClipboardList,
+        ActiveIcon: IconClipboardListFilled,
+      },
       indicator: hasPrdContent ? "content" : undefined,
       indicatorLabel: hasPrdContent ? "Plan available" : undefined,
     });
@@ -120,10 +138,46 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "designs",
       label: "Designs",
-      icon: { kind: "component", Icon: IconPalette },
+      icon: {
+        kind: "component",
+        Icon: IconPalette,
+        ActiveIcon: IconPaletteFilled,
+      },
       indicator: hasDesignsContent ? "content" : undefined,
       indicatorLabel: hasDesignsContent
         ? "Design variations available"
+        : undefined,
+    });
+  }
+
+  if (showArtifactsTab) {
+    descriptors.push({
+      value: "artifacts",
+      label: "Artifacts",
+      icon: {
+        kind: "component",
+        Icon: IconLayoutDashboard,
+        ActiveIcon: IconLayoutDashboardFilled,
+      },
+      count: artifactCount,
+      indicatorLabel: artifactCount
+        ? `${artifactCount} artifacts in this chat`
+        : undefined,
+    });
+  }
+
+  if (showDocumentsTab) {
+    descriptors.push({
+      value: "documents",
+      label: "Documents",
+      icon: {
+        kind: "component",
+        Icon: IconFile,
+        ActiveIcon: IconFileFilled,
+      },
+      count: documentCount,
+      indicatorLabel: documentCount
+        ? `${documentCount} documents in this chat`
         : undefined,
     });
   }

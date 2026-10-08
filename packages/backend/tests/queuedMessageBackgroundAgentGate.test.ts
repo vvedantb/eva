@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import {
   BACKGROUND_AGENT_QUEUE_BLOCK_MS,
+  backgroundAgentsExpireAt,
   runningBackgroundAgents,
   settleOrphanedBackgroundAgents,
 } from "../convex/_sessions/backgroundAgents";
@@ -94,6 +95,82 @@ test("a fresh sandbox settles orphaned entries and leaves the rest alone", () =>
   ]);
   expect(runningBackgroundAgents(result ?? [], NOW)).toHaveLength(0);
   expect(settleOrphanedBackgroundAgents([settled], NOW)).toBeNull();
+});
+
+/**
+ * The cap releases the gate silently, with no settle patch to hang a drain off.
+ * A drain blocked by subagents books its own retry for the moment the last of
+ * them ages out, so a queued message cannot sit for hours.
+ */
+test("backgroundAgentsExpireAt is null when nothing is running", () => {
+  expect(backgroundAgentsExpireAt(undefined, NOW)).toBeNull();
+  expect(backgroundAgentsExpireAt([], NOW)).toBeNull();
+  expect(
+    backgroundAgentsExpireAt(
+      [
+        agent({ toolUseId: "a", status: "completed", settledAt: NOW - 1_000 }),
+        agent({ toolUseId: "b", status: "stale", settledAt: NOW - 1_000 }),
+      ],
+      NOW,
+    ),
+  ).toBeNull();
+});
+
+test("backgroundAgentsExpireAt is the latest running entry's cap", () => {
+  expect(
+    backgroundAgentsExpireAt(
+      [
+        agent({ toolUseId: "a", startedAt: NOW - 60_000 }),
+        agent({ toolUseId: "b", startedAt: NOW - 10_000 }),
+      ],
+      NOW,
+    ),
+  ).toBe(NOW - 10_000 + BACKGROUND_AGENT_QUEUE_BLOCK_MS);
+});
+
+test("backgroundAgentsExpireAt ignores entries already past the cap", () => {
+  expect(
+    backgroundAgentsExpireAt(
+      [
+        agent({
+          toolUseId: "expired",
+          startedAt: NOW - BACKGROUND_AGENT_QUEUE_BLOCK_MS - 1,
+        }),
+      ],
+      NOW,
+    ),
+  ).toBeNull();
+  expect(
+    backgroundAgentsExpireAt(
+      [
+        agent({
+          toolUseId: "expired",
+          startedAt: NOW - BACKGROUND_AGENT_QUEUE_BLOCK_MS - 1,
+        }),
+        agent({ toolUseId: "live", startedAt: NOW - 5_000 }),
+      ],
+      NOW,
+    ),
+  ).toBe(NOW - 5_000 + BACKGROUND_AGENT_QUEUE_BLOCK_MS);
+});
+
+test("a blocked dequeue books a drain for the block-cap expiry", () => {
+  expect(queueHelpersSource).toContain(
+    "await scheduleDrainAtBackgroundAgentExpiry(ctx, id, entity, config)",
+  );
+  const start = queueHelpersSource.indexOf(
+    "async function scheduleDrainAtBackgroundAgentExpiry",
+  );
+  expect(start).toBeGreaterThan(-1);
+  const end = queueHelpersSource.indexOf("\n}", start);
+  expect(end).toBeGreaterThan(start);
+  const body = queueHelpersSource.slice(start, end);
+  // A workflow or synthetic turn blocking means a completion will drain.
+  expect(body).toContain("if (config.hasActiveWorkflow(entity)) return;");
+  expect(body).toContain("backgroundAgentsExpireAt(");
+  expect(body).toContain(
+    "internal._queues.helpers.drainQueueAfterBackgroundAgents",
+  );
 });
 
 /**

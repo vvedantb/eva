@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   DAY_MS,
+  HOUR_MS,
   TIME_RANGES,
   getBucketSize,
   getPreviousStartTime,
@@ -30,6 +31,7 @@ describe("getStartTime", () => {
   });
 
   test("counts whole days back from now", () => {
+    expect(getStartTime("24h", NOW)).toBe(NOW - 24 * HOUR_MS);
     expect(getStartTime("7d", NOW)).toBe(NOW - 7 * DAY_MS);
     expect(getStartTime("30d", NOW)).toBe(NOW - 30 * DAY_MS);
     expect(getStartTime("90d", NOW)).toBe(NOW - 90 * DAY_MS);
@@ -78,7 +80,8 @@ describe("getBucketSize", () => {
    * has to divide the window into a chart-sized number of points: daily over 30
    * days is 30, daily over 90 would be 90.
    */
-  test("is daily up to 30 days and weekly beyond", () => {
+  test("is hourly for a day, daily up to 30 days and weekly beyond", () => {
+    expect(getBucketSize("24h")).toBe(HOUR_MS);
     expect(getBucketSize("7d")).toBe(DAY_MS);
     expect(getBucketSize("30d")).toBe(DAY_MS);
     expect(getBucketSize("90d")).toBe(7 * DAY_MS);

@@ -4,7 +4,8 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { diffWords } from "diff";
-import { Spinner, Button } from "@eva/ui";
+import { Spinner, Button, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 
 export function DocVersionDiff({
   versionId,
@@ -49,31 +50,40 @@ export function DocVersionDiff({
           Restore this version
         </Button>
       </div>
-      <pre className="whitespace-pre-wrap max-sm:wrap-break-word rounded-surface border border-border bg-muted/30 p-3 text-sm leading-relaxed">
-        {changes.map((part, i) => {
-          if (part.added) {
-            return (
-              <ins
-                key={i}
-                className="bg-green-500/20 text-green-700 dark:text-green-400 no-underline"
-              >
-                {part.value}
-              </ins>
-            );
-          }
-          if (part.removed) {
-            return (
-              <del
-                key={i}
-                className="bg-red-500/20 text-red-700 dark:text-red-400"
-              >
-                {part.value}
-              </del>
-            );
-          }
-          return <span key={i}>{part.value}</span>;
-        })}
-      </pre>
+      <AnimatePresence mode="wait" initial={false}>
+        <m.pre
+          key={versionId}
+          className="whitespace-pre-wrap max-sm:wrap-break-word rounded-surface border border-border bg-muted/30 p-3 text-sm leading-relaxed"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
+          {changes.map((part, i) => {
+            if (part.added) {
+              return (
+                <ins
+                  key={i}
+                  className="bg-green-500/20 text-green-700 dark:text-green-400 no-underline"
+                >
+                  {part.value}
+                </ins>
+              );
+            }
+            if (part.removed) {
+              return (
+                <del
+                  key={i}
+                  className="bg-red-500/20 text-red-700 dark:text-red-400"
+                >
+                  {part.value}
+                </del>
+              );
+            }
+            return <span key={i}>{part.value}</span>;
+          })}
+        </m.pre>
+      </AnimatePresence>
     </div>
   );
 }

@@ -96,7 +96,8 @@ report screenshot.
 ## Workflow
 
 1. **Pin down what shipped.** If the user hasn't said which feature, ask — one question, not a
-   survey. `git log --oneline -15`, `git diff --stat`, or `internal/changelog.md` usually name it.
+   survey. `git log --oneline -15`, `git diff --stat`, or `internal/changelog/` (newest month file)
+   usually name it.
    You need the feature and the URL that shows it.
 
 2. **Start the app.** Just the dev server — the HD scripts launch their own Chrome and sign in as

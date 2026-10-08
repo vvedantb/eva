@@ -5,7 +5,7 @@
  * per-session settings.
  *
  * Runs at module scope in `main.tsx` before React mounts, so the hooks that read
- * these keys (`useLocalStorage`, `usePinnedSandboxTab`, terminal history) see the
+ * these keys (`useLocalStorage`, terminal history) see the
  * migrated values on their very first render rather than falling back to
  * defaults and then overwriting the migrated state.
  *

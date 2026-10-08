@@ -1,20 +1,18 @@
 import { compactRelativeTime } from "@eva/shared/dates";
 import type { Id } from "@eva/backend";
 import {
-  activeUsageStatus,
   newestCapturedAt,
-  orderedSections,
-  reportedWindows,
-  sectionKey,
-  toneForStatus,
-  USAGE_READING_MAX_AGE_MS,
-  type UsageSnapshot,
+  snapshotsOf,
+  type UsageAccountEntry,
 } from "./_utils";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { UsageProviderSection } from "./UsageProviderSection";
+import { UsageRefreshButton } from "./UsageRefreshButton";
 
 interface UsageLimitsDetailsProps {
   repoId: Id<"githubRepos">;
-  rows: readonly UsageSnapshot[];
+  /** Every credential the viewer can run on, in the query's order. */
+  entries: readonly UsageAccountEntry[];
   /**
    * One instant for the whole card, shared with the chip that opens it — both
    * read the same minute clock, so they cannot disagree by a tick, and an open
@@ -24,29 +22,26 @@ interface UsageLimitsDetailsProps {
 }
 
 /**
- * The expanded card: one section per Claude account that has reported, each
- * with its own refresh — plan limits are per account, so refreshing is too.
+ * The expanded card: one section per Claude credential the viewer can run on,
+ * whether or not it has reported yet — an account missing from the list would
+ * read as "no limits" rather than "no reading". Refreshing is one button for
+ * the lot: a card that lists every account is only useful if one click fills
+ * it in.
  */
 export function UsageLimitsDetails({
   repoId,
-  rows,
+  entries,
   now,
 }: UsageLimitsDetailsProps) {
-  const visibleRows = rows.filter(
-    (row) =>
-      now - row.capturedAt <= USAGE_READING_MAX_AGE_MS &&
-      (reportedWindows(row, now).length > 0 ||
-        toneForStatus(activeUsageStatus(row, now)) !== "neutral"),
-  );
-  const capturedAt = newestCapturedAt(visibleRows);
+  const capturedAt = newestCapturedAt(snapshotsOf(entries));
 
-  if (visibleRows.length === 0) {
+  if (entries.length === 0) {
     return (
       <div className="space-y-1 p-3">
         <p className="font-medium text-xs">Plan usage</p>
         <p className="text-muted-foreground text-xs">
-          No Claude plan readings yet. Numbers appear after a Claude turn or a
-          refresh on a connected account.
+          No Claude accounts connected. Connect one in Settings to see plan
+          usage.
         </p>
       </div>
     );
@@ -54,13 +49,14 @@ export function UsageLimitsDetails({
 
   return (
     <div className="divide-y">
-      {orderedSections(visibleRows).map((snapshot) => (
-        <UsageProviderSection
-          key={sectionKey(snapshot)}
-          repoId={repoId}
-          snapshot={snapshot}
-          now={now}
-        />
+      <div className="flex items-center justify-between gap-2 py-1.5 pr-1.5 pl-3">
+        <p className="font-medium text-xs">Plan usage</p>
+        <UsageRefreshButton repoId={repoId} />
+      </div>
+      {entries.map((entry, index) => (
+        <ListEnter key={entry.providerAccountId ?? "team"} index={index}>
+          <UsageProviderSection entry={entry} now={now} />
+        </ListEnter>
       ))}
       {capturedAt !== undefined && (
         <div className="bg-secondary py-1.5 pr-1.5 pl-3">

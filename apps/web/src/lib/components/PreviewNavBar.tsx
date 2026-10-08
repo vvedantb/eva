@@ -1,19 +1,37 @@
 "use client";
 
-import { useState, useEffect, useRef, type RefObject } from "react";
-import { Input, Spinner, WebPreviewNavigationButton } from "@eva/ui";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Input,
+  WebPreviewNavigationButton,
+  RefreshSpinIcon,
+} from "@eva/ui";
 import {
   IconArrowLeft,
   IconArrowRight,
-  IconRefresh,
+  IconCheck,
+  IconChevronDown,
   IconExternalLink,
   IconMaximize,
 } from "@tabler/icons-react";
-import {
-  stripPreviewGrant,
-  carryPreviewGrant,
-} from "@/lib/utils/previewGrant";
+import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
+import {
+  setPreviewDocumentLoading,
+  usePreviewDocumentLoading,
+} from "./sandbox/previewDocumentLoading";
 import { normalizePreviewPath } from "./previewPathHistory";
 
 export { normalizePreviewPath };
@@ -80,6 +98,16 @@ function stepIframeHistory(
   }
 }
 
+/**
+ * A named dev-server port the preview can switch to. Multi-repo sessions offer
+ * one per checked-out repo; a single-repo session passes none and the port
+ * stays a plain text input.
+ */
+export interface PreviewPortOption {
+  port: number;
+  label: string;
+}
+
 interface PreviewNavBarProps {
   previewUrl: string | null;
   iframeRef: RefObject<HTMLIFrameElement | null>;
@@ -96,10 +124,19 @@ interface PreviewNavBarProps {
   port: number;
   path?: string;
   onPortChange?: (port: number) => void;
+  /** Offered beside the port input; hidden when fewer than two are known. */
+  portOptions?: readonly PreviewPortOption[];
   defaultPath?: string;
   onPathChange?: (path: string) => void;
   isLoading?: boolean;
   onRefresh?: () => void;
+  /** Rendered after fullscreen, e.g. an overflow menu of preview tools. */
+  trailing?: ReactNode;
+  /**
+   * Idle pause on: builds the Eva wake link for "Open in new tab" from the
+   * current preview path, instead of the raw sandbox URL.
+   */
+  externalHrefForPath?: (path: string) => string;
 }
 
 type PreviewHistoryCommand =
@@ -115,14 +152,20 @@ export function PreviewNavBar({
   port,
   path,
   onPortChange,
+  portOptions,
   defaultPath = "/",
   onPathChange,
   isLoading = false,
   onRefresh,
+  trailing,
+  externalHrefForPath,
 }: PreviewNavBarProps) {
   function currentIframe(): HTMLIFrameElement | null {
     return iframeElement !== undefined ? iframeElement : iframeRef.current;
   }
+  const simpleView = useSimpleView();
+  // Host-managed iframes only: a legacy ref can't be read during render.
+  const documentLoading = usePreviewDocumentLoading(iframeElement ?? null);
   const [portInput, setPortInput] = useState(String(port));
   const [pathInput, setPathInput] = useState(path ?? defaultPath);
   // Tracks the last value emitted via onPathChange so the three event sources
@@ -185,16 +228,28 @@ export function PreviewNavBar({
     const iframe =
       iframeElement !== undefined ? iframeElement : iframeRef.current;
     const onLoad = () => {
+      if (iframe) setPreviewDocumentLoading(iframe, false);
       syncPathFromIframeRef.current();
     };
     iframe?.addEventListener("load", onLoad);
 
     function handleMessage(event: MessageEvent) {
+      const source = currentIframeRef.current();
       if (
-        event.source === currentIframeRef.current()?.contentWindow &&
-        typeof event.data === "object" &&
-        event.data !== null &&
-        "type" in event.data &&
+        source === null ||
+        event.source !== source.contentWindow ||
+        typeof event.data !== "object" ||
+        event.data === null ||
+        !("type" in event.data)
+      ) {
+        return;
+      }
+      // The page is leaving for another document (link, form, location.href).
+      if (event.data.type === "eva-preview-unload") {
+        setPreviewDocumentLoading(source, true);
+        return;
+      }
+      if (
         event.data.type === "navigation" &&
         "url" in event.data &&
         typeof event.data.url === "string"
@@ -231,6 +286,7 @@ export function PreviewNavBar({
   function reload() {
     const iframe = currentIframe();
     if (iframe) {
+      setPreviewDocumentLoading(iframe, true);
       // Reassigning the same src forces the iframe to reload its document.
       const currentSrc = iframe.src;
       iframe.src = currentSrc;
@@ -243,6 +299,7 @@ export function PreviewNavBar({
     const nextPath = normalizePreviewPath(path);
     setPathInput(nextPath);
     notifyPathChange(nextPath);
+    setPreviewDocumentLoading(iframe, true);
     iframe.src = buildUrlWithPath(previewUrl, nextPath);
   }
 
@@ -257,10 +314,13 @@ export function PreviewNavBar({
 
   // Strip the grant from the shareable "open in new tab" link: opening it is a
   // top-level navigation that runs the sign-in handshake, and the link must not
-  // carry a bearer token.
-  const openInNewTabHref = previewUrl
-    ? stripPreviewGrant(buildUrlWithPath(previewUrl, pathInput))
-    : undefined;
+  // carry a bearer token. With idle pause on, the host hands over the Eva wake
+  // link instead, which keeps working after the sandbox is paused.
+  const openInNewTabHref = externalHrefForPath
+    ? externalHrefForPath(normalizePreviewPath(pathInput))
+    : previewUrl
+      ? stripPreviewGrant(buildUrlWithPath(previewUrl, pathInput))
+      : undefined;
 
   function toggleFullscreen() {
     if (onToggleFullscreen) {
@@ -293,27 +353,61 @@ export function PreviewNavBar({
         onClick={isLoading && onRefresh ? onRefresh : reload}
         disabled={isLoading}
       >
-        {isLoading ? (
-          <Spinner size="sm" />
-        ) : (
-          <IconRefresh className="w-3.5 h-3.5" />
-        )}
+        <RefreshSpinIcon
+          busy={isLoading || documentLoading}
+          className="size-3.5"
+        />
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}
         onValueChange={setPathInput}
         onCommit={commitPath}
       />
-      <Input
-        className="h-8 w-14 max-sm:shrink-0 text-base text-center px-1 sm:w-16 sm:text-xs"
-        value={portInput}
-        onChange={(e) => setPortInput(e.target.value)}
-        onBlur={commitPort}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commitPort();
-        }}
-        aria-label="Preview port"
-      />
+      {/* The port is developer plumbing; simple view keeps path, reload,
+          open-in-tab and fullscreen. */}
+      {simpleView ? null : (
+        <>
+          <Input
+            className="h-8 w-14 max-sm:shrink-0 text-base text-center px-1 sm:w-16 sm:text-xs"
+            value={portInput}
+            onChange={(e) => setPortInput(e.target.value)}
+            onBlur={commitPort}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitPort();
+            }}
+            aria-label="Preview port"
+          />
+          {portOptions !== undefined && portOptions.length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-6 shrink-0 p-0 hover:text-foreground"
+                  aria-label="Choose a repository's dev server port"
+                >
+                  <IconChevronDown className="w-3.5 h-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {portOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.port}
+                    onSelect={() => onPortChange?.(option.port)}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {option.label}
+                    </span>
+                    {option.port === port ? (
+                      <IconCheck className="ml-auto size-3.5 shrink-0 text-primary" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </>
+      )}
       <WebPreviewNavigationButton
         tooltip="Open in new tab"
         disabled={!previewUrl}
@@ -327,6 +421,7 @@ export function PreviewNavBar({
       >
         <IconMaximize className="w-3.5 h-3.5" />
       </WebPreviewNavigationButton>
+      {trailing}
     </>
   );
 }

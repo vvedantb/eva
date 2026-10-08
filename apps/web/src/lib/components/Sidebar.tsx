@@ -1,6 +1,6 @@
 "use client";
 
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useMatches } from "@tanstack/react-router";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { decodeRepoParam, KNOWN_REPO_SUB_PAGES } from "@/lib/utils/repoUrl";
 import { useUser } from "@clerk/clerk-react";
@@ -15,6 +15,7 @@ import {
   IconCircleHalf,
   IconX,
 } from "@tabler/icons-react";
+import { AveHeaderButton } from "@/lib/components/ave/AveHeaderButton";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { api } from "@eva/backend";
@@ -29,7 +30,6 @@ import {
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
-import { RepoStatsSummary } from "@/lib/components/sidebar/RepoStatsSummary";
 import { OnlineTeamAvatars } from "@/lib/components/sidebar/TeamMembers";
 import { SidebarResizeHandle } from "@/lib/components/sidebar/SidebarResizeHandle";
 import { ContextSidebarHeaderActionProvider } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -121,6 +121,10 @@ export function Sidebar() {
   const {
     collapsed,
     setCollapsed,
+    // Context-owned so the "select something from the sidebar" landing pages
+    // can open the drawer from their empty state (`OpenNavigationButton`).
+    mobileOpen,
+    setMobileOpen,
     setSessionsNavMode,
     sidebarWidth,
     setSidebarWidth,
@@ -128,7 +132,19 @@ export function Sidebar() {
     commitSidebarWidth,
   } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Entity pages (a session, a project, a pull request) title themselves with
+  // a breadcrumb rather than a string, so `pageTitle` is empty there and the
+  // header used to fall back to the logo — no "where am I" on a phone. The
+  // route's section label (the same `staticData.title` the browser tab uses)
+  // fills that gap; the logo is only for routes that declare neither.
+  const routeTitle = useMatches({
+    select: (matches) =>
+      matches.reduce<string>(
+        (deepest, match) => match.staticData.title ?? deepest,
+        "",
+      ),
+  });
+  const mobileHeaderTitle = pageTitle || routeTitle;
   const isDesktop = useMediaQuery("(min-width: 1024px)");
 
   // The drawer lives above the router, so navigating does not unmount it. Close
@@ -363,9 +379,9 @@ export function Sidebar() {
         >
           <IconMenu2 size={20} className="text-muted-foreground" />
         </Button>
-        {pageTitle ? (
+        {mobileHeaderTitle ? (
           <h1 className="mx-auto max-sm:min-w-0 truncate text-base font-semibold tracking-[-0.02em] text-foreground text-balance">
-            {pageTitle}
+            {mobileHeaderTitle}
           </h1>
         ) : (
           <Link
@@ -378,6 +394,10 @@ export function Sidebar() {
             </span>
           </Link>
         )}
+        {/* Manager Ave's summon button lives here below `lg`; the floating
+            launcher is desktop-only because it covers the composer's send
+            button on a phone. */}
+        <AveHeaderButton />
         <Button
           size="icon"
           variant="ghost"
@@ -499,7 +519,8 @@ export function Sidebar() {
                     >
                       {isFlatPanel ? (
                         <>
-                          <span className="min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
+                          {/* pl-2 lines the title up with nav row icons (nav px-2 + row px-4). */}
+                          <span className="min-w-0 flex-1 truncate pl-2 text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
                             {flatPanelTitle}
                           </span>
                           <div className="flex shrink-0 items-center gap-0.5">
@@ -714,19 +735,12 @@ export function Sidebar() {
                     </div>
                   </nav>
 
-                  {/* Main/context keep stats+avatars; sessions/automations only
-                      hide the cook-rate block — online teammates stay visible. */}
-                  {showGlobalSessionsPanel || showGlobalAutomationsPanel ? (
+                  {/* Footer shows online teammates only. */}
+                  {showGlobalSessionsPanel ||
+                  showGlobalAutomationsPanel ||
+                  (isRepoRoute && repoBasePath) ? (
                     <div className="px-6 py-3">
                       <OnlineTeamAvatars collapsed={false} />
-                    </div>
-                  ) : isRepoRoute && repoBasePath ? (
-                    <div className="px-6 py-3">
-                      <RepoStatsSummary
-                        repo={repo}
-                        repoBasePath={repoBasePath}
-                        collapsed={false}
-                      />
                     </div>
                   ) : null}
                   {!collapsed ? (

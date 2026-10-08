@@ -7,11 +7,13 @@ const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
 const sessionWorkflow = readSource("_sessions/workflow.ts");
 const resultTarget = readSource("_sessions/resultTarget.ts");
+const chatResult = readSource("_chat/chatResult.ts");
 const sandboxExecution = readSource("_sandbox_runtime/execution.ts");
 const sandboxGit = readSource("_sandbox_runtime/git.ts");
 const sessionsSandbox = readSource("_sessions/sandbox.ts");
 const taskChatWorkflow = readSource("agentTaskChatWorkflow.ts");
 const projectChatWorkflow = readSource("projectChatWorkflow.ts");
+const taskRunWorkflow = readSource("_taskWorkflow/workflowDefinition.ts");
 const turnPersist = readSource("../callback-src/runtime/turnPersist.ts");
 const claudeSdkDaemon = readSource(
   "../callback-src/providers/claudeSdkDaemon.ts",
@@ -66,7 +68,7 @@ describe("a successful turn always publishes", () => {
  */
 describe("a failed turn still publishes its work", () => {
   test.each([
-    ["failTurnAndExit", "COMPLETION_MUTATION"],
+    ["failTurnAndExit", "postClaimedTurnFailureCompletion"],
     ["failSyntheticTurn", "COMPLETE_SYNTHETIC_TURN_MUTATION"],
   ] as const)("claude %s persists before its completion", (fn, mutation) => {
     const body = functionBody(claudeSdkDaemon, `async function ${fn}(`);
@@ -84,9 +86,9 @@ describe("a failed turn still publishes its work", () => {
 
   /** Cursor runs each turn in a disposable worker: three failure reporters. */
   test.each([
-    ["failTurnAndExit", "COMPLETION_MUTATION"],
+    ["failTurnAndExit", "postClaimedTurnFailureCompletion"],
     ["executeClaimedTurn", "deliverCompletionWithMedia(completionArgs)"],
-    ["reportCursorTurnWorkerFailure", "COMPLETION_MUTATION"],
+    ["reportCursorTurnWorkerFailure", "postClaimedTurnFailureCompletion"],
   ] as const)("cursor %s persists before its completion", (fn, mutation) => {
     const body = functionBody(cursorSdkDaemon, `async function ${fn}(`);
     assertPersistsFirst(body, mutation, fn);
@@ -212,14 +214,18 @@ describe("the reply is saved before the push", () => {
     expect(marker, "the publish-failure marker moved").not.toBeNull();
     const prefix = marker?.[1] ?? "";
     expect(prefix.length).toBeGreaterThan(0);
+    expect(resultTarget).toContain("formatDelayedPublishFailureError");
+    expect(resultTarget).toContain(prefix);
     for (const source of [
       sessionWorkflow,
       taskChatWorkflow,
       projectChatWorkflow,
+      taskRunWorkflow,
     ]) {
-      const thrown = source.match(/const publishError = `([^${]+)/);
-      expect(thrown, "the publish-failure message moved").not.toBeNull();
-      expect(thrown?.[1] ?? "").toContain(prefix);
+      expect(
+        source,
+        "the workflow must format the failure through the shared helper",
+      ).toContain("formatDelayedPublishFailureError(");
     }
   });
 });
@@ -240,14 +246,8 @@ describe("a delayed publish failure cannot rewrite a newer turn", () => {
     "%s saveResult isolates the failure before touching turn state",
     (_label, source) => {
       const body = definitionBody(source, "saveResult");
-      const guardAt = body.indexOf("delayedPublishFailureError(");
-      const clearAt = body.indexOf("clearStreamingActivity(");
-      const targetAt = body.indexOf("resultTargetMessage(");
-      expect(guardAt, "the publish-failure guard moved").toBeGreaterThan(-1);
-      expect(clearAt, "the streaming clear moved").toBeGreaterThan(-1);
-      expect(targetAt, "the result target lookup moved").toBeGreaterThan(-1);
-      expect(guardAt).toBeLessThan(clearAt);
-      expect(guardAt).toBeLessThan(targetAt);
+      expect(body).toContain("applyChatTurnResult(");
+      expect(body).toContain('"publish-failure"');
     },
   );
 
@@ -257,12 +257,29 @@ describe("a delayed publish failure cannot rewrite a newer turn", () => {
     ["project chat", projectChatWorkflow],
   ] as const)("%s failure becomes a standalone system alert", (_label, source) => {
     const body = definitionBody(source, "saveResult");
-    const guard = body.slice(
-      body.indexOf("delayedPublishFailureError("),
-      body.indexOf("clearStreamingActivity("),
+    expect(body).toContain("applyChatTurnResult(");
+    expect(body).toContain("return null;");
+  });
+
+  test("the shared module isolates the failure before touching turn state", () => {
+    const apply = functionBody(
+      chatResult,
+      "export async function applyChatTurnResult(",
     );
-    expect(guard).toContain("isSystemAlert: true");
-    expect(guard).toContain("return null;");
+    const guardAt = apply.indexOf("recordDelayedPublishFailure(");
+    const salvageAt = apply.indexOf("salvageAndClearStreamingActivity(");
+    const writeAt = apply.indexOf("writeAssistantTurnResult(");
+    expect(guardAt, "the publish-failure guard moved").toBeGreaterThan(-1);
+    expect(salvageAt, "the streaming salvage moved").toBeGreaterThan(-1);
+    expect(writeAt, "the result write moved").toBeGreaterThan(-1);
+    expect(guardAt).toBeLessThan(salvageAt);
+    expect(guardAt).toBeLessThan(writeAt);
+
+    const record = functionBody(
+      chatResult,
+      "export async function recordDelayedPublishFailure(",
+    );
+    expect(record).toContain("isSystemAlert: true");
   });
 });
 
@@ -319,15 +336,17 @@ describe("session branch publication reconciles concurrent remote work", () => {
     expect(sync).not.toContain("git rebase");
     expect(sync).toContain("git update-ref -d");
     // A rewritten local branch (rebase onto a new base) must not merge the
-    // old remote tip back in (task 231). Classify before merging.
-    const rewriteAt = sync.indexOf("divergedPublishLooksLikeRewrite");
+    // old remote tip back in (task 231). The reflog decides that before the
+    // merge; file counts never do (quick task 220).
+    const rewriteAt = sync.indexOf("rewrittenBranchIsOwnHistory(");
     const mergeAt = sync.indexOf("git merge --no-edit ${quotedRemoteRef}");
-    expect(rewriteAt, "the rewrite classifier moved").toBeGreaterThan(-1);
+    expect(rewriteAt, "the own-history check moved").toBeGreaterThan(-1);
     expect(mergeAt, "the both-moved merge moved").toBeGreaterThan(-1);
     expect(rewriteAt).toBeLessThan(mergeAt);
-    expect(sync).toContain("git merge-base");
-    expect(sync).toContain("git diff --name-only");
-    expect(sync).toContain("rewritten local branch");
+    expect(sync).not.toContain("git diff --name-only");
+    // The refusal text lives in divergedPublish.ts next to
+    // publishErrorNeedsForcePush, so the web recovery banner cannot drift.
+    expect(sync).toContain("rewrittenBranchPublishError(");
     expect(sync).toContain("no conflict markers to resolve");
 
     const push = functionBody(
@@ -368,13 +387,13 @@ describe("session branch publication reconciles concurrent remote work", () => {
     expect(turnPersist).toContain('git(["merge", "--no-edit", remoteRef]');
     expect(turnPersist).toContain('git(["merge", "--abort"]');
     expect(turnPersist).not.toContain('"rebase"');
-    const rewriteAt = turnPersist.indexOf("divergedPublishLooksLikeRewrite");
+    const rewriteAt = turnPersist.indexOf("localBranchRewroteOwnHistory(branch, remoteRef)");
     const mergeAt = turnPersist.indexOf('git(["merge", "--no-edit", remoteRef]');
-    expect(rewriteAt, "the rewrite classifier moved").toBeGreaterThan(-1);
+    expect(rewriteAt, "the own-history check moved").toBeGreaterThan(-1);
     expect(mergeAt, "the both-moved merge moved").toBeGreaterThan(-1);
     expect(rewriteAt).toBeLessThan(mergeAt);
-    expect(turnPersist).toContain('"merge-base"');
-    expect(turnPersist).toContain('"diff", "--name-only"');
+    expect(turnPersist).toContain('"reflog", "show", "--format=%H"');
+    expect(turnPersist).not.toContain('"diff", "--name-only"');
     expect(syncAt).toBeGreaterThan(-1);
     expect(syncAt).toBeLessThan(gateAt);
     expect(gateAt).toBeLessThan(pushAt);
@@ -646,8 +665,10 @@ describe("a callback-published session still opens its first pull request", () =
   });
 
   test("a published branch recovers only a missing session PR", () => {
+    // The primary repo's own PR, so a side-branch PR the agent opened never
+    // stands in for the session's draft.
     expect(sessionWorkflow).toContain(
-      "pushedCommits || (branchPublished && data.prUrl === undefined)",
+      "pushedCommits || (branchPublished && data.primaryPrUrl === undefined)",
     );
   });
 });
@@ -688,7 +709,12 @@ function assertPersistsFirst(
   completionMarker: string,
   label: string,
 ): void {
-  const persistAt = body.indexOf("persistTurnWork();");
+  const persistAt = [
+    body.indexOf("persistTurnWork();"),
+    body.indexOf("reconcileStreamingAndPersist()"),
+  ]
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0];
   const completionAt = body.indexOf(completionMarker);
   expect(persistAt, `${label} lost its durability push`).toBeGreaterThan(-1);
   expect(completionAt, `the ${label} completion moved`).toBeGreaterThan(-1);

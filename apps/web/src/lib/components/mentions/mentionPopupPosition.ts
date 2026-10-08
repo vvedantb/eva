@@ -82,7 +82,7 @@ export function computeMentionPopupPlacement(
 /**
  * Panel layout: a sheet the exact width of the composer, sitting just above it.
  * Anchored to the composer rather than the caret so the list does not jump
- * around mid-word and has room for a real search field.
+ * around mid-word.
  */
 export function computePanelPopupPlacement(
   anchor: DOMRect,

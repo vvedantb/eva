@@ -16,7 +16,7 @@ interface ScheduleDatesPopoverProps {
 
 /** "Set dates" affordance: a range calendar that schedules a project onto the
  *  timeline once both ends are picked. Mirrors the date-picker pattern in
- *  ProjectDateField. */
+ *  ProjectDateRangeField. */
 export function ScheduleDatesPopover({
   onSchedule,
 }: ScheduleDatesPopoverProps) {

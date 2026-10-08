@@ -7,6 +7,11 @@ import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { extractPrNumber } from "./helpers";
+import {
+  decodeGitHubContent,
+  decodeGitHubContentBytes,
+  githubContentContainsNul,
+} from "../_repoSkills/decodeGitHubContent";
 import { isPrDiffTooLargeError, listFileToUnifiedDiff } from "./prDiffFallback";
 import { getActionRepoWithAccess } from "../functions";
 
@@ -286,6 +291,106 @@ export const getCommitDiff = action({
   },
 });
 
+const compareDiffResultValidator = v.object({
+  diff: v.string(),
+  /** True when the diff was clipped at MAX_DIFF_BYTES. */
+  truncated: v.boolean(),
+  /** True when GitHub does not know one of the shas yet (push still pending). */
+  unavailable: v.boolean(),
+});
+
+type CompareDiffResult = {
+  diff: string;
+  truncated: boolean;
+  unavailable: boolean;
+};
+
+const requestErrorSchema = z.object({ status: z.number() });
+
+/**
+ * Uncached base...head compare fetch — wrapped by ActionCache. Auth is enforced
+ * by the public `getCompareDiff` wrapper before `fetch`.
+ */
+export const fetchCompareDiff = internalAction({
+  args: {
+    repoId: v.id("githubRepos"),
+    baseSha: v.string(),
+    headSha: v.string(),
+  },
+  returns: compareDiffResultValidator,
+  handler: async (ctx, args): Promise<CompareDiffResult> => {
+    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+      id: args.repoId,
+    });
+    if (!repo) throw new Error("Repo not found");
+
+    const octokit = await getInstallationOctokit(repo.installationId);
+    let data: unknown;
+    try {
+      const res = await octokit.rest.repos.compareCommitsWithBasehead({
+        owner: repo.owner,
+        repo: repo.name,
+        basehead: `${args.baseSha}...${args.headSha}`,
+        mediaType: { format: "diff" },
+      });
+      data = res.data;
+    } catch (error) {
+      const parsed = requestErrorSchema.safeParse(error);
+      // A sha GitHub has not received yet is not a failure to surface: the turn's
+      // push is still pending (or failed — PublishRecoveryBanner covers that).
+      if (parsed.success && parsed.data.status === 404) {
+        return { diff: "", truncated: false, unavailable: true };
+      }
+      throw error;
+    }
+    // Same boundary as the PR diff: with the diff media type GitHub returns raw
+    // unified-diff text, but octokit types `data` as the comparison object.
+    const fullDiff = z.string().parse(data);
+
+    const truncated = fullDiff.length > MAX_DIFF_BYTES;
+    // Clip on a line boundary so the final file stays parseable.
+    const diff = truncated
+      ? fullDiff.slice(0, fullDiff.lastIndexOf("\n", MAX_DIFF_BYTES))
+      : fullDiff;
+
+    return { diff, truncated, unavailable: false };
+  },
+});
+
+// A sha pair is immutable, so a successful compare can live as long as a commit
+// diff. An `unavailable` result is cached too — the client refetches with
+// `force` when the user retries after the push lands.
+const compareDiffCache = new ActionCache(components.actionCache, {
+  action: internal._github.prDiff.fetchCompareDiff,
+  name: "compareDiffV1",
+  ttl: COMMIT_DIFF_CACHE_TTL_MS,
+});
+
+/**
+ * The combined diff between two commits on the same branch: what one session
+ * turn changed (`beforeSha...afterSha` on the assistant message).
+ */
+export const getCompareDiff = action({
+  args: {
+    repoId: v.id("githubRepos"),
+    baseSha: v.string(),
+    headSha: v.string(),
+    force: v.optional(v.boolean()),
+  },
+  returns: compareDiffResultValidator,
+  handler: async (ctx, args): Promise<CompareDiffResult> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    await getActionRepoWithAccess(ctx, args.repoId);
+
+    return await compareDiffCache.fetch(
+      ctx,
+      { repoId: args.repoId, baseSha: args.baseSha, headSha: args.headSha },
+      { force: args.force === true },
+    );
+  },
+});
+
 const prFileContentsValidator = v.object({
   /** File at the base commit; null when the file was added in this PR. */
   oldContents: v.union(v.string(), v.null()),
@@ -314,8 +419,6 @@ const fileContentsSchema = z.object({
   content: z.string(),
   size: z.number(),
 });
-
-const requestErrorSchema = z.object({ status: z.number() });
 
 /**
  * Reads one file at one commit. A missing file is not an error: the same path is
@@ -356,11 +459,13 @@ async function readFileAtRef(
     return { contents: null, skipped: "too-large" };
   }
 
-  const buffer = Buffer.from(file.data.content, "base64");
+  const bytes = decodeGitHubContentBytes(file.data.content);
   // A NUL byte is the same heuristic git uses to call a file binary.
-  if (buffer.includes(0)) return { contents: null, skipped: "binary" };
+  if (githubContentContainsNul(bytes)) {
+    return { contents: null, skipped: "binary" };
+  }
 
-  return { contents: buffer.toString("utf8"), skipped: null };
+  return { contents: decodeGitHubContent(file.data.content), skipped: null };
 }
 
 /**

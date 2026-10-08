@@ -4,7 +4,11 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
-import { streamingHeartbeatHmacMessage } from "./_sandbox_runtime/callbackAuth";
+import {
+  previewActivityHmacMessage,
+  streamingHeartbeatHmacMessage,
+} from "./_sandbox_runtime/callbackAuth";
+import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
 
 const http = httpRouter();
 
@@ -102,53 +106,73 @@ http.route({
         status: 500,
       });
     }
-    const validCurrent = timingSafeEqual(hmac, expected);
-    // Warm callbacks launched before domain separation still sign their raw
-    // entity id. Keep that narrow compatibility path, but never for the old
-    // catalog namespace whose credential caused the cross-route collision.
-    const legacyExpected = validCurrent
-      ? null
-      : await computeScopedHmac(entityId);
-    const validLegacy =
-      !entityId.startsWith("harness-catalog:") &&
-      legacyExpected !== null &&
-      timingSafeEqual(hmac, legacyExpected);
-    if (!validCurrent && !validLegacy) {
+    if (!timingSafeEqual(hmac, expected)) {
       return new Response("Invalid heartbeat signature", { status: 401 });
     }
 
+    // Every agent turn holds a durable lease. A heartbeat without one comes
+    // from a process no turn owns, so it is told to stop.
     const turnId = params.get("turnId");
-    if (turnId !== null) {
-      const leaseGeneration = Number(params.get("leaseGeneration"));
-      if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
-        return new Response("Invalid turn lease generation", { status: 400 });
-      }
-      const lease = await ctx.runMutation(internal.turns.heartbeat, {
-        turnId,
-        leaseGeneration,
-        entityId,
-        touchOnly,
-        currentActivity: currentActivity ?? undefined,
-        currentContent: params.get("currentContent") ?? "",
-        pendingQuestion: params.get("pendingQuestion") ?? undefined,
+    if (turnId === null) {
+      return Response.json({
+        ok: true,
+        lease: { status: "terminal", reason: "unknown_turn" },
       });
-      return Response.json({ ok: true, lease });
     }
-
-    const accepted = await ctx.runMutation(internal.turns.legacyHeartbeat, {
+    const leaseGeneration = Number(params.get("leaseGeneration"));
+    if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
+      return new Response("Invalid turn lease generation", { status: 400 });
+    }
+    const lease = await ctx.runMutation(internal.turns.heartbeat, {
+      turnId,
+      leaseGeneration,
       entityId,
       touchOnly,
       currentActivity: currentActivity ?? undefined,
       currentContent: params.get("currentContent") ?? "",
       pendingQuestion: params.get("pendingQuestion") ?? undefined,
     });
-    return Response.json({
-      ok: true,
-      accepted,
-      lease: accepted
-        ? null
-        : { status: "terminal", reason: "superseded" },
+    return Response.json({ ok: true, lease });
+  }),
+});
+
+/**
+ * Activity heartbeat from the in-sandbox preview proxy (idle pause). The proxy
+ * posts at most once a minute while a preview page is on screen (its injected
+ * visibility ping) or a non-browser client calls the app, so a saved preview
+ * link or an API client keeps its sandbox awake, as Amp's portal does. A
+ * hidden tab does not. The HMAC is scoped per sandbox
+ * (`previewActivityHmacMessage`). `subject` is the Clerk user from the proxy's
+ * session cookie; it is outside the HMAC, so treat it as a diagnostic label
+ * for "who kept this awake", never as authorization.
+ */
+http.route({
+  path: "/api/preview/activity",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const params = new URLSearchParams(await request.text());
+    const sandboxId = requiredFormValue(params, "sandboxId");
+    const hmac = requiredFormValue(params, "hmac");
+    if (!sandboxId || !hmac) {
+      return new Response("Missing required activity fields", { status: 400 });
+    }
+    const expected = await computeScopedHmac(
+      previewActivityHmacMessage(sandboxId),
+    );
+    if (!expected) {
+      return new Response("ENCRYPTION_KEY is not configured", {
+        status: 500,
+      });
+    }
+    if (!timingSafeEqual(hmac, expected)) {
+      return new Response("Invalid activity signature", { status: 401 });
+    }
+    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+      sandboxId,
+      source: "preview-page",
+      clerkUserId: params.get("subject") || undefined,
     });
+    return Response.json({ ok: true });
   }),
 });
 
@@ -278,6 +302,21 @@ function extractBearerSecret(request: Request): string | null {
   return secret.length > 0 ? secret : null;
 }
 
+/**
+ * Body the in-sandbox credential helper posts. `path` is git's `path=`
+ * component (e.g. `owner/name.git`), present once `credential.useHttpPath` is
+ * on; absent for an old baked helper script, which still gets a primary token.
+ * Any other shape (or unparsable JSON) degrades to `{}` rather than erroring —
+ * a malformed body must not break the credential handshake.
+ */
+const gitCredentialsBodySchema = z.object({ path: z.string().optional() });
+
+/** Reads the requested repository path from the helper's body, if any. */
+function parseGitCredentialsPath(body: unknown): string | undefined {
+  const parsed = gitCredentialsBodySchema.safeParse(body);
+  return parsed.success ? parsed.data.path : undefined;
+}
+
 http.route({
   path: "/api/git-credentials",
   method: "POST",
@@ -286,16 +325,44 @@ http.route({
     if (!secret) {
       return new Response("Unauthorized", { status: 401 });
     }
-    const installationId: number | null = await ctx.runQuery(
-      internal.sandboxGitCredentials.lookupInstallationBySecret,
-      { secret },
+    // Old baked helper scripts send an empty body; treat unparseable as `{}`.
+    const body: unknown = await request.json().catch(() => ({}));
+    const resolved = await ctx.runQuery(
+      internal.sandboxGitCredentials.resolveCredentialRequest,
+      { secret, path: parseGitCredentialsPath(body) },
     );
-    if (installationId === null) {
-      return new Response("Unauthorized", { status: 401 });
+    if (resolved.kind === "denied") {
+      console.warn(`[git-credentials][denied] ${resolved.reason}`);
+      return new Response("Forbidden", { status: 403 });
     }
+    if (resolved.kind === "sibling") {
+      console.log(
+        `[git-credentials][sibling-read] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+      );
+      const siblingToken: string = await ctx.runAction(
+        internal.githubAuth.mintReadOnlyRepoToken,
+        {
+          installationId: resolved.installationId,
+          githubId: resolved.githubId,
+          name: resolved.name,
+        },
+      );
+      return Response.json({
+        username: "x-access-token",
+        token: siblingToken,
+      });
+    }
+    if (resolved.kind === "linked") {
+      // A multi-repo session's linked repo: a full token, but for that repo's
+      // own installation rather than the primary's.
+      console.log(
+        `[git-credentials][linked-repo] sandbox=${resolved.sandboxId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+      );
+    }
+
     const token: string = await ctx.runAction(
       internal.githubAuth.mintInstallationToken,
-      { installationId },
+      { installationId: resolved.installationId },
     );
     return Response.json({ username: "x-access-token", token });
   }),
@@ -422,13 +489,25 @@ const prWebhookSchema = z.object({
     title: nullableString,
     merge_commit_sha: nullableString,
     head: z
-      .object({ ref: nullableString, sha: nullableString })
+      .object({
+        ref: nullableString,
+        sha: nullableString,
+        repo: z
+          .object({ full_name: nullableString })
+          .nullable()
+          .catch(null),
+      })
       .nullable()
       .catch(null),
+    base: z.object({ ref: nullableString }).nullable().catch(null),
     user: loginObject,
   }),
   repository: z
-    .object({ name: nullableString, owner: loginObject })
+    .object({
+      name: nullableString,
+      full_name: nullableString,
+      owner: loginObject,
+    })
     .nullable()
     .catch(null),
 });
@@ -543,6 +622,23 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
+    // Event-triggered automations (CI auto-fix, review responder, issue to
+    // task, user automations). Independent of the state sync below.
+    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.dispatch,
+        { event: repoEvent },
+      );
+    }
+    for (const passed of parseCiPassed(event ?? "", body)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._automationEvents.dispatch.noteCiPassed,
+        { passed },
+      );
+    }
+
     if (event === "pull_request") {
       const parsed = prWebhookSchema.safeParse(JSON.parse(body));
       if (!parsed.success) {
@@ -555,54 +651,32 @@ http.route({
         return new Response("OK", { status: 200 });
       }
 
-      const merged = pullRequest.merged;
-      const draft = pullRequest.draft;
-
-      // head.ref carries the source branch name. Passed through so the
-      // closed-handler can fall back to branch-based reconciliation when no
-      // run has the PR URL recorded (e.g. if it was lost during PR creation).
-      const branchName = pullRequest.head?.ref ?? null;
-
-      // Always sync session PR state for any state-changing action.
-      const STATE_ACTIONS = new Set([
-        "opened",
-        "reopened",
-        "ready_for_review",
-        "converted_to_draft",
-        "closed",
-      ]);
-      if (STATE_ACTIONS.has(action)) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.githubWebhook.handleSessionPrEvent,
-          {
-            prUrl,
-            action,
-            draft: draft ?? undefined,
-            merged: merged ?? undefined,
-            prNumber: pullRequest.number ?? undefined,
-            mergeCommitSha: pullRequest.merge_commit_sha ?? undefined,
-          },
-        );
-        await ctx.scheduler.runAfter(
-          0,
-          internal.githubWebhook.handleProjectPrEvent,
-          {
-            prUrl,
-            action,
-            draft: draft ?? undefined,
-          },
-        );
-      }
-
-      // agentTasks/projects path stays as-is (close-only).
-      if (action === "closed" && merged !== null) {
-        await ctx.scheduler.runAfter(0, internal.githubWebhook.handlePrClosed, {
+      // One handler for every PR event: it updates (or, for a PR opened on an
+      // Eva branch outside Eva's own flow, creates) the `pullRequests` row,
+      // then lets the session, quick task or project that owns it react.
+      const repository = parsed.data.repository;
+      const headRepo = pullRequest.head?.repo?.full_name ?? null;
+      const baseRepo = repository?.full_name ?? null;
+      await ctx.scheduler.runAfter(
+        0,
+        internal.githubWebhook.handlePullRequestEvent,
+        {
           prUrl,
-          merged,
-          branchName: branchName ?? undefined,
-        });
-      }
+          action,
+          draft: pullRequest.draft ?? undefined,
+          merged: pullRequest.merged ?? undefined,
+          mergeCommitSha: pullRequest.merge_commit_sha ?? undefined,
+          title: pullRequest.title ?? undefined,
+          headBranch: pullRequest.head?.ref ?? undefined,
+          baseBranch: pullRequest.base?.ref ?? undefined,
+          repoOwner: repository?.owner?.login ?? undefined,
+          repoName: repository?.name ?? undefined,
+          headInSameRepo:
+            headRepo !== null && baseRepo !== null
+              ? headRepo.toLowerCase() === baseRepo.toLowerCase()
+              : undefined,
+        },
+      );
     }
 
     if (event === "push") {
@@ -702,6 +776,61 @@ http.route({
     }
 
     return Response.redirect(githubAuthReturnUrl(claim.installationId), 302);
+  }),
+});
+
+function connectorAuthReturnUrl(returnPath: string | null): string {
+  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const path =
+    returnPath &&
+    returnPath.startsWith("/settings") &&
+    !returnPath.includes("//")
+      ? returnPath
+      : "/settings/connections";
+  return `${webAppUrl}${path}`;
+}
+
+http.route({
+  path: "/api/connectors/oauth/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const requestUrl = new URL(request.url);
+    const params = requestUrl.searchParams;
+    const state = params.get("state");
+    if (!state) {
+      return new Response("Missing state", { status: 400 });
+    }
+
+    const claim = await ctx.runMutation(
+      internal._connectors.tokens.consumeOauthState,
+      { nonce: state },
+    );
+    if (!claim) {
+      return new Response("Authorization request expired. Start again.", {
+        status: 400,
+      });
+    }
+
+    const code = params.get("code");
+    if (!code) {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    const siteUrl = (process.env.CONVEX_SITE_URL ?? "").replace(/\/$/, "");
+    try {
+      await ctx.runAction(internal._connectors.oauth.completeAuthorization, {
+        userId: claim.userId,
+        provider: claim.provider,
+        actor: claim.actor,
+        code,
+        redirectUri: `${siteUrl}/api/connectors/oauth/callback`,
+        codeVerifier: claim.codeVerifier,
+      });
+    } catch {
+      return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
+    }
+
+    return Response.redirect(connectorAuthReturnUrl(claim.returnPath), 302);
   }),
 });
 

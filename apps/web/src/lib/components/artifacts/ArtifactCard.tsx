@@ -20,23 +20,49 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   Button,
+  LIST_ROW_CONTROL_CLASS,
 } from "@eva/ui";
 import { IconDots, IconLayoutDashboard } from "@tabler/icons-react";
+import { compactRelativeTime } from "@eva/shared/dates";
+import { SessionSourceRow } from "@/lib/components/sandbox/SessionSourcePane";
 import { relativeTime } from "./_format";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ArtifactCardMenuItems } from "./ArtifactCardMenuItems";
+import {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceRoute,
+} from "@/lib/components/sandbox/chatSource";
+import { openArtifactInNewTab } from "./_open";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 
-/** A single artifact tile: left-click opens the viewer; right-click for actions. */
-export function ArtifactCard({ artifact }: { artifact: ArtifactRow }) {
+/**
+ * A single artifact tile: left-click opens the viewer (or `onOpen`, which the
+ * sandbox pane uses to show it inline); right-click for actions.
+ */
+export function ArtifactCard({
+  artifact,
+  showSource = true,
+  compact = false,
+  onOpen,
+}: {
+  artifact: ArtifactRow;
+  showSource?: boolean;
+  /** Sandbox pane: a list row. The global Artifacts page keeps the tile. */
+  compact?: boolean;
+  onOpen?: (artifactId: string) => void;
+}) {
   const navigate = useNavigate();
   const remove = useMutation(api.artifacts.remove);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const altHeld = useAltHeld();
+  const source = showSource ? artifact.source : null;
+  const sourceRoute = source ? chatSourceRoute(source, "artifacts") : null;
 
-  const openInNewTab = () =>
-    window.open(`/artifacts/${artifact._id}`, "_blank", "noopener");
+  const openInNewTab = () => openArtifactInNewTab(artifact._id);
 
   const onDelete = async () => {
     await withMutationToast(
@@ -49,23 +75,97 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactRow }) {
   };
 
   const menuProps = {
-    onOpen: () =>
+    onOpen: () => {
+      if (onOpen) {
+        onOpen(artifact._id);
+        return;
+      }
       void navigate({
         to: "/artifacts/$artifactId",
         params: { artifactId: artifact._id },
-      }),
+      });
+    },
     onOpenInNewTab: openInNewTab,
-    onDelete: () => setConfirmDeleteOpen(true),
+    ...(source && sourceRoute
+      ? {
+          onOpenSource: () =>
+            void navigate({
+              to: sourceRoute.to,
+              params: sourceRoute.params,
+            }),
+          sourceLabel: chatSourceKindLabel(source.kind).toLowerCase(),
+        }
+      : {}),
+    onDelete: () =>
+      requestConfirm(altHeld, () => setConfirmDeleteOpen(true), () => {
+        void onDelete();
+      }),
   };
+
+  const kebab = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Artifact actions"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            compact
+              ? cn("max-sm:shrink-0", CARD_KEBAB_CLASS, LIST_ROW_CONTROL_CLASS)
+              : cn("absolute bottom-3 right-2 z-2", CARD_KEBAB_CLASS),
+          )}
+        >
+          <IconDots className="size-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <ArtifactCardMenuItems variant="dropdown" {...menuProps} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const meta = (
+    <>
+      {artifact.description ? (
+        <p className="line-clamp-2 text-sm text-muted-foreground">
+          {artifact.description}
+        </p>
+      ) : null}
+      {source ? (
+        <p className="truncate text-xs text-muted-foreground">
+          {chatSourceLabel(source)}
+        </p>
+      ) : null}
+    </>
+  );
+
+  const compactPreview = source
+    ? chatSourceLabel(source)
+    : (artifact.description ?? null);
 
   return (
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          {/* The tile is a single stretched <Link>, so the touch kebab cannot
-              live inside it (a button may not nest in an anchor). This wrapper
-              gives the kebab a positioning parent; `h-full` on both keeps the
-              tile stretching to the grid row as it did before. */}
+          {compact ? (
+            <SessionSourceRow
+              title={artifact.name}
+              preview={compactPreview}
+              timeLabel={compactRelativeTime(artifact.createdAt)}
+              icon={<IconLayoutDashboard size={16} />}
+              link={
+                onOpen ? (
+                  <button type="button" onClick={() => onOpen(artifact._id)} />
+                ) : (
+                  <Link
+                    to="/artifacts/$artifactId"
+                    params={{ artifactId: artifact._id }}
+                  />
+                )
+              }
+              trailing={kebab}
+            />
+          ) : (
           <div className="relative h-full">
             <Link
               to="/artifacts/$artifactId"
@@ -81,39 +181,14 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactRow }) {
                   {artifact.name}
                 </span>
               </div>
-              {artifact.description ? (
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {artifact.description}
-                </p>
-              ) : null}
+              {meta}
               <span className="mt-auto text-xs text-muted-foreground max-sm:pr-8">
                 {relativeTime(artifact.createdAt)}
               </span>
             </Link>
-            {/* Touch has no right-click, so below `sm` the same items get a
-                visible kebab, parked on the timestamp line. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Artifact actions"
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "absolute bottom-3 right-2 z-2",
-                    CARD_KEBAB_CLASS,
-                  )}
-                >
-                  <IconDots className="size-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ArtifactCardMenuItems variant="dropdown" {...menuProps} />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {kebab}
           </div>
+          )}
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ArtifactCardMenuItems variant="context" {...menuProps} />

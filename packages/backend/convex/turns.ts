@@ -5,111 +5,142 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
-import { sessionChatAdapter } from "./_chat/surfaceAdapters";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { drainSessionChatQueues } from "./_queues/helpers";
 import {
-  touchStreamingEntity,
-  upsertStreamingActivity,
-} from "./streaming";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+  stalledAlert,
+  turnAdapterForEntity,
+  type AgentTurnOwner,
+  type ChatEntityId,
+  type ChatSurfaceAdapter,
+  type ChatAlert,
+} from "./_chat/surfaceAdapters";
+import {
+  tearDownStaleDocWorkflow,
+  tearDownStaleEvaluationWorkflow,
+  tearDownStaleProjectWorkflow,
+  tearDownStaleSessionWorkflow,
+} from "./workflowWatchdog";
+import { tearDownStaleAutomationRun } from "./_automations/runs";
+import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
+import { clearStreamingActivity } from "./_taskWorkflow/helpers";
+import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
+import {
+  authMutation,
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+} from "./functions";
 import {
   acquireTurnLease,
   advanceTurn,
+  bindTurnWorkflow,
   closeTurn,
-  findOpenChatTurn,
-  listOpenSessionTurns,
+  findOpenTurn,
+  graceExpiredTurnLease,
+  openTurn,
   renewTurnLease,
+  type ChatTurnEntityId,
 } from "./_chat/turnStore";
-import { turnLeaseDurationMs } from "./_chat/turnLease";
-import { turnStateValidator } from "./_validators/tableFields";
-import { loadSessionChat } from "./_sessionChats/helpers";
+import {
+  expiredTurnLeaseDecision,
+  turnLeaseDurationMs,
+  type ExpiredTurnLeaseCause,
+} from "./_chat/turnLease";
+import {
+  chatTurnEntityIdValidator,
+  turnEntityIdValidator,
+  turnLaneValidator,
+  turnStateValidator,
+} from "./_validators/tableFields";
+import { normalizeAIModel } from "./_validators/aiModels";
+import {
+  isLegacyChatExecuting,
+  isLegacySessionExecuting,
+} from "./_chat/turnProjection";
 
-const chatTurnStatusValidator = v.object({
-  turnId: v.id("turns"),
-  state: turnStateValidator,
-  startedAt: v.number(),
-  leaseExpiresAt: v.number(),
-  placeholderMessageId: v.optional(v.id("messages")),
-});
+const chatTurnStatusValidator = v.union(
+  v.object({
+    source: v.literal("durable"),
+    turnId: v.id("turns"),
+    state: turnStateValidator,
+    startedAt: v.number(),
+    leaseExpiresAt: v.number(),
+    placeholderMessageId: v.optional(v.id("messages")),
+  }),
+  v.object({ source: v.literal("legacy") }),
+);
+type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
-/** Canonical UI projection for whether one chat's turn is open. */
+/**
+ * Whether one chat has a turn open, for a reader who may see it. The open
+ * durable turn is canonical, synthetic turns included. Entities that never
+ * opened one fall back to their workflow fields until the lifecycle marker
+ * (`turnLifecycleVersion` / `chatTurnLifecycleVersion`) says otherwise.
+ */
+async function readChatStatus(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  entityId: ChatTurnEntityId,
+): Promise<ChatTurnStatus | null> {
+  const legacyExecuting = await readLegacyExecuting(ctx, userId, entityId);
+  if (legacyExecuting === null) return null;
+  const turn = await findOpenTurn(ctx, entityId);
+  if (!turn) return legacyExecuting ? { source: "legacy" } : null;
+  return {
+    source: "durable",
+    turnId: turn._id,
+    state: turn.state,
+    startedAt: turn.turnStartedAt,
+    leaseExpiresAt: turn.leaseExpiresAt,
+    placeholderMessageId: turn.placeholderMessageId,
+  };
+}
+
+/** The legacy bridge for one entity; null when the reader may not see it. */
+async function readLegacyExecuting(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  entityId: ChatTurnEntityId,
+): Promise<boolean | null> {
+  const sessionId = ctx.db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    const session = await ctx.db.get(sessionId);
+    if (!session || !(await hasRepoAccess(ctx.db, session.repoId, userId))) {
+      return null;
+    }
+    return isLegacySessionExecuting(session);
+  }
+  const taskId = ctx.db.normalizeId("agentTasks", entityId);
+  if (taskId) {
+    const task = await ctx.db.get(taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, userId))) return null;
+    return isLegacyChatExecuting(task);
+  }
+  const projectId = ctx.db.normalizeId("projects", entityId);
+  if (!projectId) return null;
+  const project = await ctx.db.get(projectId);
+  if (!project || !(await hasRepoAccess(ctx.db, project.repoId, userId))) {
+    return null;
+  }
+  return isLegacyChatExecuting(project);
+}
+
+/** Canonical UI projection for whether one chat (session, task or project) has a turn open. */
 export const getChatStatus = authQuery({
-  args: { chatId: v.id("sessionChats") },
+  args: { entityId: chatTurnEntityIdValidator },
   returns: v.union(chatTurnStatusValidator, v.null()),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof chatTurnStatusValidator> | null> => {
-    const chat = await ctx.db.get(args.chatId);
-    if (!chat) return null;
-    if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId))) return null;
-    const turn = await findOpenChatTurn(ctx, args.chatId);
-    if (!turn) return null;
-    return {
-      turnId: turn._id,
-      state: turn.state,
-      startedAt: turn.turnStartedAt,
-      leaseExpiresAt: turn.leaseExpiresAt,
-      placeholderMessageId: turn.placeholderMessageId,
-    };
-  },
+  handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
+    await readChatStatus(ctx, ctx.userId, args.entityId),
 });
 
-/**
- * Open turns across every chat of a session, in one indexed read. Feeds the
- * chat tab strip's running dots and the "waiting for a free slot" caption.
- */
-export const listSessionChatStatuses = authQuery({
+/** Session form of {@link getChatStatus}, kept for the session UI. */
+export const getSessionStatus = authQuery({
   args: { sessionId: v.id("sessions") },
-  returns: v.array(
-    v.object({
-      chatId: v.id("sessionChats"),
-      state: turnStateValidator,
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) return [];
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
-    const turns = await listOpenSessionTurns(ctx, args.sessionId);
-    const statuses: Array<{
-      chatId: Id<"sessionChats">;
-      state: Infer<typeof turnStateValidator>;
-    }> = [];
-    for (const turn of turns) {
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (chatId) statuses.push({ chatId, state: turn.state });
-    }
-    return statuses;
-  },
-});
-
-/**
- * Chat ids with an open turn across a repo, for the sidebar's indented chat
- * rows: one indexed scan per repo group instead of a status query per session.
- */
-export const listRunningChatIdsForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.id("sessionChats")),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const turns = await ctx.db
-      .query("turns")
-      .withIndex("by_repo_open", (q) =>
-        q.eq("repoId", args.repoId).eq("open", true),
-      )
-      .collect();
-    const chatIds: Id<"sessionChats">[] = [];
-    for (const turn of turns) {
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (chatId) chatIds.push(chatId);
-    }
-    return chatIds;
-  },
+  returns: v.union(chatTurnStatusValidator, v.null()),
+  handler: async (ctx, args): Promise<ChatTurnStatus | null> =>
+    await readChatStatus(ctx, ctx.userId, args.sessionId),
 });
 
 const leaseIdentityValidator = v.object({
@@ -169,34 +200,6 @@ async function applyFencedHeartbeat(
   return lease;
 }
 
-const legacyHeartbeatArgs = {
-  entityId: v.string(),
-  touchOnly: v.boolean(),
-  currentActivity: v.optional(v.string()),
-  currentContent: v.optional(v.string()),
-  pendingQuestion: v.optional(v.string()),
-};
-const legacyHeartbeatArgsValidator = v.object(legacyHeartbeatArgs);
-
-async function applyLegacyHeartbeat(
-  ctx: MutationCtx,
-  args: Infer<typeof legacyHeartbeatArgsValidator>,
-): Promise<boolean> {
-  const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
-  if (chatId && (await findOpenChatTurn(ctx, chatId))) return false;
-  if (args.touchOnly) {
-    await touchStreamingEntity(ctx, args.entityId);
-  } else {
-    await upsertStreamingActivity(ctx, {
-      entityId: args.entityId,
-      currentActivity: args.currentActivity ?? "[]",
-      currentContent: args.currentContent,
-      pendingQuestion: args.pendingQuestion,
-    });
-  }
-  return true;
-}
-
 /** Renews the exact lease generation presented by a sandbox runner. */
 export const renew = internalMutation({
   args: {
@@ -224,36 +227,6 @@ export const heartbeatFromCallback = authMutation({
   }),
 });
 
-/** Legacy callbacks may write only while no durable Turn owns the chat. */
-export const legacyHeartbeat = internalMutation({
-  args: legacyHeartbeatArgs,
-  returns: v.boolean(),
-  handler: applyLegacyHeartbeat,
-});
-
-/** Authenticated legacy fallback with the same durable ownership gate. */
-const legacyHeartbeatResultValidator = v.object({
-  accepted: v.boolean(),
-  lease: v.union(leaseVerdictValidator, v.null()),
-});
-
-export const legacyHeartbeatFromCallback = authMutation({
-  args: legacyHeartbeatArgs,
-  returns: legacyHeartbeatResultValidator,
-  handler: async (
-    ctx,
-    args,
-  ): Promise<Infer<typeof legacyHeartbeatResultValidator>> => {
-    const accepted = await applyLegacyHeartbeat(ctx, args);
-    return {
-      accepted,
-      lease: accepted
-        ? null
-        : { status: "terminal", reason: "superseded" },
-    };
-  },
-});
-
 /** Records that durable sandbox preparation has reached the launch phase. */
 export const markLaunching = internalMutation({
   args: {
@@ -264,6 +237,54 @@ export const markLaunching = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (turn) await advanceTurn(ctx, turn, "launching", args);
+    return null;
+  },
+});
+
+/**
+ * Opens a one-shot agent's turn already leased: the launch that follows starts
+ * the process that owns it. Binds the calling workflow so the reconciler can
+ * tear that workflow down if the agent stalls.
+ */
+export const openAgentTurnLease = internalMutation({
+  args: {
+    entityId: turnEntityIdValidator,
+    lane: v.optional(turnLaneValidator),
+    streamingEntityId: v.string(),
+    model: v.optional(v.string()),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    workflowId: v.string(),
+  },
+  returns: leaseIdentityValidator,
+  handler: async (ctx, args) => {
+    const turnId = await openTurn(ctx, {
+      entityId: args.entityId,
+      lane: args.lane,
+      streamingEntityId: args.streamingEntityId,
+      model: normalizeAIModel(args.model),
+      sandboxId: args.sandboxId,
+      repoId: args.repoId,
+    });
+    await bindTurnWorkflow(ctx, turnId, args.workflowId);
+    const turn = await ctx.db.get(turnId);
+    const lease = turn
+      ? await acquireTurnLease(ctx, turn, "running", {
+          sandboxId: args.sandboxId,
+        })
+      : null;
+    if (!lease) throw new Error("Agent turn lease was not acquired");
+    return lease;
+  },
+});
+
+/** Closes one agent turn, e.g. when its process failed to launch. */
+export const closeAgentTurn = internalMutation({
+  args: { turnId: v.id("turns"), error: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const turn = await ctx.db.get(args.turnId);
+    if (turn) await closeTurn(ctx, turn, "error", { error: args.error });
     return null;
   },
 });
@@ -282,6 +303,24 @@ export const acquireOneShotLease = internalMutation({
   },
 });
 
+/**
+ * Appends why the reconciler gave up to the shared stall alert. The shared
+ * wording assumes a dead process; a turn finalised after grace expired needs
+ * to say the process was alive but mute, or the user reads a wrong cause.
+ */
+function withCauseDetail(
+  alert: ChatAlert,
+  cause: ExpiredTurnLeaseCause,
+  silentSince: number,
+): ChatAlert {
+  if (cause === "sandbox_stopped") return alert;
+  const suffix =
+    cause === "silent_timeout"
+      ? ` The agent process was still running but sent no heartbeat for ${Math.round((Date.now() - silentSince) / 1000)}s, so Eva stopped waiting.`
+      : " The agent process is no longer running in the sandbox.";
+  return { text: alert.text, detail: `${alert.detail ?? ""}${suffix}` };
+}
+
 /** Open turns whose owner lease has expired. */
 export const listExpired = internalQuery({
   args: { now: v.number(), limit: v.number() },
@@ -290,6 +329,7 @@ export const listExpired = internalQuery({
       turnId: v.id("turns"),
       sandboxId: v.optional(v.string()),
       repoId: v.id("githubRepos"),
+      silentSince: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -303,83 +343,195 @@ export const listExpired = internalQuery({
       turnId: turn._id,
       sandboxId: turn.sandboxId,
       repoId: turn.repoId,
+      silentSince: turn.silentSince,
     }));
   },
 });
+
+/**
+ * Extends one expired lease whose sandbox process is still demonstrably alive.
+ * A concurrent renewal always wins, exactly as in `finalizeExpired`.
+ */
+export const graceExpired = internalMutation({
+  args: { turnId: v.id("turns") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const turn = await ctx.db.get(args.turnId);
+    if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
+    await graceExpiredTurnLease(ctx, turn, Date.now());
+    return null;
+  },
+});
+
+/**
+ * Finalises one expired turn for any chat surface. A turn with a workflow
+ * gets the full stale-turn teardown; a turn without one (a synthetic turn)
+ * only closes its placeholder and frees the entity's synthetic slot.
+ */
+async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
+  ctx: MutationCtx,
+  adapter: ChatSurfaceAdapter<TId, TEntity>,
+  id: TId,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  const sandboxStopped = cause === "sandbox_stopped";
+  const entity = await adapter.getEntity(ctx, id);
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - lastLeaseWriteAt) / 1000),
+  );
+  const thresholdSeconds = Math.max(1, Math.round(leaseDurationMs / 1000));
+  const alert = sandboxStopped
+    ? adapter.alerts.sandboxStopped(staleSeconds)
+    : withCauseDetail(
+        adapter.alerts.stalled(staleSeconds, turn.state, thresholdSeconds),
+        cause,
+        turn.silentSince ?? lastLeaseWriteAt,
+      );
+  if (entity && turn.workflowId !== undefined) {
+    await finalizeStaleChatTurn(
+      ctx,
+      adapter,
+      id,
+      entity,
+      turn.workflowId,
+      alert,
+      { sandboxStopped },
+    );
+  } else if (entity && turn.placeholderMessageId !== undefined) {
+    const message = await ctx.db.get(turn.placeholderMessageId);
+    if (message && message.finishedAt === undefined) {
+      await ctx.db.patch(message._id, {
+        content: alert.text,
+        finishedAt: Date.now(),
+      });
+    }
+    await clearStreamingActivity(ctx, turn.streamingEntityId);
+    await adapter.finalizeOrphanTurn(ctx, id);
+    await adapter.drainQueue(ctx, id);
+  }
+  await closeTurn(ctx, turn, "error", { error: alert.text });
+  if (!sandboxStopped) {
+    await adapter.afterStallFinalize(ctx, id, turn._id);
+  }
+}
+
+/**
+ * Finalises one expired agent turn (a quick-task run or a one-shot agent)
+ * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
+ * teardown the 2-hour backstop uses for the others.
+ */
+async function finalizeExpiredAgentTurn(
+  ctx: MutationCtx,
+  owner: AgentTurnOwner,
+  turn: Doc<"turns">,
+  cause: ExpiredTurnLeaseCause,
+): Promise<void> {
+  const leaseDurationMs = turnLeaseDurationMs(turn.state);
+  const staleSeconds = Math.max(
+    1,
+    Math.round((Date.now() - (turn.leaseExpiresAt - leaseDurationMs)) / 1000),
+  );
+  const error = `Agent stalled: no heartbeat for ${staleSeconds}s (${cause})`;
+  console.log(
+    `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
+  );
+  const workflowId = turn.workflowId;
+  switch (owner.kind) {
+    case "run":
+      await finalizeStalledRun(ctx, owner.id, {
+        ...stalledRunStop({
+          state: turn.state,
+          hasSandbox: turn.sandboxId !== undefined,
+          staleSeconds,
+        }),
+        sandboxId: turn.sandboxId,
+      });
+      break;
+    case "automation":
+      if (workflowId !== undefined) {
+        await tearDownStaleAutomationRun(
+          ctx,
+          owner.id,
+          workflowId,
+          { sandboxId: turn.sandboxId, repoId: turn.repoId },
+          error,
+        );
+      }
+      break;
+    case "doc":
+      if (workflowId !== undefined) {
+        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "evaluation":
+      if (workflowId !== undefined) {
+        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+    case "summary":
+      if (workflowId !== undefined) {
+        await tearDownStaleSessionWorkflow(
+          ctx,
+          owner.id,
+          workflowId,
+          stalledAlert(
+            staleSeconds,
+            turn.state,
+            Math.round(leaseDurationMs / 1000),
+          ),
+        );
+      }
+      break;
+    case "interview":
+      if (workflowId !== undefined) {
+        await tearDownStaleProjectWorkflow(ctx, owner.id, workflowId);
+      }
+      break;
+  }
+  await clearStreamingActivity(ctx, turn.streamingEntityId);
+  await closeTurn(ctx, turn, "error", { error });
+}
 
 /** Re-reads and converges one expired lease; a concurrent renewal always wins. */
 export const finalizeExpired = internalMutation({
   args: {
     turnId: v.id("turns"),
-    sandboxStopped: v.boolean(),
+    cause: v.union(
+      v.literal("sandbox_stopped"),
+      v.literal("process_dead"),
+      v.literal("silent_timeout"),
+    ),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-    const context = chatId ? await loadSessionChat(ctx.db, chatId) : null;
-    const leaseDurationMs = turnLeaseDurationMs(turn.state);
-    const lastLeaseWriteAt = turn.leaseExpiresAt - leaseDurationMs;
-    const staleSeconds = Math.max(
-      1,
-      Math.round((Date.now() - lastLeaseWriteAt) / 1000),
-    );
-    const thresholdSeconds = Math.max(1, Math.round(leaseDurationMs / 1000));
-    const alert = args.sandboxStopped
-      ? sessionChatAdapter.alerts.sandboxStopped(staleSeconds)
-      : sessionChatAdapter.alerts.stalled(
-          staleSeconds,
-          turn.state,
-          thresholdSeconds,
-        );
-    if (chatId && context && turn.workflowId !== undefined) {
-      await finalizeStaleChatTurn(
-        ctx,
-        sessionChatAdapter,
-        chatId,
-        context,
-        turn.workflowId,
-        alert,
-        { sandboxStopped: args.sandboxStopped },
-      );
-    } else if (chatId && context && turn.placeholderMessageId !== undefined) {
-      const message = await ctx.db.get(turn.placeholderMessageId);
-      if (message && message.finishedAt === undefined) {
-        await ctx.db.patch(message._id, {
-          content: alert.text,
-          finishedAt: Date.now(),
-        });
-      }
-      await clearStreamingActivity(ctx, turn.streamingEntityId);
-      await ctx.db.patch(chatId, {
-        syntheticTurnMessageId: undefined,
-        updatedAt: Date.now(),
-      });
-      await drainSessionChatQueues(ctx, context.session._id, chatId);
-    } else {
-      // A pre-chat "session" turn or an orphan: nothing to salvage into.
-      await clearStreamingActivity(ctx, turn.streamingEntityId);
-    }
-    await closeTurn(ctx, turn, "error", { error: alert.text });
-    if (chatId && context && !args.sandboxStopped) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal._sessions.execution.retryEmptyStalledSessionTurn,
-        {
-          chatId,
-          turnId: args.turnId,
-          sandboxStopped: args.sandboxStopped,
-        },
-      );
-    }
+    await turnAdapterForEntity(ctx.db, turn, {
+      chat: (adapter, id) =>
+        finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
+      agent: (owner) => finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
+    });
     return null;
   },
 });
 
 const RECONCILE_BATCH_SIZE = 25;
 
-/** Level-triggered convergence for owners that die without sending completion. */
+/**
+ * Level-triggered convergence for owners that stop renewing their lease.
+ *
+ * An expired lease is not proof the run is gone: a daemon whose VM swaps hard
+ * can freeze for minutes and then recover. So the probe verdict now decides the
+ * action, not just the alert wording — a process the sandbox still reports
+ * running is granted grace (`graceExpired`), bounded by
+ * `TURN_SILENT_ALIVE_GRACE_MS` from the first silent cycle. A stopped sandbox
+ * or a dead process is finalised immediately, and a still-running sandbox has
+ * its post-mortem captured first so the stall can be root-caused later.
+ */
 export const reconcile = internalAction({
   args: {},
   returns: v.null(),
@@ -389,20 +541,46 @@ export const reconcile = internalAction({
       limit: RECONCILE_BATCH_SIZE,
     });
     for (const turn of expired) {
-      let sandboxStopped = false;
-      if (turn.sandboxId) {
-        const liveness = await ctx.runAction(
-          internal.sandbox.verifySandboxLiveness,
-          {
+      const liveness = turn.sandboxId
+        ? await ctx.runAction(internal.sandbox.verifySandboxLiveness, {
             sandboxId: turn.sandboxId,
             repoId: turn.repoId,
-          },
-        );
-        sandboxStopped = liveness.reason === "sandbox_not_started";
+          })
+        : null;
+      const decision = expiredTurnLeaseDecision({
+        liveness,
+        silentSince: turn.silentSince,
+        now: Date.now(),
+      });
+      console.log(
+        `[watchdog][lease-reconcile] turnId=${turn.turnId} sandboxId=${turn.sandboxId ?? "none"} alive=${liveness?.alive ?? "n/a"} reason=${liveness?.reason ?? "no_sandbox"} silentSince=${turn.silentSince ?? "none"} decision=${decision.action === "grace" ? "grace" : `finalize:${decision.cause}`}`,
+      );
+      if (decision.action === "grace") {
+        await ctx.runMutation(internal.turns.graceExpired, {
+          turnId: turn.turnId,
+        });
+        continue;
+      }
+      // Evidence must be read while the VM is still up, but never at the cost
+      // of leaving the turn open — a failed capture is only logged.
+      if (decision.cause !== "sandbox_stopped" && turn.sandboxId) {
+        try {
+          const diagnostics = await ctx.runAction(
+            internal.sandbox.captureStalledTurnDiagnostics,
+            { sandboxId: turn.sandboxId, repoId: turn.repoId },
+          );
+          console.log(
+            `[watchdog][lease-diagnostics] turnId=${turn.turnId} sandboxId=${turn.sandboxId}\n${diagnostics}`,
+          );
+        } catch (error) {
+          console.log(
+            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
       await ctx.runMutation(internal.turns.finalizeExpired, {
         turnId: turn.turnId,
-        sandboxStopped,
+        cause: decision.cause,
       });
     }
     return null;

@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -6,7 +8,11 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackEvaluationWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -17,6 +23,7 @@ import {
 import { buildPrBody } from "./prBody";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { buildRootDirectoryInstruction } from "./prompts";
 
 const evalCompleteEvent = defineEvent({
   name: "evalComplete",
@@ -72,17 +79,23 @@ export const evaluationWorkflow = workflow.define({
         baseBranch: args.branchName,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: String(args.reportId),
-        prompt: docData.prompt,
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Read,Glob,Grep",
-        repoId: docData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: String(args.reportId),
+          prompt: docData.prompt,
+          userId: args.userId,
+          completionMutation: "evaluationWorkflow:handleCompletion",
+          entityIdField: "reportId",
+          model: "sonnet",
+          allowedTools: "Read,Glob,Grep",
+          repoId: docData.repoId,
+        },
+        {
+          entityId: args.reportId,
+        },
+      );
 
       const result = await step.awaitEvent(evalCompleteEvent);
 
@@ -158,17 +171,23 @@ export const fixWorkflow = workflow.define({
         branchName: args.fixBranchName,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId: fixSandboxId,
-        entityId: String(args.reportId),
-        prompt: fixData.prompt,
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleFixCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-        repoId: fixData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId: fixSandboxId,
+          entityId: String(args.reportId),
+          prompt: fixData.prompt,
+          userId: args.userId,
+          completionMutation: "evaluationWorkflow:handleFixCompletion",
+          entityIdField: "reportId",
+          model: "sonnet",
+          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+          repoId: fixData.repoId,
+        },
+        {
+          entityId: args.reportId,
+        },
+      );
 
       const fixResult = await step.awaitEvent(fixCompleteEvent);
 
@@ -281,10 +300,9 @@ export const getDocData = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const rootDirectory = repo.rootDirectory ?? "";
-    const rootDirInstruction = rootDirectory
-      ? `\nIMPORTANT: Unless the user mentions otherwise, focus your evaluation on the app at "${rootDirectory}".`
-      : "";
+    const rootDirInstruction = buildRootDirectoryInstruction(
+      repo.rootDirectory ?? "",
+    );
 
     // The document itself is the specification. The agent explores the codebase
     // and reports whatever issues it finds, ranked by severity — no fixed
@@ -449,11 +467,24 @@ export const handleCompletion = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
+    ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.reportId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, evalCompleteEvent, report.activeWorkflowId, {
       success: args.success,
@@ -495,10 +526,9 @@ export const getFixData = internalQuery({
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const rootDirectory = repo.rootDirectory ?? "";
-    const rootDirInstruction = rootDirectory
-      ? `\nIMPORTANT: Unless the user mentions otherwise, focus your changes on the app at "${rootDirectory}".`
-      : "";
+    const rootDirInstruction = buildRootDirectoryInstruction(
+      repo.rootDirectory ?? "",
+    );
 
     const issues = report.issues ?? [];
 
@@ -591,11 +621,24 @@ export const handleFixCompletion = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
+    ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.reportId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, fixCompleteEvent, report.activeWorkflowId, {
       success: args.success,

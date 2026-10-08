@@ -4,11 +4,16 @@ export interface ModelOption<TModel extends string = string> {
   label: string;
 }
 
-/** A user's own provider account, surfaced as a selectable group in the picker. */
+/** A provider account the viewer can run on, surfaced as a group in the picker. */
 export interface ModelAccount {
   id: string;
   provider: string;
   label: string;
+  /**
+   * Owned by whoever the run bills to, not a teammate's shared account. Only
+   * own accounts may be picked automatically; a teammate's share is explicit.
+   */
+  isOwn: boolean;
 }
 
 export function getProviderLabel(provider: string): string {

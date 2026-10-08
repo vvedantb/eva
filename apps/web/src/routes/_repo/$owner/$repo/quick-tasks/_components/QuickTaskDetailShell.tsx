@@ -13,6 +13,7 @@ import {
 } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { QuickTaskBreadcrumb } from "./QuickTaskBreadcrumb";
 import { QuickTaskDetailHeaderActions } from "./QuickTaskDetailHeaderActions";
+import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 
 interface QuickTaskDetailShellProps {
   taskId: string;
@@ -40,6 +41,10 @@ export function QuickTaskDetailShell({
     handleBack,
   } = useQuickTaskNeighbors({ taskId, navSurface, sandboxTab });
 
+  // Names the browser tab. Here rather than in the page contents: this shell
+  // wraps both the detail and sandbox surfaces, so one call covers both.
+  useEntityDocumentTitle(selectedTask?.title);
+
   if (tasks === undefined) {
     return (
       <div className="flex h-full flex-1 items-center justify-center">
@@ -54,6 +59,8 @@ export function QuickTaskDetailShell({
         title={
           <QuickTaskBreadcrumb
             onBack={handleBack}
+            taskId={taskId}
+            tasks={tasks}
             taskNumId={selectedTask?.numId}
           />
         }

@@ -1,28 +1,14 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { findSandboxOwnerBySandboxId } from "./_sandbox/owner";
 
 /** Proves that a sandbox is attached to an entity in the supplied repository. */
 export const isBoundToRepo = internalQuery({
   args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query("sessions")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-    if (session) return session.repoId === args.repoId;
-
-    const project = await ctx.db
-      .query("projects")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-    if (project) return project.repoId === args.repoId;
-
-    const task = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-    return task?.repoId === args.repoId;
+    const owner = await findSandboxOwnerBySandboxId(ctx.db, args.sandboxId);
+    return owner?.doc.repoId === args.repoId;
   },
 });
 
@@ -42,8 +28,9 @@ const STAMP_GC_BATCH = 5;
 /**
  * Atomically claims the per-sandbox background-heal slot. Returns true when
  * the caller should run the heal now; false while a recent claim still holds
- * the slot. Mutation atomicity makes concurrent pollers (multiple tabs or
- * viewers of the same sandbox) race-free — exactly one wins per interval.
+ * the slot, or while the owning session is still launching its services.
+ * Mutation atomicity makes concurrent pollers (multiple tabs or viewers of the
+ * same sandbox) race-free — exactly one wins per interval.
  */
 export const claim = internalMutation({
   args: { sandboxId: v.string() },
@@ -55,6 +42,25 @@ export const claim = internalMutation({
       .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
       .first();
     if (stamp && now - stamp.lastHealAt < BG_HEAL_MIN_INTERVAL_MS) {
+      return false;
+    }
+    // A session between early-ready and final-ready is about to launch these
+    // daemons itself. Healing now would launch them first (a fresh VM has no
+    // pid files), and the lifecycle's own launch ~15s later kills those
+    // wrappers, orphans their children and truncates the logs. Read after the
+    // rate-limit check so a healthy sandbox pays one session-row read per
+    // interval, and return before stamping so the first poll after final-ready
+    // heals immediately (during the ~1min startup window every tick reads the
+    // row — cheap, indexed). Task/project sandboxes have no session row and
+    // are unaffected.
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
+      .first();
+    if (session?.sandboxServicesPending === true) {
+      console.log(
+        `[sandbox] preview heal skipped: session services still starting sandbox=${args.sandboxId}`,
+      );
       return false;
     }
     if (stamp) {

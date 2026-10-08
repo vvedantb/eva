@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  canSendSessionForReview,
   getSessionReadOnlyMessage,
   isSessionPrReadOnly,
   isSessionSidebarActive,
@@ -44,6 +45,23 @@ describe("session PR read-only state", () => {
       getSessionReadOnlyMessage({ isArchived: true, prState: "closed" }),
     ).toContain("closed");
   });
+
+  test("send for review needs a branch and a PR not already out for review", () => {
+    expect(canSendSessionForReview({ branchName: "eva/x" })).toBe(true);
+    expect(
+      canSendSessionForReview({ branchName: "eva/x", prState: "draft" }),
+    ).toBe(true);
+    expect(canSendSessionForReview({})).toBe(false);
+  });
+
+  test.each<SessionPrState>(["open", "merged", "closed"])(
+    "%s PR is past send for review",
+    (prState) => {
+      expect(canSendSessionForReview({ branchName: "eva/x", prState })).toBe(
+        false,
+      );
+    },
+  );
 
   test("manual archive has its own fallback and live sessions have none", () => {
     expect(

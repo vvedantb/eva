@@ -95,6 +95,44 @@ export class SandboxGoneError extends Error {
   }
 }
 
+/**
+ * The client-side ceiling on a sandbox exec elapsed (`withTimeout` in
+ * helpers.ts): the exec never answered at all. Typed so "the VM stopped
+ * responding" can be told apart from a command that ran and failed — the
+ * message keeps the exact `Sandbox exec (Ns) timed out after Nms` wording the
+ * setup-retry matchers already key on.
+ */
+export class SandboxExecTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SandboxExecTimeoutError";
+  }
+}
+
+/**
+ * True when a failure from a CHEAP eva-issued command (liveness probe, pid
+ * check, daemon fork) says the VM itself can no longer run commands:
+ *
+ * - exit 137 — the shell was SIGKILLed. A trivial `echo 1` cannot earn a
+ *   SIGKILL of its own, so this is the kernel OOM killer in meltdown or the
+ *   VM dying under the exec (prod 2026-09-01, silver-strategic-buzzard).
+ * - a client-side exec timeout ({@link SandboxExecTimeoutError}) — the exec
+ *   never answered at all.
+ *
+ * Deliberately NOT `sandbox-gone`: the record still exists and must never be
+ * abandoned for a replacement VM. The right reaction is a stop+resume
+ * (`restartUnresponsiveSandbox` in helpers.ts) or reporting unhealthy.
+ * Callers must only apply this to commands too cheap to be OOM-killed for
+ * their own memory use — a 137 from a heavy build means the command, not the
+ * VM.
+ */
+export function isSandboxUnresponsiveError(error: unknown): boolean {
+  if (error instanceof SandboxCommandFailedError) {
+    return error.exitCode === 137;
+  }
+  return error instanceof SandboxExecTimeoutError;
+}
+
 /** APIError from `@vercel/sandbox`: `.response` is a fetch `Response`. */
 const apiErrorShape = z.object({
   response: z.object({ status: z.number().int() }),

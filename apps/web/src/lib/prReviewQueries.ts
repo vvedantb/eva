@@ -169,6 +169,43 @@ export function commitDiffQuery(
   });
 }
 
+type CompareDiffPayload = FunctionReturnType<typeof api.github.getCompareDiff>;
+
+export type CompareDiffRunner = (args: {
+  repoId: Id<"githubRepos">;
+  baseSha: string;
+  headSha: string;
+}) => Promise<CompareDiffPayload>;
+
+/** `base...head`, split per file; `unavailable` when GitHub has not seen a sha. */
+export interface CompareDiffData {
+  readonly entries: readonly DiffFileEntry[];
+  readonly truncated: boolean;
+  readonly unavailable: boolean;
+}
+
+/**
+ * What a turn changed: the diff between the checkpoints stamped on an assistant
+ * message. Shas are immutable, so this is cached forever like a commit diff.
+ */
+export function compareDiffQuery(
+  run: CompareDiffRunner,
+  repoId: Id<"githubRepos">,
+  baseSha: string,
+  headSha: string,
+) {
+  return queryOptions({
+    queryKey: ["compare", "diff", repoId, baseSha, headSha] as const,
+    queryFn: (): Promise<CompareDiffData> =>
+      run({ repoId, baseSha, headSha }).then((payload) => ({
+        entries: buildDiffFileEntries(payload.diff),
+        truncated: payload.truncated,
+        unavailable: payload.unavailable,
+      })),
+    staleTime: Infinity,
+  });
+}
+
 /**
  * GitHub's own message where there is one, the caller's wording where there is
  * not — a rejected query can carry an empty message.

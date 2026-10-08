@@ -2,6 +2,7 @@
 
 import { Progress } from "@eva/ui";
 import { Widget } from "@/lib/components/Widget";
+import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 
 interface SessionFunnelProps {
   totalSessions: number;
@@ -14,6 +15,9 @@ export function SessionFunnel({
 }: SessionFunnelProps) {
   const sessionPrRate =
     totalSessions > 0 ? Math.round((sessionsWithPr / totalSessions) * 100) : 0;
+  const totalSessionsDisplay = useCountUpDisplay(totalSessions);
+  const sessionsWithPrDisplay = useCountUpDisplay(sessionsWithPr);
+  const sessionPrRateDisplay = useCountUpDisplay(`${sessionPrRate}%`);
   return (
     <Widget
       title="Session to PR"
@@ -23,7 +27,9 @@ export function SessionFunnel({
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-muted-foreground">Sessions Created</span>
-            <span className="font-medium text-foreground">{totalSessions}</span>
+            <span className="font-medium text-foreground">
+              {totalSessionsDisplay}
+            </span>
           </div>
           <Progress value={100} />
         </div>
@@ -31,7 +37,7 @@ export function SessionFunnel({
           <div className="flex justify-between text-sm mb-1">
             <span className="text-muted-foreground">PRs Opened</span>
             <span className="font-medium text-foreground">
-              {sessionsWithPr}
+              {sessionsWithPrDisplay}
             </span>
           </div>
           <Progress
@@ -43,7 +49,9 @@ export function SessionFunnel({
         <div className="pt-2">
           <p className="text-sm text-muted-foreground">
             Session PR rate:{" "}
-            <span className="font-bold text-foreground">{sessionPrRate}%</span>
+            <span className="font-bold text-foreground">
+              {sessionPrRateDisplay}
+            </span>
           </p>
         </div>
       </div>

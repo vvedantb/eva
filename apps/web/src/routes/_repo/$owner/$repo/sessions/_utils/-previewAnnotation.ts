@@ -285,7 +285,7 @@ export function parseAnnotationInbound(
  * Underscore only — a hyphen rule would eat ordinary utility classes
  * (`items-center` → `items`).
  */
-export function cleanClassName(cls: string): string {
+function cleanClassName(cls: string): string {
   return cls.replace(/_[a-zA-Z0-9]{5,}$/, "");
 }
 

@@ -1,12 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
-import {
-  AveBusy,
-  AveHomeRepoPicker,
-} from "@/lib/components/ave/AveHomeRepoPicker";
-import { encodeRepoParam } from "@/lib/utils/repoUrl";
-import { CachedSessionShell } from "@/routes/_repo/$owner/$repo/sessions/_components/CachedSessionShell";
+import { AveChat } from "@/lib/components/ave/AveChat";
+import { AveMark } from "@/lib/components/ave/AveMark";
 
 export const Route = createFileRoute("/_global/ave")({
   staticData: { title: "Manager Ave" },
@@ -14,33 +8,21 @@ export const Route = createFileRoute("/_global/ave")({
 });
 
 /**
- * Manager Ave full screen: one persistent session per user, but it lives at
- * this stable URL rather than redirecting into `/$owner/$repo/sessions/$numId`
- * — the session shell is mounted inline instead. Its `chatOnly` branch drops
- * the sandbox panel, so all that renders here is the chat. The floating
- * launcher (`AveLauncherProvider`) mounts the same shell as a popover; this is
- * where its expand button lands.
+ * Manager Ave full screen, at a stable per-user URL. The floating launcher
+ * (`AveLauncherProvider`) mounts the same chat as a popover; this is where its
+ * expand button lands. `_global.tsx` clamps this route to the viewport, which
+ * the chat's scroll container needs.
  */
 function AveRoute() {
-  const orchestrator = useQuery(api.sessions.getOrchestratorSession, {});
-
-  // `undefined` is "still loading", not "no session" — rendering the picker
-  // here would flash a codebase list at every user who already has one.
-  if (orchestrator === undefined) return <AveBusy label="Opening Manager Ave" />;
-
-  if (orchestrator === null) return <AveHomeRepoPicker redirectHomeWhenEmpty />;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* The shell carries its own passive RepoProvider, so Ave's repo resolves
-          without this route living under `/$owner/$repo`. */}
-      <CachedSessionShell
-        numId={String(orchestrator.numId)}
-        owner={orchestrator.owner}
-        repoParam={encodeRepoParam(orchestrator.name, orchestrator.rootDirectory)}
-        isActiveRoute
-      />
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+        <AveMark size={20} className="shrink-0" />
+        <span className="flex-1 truncate text-sm font-semibold">
+          Manager Ave
+        </span>
+      </div>
+      <AveChat />
     </div>
   );
 }
-

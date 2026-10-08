@@ -1,7 +1,13 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
-import { MASKED_ENV_VAR_VALUE } from "./_envVars/listDisplay";
+import {
+  maskEnvVarEntries,
+  removeEnvVarEntry,
+  sandboxEligibleEnvVars,
+  toggleEnvVarSandboxExclude,
+  upsertEnvVarEntry,
+} from "./_envVars/documentStore";
 
 /** Lists team env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
@@ -29,11 +35,7 @@ export const list = authQuery({
       .first();
 
     if (!doc) return [];
-    return doc.vars.map((entry) => ({
-      key: entry.key,
-      value: MASKED_ENV_VAR_VALUE,
-      sandboxExclude: entry.sandboxExclude ?? false,
-    }));
+    return maskEnvVarEntries(doc.vars);
   },
 });
 
@@ -67,9 +69,7 @@ export const getForSandbox = internalQuery({
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .first();
     if (!doc) return [];
-    return doc.vars
-      .filter((entry) => !entry.sandboxExclude)
-      .map((entry) => ({ key: entry.key, value: entry.value }));
+    return sandboxEligibleEnvVars(doc.vars);
   },
 });
 
@@ -87,24 +87,20 @@ export const upsertVarInternal = internalMutation({
       .query("teamEnvVars")
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .first();
+    const newEntry = {
+      key: args.key,
+      value: args.value,
+      sandboxExclude: args.sandboxExclude ?? false,
+    };
     if (doc) {
-      const vars = doc.vars.filter((entry) => entry.key !== args.key);
-      vars.push({
-        key: args.key,
-        value: args.value,
-        sandboxExclude: args.sandboxExclude ?? false,
+      await ctx.db.patch(doc._id, {
+        vars: upsertEnvVarEntry(doc.vars, newEntry),
+        updatedAt: Date.now(),
       });
-      await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     } else {
       await ctx.db.insert("teamEnvVars", {
         teamId: args.teamId,
-        vars: [
-          {
-            key: args.key,
-            value: args.value,
-            sandboxExclude: args.sandboxExclude ?? false,
-          },
-        ],
+        vars: [newEntry],
         updatedAt: Date.now(),
       });
     }
@@ -136,7 +132,7 @@ export const removeVar = authMutation({
 
     if (!doc) return null;
 
-    const vars = doc.vars.filter((entry) => entry.key !== args.key);
+    const vars = removeEnvVarEntry(doc.vars, args.key);
     await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     return null;
   },
@@ -165,10 +161,10 @@ export const toggleSandboxExclude = authMutation({
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .first();
     if (!doc) return null;
-    const vars = doc.vars.map((entry) =>
-      entry.key === args.key
-        ? { ...entry, sandboxExclude: args.sandboxExclude }
-        : entry,
+    const vars = toggleEnvVarSandboxExclude(
+      doc.vars,
+      args.key,
+      args.sandboxExclude,
     );
     await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     return null;

@@ -5,65 +5,67 @@ import {
   normalizeAIModel,
   type AIModel,
   type Id,
-  type ReasoningLevel,
   type StoredModelTraits,
 } from "@eva/backend";
+import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { toRunTraitArgs } from "@/lib/utils/runTraits";
 
 /**
- * Chat composer prefs backed by Convex (`sessionChats.lastModel` / trait
- * fields / `providerAccountId`) as the source of truth. Read straight off the
- * live `sessionChats.get` query — no mirrored `useState` — so picks stay
- * sticky across reloads, tabs, and devices. Each chat tab of a session keeps
- * its own picks, which is what lets two chats run on different providers.
+ * Session composer prefs backed by Convex (`sessions.lastModel` / trait fields
+ * / `providerAccountId`) as the source of truth. Read straight off the live
+ * `sessions.get` query — no mirrored `useState` — so picks stay sticky across
+ * reloads, tabs, and devices.
  *
- * Changes go through sticky setters with optimistic patches. While the chat
- * query is still loading the picker shows `defaultModel`, model-default
- * traits, and Team account.
+ * Changes go through sticky setters with optimistic patches. While the session
+ * query is still loading the picker shows `defaultModel`, model-default traits,
+ * and Team account. Cached-hidden shells pass `active: false` so this does
+ * not keep a second `sessions.get` live after SessionDetailClient skips it.
  */
-export function useChatModel(
-  chatId: Id<"sessionChats">,
+export function useSessionModel(
+  sessionId: Id<"sessions">,
   defaultModel: AIModel,
+  active = true,
 ): {
   model: AIModel;
   setModel: (model: AIModel) => void;
   /** Sticky traits from Convex; undefined fields use model defaults. */
   traits: StoredModelTraits;
   setTraits: (partial: Partial<StoredModelTraits>) => void;
-  /** undefined while the chat is loading — treat as Team until the query lands. */
+  /** undefined while session loading — treat as Team until the query lands. */
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
+  /** Resolves once the replacement daemon is warm. */
   setProviderAccountId: (
     providerAccountId: Id<"userProviderAccounts"> | null,
-  ) => void;
+  ) => Promise<void>;
   isSwitchingAccount: boolean;
 } {
-  const chat = useQuery(api.sessionChats.get, { chatId });
+  const session = useHeldQuery(
+    api.sessions.get,
+    active ? { id: sessionId } : "skip",
+  );
   const prewarmDaemonNow = useAction(api.sessionWorkflow.prewarmDaemonNow);
   const setModelMutation = useMutation(
-    api.sessionChats.setModel,
+    api.sessions.setModel,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
+    const current = localStore.getQuery(api.sessions.get, { id: args.id });
     if (!current) return;
     localStore.setQuery(
-      api.sessionChats.get,
-      { chatId: args.chatId },
+      api.sessions.get,
+      { id: args.id },
       { ...current, lastModel: args.model },
     );
   });
   const setProviderAccountIdMutation = useMutation(
-    api.sessionChats.setProviderAccountId,
+    api.sessions.setProviderAccountId,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
+    const current = localStore.getQuery(api.sessions.get, { id: args.id });
     if (!current) return;
     localStore.setQuery(
-      api.sessionChats.get,
-      { chatId: args.chatId },
+      api.sessions.get,
+      { id: args.id },
       {
         ...current,
         providerAccountId:
@@ -74,68 +76,47 @@ export function useChatModel(
   const { isSwitchingAccount, switchProviderAccount } =
     useProviderAccountHandoff({
       persist: (providerAccountId) =>
-        setProviderAccountIdMutation({ chatId, providerAccountId }),
-      prewarm: () => prewarmDaemonNow({ chatId }),
+        setProviderAccountIdMutation({ id: sessionId, providerAccountId }),
+      prewarm: () => prewarmDaemonNow({ sessionId }),
     });
   const setTraitsMutation = useMutation(
-    api.sessionChats.setTraits,
+    api.sessions.setTraits,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
+    const current = localStore.getQuery(api.sessions.get, { id: args.id });
     if (!current) return;
     localStore.setQuery(
-      api.sessionChats.get,
-      { chatId: args.chatId },
+      api.sessions.get,
+      { id: args.id },
       {
         ...current,
-        ...(args.reasoningLevel !== undefined
-          ? { lastReasoningLevel: args.reasoningLevel }
-          : {}),
-        ...(args.thinkingEnabled !== undefined
-          ? { lastThinkingEnabled: args.thinkingEnabled }
-          : {}),
-        ...(args.use1mContext !== undefined
-          ? { lastUse1mContext: args.use1mContext }
-          : {}),
-        ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
+        ...composerTraitFields(args),
       },
     );
   });
 
-  const model = normalizeAIModel(chat?.lastModel ?? defaultModel);
+  const model = normalizeAIModel(session?.lastModel ?? defaultModel);
 
   const setModel = (nextModel: AIModel) => {
-    void setModelMutation({ chatId, model: normalizeAIModel(nextModel) });
+    void setModelMutation({
+      id: sessionId,
+      model: normalizeAIModel(nextModel),
+    });
   };
 
   const setTraits = (partial: Partial<StoredModelTraits>) => {
-    const reasoningLevel: ReasoningLevel | undefined = partial.effortLevel;
     void setTraitsMutation({
-      chatId,
-      ...(reasoningLevel !== undefined ? { reasoningLevel } : {}),
-      ...(partial.thinkingEnabled !== undefined
-        ? { thinkingEnabled: partial.thinkingEnabled }
-        : {}),
-      ...(partial.use1mContext !== undefined
-        ? { use1mContext: partial.use1mContext }
-        : {}),
-      ...(partial.fastMode !== undefined ? { fastMode: partial.fastMode } : {}),
+      id: sessionId,
+      ...toRunTraitArgs(partial),
     });
   };
 
   return {
     model,
     setModel,
-    traits: {
-      effortLevel: chat?.lastReasoningLevel,
-      thinkingEnabled: chat?.lastThinkingEnabled,
-      use1mContext: chat?.lastUse1mContext,
-      fastMode: chat?.lastFastMode,
-    },
+    traits: storedComposerTraits(session),
     setTraits,
     providerAccountId:
-      chat === undefined ? undefined : (chat?.providerAccountId ?? null),
+      session === undefined ? undefined : (session?.providerAccountId ?? null),
     setProviderAccountId: switchProviderAccount,
     isSwitchingAccount,
   };

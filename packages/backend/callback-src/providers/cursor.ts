@@ -158,6 +158,23 @@ function cursorToolCallEvents(event: JsonObject): CanonicalEvent[] {
 }
 
 /**
+ * Classifies the SDK's in-place compaction lifecycle events. The runner treats
+ * an open compaction as liveness (a compacting agent must never be timed out
+ * and replaced), and the parser surfaces it in the activity feed.
+ */
+export function cursorCompactionEventPhase(
+  type: string,
+): "started" | "completed" | null {
+  if (type === "summary-started" || type === "summary_started") {
+    return "started";
+  }
+  if (type === "summary-completed" || type === "summary_completed") {
+    return "completed";
+  }
+  return null;
+}
+
+/**
  * Stream event types that legitimately carry nothing the activity feed wants.
  * Producing no canonical events for these is expected, not a parser gap.
  */
@@ -249,6 +266,25 @@ function cursorEventToCanonical(event: JsonObject): CanonicalEvent[] {
   if (event.type === "result") {
     events.push({ kind: "mark_last_complete" });
     return events;
+  }
+  if (typeof event.type === "string") {
+    const compactionPhase = cursorCompactionEventPhase(event.type);
+    if (compactionPhase === "started") {
+      events.push({
+        kind: "update_thinking",
+        label: "Compacting context...",
+        detail: "Cursor is summarizing the conversation in place.",
+      });
+      return events;
+    }
+    if (compactionPhase === "completed") {
+      events.push({
+        kind: "update_thinking",
+        label: "Context compacted",
+        detail: "The agent continues with its history summarized in place.",
+      });
+      return events;
+    }
   }
   return events;
 }

@@ -96,9 +96,14 @@ describe("queued work counts as busy", () => {
   });
 
   test("every chat surface folds it into isBusy", () => {
-    // Session, quick task chat, project chat.
-    const folds = nodeActions.match(/queuedAhead > 0/g);
-    expect(folds?.length).toBe(3);
+    // One fold, read by session, quick task chat and project chat alike.
+    expect(nodeActions.match(/queuedAhead > 0/g)?.length).toBe(1);
+    expect(nodeActions).toContain("const isBusy = isExecuting || queuedAhead > 0;");
+    const delivery = nodeActions.slice(
+      nodeActions.indexOf("function chatDelivery("),
+      nodeActions.indexOf("export const orchestratorSendMessage"),
+    );
+    expect(delivery.match(/^\s+isBusy,$/gm)?.length).toBe(3);
   });
 });
 

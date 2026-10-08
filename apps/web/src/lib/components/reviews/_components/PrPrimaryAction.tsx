@@ -17,6 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  CrossfadeIcon,
   Spinner,
   toast,
 } from "@eva/ui";
@@ -27,12 +28,19 @@ import {
   IconGitPullRequest,
 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
 import type { PrOverview } from "./prOverviewMeta";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
-export type MergeMethod = "merge" | "squash" | "rebase";
+type MergeMethod = "merge" | "squash" | "rebase";
 
-export const MERGE_METHODS: { value: MergeMethod; label: string }[] = [
+const MERGE_METHODS: { value: MergeMethod; label: string }[] = [
   { value: "squash", label: "Squash and merge" },
   { value: "merge", label: "Create a merge commit" },
   { value: "rebase", label: "Rebase and merge" },
@@ -83,6 +91,7 @@ function MergeAction({
   const [method, setMethod] = useState<MergeMethod>("squash");
   const [confirming, setConfirming] = useState(false);
   const [merging, setMerging] = useState(false);
+  const altHeld = useAltHeld();
 
   const canMerge = !overview.draft && overview.mergeable === true;
   const blocked = mergeBlocker(overview)?.detail ?? null;
@@ -118,18 +127,28 @@ function MergeAction({
     <>
       <ButtonGroup>
         <Button
-          size="sm"
+          size="xs"
           disabled={!canMerge}
-          onClick={() => setConfirming(true)}
-          title={blocked ?? methodLabel}
+          onClick={(event) =>
+            requestConfirm(
+              altHeld,
+              () => setConfirming(true),
+              () => {
+                void runMerge();
+              },
+              event,
+            )
+          }
+          title={blocked ?? skipConfirmTitle(methodLabel)}
         >
           <IconGitMerge size={14} aria-hidden />
           Merge
+          <ConfirmSkipHint />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              size="sm"
+              size="xs"
               disabled={!canMerge}
               className="px-1.5"
               aria-label="Choose a merge method"
@@ -174,7 +193,15 @@ function MergeAction({
               Cancel
             </Button>
             <Button onClick={() => void runMerge()} disabled={merging}>
-              {merging ? <Spinner size="sm" /> : <IconGitMerge size={14} />}
+              <CrossfadeIcon
+                show={merging}
+                trueKey="loading"
+                falseKey="idle"
+                variant="soft"
+                className="relative flex size-3.5 items-center justify-center"
+                whenTrue={<Spinner size="sm" />}
+                whenFalse={<IconGitMerge size={14} />}
+              />
               {merging ? "Merging" : methodLabel}
             </Button>
           </DialogFooter>
@@ -211,8 +238,16 @@ function ReopenAction({
   };
 
   return (
-    <Button size="sm" disabled={working} onClick={() => void reopen()}>
-      {working ? <Spinner size="sm" /> : <IconGitPullRequest size={14} />}
+    <Button size="xs" disabled={working} onClick={() => void reopen()}>
+      <CrossfadeIcon
+        show={working}
+        trueKey="loading"
+        falseKey="idle"
+        variant="soft"
+        className="relative flex size-3.5 items-center justify-center"
+        whenTrue={<Spinner size="sm" />}
+        whenFalse={<IconGitPullRequest size={14} />}
+      />
       Reopen
     </Button>
   );
@@ -229,6 +264,7 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const createSession = useConvexMutation(api.sessions.create);
   const [starting, setStarting] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const altHeld = useAltHeld();
 
   const sha = overview.mergeCommitSha;
 
@@ -247,7 +283,9 @@ function RevertAction({ overview }: { overview: PrOverview }) {
         message,
         baseBranch: overview.baseRef,
       });
-      await navigate({ to: `${basePath}/sessions/${numId}` });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Couldn't start a session",
@@ -258,9 +296,23 @@ function RevertAction({ overview }: { overview: PrOverview }) {
 
   return (
     <>
-      <Button size="sm" onClick={() => setConfirming(true)}>
+      <Button
+        size="xs"
+        title={skipConfirmTitle("Revert")}
+        onClick={(event) =>
+          requestConfirm(
+            altHeld,
+            () => setConfirming(true),
+            () => {
+              void start();
+            },
+            event,
+          )
+        }
+      >
         <IconArrowBackUp size={14} aria-hidden />
         Revert
+        <ConfirmSkipHint />
       </Button>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
@@ -268,10 +320,10 @@ function RevertAction({ overview }: { overview: PrOverview }) {
           <DialogHeader>
             <DialogTitle>Revert this pull request?</DialogTitle>
             <DialogDescription>
-              A merge cannot be undone through GitHub, so this starts a session on{" "}
-              <span className="font-mono">{overview.baseRef}</span> that writes
-              the revert and opens a pull request for it. Nothing changes until
-              that pull request is merged.
+              A merge cannot be undone through GitHub, so this starts a session
+              on <span className="font-mono">{overview.baseRef}</span> that
+              writes the revert and opens a pull request for it. Nothing changes
+              until that pull request is merged.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -283,7 +335,15 @@ function RevertAction({ overview }: { overview: PrOverview }) {
               Cancel
             </Button>
             <Button onClick={() => void start()} disabled={starting}>
-              {starting ? <Spinner size="sm" /> : <IconArrowBackUp size={14} />}
+              <CrossfadeIcon
+                show={starting}
+                trueKey="loading"
+                falseKey="idle"
+                variant="soft"
+                className="relative flex size-3.5 items-center justify-center"
+                whenTrue={<Spinner size="sm" />}
+                whenFalse={<IconArrowBackUp size={14} />}
+              />
               Start a session
             </Button>
           </DialogFooter>

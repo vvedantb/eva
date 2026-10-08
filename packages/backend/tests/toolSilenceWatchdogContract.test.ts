@@ -93,28 +93,38 @@ describe("a tool in flight exempts the turn from the silence kill", () => {
    * refresh only that clock and keep the runtime cap ahead of it.
    */
   test.each([
-    ["codex", () => codexSdk, "lastEventAt = now;", "S.activeAttemptStartedAt"],
+    [
+      "codex",
+      () => codexSdk,
+      "if (S.inFlightToolUses > 0) {",
+      "lastEventAt = now;",
+      "S.activeAttemptStartedAt",
+    ],
     [
       "cursor",
       () => cursorSdk,
+      // Cursor also exempts an in-place compaction: replacing a compacting
+      // agent is the rotation the resume-always design forbids.
+      "if (S.inFlightToolUses > 0 || compactionInFlight) {",
       "lastMessageAt = now;",
       "S.activeAttemptStartedAt",
     ],
     [
       "opencode",
       () => opencodeSdk,
+      "if (S.inFlightToolUses > 0) {",
       "watchdogClock = now;",
       "S.activeAttemptStartedAt",
     ],
   ])(
     "the %s one-shot watchdog refreshes only its silence clock",
-    (_name, read, refresh, runtimeClock) => {
+    (_name, read, guard, refresh, runtimeClock) => {
       const body = sliceBetween(
         read(),
         "const healthTimer = setInterval(() => {",
         "}, NO_OUTPUT_CHECK_INTERVAL_MS);",
       );
-      const exemption = guardedBlock(body, "if (S.inFlightToolUses > 0) {");
+      const exemption = guardedBlock(body, guard);
       expect(exemption).toContain(refresh);
       expect(
         exemption,
@@ -124,7 +134,7 @@ describe("a tool in flight exempts the turn from the silence kill", () => {
       const capAt = body.indexOf(
         "now - S.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS",
       );
-      const exemptionAt = body.indexOf("if (S.inFlightToolUses > 0) {");
+      const exemptionAt = body.indexOf(guard);
       expect(capAt, "the runtime cap moved").toBeGreaterThan(-1);
       // The cap must be evaluated before the exemption so a turn wedged while
       // holding a tool open is still bounded.

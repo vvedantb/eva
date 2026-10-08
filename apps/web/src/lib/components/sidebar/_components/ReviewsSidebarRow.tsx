@@ -8,7 +8,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
+  motionFast,
 } from "@eva/ui";
+import { m } from "motion/react";
 import { IconGitPullRequest, IconPencil } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import {
@@ -60,6 +62,11 @@ export function ReviewsSidebarRow({
   };
 
   return (
+    <m.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionFast}
+    >
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <SharedLayoutNavSurface itemId={String(pr.number)} isActive={isActive}>
@@ -89,7 +96,7 @@ export function ReviewsSidebarRow({
               />
               <span className="truncate text-sm font-medium">{pr.title}</span>
             </span>
-            <span className="flex w-full min-w-0 items-center gap-1.5 pl-5 text-[11px] text-muted-foreground">
+            <span className="flex w-full min-w-0 items-center gap-1.5 pl-5 text-2xs text-muted-foreground">
               <span className="shrink-0">#{pr.number}</span>
               {pr.authorLogin ? (
                 <span className="truncate">{pr.authorLogin}</span>
@@ -108,5 +115,6 @@ export function ReviewsSidebarRow({
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+    </m.div>
   );
 }

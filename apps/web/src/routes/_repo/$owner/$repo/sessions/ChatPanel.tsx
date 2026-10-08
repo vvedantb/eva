@@ -1,61 +1,67 @@
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { m, AnimatePresence } from "motion/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
-import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
-import { SessionPrdPlanView } from "./_components/SessionPrdPlanView";
-import { ComposerPlanReadyBanner } from "./_components/ComposerPlanReadyBanner";
+import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
+import {
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
+} from "@/lib/components/chat/chatBodyUtils";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
-import { SessionChatHeader } from "./_components/SessionChatHeader";
+import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
+import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
-import { SessionSummaryModal } from "./_components/SessionSummaryModal";
-import { SessionReviewModal } from "./_components/SessionReviewModal";
-import { useChatSend, type SessionMessage } from "./_components/useChatSend";
-import { ChatTabsBar } from "./_components/ChatTabsBar";
+import {
+  SessionSummaryModal,
+  useStartSessionSummary,
+} from "./_components/SessionSummaryModal";
+import {
+  SessionReviewModal,
+  useSendSessionForReview,
+} from "./_components/SessionReviewModal";
+import {
+  useSessionSend,
+  type SessionMessage,
+} from "./_components/useSessionSend";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
-import { useChatModel } from "@/lib/hooks/useChatModel";
+import { useSessionModel } from "@/lib/hooks/useSessionModel";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAvailableAiModels,
   useSessionOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
-import { useSeedChatDraft } from "@/lib/components/chat/useSeedChatDraft";
 import { PendingReviewCommentChips } from "@/lib/components/chat/PendingReviewCommentChips";
-import { AveResetChatDialog } from "@/lib/components/ave/AveResetChatDialog";
+import { requestConfirm, useAltHeld } from "@/lib/confirm";
+import { toast } from "@eva/ui";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { getSessionReadOnlyMessage } from "./_utils/sessionReadOnly";
-import { APPROVE_PLAN_PROMPT } from "./_utils/composerPrompts";
-import { motionBase } from "@eva/ui";
+import { ProposedPlanCard } from "./_components/ProposedPlanCard";
+import { proposedPlanForMessage } from "./_components/proposedPlanLogic";
+import { useSessionPlanImplementation } from "./_components/useSessionPlanImplementation";
+import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
 
 type QueuedSessionMessage = NonNullable<
   FunctionReturnType<typeof api.queuedMessages.listByParent>
 >[number];
 
-type ChatTurnStatus = FunctionReturnType<
-  typeof api.turns.listSessionChatStatuses
->[number];
-
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
-  /** The chat tab this panel shows; the transcript, turn and model are its own. */
-  chat: Doc<"sessionChats">;
-  /** Every chat of the session, for the tab strip. */
-  chats: Doc<"sessionChats">[];
-  /** Open turns across the session's chats (tab dots + the slot-wait caption). */
-  chatStatuses: ChatTurnStatus[];
-  onSelectChat: (chat: Doc<"sessionChats">) => void;
-  onCreateChat: () => void;
-  isCreatingChat: boolean;
   title: string;
   branchName?: string;
+  /** Branch the sandbox worktree is on right now, reported by its daemon. */
+  sandboxBranch?: string;
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
@@ -77,12 +83,6 @@ interface ChatPanelProps {
   isReadOnly?: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
   sandboxCollapsed?: boolean;
-  /** Canonical link to this session; omitted when the URL already is one. */
-  permalinkPath?: string;
-  /** Chat-only surface (the orchestrator): hides branch/PR affordances. */
-  chatOnly?: boolean;
-  /** Popover already titles the surface — omit the session-chat title. */
-  hideTitle?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
@@ -91,22 +91,19 @@ interface ChatPanelProps {
   onOpenPrdTab?: () => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
-  backgroundAgents?: Doc<"sessionChats">["backgroundAgents"];
+  backgroundAgents?: Doc<"sessions">["backgroundAgents"];
+  /**
+   * False while this session shell is cached-hidden. Skips chat-local
+   * subscriptions that would otherwise keep a background turn warm.
+   */
+  isRouteActive?: boolean;
 }
-
-/** Sessions run at most this many chats at once; mirrors the server cap. */
-const MAX_PARALLEL_CHATS = 3;
 
 export function ChatPanel({
   sessionId,
-  chat,
-  chats,
-  chatStatuses,
-  onSelectChat,
-  onCreateChat,
-  isCreatingChat,
   title,
   branchName,
+  sandboxBranch,
   prUrl,
   prState,
   summary,
@@ -125,28 +122,28 @@ export function ChatPanel({
   isArchived = false,
   isReadOnly = false,
   deploymentStatus,
-  sandboxCollapsed,
-  permalinkPath,
-  chatOnly,
-  hideTitle = false,
   onOpenFile,
   onViewDiff,
-  onOpenPrdTab,
   onOpenAgentsTab,
   backgroundAgents,
+  isRouteActive = true,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
-  const chatId = chat._id;
+  const navigate = useNavigate();
+  const createSession = useMutation(api.sessions.create);
+  const simpleView = useSimpleView();
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [showResetChatDialog, setShowResetChatDialog] = useState(false);
+  const altHeld = useAltHeld();
+  const { sendForReview } = useSendSessionForReview(sessionId);
+  const { startSummary } = useStartSessionSummary(sessionId);
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // The picker lists the session owner's accounts, not the viewer's — the turn
   // always runs on the owner's credentials.
   const { options: accounts, resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId);
-  // Model + traits + account are owned by Convex, per chat tab.
+    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
+  // Model + traits + account are owned by Convex.
   const {
     model,
     setModel,
@@ -155,7 +152,7 @@ export function ChatPanel({
     providerAccountId: stickyProviderAccountId,
     setProviderAccountId: setStickyProviderAccountId,
     isSwitchingAccount,
-  } = useChatModel(chatId, defaultModel);
+  } = useSessionModel(sessionId, defaultModel, isRouteActive);
   const {
     displayTraits,
     executionTraits,
@@ -170,7 +167,7 @@ export function ChatPanel({
     onTraitsPersist: setTraits,
     providerAccountId: stickyProviderAccountId,
     onProviderAccountChange: (next: string | null) => {
-      setStickyProviderAccountId(
+      void setStickyProviderAccountId(
         next === null ? null : (resolveAccountId(next) ?? null),
       );
     },
@@ -180,9 +177,8 @@ export function ChatPanel({
   // under so credentials follow the new provider.
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
-  const draftTarget = { kind: "sessionChat" as const, sessionId, chatId };
+  const draftTarget = { kind: "sessionChat" as const, sessionId };
   const draftSeed = useChatDraftSeed(draftTarget);
-  const seedChatDraft = useSeedChatDraft(draftTarget);
   const draftBundle = draftSeed.isReady
     ? {
         target: draftTarget,
@@ -195,8 +191,46 @@ export function ChatPanel({
   const review = usePendingReviewComments();
   const hasPendingReviewComments = (review?.comments.length ?? 0) > 0;
 
-  const { isExecuting, handleSend, handleCancel } = useChatSend({
-    chatId,
+  const handleForkTranscript = async (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => {
+    const accountId = resolveAccountId(providerAccountId) ?? null;
+    try {
+      const { numId } = await createSession({
+        repoId: repo._id,
+        title: input.title,
+        message: input.prompt,
+        model,
+        ...executionTraits,
+        reasoningLevel: displayTraits.effortLevel,
+        thinkingEnabled: displayTraits.thinkingEnabled,
+        use1mContext: displayTraits.use1mContext,
+        fastMode: displayTraits.fastMode,
+        providerAccountId: accountId,
+      });
+      await navigate({
+        to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Couldn't fork this chat";
+      toast.error(message);
+      throw error;
+    }
+  };
+
+  const queueGate = useChatQueueGate({
+    parentId: sessionId,
+    messages,
+    queuedMessages,
+    model,
+    isSandboxActive,
+    setModel,
+  });
+  const { isExecuting, handleSend, handleCancel } = useSessionSend({
+    sessionId,
     model,
     executionTraits,
     reasoningLevel: displayTraits.effortLevel,
@@ -204,27 +238,54 @@ export function ChatPanel({
     resolveAccountId,
     accounts,
     messages,
+    // A running turn queues regardless, so this is `composer.queuesSends`
+    // without the `isExecuting` it cannot know before this hook returns.
+    queuesSends: !isSandboxActive || queueGate.isUsageLimitHeld,
+    isRouteActive,
   });
-
+  const proposedPlans = useHeldQuery(
+    api.proposedPlans.listBySession,
+    isRouteActive ? { sessionId } : "skip",
+  );
+  const { implementPlan, implementPlanContent, implementInNewSession } =
+    useSessionPlanImplementation({
+      sessionId,
+      handleSend,
+      isRouteActive,
+    });
+  const {
+    savePlan,
+    saveAsDocument,
+    saveAsDocumentLabel,
+    isSaving,
+    isSavingDoc,
+  } = useSessionPlanDocument(sessionId);
   const chatSurface: SandboxChatSurface = {
-    entity: { kind: "session", sessionId, chatId },
+    entity: { kind: "session", sessionId },
     repoId: repo._id,
     model,
     isExecuting,
     isReadOnly,
     // A stopped session sandbox still gets the offer: sending wakes it.
-    compactionReadOnly: isReadOnly,
     backgroundAgents,
+    usageLimitRecovery: isReadOnly
+      ? undefined
+      : {
+          messages,
+          accounts,
+          resolveAccountId,
+          currentAccountId: stickyProviderAccountId,
+          onSwitchAccount: setStickyProviderAccountId,
+          isSandboxActive,
+        },
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
-    onSendCommand: (command) => {
-      void handleSend(command, undefined, { skipReviewComments: true });
-    },
   };
 
-  const activeQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: chatId,
-  });
+  const activeQuestion = useHeldQuery(
+    api.pendingQuestions.getActive,
+    isRouteActive ? { entityId: sessionId } : "skip",
+  );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const handleAnswerBlockingQuestion = async (
     toolUseId: string,
@@ -232,7 +293,7 @@ export function ChatPanel({
   ) => {
     await catchMutationError(
       answerPendingQuestion({
-        entityId: chatId,
+        entityId: sessionId,
         toolUseId,
         answer: JSON.stringify(answers),
       }),
@@ -253,31 +314,9 @@ export function ChatPanel({
         : (accounts.find((account) => account.id === stickyProviderAccountId)
             ?.label ?? "Selected account");
 
-  const runningChatIds = new Set<string>(
-    chatStatuses.map((status) => status.chatId),
-  );
-  const chatTabs = chatOnly ? undefined : (
-    <ChatTabsBar
-      chats={chats}
-      activeChatId={chatId}
-      runningChatIds={runningChatIds}
-      onSelect={onSelectChat}
-      onCreate={onCreateChat}
-      isReadOnly={isReadOnly}
-      isCreating={isCreatingChat}
-    />
-  );
-  // Queued on this chat while the session's run slots are all taken: the
-  // server parked the send instead of starting it (see `startExecute`).
-  const isWaitingForSlot =
-    !isExecuting &&
-    queuedMessages.length > 0 &&
-    runningChatIds.size >= MAX_PARALLEL_CHATS;
-
-  const { headerLeft, headerRight } = SessionChatHeader({
+  const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
     sessionId,
-    chatId,
     title,
     branchName,
     prUrl,
@@ -288,102 +327,72 @@ export function ChatPanel({
     isSandboxToggling,
     isAssistantResponding: isExecuting,
     deploymentStatus,
-    permalinkPath,
-    chatOnly,
-    hideTitle,
+    simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,
     onSandboxToggle,
-    onOpenSummaryModal: () => setShowSummaryModal(true),
-    onOpenReviewModal: () => setShowReviewModal(true),
-    // Only Manager Ave can be reset: it is the one chat the user cannot simply
-    // replace by opening a new session.
-    onOpenResetChatDialog: chatOnly
-      ? () => setShowResetChatDialog(true)
-      : undefined,
+    onOpenSummaryModal: () =>
+      requestConfirm(
+        altHeld,
+        () => setShowSummaryModal(true),
+        () => {
+          void startSummary();
+        },
+      ),
+    onOpenReviewModal: () =>
+      requestConfirm(
+        altHeld,
+        () => setShowReviewModal(true),
+        () => {
+          void sendForReview().then((ok) => {
+            if (ok) toast.success("Sent to the team for review.");
+          });
+        },
+      ),
   });
 
-  const startupStreamingNode = (
-    <div className="rounded-surface bg-secondary p-4">
-      <StreamingActivityDisplay
-        activity={startupStreamingActivity}
-        thinkingLabel="Starting sandbox..."
-      />
-    </div>
+  const transcriptTail = sandboxStartupTail(
+    startupStreamingActivity,
+    isStartupStreaming,
   );
 
-  const emptyStateOverride = isStartupStreaming ? (
-    <div className="flex flex-col items-center justify-center py-8">
-      <StreamingActivityDisplay
-        activity={startupStreamingActivity}
-        thinkingLabel="Starting sandbox..."
-      />
-    </div>
-  ) : null;
-
-  const beforeQueuedContent = isStartupStreaming ? (
-    startupStreamingNode
-  ) : isWaitingForSlot ? (
-    <p className="px-1 text-xs text-muted-foreground">
-      Waiting for a free slot — {runningChatIds.size} of {MAX_PARALLEL_CHATS}{" "}
-      chats in this session are running.
-    </p>
-  ) : null;
-
-  const hasPlanContent =
-    typeof planContent === "string" && planContent.trim().length > 0;
-  // Compact card above the composer only while the sandbox pane is collapsed —
-  // otherwise the PRD tab owns the plan and the slim strip links to it.
-  const showCompactPlanCard = hasPlanContent && sandboxCollapsed !== false;
-  // When the card is hidden but a plan exists, show a slim Plan Ready strip.
-  const showPlanReadyBanner = hasPlanContent && !showCompactPlanCard;
-
-  const handleApprovePlan = () => {
-    void seedChatDraft(APPROVE_PLAN_PROMPT);
-  };
-
-  const handleViewPlan = () => {
-    onOpenPrdTab?.();
-  };
+  const capturedPlans = proposedPlans ?? [];
+  const lastAssistantMessageId = [...messages]
+    .toReversed()
+    .find(
+      (message) =>
+        message.role === "assistant" && message.isSystemAlert !== true,
+    )?._id;
+  const planContentMarkdown =
+    typeof planContent === "string" && planContent.trim().length > 0
+      ? planContent
+      : null;
+  const planContentAlreadyInChat =
+    planContentMarkdown !== null &&
+    capturedPlans.some(
+      (plan) => plan.planMarkdown.trim() === planContentMarkdown.trim(),
+    );
 
   const preInputContent = (
     <SandboxChatPreInput
       surface={chatSurface}
       beforeBanner={
         <>
-          <BackgroundProcessesPanel sessionId={sessionId} />
-          <PendingReviewCommentChips />
-        </>
-      }
-      afterBanner={
-        <>
-          {showCompactPlanCard && planContent ? (
-            <AnimatePresence initial={false}>
-              <m.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
-              >
-                <SessionPrdPlanView
-                  sessionId={sessionId}
-                  planContent={planContent}
-                  onApprovePlan={handleApprovePlan}
-                  variant="compact"
-                  isArchived={isReadOnly}
-                />
-              </m.div>
-            </AnimatePresence>
-          ) : null}
-          {showPlanReadyBanner && planContent ? (
-            <ComposerPlanReadyBanner
-              planContent={planContent}
-              onViewPlan={handleViewPlan}
-              onApprovePlan={handleApprovePlan}
-              isArchived={isReadOnly}
+          {simpleView ? null : (
+            <BackgroundProcessesPanel
+              sessionId={sessionId}
+              isRouteActive={isRouteActive}
+            />
+          )}
+          {!isReadOnly ? (
+            <PublishRecoveryBanner
+              sessionId={sessionId}
+              messages={messages}
+              isSandboxActive={isSandboxActive}
             />
           ) : null}
+          <PendingReviewCommentChips />
         </>
       }
     />
@@ -392,16 +401,25 @@ export function ChatPanel({
   const emptyStateTitle = isSandboxActive
     ? "No messages yet. Start the conversation!"
     : isSandboxStopping
-      ? "Stopping sandbox..."
+      ? SANDBOX_CHAT_COPY.stoppingTitle
       : isSandboxToggling
-        ? "Starting sandbox..."
-        : "Wake Eva up to begin chatting.";
+        ? SANDBOX_CHAT_COPY.startingTitle
+        : SANDBOX_CHAT_COPY.asleepTitle;
 
-  const placeholder = !isSandboxActive
-    ? "Wake Eva up to begin chatting..."
-    : isSwitchingAccount
-      ? "Switching Claude account..."
-      : "Ask Eva anything... / for skills · @ to mention";
+  const emptyStateDescription = isSandboxActive
+    ? SANDBOX_CHAT_COPY.activeDescription
+    : isSandboxToggling
+      ? // Waking or sleeping is already the whole story; a second line would
+        // only restate the title.
+        ""
+      : SANDBOX_CHAT_COPY.asleepDescription;
+
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
+  });
 
   const readOnlyMessage = getSessionReadOnlyMessage({
     isArchived,
@@ -414,26 +432,40 @@ export function ChatPanel({
       readOnlyMessage={readOnlyMessage}
       headerLeft={headerLeft}
       headerRight={headerRight}
-      tabs={chatTabs}
     >
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
-        conversationId={chatId}
+        repo={{ id: repo._id, basePath }}
+        conversationId={sessionId}
+        chatParentId={sessionId}
+        isRouteActive={isRouteActive}
         messages={messages}
         queuedMessages={queuedMessages}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streamingActivity}
         streamingContent={streamingContent}
         streamingPendingQuestion={streamingPendingQuestion}
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
-        isInputDisabled={!isSandboxActive || isSwitchingAccount}
+        isInputDisabled={composer.isInputDisabled}
         isArchived={isReadOnly}
-        placeholder={placeholder}
+        placeholder={composer.placeholder}
         emptyStateTitle={emptyStateTitle}
-        emptyStateOverride={emptyStateOverride}
-        beforeQueuedContent={beforeQueuedContent}
+        emptyStateDescription={emptyStateDescription}
+        disabledReason={composer.disabledReason}
+        onStartSandbox={
+          !isSandboxActive && !isSandboxToggling && !isReadOnly
+            ? () => onSandboxToggle("start")
+            : undefined
+        }
+        transcriptTail={transcriptTail}
+        underCardLeading={
+          <SandboxBranchChip
+            branch={sandboxBranch}
+            isSandboxActive={isSandboxActive}
+            intendedBranch={branchName}
+          />
+        }
         preInputContent={preInputContent}
         preConversationContent={
           <SessionSummaryAccordion
@@ -441,24 +473,86 @@ export function ChatPanel({
             summaryStreamingActivity={summaryStreamingActivity}
           />
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={accounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={onTraitsChange}
+        modelPicker={{
+          model,
+          setModel: queueGate.setModel,
+          modelOptions,
+          accounts,
+          accountId: providerAccountId,
+          onAccountChange: setProviderAccountId,
+          displayTraits,
+          onTraitsChange,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
+        onForkTranscript={handleForkTranscript}
+        afterMessage={(messageId) => {
+          const plan = proposedPlanForMessage(capturedPlans, messageId);
+          if (plan) {
+            return (
+              <ProposedPlanCard
+                planMarkdown={plan.planMarkdown}
+                implemented={plan.implementedAt !== undefined}
+                onImplement={
+                  isReadOnly || plan.implementedAt !== undefined
+                    ? undefined
+                    : () => implementPlan(plan)
+                }
+                onImplementInNewSession={
+                  isReadOnly || plan.implementedAt !== undefined
+                    ? undefined
+                    : () => void implementInNewSession(plan.planMarkdown, plan)
+                }
+                onSave={isReadOnly ? undefined : savePlan}
+                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
+                saveAsDocumentLabel={saveAsDocumentLabel}
+                isSaving={isSaving}
+                isSavingDoc={isSavingDoc}
+                isArchived={isReadOnly}
+              />
+            );
+          }
+          if (
+            planContentMarkdown &&
+            !planContentAlreadyInChat &&
+            messageId === lastAssistantMessageId
+          ) {
+            return (
+              <ProposedPlanCard
+                planMarkdown={planContentMarkdown}
+                implemented={false}
+                onImplement={
+                  isReadOnly
+                    ? undefined
+                    : () => implementPlanContent(planContentMarkdown)
+                }
+                onImplementInNewSession={
+                  isReadOnly
+                    ? undefined
+                    : () => void implementInNewSession(planContentMarkdown)
+                }
+                onSave={isReadOnly ? undefined : savePlan}
+                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
+                saveAsDocumentLabel={saveAsDocumentLabel}
+                isSaving={isSaving}
+                isSavingDoc={isSavingDoc}
+                isArchived={isReadOnly}
+              />
+            );
+          }
+          return null;
+        }}
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
         onOpenFile={onOpenFile}
-        onViewDiff={prUrl ? onViewDiff : undefined}
+        onViewDiff={onViewDiff}
         hasPendingContext={hasPendingReviewComments}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={backgroundAgents}
         sandboxRunning={isSandboxActive}
+        turnCheckpoint={
+          isReadOnly ? undefined : { sessionId, repoId: repo._id }
+        }
       />
       <SessionSummaryModal
         sessionId={sessionId}
@@ -471,12 +565,7 @@ export function ChatPanel({
         open={showReviewModal}
         onClose={() => setShowReviewModal(false)}
       />
-      {chatOnly && (
-        <AveResetChatDialog
-          open={showResetChatDialog}
-          onOpenChange={setShowResetChatDialog}
-        />
-      )}
+      {queueGate.switchDialog}
     </ChatPageWrapper>
   );
 }

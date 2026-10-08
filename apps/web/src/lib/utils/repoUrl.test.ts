@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hrefToNavigateOptions,
   repoHref,
   repoPublicHref,
   repoSectionFromPath,
@@ -118,6 +119,27 @@ describe("repoUrl monorepo slash rewrite", () => {
     expect(repoSectionHref("evalucom", "carepulse-ts", "apps/web", null)).toBe(
       "/evalucom/carepulse-ts/web",
     );
+  });
+
+  // The router resolves `to` as a pathname and never splits a query out of it,
+  // so a comment notification handed over whole would match nothing.
+  it("splits a comment anchor out of a notification href", () => {
+    expect(
+      hrefToNavigateOptions(
+        "/evalucom/carepulse-ts/web/quick-tasks/204?comment=abc123",
+      ),
+    ).toEqual({
+      to: "/evalucom/carepulse-ts--web/quick-tasks/204",
+      search: { comment: "abc123" },
+    });
+  });
+
+  it("leaves an href with no search untouched", () => {
+    expect(hrefToNavigateOptions("/evalucom/carepulse-ts/quick-tasks/204"))
+      .toEqual({
+        to: "/evalucom/carepulse-ts/quick-tasks/204",
+        search: {},
+      });
   });
 
   it("repoPublicHref yields slash form for shareable links", () => {

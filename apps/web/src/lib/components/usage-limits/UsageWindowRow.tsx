@@ -1,4 +1,7 @@
+"use client";
+
 import { formatExactDateTime } from "@eva/shared/dates";
+import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 import {
   formatUtilization,
   resetsInLabel,
@@ -19,19 +22,20 @@ export function UsageWindowRow({ usageWindow, now }: UsageWindowRowProps) {
   const utilization = usageWindow.utilization ?? 0;
   const tone = toneForUtilization(utilization);
   const resetsAt = usageWindow.resetsAt;
+  const utilizationLabel = useCountUpDisplay(formatUtilization(utilization));
 
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="truncate">{usageWindow.label}</span>
         <span className={`tabular-nums ${USAGE_TONE_TEXT_CLASS[tone]}`}>
-          {formatUtilization(utilization)}
+          {utilizationLabel}
         </span>
       </div>
       <UsageBar utilization={utilization} tone={tone} />
       {resetsAt !== undefined && (
         <p
-          className="text-[11px] text-muted-foreground"
+          className="text-2xs text-muted-foreground"
           title={formatExactDateTime(resetsAt)}
         >
           {resetsInLabel(resetsAt, now)}

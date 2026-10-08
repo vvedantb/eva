@@ -1,11 +1,15 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { cn } from "@eva/ui";
+import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
 
 const SEGMENTS = 32;
 
 /**
- * Segmented tick-meter (the "score bar" from the reference dashboard).
- * Ticks fill left-to-right proportional to value/max. `tone` colours the
- * filled ticks: neutral by default, amber for a top performer, red for risk.
+ * Segmented tick-meter. Empty ticks stay mounted; a clipped fill row sweeps
+ * left-to-right on `--motion-base`. `clip-path` (not `width`) keeps the tick
+ * geometry unscaled — the same compositor rule as `UsageBar`'s `scaleX`.
  */
 export function ScoreBar({
   value,
@@ -17,7 +21,18 @@ export function ScoreBar({
   tone?: "default" | "top" | "risk";
 }) {
   const ratio = max > 0 ? Math.min(value / max, 1) : 0;
-  const filled = Math.round(ratio * SEGMENTS);
+  const skipMotion = useDisablePageMotion();
+  const [shownRatio, setShownRatio] = useState(skipMotion ? ratio : 0);
+
+  useEffect(() => {
+    if (skipMotion) {
+      setShownRatio(ratio);
+      return;
+    }
+    const id = requestAnimationFrame(() => setShownRatio(ratio));
+    return () => cancelAnimationFrame(id);
+  }, [ratio, skipMotion]);
+
   const fillClass =
     tone === "top"
       ? "bg-warning"
@@ -26,16 +41,23 @@ export function ScoreBar({
         : "bg-foreground/65";
 
   return (
-    <div className="flex w-full items-center gap-[2px]" aria-hidden>
+    <div className="relative flex w-full items-center gap-[2px]" aria-hidden>
       {Array.from({ length: SEGMENTS }, (_, i) => (
         <span
           key={i}
-          className={cn(
-            "h-3.5 flex-1 rounded-full",
-            i < filled ? fillClass : "bg-muted-foreground/15",
-          )}
+          className="h-3.5 flex-1 rounded-full bg-muted-foreground/15"
         />
       ))}
+      <div
+        className="score-bar-fill absolute inset-0 flex items-center gap-[2px] transition-[clip-path] duration-[var(--motion-base)]"
+        style={{
+          clipPath: `inset(0 ${((1 - shownRatio) * 100).toFixed(2)}% 0 0)`,
+        }}
+      >
+        {Array.from({ length: SEGMENTS }, (_, i) => (
+          <span key={i} className={cn("h-3.5 flex-1 rounded-full", fillClass)} />
+        ))}
+      </div>
     </div>
   );
 }

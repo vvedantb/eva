@@ -12,14 +12,17 @@ import {
   STREAMING_HEARTBEAT_MAX_RETRIES,
 } from "../config.js";
 import type { ConvexCallType, JsonObject, JsonValue } from "../types.js";
-import { readResponseJson } from "../utils.js";
+import { log, readResponseJson } from "../utils.js";
 import {
   getCurrentTurnLease,
   noteHeartbeatResponse,
+  type TurnLeaseIdentity,
 } from "../runtime/turnLease.js";
 
-function appendTurnLease(body: URLSearchParams): void {
-  const identity = getCurrentTurnLease();
+function appendTurnLease(
+  body: URLSearchParams,
+  identity: TurnLeaseIdentity | null,
+): void {
   if (identity === null) return;
   body.set("turnId", identity.turnId);
   body.set("leaseGeneration", String(identity.leaseGeneration));
@@ -63,14 +66,16 @@ async function withRetries<T>(
       attempt++;
       if (attempt > maxRetries || !shouldRetry(error)) throw e;
       const delayMs = buildRetryDelayMs(attempt);
-      console.error(
+      // Timestamped: these lines are the only record of a daemon stalling
+      // between heartbeats, and an untimestamped one says nothing about when.
+      log(
         label +
           " attempt " +
           attempt +
           " failed, retrying in " +
           delayMs +
-          "ms:",
-        String(e),
+          "ms: " +
+          String(e),
       );
       await new Promise((r) => setTimeout(r, delayMs));
     }
@@ -195,52 +200,52 @@ export async function callHarnessSkillCatalogReport(
 async function callStreamingHeartbeatTouchOnce(
   entityId: string,
 ): Promise<string | JsonValue> {
+  // Captured once: the verdict must be judged against the lease the request
+  // carried, not whatever this process owns by the time the reply lands.
+  const identity = getCurrentTurnLease();
+  // No lease, no turn to report on: the server would only answer terminal.
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
     body.set("hmac", STREAMING_HMAC);
     body.set("touchOnly", "1");
-    appendTurnLease(body);
+    appendTurnLease(body, identity);
     const response = await postSignedForm(
       CONVEX_SITE_URL + "/api/streaming/heartbeat",
       body,
       "Streaming heartbeat touch",
     );
-    noteHeartbeatResponse(response);
+    noteHeartbeatResponse(response, identity);
     return response;
   }
 
-  const identity = getCurrentTurnLease();
-  const response =
-    identity === null
-      ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
-          entityId,
-          touchOnly: true,
-        })
-      : await callConvex("mutation", "turns:heartbeatFromCallback", {
-          entityId,
-          touchOnly: true,
-          turnId: identity.turnId,
-          leaseGeneration: identity.leaseGeneration,
-        });
-  noteHeartbeatResponse(response);
+  const response = await callConvex("mutation", "turns:heartbeatFromCallback", {
+    entityId,
+    touchOnly: true,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration,
+  });
+  noteHeartbeatResponse(response, identity);
   return response;
 }
 
-/** Sends one streaming heartbeat request through the scoped HMAC endpoint or legacy mutation fallback. */
+/** Sends one streaming heartbeat request through the scoped HMAC endpoint or the authenticated mutation fallback. */
 async function callStreamingHeartbeatOnce(
   entityId: string,
   currentActivity: string,
   currentContent: string,
   pendingQuestion?: string,
 ): Promise<string | JsonValue> {
+  const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
     body.set("hmac", STREAMING_HMAC);
     body.set("currentActivity", currentActivity);
     body.set("currentContent", currentContent || "");
-    appendTurnLease(body);
+    appendTurnLease(body, identity);
     if (pendingQuestion) {
       body.set("pendingQuestion", pendingQuestion);
     }
@@ -249,7 +254,7 @@ async function callStreamingHeartbeatOnce(
       body,
       "Streaming heartbeat",
     );
-    noteHeartbeatResponse(response);
+    noteHeartbeatResponse(response, identity);
     return response;
   }
 
@@ -258,21 +263,18 @@ async function callStreamingHeartbeatOnce(
     touchOnly: false,
     currentActivity,
     currentContent,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration,
   };
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const identity = getCurrentTurnLease();
-  const path =
-    identity === null
-      ? "turns:legacyHeartbeatFromCallback"
-      : "turns:heartbeatFromCallback";
-  if (identity !== null) {
-    args.turnId = identity.turnId;
-    args.leaseGeneration = identity.leaseGeneration;
-  }
-  const response = await callConvex("mutation", path, args);
-  noteHeartbeatResponse(response);
+  const response = await callConvex(
+    "mutation",
+    "turns:heartbeatFromCallback",
+    args,
+  );
+  noteHeartbeatResponse(response, identity);
   return response;
 }
 
@@ -294,6 +296,22 @@ export async function callStreamingHeartbeat(
         pendingQuestion,
       ),
   );
+}
+
+/**
+ * Convex `/api/mutation` wraps returns in `{ status, value }`. Readers accept
+ * either that envelope or a bare object so older/unwrapped fixtures still work.
+ */
+export function unwrapConvexMutationPayload(
+  result: JsonValue,
+): JsonObject | null {
+  if (typeof result !== "object" || result === null || Array.isArray(result)) {
+    return null;
+  }
+  const inner = result.value;
+  return typeof inner === "object" && inner !== null && !Array.isArray(inner)
+    ? inner
+    : result;
 }
 
 /** Retries a lightweight touch heartbeat (no activity payload). */

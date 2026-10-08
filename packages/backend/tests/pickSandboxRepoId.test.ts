@@ -1,5 +1,8 @@
 import { test, expect } from "vitest";
-import { pickSandboxRepoId } from "../convex/_githubRepos/sandboxRepoPick";
+import {
+  pickSandboxRepoId,
+  pickSnapshotCredentialRepoId,
+} from "../convex/_githubRepos/sandboxRepoPick";
 
 type Repo = {
   _id: string;
@@ -70,4 +73,31 @@ test("pickSandboxRepoId falls back to workflow repo when no sibling has the key"
   // Preferred app (web) when nothing has VERCEL_PROJECT_ID — caller then fails
   // with the clear "must be set on this app repo" error at credential resolve.
   expect(picked).toBe("web");
+});
+
+test("pickSnapshotCredentialRepoId uses preferred web when root lacks VERCEL_PROJECT_ID", async () => {
+  const root: Repo = { _id: "root" };
+  const web: Repo = { _id: "web", rootDirectory: "apps/web" };
+  const eproc: Repo = { _id: "eproc", rootDirectory: "apps/eprocurement" };
+
+  const picked = await pickSnapshotCredentialRepoId(
+    root._id,
+    [root, web, eproc],
+    hasProject(new Set(["web", "eproc"])),
+  );
+
+  expect(picked).toBe("web");
+});
+
+test("pickSnapshotCredentialRepoId does not borrow a sibling app's VERCEL_PROJECT_ID", async () => {
+  const web: Repo = { _id: "web", rootDirectory: "apps/web" };
+  const eproc: Repo = { _id: "eproc", rootDirectory: "apps/eprocurement" };
+
+  const picked = await pickSnapshotCredentialRepoId(
+    eproc._id,
+    [web, eproc],
+    hasProject(new Set(["web"])),
+  );
+
+  expect(picked).toBe("eproc");
 });

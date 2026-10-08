@@ -626,6 +626,12 @@ export const inspectSnapshotsByIds = internalAction({
   handler: async (ctx, args) => {
     const tryDelete = args.tryDelete === true;
     const now = Date.now();
+    // Group seeded snapshots (repoGroups.seededSnapshotName) are not any live
+    // sandbox's currentSnapshotId, so the `protectedBy` check below would
+    // otherwise wave a manual tryDelete straight through one.
+    const groupSnapshotIds = new Set(
+      await ctx.runQuery(internal.repoGroups.listAllGroupSnapshotNames, {}),
+    );
     const uniqueIds = [...new Set(args.snapshotIds.filter((id) => id.length > 0))];
     const remaining = new Set(uniqueIds);
     const byId = new Map<string, SnapshotLookupRow>();
@@ -719,6 +725,8 @@ export const inspectSnapshotsByIds = internalAction({
           if (tryDelete && String(snap.status) === "created") {
             if (protector !== null) {
               row.error = `protected by live sandbox ${protector}`;
+            } else if (groupSnapshotIds.has(snapshotId)) {
+              row.error = "protected: repo group seeded snapshot";
             } else {
               try {
                 await snap.delete();

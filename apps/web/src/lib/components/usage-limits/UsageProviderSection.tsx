@@ -1,61 +1,54 @@
-import type { Id } from "@eva/backend";
 import {
+  emptyAccountUsageCopy,
   providerHeading,
   reportedWindows,
-  type UsageAccountScope,
-  type UsageSnapshot,
+  snapshotOf,
+  type UsageAccountEntry,
 } from "./_utils";
-import { UsageRefreshButton } from "./UsageRefreshButton";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { UsageWindowRow } from "./UsageWindowRow";
 
 interface UsageProviderSectionProps {
-  repoId: Id<"githubRepos">;
-  snapshot: UsageSnapshot;
+  entry: UsageAccountEntry;
   /** Passed in so every row in one card measures against the same instant. */
   now: number;
 }
 
 /**
- * One account's reading: the plan windows the provider reported, if any.
+ * One credential's reading: the plan windows the provider reported, or a line
+ * saying why there are none to draw.
  *
  * The account's name trails the heading, muted: the plan is what the numbers
- * measure, and the account is only there to tell two of the same plan apart. A
- * run on the shared team credential belongs to no account and shows none.
+ * measure, and the label is the only thing telling two of the same plan apart —
+ * so it is shown for every entry, the shared team credential ("Team") included.
  */
 export function UsageProviderSection({
-  repoId,
-  snapshot,
+  entry,
   now,
 }: UsageProviderSectionProps) {
-  const windows = reportedWindows(snapshot, now);
-  const scope: UsageAccountScope = {
-    providerAccountId: snapshot.providerAccountId ?? null,
-    accountLabel: snapshot.accountLabel ?? "Team",
-  };
+  const snapshot = snapshotOf(entry);
+  const windows = snapshot === undefined ? [] : reportedWindows(snapshot, now);
 
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-medium text-xs">
-          {providerHeading(snapshot)}
-          {snapshot.accountLabel !== undefined && (
-            <span className="font-normal text-muted-foreground">
-              {` · ${snapshot.accountLabel}`}
-            </span>
-          )}
-        </p>
-        <UsageRefreshButton repoId={repoId} scope={scope} />
-      </div>
-      {windows.length > 0 && (
+      <p className="font-medium text-xs">
+        {snapshot === undefined ? "Claude" : providerHeading(snapshot)}
+        <span className="font-normal text-muted-foreground">
+          {` · ${entry.accountLabel}`}
+        </span>
+      </p>
+      {windows.length > 0 ? (
         <div className="space-y-2.5">
-          {windows.map((usageWindow) => (
-            <UsageWindowRow
-              key={usageWindow.key}
-              usageWindow={usageWindow}
-              now={now}
-            />
+          {windows.map((usageWindow, index) => (
+            <ListEnter key={usageWindow.key} index={index} fast>
+              <UsageWindowRow usageWindow={usageWindow} now={now} />
+            </ListEnter>
           ))}
         </div>
+      ) : (
+        <p className="text-muted-foreground text-xs">
+          {emptyAccountUsageCopy(snapshot === undefined ? [] : [snapshot], now)}
+        </p>
       )}
     </div>
   );

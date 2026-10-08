@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
-import type { ActionCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { ActionCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   authQuery,
   authMutation,
@@ -10,6 +10,15 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { artifactFields } from "./validators";
+import {
+  callerCanSeeChatSource,
+  chatSourceArgValidator,
+  chatSourceFieldsFromArg,
+  chatSourceSummaryValidator,
+  listRowsForChatSource,
+  resolveChatSource,
+  type RepoCache,
+} from "./_chatSource/helpers";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
@@ -19,6 +28,7 @@ const artifactDoc = v.object({
   _id: v.id("artifacts"),
   _creationTime: v.number(),
   ...artifactFields,
+  source: chatSourceSummaryValidator,
 });
 
 // get() resolves the stored HTML to a (time-limited, signed) storage URL.
@@ -26,8 +36,20 @@ const artifactWithUrl = v.object({
   _id: v.id("artifacts"),
   _creationTime: v.number(),
   ...artifactFields,
+  source: chatSourceSummaryValidator,
   url: v.union(v.string(), v.null()),
 });
+
+async function withSource(
+  ctx: QueryCtx,
+  artifact: Doc<"artifacts">,
+  repoCache: RepoCache = new Map(),
+) {
+  return {
+    ...artifact,
+    source: await resolveChatSource(ctx, artifact, repoCache),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MCP CallToolResult envelope
@@ -95,16 +117,19 @@ export const create = authMutation({
     boundTeamId: v.id("teams"),
     declaredTools: v.array(v.string()),
     htmlStorageId: v.id("_storage"),
+    source: v.optional(chatSourceArgValidator),
   },
   returns: v.id("artifacts"),
   handler: async (ctx, args) => {
     if (!(await hasTeamAccess(ctx.db, args.boundTeamId, ctx.userId))) {
       throw new Error("Not authorized: you are not a member of this team.");
     }
+    const { source, ...rest } = args;
     return ctx.db.insert("artifacts", {
-      ...args,
+      ...rest,
       uploadedBy: ctx.userId,
       createdAt: Date.now(),
+      ...(await chatSourceFieldsFromArg(ctx, source, "artifact")),
     });
   },
 });
@@ -124,7 +149,7 @@ export const get = authQuery({
       return null;
     }
     return {
-      ...artifact,
+      ...(await withSource(ctx, artifact)),
       url: await ctx.storage.getUrl(artifact.htmlStorageId),
     };
   },
@@ -136,11 +161,13 @@ export const listForTeam = authQuery({
   returns: v.array(artifactDoc),
   handler: async (ctx, args) => {
     if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
-    return ctx.db
+    const rows = await ctx.db
       .query("artifacts")
       .withIndex("by_team", (q) => q.eq("boundTeamId", args.teamId))
       .order("desc")
       .collect();
+    const repoCache: RepoCache = new Map();
+    return Promise.all(rows.map((row) => withSource(ctx, row, repoCache)));
   },
 });
 
@@ -161,7 +188,29 @@ export const listAll = authQuery({
           .collect(),
       ),
     );
-    return perTeam.flat().sort((a, b) => b.createdAt - a.createdAt);
+    const repoCache: RepoCache = new Map();
+    const rows = await Promise.all(
+      perTeam.flat().map((row) => withSource(ctx, row, repoCache)),
+    );
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+/** Artifacts created from one session, quick task, or project sandbox. */
+export const listForSource = authQuery({
+  args: { source: chatSourceArgValidator },
+  returns: v.array(artifactDoc),
+  handler: async (ctx, args) => {
+    if (!(await callerCanSeeChatSource(ctx, args.source))) return [];
+    const rows = await listRowsForChatSource(ctx, "artifacts", args.source);
+    const visible: Doc<"artifacts">[] = [];
+    for (const row of rows) {
+      if (await hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId)) {
+        visible.push(row);
+      }
+    }
+    const repoCache: RepoCache = new Map();
+    return Promise.all(visible.map((row) => withSource(ctx, row, repoCache)));
   },
 });
 
@@ -424,6 +473,7 @@ export const callTool = authAction({
             internal.mcp.nodeActions.runTestQuery,
             { convexUrl: t.convexUrl, deployKey: t.deployKey, code: a.code },
           );
+          if (!result.ok) return errorResult(result.error);
           return textResult(
             result.logLines.length > 0
               ? { result: result.value, logLines: result.logLines }
@@ -445,6 +495,7 @@ export const callTool = authAction({
               code: `return await ctx.db.get(${JSON.stringify(a.id)});`,
             },
           );
+          if (!result.ok) return errorResult(result.error);
           return textResult(
             result.logLines.length > 0
               ? { document: result.value, logLines: result.logLines }
@@ -466,6 +517,7 @@ export const callTool = authAction({
               code: `const docs = await ctx.db.query(${JSON.stringify(a.table)}).collect(); return docs.length;`,
             },
           );
+          if (!result.ok) return errorResult(result.error);
           return textResult({ table: a.table, count: result.value });
         }
 

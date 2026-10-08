@@ -9,7 +9,7 @@ import { cn } from "@eva/ui";
  */
 
 /** Fixed body height so switching tabs never changes the panel's size. */
-export const MOCK_BODY_HEIGHT = "h-76";
+const MOCK_BODY_HEIGHT = "h-76";
 
 export function MockWindow({
   title,
@@ -30,7 +30,7 @@ export function MockWindow({
           <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-border" />
         </span>
-        <p className="truncate font-mono text-[11px] text-muted-foreground">
+        <p className="truncate font-mono text-2xs text-muted-foreground">
           {title}
         </p>
         {trailing ? <div className="ml-auto shrink-0">{trailing}</div> : null}
@@ -78,7 +78,7 @@ export function MockChip({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-3xs font-medium",
         TONE_CHIP[tone],
       )}
     >

@@ -6,20 +6,27 @@
  * imports.
  */
 
+export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
 
-export const TIME_RANGES = ["7d", "30d", "90d", "all"] as const;
+export const TIME_RANGES = ["24h", "7d", "30d", "90d", "all"] as const;
 
 export type TimeRange = (typeof TIME_RANGES)[number];
 
 export const TIME_RANGE_LABELS: Record<TimeRange, string> = {
+  "24h": "Last 24 hours",
   "7d": "Last 7 days",
   "30d": "Last 30 days",
   "90d": "Last 90 days",
   all: "All time",
 };
 
-const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90 } as const;
+const RANGE_MS = {
+  "24h": 24 * HOUR_MS,
+  "7d": 7 * DAY_MS,
+  "30d": 30 * DAY_MS,
+  "90d": 90 * DAY_MS,
+} as const;
 
 export function isTimeRange(value: string): value is TimeRange {
   const ranges: ReadonlyArray<string> = TIME_RANGES;
@@ -40,7 +47,7 @@ export function getStartTime(
   now: number,
 ): number | undefined {
   if (range === "all") return undefined;
-  return now - RANGE_DAYS[range] * DAY_MS;
+  return now - RANGE_MS[range];
 }
 
 /** Start of the equal-length window immediately before `getStartTime`. */
@@ -52,7 +59,8 @@ export function getPreviousStartTime(
   return start === undefined ? undefined : start - (now - start);
 }
 
-/** Bucket width for the activity timeline: daily up to 30 days, else weekly. */
+/** Bucket width for timelines: hourly for a day, daily up to 30 days, else weekly. */
 export function getBucketSize(range: TimeRange): number {
+  if (range === "24h") return HOUR_MS;
   return range === "7d" || range === "30d" ? DAY_MS : 7 * DAY_MS;
 }

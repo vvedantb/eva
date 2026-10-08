@@ -5,7 +5,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -17,14 +17,40 @@ import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
-import { drainSessionChatQueuesAfterSandboxReady } from "../_queues/helpers";
+import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
-import {
-  ensureMainChat,
-  listLiveSessionChats,
-  sessionChatStreamingEntityId,
-} from "../_sessionChats/helpers";
+import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+import {
+  stopAlertText,
+  stopReasonValidator,
+  type StopReason,
+} from "../_sandbox/stopReason";
+import { touchUserActivity } from "../_sandbox/activity";
+import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+
+/** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
+const SANDBOX_ERROR_MAX_LENGTH = 200;
+
+/**
+ * Turns a thrown start error into the short line the UI shows next to
+ * "Eva couldn't wake up". Action errors arrive with a Convex prefix, a request
+ * id, and a stack — none of which mean anything to the person reading them, and
+ * all of which would blow past the 200-char budget.
+ */
+export function toUserFacingSandboxError(raw: string): string {
+  const cleaned = (raw.split("\n")[0] ?? "")
+    .replace(/\[Request ID:[^\]]*\]/g, "")
+    .replace(/\[CONVEX[^\]]*\]/g, "")
+    .replace(/^(Uncaught\s+)?[A-Za-z]*Error:\s*/, "")
+    .replace(/\s+at\s+\S+\s*\(.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return "The sandbox did not start.";
+  return cleaned.length > SANDBOX_ERROR_MAX_LENGTH
+    ? `${cleaned.slice(0, SANDBOX_ERROR_MAX_LENGTH - 1).trimEnd()}…`
+    : cleaned;
+}
 
 /** Updates sandbox-related fields (sandbox ID, branch, PR URL) on a session. */
 export const updateSandbox = authMutation({
@@ -60,7 +86,9 @@ export const clearSandbox = authMutation({
     await markAllRunningExited(ctx.db, args.id);
     await ctx.db.patch(args.id, {
       sandboxId: undefined,
-
+      // The association is being reset, so a previous wake failure no longer
+      // describes anything the user can act on.
+      sandboxError: undefined,
       status: "closed",
     });
     return null;
@@ -79,49 +107,129 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
+    await requestSessionSandboxStart(ctx, session);
+    return null;
+  },
+});
+
+/**
+ * Shared start path for the user Start button and the fork's source restart.
+ * Marks the session `"starting"` then schedules resume or create.
+ */
+export async function requestSessionSandboxStart(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<void> {
+  const repo = await ctx.db.get(session.repoId);
+  if (!repo) throw new Error("Repository not found");
+  const branchName = session.branchName || `eva/session-${session._id}`;
+  const baseBranch = resolveSessionBaseBranch(session, repo);
+  await ctx.db.patch(session._id, {
+    status: "starting",
+    // A new attempt owns the outcome: drop the previous failure so the dot
+    // leaves "Couldn't wake up" the moment Try again is pressed.
+    sandboxError: undefined,
+    updatedAt: Date.now(),
+  });
+  // Seed startup streaming immediately so the UI shows a real step instead of
+  // the random "Eva is inferring…" spinner while the workflow schedules.
+  await seedSandboxStartupActivity(ctx.db, `session-startup-${session._id}`);
+  const reusableSandboxId = session.sandboxId;
+  console.log(
+    `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
+  );
+  const startArgs = {
+    sessionId: session._id,
+    existingSandboxId: session.sandboxId,
+    installationId: repo.installationId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    branchName,
+    baseBranch,
+    repoId: session.repoId,
+    hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
+  };
+  // Vercel: schedule the start action directly. Workflow step scheduling was
+  // measured at ~6s before the first action ran.
+  // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
+  // arms `sandboxSetupPending` for them and only the workflow's
+  // `prepareLinkedRepo` steps clear it again, so a direct schedule would
+  // leave the gate armed forever (and re-clone nothing when a failed resume
+  // falls back to a fresh sandbox).
+  if (reusableSandboxId && !startArgs.hasLinkedRepos) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.startSessionSandbox,
+      startArgs,
+    );
+  } else {
+    await workflow.start(
+      ctx,
+      internal.sessionWorkflow.sessionSandboxStartupWorkflow,
+      startArgs,
+    );
+  }
+}
+
+/**
+ * User-confirmed recovery for the rewritten-branch publish refusal: replaces
+ * origin/<branch> with the sandbox's local branch. Fire-and-forget — the
+ * scheduled action posts the outcome into the session chat as a system alert.
+ *
+ * `sessionRepoId` selects one of a multi-repo session's linked clones instead
+ * of the primary — the recovery banner renders one row per diverged repo, and
+ * each row recovers only its own branch.
+ */
+export const forcePushBranch = authMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
+    if (session.status !== "active" || !session.sandboxId) {
+      throw new Error("Start the sandbox before force-pushing");
+    }
+    // Access is the session's; the linked row must still belong to it, or a
+    // session id the caller can reach would rewrite an unrelated branch.
+    let linkedRepo: Doc<"sessionRepos"> | null = null;
+    if (args.sessionRepoId !== undefined) {
+      linkedRepo = await ctx.db.get(args.sessionRepoId);
+      if (!linkedRepo || linkedRepo.sessionId !== args.sessionId) {
+        throw new Error("Linked repository not found for this session");
+      }
+    }
+    const branchName = linkedRepo ? linkedRepo.branchName : session.branchName;
+    if (!branchName) {
+      throw new Error("Session has no branch to publish");
+    }
+    // Only eva-owned session branches may ever be rewritten on GitHub; a base
+    // branch must never be reachable through this path.
+    if (!isEvaOwnedBranch(branchName)) {
+      throw new Error(
+        `Refusing to force-push non-session branch ${branchName}`,
+      );
+    }
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
-    const branchName = session.branchName || `eva/session-${args.sessionId}`;
-    const baseBranch = resolveSessionBaseBranch(session, repo);
-    await ctx.db.patch(args.sessionId, {
-      status: "starting",
-      updatedAt: Date.now(),
-    });
-    // Seed startup streaming immediately so the UI shows a real step instead of
-    // the random "Eva is inferring…" spinner while the workflow schedules.
-    await seedSandboxStartupActivity(
-      ctx.db,
-      `session-startup-${args.sessionId}`,
-    );
-    const reusableSandboxId = session.sandboxId;
-    console.log(
-      `[sessions] startSandbox sessionId=${args.sessionId} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
-    );
-    const startArgs = {
+    await ctx.scheduler.runAfter(0, internal.sandbox.performForcePushBranch, {
       sessionId: args.sessionId,
-      existingSandboxId: session.sandboxId,
-      installationId: repo.installationId,
+      sandboxId: session.sandboxId,
+      // The sandbox (and therefore its provider credentials) always belongs to
+      // the primary repo, linked clones included.
+      repoId: session.repoId,
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
-      baseBranch,
-      repoId: session.repoId,
-    };
-    // Vercel: schedule the start action directly. Workflow step scheduling was
-    // measured at ~6s before the first action ran.
-    if (reusableSandboxId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.startSessionSandbox,
-        startArgs,
-      );
-    } else {
-      await workflow.start(
-        ctx,
-        internal.sessionWorkflow.sessionSandboxStartupWorkflow,
-        startArgs,
-      );
-    }
+      ...(args.sessionRepoId !== undefined
+        ? { sessionRepoId: args.sessionRepoId }
+        : {}),
+    });
     return null;
   },
 });
@@ -133,19 +241,16 @@ export const startSandbox = authMutation({
 export async function requestSessionSandboxStop(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
+  options: { stopReason?: StopReason } = {},
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
   if (!session) return;
+  const { stopReason } = options;
 
-  // Stopping kills every chat's paused turn, so a blocking AskUserQuestion
-  // can never be claimed — clear them or they hide the composer forever.
-  const chats = await listLiveSessionChats(ctx.db, sessionId);
-  for (const chat of chats) {
-    await clearPendingQuestionsForEntity(
-      ctx.db,
-      sessionChatStreamingEntityId(chat._id),
-    );
-  }
+  // Stopping kills the paused turn, so any blocking AskUserQuestion can never
+  // be claimed — clear it or it hides the composer forever.
+  await clearPendingQuestionsForEntity(ctx.db, String(sessionId));
+  await clearPreviewToolCallsForParent(ctx.db, sessionId);
 
   // Allow stop from closed when a sandboxId remains — start can early-ready
   // then fail and leave a live Vercel VM while UI shows inactive.
@@ -159,6 +264,7 @@ export async function requestSessionSandboxStop(
         sessionId,
         sandboxId: session.sandboxId,
         repoId: session.repoId,
+        stopReason,
       });
     } else {
       await ctx.db.patch(sessionId, {
@@ -174,6 +280,7 @@ export async function requestSessionSandboxStop(
       sessionId,
       sandboxId: session.sandboxId,
       repoId: session.repoId,
+      stopReason,
     });
   } else {
     // No sandbox to stop — close immediately.
@@ -189,19 +296,16 @@ export async function requestSessionSandboxStop(
   // sandbox..." / cold-storage copy while status is stopping.
   await clearSandboxStartupActivity(ctx.db, `session-startup-${sessionId}`);
 
-  for (const chat of chats) {
-    if (!chat.syntheticTurnMessageId) continue;
-    const streamingEntityId = sessionChatStreamingEntityId(chat._id);
-    const syntheticMessage = await ctx.db.get(chat.syntheticTurnMessageId);
+  if (session.syntheticTurnMessageId) {
+    const syntheticMessage = await ctx.db.get(session.syntheticTurnMessageId);
     if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
       const streaming = await ctx.db
         .query("streamingActivity")
-        .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
+        .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
         .first();
       await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
     }
-    await clearStreamingActivity(ctx, streamingEntityId);
-    await ctx.db.patch(chat._id, { syntheticTurnMessageId: undefined });
+    await clearStreamingActivity(ctx, String(sessionId));
   }
 
   // The "Sandbox stopped" / "Failed to stop sandbox" divider is inserted by
@@ -211,6 +315,7 @@ export async function requestSessionSandboxStop(
     // Keep sandboxId so we can resume the stopped sandbox later.
     ptySessionId: undefined,
     status: "stopping",
+    syntheticTurnMessageId: undefined,
     updatedAt: Date.now(),
   });
 }
@@ -246,6 +351,7 @@ export async function scheduleFinalizeStop(
     sessionId: Id<"sessions">;
     sandboxId: string;
     repoId: Id<"githubRepos">;
+    stopReason?: StopReason;
   },
 ): Promise<void> {
   await ctx.scheduler.runAfter(
@@ -258,7 +364,7 @@ export async function scheduleFinalizeStop(
   await ctx.scheduler.runAfter(
     STUCK_STOPPING_RECOVER_MS,
     internal._sessions.sandbox.recoverStuckStopping,
-    { sessionId: args.sessionId },
+    { sessionId: args.sessionId, stopReason: args.stopReason },
   );
 }
 
@@ -272,6 +378,7 @@ export const finalizeStopSandbox = internalAction({
     sessionId: v.id("sessions"),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -287,6 +394,7 @@ export const finalizeStopSandbox = internalAction({
     await ctx.runMutation(internal._sessions.sandbox.markSandboxClosed, {
       sessionId: args.sessionId,
       error: stopError,
+      stopReason: args.stopReason,
     });
     return null;
   },
@@ -295,10 +403,12 @@ export const finalizeStopSandbox = internalAction({
 /**
  * Re-issues finalizeStopSandbox if the session is still `"stopping"`.
  * Scheduled after Stop so a platform transient on the first action doesn't
- * leave the UI wedged; no-ops if stop already finished.
+ * leave the UI wedged; no-ops if stop already finished. Carries the original
+ * stop reason so the divider matches the request even when this finalize wins
+ * the race against a slow provider stop.
  */
 export const recoverStuckStopping = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: { sessionId: v.id("sessions"), stopReason: stopReasonValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -312,6 +422,7 @@ export const recoverStuckStopping = internalMutation({
         sessionId: args.sessionId,
         sandboxId: session.sandboxId,
         repoId: session.repoId,
+        stopReason: args.stopReason,
       },
     );
     return null;
@@ -326,6 +437,7 @@ export const markSandboxClosed = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     error: v.optional(v.string()),
+    stopReason: stopReasonValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -333,10 +445,9 @@ export const markSandboxClosed = internalMutation({
     if (!session) return null;
     // Only flip if still stopping — don't overwrite a fresh start.
     if (session.status !== "stopping") return null;
-    const mainChat = await ensureMainChat(ctx, session);
     if (args.error) {
       await ctx.db.insert("messages", {
-        parentId: mainChat._id,
+        parentId: args.sessionId,
         role: "assistant",
         content: "Failed to stop sandbox",
         timestamp: Date.now(),
@@ -346,14 +457,15 @@ export const markSandboxClosed = internalMutation({
       // VM is still running — keep UI active so Stop can be retried.
       await ctx.db.patch(args.sessionId, {
         status: "active",
+        sandboxError: undefined,
         updatedAt: Date.now(),
       });
       return null;
     }
     await ctx.db.insert("messages", {
-      parentId: mainChat._id,
+      parentId: args.sessionId,
       role: "assistant",
-      content: "Sandbox stopped",
+      content: stopAlertText(args.stopReason),
       timestamp: Date.now(),
       isSystemAlert: true,
     });
@@ -381,6 +493,10 @@ export const sandboxReady = internalMutation({
     // queued first turn until the base pull + dependency install finish. Final-
     // ready never passes it (setup has by then cleared the flag explicitly).
     markSetupPending: v.optional(v.boolean()),
+    // Set by every early-ready call: services (background + startup commands)
+    // are still coming up, so the Preview heal must not launch them itself.
+    // Final-ready omits it, which clears the flag.
+    markServicesPending: v.optional(v.boolean()),
     /** Existing sandbox id was unresumable; we created a fresh one. */
     resumeFellBack: v.optional(v.boolean()),
   },
@@ -402,21 +518,20 @@ export const sandboxReady = internalMutation({
     // sandbox/dev metadata on every call.
     const alreadyActive =
       session.status === "active" && session.sandboxId === args.sandboxId;
-    const mainChat = await ensureMainChat(ctx, session);
     if (!alreadyActive) {
       // Fresh boot / resume — prior VM processes are gone.
       await markAllRunningExited(ctx.db, args.sessionId);
-      // Subagents died with the old VM, so settle any the dead daemons never
-      // reported terminal — they gate each chat's message queue (see
+      // Subagents died with the old VM, so settle any the dead daemon never
+      // reported terminal — they gate the message queue (see
       // `runningBackgroundAgents`) and nothing else would ever clear them.
-      for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
-        const settledAgents = settleOrphanedBackgroundAgents(
-          chat.backgroundAgents,
-          Date.now(),
-        );
-        if (settledAgents) {
-          await ctx.db.patch(chat._id, { backgroundAgents: settledAgents });
-        }
+      const settledAgents = settleOrphanedBackgroundAgents(
+        session.backgroundAgents,
+        Date.now(),
+      );
+      if (settledAgents) {
+        await ctx.db.patch(args.sessionId, {
+          backgroundAgents: settledAgents,
+        });
       }
       const content = args.resumeFellBack
         ? "Previous sandbox expired — started a fresh one. Uncommitted changes from the old sandbox are gone."
@@ -424,7 +539,7 @@ export const sandboxReady = internalMutation({
           ? "Sandbox started"
           : "Sandbox reconnected";
       await ctx.db.insert("messages", {
-        parentId: mainChat._id,
+        parentId: args.sessionId,
         role: "assistant",
         content,
         timestamp: Date.now(),
@@ -436,15 +551,41 @@ export const sandboxReady = internalMutation({
       sandboxId: args.sandboxId,
       branchName: args.branchName,
       status: "active",
+      // Awake: whatever the last attempt failed on is history.
+      sandboxError: undefined,
       ...(args.devPort !== undefined ? { devPort: args.devPort } : {}),
       ...(args.devCommand !== undefined ? { devCommand: args.devCommand } : {}),
       ...(args.markSetupPending ? { sandboxSetupPending: true } : {}),
+      // Early-ready arms the Preview-heal gate; final-ready (which never passes
+      // the flag) always disarms it, so a heal can resume as soon as the
+      // lifecycle has launched services itself.
+      sandboxServicesPending: args.markServicesPending ? true : undefined,
     });
+    if (args.markSetupPending) {
+      await syncSessionDaemonState(ctx, session, {
+        sandboxSetupPending: true,
+      });
+    }
+    // A wake is an interaction: the idle sweep must grant a full grace window
+    // before it can pause the sandbox it just brought back.
+    await touchUserActivity(
+      ctx,
+      { kind: "session", entityId: String(args.sessionId) },
+      { source: "start" },
+    );
     // Drain first-message (and any other) queued turns now that chat can run.
     // Early + final ready both call this; second no-ops while activeWorkflowId is set.
     // Starting a sandbox is not a turn ending, so this drain must not wake a
     // watching orchestrator when the queue turns out to be empty.
-    await drainSessionChatQueuesAfterSandboxReady(ctx, args.sessionId);
+    // Scheduled, not imported: the queue helpers import this module to wake a
+    // stopped sandbox, so a direct call would make an import cycle.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      {
+        parentId: args.sessionId,
+      },
+    );
     return null;
   },
 });
@@ -462,6 +603,26 @@ export const clearSandboxSetupPending = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.sandboxSetupPending !== true) return null;
     await ctx.db.patch(args.sessionId, { sandboxSetupPending: undefined });
+    await syncSessionDaemonState(ctx, session, {
+      sandboxSetupPending: undefined,
+    });
+    return null;
+  },
+});
+
+/**
+ * Releases the Preview-heal gate set by early-ready without a final-ready.
+ * Only the start failure path needs this: it deliberately leaves an active
+ * sandbox running, and a flag left armed would suppress the background heal on
+ * that sandbox forever. Idempotent.
+ */
+export const clearSandboxServicesPending = internalMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.sandboxServicesPending !== true) return null;
+    await ctx.db.patch(args.sessionId, { sandboxServicesPending: undefined });
     return null;
   },
 });
@@ -477,9 +638,8 @@ export const sandboxError = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
     await markAllRunningExited(ctx.db, args.sessionId);
-    const mainChat = await ensureMainChat(ctx, session);
     await ctx.db.insert("messages", {
-      parentId: mainChat._id,
+      parentId: args.sessionId,
       role: "assistant",
       content: "Failed to start sandbox",
       timestamp: Date.now(),
@@ -488,13 +648,16 @@ export const sandboxError = internalMutation({
     });
     await ctx.db.patch(args.sessionId, {
       status: "closed",
+      // Read by the sidebar dot and the chat header's retry notice — a start
+      // that fails is otherwise indistinguishable from a sleeping sandbox.
+      sandboxError: toUserFacingSandboxError(args.error),
       updatedAt: Date.now(),
     });
     // A watched child whose sandbox never started will never reach the
     // queue-drain hook (its queued first turn stays queued), so without this
     // the orchestrator waits on it forever. Notify only — deliberately no
     // drain, which would start that turn on a session just marked closed.
-    if (session.watchedByOrchestrator !== undefined) {
+    if (session.watchedByAve !== undefined) {
       await ctx.scheduler.runAfter(
         0,
         internal.orchestratorNotify.notifyOrchestratorOfChild,
@@ -530,9 +693,8 @@ export const sandboxStartupWarning = internalMutation({
     // which the generic copy misrepresents as a services problem.
     const isBranchCheckoutFailure =
       /\.(checkoutSessionBranch|checkoutBranch):/.test(args.error);
-    const mainChat = await ensureMainChat(ctx, session);
     await ctx.db.insert("messages", {
-      parentId: mainChat._id,
+      parentId: args.sessionId,
       role: "assistant",
       content: isBranchCheckoutFailure
         ? "Session branch could not be created — the session is running on its base branch. Eva will recover the branch when it publishes your changes."

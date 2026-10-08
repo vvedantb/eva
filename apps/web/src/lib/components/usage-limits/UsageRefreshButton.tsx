@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useAction } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { Button, Spinner, toast } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner, toast } from "@eva/ui";
 import { IconRefresh } from "@tabler/icons-react";
-import type { UsageAccountScope } from "./_utils";
 
 /**
  * Why a refresh came back with nothing, in the user's terms. Each one names a
@@ -21,47 +21,50 @@ const FAILURE_COPY: Record<string, string> = {
 
 const GENERIC_FAILURE = "Couldn't refresh plan usage.";
 
+/** One account's outcome, derived from the action so the two cannot drift. */
+type RefreshOutcome = FunctionReturnType<
+  typeof api.usageLimitsActions.refreshAll
+>["results"][number];
+
 interface UsageRefreshButtonProps {
   repoId: Id<"githubRepos">;
-  /** The credential to read. Refreshing is per account, like the reading. */
-  scope: UsageAccountScope;
-}
-
-function reportOutcome(result: { ok: boolean; reason?: string }): void {
-  if (result.ok) return;
-  const copy = FAILURE_COPY[result.reason ?? ""];
-  toast.error(copy ?? GENERIC_FAILURE);
 }
 
 /**
- * Pulls a reading now instead of waiting for the next turn to report one.
- *
- * Nothing is invalidated on success: `getByRepo` is a live query, so the card
- * the button sits in updates itself the moment the row is written.
+ * Failures are named per account: several credentials are read at once, and
+ * "Couldn't reach Claude" is no use without knowing whose token it was.
  */
-export function UsageRefreshButton({ repoId, scope }: UsageRefreshButtonProps) {
-  const refresh = useAction(api.usageLimitsActions.refresh);
+function reportOutcome(result: RefreshOutcome): void {
+  if (result.ok) return;
+  const copy = FAILURE_COPY[result.reason ?? ""] ?? GENERIC_FAILURE;
+  toast.error(`${result.accountLabel}: ${copy}`);
+}
+
+/**
+ * Pulls a reading for every credential now instead of waiting for the next turn
+ * to report one. One button rather than one per row: the card lists accounts
+ * that have never reported, and filling those in is the whole point of asking.
+ *
+ * Nothing is invalidated on success: `getForViewer` is a live query, so the card
+ * the button sits in updates itself the moment a row is written.
+ */
+export function UsageRefreshButton({ repoId }: UsageRefreshButtonProps) {
+  const refresh = useAction(api.usageLimitsActions.refreshAll);
   const [pending, setPending] = useState(false);
 
   const onRefresh = async () => {
     setPending(true);
-    const accountId = scope.providerAccountId;
-    const accountArg =
-      accountId === null ? {} : { providerAccountId: accountId };
+    let results: readonly RefreshOutcome[] = [];
     try {
-      const result = await refresh({
-        repoId,
-        provider: "claude",
-        ...accountArg,
-      });
-      setPending(false);
-      reportOutcome(result);
+      const response = await refresh({ repoId });
+      results = response.results;
     } catch {
       // A server throw carries Convex internals (request id, stack), which is
       // not copy for a toast — every named failure already arrives as a reason.
-      setPending(false);
       toast.error(GENERIC_FAILURE);
     }
+    setPending(false);
+    for (const result of results) reportOutcome(result);
   };
 
   return (
@@ -74,7 +77,15 @@ export function UsageRefreshButton({ repoId, scope }: UsageRefreshButtonProps) {
         void onRefresh();
       }}
     >
-      {pending ? <Spinner size="sm" /> : <IconRefresh size={14} />}
+      <CrossfadeIcon
+        show={pending}
+        trueKey="loading"
+        falseKey="idle"
+        variant="soft"
+        className="relative flex size-3.5 items-center justify-center"
+        whenTrue={<Spinner size="sm" />}
+        whenFalse={<IconRefresh size={14} />}
+      />
     </Button>
   );
 }

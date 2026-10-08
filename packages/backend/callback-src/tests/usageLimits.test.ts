@@ -275,6 +275,16 @@ test("a spend-limit result becomes a non-destructive rejected snapshot", () => {
   });
 });
 
+test("a session-limit result becomes a rejected snapshot", () => {
+  captureClaudeUsageLimitError(
+    "You've hit your session limit · resets 12pm (UTC)",
+  );
+  expect(S.usageLimitSnapshot).toEqual({
+    completeness: "partial",
+    status: "rejected",
+  });
+});
+
 test("a spend-limit result keeps authoritative windows when available", async () => {
   await captureClaudeUsage(async () => ({
     subscription_type: "max",

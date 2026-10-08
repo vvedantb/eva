@@ -1,9 +1,19 @@
 import { describe, expect, test } from "vitest";
+import { z } from "zod";
+import type { Id } from "@eva/backend";
 import {
   dropPreviewGroup,
   getPreviewMeta,
   setPreviewMeta,
 } from "./previewIframeHost";
+import {
+  armPreviewMiniPlayer,
+  closePreviewMiniPlayer,
+  getArmedPreviewMiniPlayer,
+  getPreviewMiniPlayer,
+  openPreviewMiniPlayer,
+  type PreviewMiniPlayerTarget,
+} from "./previewMiniPlayerStore";
 
 /**
  * Preview iframes outlive the router so route changes do not reload the app
@@ -65,5 +75,45 @@ describe("preview meta cache", () => {
     expect(getPreviewMeta("sbx_d:3000")?.previewInfo.url).toBe(
       "https://d-3000.vercel.run/",
     );
+  });
+});
+
+/**
+ * The floating mini-player shows one of the hosted iframes, so dropping a
+ * sandbox's iframes must take the window (and any pending float) with them —
+ * a mini-player over a dead document would be a frozen screenshot.
+ */
+describe("dropping a sandbox and the mini-player", () => {
+  function miniPlayer(sandboxId: string): PreviewMiniPlayerTarget {
+    return {
+      entryKey: `eva:session:s1:preview-path:p1:3000:${sandboxId}`,
+      group: `${sandboxId}:3000`,
+      src: `https://${sandboxId}-3000.vercel.run/`,
+      epoch: 1,
+      sessionId: z.custom<Id<"sessions">>().parse("sess_1"),
+      sandboxId,
+      returnTo: "/acme/app/sessions/12/preview",
+      title: "Fix the header",
+    };
+  }
+
+  test("closes and disarms the mini-player of that sandbox", () => {
+    armPreviewMiniPlayer(miniPlayer("sbx_e"));
+    openPreviewMiniPlayer({ ...miniPlayer("sbx_e"), mode: "auto" });
+
+    dropPreviewGroup("sbx_e");
+
+    expect(getPreviewMiniPlayer()).toBeNull();
+    expect(getArmedPreviewMiniPlayer()).toBeNull();
+  });
+
+  test("spares a mini-player showing another sandbox", () => {
+    const other = { ...miniPlayer("sbx_f2"), mode: "manual" as const };
+    openPreviewMiniPlayer(other);
+
+    dropPreviewGroup("sbx_f");
+
+    expect(getPreviewMiniPlayer()).toEqual(other);
+    closePreviewMiniPlayer();
   });
 });

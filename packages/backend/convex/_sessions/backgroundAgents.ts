@@ -12,7 +12,17 @@ export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = 2 * 60 * 60 * 1000;
 /** Terminal status stamped on entries orphaned by a dead daemon. */
 const STALE_STATUS = "stale";
 
-/** Merges daemon background-agent patches into the session doc array by toolUseId. */
+/** Terminal status stamped on an entry replaced by a restart of the same task. */
+const SUPERSEDED_STATUS = "superseded";
+
+/**
+ * Merges daemon background-agent patches into the session doc array by
+ * toolUseId.
+ *
+ * An Agent resumed via SendMessage gets a new tool_use id for the same task id.
+ * The daemon that owned the first one may have died without settling it, and
+ * one task cannot run twice at once, so the older running entry is superseded.
+ */
 export function mergeBackgroundAgents(
   existing: BackgroundAgentEntry[] | undefined,
   patches: BackgroundAgentEntry[],
@@ -27,6 +37,30 @@ export function mergeBackgroundAgents(
       patch.toolUseId,
       previous ? { ...previous, ...patch } : patch,
     );
+  }
+  for (const patch of patches) {
+    const taskId = patch.taskId;
+    if (
+      taskId === undefined ||
+      patch.status !== "running" ||
+      patch.settledAt !== undefined
+    ) {
+      continue;
+    }
+    for (const [toolUseId, entry] of byToolUseId) {
+      if (
+        toolUseId !== patch.toolUseId &&
+        entry.taskId === taskId &&
+        entry.status === "running" &&
+        entry.settledAt === undefined
+      ) {
+        byToolUseId.set(toolUseId, {
+          ...entry,
+          status: SUPERSEDED_STATUS,
+          settledAt: patch.startedAt,
+        });
+      }
+    }
   }
   return [...byToolUseId.values()];
 }
@@ -46,6 +80,26 @@ export function runningBackgroundAgents(
       entry.settledAt === undefined &&
       entry.status === "running" &&
       now - entry.startedAt < BACKGROUND_AGENT_QUEUE_BLOCK_MS,
+  );
+}
+
+/**
+ * When the last still-running entry ages past the cap and stops blocking the
+ * queue, or `null` when nothing is running. The cap releases the gate silently
+ * — no settle patch arrives — so a blocked drain uses this to come back then.
+ */
+export function backgroundAgentsExpireAt(
+  entries: BackgroundAgentEntry[] | undefined,
+  now: number,
+): number | null {
+  const running = runningBackgroundAgents(entries, now);
+  if (running.length === 0) {
+    return null;
+  }
+  return Math.max(
+    ...running.map(
+      (entry) => entry.startedAt + BACKGROUND_AGENT_QUEUE_BLOCK_MS,
+    ),
   );
 }
 

@@ -50,7 +50,7 @@ export function chatAttachmentErrorMessage(err: {
   }
 }
 
-export function filenameExtension(name: string): string {
+function filenameExtension(name: string): string {
   const lower = name.toLowerCase();
   const dot = lower.lastIndexOf(".");
   if (dot < 0) return "";

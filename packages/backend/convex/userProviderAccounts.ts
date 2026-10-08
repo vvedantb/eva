@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import type { QueryCtx } from "./_generated/server";
 import { internalQuery, internalMutation } from "./_generated/server";
 import {
   authQuery,
@@ -7,13 +6,12 @@ import {
   hasRepoAccess,
   hasTaskAccess,
 } from "./functions";
-import type { Id } from "./_generated/dataModel";
 import { aiProviderValidator } from "./validators";
-import { resolveUserDisplayFirstName } from "./_userProviderAccounts/defaults";
 import {
-  isAccountUsableBy,
-  listTeammateUserIds,
-} from "./_userProviderAccounts/sharing";
+  listAccountsFor,
+  listSelectableAccountsFor,
+} from "./_userProviderAccounts/listing";
+import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
 
 const credentialValidator = v.object({ key: v.string(), value: v.string() });
 
@@ -24,66 +22,15 @@ const accountListItemValidator = v.object({
   label: v.string(),
   credentials: v.array(credentialValidator),
   shared: v.boolean(),
+  // Owned by the pool owner this list was built for (the viewer, or the task /
+  // session owner), as opposed to a teammate's shared account. Sharing is not
+  // enough to tell them apart: an own account can be shared too.
+  isOwn: v.boolean(),
   lastUsedAt: v.optional(v.number()),
   // First name of whoever last ran on it, omitted when that was the owner.
   lastUsedByName: v.optional(v.string()),
   updatedAt: v.number(),
 });
-
-/**
- * One user's accounts with credential values masked, labelled with that user's
- * first name. Shared by every picker query so owner-scoped lists and the
- * viewer's own list cannot drift apart.
- */
-async function listAccountsFor(ctx: QueryCtx, userId: Id<"users">) {
-  const displayName =
-    (await resolveUserDisplayFirstName(ctx.db, userId)) ?? "Personal";
-  const rows = await ctx.db
-    .query("userProviderAccounts")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .collect();
-  // Teammates repeat across rows, so resolve each name once.
-  const names = new Map<Id<"users">, string | undefined>();
-  const items = [];
-  for (const row of rows) {
-    const usedBy = row.lastUsedByUserId;
-    if (usedBy && usedBy !== userId && !names.has(usedBy)) {
-      names.set(usedBy, await resolveUserDisplayFirstName(ctx.db, usedBy));
-    }
-    items.push({
-      _id: row._id,
-      _creationTime: row._creationTime,
-      provider: row.provider,
-      label: displayName,
-      credentials: row.credentials.map((entry) => ({
-        key: entry.key,
-        value: "••••••",
-      })),
-      shared: row.shared === true,
-      lastUsedAt: row.lastUsedAt,
-      lastUsedByName:
-        usedBy && usedBy !== userId ? names.get(usedBy) : undefined,
-      updatedAt: row.updatedAt,
-    });
-  }
-  return items;
-}
-
-/**
- * The accounts `ownerUserId` may run on: their own, then every teammate's
- * shared accounts. Own accounts come first so nothing downstream prefers a
- * teammate's credential by accident.
- */
-async function listSelectableAccountsFor(ctx: QueryCtx, ownerUserId: Id<"users">) {
-  const own = await listAccountsFor(ctx, ownerUserId);
-  const teammates = await listTeammateUserIds(ctx.db, ownerUserId);
-  const shared = [];
-  for (const teammateId of teammates) {
-    const rows = await listAccountsFor(ctx, teammateId);
-    shared.push(...rows.filter((row) => row.shared));
-  }
-  return [...own, ...shared];
-}
 
 /**
  * Lists the authenticated user's own provider accounts, masking credential
@@ -94,7 +41,7 @@ async function listSelectableAccountsFor(ctx: QueryCtx, ownerUserId: Id<"users">
 export const list = authQuery({
   args: {},
   returns: v.array(accountListItemValidator),
-  handler: async (ctx) => await listAccountsFor(ctx, ctx.userId),
+  handler: async (ctx) => await listAccountsFor(ctx, ctx.userId, true),
 });
 
 /**

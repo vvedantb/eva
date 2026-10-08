@@ -20,9 +20,11 @@ import { getCurrentUserId } from "./_auth/currentUser";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
+import { buildProjectBranchName } from "./_git/branchNames";
+import { findLivePullRequestOnBranch } from "./_pullRequests/store";
 
 /** Checks a loaded repo against connector ownership or team membership. */
-async function userCanAccessRepo(
+export async function userCanAccessRepo(
   db: GenericDatabaseReader<DataModel>,
   repo: Doc<"githubRepos">,
   userId: Id<"users">,
@@ -350,7 +352,11 @@ export async function isSupersededTaskRun(
   });
 }
 
-/** Determines if a PR should be created (no existing PR on project or any task run). */
+/**
+ * True when the run should open a PR rather than refresh one: there is no live
+ * PR on the branch it pushes to. A merged or closed PR on that branch means the
+ * next run opens a fresh one, which the owner then holds beside the old one.
+ */
 export async function isFirstTaskOnBranch(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
@@ -358,15 +364,23 @@ export async function isFirstTaskOnBranch(
 ): Promise<boolean> {
   if (projectId) {
     const project = await db.get(projectId);
-    if (project?.prUrl) return false;
-    return true;
+    if (!project) return true;
+    const branch =
+      project.branchName ??
+      buildProjectBranchName(project._id, project.branchVersion);
+    return (
+      (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
+    );
   }
-  // Check if any run for this task already created a PR
-  const runs = await db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  return !runs.some((run) => run.prUrl);
+  const task = await db.get(taskId);
+  if (!task?.repoId) return true;
+  return (
+    (await findLivePullRequestOnBranch(
+      db,
+      task.repoId,
+      `eva/task-${taskId}`,
+    )) === null
+  );
 }
 
 /** Deletes a task and all its related data (runs, dependencies, scheduled functions, sandbox). */

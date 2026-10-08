@@ -3,15 +3,15 @@ import {
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  MessageResponse,
   motionFast,
   ProviderIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@eva/ui";
-import { memo } from "react";
-import { m } from "motion/react";
+import { Markdown } from "@eva/ui/markdown";
+import { memo, type ReactNode } from "react";
+import { AnimatePresence, m } from "motion/react";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -22,13 +22,18 @@ import {
   findAIModelOption,
   getReasoningLevelLabel,
   type BackgroundAgentEntry,
+  type Id,
 } from "@eva/backend";
-import { VideoPreview } from "@/lib/components/MediaPreview";
-import { ImageGalleryPreview } from "@/lib/components/MediaGallery";
+import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
 import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
+import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { ChatMessageContextMenu } from "@/lib/components/chat/ChatMessageContextMenu";
+import {
+  useTurnCheckpointActions,
+  type TurnCheckpointContext,
+} from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import {
   StreamingActivityDisplay,
   ActivityLogDisplay,
@@ -37,16 +42,30 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
+import { IconGitFork } from "@tabler/icons-react";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
-import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
-import { getAssistantTurnState } from "@/lib/components/chat/chatBodyUtils";
+import type {
+  ChatBodyMessage,
+  ChatRepo,
+} from "@/lib/components/chat/chatBodyUtils";
+import {
+  collectQuestionSteps,
+  getAssistantTurnState,
+  stripErrorPrefix,
+  turnErrorTitle as getTurnErrorTitle,
+} from "@/lib/components/chat/chatBodyUtils";
+import { AssistantQuestionCards } from "@/lib/components/chat/_components/AssistantQuestionCards";
+import { ChatUiPanelTabs } from "@/lib/components/chat/generativeUi/ChatUiPanelTabs";
+import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
+import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
+import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
 
 /** Squares the bottom-left corner against a teammate's side avatar. */
 function otherUserBubbleRadius(): string {
-  const r = "clamp(0.75rem, var(--radius), 1.25rem)";
+  const r = "clamp(0.75rem, var(--radius), 1rem)";
   return `${r} ${r} ${r} 0`;
 }
 
@@ -87,7 +106,14 @@ function MessageModelIcon({
 
 interface ChatMessageProps {
   message: ChatBodyMessage;
-  repoBasePath: string;
+  /**
+   * False for rows the user has already scrolled past — the transcript backlog
+   * mounts a whole chat at once, and 80 simultaneous enter animations is both
+   * wrong (nothing arrived) and the most expensive part of that commit.
+   */
+  animateIn?: boolean;
+  /** Absent (Manager Ave): user turns render as plain markdown. */
+  repo?: ChatRepo;
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
@@ -119,11 +145,42 @@ interface ChatMessageProps {
   /** Entity-wide sub-agent lifecycle entries; narrowed to this turn's spawns. */
   backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
   sandboxRunning?: boolean;
+  /**
+   * Sessions only: enables "Diff this turn" / "Restore to before this turn"
+   * on assistant turns that carry checkpoint shas.
+   */
+  turnCheckpoint?: TurnCheckpointContext;
+  /** Flash the row after a citation chip jumps here. */
+  citeHighlight?: boolean;
+  /** Sessions: start a new chat with the transcript through this message. */
+  onFork?: () => void;
+  /**
+   * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
+   * is read-only, which is what hides the Retry action on a failed turn.
+   */
+  onRetryTurn?: (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => void;
+  /** The preceding user turn, i.e. what Retry re-sends. */
+  precedingUser?: {
+    content: string;
+    attachmentStorageIds?: Id<"_storage">[];
+  };
+  /**
+   * Agent-composed panels (`render_ui`) for this turn. On a settled assistant
+   * reply they take the prose's slot behind a UI / Text tab strip, so only one
+   * of the two renderings is on screen. Otherwise (user turn, still streaming,
+   * failed turn, no prose) they render directly above the meta row so a panel
+   * is never dropped.
+   */
+  belowContent?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
   message,
-  repoBasePath,
+  animateIn = true,
+  repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
   changedFilesExpanded,
@@ -141,7 +198,18 @@ export const ChatMessage = memo(function ChatMessage({
   onOpenAgentsTab,
   backgroundAgents,
   sandboxRunning,
+  turnCheckpoint,
+  citeHighlight = false,
+  onFork,
+  onRetryTurn,
+  precedingUser,
+  belowContent,
 }: ChatMessageProps) {
+  const checkpoint = useTurnCheckpointActions({
+    message,
+    context: turnCheckpoint,
+    sandboxRunning: sandboxRunning === true,
+  });
   if (message.isSystemAlert) {
     return (
       <SystemAlertMessage
@@ -152,37 +220,41 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const { isStreamingPlaceholder, changedFiles } =
+  const { isStreamingPlaceholder, changedFiles, questionSteps } =
     getAssistantTurnState(message);
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
+  const streamingQuestionSteps = isStreamingPlaceholder
+    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+    : [];
 
   const copySource =
     message.content.trim().length > 0
       ? message.content
       : (streamingContent ?? "");
   const copyPlain = copySource ? tokenizedToDisplayText(copySource) : undefined;
+  const forkAction: ChatMessageActionItem | undefined = onFork
+    ? {
+        key: "fork",
+        label: "Fork from here",
+        icon: <IconGitFork className="size-4" />,
+        onClick: onFork,
+      }
+    : undefined;
+  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
 
-  // Two orchestrator provenances, never both on one row: a child chat shows the
-  // turns Eva injected, Eva shows the wake-ups its children fired.
+  // Two MCP provenances, never both on one row: a child chat shows the turns
+  // posted from outside the composer, Eva shows the wake-ups its children fired.
   const isOrchestratorNotification = message.orchestratorNotification === true;
+  const sentViaMcp = message.sentViaOrchestrator === true;
   const orchestratorTag = isOrchestratorNotification
     ? "agent update"
-    : message.sentViaOrchestrator === true
-      ? "via Ave"
+    : sentViaMcp
+      ? "via MCP"
       : undefined;
 
-  // Videos render as inline players; images collapse into one Twitter-style
-  // grid + lightbox so a screenshot-heavy turn is not a long vertical stack.
   const mediaEntries = message.media ?? [];
-  const videoMedia = mediaEntries.flatMap((entry) =>
-    entry.url && entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
-  const imageMedia = mediaEntries.flatMap((entry) =>
-    entry.url && !entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
 
   // Only surfaces with an Agents tab get the doorway to it.
   const agentSpawn = !onOpenAgentsTab
@@ -198,205 +270,296 @@ export const ChatMessage = memo(function ChatMessage({
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
 
+  const turnErrorTitle = getTurnErrorTitle({
+    errorType: message.errorType,
+    turnModel,
+    messageModel: message.model,
+  });
+  // A panel and the prose that introduced it are two renderings of one answer,
+  // so the panel takes the slot and the prose moves behind a tab. Needs real
+  // prose to switch to, and a failed turn shows its error notice instead.
+  const panelTabs =
+    belowContent !== undefined &&
+    turnErrorTitle === null &&
+    message.content.trim().length > 0;
+  /* wrap-anywhere: without it a long unbreakable token is silently clipped by
+     MessageContent's overflow-hidden. */
+  const turnProse = <Markdown>{message.content}</Markdown>;
+  // Retrying means re-sending the prompt this turn answered, so it needs the
+  // turn before it; a failure with nothing above it has nothing to repeat.
+  const retryAction =
+    onRetryTurn && precedingUser
+      ? {
+          label: "Retry",
+          onClick: () =>
+            onRetryTurn(
+              precedingUser.content,
+              precedingUser.attachmentStorageIds,
+            ),
+        }
+      : null;
+
   return (
-    <ChatMessageContextMenu content={copySource}>
-      <m.div
-        data-message-id={message._id}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={motionFast}
-      >
-        <AIMessage
-          from={message.role}
+    <>
+      <ChatMessageContextMenu content={copySource} extraItems={rowActions}>
+        <m.div
+          data-message-id={message._id}
+          initial={animateIn ? { opacity: 0, y: 10 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={motionFast}
           className={
-            isOtherUser ? "ml-0 mr-auto justify-start gap-1.5" : undefined
+            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
           }
         >
-          {message.role === "user" ? (
-            <div
-              className={cn(
-                "flex flex-col gap-0.5",
-                isOtherUser ? "items-start" : "items-end",
-              )}
-            >
-              {isOtherUser && senderFirstName ? (
-                <span
-                  data-pii
-                  className={cn(
-                    "text-[11px] font-medium text-muted-foreground",
-                    // Avatar (16) + gap (8) + bubble px-3 (12) → align with bubble text
-                    "pl-9",
-                  )}
-                >
-                  {senderFirstName}
-                </span>
-              ) : null}
-              {orchestratorTag ? (
-                <span
-                  className={cn(
-                    "rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground",
-                    isOtherUser ? "ml-9" : undefined,
-                  )}
-                >
-                  {orchestratorTag}
-                </span>
-              ) : null}
-              {/* min-w-0 stops the default `min-width: auto` on this flex item
+          <AIMessage
+            from={message.role}
+            className={
+              isOtherUser ? "ml-0 mr-auto justify-start gap-1.5" : undefined
+            }
+          >
+            {message.role === "user" ? (
+              <div
+                className={cn(
+                  "flex flex-col gap-0.5",
+                  isOtherUser ? "items-start" : "items-end",
+                )}
+              >
+                {isOtherUser && senderFirstName ? (
+                  <span
+                    data-pii
+                    className={cn(
+                      "text-2xs font-medium text-muted-foreground",
+                      // Avatar (16) + gap (8) + bubble px-3 (12) → align with bubble text
+                      "pl-9",
+                    )}
+                  >
+                    {senderFirstName}
+                  </span>
+                ) : null}
+                {orchestratorTag ? (
+                  <span
+                    className={cn(
+                      "rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground",
+                      isOtherUser ? "ml-9" : undefined,
+                    )}
+                  >
+                    {orchestratorTag}
+                  </span>
+                ) : null}
+                {/* min-w-0 stops the default `min-width: auto` on this flex item
                   from letting one unbreakable token (a JWT, a long URL) stretch
                   the bubble past the message column. */}
-              <div className="flex min-w-0 max-w-full items-end gap-2">
-                {isOtherUser ? (
-                  <div className="shrink-0">
-                    <UserMessageAvatar userId={message.userId} />
+                <div className="flex min-w-0 max-w-full items-end gap-2">
+                  {isOtherUser ? (
+                    <div className="shrink-0">
+                      <UserMessageAvatar userId={message.userId} />
+                    </div>
+                  ) : null}
+                  <MessageContent
+                    className={cn(
+                      "group px-3 py-2 text-foreground",
+                      isOtherUser
+                        ? "bg-secondary group-[.is-user]:ml-0 group-[.is-user]:bg-secondary"
+                        : isOrchestratorNotification || sentViaMcp
+                          ? // Not typed in the Eva composer — drop it a tone
+                            // step off the accent bubble.
+                            "rounded-surface bg-muted group-[.is-user]:bg-muted"
+                          : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
+                    )}
+                    style={
+                      isOtherUser
+                        ? { borderRadius: otherUserBubbleRadius() }
+                        : undefined
+                    }
+                  >
+                    <UserMessageBody
+                      message={message}
+                      repo={repo}
+                    />
+                  </MessageContent>
+                </div>
+                {isHandoffBoundary && message.model !== undefined ? (
+                  <HandoffModelChip
+                    model={message.model}
+                    className={isOtherUser ? "ml-6" : undefined}
+                  />
+                ) : null}
+                {belowContent ? (
+                  <div className="mt-1 flex w-full flex-col gap-2">
+                    {belowContent}
                   </div>
                 ) : null}
-                <MessageContent
-                  className={cn(
-                    "group px-3 py-2 text-foreground",
-                    isOtherUser
-                      ? "bg-secondary group-[.is-user]:ml-0 group-[.is-user]:bg-secondary"
-                      : isOrchestratorNotification
-                        ? // Machine-authored wake-up, not something the user
-                          // typed — drop it a tone step off the accent bubble.
-                          "rounded-surface bg-muted group-[.is-user]:bg-muted"
-                        : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
-                  )}
-                  style={
-                    isOtherUser
-                      ? { borderRadius: otherUserBubbleRadius() }
-                      : undefined
-                  }
-                >
-                  <UserMessageBody
-                    message={message}
-                    repoBasePath={repoBasePath}
-                  />
-                </MessageContent>
-              </div>
-              {isHandoffBoundary && message.model !== undefined ? (
-                <HandoffModelChip
-                  model={message.model}
-                  className={isOtherUser ? "ml-6" : undefined}
+                <UserMessageMeta
+                  align={isOtherUser ? "start" : "end"}
+                  copyPlain={copyPlain}
+                  actions={forkAction ? [forkAction] : []}
+                  timestamp={message.timestamp}
+                  className={isOtherUser ? "pl-6" : undefined}
                 />
-              ) : null}
-              <UserMessageMeta
-                align={isOtherUser ? "start" : "end"}
-                copyPlain={copyPlain}
-                timestamp={message.timestamp}
-                className={isOtherUser ? "pl-6" : undefined}
-              />
-            </div>
-          ) : (
-            <>
-              <MessageContent className="px-1 py-2">
-                {isStreamingPlaceholder ? (
-                  <>
-                    <StreamingActivityDisplay
-                      activity={streamingActivity}
-                      name="Eva"
-                      startedAt={message.timestamp}
-                      onOpenFile={onOpenFile}
-                    />
-                    {agentSpawnRow}
-                    {streamingContent ? (
-                      <MessageResponse className="prose prose-sm dark:prose-invert max-w-none mt-2 wrap-anywhere">
-                        {streamingContent}
-                      </MessageResponse>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    {message.activityLog && (
-                      <ActivityLogDisplay
-                        activityLog={message.activityLog}
-                        name="Eva"
-                        icon={EVA_ICON}
-                        startedAt={message.timestamp}
-                        finishedAt={message.finishedAt}
-                        finalText={message.content}
-                        onOpenFile={onOpenFile}
-                      />
-                    )}
-                    {agentSpawnRow}
-                    {/* wrap-anywhere: without it a long unbreakable token is
-                        silently clipped by MessageContent's overflow-hidden. */}
-                    <MessageResponse className="prose prose-sm dark:prose-invert max-w-none wrap-anywhere">
-                      {message.content}
-                    </MessageResponse>
-                    {showChangedFiles && changedFiles.length > 0 ? (
-                      <ChangedFilesCard
-                        files={changedFiles}
-                        isLatestAssistantTurn={isLatestAssistantTurn}
-                        expanded={changedFilesExpanded}
-                        onExpandedChange={(nextExpanded) =>
-                          onChangedFilesExpandedChange(
-                            message._id,
-                            nextExpanded,
-                          )
-                        }
-                        onOpenFile={onOpenFile}
-                        onViewDiff={onViewDiff}
-                      />
-                    ) : null}
-                    {videoMedia.map((entry, index) => (
-                      // Capped to the same width `ImageGalleryPreview` uses, so
-                      // a video and a screenshot in the same reply line up
-                      // instead of the video spanning the whole pane.
-                      <VideoPreview
-                        key={index}
-                        url={entry.url}
-                        className="max-w-lg"
-                      />
-                    ))}
-                    {imageMedia.length > 0 ? (
-                      <ImageGalleryPreview images={imageMedia} />
-                    ) : null}
-                  </>
-                )}
-              </MessageContent>
-              {turnModel || copyPlain ? (
-                <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
-                  {turnModel ? (
-                    <MessageModelIcon
-                      model={turnModel}
-                      reasoningLevel={turnReasoningLevel}
-                      credentialSourceLabel={turnCredentialSourceLabel}
-                    />
-                  ) : null}
-                  {copyPlain ? (
+              </div>
+            ) : (
+              <>
+                <MessageContent className="px-1 py-2">
+                  {isStreamingPlaceholder ? (
                     <>
-                      <ChatMessageActions
-                        copyText={copyPlain}
-                        className="ml-0.5"
-                        revealOnHover={false}
+                      <StreamingActivityDisplay
+                        activity={streamingActivity}
+                        name="Eva"
+                        startedAt={message.timestamp}
+                        onOpenFile={onOpenFile}
                       />
-                      {message.finishedAt && message.timestamp ? (
-                        <span className="text-[11px] tabular-nums text-muted-foreground/60">
-                          {dayjs(message.timestamp).format("h:mm A")} ·{" "}
-                          {formatDuration(
-                            message.timestamp,
-                            message.finishedAt,
-                          )}
-                        </span>
+                      {agentSpawnRow}
+                      <AssistantQuestionCards steps={streamingQuestionSteps} />
+                      {streamingContent ? (
+                        <div data-assistant-cite-source={message._id}>
+                          <Markdown className="mt-2">
+                            {streamingContent}
+                          </Markdown>
+                        </div>
                       ) : null}
                     </>
-                  ) : null}
-                </div>
-              ) : null}
-            </>
-          )}
-        </AIMessage>
-      </m.div>
-    </ChatMessageContextMenu>
+                  ) : (
+                    <>
+                      {message.activityLog && (
+                        <ActivityLogDisplay
+                          activityLog={message.activityLog}
+                          messageId={message._id}
+                          name="Eva"
+                          icon={EVA_ICON}
+                          startedAt={message.timestamp}
+                          finishedAt={message.finishedAt}
+                          finalText={message.content}
+                          onOpenFile={onOpenFile}
+                        />
+                      )}
+                      {agentSpawnRow}
+                      <AssistantQuestionCards steps={questionSteps} />
+                      <AnimatePresence mode="wait" initial={false}>
+                        {turnErrorTitle !== null ? (
+                          <m.div
+                            key="turn-error"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                          >
+                            <TurnErrorNotice
+                              title={turnErrorTitle}
+                              detail={stripErrorPrefix(message.content)}
+                              {...(retryAction ? { action: retryAction } : {})}
+                            />
+                          </m.div>
+                        ) : (
+                          <m.div
+                            key="turn-content"
+                            data-assistant-cite-source={message._id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={motionFast}
+                          >
+                            {panelTabs ? (
+                              <ChatUiPanelTabs
+                                panel={belowContent}
+                                text={turnProse}
+                              />
+                            ) : (
+                              turnProse
+                            )}
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                      {showChangedFiles && changedFiles.length > 0 ? (
+                        <ChangedFilesCard
+                          files={changedFiles}
+                          isLatestAssistantTurn={isLatestAssistantTurn}
+                          expanded={changedFilesExpanded}
+                          onExpandedChange={(nextExpanded) =>
+                            onChangedFilesExpandedChange(
+                              message._id,
+                              nextExpanded,
+                            )
+                          }
+                          onOpenFile={onOpenFile}
+                          onViewDiff={onViewDiff}
+                        />
+                      ) : null}
+                      <AgentMedia entries={mediaEntries} />
+                    </>
+                  )}
+                </MessageContent>
+                {/* Sits above `belowContent` so agent-composed panels keep
+                    their promised slot directly over the meta row, and so the
+                    chip stays next to the changed-files card it judges.
+                    Deliberately not gated on `showChangedFiles`: the verdict is
+                    a safety signal, and simple view hiding it is exactly the
+                    reader who needs it. The hover card's per-hunk rows only
+                    link out when the diff surface exists — simple view bounces
+                    away from that tab, so they degrade to plain rows there. */}
+                {message.scopeCheck ? (
+                  <div className="mt-1">
+                    <ScopeCheckChip
+                      check={message.scopeCheck}
+                      {...(showChangedFiles && onViewDiff
+                        ? { onViewDiff }
+                        : {})}
+                    />
+                  </div>
+                ) : null}
+                {/* Only the panels the tab strip did not claim — a still-
+                    streaming or failed turn has no prose to trade places with. */}
+                {belowContent && !panelTabs ? (
+                  <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+                ) : null}
+                {turnModel || copyPlain || rowActions.length > 0 ? (
+                  <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
+                    {turnModel ? (
+                      <MessageModelIcon
+                        model={turnModel}
+                        reasoningLevel={turnReasoningLevel}
+                        credentialSourceLabel={turnCredentialSourceLabel}
+                      />
+                    ) : null}
+                    {copyPlain || rowActions.length > 0 ? (
+                      <>
+                        <ChatMessageActions
+                          copyText={copyPlain}
+                          actions={rowActions}
+                          className="ml-0.5"
+                          revealOnHover={false}
+                        />
+                        {message.finishedAt && message.timestamp ? (
+                          <span className="text-2xs tabular-nums text-muted-foreground/60">
+                            {/* The turn's clock time is when Eva finished, not
+                                when it started — the duration next to it already
+                                says how long the reply took. */}
+                            {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
+                            {formatDuration(
+                              message.timestamp,
+                              message.finishedAt,
+                            )}
+                          </span>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </AIMessage>
+        </m.div>
+      </ChatMessageContextMenu>
+      {checkpoint.dialogs}
+    </>
   );
 });
 
 function UserMessageBody({
   message,
-  repoBasePath,
+  repo,
 }: {
   message: ChatBodyMessage;
-  repoBasePath: string;
+  repo?: ChatRepo;
 }) {
   return (
     <>
@@ -413,7 +576,7 @@ function UserMessageBody({
         <CollapsibleUserMessageBody text={message.content}>
           <ReviewCommentMessage
             text={message.content}
-            repoBasePath={repoBasePath}
+            repo={repo}
           />
         </CollapsibleUserMessageBody>
       ) : null}
@@ -435,26 +598,31 @@ function HandoffModelChip({
 }) {
   const option = findAIModelOption(model);
   return (
-    <span
+    <m.span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground",
+        "inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground",
         className,
       )}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={motionFast}
     >
       <ProviderIcon provider={option.provider} size={10} />
       {formatModelDisplayLabel(option.provider, option.label)}
-    </span>
+    </m.span>
   );
 }
 
 function UserMessageMeta({
   align,
   copyPlain,
+  actions = [],
   timestamp,
   className,
 }: {
   align: "start" | "end";
   copyPlain?: string;
+  actions?: ChatMessageActionItem[];
   timestamp?: number;
   className?: string;
 }) {
@@ -466,11 +634,15 @@ function UserMessageMeta({
         className,
       )}
     >
-      {copyPlain ? (
-        <ChatMessageActions copyText={copyPlain} revealOnHover={false} />
+      {copyPlain || actions.length > 0 ? (
+        <ChatMessageActions
+          copyText={copyPlain}
+          actions={actions}
+          revealOnHover={false}
+        />
       ) : null}
       {timestamp ? (
-        <span className="text-[11px] text-muted-foreground/60">
+        <span className="text-2xs text-muted-foreground/60">
           {dayjs(timestamp).format("h:mm A")}
         </span>
       ) : null}

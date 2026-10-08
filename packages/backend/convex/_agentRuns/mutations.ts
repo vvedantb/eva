@@ -7,7 +7,6 @@ import {
   logLevelValidator,
   deploymentStatusValidator,
 } from "../validators";
-import { createNotification } from "../notifications";
 import {
   authMutation,
   hasTaskAccess,
@@ -26,35 +25,6 @@ async function loadAccessibleRun(
   if (!task || !(await hasTaskAccess(db, task, userId)))
     throw new Error("Run not found");
   return { run, task };
-}
-
-/** Builds a human-readable notification message for a completed or failed run. */
-function buildRunNotificationMessage(params: {
-  success: boolean;
-  projectId: Id<"projects"> | undefined;
-  resultSummary: string | undefined;
-  error: string | undefined;
-  prUrl: string | undefined;
-}): string {
-  const scopeLabel = params.projectId ? "project task" : "quick task";
-  if (params.success) {
-    if (params.prUrl) {
-      return `Run succeeded for this ${scopeLabel}. Pull request: ${params.prUrl}`;
-    }
-    if (params.resultSummary) {
-      return `Run succeeded for this ${scopeLabel}. ${params.resultSummary}`;
-    }
-    return `Run succeeded for this ${scopeLabel}.`;
-  }
-  if (params.error) {
-    const trimmedError = params.error.trim();
-    const clippedError =
-      trimmedError.length > 200
-        ? `${trimmedError.slice(0, 197)}...`
-        : trimmedError;
-    return `Run failed for this ${scopeLabel}. ${clippedError}`;
-  }
-  return `Run failed for this ${scopeLabel}.`;
 }
 
 /** Updates the status of an in-progress agent run and recomputes project phase if needed. */
@@ -106,13 +76,39 @@ export const appendLog = authMutation({
   },
 });
 
+/**
+ * Records media the sandbox harvested for this run (screenshots, recordings).
+ *
+ * Called by the in-sandbox callback as the run finishes, before the completion
+ * mutation: a run is not a chat turn, so there is no `messages` row for
+ * `screenshots:attachMedia` to patch. Ids append in capture order, matching how
+ * a chat turn accumulates media across a turn.
+ */
+export const attachMedia = authMutation({
+  args: {
+    id: v.id("agentRuns"),
+    mediaStorageIds: v.array(v.id("_storage")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.mediaStorageIds.length === 0) return null;
+    const { run } = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
+    await ctx.db.patch(args.id, {
+      mediaStorageIds: [
+        ...(run.mediaStorageIds ?? []),
+        ...args.mediaStorageIds,
+      ],
+    });
+    return null;
+  },
+});
+
 /** Marks a run as complete, updates the task status, saves activity log, and notifies relevant users. */
 export const complete = authMutation({
   args: {
     id: v.id("agentRuns"),
     success: v.boolean(),
     resultSummary: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
     error: v.optional(v.string()),
     activityLog: v.optional(v.string()),
   },
@@ -127,7 +123,6 @@ export const complete = authMutation({
       finalizingAt: undefined,
       finishedAt: now,
       resultSummary: args.resultSummary,
-      prUrl: args.prUrl,
       error: args.error,
     });
 
@@ -160,30 +155,8 @@ export const complete = authMutation({
     if (task.projectId) {
       await recomputeProjectPhase(ctx, task.projectId);
     }
-    const scopeLabel = task.projectId ? "Task" : "Quick task";
-    const statusText = args.success ? "completed" : "failed";
-    const notifyUsers = new Set(
-      [task.createdBy, task.assignedTo].filter(
-        (id): id is Id<"users"> => id !== undefined,
-      ),
-    );
-    for (const userId of notifyUsers) {
-      await createNotification(ctx, {
-        userId,
-        type: args.success ? "run_completed" : "run_failed",
-        title: `${scopeLabel} ${statusText}: ${task.title}`,
-        repoId: task.repoId,
-        projectId: task.projectId,
-        taskId: task._id,
-        message: buildRunNotificationMessage({
-          success: args.success,
-          projectId: task.projectId,
-          resultSummary: args.resultSummary,
-          error: args.error,
-          prUrl: args.prUrl,
-        }),
-      });
-    }
+    // Run success/failure deliberately sends no notification: the task card and
+    // chat already show the outcome, so an inbox row per run is pure noise.
     return null;
   },
 });

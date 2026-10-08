@@ -12,6 +12,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  CrossfadeIcon,
   Spinner,
 } from "@eva/ui";
 import { IconCheck, IconPencil } from "@tabler/icons-react";
@@ -79,7 +80,15 @@ export function PrMetaEditor({
           aria-label={`Edit ${title.toLowerCase()}`}
           title={`Edit ${title.toLowerCase()}`}
         >
-          {saving ? <Spinner size="sm" /> : <IconPencil size={13} aria-hidden />}
+          <CrossfadeIcon
+            show={saving}
+            trueKey="loading"
+            falseKey="idle"
+            variant="soft"
+            className="relative flex size-3.5 items-center justify-center"
+            whenTrue={<Spinner size="sm" />}
+            whenFalse={<IconPencil size={13} aria-hidden />}
+          />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-0">

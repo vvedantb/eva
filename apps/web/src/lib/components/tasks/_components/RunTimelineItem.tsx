@@ -18,31 +18,28 @@ import {
   ProviderIcon,
   formatModelDisplayLabel,
   findModelOption,
+  motionFast,
+  CircleSpinner,
 } from "@eva/ui";
-import { IconLoader2, IconPlayerStop } from "@tabler/icons-react";
+import { AnimatePresence, m } from "motion/react";
+import { IconPlayerStop } from "@tabler/icons-react";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import dayjs, { formatExactDateTime } from "@eva/shared/dates";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { FunctionReturnType } from "convex/server";
 import { AI_MODEL_OPTIONS, getAIModelProvider } from "@eva/backend";
 import type { api } from "@eva/backend";
-import {
-  MarkdownMentionText,
-  MARKDOWN_PROSE_CLASS,
-} from "@/lib/components/chat/MarkdownMentionText";
+import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { getUserDisplayName } from "./task-detail-constants";
 import type { TaskComment } from "../_utils/commentThread";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { RunActivityLog } from "../RunActivityLog";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
-
-const summaryPlugins = { cjk, math, mermaid };
+import { RunMedia } from "../RunMedia";
+import { Markdown } from "@eva/ui/markdown";
 
 /** Matches scroll cap used for run logs inside the same accordion. */
 const RUN_ACCORDION_SCROLL_CLASS =
@@ -79,6 +76,7 @@ function getRunStatusLabel(run: Run, hasRunComment: boolean): string {
 export function RunTimelineItem({
   run,
   isActiveRun,
+  activityInChat = false,
   streaming,
   activeRunElapsed,
   isStopping,
@@ -89,6 +87,11 @@ export function RunTimelineItem({
 }: {
   run: Run;
   isActiveRun: boolean;
+  /**
+   * This run's activity streams into the sandbox chat as a normal turn, so the
+   * steps and the log are left out here rather than shown twice.
+   */
+  activityInChat?: boolean;
   streaming: Streaming | undefined;
   activeRunElapsed: number;
   isStopping: boolean;
@@ -124,6 +127,7 @@ export function RunTimelineItem({
       </Tooltip>
     ) : null;
 
+  const statusLabel = getRunStatusLabel(run, hasRunComment);
   const modelProvider = run.model ? getAIModelProvider(run.model) : null;
   const modelDisplayLabel =
     run.model && modelProvider
@@ -157,19 +161,30 @@ export function RunTimelineItem({
                       {getUserDisplayName(requester)}
                     </span>
                   ) : null}
-                  <Badge
-                    variant={
-                      run.status === "running"
-                        ? "warning"
-                        : run.status === "error"
-                          ? "destructive"
-                          : run.status === "success"
-                            ? "success"
-                            : "secondary"
-                    }
-                  >
-                    {getRunStatusLabel(run, hasRunComment)}
-                  </Badge>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <m.span
+                      key={statusLabel}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={motionFast}
+                      className="inline-flex"
+                    >
+                      <Badge
+                        variant={
+                          run.status === "running"
+                            ? "warning"
+                            : run.status === "error"
+                              ? "destructive"
+                              : run.status === "success"
+                                ? "success"
+                                : "secondary"
+                        }
+                      >
+                        {statusLabel}
+                      </Badge>
+                    </m.span>
+                  </AnimatePresence>
                   {modelProvider && modelDisplayLabel ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -207,6 +222,7 @@ export function RunTimelineItem({
                       variant="destructive"
                       size="sm"
                       className="h-6 px-2 text-xs"
+                      title={skipConfirmTitle("Stop")}
                       onClick={(e) => {
                         e.stopPropagation();
                         onStopConfirm();
@@ -214,11 +230,12 @@ export function RunTimelineItem({
                       disabled={isStopping}
                     >
                       {isStopping ? (
-                        <IconLoader2 size={14} className="animate-spin" />
+                        <CircleSpinner size="sm" className="size-3.5" />
                       ) : (
                         <IconPlayerStop size={14} />
                       )}
                       Stop
+                      <ConfirmSkipHint />
                     </Button>
                   </div>
                 </TooltipTrigger>
@@ -240,39 +257,53 @@ export function RunTimelineItem({
                 ))}
               </div>
             ) : null}
-            {run.status === "running" &&
-              streaming?.currentActivity &&
-              (() => {
-                const steps = parseActivitySteps(streaming.currentActivity);
-                return steps ? (
-                  <ActivityTasks steps={steps} isStreaming />
-                ) : (
-                  <Reasoning isStreaming defaultOpen>
-                    <ReasoningTrigger
-                      getThinkingMessage={(s) =>
-                        s ? "Working..." : "Processing complete"
-                      }
-                    />
-                    <ReasoningContent>
-                      {streaming.currentActivity}
-                    </ReasoningContent>
-                  </Reasoning>
-                );
-              })()}
-            <RunActivityLog
-              runId={run._id}
-              isActive={isActiveRun}
-              finalText={run.resultSummary}
-              startedAt={run.startedAt}
-              finishedAt={run.finishedAt}
-            />
+            {activityInChat ? (
+              <p className="text-xs text-muted-foreground">
+                Eva is working in the sandbox chat — open the Sandbox tab to
+                follow along.
+              </p>
+            ) : (
+              <>
+                {run.status === "running" &&
+                  streaming?.currentActivity &&
+                  (() => {
+                    const steps = parseActivitySteps(streaming.currentActivity);
+                    return steps ? (
+                      <ActivityTasks steps={steps} isStreaming />
+                    ) : (
+                      <Reasoning isStreaming defaultOpen>
+                        <ReasoningTrigger
+                          getThinkingMessage={(s) =>
+                            s ? "Working..." : "Processing complete"
+                          }
+                        />
+                        <ReasoningContent>
+                          {streaming.currentActivity}
+                        </ReasoningContent>
+                      </Reasoning>
+                    );
+                  })()}
+                <RunActivityLog
+                  runId={run._id}
+                  isActive={isActiveRun}
+                  finalText={run.resultSummary}
+                  startedAt={run.startedAt}
+                  finishedAt={run.finishedAt}
+                />
+              </>
+            )}
+            {/* Captures the run left behind. Skipped when the run renders in
+                the sandbox chat — the chat turn shows the same files. */}
+            {activityInChat ? null : (
+              <RunMedia
+                runId={run._id}
+                hasMedia={(run.mediaStorageIds?.length ?? 0) > 0}
+              />
+            )}
             {run.resultSummary && (
-              <Streamdown
-                className="text-sm text-muted-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                plugins={summaryPlugins}
-              >
+              <Markdown className="text-sm text-muted-foreground">
                 {run.resultSummary}
-              </Streamdown>
+              </Markdown>
             )}
             {run.error && (
               <div className="rounded bg-destructive/10 p-2 text-sm text-destructive">
@@ -349,7 +380,7 @@ function RunInlineComment({
         repoBasePath={basePath}
         repoId={repo._id}
         atKind="user"
-        className={`${MARKDOWN_PROSE_CLASS} text-sm wrap-break-word`}
+        className="text-sm wrap-break-word"
       />
     </div>
   );

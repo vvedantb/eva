@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { isUnclaimedOpenTurn } from "../convex/_sessions/pendingTurnRecovery";
+import {
+  isPendingTurnLive,
+  isTurnClaimed,
+  isUnclaimedOpenTurn,
+} from "../convex/_sessions/pendingTurnRecovery";
 
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
@@ -76,6 +80,63 @@ describe("isUnclaimedOpenTurn", () => {
 });
 
 /**
+ * Manager Ave (session 111) carried a `pendingTurn` staged on 27 Aug whose turn
+ * had long closed. `ensurePendingTurn` read the full slot as "already staged"
+ * and refused every later turn a prompt, so each one opened, was never claimed
+ * (`leaseGeneration` 0) and stalled out ~15 minutes later — for weeks.
+ */
+describe("isPendingTurnLive", () => {
+  const openTurnId = "turn_open";
+
+  test("an empty slot is not live", () => {
+    expect(isPendingTurnLive({ pendingTurn: undefined, openTurnId })).toBe(
+      false,
+    );
+  });
+
+  test("the slot staged by the open turn is live", () => {
+    expect(
+      isPendingTurnLive({ pendingTurn: { turnId: openTurnId }, openTurnId }),
+    ).toBe(true);
+  });
+
+  test("a slot left by a turn that already closed is not live", () => {
+    expect(
+      isPendingTurnLive({ pendingTurn: { turnId: "turn_dead" }, openTurnId }),
+    ).toBe(false);
+  });
+
+  /** Ave's orphan predated durable turns, so it carried no turnId at all. */
+  test("a slot with no turnId is not live once a durable turn is open", () => {
+    expect(isPendingTurnLive({ pendingTurn: {}, openTurnId })).toBe(false);
+  });
+
+  /** Legacy sessions have no durable turn, so the slot is the only record. */
+  test("any slot is live when no durable turn is open", () => {
+    expect(isPendingTurnLive({ pendingTurn: {}, openTurnId: undefined })).toBe(
+      true,
+    );
+  });
+});
+
+/**
+ * Orphans only exist because the stall teardown left the slot full. Clearing it
+ * there is what stops a single stalled turn wedging the session permanently.
+ */
+describe("the stall teardown frees the handoff slot", () => {
+  const adapters = readSource("_chat/surfaceAdapters.ts");
+
+  test("session release clears pendingTurn on the session and the mirror", () => {
+    const release = adapters.slice(
+      adapters.indexOf('kind: "session"'),
+      adapters.indexOf('kind: "taskChat"'),
+    );
+    expect(release).toContain("pendingTurn: undefined");
+    expect(release).toContain("syncSessionDaemonState(ctx, session, {");
+  });
+});
+
+/**
  * The re-stage only helps if it runs while the workflow is still waiting.
  * Scheduled after `awaitEvent`, it would fire once the turn had already
  * completed — which is the state it exists to prevent.
@@ -101,6 +162,59 @@ describe("the workflow re-stages before it waits", () => {
     const body = definitionBody(workflow, "restageOpenTurn");
     expect(body).toContain("isUnclaimedOpenTurn(");
     expect(body).toContain('lastAssistant.content !== ""');
+  });
+});
+
+/**
+ * A restage while a daemon runs the turn parks a duplicate prompt, and a
+ * prewarm-respawned daemon then runs it a second time (task
+ * m57bzd0wbdtnm57e2g4jfb17718b5yty, 2026-09-02). The durable turn's lease is
+ * the proof of a claim for every chat, so no entity-side stamp is needed.
+ */
+describe("isTurnClaimed", () => {
+  test.each(["running", "finalizing"] as const)(
+    "a %s turn has a daemon on it",
+    (state) => {
+      expect(isTurnClaimed({ state })).toBe(true);
+    },
+  );
+
+  test.each(["staged", "launching"] as const)(
+    "a %s turn is still waiting for a claim",
+    (state) => {
+      expect(isTurnClaimed({ state })).toBe(false);
+    },
+  );
+
+  test("no open turn is no claim", () => {
+    expect(isTurnClaimed(null)).toBe(false);
+  });
+});
+
+describe("every chat restages only when the lease says the turn is unclaimed", () => {
+  test.each([
+    // Every chat workflow always has a turn: no open turn, no restage.
+    [
+      "session",
+      "_sessions/workflow.ts",
+      "if (!openTurn || isTurnClaimed(openTurn)) return null;",
+    ],
+    [
+      "task chat",
+      "_chat/taskChatDaemon.ts",
+      "if (!openTurn || isTurnClaimed(openTurn)) return null;",
+    ],
+    [
+      "project chat",
+      "_chat/projectChatDaemon.ts",
+      "if (!openTurn || isTurnClaimed(openTurn)) return null;",
+    ],
+  ])("%s ensurePendingTurn consults the lease first", (_, path, guard) => {
+    const restage = definitionBody(readSource(path), "ensurePendingTurn");
+    const guardAt = restage.indexOf(guard);
+    expect(guardAt, `${path} no longer asks the lease`).toBeGreaterThan(-1);
+    // The guard has to precede the restage decision to be worth anything.
+    expect(guardAt).toBeLessThan(restage.indexOf("isUnclaimedOpenTurn({"));
   });
 });
 

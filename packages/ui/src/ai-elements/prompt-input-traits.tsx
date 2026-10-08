@@ -69,11 +69,11 @@ function TraitSegment({
 }) {
   return (
     <div className="flex items-start gap-2.5">
-      <span className="w-[4.75rem] shrink-0 pt-1 text-[11px] font-medium text-muted-foreground">
+      <span className="w-[4.75rem] shrink-0 pt-1 text-2xs font-medium text-muted-foreground">
         {label}
       </span>
       {options.length === 0 ? (
-        <span className="flex h-6 items-center text-[11px] text-muted-foreground/70">
+        <span className="flex h-6 items-center text-2xs text-muted-foreground/70">
           No options available
         </span>
       ) : (
@@ -94,7 +94,7 @@ function TraitSegment({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onChange(option.value)}
                 className={cn(
-                  "h-6 rounded-md px-2 text-[11px] font-medium motion-press transition-colors active:scale-[0.96]",
+                  "h-6 rounded-md px-2 text-2xs font-medium motion-press transition-colors active:scale-[0.96]",
                   selected
                     ? "bg-background text-foreground"
                     : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
@@ -193,7 +193,7 @@ export function TraitsPanel({
           disabled={disabled || ultrathinkInBodyText}
         />
         {ultrathinkInBodyText ? (
-          <p className="pl-[5.375rem] text-[11px] leading-snug text-muted-foreground/80">
+          <p className="pl-[5.375rem] text-2xs leading-snug text-muted-foreground/80">
             Your prompt contains &quot;ultrathink&quot; in the text. Remove it
             to change this option.
           </p>
@@ -244,6 +244,3 @@ export function TraitsPanel({
     </div>
   );
 }
-
-/** @deprecated Use `TraitsPanel`. Kept so existing imports keep working. */
-export const TraitsMenu = TraitsPanel;

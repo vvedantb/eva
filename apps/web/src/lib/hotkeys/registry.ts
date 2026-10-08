@@ -23,7 +23,7 @@ export type { ShortcutDef, ShortcutId };
  * overrides as plain strings, so this is the boundary that keeps a bad or
  * stale value from reaching `useHotkey` — and keeps the codebase free of casts.
  */
-export function isHotkey(value: string): value is Hotkey {
+function isHotkey(value: string): value is Hotkey {
   return validateHotkey(value).valid;
 }
 

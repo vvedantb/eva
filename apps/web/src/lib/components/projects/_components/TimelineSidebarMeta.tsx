@@ -3,7 +3,7 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api, Id } from "@eva/backend";
 import { AvatarStack, Tooltip, TooltipTrigger, TooltipContent } from "@eva/ui";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 
 type ProjectProgress = FunctionReturnType<
   typeof api.projects.listTaskProgress
@@ -100,7 +100,7 @@ export function TimelineSidebarMeta({
         ))}
       </AvatarStack>
       {hidden > 0 && (
-        <span className="text-[10px] font-medium leading-none text-muted-foreground">
+        <span className="text-3xs font-medium leading-none text-muted-foreground">
           +{hidden}
         </span>
       )}

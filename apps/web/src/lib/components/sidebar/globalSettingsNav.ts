@@ -1,4 +1,5 @@
 import {
+  IconActivity,
   IconBell,
   IconCode,
   IconFlask,
@@ -6,9 +7,11 @@ import {
   IconKey,
   IconKeyboard,
   IconPalette,
+  IconPlug,
   IconServerBolt,
   IconUserCog,
 } from "@tabler/icons-react";
+import { GrokMark } from "@/lib/components/grokBot/GrokMark";
 
 /** Shared nav for the rail settings menu and the global Settings sidebar. */
 export const GLOBAL_SETTINGS_NAV = [
@@ -33,6 +36,16 @@ export const GLOBAL_SETTINGS_NAV = [
     icon: IconKey,
   },
   {
+    name: "Connections",
+    href: "/settings/connections",
+    icon: IconPlug,
+  },
+  {
+    name: "Grok Bot",
+    href: "/settings/grok-bot",
+    icon: GrokMark,
+  },
+  {
     name: "Notifications",
     href: "/settings/notifications",
     icon: IconBell,
@@ -41,6 +54,11 @@ export const GLOBAL_SETTINGS_NAV = [
     name: "Sandboxes",
     href: "/settings/sandboxes",
     icon: IconServerBolt,
+  },
+  {
+    name: "Sandbox status",
+    href: "/settings/sandbox-status",
+    icon: IconActivity,
   },
   {
     name: "Sync",

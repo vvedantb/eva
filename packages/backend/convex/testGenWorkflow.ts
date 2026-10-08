@@ -1,10 +1,16 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -12,22 +18,13 @@ import {
   sendCompletionEvent,
 } from "./_taskWorkflow/helpers";
 import { buildPrBody } from "./prBody";
+import { buildTestGenBranchName } from "./_git/branchNames";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 
 const testGenCompleteEvent = defineEvent({
   name: "testGenComplete",
   validator: workflowCompleteValidator,
 });
-
-/** Converts text to a URL-safe lowercase slug, truncated to 50 characters. */
-function slugify(text: string): string {
-  const slug = text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
-  return slug || "untitled";
-}
 
 /** Replaces double quotes with single quotes in a commit title for shell safety. */
 function sanitizeCommitTitle(title: string): string {
@@ -99,17 +96,23 @@ export const testGenWorkflow = workflow.define({
         streamingEntityId: args.docId,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: args.docId,
-        prompt: docData.prompt,
-        userId: args.userId,
-        completionMutation: "testGenWorkflow:handleCompletion",
-        entityIdField: "docId",
-        model: "sonnet",
-        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-        repoId: docData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: args.docId,
+          prompt: docData.prompt,
+          userId: args.userId,
+          completionMutation: "testGenWorkflow:handleCompletion",
+          entityIdField: "docId",
+          model: "sonnet",
+          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+          repoId: docData.repoId,
+        },
+        {
+          entityId: args.docId,
+        },
+      );
 
       // Step 4: Wait for callback
       const result = await step.awaitEvent(testGenCompleteEvent);
@@ -226,7 +229,7 @@ export const getDocData = internalQuery({
       };
     }
 
-    const branchName = `tests/doc-${slugify(doc.title)}`;
+    const branchName = buildTestGenBranchName(doc.title);
     const commitTitle = sanitizeCommitTitle(doc.title);
 
     const prompt = `You are a test engineer. Generate tests for the feature described below.
@@ -340,11 +343,24 @@ export const handleCompletion = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
+    ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.docId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, testGenCompleteEvent, doc.activeWorkflowId, {
       success: args.success,

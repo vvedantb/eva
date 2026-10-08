@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { QuickTasksClient } from "./QuickTasksClient";
-import { parseDiffSearchFields } from "@/lib/search-params";
+import {
+  parseCommentAnchorSearchField,
+  parseDiffSearchFields,
+} from "@/lib/search-params";
 
 // Layout route for the quick-tasks section. Rendering QuickTasksClient here
 // (rather than per child route) keeps the list mounted while the open task
@@ -12,5 +15,6 @@ export const Route = createFileRoute("/_repo/$owner/$repo/quick-tasks")({
   validateSearch: (search: Record<string, string>) => ({
     draft: typeof search.draft === "string" ? search.draft : undefined,
     ...parseDiffSearchFields(search),
+    ...parseCommentAnchorSearchField(search),
   }),
 });

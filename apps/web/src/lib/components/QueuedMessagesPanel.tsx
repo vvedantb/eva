@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Id } from "@eva/backend";
 import { findAIModelOption, getReasoningLevelLabel } from "@eva/backend";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import {
   Button,
   Dialog,
@@ -26,8 +26,10 @@ import {
   TooltipContent,
   TooltipTrigger,
   formatModelDisplayLabel,
+  motionBase,
   useDragSensors,
 } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 import { IconArrowUp, IconPencil, IconTrash } from "@tabler/icons-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
@@ -37,9 +39,15 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  requestConfirm,
+  skipConfirmTitle,
+  useAltHeld,
+} from "@/lib/confirm";
 
-interface QueuedMessageItem {
-  id: Id<"queuedMessages">;
+/** `TId` is the row's id: a `queuedMessages` doc, or Manager Ave's held message. */
+interface QueuedMessageItem<TId extends string> {
+  id: TId;
   content: string;
   model?: string;
   reasoningLevel?: string;
@@ -47,14 +55,14 @@ interface QueuedMessageItem {
   userId?: Id<"users">;
 }
 
-interface QueuedMessagesPanelProps {
-  items: QueuedMessageItem[];
+interface QueuedMessagesPanelProps<TId extends string> {
+  items: QueuedMessageItem<TId>[];
   label?: string;
   renderContent?: (content: string) => React.ReactNode;
-  onEdit?: (id: Id<"queuedMessages">, content: string) => Promise<void>;
-  onDelete?: (id: Id<"queuedMessages">) => Promise<void>;
+  onEdit?: (id: TId, content: string) => Promise<void>;
+  onDelete?: (id: TId) => Promise<void>;
   /** When provided, items become reorderable; receives the new top-to-bottom id order. */
-  onReorder?: (orderedIds: Id<"queuedMessages">[]) => Promise<void>;
+  onReorder?: (orderedIds: TId[]) => Promise<void>;
 }
 
 /** Tooltip copy for a queued row's model + effort snapshot. */
@@ -75,7 +83,7 @@ function QueueRowHandle({
   attributes,
   listeners,
 }: {
-  item: QueuedMessageItem;
+  item: QueuedMessageItem<string>;
   draggable: boolean;
   attributes: ReturnType<typeof useSortable>["attributes"];
   listeners: ReturnType<typeof useSortable>["listeners"];
@@ -121,7 +129,7 @@ function QueueRowHandle({
 }
 
 /** A single sortable queue row (provider handle + 2-line text + actions). */
-function SortableQueuedItem({
+function SortableQueuedItem<TId extends string>({
   item,
   index,
   draggable,
@@ -130,13 +138,13 @@ function SortableQueuedItem({
   onDeleteClick,
   onMoveToFront,
 }: {
-  item: QueuedMessageItem;
+  item: QueuedMessageItem<TId>;
   index: number;
   draggable: boolean;
   renderContent?: (content: string) => React.ReactNode;
-  onEditClick?: (item: QueuedMessageItem) => void;
-  onDeleteClick?: (item: QueuedMessageItem) => void;
-  onMoveToFront?: (item: QueuedMessageItem) => void;
+  onEditClick?: (item: QueuedMessageItem<TId>) => void;
+  onDeleteClick?: (item: QueuedMessageItem<TId>) => void;
+  onMoveToFront?: (item: QueuedMessageItem<TId>) => void;
 }) {
   const {
     attributes,
@@ -198,6 +206,7 @@ function SortableQueuedItem({
           {onDeleteClick ? (
             <QueueItemAction
               aria-label="Delete queued message"
+              title={skipConfirmTitle("Delete queued message")}
               onClick={() => onDeleteClick(item)}
             >
               <IconTrash size={14} />
@@ -211,29 +220,44 @@ function SortableQueuedItem({
 
 /**
  * Pending-message queue flush above the composer on sandbox chat pages
- * (sessions, quick tasks, projects). Narrower inset bar with square bottom
- * corners so it blends into the input card — same idea as underCardLeading.
+ * (sessions, quick tasks, projects). Fills the dock column in ComposerStash
+ * (which insets it) with square bottom corners so it blends into the input
+ * card — same idea as underCardLeading.
  */
-export function QueuedMessagesPanel({
+export function QueuedMessagesPanel<TId extends string>({
   items,
   label = "Queued",
   renderContent,
   onEdit,
   onDelete,
   onReorder,
-}: QueuedMessagesPanelProps) {
-  const [editingItem, setEditingItem] = useState<QueuedMessageItem | null>(
+}: QueuedMessagesPanelProps<TId>) {
+  const [editingItem, setEditingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
   );
-  const [deletingItem, setDeletingItem] = useState<QueuedMessageItem | null>(
+  const [deletingItem, setDeletingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
   );
   const [draftContent, setDraftContent] = useState("");
-  const [draftForId, setDraftForId] = useState<Id<"queuedMessages"> | null>(
+  const [draftForId, setDraftForId] = useState<TId | null>(
     null,
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const altHeld = useAltHeld();
+
+  const deleteQueued = async (item: QueuedMessageItem<TId>) => {
+    if (!onDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(item.id);
+      setDeletingItem(null);
+    } catch (error) {
+      setIsDeleting(false);
+      throw error;
+    }
+    setIsDeleting(false);
+  };
 
   const editingId = editingItem?.id ?? null;
   if (editingId !== draftForId) {
@@ -245,10 +269,6 @@ export function QueuedMessagesPanel({
   // finger is also describing, so the browser claims the gesture and reordering
   // a queued message by touch never starts. The house hook arms touch on a hold.
   const sensors = useDragSensors({ sortable: true });
-
-  if (items.length === 0) {
-    return null;
-  }
 
   const draggable = Boolean(onReorder) && items.length > 1;
 
@@ -264,7 +284,7 @@ export function QueuedMessagesPanel({
     void onReorder(orderedIds);
   };
 
-  const handleMoveToFront = (item: QueuedMessageItem) => {
+  const handleMoveToFront = (item: QueuedMessageItem<TId>) => {
     if (!onReorder) return;
     const rest = items.filter((entry) => entry.id !== item.id);
     void onReorder([item.id, ...rest.map((entry) => entry.id)]);
@@ -272,42 +292,69 @@ export function QueuedMessagesPanel({
 
   return (
     <>
-      {/* Flush above the composer: narrower inset bar, square bottom so it
-          blends into the input card (mirrors underCardLeading below). */}
-      <Queue className="mx-auto mb-0 w-[calc(100%-1.5rem)] rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
-        <QueueSection defaultOpen>
-          <QueueSectionTrigger>
-            <QueueSectionLabel count={items.length} label={label} />
-          </QueueSectionTrigger>
-          <QueueSectionContent>
-            <QueueList>
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={items.map((item) => item.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {items.map((item, index) => (
-                    <SortableQueuedItem
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      draggable={draggable}
-                      renderContent={renderContent}
-                      onEditClick={onEdit ? setEditingItem : undefined}
-                      onDeleteClick={onDelete ? setDeletingItem : undefined}
-                      onMoveToFront={onReorder ? handleMoveToFront : undefined}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            </QueueList>
-          </QueueSectionContent>
-        </QueueSection>
-      </Queue>
+      <AnimatePresence initial={false}>
+        {items.length > 0 ? (
+          <m.div
+            key="queued-messages"
+            className="w-full"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={motionBase}
+          >
+            {/* Flush above the composer: fills the dock column in ComposerStash,
+                which owns the inset, with a square bottom so it blends into the
+                input card (mirrors underCardLeading below). */}
+            <Queue className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
+              <QueueSection defaultOpen>
+                <QueueSectionTrigger>
+                  <QueueSectionLabel count={items.length} label={label} />
+                </QueueSectionTrigger>
+                <QueueSectionContent>
+                  <QueueList>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={items.map((item) => item.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {items.map((item, index) => (
+                          <SortableQueuedItem
+                            key={item.id}
+                            item={item}
+                            index={index}
+                            draggable={draggable}
+                            renderContent={renderContent}
+                            onEditClick={onEdit ? setEditingItem : undefined}
+                            onDeleteClick={
+                              onDelete
+                                ? (item) =>
+                                    requestConfirm(
+                                      altHeld,
+                                      () => setDeletingItem(item),
+                                      () => {
+                                        void deleteQueued(item);
+                                      },
+                                    )
+                                : undefined
+                            }
+                            onMoveToFront={
+                              onReorder ? handleMoveToFront : undefined
+                            }
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  </QueueList>
+                </QueueSectionContent>
+              </QueueSection>
+            </Queue>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
 
       <Dialog
         open={editingItem !== null}
@@ -381,19 +428,9 @@ export function QueuedMessagesPanel({
             <Button
               variant="destructive"
               disabled={isDeleting || !deletingItem || !onDelete}
-              onClick={async () => {
-                if (!deletingItem || !onDelete) {
-                  return;
-                }
-                setIsDeleting(true);
-                try {
-                  await onDelete(deletingItem.id);
-                  setDeletingItem(null);
-                } catch (error) {
-                  setIsDeleting(false);
-                  throw error;
-                }
-                setIsDeleting(false);
+              onClick={() => {
+                if (!deletingItem) return;
+                void deleteQueued(deletingItem);
               }}
             >
               Delete

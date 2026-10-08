@@ -1,4 +1,4 @@
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { Avatar, AvatarFallback } from "@eva/ui";
 import type { Id } from "@eva/backend";
 
@@ -16,7 +16,7 @@ export function UserMessageAvatar({
   }
   return (
     <Avatar className={className}>
-      <AvatarFallback className="bg-secondary text-[10px] text-muted-foreground">
+      <AvatarFallback className="bg-secondary text-3xs text-muted-foreground">
         U
       </AvatarFallback>
     </Avatar>

@@ -21,7 +21,7 @@ export const KNOWN_REPO_SUB_PAGES = new Set([
 ]);
 
 /** Global first segments that are never `/$owner/$repo/...`. */
-export const NON_REPO_PATH_PREFIXES = new Set([
+const NON_REPO_PATH_PREFIXES = new Set([
   "home",
   "sign-in",
   "sign-up",
@@ -36,6 +36,8 @@ export const NON_REPO_PATH_PREFIXES = new Set([
   "testing",
   "agent-callback",
   "mcp",
+  // Stable preview wake links: `/p/$kind/$id` (routes/p.$kind.$id.tsx).
+  "p",
 ]);
 
 /**
@@ -87,6 +89,23 @@ export function decodeRepoParam(repoParam: string): {
 /**
  * Browser slash URL → router internal `--` URL.
  * `/owner/repo/app/…` → `/owner/repo--app/…`
+ *
+ * When you need it, and when you do not — `repoUrlRouterContract.test.ts` pins
+ * both, because the answer differs by call site and guessing has cost two bugs:
+ *
+ * - `<Link to>` / `router.buildLocation`: **required**. These never cross the
+ *   history boundary where `main.tsx`'s `rewrite.input` runs, so a display-form
+ *   target matches no route. The href still renders correctly and a click still
+ *   works, but active styling and `defaultPreload: "intent"` silently stop.
+ * - `navigate({ to })`: **redundant**. A real navigation commits through
+ *   history, so the rewrite already converts it. Harmless (the function is
+ *   idempotent) and kept for uniformity — but a missing one here is not a bug,
+ *   so do not reach for it to explain a broken redirect. PR #802 did exactly
+ *   that; the real cause was an unrelated nuqs URL write.
+ *
+ * Anything user-visible — `<a href>`, `window.location`, copy-link buttons —
+ * wants {@link repoHref} or {@link toDisplayRepoHref} instead. `repo--app` must
+ * never reach the address bar.
  */
 export function toInternalRepoHref(href: string): string {
   const { pathname, suffix } = splitHref(href);
@@ -158,6 +177,29 @@ export function repoSectionHref(
 ): string {
   const base = repoHref(owner, name, rootDirectory);
   return section === null ? base : `${base}/${section}`;
+}
+
+/**
+ * Turn a stored href into the arguments TanStack `navigate` actually reads.
+ *
+ * The router never splits a query string out of `to` — it resolves the whole
+ * string as a pathname, so `/o/r/quick-tasks/3?comment=abc` matches nothing.
+ * Search has to be handed over separately, which is what this does, on top of
+ * the `repo--app` rewrite every stored href needs anyway.
+ */
+export function hrefToNavigateOptions(href: string): {
+  to: string;
+  search: Record<string, string>;
+} {
+  const internal = toInternalRepoHref(href);
+  const { pathname, suffix } = splitHref(internal);
+  if (!suffix.startsWith("?")) return { to: internal, search: {} };
+  const [query] = suffix.slice(1).split("#");
+  const search: Record<string, string> = {};
+  for (const [key, value] of new URLSearchParams(query)) {
+    search[key] = value;
+  }
+  return { to: pathname, search };
 }
 
 function splitHref(href: string): { pathname: string; suffix: string } {

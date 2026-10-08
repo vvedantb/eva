@@ -55,3 +55,23 @@ export async function pickSandboxRepoId<TId extends string>(
 
   return preferred?._id ?? workflowRepoId;
 }
+
+/**
+ * Snapshot builds must not silently use a sibling *app's* Vercel project
+ * (eprocurement must not capture under apps/web). The monorepo root has no
+ * project id of its own, so it may pick the default app that does.
+ */
+export async function pickSnapshotCredentialRepoId<TId extends string>(
+  workflowRepoId: TId,
+  siblings: Array<AppRepoPickFields & { _id: TId }>,
+  hasVercelProjectId: (repoId: TId) => Promise<boolean>,
+): Promise<TId> {
+  if (await hasVercelProjectId(workflowRepoId)) {
+    return workflowRepoId;
+  }
+  const workflow = siblings.find((repo) => repo._id === workflowRepoId);
+  if (workflow?.rootDirectory !== undefined) {
+    return workflowRepoId;
+  }
+  return pickSandboxRepoId(workflowRepoId, siblings, hasVercelProjectId);
+}

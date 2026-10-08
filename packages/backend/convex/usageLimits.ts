@@ -1,17 +1,33 @@
-import { loadSessionChat } from "./_sessionChats/helpers";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
+import type { GenericDatabaseReader } from "convex/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
-import { internalQuery } from "./_generated/server";
+import { internalQuery, type QueryCtx } from "./_generated/server";
 import {
   agentUsageLimitFields,
+  PROVIDER_PRIMARY_AUTH_KEY,
   usageLimitProviderValidator,
 } from "./validators";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
+import { listSelectableAccountsFor } from "./_userProviderAccounts/listing";
+import {
+  findUsageLimitRow,
+  listLegacyUsageLimitRows,
+  parseUsageLimitRowKey,
+  presentReading,
+  usageLimitRowIdentity,
+  type UsageLimitProvider,
+  type UsageLimitRowKey,
+} from "./_usageLimits/rows";
+import {
+  ensureSessionDaemonState,
+  syncSessionDaemonState,
+} from "./_sessions/daemonState";
+import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 
 /**
  * Agent plan usage limits. A sandbox turn captures how much of the provider's
- * plan it has used and reports it here; the UI reads it back per repo.
+ * plan it has used and reports it here; the UI reads it back per credential.
  *
  * Deliberately its own mutation rather than extra completion arguments: the
  * completion mutation is shared by every entity workflow, and a reading that is
@@ -20,30 +36,12 @@ import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
  * Auth mirrors the completion mutations — the sandbox calls in with its
  * CONVEX_TOKEN identity (the launching user), so repo access is checked exactly
  * as `sessionWorkflow:handleCompletion` checks it.
- */
-
-const agentUsageLimitValidator = v.object({
-  _id: v.id("agentUsageLimits"),
-  _creationTime: v.number(),
-  ...agentUsageLimitFields,
-  /**
-   * The account's current name, resolved on read rather than stored, so a
-   * rename shows up without rewriting rows. Absent when the run used the shared
-   * team credential, or when the account has since been deleted.
-   */
-  accountLabel: v.optional(v.string()),
-});
-
-/**
- * Upserts the reading for one (repo, provider, account) triple. Authoritative
- * provider snapshots replace the row so vanished windows are cleared; partial
- * stream observations patch only what they actually observed.
  *
- * The account is part of the key because plan limits are per account — keyed on
- * the provider alone, a second connected account's reading would overwrite the
- * first. A run on the shared team credential reports no account and keeps its
- * own row.
+ * The repo the reading arrived on authorises the call and names the team behind
+ * the shared credential, and is then dropped: see `_usageLimits/rows.ts` for why
+ * a row belongs to a credential.
  */
+
 type UsageWindow = NonNullable<Doc<"agentUsageLimits">["windows"]>[number];
 
 /** The stored discriminant. Derived from the row so the two cannot drift. */
@@ -51,8 +49,21 @@ export type UsageLimitCompleteness = NonNullable<
   Doc<"agentUsageLimits">["completeness"]
 >;
 
-/** Readings older than this are no longer evidence of the provider's state. */
-export const USAGE_LIMIT_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/**
+ * The reading itself, with every field that is row identity rather than reading
+ * removed: which credential a reading belongs to is the caller's own question,
+ * and the legacy `repoId` is nobody's. Taken apart from the schema fields rather
+ * than restated, so a new reading field reaches the wire on its own.
+ */
+const {
+  repoId: _legacyRepoId,
+  providerAccountId: _accountIsRowIdentity,
+  teamId: _teamIsRowIdentity,
+  ...usageLimitReadingFields
+} = agentUsageLimitFields;
+
+/** The only provider with plan windows, so the only one with credentials here. */
+const USAGE_LIMIT_PROVIDER = usageLimitProviderValidator.value;
 
 /** New same-key windows win while unobserved stored windows remain intact. */
 export function mergeUsageLimitWindows(
@@ -79,16 +90,51 @@ export function isAuthoritativeReading(
   return snapshotComplete === true;
 }
 
-export function isUsageLimitReadingFresh(
-  capturedAt: number,
-  now: number,
-): boolean {
-  return now - capturedAt <= USAGE_LIMIT_READING_MAX_AGE_MS;
+/**
+ * Which credential a report belongs to. An account names itself; a run on the
+ * shared credential names only the repo it ran in, so the team that owns the
+ * token is resolved here. Null when that repo belongs to no team.
+ */
+async function resolveReportKey(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+  reported: {
+    provider: UsageLimitProvider;
+    providerAccountId?: Id<"userProviderAccounts">;
+  },
+): Promise<UsageLimitRowKey | null> {
+  if (reported.providerAccountId !== undefined) {
+    return {
+      provider: reported.provider,
+      providerAccountId: reported.providerAccountId,
+    };
+  }
+  const repo = await db.get(repoId);
+  const teamId = repo?.teamId;
+  if (teamId === undefined) return null;
+  return { provider: reported.provider, teamId };
 }
 
+/**
+ * Upserts the reading for one credential. Authoritative provider snapshots
+ * replace the row so vanished windows are cleared; partial stream observations
+ * patch only what they actually observed.
+ *
+ * `repoId` stays a required argument because the sandbox callback bundle
+ * (`callback-src/runtime/usageLimits.ts`) is a separate esbuild artifact that
+ * cannot be redeployed in step with this mutation. It is used and then dropped:
+ * it authorises the call, and for a run on the shared credential it names the
+ * team whose token that was.
+ */
 export const report = authMutation({
   args: {
-    ...agentUsageLimitFields,
+    ...usageLimitReadingFields,
+    providerAccountId: agentUsageLimitFields.providerAccountId,
+    // Required on the wire even though the stored field is optional: every
+    // caller reports from a repo, and only a legacy row keeps one. `teamId` is
+    // not accepted at all — a sandbox does not get to choose whose plan its
+    // reading is filed against.
+    repoId: v.id("githubRepos"),
     /** Superseded by `completeness`. Callback bundles baked before the
      * discriminant still send this boolean, so it is still honoured; bundles
      * that send neither safely receive merge semantics. */
@@ -96,29 +142,38 @@ export const report = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
+    const { snapshotComplete, repoId, ...observed } = args;
+    if (!(await hasRepoAccess(ctx.db, repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    if (args.providerAccountId) {
-      const account = await ctx.db.get(args.providerAccountId);
+    if (observed.providerAccountId) {
+      const account = await ctx.db.get(observed.providerAccountId);
       if (
         !account ||
-        account.provider !== args.provider ||
+        account.provider !== observed.provider ||
         !(await isAccountUsableBy(ctx.db, account, ctx.userId))
       ) {
         throw new Error("Provider account not found");
       }
     }
-    const existing = await ctx.db
-      .query("agentUsageLimits")
-      .withIndex("by_repo_provider_account", (q) =>
-        q
-          .eq("repoId", args.repoId)
-          .eq("provider", args.provider)
-          .eq("providerAccountId", args.providerAccountId),
-      )
-      .first();
-    const { snapshotComplete, ...reading } = args;
+    const key = await resolveReportKey(ctx.db, repoId, observed);
+    // A run on the shared credential in a repo with no team has nowhere to file
+    // its reading: the row is keyed by team. Dropping it is right — telemetry
+    // must not fail a turn, and there is no viewer who could read it back.
+    if (key === null) {
+      console.log(
+        `[usageLimits] dropped a team-credential reading for repo ${repoId}: no team`,
+      );
+      return null;
+    }
+    const existing = await findUsageLimitRow(ctx.db, key);
+    // Self-cleaning: the rows this key used to have one of per repo are dead
+    // weight the moment a credential-keyed row exists, and this is the only
+    // writer that knows the key is current.
+    for (const legacy of await listLegacyUsageLimitRows(ctx.db, key)) {
+      await ctx.db.delete(legacy._id);
+    }
+    const reading = { ...observed, ...usageLimitRowIdentity(key) };
     if (existing) {
       if (isAuthoritativeReading(reading.completeness, snapshotComplete)) {
         await ctx.db.replace(existing._id, reading);
@@ -162,15 +217,15 @@ export const report = authMutation({
 });
 
 /**
- * The stored row for one (repo, provider, account) triple. The refresh action
- * waits until `capturedAt` moves past the pre-refresh value, which is how it
- * knows the live daemon actually reported.
+ * The stored row for one credential, keyed by exactly one of account or team.
+ * The refresh action reads it to carry the stored plan name forward: the probe
+ * it runs reports numbers and never names the plan.
  */
 export const getReadingInternal = internalQuery({
   args: {
-    repoId: v.id("githubRepos"),
     provider: usageLimitProviderValidator,
     providerAccountId: v.optional(v.id("userProviderAccounts")),
+    teamId: v.optional(v.id("teams")),
   },
   returns: v.union(
     v.null(),
@@ -180,15 +235,10 @@ export const getReadingInternal = internalQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("agentUsageLimits")
-      .withIndex("by_repo_provider_account", (q) =>
-        q
-          .eq("repoId", args.repoId)
-          .eq("provider", args.provider)
-          .eq("providerAccountId", args.providerAccountId),
-      )
-      .first();
+    const existing = await findUsageLimitRow(
+      ctx.db,
+      parseUsageLimitRowKey(args),
+    );
     if (!existing) return null;
     return {
       capturedAt: existing.capturedAt,
@@ -199,123 +249,185 @@ export const getReadingInternal = internalQuery({
   },
 });
 
+/** The Team entry's label. Not a person, so it is not resolved from a name. */
+const TEAM_CREDENTIAL_LABEL = "Team";
+
+const usageLimitCredentialValidator = v.object({
+  /** Absent = the shared team credential, which has no account row. */
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  teamId: v.optional(v.id("teams")),
+  accountLabel: v.string(),
+});
+
+type UsageLimitCredential = Infer<typeof usageLimitCredentialValidator>;
+
 /**
- * Every account's latest reading for a repo, most recently captured first. One
- * provider can appear more than once — once per connected account it has run on.
- *
- * A row belonging to a provider account the caller may not run on is omitted
- * entirely, not merely stripped of its label: plan headroom is a fact about
- * somebody else's account. Rows with no account (the shared team credential)
- * are visible to everyone with repo access.
+ * Whether a launch in this repo would inject the shared
+ * `CLAUDE_CODE_OAUTH_TOKEN` — the same team-then-repo lookup
+ * `resolveAllEnvVars` does, on `key` alone. The value is never read: presence is
+ * the whole question, and a query has no business decrypting a credential.
  */
-export const getByRepo = authQuery({
+async function hasSharedClaudeCredential(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+  teamId: Id<"teams">,
+): Promise<boolean> {
+  const key = PROVIDER_PRIMARY_AUTH_KEY[USAGE_LIMIT_PROVIDER];
+  const teamVars = await db
+    .query("teamEnvVars")
+    .withIndex("by_team", (q) => q.eq("teamId", teamId))
+    .first();
+  if (teamVars?.vars.some((entry) => entry.key === key) === true) return true;
+  const repoVars = await db
+    .query("repoEnvVars")
+    .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+    .first();
+  return repoVars?.vars.some((entry) => entry.key === key) === true;
+}
+
+/**
+ * Every Claude credential the viewer may run on in this repo, in the order the
+ * card lists them: their own accounts, then teammates' shared ones, then the
+ * shared team credential last.
+ *
+ * Exactly the picker's set (`listSelectableAccountsFor`) narrowed to Claude,
+ * because the two answer the same question: a card that listed headroom for a
+ * credential the user cannot spend — or omitted one they can — would be
+ * describing somebody else's plan.
+ */
+async function listUsageLimitCredentials(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+): Promise<UsageLimitCredential[]> {
+  const accounts = await listSelectableAccountsFor(ctx, userId);
+  const credentials: UsageLimitCredential[] = accounts
+    .filter((account) => account.provider === USAGE_LIMIT_PROVIDER)
+    .map((account) => ({
+      providerAccountId: account._id,
+      accountLabel: account.label,
+    }));
+  const repo = await ctx.db.get(repoId);
+  const teamId = repo?.teamId;
+  // The team row is keyed by team, so a repo outside one has nowhere to file a
+  // reading and nothing to show for it.
+  if (teamId === undefined) return credentials;
+  if (!(await hasSharedClaudeCredential(ctx.db, repoId, teamId))) {
+    return credentials;
+  }
+  return [...credentials, { teamId, accountLabel: TEAM_CREDENTIAL_LABEL }];
+}
+
+/**
+ * Every Claude credential the viewer may run on, each with its current reading.
+ *
+ * The entries are the credentials, not the rows that happen to exist: a
+ * connected account that has never reported still appears, with a null reading,
+ * rather than vanishing from the card. And because a reading belongs to the
+ * credential, the numbers no longer depend on which repo the card is open in.
+ *
+ * No row identity is returned. `_id`, the legacy `repoId` and `teamId` are the
+ * table's business, and `accountLabel` is resolved on read rather than stored so
+ * a rename shows up without rewriting rows.
+ */
+export const getForViewer = authQuery({
   args: {
     repoId: v.id("githubRepos"),
     /** Quantized by the caller so expiry remains deterministic and cacheable. */
     now: v.number(),
   },
-  returns: v.array(agentUsageLimitValidator),
+  returns: v.array(
+    v.object({
+      /** Absent = the shared team credential. */
+      providerAccountId: v.optional(v.id("userProviderAccounts")),
+      accountLabel: v.string(),
+      /** Null when the credential has never reported, or not within 24h. */
+      reading: v.union(v.null(), v.object(usageLimitReadingFields)),
+    }),
+  ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const rows = await ctx.db
-      .query("agentUsageLimits")
-      .withIndex("by_repo_provider_account", (q) => q.eq("repoId", args.repoId))
-      .collect();
-    const visible = [];
-    for (const row of rows) {
-      if (!isUsageLimitReadingFresh(row.capturedAt, args.now)) continue;
-      const next = { ...row };
-      const reportedWindows = next.windows;
-      if (reportedWindows) {
-        const activeWindows = reportedWindows.filter(
-          (window) =>
-            window.resetsAt === undefined || window.resetsAt > args.now,
-        );
-        if (activeWindows.length > 0) {
-          next.windows = activeWindows;
-        } else {
-          delete next.windows;
-          // A status observed alongside windows expires when all of those
-          // windows reset. Windowless status-only events remain until the row's
-          // captured-at freshness limit above.
-          //
-          // The discriminant goes with it: "complete" described a reading whose
-          // windows have all since reset, and leaving it would have the UI
-          // report that the provider has no plan windows at all. A reading that
-          // never carried windows keeps it — that is the case it exists for.
-          if (reportedWindows.length > 0) {
-            delete next.status;
-            delete next.completeness;
-          }
-        }
-      }
-      // A row with no account ran on the shared team credential and belongs to
-      // no one in particular, so anyone with repo access may see it.
-      const accountId = next.providerAccountId;
-      const account =
-        accountId === undefined ? null : await ctx.db.get(accountId);
-      const canSeeAccount =
-        account !== null &&
-        account.provider === next.provider &&
-        (await isAccountUsableBy(ctx.db, account, ctx.userId));
-      // An account the caller cannot run on is one whose plan headroom is none
-      // of their business, so the row is dropped rather than anonymised.
-      if (accountId !== undefined && !canSeeAccount) continue;
-      visible.push({
-        ...next,
-        ...(canSeeAccount && account ? { accountLabel: account.label } : {}),
+    const credentials = await listUsageLimitCredentials(
+      ctx,
+      ctx.userId,
+      args.repoId,
+    );
+    const entries = [];
+    for (const credential of credentials) {
+      const row = await findUsageLimitRow(
+        ctx.db,
+        parseUsageLimitRowKey({
+          provider: USAGE_LIMIT_PROVIDER,
+          providerAccountId: credential.providerAccountId,
+          teamId: credential.teamId,
+        }),
+      );
+      entries.push({
+        ...(credential.providerAccountId === undefined
+          ? {}
+          : { providerAccountId: credential.providerAccountId }),
+        accountLabel: credential.accountLabel,
+        reading: presentReading(row, args.now),
       });
     }
-    visible.sort((a, b) => b.capturedAt - a.capturedAt);
-    return visible;
+    return entries;
+  },
+});
+
+/**
+ * The same credential list `getForViewer` shows, for the refresh action to fan
+ * out over. Shared rather than rebuilt so the button cannot refresh a different
+ * set of credentials from the one the card displays.
+ */
+export const listRefreshTargetsInternal = internalQuery({
+  args: { userId: v.id("users"), repoId: v.id("githubRepos") },
+  returns: v.array(usageLimitCredentialValidator),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, args.userId))) return [];
+    return await listUsageLimitCredentials(ctx, args.userId, args.repoId);
   },
 });
 
 const refreshTargetArgs = {
-  /** The live chat whose daemon reports the reading (its session's sandbox). */
-  chatId: v.optional(v.id("sessionChats")),
+  sessionId: v.optional(v.id("sessions")),
   projectId: v.optional(v.id("projects")),
   taskId: v.optional(v.id("agentTasks")),
 };
 
 type RefreshTarget =
-  | { kind: "session"; chatId: Id<"sessionChats"> }
+  | { kind: "session"; sessionId: Id<"sessions"> }
   | { kind: "project"; projectId: Id<"projects"> }
   | { kind: "task"; taskId: Id<"agentTasks"> };
 
 function parseRefreshTarget(args: {
-  chatId?: Id<"sessionChats">;
+  sessionId?: Id<"sessions">;
   projectId?: Id<"projects">;
   taskId?: Id<"agentTasks">;
 }): RefreshTarget {
   if (
-    args.chatId !== undefined &&
+    args.sessionId !== undefined &&
     args.projectId === undefined &&
     args.taskId === undefined
   ) {
-    return { kind: "session", chatId: args.chatId };
+    return { kind: "session", sessionId: args.sessionId };
   }
   if (
     args.projectId !== undefined &&
-    args.chatId === undefined &&
+    args.sessionId === undefined &&
     args.taskId === undefined
   ) {
     return { kind: "project", projectId: args.projectId };
   }
   if (
     args.taskId !== undefined &&
-    args.chatId === undefined &&
+    args.sessionId === undefined &&
     args.projectId === undefined
   ) {
     return { kind: "task", taskId: args.taskId };
   }
   throw new Error(
-    "Refresh needs exactly one of chatId, projectId, or taskId",
+    "Refresh needs exactly one of sessionId, projectId, or taskId",
   );
-}
-
-function isStoppedSandbox(status: string | undefined): boolean {
-  return status === "closed" || status === "stopping";
 }
 
 /**
@@ -332,15 +444,14 @@ export const getRefreshSurface = internalQuery({
   handler: async (ctx, args) => {
     const target = parseRefreshTarget(args);
     if (target.kind === "session") {
-      const context = await loadSessionChat(ctx.db, target.chatId);
-      if (!context || context.session.repoId !== args.repoId) {
-        throw new Error("Chat not found");
+      const session = await ctx.db.get(target.sessionId);
+      if (!session || session.repoId !== args.repoId) {
+        throw new Error("Session not found");
       }
-      const { session } = context;
       if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
         throw new Error("Not authorized");
       }
-      if (!session.sandboxId || isStoppedSandbox(session.status)) {
+      if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
         return "idle";
       }
       return "ready";
@@ -355,7 +466,7 @@ export const getRefreshSurface = internalQuery({
       }
       if (
         !project.sandboxId ||
-        isStoppedSandbox(project.reviewProjectSandboxStatus)
+        isSandboxClosingStatus(project.reviewProjectSandboxStatus)
       ) {
         return "idle";
       }
@@ -368,7 +479,7 @@ export const getRefreshSurface = internalQuery({
     if (!(await hasRepoAccess(ctx.db, task.repoId, args.userId))) {
       throw new Error("Not authorized");
     }
-    if (!task.sandboxId || isStoppedSandbox(task.reviewTaskSandboxStatus)) {
+    if (!task.sandboxId || isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return "idle";
     }
     return "ready";
@@ -390,18 +501,20 @@ export const requestRefresh = authMutation({
     const target = parseRefreshTarget(args);
     const now = Date.now();
     if (target.kind === "session") {
-      const context = await loadSessionChat(ctx.db, target.chatId);
-      if (!context || context.session.repoId !== args.repoId) {
-        throw new Error("Chat not found");
+      const session = await ctx.db.get(target.sessionId);
+      if (!session || session.repoId !== args.repoId) {
+        throw new Error("Session not found");
       }
-      const { chat, session } = context;
       if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
         throw new Error("Not authorized");
       }
-      if (!session.sandboxId || isStoppedSandbox(session.status)) {
+      if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
         return false;
       }
-      await ctx.db.patch(chat._id, { usageRefreshRequestedAt: now });
+      await ensureSessionDaemonState(ctx, session);
+      await syncSessionDaemonState(ctx, session, {
+        usageRefreshRequestedAt: now,
+      });
       return true;
     }
     if (target.kind === "project") {
@@ -414,7 +527,7 @@ export const requestRefresh = authMutation({
       }
       if (
         !project.sandboxId ||
-        isStoppedSandbox(project.reviewProjectSandboxStatus)
+        isSandboxClosingStatus(project.reviewProjectSandboxStatus)
       ) {
         return false;
       }
@@ -428,7 +541,7 @@ export const requestRefresh = authMutation({
     if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    if (!task.sandboxId || isStoppedSandbox(task.reviewTaskSandboxStatus)) {
+    if (!task.sandboxId || isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       return false;
     }
     await ctx.db.patch(target.taskId, { usageRefreshRequestedAt: now });
@@ -447,13 +560,15 @@ export const clearRefresh = authMutation({
   handler: async (ctx, args) => {
     const target = parseRefreshTarget(args);
     if (target.kind === "session") {
-      const context = await loadSessionChat(ctx.db, target.chatId);
-      if (!context) throw new Error("Chat not found");
-      const { chat, session } = context;
+      const session = await ctx.db.get(target.sessionId);
+      if (!session) throw new Error("Session not found");
       if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
         throw new Error("Not authorized");
       }
-      await ctx.db.patch(chat._id, { usageRefreshRequestedAt: undefined });
+      await ensureSessionDaemonState(ctx, session);
+      await syncSessionDaemonState(ctx, session, {
+        usageRefreshRequestedAt: undefined,
+      });
       return null;
     }
     if (target.kind === "project") {

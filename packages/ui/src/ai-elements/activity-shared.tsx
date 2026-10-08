@@ -17,9 +17,11 @@ import {
   IconListCheck,
   IconInfoCircle,
   IconAnchor,
-  IconLoader2,
 } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { CircleSpinner } from "../ui/spinner";
+import { useEffect, useState, useSyncExternalStore } from "react";
+
+import { quantizedSnapshot, subscribeQuantized } from "../utils/sharedClock";
 
 /** One item in a todo checklist step (type "todos"). */
 export interface TodoItem {
@@ -36,6 +38,20 @@ export interface ActivityStepOutput {
 export interface ActivityStepEdit {
   oldText: string;
   newText: string;
+}
+
+/** One choice offered by an AskUserQuestion prompt. */
+export interface ActivityQuestionOption {
+  label: string;
+  description?: string;
+}
+
+/** One question of an AskUserQuestion prompt, with the choices shown. */
+export interface ActivityQuestion {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: ActivityQuestionOption[];
 }
 
 export interface ActivityStep {
@@ -84,6 +100,16 @@ export interface ActivityStep {
   isError?: boolean;
   /** Wall time from push → complete (ms). */
   durationMs?: number;
+  /** AskUserQuestion prompt (type "question" only): the questions and options shown to the user. */
+  questions?: ActivityQuestion[];
+  /** AskUserQuestion answers keyed by question text. Absent when the turn ended without a structured answer. */
+  answers?: Record<string, string>;
+  /**
+   * The transcript query stripped this step's expanded-only fields (`output`,
+   * `edits`, `contentPreview`) to keep the chat subscription small. The row
+   * still opens; the body fills in once the full payload is fetched.
+   */
+  hasHiddenDetail?: boolean;
 }
 
 /** True when the step has expandable rich detail to show. */
@@ -93,7 +119,8 @@ export function stepHasRichDetail(step: ActivityStep): boolean {
     step.output ||
     (step.edits && step.edits.length > 0) ||
     (step.files && step.files.length > 0) ||
-    step.contentPreview,
+    step.contentPreview ||
+    step.hasHiddenDetail,
   );
 }
 
@@ -128,7 +155,7 @@ export const stepConfig = {
   tool: { icon: IconTool, defaultLabel: "Used tool" },
   notice: { icon: IconInfoCircle, defaultLabel: "Notice" },
   hook: { icon: IconAnchor, defaultLabel: "Hook" },
-  status: { icon: IconLoader2, defaultLabel: "Status" },
+  status: { icon: CircleSpinner, defaultLabel: "Status" },
 };
 
 const SPINNER_VERBS = [
@@ -329,31 +356,58 @@ export function useSpinnerVerb(active: boolean): string {
   const [verb, setVerb] = useState(getRandomVerb);
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => {
-      setVerb(getRandomVerb());
-    }, 3000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      if (id !== undefined) return;
+      id = setInterval(() => {
+        setVerb(getRandomVerb());
+      }, 3000);
+    };
+    const stop = () => {
+      if (id === undefined) return;
+      clearInterval(id);
+      id = undefined;
+    };
+    const onVisibility = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        stop();
+        return;
+      }
+      start();
+    };
+    onVisibility();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+    return () => {
+      stop();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+    };
   }, [active]);
   return verb;
 }
+
+const SECOND_MS = 1000;
+const noopSubscribe = () => () => {};
 
 export function useElapsedSeconds(
   startedAt: number | undefined,
   active: boolean,
 ) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!active || !startedAt) {
-      setElapsed(0);
-      return;
-    }
-    setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    const id = setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [active, startedAt]);
-  return elapsed;
+  const tick = useSyncExternalStore(
+    active && startedAt
+      ? (onChange) => subscribeQuantized(SECOND_MS, onChange)
+      : noopSubscribe,
+    () => quantizedSnapshot(SECOND_MS),
+    () => quantizedSnapshot(SECOND_MS),
+  );
+  if (!active || !startedAt) return 0;
+  return Math.max(0, Math.floor((tick - startedAt) / 1000));
 }
 
 export function formatElapsed(seconds: number): string {

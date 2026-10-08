@@ -5,7 +5,7 @@ import { useState, type MouseEvent } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
 import {
   AvatarStack,
@@ -16,6 +16,7 @@ import {
   ContextMenuContent,
   BorderBeam,
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -38,9 +39,12 @@ import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import {
   SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
@@ -62,7 +66,13 @@ interface ProjectCardProps {
   planningMode: "interview" | "tasks_only";
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
+  /** Finished project chat reply the user has not seen (`api.projects.list`). */
+  hasUnread?: boolean;
   isActive?: boolean;
+  isSelecting?: boolean;
+  isSelected?: boolean;
+  /** `shiftKey` asks the owner for a range selection from its anchor. */
+  onToggleSelect?: (event: { shiftKey: boolean }) => void;
   /** Public (slash) path; rendered via router Link so rewrites own the href. */
   href?: string;
   /**
@@ -89,11 +99,16 @@ export function ProjectCard({
   planningMode,
   isBuilding = false,
   sandboxStatus,
+  hasUnread = false,
   isActive,
+  isSelecting,
+  isSelected,
+  onToggleSelect,
   href,
   onClick,
   onDelete,
 }: ProjectCardProps) {
+  const simpleView = useSimpleView();
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(title);
   const [editDescription, setEditDescription] = useState(description ?? "");
@@ -182,7 +197,7 @@ export function ProjectCard({
 
   const cardContent = (
     <ListRow
-      className="shrink-0"
+      className={cn("shrink-0", isSelected && "ring-2 ring-primary/40")}
       accentClassName={accentColor}
       selected={isActive}
       link={
@@ -191,10 +206,17 @@ export function ProjectCard({
         ) : undefined
       }
       onClick={
-        editOpen || onClick
+        editOpen || isSelecting || onClick
           ? (event) => {
               if (editOpen) {
                 event.preventDefault();
+                return;
+              }
+              // While selecting, the whole card is a selection target — the
+              // stretched link would otherwise navigate away mid-selection.
+              if (isSelecting) {
+                event.preventDefault();
+                onToggleSelect?.({ shiftKey: event.shiftKey });
                 return;
               }
               onClick?.(event);
@@ -205,10 +227,25 @@ export function ProjectCard({
       contentClassName="flex flex-col gap-1.5 px-3 py-2.5 pl-3.5"
     >
       <div className="flex min-w-0 items-start gap-2">
+        {isSelecting ? (
+          <Checkbox
+            checked={isSelected}
+            // One handler, not `onClick` + `onCheckedChange`: Radix composes
+            // its own toggle after ours and skips it once the event is
+            // default-prevented, so this reads the shift modifier without
+            // toggling twice.
+            onClick={(event) => {
+              event.stopPropagation();
+              event.preventDefault();
+              onToggleSelect?.({ shiftKey: event.shiftKey });
+            }}
+            className={cn("mt-0.5 shrink-0", LIST_ROW_CONTROL_CLASS)}
+          />
+        ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-baseline gap-1.5">
             <EntityNumLabel numId={numId} />
-            <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+            <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
               {title}
             </MarqueeOnHover>
           </div>
@@ -225,7 +262,7 @@ export function ProjectCard({
             </p>
           ) : null}
         </div>
-        {sandboxStatus ? (
+        {sandboxStatus && showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -240,6 +277,8 @@ export function ProjectCard({
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {/* `mt-[7px]` centres the 6px dot on the 20px title line. */}
+        <UnreadDot show={hasUnread} className="mt-[7px]" />
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
@@ -247,7 +286,7 @@ export function ProjectCard({
           <TooltipTrigger asChild>
             <Badge
               variant="secondary"
-              className="gap-0.5 px-1.5 py-0 text-[10px] font-medium leading-4"
+              className="gap-0.5 px-1.5 py-0 text-3xs font-medium leading-4"
             >
               {planningMode === "interview" ? (
                 <IconSparkles className="size-2.5 shrink-0" />
@@ -278,7 +317,7 @@ export function ProjectCard({
               ))}
             </AvatarStack>
             {hiddenCount > 0 ? (
-              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+              <span className="text-2xs font-medium tabular-nums text-muted-foreground">
                 +{hiddenCount}
               </span>
             ) : null}
@@ -363,7 +402,6 @@ export function ProjectCard({
     <BorderBeam
       active
       colorVariant="progress"
-      glow={false}
       className="rounded-surface"
     >
       {cardContent}

@@ -1,4 +1,4 @@
-import { mkdirSync, unlinkSync, writeFileSync } from "fs";
+import { mkdirSync, unlinkSync } from "fs";
 import {
   ALLOWED_TOOLS,
   CLAIM_MUTATION,
@@ -24,7 +24,8 @@ import {
   runCursorDaemon,
   runCursorTurnWorker,
 } from "./providers/cursorSdkDaemon.js";
-import { fetchWithTimeout, callConvexWithRetry } from "./http/convexClient.js";
+import { callConvexWithRetry } from "./http/convexClient.js";
+import { ensureGithubToken } from "./providers/githubToken.js";
 import { callbackState as S } from "./runtime/state.js";
 import {
   appendCurrentTurnLease,
@@ -32,7 +33,12 @@ import {
 } from "./runtime/turnLease.js";
 import { waitForPendingClaudeUsageReport } from "./runtime/usageLimits.js";
 import { persistTurnWork } from "./runtime/turnPersist.js";
+import {
+  appendTurnCheckpoint,
+  beginTurnCheckpoint,
+} from "./runtime/turnCheckpoint.js";
 import { materializeSystemSkills } from "./runtime/systemSkills.js";
+import { startBranchWatcher } from "./runtime/branchWatcher.js";
 import {
   flushStreaming,
   runPreflightHeartbeat,
@@ -42,10 +48,13 @@ import {
 } from "./runtime/heartbeats.js";
 import {
   appendDiagnosticTail,
-  buildErrorMessage,
+  buildTurnCompletionPayload,
   deliverCompletionWithMedia,
   extractResultEvent,
   hasToolActivity,
+  providerAttemptTimedOut,
+  providerAttemptWasInterrupted,
+  resolveProviderAttemptOutcome,
   writeDoneFile,
 } from "./runtime/completion.js";
 import {
@@ -54,12 +63,8 @@ import {
   syncProviderStateToPersist,
 } from "./providers/attempts.js";
 import type { JsonObject } from "./types.js";
-import {
-  hasNewTaskCommitSince,
-  log,
-  readGitHeadSha,
-  readResponseJson,
-} from "./utils.js";
+import { hasNewTaskCommitSince, log, readGitHeadSha } from "./utils.js";
+import { writeOomScoreAdj } from "./runtime/daemonProcess.js";
 import { serializeSteps } from "./parse/stepBudget.js";
 
 // Cursor chat turns run in disposable children so the SDK cannot retain heap
@@ -101,17 +106,19 @@ try {
 // die — not the process responsible for heartbeats and failure reporting.
 // Lowering our own score requires privilege, so this is best-effort; a spawned
 // child's score is raised at spawn time (opencodeServer.ts) as the portable half.
-try {
-  writeFileSync("/proc/self/oom_score_adj", "-600");
-} catch {
-  /* unprivileged or non-Linux — ignore */
-}
+writeOomScoreAdj("self", "-600");
 
 S.lastStepType = "thinking";
 
 // Before either provider path starts — the agent scans `.agents/skills` on
 // startup, so installed Eva skills must already be on disk.
 materializeSystemSkills();
+
+// Above the provider split on purpose: each daemon below blocks for the life of
+// the process, so this is the one place that runs exactly once per daemon
+// process for Claude, Codex and Cursor alike (and for one-shot job runs). The
+// Cursor turn worker exited further up, so it never doubles the reports.
+startBranchWatcher();
 
 // Interactive chats keep one provider process warm and claim staged turns.
 // Jobs (tasks / automations / arena) omit CLAIM_MUTATION and stay one-shot.
@@ -147,39 +154,11 @@ for (const d of [WORK_DIR + "/screenshots", WORK_DIR + "/recordings"]) {
   }
 }
 
-if (REPO_ID && CONVEX_URL && CONVEX_TOKEN) {
-  try {
-    const res = await fetchWithTimeout(CONVEX_URL + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + CONVEX_TOKEN,
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: REPO_ID },
-        format: "json",
-      }),
-    });
-    if (res.ok) {
-      const data = await readResponseJson(res);
-      if (
-        data &&
-        typeof data === "object" &&
-        !Array.isArray(data) &&
-        data.value &&
-        typeof data.value === "object" &&
-        !Array.isArray(data.value) &&
-        typeof data.value.token === "string"
-      ) {
-        process.env.GITHUB_TOKEN = data.value.token;
-        process.env.GH_TOKEN = data.value.token;
-      }
-    }
-  } catch {
-    /* ignore github token fetch errors */
-  }
-}
+await ensureGithubToken({
+  convexUrl: CONVEX_URL,
+  convexToken: CONVEX_TOKEN,
+  repoId: REPO_ID,
+});
 
 log(
   "entityId=" +
@@ -197,6 +176,7 @@ log(
 );
 
 try {
+  beginTurnCheckpoint();
   const taskCommitBaselineHead = REQUIRE_TASK_COMMIT ? readGitHeadSha() : "";
   if (REQUIRE_TASK_COMMIT) {
     log(
@@ -240,50 +220,29 @@ try {
 
   if (await setFinalizingState()) process.exit(0);
 
+  const finalAttempt = {
+    code: finalCode,
+    terminatedBySignal: finalTerminatedBySignal,
+    output: firstAttempt.output,
+    timedOutForNoOutput: finalTimedOutForNoOutput,
+    timedOutForMaxRuntime: finalTimedOutForMaxRuntime,
+    timedOutForFirstEvent: finalTimedOutForFirstEvent,
+    timedOutForFirstAssistant: finalTimedOutForFirstAssistant,
+    timedOutAfterFirstText: finalTimedOutAfterFirstText,
+    timedOutForZombie: finalTimedOutForZombie,
+    toolStallErrorMessage: finalToolStallErrorMessage,
+  };
   // Cursor can flush partial assistant text while a SIGTERM/SIGKILL is tearing
   // down the process. extractResultEvent deliberately falls back to that text,
   // so without this guard an interrupted recording turn reported its
   // "recording now…" preamble as a successful final answer. Node reports a
   // direct signal with `code=null`; shells can translate it to 137/143. Keep
   // both forms so neither can masquerade as genuine completion.
-  const agentWasInterrupted =
-    finalTerminatedBySignal || finalCode === 137 || finalCode === 143;
-
-  const attemptEndedDueToTimeout =
-    finalTimedOutAfterFirstText ||
-    finalTimedOutForNoOutput ||
-    finalTimedOutForMaxRuntime ||
-    finalTimedOutForFirstEvent ||
-    finalTimedOutForFirstAssistant ||
-    finalTimedOutForZombie ||
-    Boolean(finalToolStallErrorMessage);
-
-  const runSucceededWithResult =
-    finalResultEvent != null &&
-    !finalResultEvent.isError &&
-    !agentWasInterrupted;
-
-  let errorValue: string | null = null;
-  if (finalResultEvent?.isError) {
-    errorValue = finalResultEvent.result;
-  } else if (
-    (!runSucceededWithResult && finalCode !== 0) ||
-    (attemptEndedDueToTimeout && !runSucceededWithResult)
-  ) {
-    errorValue = appendDiagnosticTail(
-      buildErrorMessage(
-        finalCode,
-        S.fatalHeartbeatErrorMessage,
-        finalToolStallErrorMessage,
-        finalTimedOutForMaxRuntime,
-        finalTimedOutForNoOutput,
-        finalTimedOutForFirstEvent,
-        finalTimedOutForFirstAssistant,
-        finalTimedOutAfterFirstText,
-        finalTimedOutForZombie,
-      ),
-    );
-  }
+  const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt);
+  const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
+  const { success: runSucceededWithResult, error: resolvedError } =
+    resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
+  let errorValue: string | null = resolvedError;
 
   // The final result text is delivered separately (rendered as the chat
   // message via `result`/`resultSummary`). If the last streamed "response"
@@ -352,20 +311,14 @@ try {
       S.accumulatedSteps.length,
   );
 
-  const completionArgs: JsonObject = {
-    [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",
+  const completionArgs = buildTurnCompletionPayload({
     success: completionSuccess,
     result: finalResultEvent?.result ?? S.rawOutput,
     error: errorValue,
     activityLog,
-  };
-  if (RUN_ID) completionArgs.runId = RUN_ID;
-  if (finalResultEvent?.rawResultEvent) {
-    completionArgs.rawResultEvent = finalResultEvent.rawResultEvent;
-  }
-  if (S.pendingQuestionData) {
-    completionArgs.pendingQuestion = S.pendingQuestionData;
-  }
+    resultEvent: finalResultEvent,
+    entityFieldFallback: "entityId",
+  });
   appendCurrentTurnLease(completionArgs);
 
   // Durability BEFORE completion: commit + push the turn's work so a VM death
@@ -430,6 +383,7 @@ try {
   };
   if (RUN_ID) errorArgs.runId = RUN_ID;
   appendCurrentTurnLease(errorArgs);
+  appendTurnCheckpoint(errorArgs);
   try {
     await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", errorArgs);
   } catch {

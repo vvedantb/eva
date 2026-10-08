@@ -1,4 +1,5 @@
 import { useParams, useRouterState } from "@tanstack/react-router";
+import { sandboxTabIdFromParam } from "@/lib/search-params";
 
 /** Matches `/sessions/$numId/review…` (diffs or recap). */
 const SESSION_REVIEW_PATH = /\/sessions\/[^/]+\/review(?:\/|$)/;
@@ -19,7 +20,7 @@ export function useSessionRouteSandboxTab(): string {
 
   const sandboxTab = params.sandboxTab;
   if (typeof sandboxTab === "string" && sandboxTab.length > 0) {
-    return sandboxTab;
+    return sandboxTabIdFromParam(sandboxTab);
   }
 
   return "preview";

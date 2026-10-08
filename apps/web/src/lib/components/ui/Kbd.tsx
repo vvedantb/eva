@@ -10,7 +10,7 @@ import {
 } from "@/lib/hotkeys/registry";
 
 const KBD_CLASS =
-  "rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground";
+  "rounded bg-muted px-1 py-0.5 font-mono text-3xs text-muted-foreground";
 
 /**
  * One key cap. Renders the platform's own notation — `⌘⇧B` on macOS,

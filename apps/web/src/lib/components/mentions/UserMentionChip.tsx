@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { UserProfileHoverCardBody } from "@eva/shared";
+import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@eva/ui";
 import { MENTION_CHIP_CLASS } from "./mentionChipStyles";
 

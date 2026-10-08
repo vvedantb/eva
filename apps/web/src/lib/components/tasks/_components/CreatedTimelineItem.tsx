@@ -3,7 +3,7 @@
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { getUserDisplayName } from "./task-detail-constants";
 
 type User = NonNullable<FunctionReturnType<typeof api.users.listAll>>[number];

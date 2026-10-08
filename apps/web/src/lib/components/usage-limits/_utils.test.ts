@@ -6,12 +6,11 @@ import {
   formatResetDistanceMs,
   maxUtilization,
   newestCapturedAt,
-  orderedSections,
   providerHeading,
   reportedWindows,
   resetsInLabel,
   scopedWeeklyNameForModel,
-  sectionKey,
+  snapshotsOf,
   toneForUtilization,
   type UsageSnapshot,
   usageRowsForAccount,
@@ -277,31 +276,24 @@ test("a windowless rejection still colours a chip that has a number", () => {
   });
 });
 
-test("a section is keyed by account, so two of one provider stay distinct", () => {
-  expect(sectionKey({ provider: "claude", providerAccountId: "acc-a" })).toBe(
-    "claude:acc-a",
-  );
-  expect(
-    sectionKey({ provider: "claude", providerAccountId: "acc-b" }),
-  ).not.toBe(sectionKey({ provider: "claude", providerAccountId: "acc-a" }));
-  // A run on the shared team credential has no account, and still keys.
-  expect(sectionKey({ provider: "claude" })).toBe("claude:");
-});
-
-test("a provider's accounts keep the order they were captured in", () => {
-  // Grouping is by provider, so one provider's accounts stay in the order the
-  // query returned them — freshest first.
-  const rows = [
-    { provider: "claude" as const, providerAccountId: "acc-a" },
-    { provider: "claude" as const },
-    { provider: "claude" as const, providerAccountId: "acc-b" },
-  ];
-  expect(orderedSections(rows).map(sectionKey)).toEqual([
-    "claude:acc-a",
-    "claude:",
-    "claude:acc-b",
+test("only the accounts that have reported become snapshots", () => {
+  // Every credential the viewer can run on is an entry, so the card can list an
+  // account before its first turn. The chip measures readings, not accounts.
+  const reading = {
+    provider: "claude" as const,
+    capturedAt: NOW,
+    windows: [{ key: "five_hour", label: "5h", utilization: 12 }],
+  };
+  const snapshots = snapshotsOf([
+    { providerAccountId: undefined, accountLabel: "Kezia", reading: null },
+    { providerAccountId: undefined, accountLabel: "Team", reading },
   ]);
-  expect(orderedSections([])).toEqual([]);
+  // The account the reading belongs to travels with it — the chip scopes on it.
+  expect(snapshots).toEqual([
+    { ...reading, providerAccountId: undefined, accountLabel: "Team" },
+  ]);
+  expect(chipSummary(snapshots, NOW)?.label).toBe("12%");
+  expect(snapshotsOf([])).toEqual([]);
 });
 
 test("a flagged reading still shows even with nothing to measure", () => {

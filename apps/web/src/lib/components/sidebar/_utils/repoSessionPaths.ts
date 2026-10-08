@@ -1,11 +1,30 @@
-﻿import { repoHref } from "@/lib/utils/repoUrl";
-import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
+﻿import { entityPathSegment } from "@/lib/numId";
+import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
+
+/**
+ * The only fields these helpers read off a repo row, so callers holding just a
+ * repo's identity (and tests) do not have to carry the whole Convex document.
+ */
+export type RepoPathParts = {
+  owner: string;
+  name: string;
+  rootDirectory?: string;
+};
+
+/**
+ * A sidebar session row. `linkedFrom` is set only on rows a repo sees through
+ * a linked checkout: the session's own (primary) repo owns its URL.
+ */
+export interface SessionRowRef {
+  numId?: number;
+  linkedFrom?: RepoPathParts;
+}
 
 /**
  * Base path(s) for a repo/app row. Public slash form plus internal `--` form
  * so path matching works against both `publicHref` and `location.pathname`.
  */
-export function repoBasePaths(repo: RepoWithLogo): string[] {
+export function repoBasePaths(repo: RepoPathParts): string[] {
   const slash = repoHref(repo.owner, repo.name, repo.rootDirectory);
   if (!repo.rootDirectory) return [slash];
   const leaf = repo.rootDirectory.split("/").pop();
@@ -14,13 +33,13 @@ export function repoBasePaths(repo: RepoWithLogo): string[] {
   return slash === internal ? [slash] : [slash, internal];
 }
 
-/** Sessions index URL for an app (`â€¦/sessions` composer landing). */
-export function repoSessionsIndexPath(repo: RepoWithLogo): string {
+/** Sessions index URL for an app (`.../sessions` composer landing). */
+export function repoSessionsIndexPath(repo: RepoPathParts): string {
   return `${repoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions`;
 }
 
 /** Whether `pathname` is under this repo/app (any sub-page). */
-export function repoMatchesPath(repo: RepoWithLogo, pathname: string): boolean {
+export function repoMatchesPath(repo: RepoPathParts, pathname: string): boolean {
   return repoBasePaths(repo).some(
     (base) => pathname === base || pathname.startsWith(`${base}/`),
   );
@@ -28,10 +47,10 @@ export function repoMatchesPath(repo: RepoWithLogo, pathname: string): boolean {
 
 /**
  * Whether `pathname` is this session under the app. Checks slash + `--`
- * bases â€” `location.pathname` is the router-internal form.
+ * bases - `location.pathname` is the router-internal form.
  */
 export function sessionMatchesPath(
-  repo: RepoWithLogo,
+  repo: RepoPathParts,
   pathSegment: string | null | undefined,
   pathname: string,
 ): boolean {
@@ -43,10 +62,44 @@ export function sessionMatchesPath(
 }
 
 /**
- * Which row of a session is selected for the current URL: the session row
- * while Main (no `?chat` or `?chat=1`) is open, otherwise the chat row with
- * that number. Both never highlight at once.
+ * The repo whose URL a row's session lives under. A row shown in this app's
+ * sidebar only because the session clones this repo still belongs to the
+ * session's primary repo, so its link and selection must resolve there.
  */
-export function selectedChatNumber(chatParam: number | null): number {
-  return chatParam === null ? 1 : chatParam;
+function sessionRowRepo(
+  repo: RepoPathParts,
+  session: SessionRowRef,
+): RepoPathParts {
+  return session.linkedFrom ?? repo;
+}
+
+/**
+ * Router href for a session row, or the app's sessions index when the row has
+ * no numId yet. The single place a row's destination is decided - linked-in
+ * rows resolve under their primary repo, not the sidebar they appear in.
+ */
+export function sessionHrefForRow(
+  repo: RepoPathParts,
+  session: SessionRowRef,
+): string {
+  const owning = sessionRowRepo(repo, session);
+  const base = `${repoHref(owning.owner, owning.name, owning.rootDirectory)}/sessions`;
+  const segment = entityPathSegment(session);
+  return toInternalRepoHref(segment ? `${base}/${segment}` : base);
+}
+
+/**
+ * Whether `pathname` is this row's session, under the same repo
+ * {@link sessionHrefForRow} links to.
+ */
+export function sessionRowMatchesPath(
+  repo: RepoPathParts,
+  session: SessionRowRef,
+  pathname: string,
+): boolean {
+  return sessionMatchesPath(
+    sessionRowRepo(repo, session),
+    entityPathSegment(session),
+    pathname,
+  );
 }

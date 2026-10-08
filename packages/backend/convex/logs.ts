@@ -6,6 +6,23 @@ import {
   buildTaskProjectIdLookup,
   resolveLogProjectId,
 } from "./_logs/resolveProjectId";
+import { deriveLogUsage } from "./_logs/usage";
+import { logUsageFields } from "./_validators/tableFields";
+
+/** Denormalised usage columns copied onto every log DTO. */
+function usageOf(entry: Doc<"logs">) {
+  return {
+    costUsd: entry.costUsd,
+    model: entry.model,
+    provider: entry.provider,
+    inputTokens: entry.inputTokens,
+    outputTokens: entry.outputTokens,
+    cacheReadTokens: entry.cacheReadTokens,
+    cacheCreationTokens: entry.cacheCreationTokens,
+    durationMs: entry.durationMs,
+    contextWindow: entry.contextWindow,
+  };
+}
 
 function toLogDto(entry: Doc<"logs">, projectId: Id<"projects"> | undefined) {
   return {
@@ -16,8 +33,20 @@ function toLogDto(entry: Doc<"logs">, projectId: Id<"projects"> | undefined) {
     rawResultEvent: entry.rawResultEvent,
     projectId,
     createdAt: entry.createdAt,
+    ...usageOf(entry),
   };
 }
+
+const logDtoValidator = v.object({
+  _id: v.id("logs"),
+  entityType: v.string(),
+  entityId: v.string(),
+  entityTitle: v.string(),
+  rawResultEvent: v.optional(v.string()),
+  projectId: v.optional(v.id("projects")),
+  createdAt: v.number(),
+  ...logUsageFields,
+});
 
 /** Inserts a new log entry for a repo entity (internal use only). */
 export const log = internalMutation({
@@ -39,6 +68,7 @@ export const log = internalMutation({
       repoId: args.repoId,
       projectId: args.projectId,
       createdAt: Date.now(),
+      ...deriveLogUsage(args.rawResultEvent),
     });
     return null;
   },
@@ -50,17 +80,7 @@ export const getByEntityId = authQuery({
     repoId: v.id("githubRepos"),
     entityId: v.string(),
   },
-  returns: v.array(
-    v.object({
-      _id: v.id("logs"),
-      entityType: v.string(),
-      entityId: v.string(),
-      entityTitle: v.string(),
-      rawResultEvent: v.optional(v.string()),
-      projectId: v.optional(v.id("projects")),
-      createdAt: v.number(),
-    }),
-  ),
+  returns: v.array(logDtoValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
@@ -86,17 +106,7 @@ export const getByProjectId = authQuery({
     repoId: v.id("githubRepos"),
     projectId: v.id("projects"),
   },
-  returns: v.array(
-    v.object({
-      _id: v.id("logs"),
-      entityType: v.string(),
-      entityId: v.string(),
-      entityTitle: v.string(),
-      rawResultEvent: v.optional(v.string()),
-      projectId: v.optional(v.id("projects")),
-      createdAt: v.number(),
-    }),
-  ),
+  returns: v.array(logDtoValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
@@ -157,17 +167,7 @@ export const listByRepo = authQuery({
     repoId: v.id("githubRepos"),
     startTime: v.optional(v.number()),
   },
-  returns: v.array(
-    v.object({
-      _id: v.id("logs"),
-      entityType: v.string(),
-      entityId: v.string(),
-      entityTitle: v.string(),
-      rawResultEvent: v.optional(v.string()),
-      projectId: v.optional(v.id("projects")),
-      createdAt: v.number(),
-    }),
-  ),
+  returns: v.array(logDtoValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       return [];
@@ -203,16 +203,7 @@ export const listByProject = authQuery({
     v.object({
       projectId: v.id("projects"),
       projectTitle: v.string(),
-      logs: v.array(
-        v.object({
-          _id: v.id("logs"),
-          entityType: v.string(),
-          entityId: v.string(),
-          entityTitle: v.string(),
-          rawResultEvent: v.optional(v.string()),
-          createdAt: v.number(),
-        }),
-      ),
+      logs: v.array(logDtoValidator),
     }),
   ),
   handler: async (ctx, args) => {
@@ -235,14 +226,7 @@ export const listByProject = authQuery({
 
     const projectTitles = new Map<string, string>();
 
-    type LogEntry = {
-      _id: Id<"logs">;
-      entityType: string;
-      entityId: string;
-      entityTitle: string;
-      rawResultEvent: string | undefined;
-      createdAt: number;
-    };
+    type LogEntry = ReturnType<typeof toLogDto>;
 
     const groups = new Map<
       string,
@@ -258,14 +242,7 @@ export const listByProject = authQuery({
         if (!project) continue;
         projectTitles.set(pidStr, project.title);
       }
-      const logEntry: LogEntry = {
-        _id: entry._id,
-        entityType: entry.entityType,
-        entityId: entry.entityId,
-        entityTitle: entry.entityTitle,
-        rawResultEvent: entry.rawResultEvent,
-        createdAt: entry.createdAt,
-      };
+      const logEntry: LogEntry = toLogDto(entry, projectId);
       const existing = groups.get(pidStr);
       if (existing) {
         existing.logs.push(logEntry);

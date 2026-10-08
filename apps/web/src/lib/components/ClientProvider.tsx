@@ -13,17 +13,20 @@ import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { useAuth } from "@clerk/clerk-react";
 import { ConvexQueryCacheProvider } from "convex-helpers/react/cache/provider";
 import { BlurPidEffect } from "@/lib/components/BlurPidEffect";
+import { PageMotionProvider } from "@/lib/components/PageMotionProvider";
 import { FaviconController } from "@/lib/components/FaviconController";
 import { ThemeModeProvider } from "@/lib/components/ThemeModeProvider";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
+import { ensureRuntimeVisibility } from "@eva/ui";
 import { ThemeProvider } from "../contexts/ThemeContext";
-import { TooltipProvider } from "@eva/ui";
 import { AuthLoadingScreen } from "./AuthLoadingScreen";
 import { WelcomeSetupDialog } from "./onboarding/WelcomeSetupDialog";
 import { convex } from "@/lib/convex";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+
+ensureRuntimeVisibility();
 
 // Tracks whether the user has been signed in during this page session.
 // Used by useStableAuth to detect unexpected auth loss (stale deployment).
@@ -119,8 +122,10 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
       <ConvexQueryCacheProvider>
         <EnsureUser />
         <ThemeModeProvider>
-          {children}
-          <FaviconController />
+          <PageMotionProvider>
+            {children}
+            <FaviconController />
+          </PageMotionProvider>
         </ThemeModeProvider>
       </ConvexQueryCacheProvider>
     </ConvexProviderWithClerk>
@@ -137,13 +142,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         <Navigate to="/" />
       </Unauthenticated>
       <Authenticated>
+        {/* TooltipProvider lives in `__root`, above the layers that render
+            outside this gate. */}
         <ThemeProvider>
-          <TooltipProvider>
-            {children}
-            <BlurPidEffect />
-            <PresenceHeartbeat />
-            <WelcomeSetupDialog />
-          </TooltipProvider>
+          {children}
+          <BlurPidEffect />
+          <PresenceHeartbeat />
+          <WelcomeSetupDialog />
         </ThemeProvider>
       </Authenticated>
     </>

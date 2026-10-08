@@ -15,6 +15,83 @@ const primitivesDir = join(
   "ui",
 );
 
+const globalsCss = readFileSync(join(here, "globals.css"), "utf8").replaceAll(
+  "\r\n",
+  "\n",
+);
+
+/** The `r g b` triple for a token inside the light theme's `:root` block. */
+function lightToken(name: string): [number, number, number] {
+  return themeToken(name, ":root {");
+}
+
+/** The `r g b` triple for a token inside the dark theme's `.dark` block. */
+function darkToken(name: string): [number, number, number] {
+  return themeToken(name, ".dark {");
+}
+
+function themeToken(name: string, selector: string): [number, number, number] {
+  const block = globalsCss.slice(
+    globalsCss.indexOf(selector, globalsCss.indexOf("@layer base")),
+  );
+  const match = new RegExp(`--${name}:\\s*(\\d+) (\\d+) (\\d+);`).exec(block);
+  expect(match, `--${name} is not declared as an r g b triple`).not.toBeNull();
+  const [, r, g, b] = match ?? [];
+  return [Number(r), Number(g), Number(b)];
+}
+
+/** WCAG 2.x relative luminance for an 8-bit sRGB triple. */
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const [lr, lg, lb] = [r, g, b].map((channel) => {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * (lr ?? 0) + 0.7152 * (lg ?? 0) + 0.0722 * (lb ?? 0);
+}
+
+function contrastRatio(
+  a: [number, number, number],
+  b: [number, number, number],
+): number {
+  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort(
+    (x, y) => y - x,
+  );
+  return ((lighter ?? 0) + 0.05) / ((darker ?? 0) + 0.05);
+}
+
+describe("light theme contrast", () => {
+  /**
+   * Muted text carries timestamps, counts, empty-state captions and section
+   * labels — it is body copy, not decoration, so it owes WCAG AA (4.5:1). The
+   * previous `113 114 116` measured 4.41:1 on the `244 245 246` canvas: close
+   * enough to look fine on a laptop and to fail on a projector or in sunlight.
+   */
+  it("keeps --muted-foreground readable on the canvas", () => {
+    const ratio = contrastRatio(
+      lightToken("muted-foreground"),
+      lightToken("background"),
+    );
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * Tinted chips — Jev's scope verdict is the live one — pair a `-bg` wash with
+   * a `-strong` text colour. `--warning` and `--destructive` themselves are
+   * fills, not text: on their own tint they measure around 2:1.
+   */
+  it.each([
+    ["warning-strong", "warning-bg"],
+    ["destructive-strong", "destructive-bg"],
+  ])("keeps --%s readable on --%s", (text, background) => {
+    expect(
+      contrastRatio(lightToken(text), lightToken(background)),
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrastRatio(darkToken(text), darkToken(background)),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe("primitive insets", () => {
   /**
    * `tailwind-merge` resolves conflicts within a variant group, never across

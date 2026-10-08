@@ -2,15 +2,20 @@ import { api } from "@eva/backend";
 import type { AIModel, Id, ModelTraitsExecutionArgs } from "@eva/backend";
 import type { ModelAccount } from "@eva/ui";
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import {
+  isAssistantTurnInProgress,
+  readableSendError,
+} from "@/lib/components/chat/chatBodyUtils";
+import type { ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { toast } from "@eva/ui";
 export type SessionMessage = NonNullable<
   FunctionReturnType<typeof api.messages.listByParent>
 >[number];
@@ -29,7 +34,7 @@ function applyAddMessageOptimistically(
 ) {
   if (args.role !== "user") return;
   const existing = localStore.getQuery(api.messages.listByParent, {
-    parentId: args.chatId,
+    parentId: args.id,
   });
   if (existing === undefined) return;
 
@@ -37,7 +42,7 @@ function applyAddMessageOptimistically(
   const userMsg: SessionMessage = {
     _id: optimisticMessageId(),
     _creationTime: now,
-    parentId: args.chatId,
+    parentId: args.id,
     role: "user",
     content: args.content,
     timestamp: now,
@@ -53,30 +58,31 @@ function applyAddMessageOptimistically(
   const assistantPlaceholder: SessionMessage = {
     _id: optimisticMessageId(),
     _creationTime: now + 1,
-    parentId: args.chatId,
+    parentId: args.id,
     role: "assistant",
     content: "",
     timestamp: now + 1,
     activityLog: "",
   };
-  localStore.setQuery(api.messages.listByParent, { parentId: args.chatId }, [
+  localStore.setQuery(api.messages.listByParent, { parentId: args.id }, [
     ...existing,
     userMsg,
     assistantPlaceholder,
   ]);
 }
 
-export interface SessionSendOptions {
+export interface SessionSendOptions extends ChatSendOptions {
   /**
    * Skip appending the pending review comments to the prompt (and leave them
    * pending). For harness built-ins like `/compact`, which must reach the
    * harness as bare text.
    */
   skipReviewComments?: boolean;
+  sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
-interface UseChatSendParams {
-  chatId: Id<"sessionChats">;
+interface UseSessionSendParams {
+  sessionId: Id<"sessions">;
   model: AIModel;
   executionTraits: ModelTraitsExecutionArgs;
   /** Effective effort shown in the composer; snapshotted onto the user message. */
@@ -87,15 +93,17 @@ interface UseChatSendParams {
   ) => Id<"userProviderAccounts"> | undefined;
   accounts: ReadonlyArray<ModelAccount>;
   messages: SessionMessage[];
+  /**
+   * An idle chat still queues: Eva is asleep (the queue wakes her) or a usage
+   * limit holds the chosen provider. See `sandboxComposerState`.
+   */
+  queuesSends: boolean;
+  /** Cached-hidden shells skip the turn-status subscription. */
+  isRouteActive?: boolean;
 }
 
-/**
- * Send / queue / cancel for one chat tab of a session. `startExecute` itself
- * decides whether the message runs now or waits for a free parallel-chat
- * slot, so the composer never has to know the session-wide cap.
- */
-export function useChatSend({
-  chatId,
+export function useSessionSend({
+  sessionId,
   model,
   executionTraits,
   reasoningLevel,
@@ -103,7 +111,9 @@ export function useChatSend({
   resolveAccountId,
   accounts,
   messages,
-}: UseChatSendParams) {
+  queuesSends,
+  isRouteActive = true,
+}: UseSessionSendParams) {
   const review = usePendingReviewComments();
   const addMessage = useMutation(api.sessions.addMessage).withOptimisticUpdate(
     (localStore, args) =>
@@ -114,7 +124,11 @@ export function useChatSend({
   const cancelExecutionMutation = useMutation(
     api.sessionWorkflow.cancelExecution,
   );
-  const turnStatus = useQuery(api.turns.getChatStatus, { chatId });
+  const setDraft = useMutation(api.drafts.set);
+  const turnStatus = useHeldQuery(
+    api.turns.getSessionStatus,
+    isRouteActive ? { sessionId } : "skip",
+  );
 
   // The persisted open turn is canonical. Message shape only covers the first
   // render while that subscription loads, so a stale empty bubble cannot keep
@@ -123,6 +137,27 @@ export function useChatSend({
     turnStatus === undefined
       ? isAssistantTurnInProgress(messages)
       : turnStatus !== null;
+
+  // The composer clears optimistically, so a failed send's prompt only exists
+  // in this closure. Writing the failure as an assistant turn used to read like
+  // Eva replying "Error: …" while the user's own message was gone — the toast
+  // says whose failure it is and hands the typed prompt back through the same
+  // `drafts` row the composer reads (ChatDraftSync pulls it live).
+  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
+    toast.error("Couldn't send your message", {
+      id: "session-send",
+      description: readableSendError(errorMessage),
+      action: {
+        label: "Restore draft",
+        onClick: () => {
+          void setDraft({
+            target: { kind: "sessionChat", sessionId },
+            content: draftContent,
+          });
+        },
+      },
+    });
+  };
 
   const handleSend = async (
     content: string,
@@ -135,23 +170,45 @@ export function useChatSend({
     const finalContent = consumesReviewComments
       ? appendReviewCommentsToPrompt(content, review?.comments ?? [])
       : content;
-    if (isExecuting) {
-      await enqueueMessage({
-        chatId,
-        message: finalContent,
-        model,
-        ...executionTraits,
-        reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: resolveAccountId(providerAccountId),
-        attachmentStorageIds,
-      });
+    // What the user typed. A ChatBody send has already appended its citation /
+    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
+    // re-edit, so the restore has to use the pre-append text.
+    const draftContent = options?.draftContent ?? content;
+    // Hoisted out of the `try`: React Compiler bails on the whole file when it
+    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    const enqueueReasoningLevel =
+      reasoningLevel ?? executionTraits.reasoningLevel;
+    if (isExecuting || queuesSends) {
+      try {
+        await enqueueMessage({
+          sessionId,
+          message: finalContent,
+          model,
+          ...executionTraits,
+          reasoningLevel: enqueueReasoningLevel,
+          providerAccountId: resolveAccountId(providerAccountId),
+          attachmentStorageIds,
+        });
+      } catch (error) {
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
+      }
       if (consumesReviewComments) review?.clear();
       return;
     }
     const accountId = resolveAccountId(providerAccountId);
-    void Promise.all([
+    // Awaited rather than fired and forgotten: the caller cannot tell a
+    // delivered send from a failed one unless this settles with it. The
+    // composer still empties instantly — ChatBody observes this promise instead
+    // of blocking its submit on it.
+    await Promise.all([
       addMessage({
-        chatId,
+        id: sessionId,
         role: "user",
         content: finalContent,
         attachmentStorageIds,
@@ -160,23 +217,28 @@ export function useChatSend({
         reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
       }),
       startExecution({
-        chatId,
+        sessionId,
         message: finalContent,
         model,
         ...executionTraits,
         reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
         providerAccountId: accountId,
         attachmentStorageIds,
+        ...(options?.sourceProposedPlanId !== undefined
+          ? { sourceProposedPlanId: options.sourceProposedPlanId }
+          : {}),
       }),
     ])
-      .catch(async (error) => {
-        const errorMessage =
-          error instanceof Error ? error.message : "Failed to send message";
-        await addMessage({
-          chatId,
-          role: "assistant",
-          content: `Error: ${errorMessage}`,
-        });
+      .catch((error) => {
+        // The optimistic user bubble has rolled back too, so the toast is the
+        // only thing left standing for this turn.
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
       })
       .finally(() => {
         if (consumesReviewComments) review?.clear();
@@ -185,7 +247,7 @@ export function useChatSend({
 
   const handleCancel = async () => {
     await catchMutationError(
-      cancelExecutionMutation({ chatId }),
+      cancelExecutionMutation({ sessionId }),
       "Couldn't cancel execution",
       "session-cancel-execution",
     );

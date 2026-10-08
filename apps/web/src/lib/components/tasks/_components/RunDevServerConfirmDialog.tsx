@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  CircleSpinner,
 } from "@eva/ui";
-import { IconLoader2 } from "@tabler/icons-react";
 
 export function RunDevServerConfirmDialog({
   open,
@@ -43,7 +43,7 @@ export function RunDevServerConfirmDialog({
             <p className="mt-1 font-mono text-xs break-all">
               {devCommandLabel}
             </p>
-            <p className="mt-2 text-[11px]">
+            <p className="mt-2 text-2xs">
               From App settings (Dev server). Empty override uses auto-detection
               from package.json.
             </p>
@@ -60,7 +60,7 @@ export function RunDevServerConfirmDialog({
             }}
             disabled={isRunning}
           >
-            {isRunning && <IconLoader2 size={16} className="animate-spin" />}
+            {isRunning && <CircleSpinner size="sm" />}
             Run dev server
           </Button>
         </DialogFooter>

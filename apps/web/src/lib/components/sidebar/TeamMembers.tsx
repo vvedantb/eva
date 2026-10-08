@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { useFollow } from "@/lib/contexts/FollowContext";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 
@@ -78,7 +78,7 @@ export function OnlineTeamAvatars({ collapsed }: { collapsed: boolean }) {
           );
         })}
         {onlineMembers.length > 3 && (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-3xs text-muted-foreground">
             +{onlineMembers.length - 3}
           </span>
         )}
@@ -93,7 +93,7 @@ export function OnlineTeamAvatars({ collapsed }: { collapsed: boolean }) {
           className="size-1.5 shrink-0 rounded-full bg-success"
           aria-hidden
         />
-        <span className="truncate text-[10px] text-muted-foreground">
+        <span className="truncate text-3xs text-muted-foreground">
           {onlineMembers.length} online
         </span>
       </div>

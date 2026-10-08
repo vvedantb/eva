@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { embedNavigateMessage } from "@/lib/embed/embedded";
-import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 
 /**
  * Embedded-side half of the inbox preview bridge (mounted only when
@@ -19,7 +19,9 @@ export function EmbedNavigationBridge() {
       if (event.origin !== window.location.origin) return;
       const parsed = embedNavigateMessage.safeParse(event.data);
       if (!parsed.success) return;
-      navigate({ to: toInternalRepoHref(parsed.data.href) });
+      // Split path from search: a comment notification's href carries
+      // `?comment=<id>`, which the router only reads as a separate `search`.
+      navigate(hrefToNavigateOptions(parsed.data.href));
     };
     window.addEventListener("message", onMessage);
     // Until this arrives the host falls back to swapping the iframe src, so a

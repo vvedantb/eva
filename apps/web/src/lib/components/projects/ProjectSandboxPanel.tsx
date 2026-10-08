@@ -16,8 +16,6 @@ import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
-import { useComputerTab } from "@/lib/components/sandbox/useComputerTab";
-import { useEditorTab } from "@/lib/components/sandbox/useEditorTab";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
@@ -27,6 +25,14 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SessionArtifactsPanel,
+  useSourceArtifacts,
+} from "@/lib/components/artifacts/SessionArtifactsPanel";
+import {
+  SessionDocumentsPanel,
+  useSourceDocuments,
+} from "@/lib/components/docs/SessionDocumentsPanel";
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -45,6 +51,12 @@ interface ProjectSandboxPanelProps {
   sandboxTab: TaskRouteSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined in
+   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
+   */
+  autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
 }
@@ -65,6 +77,7 @@ export function ProjectSandboxPanel({
   sandboxTab,
   onStartSandbox,
   isSandboxStarting,
+  autoWakeEligible,
   collapsed = false,
   onToggle,
 }: ProjectSandboxPanelProps) {
@@ -86,6 +99,9 @@ export function ProjectSandboxPanel({
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
   // chat panel already subscribes to (same entity ids).
+  const artifactSource = { kind: "project" as const, projectId };
+  const { artifactCount } = useSourceArtifacts(artifactSource);
+  const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
     parentId: projectId,
     streamingEntityId: `project-chat-${projectIdStr}`,
@@ -131,19 +147,6 @@ export function ProjectSandboxPanel({
     navigateToSandboxTab(tab);
   };
 
-  const {
-    computerTabOpen,
-    computerRunning,
-    setComputerRunning,
-    openComputer,
-    closeComputer,
-  } = useComputerTab(`project:${projectIdStr}`, activeTab, handleTabChange);
-  const { editorTabOpen, openEditor, closeEditor } = useEditorTab(
-    `project:${projectIdStr}`,
-    activeTab,
-    handleTabChange,
-  );
-
   const enabledTabs = withBrowserTab(panes.enabledTabs);
   const { owner: ownerParam, repo: repoParam } = useParams({ strict: false });
 
@@ -179,14 +182,9 @@ export function ProjectSandboxPanel({
             showFilesTab
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
+            artifactCount={artifactCount}
+            documentCount={documentCount}
             agentBrowsingAt={viewState?.agentBrowsingAt}
-            computerTabOpen={computerTabOpen}
-            computerRunning={computerRunning}
-            onOpenComputer={openComputer}
-            onCloseComputer={closeComputer}
-            editorTabOpen={editorTabOpen}
-            onOpenEditor={openEditor}
-            onCloseEditor={closeEditor}
             fileList={fileList}
             consoleDock={panes.consoleDock}
             terminalPanel={terminalPanel}
@@ -194,12 +192,31 @@ export function ProjectSandboxPanel({
         }
       >
         <div className="h-full overflow-hidden">
+          <div
+            className={
+              activeTab === "artifacts"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            <SessionArtifactsPanel source={artifactSource} />
+          </div>
+          <div
+            className={
+              activeTab === "documents"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            <SessionDocumentsPanel source={artifactSource} />
+          </div>
           <div className={!simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"}>
             <FilesPanel
               sandboxId={sandboxId}
               repoId={repoId}
               isActive={isActive}
               fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
             />
           </div>
           <div
@@ -224,9 +241,11 @@ export function ProjectSandboxPanel({
             onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
             // Backend starts the app in the Console tmux session after startup.
             runConsoleDevCommandOnConnect={false}
-            onComputerRunningChange={setComputerRunning}
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
+            autoWakeEligible={autoWakeEligible}
+            // A collapsed rail is not on screen: no presence beacon, no auto-wake.
+            presenceEnabled={!collapsed}
             stickyPreviewPath={viewState?.previewPath}
             onStickyPreviewPathChange={(path) => {
               void setPreviewPath({ owner, path });

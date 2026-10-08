@@ -7,6 +7,22 @@ type IconProps = {
   className?: string;
 };
 
+/**
+ * Rail destinations solidify while active. Inner details are "cut out" by
+ * painting them in the active tile's tone rather than an SVG mask, so they keep
+ * their hover animations. Only valid on a `bg-sidebar-accent` tile.
+ */
+type FillableIconProps = IconProps & { filled?: boolean };
+
+const CUTOUT_STROKE_CLASS = "stroke-sidebar-accent";
+const CUTOUT_FILL_CLASS = "fill-sidebar-accent";
+
+function cutout(filled: boolean, kind: "stroke" | "fill", className?: string) {
+  if (!filled) return className;
+  const tone = kind === "stroke" ? CUTOUT_STROKE_CLASS : CUTOUT_FILL_CLASS;
+  return className ? `${className} ${tone}` : tone;
+}
+
 const baseSvgProps = (
   size: number,
   className?: string,
@@ -74,48 +90,6 @@ export function ProjectsIcon({ size = 24, className }: IconProps) {
   );
 }
 
-export function DesignsIcon({ size = 24, className }: IconProps) {
-  return (
-    <svg {...baseSvgProps(size, className)}>
-      <g className="nav-icon-palette">
-        <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.9 1.7-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.6 1.7-1.6h1.7a3 3 0 0 0 3-3v-1A8 8 0 0 0 12 3z" />
-        <circle
-          cx="7.2"
-          cy="13"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-1"
-        />
-        <circle
-          cx="9.8"
-          cy="8.5"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-2"
-        />
-        <circle
-          cx="14.5"
-          cy="7.2"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-3"
-        />
-        <circle
-          cx="17.5"
-          cy="11"
-          r="1.1"
-          fill="currentColor"
-          stroke="none"
-          className="nav-icon-palette-dot nav-icon-palette-dot-4"
-        />
-      </g>
-    </svg>
-  );
-}
-
 export function QuickTasksIcon({ size = 28, className }: IconProps) {
   return (
     <svg {...baseSvgProps(size, className)}>
@@ -163,11 +137,25 @@ export function QuickTasksIcon({ size = 28, className }: IconProps) {
   );
 }
 
-export function SessionsIcon({ size = 34, className }: IconProps) {
+export function SessionsIcon({
+  size = 34,
+  className,
+  filled = false,
+}: FillableIconProps) {
   return (
     <svg {...baseSvgProps(size, className)}>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M7 10l3 2-3 2" className="nav-icon-prompt" />
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="16"
+        rx="2"
+        fill={filled ? "currentColor" : "none"}
+      />
+      <path
+        d="M7 10l3 2-3 2"
+        className={cutout(filled, "stroke", "nav-icon-prompt")}
+      />
       <rect
         x="13"
         y="13.5"
@@ -176,7 +164,7 @@ export function SessionsIcon({ size = 34, className }: IconProps) {
         rx="0.2"
         fill="currentColor"
         stroke="none"
-        className="nav-icon-typed nav-icon-typed-1"
+        className={cutout(filled, "fill", "nav-icon-typed nav-icon-typed-1")}
       />
       <rect
         x="14.6"
@@ -186,7 +174,7 @@ export function SessionsIcon({ size = 34, className }: IconProps) {
         rx="0.2"
         fill="currentColor"
         stroke="none"
-        className="nav-icon-typed nav-icon-typed-2"
+        className={cutout(filled, "fill", "nav-icon-typed nav-icon-typed-2")}
       />
       <rect
         x="16.2"
@@ -196,7 +184,7 @@ export function SessionsIcon({ size = 34, className }: IconProps) {
         rx="0.2"
         fill="currentColor"
         stroke="none"
-        className="nav-icon-typed nav-icon-typed-3"
+        className={cutout(filled, "fill", "nav-icon-typed nav-icon-typed-3")}
       />
       <rect
         x="17.8"
@@ -206,7 +194,7 @@ export function SessionsIcon({ size = 34, className }: IconProps) {
         rx="0.3"
         fill="currentColor"
         stroke="none"
-        className="nav-icon-cursor"
+        className={cutout(filled, "fill", "nav-icon-cursor")}
       />
     </svg>
   );
@@ -295,12 +283,30 @@ export function TestingArenaIcon({ size = 24, className }: IconProps) {
   );
 }
 
-export function InboxIcon({ size = 24, className }: IconProps) {
+export function InboxIcon({
+  size = 24,
+  className,
+  filled = false,
+}: FillableIconProps) {
   return (
     <svg {...baseSvgProps(size, className)}>
-      <path d="M3 13.5l3-7.5h12l3 7.5v5.5A2 2 0 0 1 19 21H5a2 2 0 0 1-2-2z" />
-      <path d="M3 13.5h5.2l1 2h5.6l1-2H21" />
+      <path
+        d="M3 13.5l3-7.5h12l3 7.5v5.5A2 2 0 0 1 19 21H5a2 2 0 0 1-2-2z"
+        fill={filled ? "currentColor" : "none"}
+      />
+      <path
+        d="M3 13.5h5.2l1 2h5.6l1-2H21"
+        className={cutout(filled, "stroke")}
+      />
       <g className="nav-icon-letter">
+        {/* The arrow dips into the tray; a tile-toned halo keeps it legible
+            against the solid body. */}
+        {filled ? (
+          <g className={CUTOUT_STROKE_CLASS} strokeWidth={4}>
+            <line x1="12" y1="2.5" x2="12" y2="8" />
+            <polyline points="9.6,5.6 12,8 14.4,5.6" />
+          </g>
+        ) : null}
         <line x1="12" y1="2.5" x2="12" y2="8" />
         <polyline points="9.6,5.6 12,8 14.4,5.6" />
       </g>
@@ -355,7 +361,11 @@ export function DraftsIcon({ size = 24, className }: IconProps) {
   );
 }
 
-export function AutomationsIcon({ size = 24, className }: IconProps) {
+export function AutomationsIcon({
+  size = 24,
+  className,
+  filled = false,
+}: FillableIconProps) {
   return (
     <svg {...baseSvgProps(size, className)}>
       <circle
@@ -365,6 +375,11 @@ export function AutomationsIcon({ size = 24, className }: IconProps) {
         strokeDasharray="2.5 3.5"
         className="nav-icon-orbit"
       />
+      {/* Filling the dashed orbit itself reads as a cog; a disc inside it keeps
+          the orbit's silhouette. */}
+      {filled ? (
+        <circle cx="12" cy="12" r="6.5" fill="currentColor" stroke="none" />
+      ) : null}
       <g className="nav-icon-sparks">
         <line x1="3.7" y1="3.7" x2="2.2" y2="2.2" />
         <line x1="20.3" y1="3.7" x2="21.8" y2="2.2" />
@@ -375,7 +390,7 @@ export function AutomationsIcon({ size = 24, className }: IconProps) {
         d="M10.4 8.6v6.8l5.6-3.4z"
         fill="currentColor"
         stroke="none"
-        className="nav-icon-play"
+        className={cutout(filled, "fill", "nav-icon-play")}
       />
     </svg>
   );

@@ -4,9 +4,12 @@ import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { UserInitials } from "@eva/shared";
+import { UserInitials } from "@eva/shared/user-initials";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@eva/ui";
+import { IconGitBranch, IconGitFork } from "@tabler/icons-react";
+import { DynamicLink } from "@/lib/components/DynamicLink";
+import { sessionHrefForRow } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 
 function authorDisplayName(user: {
   firstName?: string | null;
@@ -37,7 +40,7 @@ function authorFirstName(user: {
 }
 
 /** Avatar + display name for sidebar hover footers (sessions, docs, automations). */
-export function HoverCardAuthor({ userId }: { userId: Id<"users"> }) {
+function HoverCardAuthor({ userId }: { userId: Id<"users"> }) {
   const user = useQuery(api.users.get, { id: userId });
   if (!user) {
     return (
@@ -77,11 +80,50 @@ export function SessionFolderAuthor({ userId }: { userId: Id<"users"> }) {
       {user ? (
         <span
           data-pii
-          className="truncate text-[10px] leading-none text-muted-foreground"
+          className="truncate text-3xs leading-none text-muted-foreground"
         >
           {authorFirstName(user)}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+interface ForkLink {
+  _id: Id<"sessions">;
+  title: string;
+  numId?: number;
+  repo: { owner: string; name: string; rootDirectory?: string };
+}
+
+/** One "Forked from" / "Forked into" line linking to the other session. */
+function ForkLinkRow({ label, link }: { label: string; link: ForkLink }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <IconGitFork size={12} className="shrink-0" />
+      <span className="shrink-0">{label}</span>
+      <DynamicLink
+        to={sessionHrefForRow(link.repo, link)}
+        className="min-w-0 truncate text-foreground/80 hover:text-foreground hover:underline"
+      >
+        {link.title}
+      </DynamicLink>
+    </div>
+  );
+}
+
+/** Fork lineage, loaded on hover so session lists stay join-free. */
+function SessionForkLinks({ sessionId }: { sessionId: Id<"sessions"> }) {
+  const links = useQuery(api.sessions.getForkLinks, { id: sessionId });
+  if (!links || (!links.forkedFrom && links.forks.length === 0)) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-1">
+      {links.forkedFrom ? (
+        <ForkLinkRow label="Forked from" link={links.forkedFrom} />
+      ) : null}
+      {links.forks.map((fork) => (
+        <ForkLinkRow key={fork._id} label="Forked into" link={fork} />
+      ))}
     </div>
   );
 }
@@ -94,6 +136,8 @@ interface SessionHoverCardBodyProps {
   preview?: string | null;
   createdAt: number;
   userId: Id<"users">;
+  /** Branch chosen at session creation. Absent on sessions predating the field. */
+  baseBranch?: string;
 }
 
 /**
@@ -106,6 +150,7 @@ export function SessionHoverCardBody({
   preview: previewProp,
   createdAt,
   userId,
+  baseBranch,
 }: SessionHoverCardBodyProps) {
   const fetchedPreview = useQuery(
     api.sessions.getFirstMessagePreview,
@@ -122,6 +167,18 @@ export function SessionHoverCardBody({
           {preview}
         </p>
       ) : null}
+      {baseBranch ? (
+        <div
+          className="mt-3 flex min-w-0 items-center gap-1.5"
+          title={`Base branch: ${baseBranch}`}
+        >
+          <IconGitBranch size={12} className="shrink-0 text-muted-foreground" />
+          <span className="truncate text-xs text-muted-foreground">
+            {baseBranch}
+          </span>
+        </div>
+      ) : null}
+      {sessionId ? <SessionForkLinks sessionId={sessionId} /> : null}
       <div className="mt-3 flex items-center justify-between gap-2">
         <HoverCardAuthor userId={userId} />
         <span className="shrink-0 text-xs text-muted-foreground">

@@ -101,7 +101,7 @@ export function WelcomeSetupNotificationsStep({
             <IconMail size={14} className="text-primary" />
             <h3 className="text-sm font-medium">Email me these updates</h3>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-2xs text-muted-foreground">
             {enabled
               ? "You're subscribed. Manage email preferences in settings anytime."
               : "Includes the weekly changelog and daily unread digest. Off by default."}

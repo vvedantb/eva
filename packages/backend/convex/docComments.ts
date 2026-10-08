@@ -125,6 +125,7 @@ export const create = authMutation({
           title: `${authorName} replied to your comment`,
           repoId: doc.repoId,
           docId: args.docId,
+          commentId,
           message: buildDocCommentNotificationMessage(args.content),
         });
         notifiedUserIds.add(parent.authorId);
@@ -155,6 +156,7 @@ export const create = authMutation({
           title: mentionTitle,
           repoId: doc.repoId,
           docId: args.docId,
+          commentId,
           message: mentionMessage,
         });
         notifiedUserIds.add(mentionedUserId);
@@ -168,6 +170,7 @@ export const create = authMutation({
       title: `New comment on "${doc.title}"`,
       message: buildDocCommentNotificationMessage(args.content),
       repoId: doc.repoId,
+      commentId,
       actorId: ctx.userId,
       alreadyNotified: notifiedUserIds,
     });

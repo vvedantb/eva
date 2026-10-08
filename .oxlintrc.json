@@ -6,6 +6,10 @@
     {
       "name": "anti-slop",
       "specifier": "./scripts/oxlint-plugin-anti-slop/index.mjs"
+    },
+    {
+      "name": "no-effect",
+      "specifier": "eslint-plugin-react-you-might-not-need-an-effect"
     }
   ],
   "categories": {
@@ -15,6 +19,7 @@
   },
   "rules": {
     "react/rules-of-hooks": "error",
+    "react/capitalized-calls": "error",
     "react/exhaustive-deps": "warn",
     "react/react-in-jsx-scope": "off",
     "react/set-state-in-effect": "warn",
@@ -32,6 +37,15 @@
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "off",
     "anti-slop/no-widen-then-assert": "error",
+    "no-effect/no-derived-state": "error",
+    "no-effect/no-chain-state-updates": "error",
+    "no-effect/no-event-handler": "error",
+    "no-effect/no-adjust-state-on-prop-change": "error",
+    "no-effect/no-reset-all-state-on-prop-change": "error",
+    "no-effect/no-pass-live-state-to-parent": "error",
+    "no-effect/no-pass-data-to-parent": "error",
+    "no-effect/no-external-store-subscription": "error",
+    "no-effect/no-initialize-state": "error",
     "eva/no-is-record": "error",
     "eva/no-json-parse": "warn",
     "eva/no-double-cast": "warn",
@@ -68,6 +82,31 @@
     {
       "files": ["apps/web/src/**"],
       "rules": { "eva/no-value-block-in-try": "error" }
+    },
+    {
+      "files": ["packages/shared/src/index.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react-dom",
+                  "@eva/ui",
+                  "@eva/ui/*",
+                  "facehash",
+                  "convex-helpers/react",
+                  "convex-helpers/react/*",
+                  "./components/user-initials"
+                ],
+                "message": "The @eva/shared root barrel is bundled into Convex functions, so it must stay free of frontend code. Add a subpath export in packages/shared/package.json instead."
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "files": ["packages/backend/**"],

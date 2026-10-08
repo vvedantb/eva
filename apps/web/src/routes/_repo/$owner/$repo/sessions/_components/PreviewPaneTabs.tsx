@@ -1,5 +1,6 @@
 import { IconWorld, IconX } from "@tabler/icons-react";
-import { cn } from "@eva/ui";
+import { cn, motionFast } from "@eva/ui";
+import { AnimatePresence, m } from "motion/react";
 
 interface PreviewPaneTabsProps {
   previewIds: string[];
@@ -27,11 +28,17 @@ export function PreviewPaneTabs({
       className="flex shrink-0 items-center gap-1 overflow-x-auto bg-muted/40 px-2 py-1.5 scrollbar-thin"
       role="tablist"
     >
+      <AnimatePresence initial={false} mode="popLayout">
       {previewIds.map((id, index) => {
         const selected = id === activeId;
         return (
-          <div
+          <m.div
             key={id}
+            layout
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={motionFast}
             className={cn(
               // The wrapper only shifts colour; the press lives on the button
               // inside it, so `transform` here named a property nothing sets.
@@ -71,9 +78,10 @@ export function PreviewPaneTabs({
                 <IconX className="size-3.5" />
               </button>
             ) : null}
-          </div>
+          </m.div>
         );
       })}
+      </AnimatePresence>
     </div>
   );
 }

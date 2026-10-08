@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { LogsClient } from "./LogsClient";
+import { UsageClient } from "./UsageClient";
 
 export const Route = createFileRoute("/_repo/$owner/$repo/settings/logs")({
   staticData: { title: "Settings" },
-  component: LogsClient,
+  component: UsageClient,
 });

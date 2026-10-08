@@ -1,7 +1,11 @@
 import { expect, test } from "vitest";
 import { splitCursorModel } from "../config.js";
 import { cursorSdkToolToStep } from "../parse/toolSteps.js";
-import { probeCursorSdkToolResult } from "../providers/cursor.js";
+import {
+  cursorCompactionEventPhase,
+  cursorParseLine,
+  probeCursorSdkToolResult,
+} from "../providers/cursor.js";
 import {
   COST_LOOKUP_RETRY_DELAYS_MS,
   EMPTY_CURSOR_COST_SNAPSHOT,
@@ -9,6 +13,7 @@ import {
   RESOURCE_EXHAUSTED_RETRY_DELAYS_MS,
   attributeCursorTurnRawCents,
   cursorModeParams,
+  cursorModelCatalogJson,
   cursorEventHasVisibleActivity,
   cursorEventWaitTimeoutMs,
   cursorAgentStartupActivity,
@@ -17,6 +22,8 @@ import {
   readCursorCostSnapshot,
   resolveCursorTurnCostUsd,
   runTurnWithResourceExhaustedRetries,
+  canReplaceCursorAgent,
+  shouldRetryStalledCursorCreate,
   shouldRetryStalledCursorResume,
   waitForCursorPhase,
   CursorPhaseTimeoutError,
@@ -55,7 +62,7 @@ test("Cursor SDK phases fail on a bounded deadline", async () => {
   expect(timedOut).toBe(true);
 });
 
-test("only a pre-output resumed Cursor stall rotates to a fresh agent", () => {
+test("only a pre-output resumed Cursor stall is safe to replay", () => {
   expect(
     shouldRetryStalledCursorResume(
       new CursorPhaseTimeoutError("starting the model run", 60_000),
@@ -78,6 +85,64 @@ test("only a pre-output resumed Cursor stall rotates to a fresh agent", () => {
   ).toBe(false);
 });
 
+test("only a missing Cursor store may replace the saved agent", () => {
+  expect(canReplaceCursorAgent(new Error("agent_not_found"))).toBe(true);
+  const gone: Error & { code?: string } = new Error("Agent not found");
+  gone.code = "agent_not_found";
+  expect(canReplaceCursorAgent(gone)).toBe(true);
+  expect(
+    canReplaceCursorAgent(
+      new CursorPhaseTimeoutError("waiting for the first model event", 300_000),
+    ),
+  ).toBe(false);
+  expect(
+    canReplaceCursorAgent(
+      new CursorPhaseTimeoutError("starting the model run", 60_000),
+    ),
+  ).toBe(false);
+  expect(canReplaceCursorAgent(new Error("resource_exhausted"))).toBe(false);
+});
+
+test("only a stalled Cursor creation is replayed as a creation", () => {
+  expect(
+    shouldRetryStalledCursorCreate(
+      new CursorPhaseTimeoutError("creating a fresh agent", 30_000),
+    ),
+  ).toBe(true);
+  expect(
+    shouldRetryStalledCursorCreate(
+      new CursorPhaseTimeoutError("restoring saved context", 30_000),
+    ),
+  ).toBe(false);
+  expect(
+    shouldRetryStalledCursorCreate(
+      new CursorPhaseTimeoutError("starting the model run", 60_000),
+    ),
+  ).toBe(false);
+  expect(shouldRetryStalledCursorCreate(new Error("agent_not_found"))).toBe(
+    false,
+  );
+});
+
+test("the Cursor model catalog keeps only the ids and aliases the SDK matches on", () => {
+  const json = cursorModelCatalogJson([
+    {
+      id: "grok-4.6",
+      displayName: "Grok 4.6",
+      aliases: ["grok"],
+      parameters: [{ id: "reasoning", values: [{ value: "high" }] }],
+    },
+    { id: "composer-2.5", displayName: "Composer 2.5" },
+  ]);
+  expect(json).not.toBeNull();
+  expect(JSON.parse(json ?? "[]")).toEqual([
+    { id: "grok-4.6", aliases: ["grok"] },
+    { id: "composer-2.5" },
+  ]);
+  // An empty list would make the SDK reject every model, non-retryably.
+  expect(cursorModelCatalogJson([])).toBeNull();
+});
+
 test("Cursor silence policy distinguishes safe startup recovery from visible work", () => {
   expect(cursorEventHasVisibleActivity("thinking")).toBe(true);
   expect(cursorEventHasVisibleActivity("assistant")).toBe(true);
@@ -88,38 +153,79 @@ test("Cursor silence policy distinguishes safe startup recovery from visible wor
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: false,
-      firstVisibleDeadlineAt: 61_000,
+      lastEventAt: 1_000,
       now: 1_000,
       toolInFlight: false,
+      compactionInFlight: false,
     }),
-  ).toBe(60_000);
-  // Silent status/usage events do not reset the first-visible deadline.
+  ).toBe(300_000);
+  // The pre-visible window rolls from the LAST event of any type: a stream
+  // still emitting lifecycle events (status, usage, summaries) is alive, so
+  // only total silence trips the stall — never a slow warm-up that talks.
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: false,
-      firstVisibleDeadlineAt: 61_000,
-      now: 31_000,
+      lastEventAt: 31_000,
+      now: 41_000,
       toolInFlight: false,
+      compactionInFlight: false,
     }),
-  ).toBe(30_000);
+  ).toBe(290_000);
   // Once reasoning/text/tools are visible, a normal one-minute model pause is
   // not fatal. A much longer safety bound still catches a genuinely dead run.
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: true,
-      firstVisibleDeadlineAt: 61_000,
+      lastEventAt: 1_000,
       now: 61_000,
       toolInFlight: false,
+      compactionInFlight: false,
     }),
   ).toBe(300_000);
   expect(
     cursorEventWaitTimeoutMs({
       sawVisibleActivity: true,
-      firstVisibleDeadlineAt: 61_000,
+      lastEventAt: 1_000,
       now: 61_000,
       toolInFlight: true,
+      compactionInFlight: false,
     }),
   ).toBeGreaterThan(300_000);
+  // An in-place compaction can outlast every silence budget; timing it out
+  // would replace the very agent the resume-always design exists to keep.
+  expect(
+    cursorEventWaitTimeoutMs({
+      sawVisibleActivity: false,
+      lastEventAt: 0,
+      now: 10_000_000,
+      toolInFlight: false,
+      compactionInFlight: true,
+    }),
+  ).toBeGreaterThan(300_000);
+});
+
+test("compaction lifecycle events are recognized and shown, never dropped", () => {
+  expect(cursorCompactionEventPhase("summary-started")).toBe("started");
+  expect(cursorCompactionEventPhase("summary_started")).toBe("started");
+  expect(cursorCompactionEventPhase("summary-completed")).toBe("completed");
+  expect(cursorCompactionEventPhase("summary_completed")).toBe("completed");
+  expect(cursorCompactionEventPhase("thinking")).toBeNull();
+  expect(cursorCompactionEventPhase("tool_use_summary")).toBeNull();
+
+  expect(cursorParseLine({ type: "summary-started" })).toEqual([
+    {
+      kind: "update_thinking",
+      label: "Compacting context...",
+      detail: "Cursor is summarizing the conversation in place.",
+    },
+  ]);
+  expect(cursorParseLine({ type: "summary-completed" })).toEqual([
+    {
+      kind: "update_thinking",
+      label: "Context compacted",
+      detail: "The agent continues with its history summarized in place.",
+    },
+  ]);
 });
 
 test("splitCursorModel separates base id and reasoning level", () => {
@@ -159,6 +265,9 @@ test("splitCursorModel separates base id and reasoning level", () => {
 });
 
 test("cursorModeParams explicitly keeps first-party models on Standard", () => {
+  expect(cursorModeParams("grok-4.7", false, false)).toEqual([
+    { id: "fast", value: "false" },
+  ]);
   expect(cursorModeParams("grok-4.6", false, false)).toEqual([
     { id: "fast", value: "false" },
   ]);

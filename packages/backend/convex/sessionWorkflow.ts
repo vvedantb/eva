@@ -7,6 +7,7 @@ export {
   addAssistantPlaceholder,
   getSessionData,
   updateSandboxId,
+  clearSessionClosedStatus,
   saveResult,
   handleCompletion,
   claimPendingTurn,
@@ -21,6 +22,7 @@ export {
 
 export {
   startExecute,
+  retryLastTurnWithAccount,
   prewarmDaemon,
   prewarmDaemonNow,
   getDaemonPrewarmData,

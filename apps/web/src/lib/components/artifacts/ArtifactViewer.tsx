@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, type ReactNode } from "react";
+import { use, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -8,6 +8,13 @@ import { Spinner } from "@eva/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
 import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
+import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
+import {
+  chatSourceLabel,
+  chatSourceRoute,
+  type ChatSource,
+} from "@/lib/components/sandbox/chatSource";
+import { openArtifactInNewTab } from "./_open";
 
 type ArtifactHtmlResult =
   | { ok: true; html: string }
@@ -65,8 +72,6 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
     );
   }
 
-  const url = artifact.url;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* Only the artifact name is essential on a phone, so the breadcrumb and
@@ -84,11 +89,12 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         <h1 className="min-w-0 truncate text-balance font-medium text-foreground">
           {artifact.name}
         </h1>
+        {artifact.source ? (
+          <SourceLink source={artifact.source} />
+        ) : null}
         <button
           type="button"
-          onClick={() =>
-            window.open(`/artifacts/${artifact._id}`, "_blank", "noopener")
-          }
+          onClick={() => openArtifactInNewTab(artifact._id)}
           aria-label="Open in new tab"
           className="max-sm:hit-target flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
@@ -97,30 +103,65 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         </button>
       </div>
       <div className="min-h-0 w-full flex-1 overflow-hidden rounded-surface border border-border bg-white">
-        {url ? (
-          <Suspense
-            fallback={
-              <Centered>
-                <div className="flex flex-col items-center gap-2">
-                  <Spinner />
-                  <span className="text-sm text-muted-foreground">
-                    Loading dashboard…
-                  </span>
-                </div>
-              </Centered>
-            }
-          >
-            <ArtifactHtmlBody key={url} url={url} title={artifact.name} />
-          </Suspense>
-        ) : (
-          <Centered>
-            <p className="text-sm text-muted-foreground">
-              Artifact has no content URL.
-            </p>
-          </Centered>
-        )}
+        <ArtifactContent url={artifact.url} title={artifact.name} />
       </div>
     </div>
+  );
+}
+
+/** Artifact HTML in its bridged iframe, with loading / error / empty states. */
+export function ArtifactContent({
+  url,
+  title,
+}: {
+  url: string | null;
+  title: string;
+}) {
+  if (!url) {
+    return (
+      <Centered>
+        <p className="text-sm text-muted-foreground">
+          Artifact has no content URL.
+        </p>
+      </Centered>
+    );
+  }
+  return (
+    <ViewTransitionSuspense
+      fallback={
+        <Centered>
+          <div className="flex flex-col items-center gap-2">
+            <Spinner />
+            <span className="text-sm text-muted-foreground">
+              Loading dashboard…
+            </span>
+          </div>
+        </Centered>
+      }
+    >
+      <ArtifactHtmlBody key={url} url={url} title={title} />
+    </ViewTransitionSuspense>
+  );
+}
+
+function SourceLink({ source }: { source: ChatSource }) {
+  const route = chatSourceRoute(source, "artifacts");
+  const label = chatSourceLabel(source);
+  if (!route) {
+    return (
+      <span className="hidden min-w-0 truncate text-sm text-muted-foreground sm:inline">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Link
+      to={route.to}
+      params={route.params}
+      className="hidden min-w-0 truncate text-sm text-muted-foreground hover:text-foreground sm:inline"
+    >
+      {label}
+    </Link>
   );
 }
 

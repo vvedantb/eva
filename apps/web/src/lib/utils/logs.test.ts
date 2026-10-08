@@ -1,5 +1,10 @@
 import { expect, test } from "vitest";
-import { formatTokens, getTotalInputTokens, parseResultEvent } from "./logs";
+import {
+  formatCost,
+  formatTokens,
+  getTotalInputTokens,
+  parseResultEvent,
+} from "./logs";
 
 test("parseResultEvent keeps input vs cache token categories separate", () => {
   // Cost UI must not treat cache reads as billed input tokens.
@@ -72,4 +77,13 @@ test("formatTokens uses compact suffixes", () => {
   expect(formatTokens(0)).toBe("0");
   expect(formatTokens(1500)).toBe("1.5k");
   expect(formatTokens(2_000_000)).toBe("2.0M");
+});
+
+test("formatCost shows USD to the cent, with more precision under a cent", () => {
+  expect(formatCost(1.5)).toBe("$1.50");
+  expect(formatCost(1234.567)).toBe("$1,234.57");
+  expect(formatCost(0)).toBe("$0.00");
+  expect(formatCost(0.004)).toBe("$0.004");
+  expect(formatCost(0.00042)).toBe("$0.0004");
+  expect(formatCost(Number.NaN)).toBe("$0.00");
 });

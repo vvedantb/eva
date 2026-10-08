@@ -59,6 +59,63 @@ export const fetchPrMetadata = internalAction({
   },
 });
 
+export type PrDiffResult = {
+  diffText: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  truncated: boolean;
+};
+
+/** Fetches a bounded per-file PR diff. Shared by the recap workflow and the
+ * generated PR description so both see the same view of the change. */
+export async function fetchPullRequestDiff(
+  octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
+  params: { owner: string; repo: string; prNumber: number },
+): Promise<PrDiffResult> {
+  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+    owner: params.owner,
+    repo: params.repo,
+    pull_number: params.prNumber,
+    per_page: 100,
+  });
+
+  let additions = 0;
+  let deletions = 0;
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  let truncated = files.length > MAX_FILES;
+
+  const cappedFiles = files.slice(0, MAX_FILES);
+  for (const file of cappedFiles) {
+    additions += file.additions;
+    deletions += file.deletions;
+
+    const patch = file.patch ?? "";
+    const header = `### ${file.filename} (+${file.additions}/-${file.deletions})\n`;
+    const block = `${header}${patch}\n`;
+    if (totalBytes + block.length > MAX_DIFF_BYTES) {
+      truncated = true;
+      const remaining = MAX_DIFF_BYTES - totalBytes;
+      if (remaining > 0) {
+        chunks.push(block.slice(0, remaining));
+        totalBytes += remaining;
+      }
+      break;
+    }
+    chunks.push(block);
+    totalBytes += block.length;
+  }
+
+  return {
+    diffText: chunks.join("\n"),
+    additions,
+    deletions,
+    changedFiles: files.length,
+    truncated,
+  };
+}
+
 /** Fetches a bounded PR diff for recap generation. */
 export const fetchPrDiff = internalAction({
   args: {
@@ -70,47 +127,7 @@ export const fetchPrDiff = internalAction({
   returns: prDiffResultValidator,
   handler: async (_ctx, args) => {
     const octokit = await getInstallationOctokit(args.installationId);
-    const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-      owner: args.owner,
-      repo: args.repo,
-      pull_number: args.prNumber,
-      per_page: 100,
-    });
-
-    let additions = 0;
-    let deletions = 0;
-    const chunks: string[] = [];
-    let totalBytes = 0;
-    let truncated = files.length > MAX_FILES;
-
-    const cappedFiles = files.slice(0, MAX_FILES);
-    for (const file of cappedFiles) {
-      additions += file.additions;
-      deletions += file.deletions;
-
-      const patch = file.patch ?? "";
-      const header = `### ${file.filename} (+${file.additions}/-${file.deletions})\n`;
-      const block = `${header}${patch}\n`;
-      if (totalBytes + block.length > MAX_DIFF_BYTES) {
-        truncated = true;
-        const remaining = MAX_DIFF_BYTES - totalBytes;
-        if (remaining > 0) {
-          chunks.push(block.slice(0, remaining));
-          totalBytes += remaining;
-        }
-        break;
-      }
-      chunks.push(block);
-      totalBytes += block.length;
-    }
-
-    return {
-      diffText: chunks.join("\n"),
-      additions,
-      deletions,
-      changedFiles: files.length,
-      truncated,
-    };
+    return await fetchPullRequestDiff(octokit, args);
   },
 });
 

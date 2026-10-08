@@ -7,6 +7,7 @@ import {
   lookupAccent,
   type AccentColor,
 } from "@/lib/contexts/themeTokens";
+import { setDocumentUnreadCount } from "@/lib/hooks/useDocumentTitle";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import {
   SHELL_COLOR,
@@ -71,6 +72,10 @@ export function FaviconController() {
   const accentColor = customTheme?.accentColor ?? "zinc";
 
   useEffect(() => {
+    // The tab title carries the same count as the badge ("(3) … | Eva"), so it
+    // is published from here rather than from a second subscription.
+    setDocumentUnreadCount(unreadCount ?? 0);
+
     const link = document.querySelector(
       'link[rel="icon"][type="image/svg+xml"]',
     );

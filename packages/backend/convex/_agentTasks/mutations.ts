@@ -33,12 +33,17 @@ import {
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
-
-/** Extracts the PR number from a GitHub PR URL. */
-function extractPrNumber(prUrl: string): number | null {
-  const match = prUrl.match(/\/pull\/(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
-}
+import {
+  applyPrLifecycleTransition,
+  findPrimaryPullRequest,
+} from "../_pullRequests/store";
+import {
+  selectPrLifecycleTransition,
+} from "../_github/prLifecycleActions";
+import {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+} from "../_shared/composerTraits";
 
 /** Highest taskNumber among a project's tasks, or 0 if none are numbered. */
 function maxTaskNumberOf(tasks: Doc<"agentTasks">[]): number {
@@ -162,25 +167,19 @@ export const update = authMutation({
         task.title,
         args.title,
       );
-      if (task.repoId) {
-        const runs = await ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", args.id))
-          .collect();
-        const prUrl = runs
-          .sort(
-            (a, b) =>
-              (b.startedAt ?? b._creationTime) -
-              (a.startedAt ?? a._creationTime),
-          )
-          .find((run) => run.prUrl)?.prUrl;
-        if (prUrl) {
-          await schedulePrTitleSync(ctx, {
-            repoId: task.repoId,
-            prUrl,
-            title: args.title,
+      // A project task's PR carries the project's title, not the task's.
+      const primaryPr = task.projectId
+        ? null
+        : await findPrimaryPullRequest(ctx.db, {
+            kind: "task",
+            taskId: args.id,
           });
-        }
+      if (primaryPr) {
+        await schedulePrTitleSync(ctx, {
+          repoId: primaryPr.repoId,
+          prUrl: primaryPr.prUrl,
+          title: args.title,
+        });
       }
     }
     if (
@@ -380,46 +379,39 @@ export const updateStatus = authMutation({
         enteringCancelled ||
         leavingCancelled)
     ) {
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", args.id))
-        .order("desc")
-        .first();
-      const prUrl = run?.prUrl;
-      const prNumber = prUrl ? extractPrNumber(prUrl) : null;
-      const repo = prNumber ? await ctx.db.get(task.repoId) : null;
-      if (prNumber && repo) {
-        const baseArgs = {
+      const owner = { kind: "task" as const, taskId: args.id };
+      const primaryPr = await findPrimaryPullRequest(ctx.db, owner);
+      const prUrl = primaryPr?.prUrl;
+      const repo = await ctx.db.get(task.repoId);
+      const transition = selectPrLifecycleTransition({
+        enteringCancelled,
+        leavingCancelled,
+        enteringCodeReview,
+        leavingCodeReview,
+        asReadyOnReopen: args.status === "code_review",
+      });
+      if (transition) {
+        await applyPrLifecycleTransition(ctx, owner, transition);
+      }
+
+      // Write the reviewer-facing description here rather than at the end of
+      // every run: this is the moment the work is offered for review, so the
+      // diff is final and it costs one model call per review instead of one
+      // per run (mirrors a session's "Send for review"). Scheduled, not
+      // awaited, and best-effort — a failure leaves the static PR body in
+      // place. The run stops the sandbox on its way out, so the action resumes
+      // it for the model call and stops it again unless the reviewer already
+      // has it open.
+      if (enteringCodeReview && prUrl && repo && task.sandboxId) {
+        await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
           installationId: repo.installationId,
           repoOwner: repo.owner,
           repoName: repo.name,
-          prNumber,
-        };
-        if (enteringCancelled) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.closePullRequest,
-            baseArgs,
-          );
-        } else if (leavingCancelled) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.reopenPullRequest,
-            { ...baseArgs, asReady: args.status === "code_review" },
-          );
-        } else if (enteringCodeReview) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.markPrReadyForReview,
-            baseArgs,
-          );
-        } else if (leavingCodeReview) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.taskWorkflowActions.convertPrToDraft,
-            baseArgs,
-          );
-        }
+          prUrl,
+          sandboxId: task.sandboxId,
+          repoId: task.repoId,
+          restoreStoppedSandbox: task.reviewTaskSandboxStatus !== "active",
+        });
       }
     }
 
@@ -484,6 +476,30 @@ export const remove = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await softDeleteAgentTask(ctx, args.id);
+    return null;
+  },
+});
+
+/**
+ * Clears a soft delete, putting the task back in the lists it vanished from —
+ * the Undo behind bulk delete.
+ *
+ * Only the row returns. `softDeleteAgentTask` also cancels the task's scheduled
+ * run, drops its run summary and queues its sandbox for deletion; none of those
+ * can be undone, so a restored task comes back without them.
+ */
+export const restore = authMutation({
+  args: { id: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+      throw new Error("Task not found");
+    if (task.deletedAt === undefined) return null;
+    await ctx.db.patch(args.id, {
+      deletedAt: undefined,
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });
@@ -849,26 +865,10 @@ export const setTraits = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");
     }
-    if (
-      args.reasoningLevel === undefined &&
-      args.thinkingEnabled === undefined &&
-      args.use1mContext === undefined &&
-      args.fastMode === undefined
-    ) {
+    if (!hasComposerTraitUpdate(args)) {
       return null;
     }
-    await ctx.db.patch(args.id, {
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-    });
+    await ctx.db.patch(args.id, composerTraitFields(args));
     return null;
   },
 });

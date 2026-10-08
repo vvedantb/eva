@@ -5,6 +5,7 @@ import {
   DropdownMenuSeparator,
 } from "@eva/ui";
 import { IconPhoto, IconPhotoOff, IconTrash } from "@tabler/icons-react";
+import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 /**
  * The team card's actions, hosted in either menu surface. Right-click covers
@@ -47,9 +48,14 @@ export function TeamCardMenuItems({
       {canDelete && onDelete ? (
         <>
           <MenuSeparator />
-          <Item className="text-destructive" onClick={onDelete}>
+          <Item
+            className="text-destructive"
+            onClick={onDelete}
+            title={skipConfirmTitle("Delete team")}
+          >
             <IconTrash size={16} />
             Delete team
+            <ConfirmSkipHint />
           </Item>
         </>
       ) : null}

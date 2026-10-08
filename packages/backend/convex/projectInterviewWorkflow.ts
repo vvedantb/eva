@@ -1,11 +1,17 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackProjectWorkflow } from "./workflowWatchdog";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { PROJECT_INTERVIEW_SYSTEM_PROMPT, SPEC_SYSTEM_PROMPT } from "./prompts";
@@ -151,18 +157,25 @@ export const projectInterviewWorkflow = workflow.define({
         },
       );
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: args.projectId,
-        prompt: fullPrompt,
-        userId: args.userId,
-        completionMutation: "projectInterviewWorkflow:handleCompletion",
-        entityIdField: "projectId",
-        model: "sonnet",
-        allowedTools: "Read,Glob,Grep",
-        repoId: projectData.repoId,
-        sessionPersistenceId: args.projectId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: args.projectId,
+          prompt: fullPrompt,
+          userId: args.userId,
+          completionMutation: "projectInterviewWorkflow:handleCompletion",
+          entityIdField: "projectId",
+          model: "sonnet",
+          allowedTools: "Read,Glob,Grep",
+          repoId: projectData.repoId,
+          sessionPersistenceId: args.projectId,
+        },
+        {
+          entityId: args.projectId,
+          lane: "interview",
+        },
+      );
 
       // Step 4: Wait for callback
       const result = await step.awaitEvent(projectInterviewCompleteEvent);
@@ -383,11 +396,25 @@ export const handleCompletion = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
+    ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.projectId,
+        lane: "interview",
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(
       ctx,
@@ -545,18 +572,25 @@ Output ONLY valid JSON.`;
         },
       );
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: args.projectId,
-        prompt,
-        userId: args.userId,
-        completionMutation: "projectInterviewWorkflow:handleSpecCompletion",
-        entityIdField: "projectId",
-        model: "sonnet",
-        allowedTools: "Read,Glob,Grep",
-        repoId: projectData.repoId,
-        sessionPersistenceId: args.projectId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: args.projectId,
+          prompt,
+          userId: args.userId,
+          completionMutation: "projectInterviewWorkflow:handleSpecCompletion",
+          entityIdField: "projectId",
+          model: "sonnet",
+          allowedTools: "Read,Glob,Grep",
+          repoId: projectData.repoId,
+          sessionPersistenceId: args.projectId,
+        },
+        {
+          entityId: args.projectId,
+          lane: "interview",
+        },
+      );
 
       const result = await step.awaitEvent(projectInterviewCompleteEvent);
 
@@ -589,11 +623,25 @@ export const handleSpecCompletion = authMutation({
     error: v.union(v.string(), v.null()),
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
+    ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.projectId,
+        lane: "interview",
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(
       ctx,

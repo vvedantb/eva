@@ -4,7 +4,10 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { encryptValue, decryptValue } from "./encryption";
+import {
+  decryptStoredEntry,
+  encryptCredentialEntries,
+} from "./_envVars/encryptedEntries";
 import { aiProviderValidator } from "./validators";
 import type { Id } from "./_generated/dataModel";
 
@@ -50,10 +53,7 @@ export const upsert = action({
           ? fullName
           : "Personal";
     void args.label;
-    const encrypted = args.credentials.map((entry) => ({
-      key: entry.key,
-      value: encryptValue(entry.value),
-    }));
+    const encrypted = encryptCredentialEntries(args.credentials);
     if (args.accountId) {
       await ctx.runMutation(internal.userProviderAccounts.updateInternal, {
         accountId: args.accountId,
@@ -88,7 +88,6 @@ export const revealValue = action({
     if (!account || account.userId !== userId) {
       throw new Error("Account not found");
     }
-    const entry = account.credentials.find((c) => c.key === args.key);
-    return entry ? decryptValue(entry.value) : null;
+    return decryptStoredEntry(account.credentials, args.key);
   },
 });

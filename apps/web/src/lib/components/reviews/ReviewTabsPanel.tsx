@@ -1,28 +1,31 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Tabs, TabsBar, TabsContent, TabsList, TabsTrigger, cn } from "@eva/ui";
+import { Button, Spinner, cn } from "@eva/ui";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
-import { IconGitPullRequest } from "@tabler/icons-react";
-import { isReviewTab, type ReviewTab } from "@/lib/search-params";
+import { IconAlertTriangle, IconGitPullRequest } from "@tabler/icons-react";
+import type { ReviewTab } from "@/lib/search-params";
 import { DiffsPanel } from "@/lib/components/sandbox/DiffsPanel";
 import {
   DIFF_HIGHLIGHTER_OPTIONS,
   DIFF_POOL_OPTIONS,
 } from "@/lib/components/sandbox/diffWorkerPool";
-import { PrRecapPanel } from "@/lib/components/sandbox/PrRecapPanel";
-import { ReviewOverviewPanel } from "./ReviewOverviewPanel";
-import { usePrOverview } from "./usePrOverview";
-import { PrChecksPanel } from "./_components/PrChecksPanel";
-import { PrCommitsPanel } from "./_components/PrCommitsPanel";
-import { PrTabRail } from "./_components/PrTabRail";
+import { ReviewSummaryTab } from "./ReviewSummaryTab";
+import { ReviewTimelineTab } from "./ReviewTimelineTab";
+import { usePrOverview, type PrOverviewState } from "./usePrOverview";
+import type { PrOverview } from "./_components/prOverviewMeta";
+import { PrComposer } from "./_components/PrComposer";
 import { ReviewHeader } from "./_components/ReviewHeader";
+import { ReviewTabNav } from "./_components/ReviewTabNav";
 import {
-  REVIEW_TAB_META,
+  PullRequestsTab,
+  type ReviewPullRequest,
+} from "./_components/PullRequestsTab";
+import {
   REVIEW_TAB_ORDER,
-  reviewTabCount,
+  SINGLE_PR_REVIEW_TABS,
 } from "./_components/reviewTabMeta";
 
 interface ReviewTabsPanelProps {
@@ -33,39 +36,36 @@ interface ReviewTabsPanelProps {
   activeTab: ReviewTab;
   onTabChange: (tab: ReviewTab) => void;
   /**
-   * Rendered as the first row of the shared header — the standalone page puts the
-   * PR title here. Padding is supplied here, so pass an unwrapped block.
+   * Shown in place of the header until the overview lands — the standalone
+   * page's cached title, so a revisited pull request names itself at once.
    */
-  header?: ReactNode;
-  /**
-   * Rendered above `header` as the first line of the surface — the standalone
-   * page's repository breadcrumb. Absent in a session, where the sidebar already
-   * says which repository and task the reader is in.
-   */
-  breadcrumb?: ReactNode;
+  placeholder?: ReactNode;
   /**
    * Renews every payload the surface shows, not just the overview — the
-   * standalone page also has a title block, read from its own query. Omitted in a
-   * session, where the overview is the only payload on the surface.
+   * standalone page also has a title block, read from its own query.
    */
   refresh?: { run: () => void; running: boolean };
   /**
-   * Nested surfaces (session sandbox Review) use `size="sm"` on the same
-   * TabsBar / TabsList; the standalone Reviews page keeps the default size.
+   * Every PR the chat holds, for the Pull requests tab, and which one the
+   * other tabs show. Sandbox surfaces only — absent, the tab is not offered.
    */
-  compact?: boolean;
+  pullRequests?: {
+    items: readonly ReviewPullRequest[];
+    selectedId: Id<"pullRequests"> | undefined;
+    onSelect: (id: Id<"pullRequests">) => void;
+  };
 }
 
 /**
- * The Activity/Commits/Checks/Changes/Recap tab set, shared by the standalone
- * Reviews page and the sandbox Review tab. Every review surface renders this, so
- * tab order, labels, slugs, empty states, and panel wiring cannot drift between
- * them: the only per-surface concerns are how the active tab is read from the URL
- * and what (if anything) sits above the tab row.
+ * The pull request review surface, reimplemented on t3code's layout and shared
+ * by the standalone Reviews page and the sandbox Review tab:
  *
- * The four questions a reviewer arrives with — what was said, what was pushed,
- * what CI thinks, what changed — get a tab each, rather than Commits and Checks
- * being nested inside Activity where each cost a scroll and a disclosure click.
+ * - a two-line header (`ReviewHeader`) — state, branches, actions; then the
+ *   title — ending in the tab row, as Cursor keeps it,
+ * - three tabs — Summary, Timeline, Code — each its own scroll box, all kept
+ *   mounted so drafts, scroll and expanded files survive a switch, plus Pull
+ *   requests on a sandbox surface, which picks the PR the other three show,
+ * - one floating composer (`PrComposer`) for comments and the review.
  *
  * Deliberately does not mount `PendingReviewCommentsProvider`: the sandbox
  * shares those pending comments with its chat composer, so the provider has to
@@ -77,49 +77,56 @@ export function ReviewTabsPanel({
   prNumber,
   activeTab,
   onTabChange,
-  header,
-  breadcrumb,
+  placeholder,
   refresh,
-  compact = false,
+  pullRequests,
 }: ReviewTabsPanelProps) {
-  // Cached hook, so querying here as well as on a surface that needs the recap
-  // to pick a default tab costs one request, not two.
+  const tabs = pullRequests === undefined ? SINGLE_PR_REVIEW_TABS : REVIEW_TAB_ORDER;
   const recapDoc = useQuery(
     api.docs.getRecapByPrUrl,
     prUrl ? { repoId, prUrl } : "skip",
   );
-  // Read here rather than inside Overview: the header above the tab row and the
-  // Overview tab are two views of one payload, and the header has to stay true
-  // while the reader is in Diffs or Recap.
   const { state, reload } = usePrOverview(repoId, prNumber);
   const overview = state.status === "ready" ? state.overview : null;
-  const tabSize = compact ? "sm" : "default";
+  // The commit Code is scoped to. Owned here because Timeline sets it too: a
+  // commit row opens Code on that commit.
+  const [codeCommit, setCodeCommit] = useState<string | null>(null);
+  // Where Code puts its few controls: the right end of the tab row, as Cursor
+  // keeps layout and tree toggles beside the tabs instead of a second toolbar.
+  const [codeControlsSlot, setCodeControlsSlot] = useState<HTMLElement | null>(
+    null,
+  );
+
+  const openCommit = (sha: string) => {
+    setCodeCommit(sha);
+    onTabChange("diffs");
+  };
+
+  const nav = (
+    <ReviewTabNav
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      controlsRef={setCodeControlsSlot}
+    />
+  );
 
   return (
-    // Mounted unconditionally and above the tabs, so the workers spin up while
-    // the surface is still hidden rather than on the click that reveals Diffs.
-    // The pool itself is a refcounted singleton, so several review surfaces
-    // share one set of workers and the last to unmount tears them down.
+    // Mounted above the tabs, so the workers spin up while Code is still hidden
+    // rather than on the click that reveals it. The pool is a refcounted
+    // singleton shared by every review surface.
     <WorkerPoolContextProvider
       poolOptions={DIFF_POOL_OPTIONS}
       highlighterOptions={DIFF_HIGHLIGHTER_OPTIONS}
     >
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => {
-          if (isReviewTab(value)) onTabChange(value);
-        }}
-        className="flex h-full min-h-0 flex-col"
-      >
-        {/* Until the overview lands, the surface's own block stands in for the
-            header — same padding, so the title does not shift when it arrives. */}
+      <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
         {overview === null ? (
-          header === undefined && breadcrumb === undefined ? null : (
-            <div className="shrink-0 space-y-2 px-4 pt-3">
-              {breadcrumb}
-              {header}
-            </div>
-          )
+          <div className="shrink-0 border-b border-border">
+            {placeholder === undefined ? null : (
+              <div className="px-4 pt-3 pb-2">{placeholder}</div>
+            )}
+            {nav}
+          </div>
         ) : (
           <ReviewHeader
             repoId={repoId}
@@ -129,134 +136,117 @@ export function ReviewTabsPanel({
               (state.status === "ready" && state.refreshing)
             }
             onRefresh={refresh?.run ?? reload}
-            onTabChange={onTabChange}
             onChanged={reload}
-            title={header}
-            breadcrumb={breadcrumb}
+            nav={nav}
           />
         )}
-        {/* Zeroed left padding so the first tab's label lands on the same 16px
-            edge as the header and the panel below it — TabsList adds 4px and the
-            trigger 12px (10px when small), which is the whole inset. A left edge
-            that steps in and out between three stacked rows is most of what reads
-            as clutter on a surface this dense. */}
-        <TabsBar
-          size={tabSize}
-          className={cn("pr-4", compact ? "pl-0.5" : "pl-0")}
-          actions={overview === null ? null : <PrTabRail overview={overview} />}
-        >
-          {/* Pill tabs, not the underline the review surface used to carry: the
-              filled marker is the same device the sandbox and settings tabs use,
-              and it slides between tabs instead of redrawing a rule. */}
-          <TabsList size={tabSize} className="h-auto gap-0.5 shadow-none">
-            {REVIEW_TAB_ORDER.map((tab) => {
-              const meta = REVIEW_TAB_META[tab];
-              const Icon = meta.icon;
-              const count = reviewTabCount(tab, overview);
-              return (
-                <TabsTrigger key={tab} value={tab} className="gap-1.5">
-                  <Icon
-                    size={compact ? 13 : 14}
-                    className="shrink-0 opacity-70"
-                    aria-hidden
-                  />
-                  {meta.label}
-                  {count === null ? null : (
-                    <span
-                      className={cn(
-                        "text-xs font-normal tabular-nums",
-                        count.muted
-                          ? "text-muted-foreground"
-                          : "text-destructive",
-                      )}
-                    >
-                      {count.text}
-                    </span>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </TabsBar>
 
-        {/* forceMount + hidden: switching tabs keeps each panel's state (drafted
-            comments, scroll position, expanded files) instead of refetching. */}
-        <ReviewTabContent tab="overview" activeTab={activeTab}>
-          {prNumber === undefined ? (
-            <NoPullRequest detail="Once a pull request is opened for this work, its activity will appear here." />
-          ) : (
-            <ReviewOverviewPanel
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          {tabs.map((tab) => (
+            <div
+              key={tab}
+              className={cn("absolute inset-0", activeTab !== tab && "invisible")}
+              inert={activeTab !== tab}
+            >
+              {tab === "prs" && pullRequests !== undefined ? (
+                <PullRequestsTab
+                  items={pullRequests.items}
+                  selectedId={pullRequests.selectedId}
+                  onSelect={pullRequests.onSelect}
+                />
+              ) : tab === "diffs" ? (
+                <DiffsPanel
+                  prUrl={prUrl}
+                  repoId={repoId}
+                  commits={overview?.commits ?? []}
+                  commit={codeCommit}
+                  onCommitChange={setCodeCommit}
+                  controlsSlot={activeTab === "diffs" ? codeControlsSlot : null}
+                />
+              ) : (
+                <OverviewGate state={state} reload={reload}>
+                  {(ready) =>
+                    tab === "summary" ? (
+                      <ReviewSummaryTab
+                        repoId={repoId}
+                        prUrl={prUrl}
+                        overview={ready}
+                        recapDoc={recapDoc}
+                        onChanged={reload}
+                      />
+                    ) : (
+                      <ReviewTimelineTab
+                        repoId={repoId}
+                        overview={ready}
+                        onOpenCommit={openCommit}
+                      />
+                    )
+                  }
+                </OverviewGate>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Floats over the content; no tab reserves a footer for it. From `lg`
+            it steps left of the Manager Ave launcher, which owns the
+            viewport's bottom-right corner there. */}
+        {overview === null ? null : (
+          <div className="absolute right-4 bottom-4 z-20 lg:right-20">
+            <PrComposer
               repoId={repoId}
-              prNumber={prNumber}
-              state={state}
-              reload={reload}
+              prNumber={overview.number}
+              isOpen={overview.status === "open"}
+              onPosted={reload}
             />
-          )}
-        </ReviewTabContent>
-
-        <ReviewTabContent tab="commits" activeTab={activeTab}>
-          {overview === null ? (
-            <NoPullRequest detail="Once a pull request is opened for this work, its commits will appear here." />
-          ) : (
-            <PrCommitsPanel repoId={repoId} overview={overview} />
-          )}
-        </ReviewTabContent>
-
-        <ReviewTabContent tab="checks" activeTab={activeTab}>
-          {overview === null ? (
-            <NoPullRequest detail="Once a pull request is opened for this work, its checks will appear here." />
-          ) : (
-            <PrChecksPanel
-              overview={overview}
-              refreshing={state.status === "ready" && state.refreshing}
-              onRefresh={reload}
-            />
-          )}
-        </ReviewTabContent>
-
-        <ReviewTabContent tab="diffs" activeTab={activeTab}>
-          <DiffsPanel prUrl={prUrl} repoId={repoId} />
-        </ReviewTabContent>
-
-        <ReviewTabContent tab="recap" activeTab={activeTab}>
-          <PrRecapPanel prUrl={prUrl} repoId={repoId} recapDoc={recapDoc} />
-        </ReviewTabContent>
-      </Tabs>
+          </div>
+        )}
+      </div>
     </WorkerPoolContextProvider>
   );
 }
 
-function ReviewTabContent({
-  tab,
-  activeTab,
+/** The states before Summary and Timeline have an overview to render. */
+function OverviewGate({
+  state,
+  reload,
   children,
 }: {
-  tab: ReviewTab;
-  activeTab: ReviewTab;
-  children: ReactNode;
+  state: PrOverviewState;
+  reload: () => void;
+  children: (overview: PrOverview) => ReactNode;
 }) {
-  return (
-    <TabsContent
-      value={tab}
-      forceMount
-      className={cn(
-        "mt-0 min-h-0 flex-1 focus-visible:ring-0",
-        activeTab !== tab && "hidden",
-      )}
-    >
-      {children}
-    </TabsContent>
-  );
-}
-
-function NoPullRequest({ detail }: { detail: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <IconGitPullRequest className="h-10 w-10 text-muted-foreground/60" />
-      <div className="max-w-md space-y-1">
-        <p className="text-sm font-medium">No pull request yet</p>
-        <p className="text-sm text-muted-foreground">{detail}</p>
+  if (state.status === "idle") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <IconGitPullRequest className="h-10 w-10 text-muted-foreground/60" />
+        <div className="max-w-md space-y-1">
+          <p className="text-sm font-medium">No pull request yet</p>
+          <p className="text-sm text-muted-foreground">
+            Once a pull request is opened for this work, it will appear here.
+          </p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+  if (state.status === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+        <Spinner size="sm" />
+        Loading pull request…
+      </div>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <IconAlertTriangle className="h-8 w-8 text-destructive" />
+        <p className="text-sm text-destructive">{state.message}</p>
+        <Button size="sm" variant="secondary" onClick={reload}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+  return children(state.overview);
 }

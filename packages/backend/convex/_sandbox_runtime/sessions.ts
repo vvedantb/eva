@@ -7,6 +7,7 @@ import { internal } from "../_generated/api";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 import {
   execHandle,
+  getSandboxHandle,
   resolveSandboxContext,
   resolveSandboxClientOnly,
   ensureSandboxRunning,
@@ -15,20 +16,22 @@ import {
   errorMessage,
   sleep,
   workspaceDirShell,
+  WORKSPACE_DIR,
 } from "./helpers";
 import {
   setupBranch,
   checkoutSessionBranch,
   createSandboxAndPrepareRepo,
   fetchBranchRefs,
+  forcePushBranchToOrigin,
+  isUnresolvedGitIndexError,
+  recoverUnresolvedGitIndex,
   resolveBaseTarget,
   copySandboxConfigFilesToWorkspace,
+  dependencyInstallCommand,
   SESSION_LIFECYCLE,
 } from "./git";
-import {
-  SandboxGoneError,
-  isSandboxGoneError,
-} from "./sandboxErrors";
+import { SandboxGoneError, isSandboxGoneError } from "./sandboxErrors";
 import { ensureGitCredentialHelper } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
@@ -37,7 +40,10 @@ import {
   installPythonDependenciesBestEffort,
   startSessionServices,
 } from "./devServer";
-import { launchDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
+import {
+  launchDevServerInVercelConsole,
+  launchLinkedRepoDevServerInVercelConsole,
+} from "../_pty/launchDevServerInVercelConsole";
 import { runStartupCommandsDirect } from "./execution";
 import { resolveVercelConsoleDevCommand } from "./vercelAppPorts";
 import type { GenericActionCtx } from "convex/server";
@@ -50,6 +56,12 @@ import { startDesktopWithChrome } from "./desktop";
  *
  * Eva launches `exec next|vite -p <listen>` so customer package.json `-p`
  * flags cannot bind the wrong port. Proxy owns 3000.
+ *
+ * `dir` defaults to the primary repo's workspace root; only the primary uses
+ * this path (framework auto-detection assumes `rootDir` is relative to it).
+ * A linked repo's dev server goes through
+ * `launchLinkedRepoDevServerInVercelConsole` instead, which skips detection
+ * entirely — linked repos always have an explicit `devCommand`.
  */
 export async function launchPreviewDevServer(
   handle: SandboxHandle,
@@ -57,6 +69,7 @@ export async function launchPreviewDevServer(
   devCommand: string,
   devPort: number,
   rootDir: string,
+  dir: string = WORKSPACE_DIR,
 ): Promise<void> {
   const resolved = await resolveVercelConsoleDevCommand(
     handle,
@@ -69,7 +82,34 @@ export async function launchPreviewDevServer(
     ownerKey,
     resolved.devCommand,
     resolved.listenPort,
+    dir,
   );
+}
+
+/**
+ * `startSessionServices` plus the chat alert for a failed seeded Supabase
+ * restore — that failure is non-fatal so the dev server still launches, and
+ * this alert is the only place the user sees it.
+ */
+export async function startServicesWithRestoreAlert(
+  ctx: GenericActionCtx<DataModel>,
+  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  handle: SandboxHandle,
+  rootDir: string,
+  repo: Doc<"githubRepos"> | null,
+): Promise<{ port: number; devCommand: string }> {
+  const services = await startSessionServices(
+    handle,
+    rootDir,
+    devOverrides(repo),
+  );
+  if (services.restoreError !== undefined) {
+    await ctx.runMutation(internal._chat.seededRestoreAlert.insert, {
+      parentId,
+      error: services.restoreError,
+    });
+  }
+  return { port: services.port, devCommand: services.devCommand };
 }
 
 /** Per-app dev server overrides loaded from the githubRepos doc. */
@@ -168,6 +208,11 @@ async function checkoutSessionBranchWithRetry(
   baseBranch: string,
 ): Promise<void> {
   const maxAttempts = 3;
+  // One-shot: a reused VM whose previous run died mid-merge refuses every
+  // checkout with "needs merge; resolve your current index first" — abort the
+  // stale operation and retry. If recovery does not clear it, the next failure
+  // throws as before; nothing else is reset away.
+  let recoveredUnresolvedIndex = false;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       await checkoutSessionBranch(sandbox, branchName, baseBranch);
@@ -179,6 +224,25 @@ async function checkoutSessionBranchWithRetry(
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (
+        attempt < maxAttempts &&
+        !recoveredUnresolvedIndex &&
+        isUnresolvedGitIndexError(message)
+      ) {
+        recoveredUnresolvedIndex = true;
+        logSession(
+          `checkoutSessionBranchWithRetry recovering unresolved git index (attempt ${attempt}/${maxAttempts}, branch=${branchName}, base=${baseBranch}): ${message}`,
+        );
+        try {
+          await recoverUnresolvedGitIndex(sandbox);
+        } catch (recoverError) {
+          // Best-effort: the retried checkout below surfaces the real state.
+          logSession(
+            `checkoutSessionBranchWithRetry unresolved-index recovery failed (branch=${branchName}, base=${baseBranch}): ${errorMessage(recoverError, "recovery failed")}`,
+          );
+        }
+        continue;
+      }
       const canRetry =
         attempt < maxAttempts && isRetryableSessionGitError(message);
       if (!canRetry) {
@@ -286,13 +350,13 @@ async function resumeReusedSandbox(
   handle: SandboxHandle,
   opts: {
     installationId: number;
+    repoOwner: string;
+    repoName: string;
     branchName: string;
     baseBranch: string;
     onRestoring: () => Promise<void>;
     onEarlyReady: () => Promise<void>;
     shouldAbort?: () => Promise<boolean>;
-    /** Manager Ave: no containers, so skip the dockerd wait after wake. */
-    skipDocker?: boolean;
   },
 ): Promise<void> {
   const abortIfStopRequested = async (): Promise<void> => {
@@ -342,16 +406,15 @@ async function resumeReusedSandbox(
   // ensureSandboxRunning skipped the per-boot bootstrap to unlock sooner; pay
   // it here, swap first, before any service can spike memory.
   await ensureSwapFile(handle);
-  // Orchestrator never runs containers; starting dockerd on the Ubuntu
-  // universal image is a ~2.5 minute no-op (dnf missing, then poll loops).
-  if (!opts.skipDocker) {
-    await ensureDockerDaemon(handle);
-  }
+  await ensureDockerDaemon(handle);
   await abortIfStopRequested();
   // Self-heal: rotate the per-sandbox secret + reinstall the helper every
   // resume so in-sandbox `git pull` and any subsequent fetch authenticate
   // without relying on a stale URL-embedded token.
-  await ensureGitCredentialHelper(ctx, handle, opts.installationId);
+  await ensureGitCredentialHelper(ctx, handle, opts.installationId, {
+    owner: opts.repoOwner,
+    name: opts.repoName,
+  });
   await checkoutSessionBranchWithRetry(
     handle,
     opts.branchName,
@@ -426,12 +489,7 @@ async function installSnapshotDependenciesWithRetry(
   // pnpm workspaces must install from the lockfile root (usually the repo root),
   // not from a nested app rootDirectory that only has package.json.
   const installCwd = pm === "pnpm" ? workspaceRoot : dir;
-  const installCommand =
-    pm === "pnpm"
-      ? `npm install -g pnpm && cd ${installCwd} && pnpm install`
-      : pm === "yarn"
-        ? `npm install -g yarn && cd ${installCwd} && yarn install`
-        : `cd ${installCwd} && npm install`;
+  const installCommand = dependencyInstallCommand(pm, installCwd);
   const timeoutSeconds = pm === "pnpm" ? 240 : 180;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -613,6 +671,16 @@ type SessionSandboxPreparationArgs = {
   baseBranch: string;
   repoId: Id<"githubRepos">;
   startDesktop: boolean;
+  /**
+   * True when the session also has `sessionRepos` rows to clone into
+   * `/tmp/workspace`. Set by both `startSandbox` paths (create and resume —
+   * a resume that falls through to a fresh sandbox has to re-clone them) so
+   * the setup-pending flag stays armed until
+   * `sessionSandboxStartupWorkflow` has provisioned every row. Absent
+   * (`prepareSessionSandbox`, used by `sessionExecuteWorkflow`) behaves as
+   * false: that path runs mid-session, long after provisioning.
+   */
+  hasLinkedRepos?: boolean;
 };
 
 type PreparedSessionSandbox = {
@@ -755,16 +823,9 @@ async function prepareSessionSandboxInternal(
       }),
   );
   const rootDir = repo?.rootDirectory ?? "";
-  // The orchestrator (master) session boots from the Vercel managed image,
-  // skips the repo dependency install, and must not start repo services
-  // either: `pnpm dev` / `npx convex dev` cannot work without node_modules,
-  // and every doomed attempt ends 6 minutes later with a "Convex dev was not
-  // ready" alert row in the master's chat. Resolved before the reuse path so
-  // both boot paths share the decision.
   const launchSession = await ctx.runQuery(internal.sessions.getInternal, {
     id: args.sessionId,
   });
-  const isOrchestrator = launchSession?.isOrchestrator === true;
   completedSteps.push({
     type: "tool",
     label: "Loading repository config...",
@@ -816,6 +877,8 @@ async function prepareSessionSandboxInternal(
             () =>
               resumeReusedSandbox(ctx, handle, {
                 installationId: args.installationId,
+                repoOwner: args.repoOwner,
+                repoName: args.repoName,
                 branchName: args.branchName,
                 baseBranch: args.baseBranch,
                 onRestoring: () =>
@@ -833,10 +896,12 @@ async function prepareSessionSandboxInternal(
                     branchName: args.branchName,
                     isNew: false,
                     usedSnapshot: false,
+                    // Services are relaunched below; keep the Preview heal off
+                    // this sandbox until then so it cannot double-launch them.
+                    markServicesPending: true,
                   });
                 },
                 shouldAbort: () => sessionStopRequested(ctx, args.sessionId),
-                skipDocker: isOrchestrator,
               }),
           );
           await runLoggedSessionStep(
@@ -849,17 +914,20 @@ async function prepareSessionSandboxInternal(
             sandboxDetails,
             () => copySandboxConfigFilesToWorkspace(handle),
           );
-          let devPort: number | undefined;
-          let devCommand: string | undefined;
-          if (!isOrchestrator) {
-            const services = await runLoggedSessionStep(
-              "reuseSessionSandbox.startSessionServices",
-              sandboxDetails,
-              () => startSessionServices(handle, rootDir, devOverrides(repo)),
-            );
-            devPort = services.port;
-            devCommand = services.devCommand;
-          }
+          const services = await runLoggedSessionStep(
+            "reuseSessionSandbox.startSessionServices",
+            sandboxDetails,
+            () =>
+              startServicesWithRestoreAlert(
+                ctx,
+                args.sessionId,
+                handle,
+                rootDir,
+                repo,
+              ),
+          );
+          const devPort = services.port;
+          const devCommand = services.devCommand;
           if (args.startDesktop) {
             await runLoggedSessionStep(
               "reuseSessionSandbox.startDesktop",
@@ -867,11 +935,7 @@ async function prepareSessionSandboxInternal(
               () => startDesktopWithChrome(handle),
             );
           }
-          await abortReuseIfSessionStopped(
-            ctx,
-            args.sessionId,
-            handle.id,
-          );
+          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
           await emitSessionProgress(
             ctx,
             args.sessionId,
@@ -883,9 +947,6 @@ async function prepareSessionSandboxInternal(
             "reuseSessionSandbox.runBackgroundCommands",
             sandboxDetails,
             async () => {
-              // No repo services on the orchestrator: without node_modules the
-              // convex daemon can only fail into a chat alert (see above).
-              if (isOrchestrator) return;
               const result = await ctx.runAction(
                 internal.sandbox.runBackgroundCommands,
                 {
@@ -913,12 +974,6 @@ async function prepareSessionSandboxInternal(
             "reuseSessionSandbox.runStartupCommands",
             sandboxDetails,
             async () => {
-              // Startup commands bootstrap repo services (dockerd, seeded DBs)
-              // against installed dependencies. The orchestrator installs none
-              // and runs none, so they can only fail — and their failures are
-              // reported as `sandboxStartupWarning` alert rows in its chat,
-              // which is exactly what gating the services was meant to stop.
-              if (isOrchestrator) return;
               const result = await runStartupCommandsDirect(ctx, {
                 sandboxId: handle.id,
                 repoId: args.repoId,
@@ -930,24 +985,47 @@ async function prepareSessionSandboxInternal(
               }
             },
           );
-          if (devCommand !== undefined && devPort !== undefined) {
-            const command = devCommand;
-            const port = devPort;
-            await abortReuseIfSessionStopped(
-              ctx,
-              args.sessionId,
-              handle.id,
-            );
+          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
+          await runLoggedSessionStep(
+            "reuseSessionSandbox.launchDevServer",
+            sandboxDetails,
+            () =>
+              launchPreviewDevServer(
+                handle,
+                `session-${args.sessionId}`,
+                devCommand,
+                devPort,
+                rootDir,
+              ),
+          );
+          // Resume is the only path that can relaunch linked repos' dev
+          // servers: they were cloned by `prepareLinkedRepo` (run once, from
+          // `sessionSandboxStartupWorkflow`, on the session's first-ever
+          // create) and never re-run on a plain resume. Rows a create hasn't
+          // reached yet (`clonedAt` unset) are silently skipped — nothing to
+          // restart until they exist on disk.
+          const linkedRows = await ctx.runQuery(
+            internal.sessions.listLinkedReposInternal,
+            { sessionId: args.sessionId },
+          );
+          for (const linkedRow of linkedRows) {
+            if (
+              linkedRow.clonedAt === undefined ||
+              !linkedRow.devCommand ||
+              linkedRow.devPort === undefined
+            ) {
+              continue;
+            }
             await runLoggedSessionStep(
-              "reuseSessionSandbox.launchDevServer",
-              sandboxDetails,
+              "reuseSessionSandbox.launchLinkedRepoDevServer",
+              `${sandboxDetails}, linkedRepo=${linkedRow.name}`,
               () =>
-                launchPreviewDevServer(
+                launchLinkedRepoDevServerInVercelConsole(
                   handle,
-                  `session-${args.sessionId}`,
-                  command,
-                  port,
-                  rootDir,
+                  `session-${args.sessionId}-${linkedRow.name}`,
+                  linkedRow.path,
+                  linkedRow.devCommand ?? "",
+                  linkedRow.devPort ?? 0,
                 ),
             );
           }
@@ -984,11 +1062,40 @@ async function prepareSessionSandboxInternal(
   });
 
   // Create path needs full env map + snapshot — load only after reuse failed.
-  const { sandboxEnvVars, snapshotName, image } = await runLoggedSessionStep(
+  const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
     "resolveSessionSandboxContext",
     actionDetails,
-    () => resolveSandboxContext(ctx, args.repoId, { isOrchestrator }),
+    () =>
+      resolveSandboxContext(ctx, args.repoId, {
+        repoGroupId: launchSession?.repoGroupId,
+      }),
   );
+  // A forked session's first sandbox is a Vercel fork of the source sandbox
+  // (DBs included). A replacement for an expired fork sandbox boots the repo
+  // snapshot instead, since the source may be gone by then.
+  const forkFrom =
+    reuseId === undefined ? launchSession?.forkSourceSandboxId : undefined;
+  const bootsFromImage = Boolean(snapshotName) || forkFrom !== undefined;
+  if (forkFrom) {
+    // Check the source before forking: a create failure is too opaque to tell
+    // "source deleted" from a transient. A gone source can never be forked, so
+    // drop it — the next Start boots the repo snapshot instead of failing
+    // forever — and still restart the source if the fork had stopped it.
+    try {
+      await client.get(forkFrom);
+    } catch (error) {
+      if (isSandboxGoneError(error)) {
+        await ctx.runMutation(internal.sessions.settleForkSource, {
+          sessionId: args.sessionId,
+          sourceGone: true,
+        });
+        throw new Error(
+          "The session this was forked from no longer has a sandbox, so its data can't be copied. Start again to boot without it.",
+        );
+      }
+      throw error;
+    }
+  }
 
   if (reuseId) {
     await emitSessionProgress(
@@ -1016,9 +1123,9 @@ async function prepareSessionSandboxInternal(
   // Snapshot restore is sub-second; the remaining work is what used to make
   // "new session" feel like 10–60s.
   let earlyReadyEmitted = false;
-  const prepared = await runLoggedSessionStep(
+  const preparing = runLoggedSessionStep(
     "createSessionSandboxAndPrepareRepo",
-    `${actionDetails}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}`,
+    `${actionDetails}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}`,
     () =>
       createSandboxAndPrepareRepo(
         ctx,
@@ -1034,21 +1141,25 @@ async function prepareSessionSandboxInternal(
           earlyReadyEmitted = true;
           // Seed configured app port/command immediately so Preview doesn't
           // fall back to 3000 while startSessionServices is still running.
-          // Never for the orchestrator: it starts no dev server, and a sticky
-          // devPort+devCommand pair on the row is all `previewRecovery` needs
-          // to "self-heal" a server that was deliberately never launched.
-          const configured =
-            repo && !isOrchestrator ? devOverrides(repo) : undefined;
+          const configured = repo ? devOverrides(repo) : undefined;
           await ctx.runMutation(internal.sessions.sandboxReady, {
             sessionId: args.sessionId,
             sandboxId: sandbox.id,
             branchName: args.branchName,
             isNew: true,
-            usedSnapshot: Boolean(snapshotName),
+            usedSnapshot: bootsFromImage,
             resumeFellBack: reuseId !== undefined,
             // Snapshot restores keep a stale checkout + baked modules; gate the
             // queued first turn until the base pull + install below finish.
-            markSetupPending: Boolean(snapshotName),
+            // Linked repos gate it too, regardless of snapshot — they still
+            // need to be cloned/installed after this action returns (see
+            // `sessionSandboxStartupWorkflow`), and the workflow — not this
+            // action — clears the gate once they're done.
+            markSetupPending:
+              bootsFromImage || args.hasLinkedRepos === true,
+            // Background + startup commands have not run yet on this fresh VM;
+            // keep the Preview heal off it until final-ready clears the flag.
+            markServicesPending: true,
             ...(configured?.devPort !== undefined
               ? { devPort: configured.devPort }
               : {}),
@@ -1060,13 +1171,21 @@ async function prepareSessionSandboxInternal(
         undefined,
         { mode: "none" },
         undefined,
-        // skipInstallDeps: the orchestrator only chats + runs git, so a repo
-        // dependency install would add minutes to every master boot.
-        isOrchestrator,
-        image,
-        isOrchestrator,
+        false,
+        forkFrom,
       ),
   );
+  // The fork has been taken (or has failed) once this settles: only now is it
+  // safe to start the source again. Settled on both outcomes so a failed fork
+  // never leaves the source parked; a retry forks the same source again.
+  const prepared = forkFrom
+    ? await preparing.finally(() =>
+        ctx.runMutation(internal.sessions.settleForkSource, {
+          sessionId: args.sessionId,
+          sourceGone: false,
+        }),
+      )
+    : await preparing;
   const handle = prepared.sandbox;
   const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}, usedSnapshot=${prepared.usedSnapshot ? "true" : "false"}`;
   // Any setup step below (ref sync, branch checkout, config restore, seeded-
@@ -1225,9 +1344,14 @@ async function prepareSessionSandboxInternal(
     // daemon can claim the queued first turn. Dev server / background / startup
     // commands below keep warming without blocking the agent. No-op when the
     // gate was never set (non-snapshot path).
-    await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
-      sessionId: args.sessionId,
-    });
+    // Linked repos: leave the gate set. `sessionSandboxStartupWorkflow` still
+    // has to clone/install every `sessionRepos` row after this action returns,
+    // and it — not this action — clears the gate once that finishes (or fails).
+    if (!args.hasLinkedRepos) {
+      await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
+        sessionId: args.sessionId,
+      });
+    }
 
     // Restore baked config files from /home/eva/sandbox-config into the workspace.
     // Skipped when usedSnapshot: createSandboxAndPrepareRepo already ran this
@@ -1256,29 +1380,31 @@ async function prepareSessionSandboxInternal(
       status: "complete",
     });
 
-    // Orchestrator: no services, so don't narrate a dev server it never starts
-    // — the step would show as active and then land in the master's startup
-    // progress marked "complete".
-    if (!isOrchestrator) {
-      await emitSessionProgress(
-        ctx,
-        args.sessionId,
-        completedSteps,
-        "Starting dev server...",
-      );
-      const services = await runLoggedSessionStep(
-        "newSessionSandbox.startSessionServices",
-        sandboxDetails,
-        () => startSessionServices(handle, rootDir, devOverrides(repo)),
-      );
-      resolvedDevPort = services.port;
-      resolvedDevCommand = services.devCommand;
-      completedSteps.push({
-        type: "tool",
-        label: "Starting dev server...",
-        status: "complete",
-      });
-    }
+    await emitSessionProgress(
+      ctx,
+      args.sessionId,
+      completedSteps,
+      "Starting dev server...",
+    );
+    const services = await runLoggedSessionStep(
+      "newSessionSandbox.startSessionServices",
+      sandboxDetails,
+      () =>
+        startServicesWithRestoreAlert(
+          ctx,
+          args.sessionId,
+          handle,
+          rootDir,
+          repo,
+        ),
+    );
+    resolvedDevPort = services.port;
+    resolvedDevCommand = services.devCommand;
+    completedSteps.push({
+      type: "tool",
+      label: "Starting dev server...",
+      status: "complete",
+    });
 
     if (args.startDesktop) {
       await emitSessionProgress(
@@ -1310,8 +1436,6 @@ async function prepareSessionSandboxInternal(
       "newSessionSandbox.runBackgroundCommands",
       sandboxDetails,
       async () => {
-        // No repo services on the orchestrator (see isOrchestrator above).
-        if (isOrchestrator) return;
         const result = await ctx.runAction(
           internal.sandbox.runBackgroundCommands,
           {
@@ -1347,8 +1471,6 @@ async function prepareSessionSandboxInternal(
       "newSessionSandbox.runStartupCommands",
       sandboxDetails,
       async () => {
-        // No repo services on the orchestrator (see the reuse path above).
-        if (isOrchestrator) return;
         const result = await runStartupCommandsDirect(ctx, {
           sandboxId: handle.id,
           repoId: args.repoId,
@@ -1478,6 +1600,71 @@ async function prepareSessionSandboxInternal(
   }
 }
 
+/**
+ * Executes the user-confirmed force-push after a publish refused a rewritten
+ * local branch (see rewrittenBranchPublishError). The outcome lands in the
+ * session chat either way: the recovery banner that scheduled this has no
+ * other channel to report back on.
+ */
+export const performForcePushBranch = internalAction({
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    repoOwner: v.string(),
+    repoName: v.string(),
+    branchName: v.string(),
+    /** When set, force-push this linked repo's clone instead of the primary. */
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      let owner = args.repoOwner;
+      let name = args.repoName;
+      let branchName = args.branchName;
+      let workspaceDir: string | undefined;
+      if (args.sessionRepoId !== undefined) {
+        const linkedRepos = await ctx.runQuery(
+          internal.sessions.listLinkedReposInternal,
+          { sessionId: args.sessionId },
+        );
+        const linkedRepo = linkedRepos.find(
+          (row) => row._id === args.sessionRepoId,
+        );
+        if (!linkedRepo) {
+          throw new Error(
+            `Linked repo ${args.sessionRepoId} not found for force-push`,
+          );
+        }
+        owner = linkedRepo.owner;
+        name = linkedRepo.name;
+        branchName = linkedRepo.branchName;
+        workspaceDir = linkedRepo.path;
+      }
+      await forcePushBranchToOrigin(sandbox, owner, name, branchName, {
+        workspaceDir,
+      });
+      await ctx.runMutation(internal.sessionWorkflow.postSystemAlert, {
+        sessionId: args.sessionId,
+        content: "Force-pushed session branch to GitHub",
+      });
+    } catch (error) {
+      const errorDetail = errorMessage(error, "Force-push failed");
+      console.error(
+        `[sandbox][sessions] performForcePushBranch failed sessionId=${args.sessionId}: ${errorDetail}`,
+      );
+      await ctx.runMutation(internal.sessionWorkflow.postSystemAlert, {
+        sessionId: args.sessionId,
+        content: "Force-push failed",
+        errorDetail,
+      });
+    }
+    return null;
+  },
+});
+
 /** Starts a session sandbox end-to-end and notifies the session of readiness or error. */
 export const startSessionSandbox = internalAction({
   args: {
@@ -1489,11 +1676,19 @@ export const startSessionSandbox = internalAction({
     branchName: v.string(),
     baseBranch: v.string(),
     repoId: v.optional(v.id("githubRepos")),
+    /**
+     * True when the session also has `sessionRepos` rows to clone into
+     * `/tmp/workspace`. This action does not clone them: it arms
+     * `sandboxSetupPending` and leaves it armed so the caller —
+     * `sessionSandboxStartupWorkflow` — can run `prepareLinkedRepo` per row
+     * and clear the gate once every row has been attempted.
+     */
+    hasLinkedRepos: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const actionStartedAt = Date.now();
-    const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
+    const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}, linkedRepos=${args.hasLinkedRepos === true}`;
     logSession(`startSessionSandbox invoked (${actionDetails})`);
     try {
       if (!args.repoId) {
@@ -1524,6 +1719,7 @@ export const startSessionSandbox = internalAction({
         baseBranch: args.baseBranch,
         repoId: args.repoId,
         startDesktop: false,
+        hasLinkedRepos: args.hasLinkedRepos === true,
       });
       await runLoggedSessionStep(
         prepared.isNew
@@ -1587,6 +1783,12 @@ export const startSessionSandbox = internalAction({
         console.warn(
           `[sandbox][sessions] startSessionSandbox failed after early-ready; keeping active sessionId=${args.sessionId} sandboxId=${sessionAfter.sandboxId}: ${failMessage}`,
         );
+        // Final-ready never ran, so the Preview-heal gate armed at early-ready
+        // would stay armed for the life of this sandbox and permanently
+        // suppress background-daemon healing on it.
+        await ctx.runMutation(internal.sessions.clearSandboxServicesPending, {
+          sessionId: args.sessionId,
+        });
         await ctx.runMutation(internal.sessions.sandboxStartupWarning, {
           sessionId: args.sessionId,
           error: failMessage,
@@ -1731,6 +1933,8 @@ async function prepareTaskPreviewSandboxInternal(
     await runLoggedSessionStep("reuseTaskSandbox.prepare", sandboxDetails, () =>
       resumeReusedSandbox(ctx, handle, {
         installationId: args.installationId,
+        repoOwner: args.repoOwner,
+        repoName: args.repoName,
         branchName: args.branchName,
         baseBranch: args.baseBranch,
         onRestoring: () =>
@@ -1782,7 +1986,8 @@ async function prepareTaskPreviewSandboxInternal(
     const { port: devPort, devCommand } = await runLoggedSessionStep(
       "reuseTaskSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(ctx, args.taskId, handle, rootDir, repo),
     );
     completedSteps.push({
       type: "tool",
@@ -2013,7 +2218,8 @@ async function prepareTaskPreviewSandboxInternal(
     const { port: devPort, devCommand } = await runLoggedSessionStep(
       "newTaskSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(ctx, args.taskId, handle, rootDir, repo),
     );
     completedSteps.push({
       type: "tool",
@@ -2201,6 +2407,8 @@ async function prepareProjectPreviewSandboxInternal(
       () =>
         resumeReusedSandbox(ctx, handle, {
           installationId: args.installationId,
+          repoOwner: args.repoOwner,
+          repoName: args.repoName,
           branchName: args.branchName,
           baseBranch: args.baseBranch,
           onRestoring: () =>
@@ -2252,7 +2460,14 @@ async function prepareProjectPreviewSandboxInternal(
     const { port: devPort, devCommand } = await runLoggedSessionStep(
       "reuseProjectSandbox.startSessionServices",
       sandboxDetails,
-      () => startSessionServices(handle, rootDir, devOverrides(repo)),
+      () =>
+        startServicesWithRestoreAlert(
+          ctx,
+          args.projectId,
+          handle,
+          rootDir,
+          repo,
+        ),
     );
     completedSteps.push({
       type: "tool",
@@ -2484,7 +2699,8 @@ async function prepareProjectPreviewSandboxInternal(
   const { port: devPort, devCommand } = await runLoggedSessionStep(
     "newProjectSandbox.startSessionServices",
     sandboxDetails,
-    () => startSessionServices(handle, rootDir, devOverrides(repo)),
+    () =>
+      startServicesWithRestoreAlert(ctx, args.projectId, handle, rootDir, repo),
   );
   completedSteps.push({
     type: "tool",

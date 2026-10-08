@@ -47,6 +47,31 @@ describe("the seed run gates on a live backend, not a completed push", () => {
     );
   });
 
+  /**
+   * Health-only was too loose the other way. `convex dev`'s first push applies
+   * schema.ts and backfills its indexes; landing that mid-import makes
+   * `npx convex import` abort the whole restore with "Could not complete
+   * import because schema changed" (observed 2026-09-21, cost-model-ts). The
+   * seed run now also waits for the push — bounded, so the repos the gate was
+   * loosened for still get through.
+   */
+  test("the import waits for the daemon's first push to land", () => {
+    const waitAt = seedRun.indexOf(
+      'echo "SEEDRUN-STAGE:convex-functions-ready-${i}"',
+    );
+    const seedAt = seedRun.indexOf('echo "SEEDRUN-STAGE:seed-commands"');
+    expect(waitAt, "the functions-ready wait moved or was removed").toBeGreaterThan(
+      -1,
+    );
+    expect(seedAt, "the seed commands no longer run after the wait").toBeGreaterThan(
+      waitAt,
+    );
+  });
+
+  test("the functions-ready wait is bounded", () => {
+    expect(seedRun).toContain("for s in $(seq 1 ${CONVEX_FUNCTIONS_READY_ATTEMPTS})");
+  });
+
   test("a daemon that exited ends the wait instead of burning the window", () => {
     // Without the pid the loop sleeps out its full 900s on a dead daemon.
     expect(seedRun).toContain("& echo $! > /tmp/bg-${i}.pid");

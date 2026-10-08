@@ -28,6 +28,7 @@ import {
 } from "@/lib/components/projects/ProjectPhaseBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
+import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { TimelineBar } from "./_components/TimelineBar";
 import { TimelineSidebarMeta } from "./_components/TimelineSidebarMeta";
 import { TimelineToolbar } from "./_components/TimelineToolbar";
@@ -242,14 +243,14 @@ export function ProjectsTimeline({
         >
           <GanttTodayBridge targetRef={scrollToTodayRef} />
           <GanttSidebar headerTitle="Projects" headerMeta="Progress">
-            {features.map((feature) => {
+            {features.map((feature, index) => {
               const project = scheduledProjectMap.get(feature.id);
               const phase = project?.phase ?? "draft";
               const config = phaseConfig[phase];
               const Icon = config.icon;
               return (
+                <ListEnter key={feature.id} index={index}>
                 <GanttSidebarItem
-                  key={feature.id}
                   feature={feature}
                   onSelectItem={handleSelectItem}
                   icon={<Icon size={14} className={config.text} />}
@@ -264,17 +265,23 @@ export function ProjectsTimeline({
                     ) : undefined
                   }
                 />
+                </ListEnter>
               );
             })}
           </GanttSidebar>
           <GanttTimeline>
             <GanttHeader />
             <GanttFeatureList>
-              {features.map((feature) => {
+              {features.map((feature, index) => {
                 const phase =
                   scheduledProjectMap.get(feature.id)?.phase ?? "draft";
                 return (
-                  <div className="flex" key={feature.id}>
+                  <ListEnter
+                    key={feature.id}
+                    index={index}
+                    slide={false}
+                    className="flex"
+                  >
                     <GanttFeatureItem
                       {...feature}
                       onMove={handleMove}
@@ -286,7 +293,7 @@ export function ProjectsTimeline({
                         progress={progressMap.get(feature.id)}
                       />
                     </GanttFeatureItem>
-                  </div>
+                  </ListEnter>
                 );
               })}
             </GanttFeatureList>

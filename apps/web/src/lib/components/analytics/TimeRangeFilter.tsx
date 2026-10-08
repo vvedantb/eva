@@ -19,9 +19,15 @@ import {
 interface TimeRangeFilterProps {
   value: TimeRange;
   onChange: (value: TimeRange) => void;
+  /** Subset of ranges to offer; defaults to every range. */
+  ranges?: readonly TimeRange[];
 }
 
-export function TimeRangeFilter({ value, onChange }: TimeRangeFilterProps) {
+export function TimeRangeFilter({
+  value,
+  onChange,
+  ranges = TIME_RANGES,
+}: TimeRangeFilterProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -43,7 +49,7 @@ export function TimeRangeFilter({ value, onChange }: TimeRangeFilterProps) {
             }
           }}
         >
-          {TIME_RANGES.map((range) => (
+          {ranges.map((range) => (
             <DropdownMenuRadioItem key={range} value={range}>
               {TIME_RANGE_LABELS[range]}
             </DropdownMenuRadioItem>
@@ -53,5 +59,3 @@ export function TimeRangeFilter({ value, onChange }: TimeRangeFilterProps) {
     </DropdownMenu>
   );
 }
-
-export type { TimeRange };

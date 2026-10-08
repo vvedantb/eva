@@ -9,9 +9,20 @@ export {
   connectRepo,
 } from "./_github/api";
 
-export { createSessionPr, createDraftSessionPr } from "./_github/prFlow";
+export {
+  createSessionPr,
+  createDraftSessionPr,
+  createDraftSessionRepoPr,
+} from "./_github/prFlow";
 
-export { getPrDiff, getPrFileContents, getCommitDiff } from "./_github/prDiff";
+export { generatePrDescription } from "./_github/prDescription";
+
+export {
+  getPrDiff,
+  getPrFileContents,
+  getCommitDiff,
+  getCompareDiff,
+} from "./_github/prDiff";
 
 export { listPullRequests, getPullRequestHeader } from "./_github/pullRequests";
 

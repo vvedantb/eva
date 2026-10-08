@@ -5,9 +5,17 @@ import type { Infer, Validator } from "convex/values";
 import { LlmJson } from "@solvers-hub/llm-json";
 import { toWorkflowId, workflow } from "../workflowManager";
 import { buildProjectBranchName } from "../_projects/helpers";
+import {
+  findPullRequestByUrl,
+  recordPullRequest,
+  type PrState,
+} from "../_pullRequests/store";
 import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
+import { deriveLogUsage } from "../_logs/usage";
+import { touchAgentFinished } from "../_sandbox/activity";
+import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
 
@@ -44,7 +52,7 @@ export async function resolveTaskSandboxIdForRun(
 
 /** Returns the streaming entity ID used for a task run's activity stream. */
 export function getTaskRunStreamingEntityId(runId: Id<"agentRuns">): string {
-  return `task-run-${String(runId)}`;
+  return `${TASK_RUN_STREAM_PREFIX}${String(runId)}`;
 }
 
 /** Deletes the streaming activity record for a given entity ID. */
@@ -172,12 +180,22 @@ export async function finalizeRunStatus(
       params.projectId,
       params.claudeResult,
     ),
-    prUrl: params.prUrl ?? undefined,
     error: errorMessage,
     prError: params.prError ?? undefined,
     exitReason: params.exitReason ?? (params.success ? "completed" : "error"),
     errorType: isRateLimit ? ("rate_limit" as const) : undefined,
     limitResetAt,
+  });
+  if (params.prUrl) {
+    await recordRunPullRequest(ctx, {
+      runId: params.runId,
+      taskId: run.taskId,
+      prUrl: params.prUrl,
+    });
+  }
+  await touchAgentFinished(ctx, {
+    kind: "task",
+    entityId: String(run.taskId),
   });
 
   // Single terminal-status choke point for a run, and it is guarded above
@@ -188,6 +206,67 @@ export async function finalizeRunStatus(
     run.taskId,
     params.success ? "success" : "error",
   );
+}
+
+/**
+ * Links the PR a task run opened or refreshed. A quick task owns its PR; a
+ * project task's PR is the project's, tagged with the task and run that opened
+ * it. Either way it becomes the owner's primary: it is the PR of the branch Eva
+ * is working on now. Task-workflow PRs open as drafts; when the PR is already
+ * tracked its state is kept, and the webhook corrects it within seconds.
+ */
+export async function recordRunPullRequest(
+  ctx: MutationCtx,
+  args: {
+    runId: Id<"agentRuns"> | undefined;
+    taskId: Id<"agentTasks">;
+    prUrl: string;
+    /** Initial state when the PR is not tracked yet. Defaults to draft. */
+    state?: PrState;
+  },
+): Promise<void> {
+  const task = await ctx.db.get(args.taskId);
+  if (!task) return;
+  const existing = await findPullRequestByUrl(ctx.db, args.prUrl);
+  if (task.projectId !== undefined) {
+    const project = await ctx.db.get(task.projectId);
+    if (!project) return;
+    await recordPullRequest(ctx, {
+      owner: {
+        kind: "project",
+        projectId: project._id,
+        taskId: task._id,
+        ...(args.runId !== undefined ? { runId: args.runId } : {}),
+      },
+      repoId: project.repoId,
+      prUrl: args.prUrl,
+      state: existing?.state ?? args.state ?? "draft",
+      primary: true,
+      origin: "eva",
+      headBranch:
+        project.branchName ??
+        buildProjectBranchName(project._id, project.branchVersion),
+      baseBranch: project.baseBranch,
+      title: project.title,
+    });
+    return;
+  }
+  if (task.repoId === undefined) return;
+  await recordPullRequest(ctx, {
+    owner: {
+      kind: "task",
+      taskId: task._id,
+      ...(args.runId !== undefined ? { runId: args.runId } : {}),
+    },
+    repoId: task.repoId,
+    prUrl: args.prUrl,
+    state: existing?.state ?? args.state ?? "draft",
+    primary: true,
+    origin: "eva",
+    headBranch: `eva/task-${task._id}`,
+    baseBranch: task.baseBranch,
+    title: task.title,
+  });
 }
 
 /** Extracts a JSON block from text, handling code fences and raw JSON objects. */
@@ -250,5 +329,6 @@ export async function recordCompletionLog(
     repoId: params.repoId,
     projectId: params.projectId,
     createdAt: Date.now(),
+    ...deriveLogUsage(params.rawResultEvent),
   });
 }
