@@ -838,7 +838,7 @@ describe("MCP sends are badged; composer-typed messages are not", () => {
   const sessionSend = readFileSync(
     join(
       testsDir,
-      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
+      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
     ),
     "utf8",
   );

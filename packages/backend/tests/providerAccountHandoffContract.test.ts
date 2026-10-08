@@ -144,7 +144,9 @@ describe("session chat provider account handoff", () => {
     // pick included) to it unchanged.
     const startExecute = exportBody(sessionExecutionSource, "startExecute");
     expect(startExecute).toContain("stageAndStartChatTurn(ctx, {");
-    expect(startExecute).toContain("const { chatId, message, ...settings } = args;");
+    expect(startExecute).toContain(
+      "const { chatId, message, sourceProposedPlanId, ...settings } = args;",
+    );
     expect(startExecute).toContain("settings,");
     expect(startExecute).not.toContain("void args.providerAccountId");
     const stager = functionBody(sessionExecutionSource, "stageAndStartChatTurn");

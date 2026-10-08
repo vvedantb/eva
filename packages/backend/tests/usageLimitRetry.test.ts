@@ -54,7 +54,7 @@ function expectRetryReusesStaging(relative: string, stagingHelper: string) {
 test("retryLastTurnWithAccount reuses the shared staging helpers", () => {
   expectRetryReusesStaging(
     "_sessions/execution.ts",
-    "stageAndStartSessionTurn(",
+    "stageAndStartChatTurn(",
   );
 });
 

@@ -63,9 +63,9 @@ test("task and project readers derive execution from open Turns", () => {
 // here would break on the wrapper rather than on the contract.
 test("the session composer uses persisted turn status after query load", () => {
   const hook = source(
-    "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
+    "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
   );
-  expect(hook).toContain("api.turns.getSessionStatus");
+  expect(hook).toContain("api.turns.getChatStatus");
   expect(hook).toContain("turnStatus === undefined");
   expect(hook).toContain(": turnStatus !== null");
 });
@@ -74,6 +74,6 @@ test("annotation sends share the same canonical turn projection", () => {
   const hook = source(
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionAnnotationSend.ts",
   );
-  expect(hook).toContain("api.turns.getSessionStatus");
+  expect(hook).toContain("api.turns.getChatStatus");
   expect(hook).toContain(": turnStatus !== null");
 });
