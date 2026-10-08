@@ -226,7 +226,6 @@ export function SessionDetailClient({
       summary={session.summary}
       messages={messages ?? []}
       queuedMessages={queuedMessages ?? []}
-      planContent={session.planContent}
       streamingActivity={streaming?.currentActivity}
       streamingContent={streaming?.currentContent}
       streamingPendingQuestion={streaming?.pendingQuestion}

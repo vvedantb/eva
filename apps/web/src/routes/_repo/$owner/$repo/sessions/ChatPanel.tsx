@@ -67,7 +67,6 @@ interface ChatPanelProps {
   summary?: string[];
   messages: SessionMessage[];
   queuedMessages: QueuedSessionMessage[];
-  planContent?: string;
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
@@ -109,7 +108,6 @@ export function ChatPanel({
   summary,
   messages,
   queuedMessages,
-  planContent,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
@@ -247,7 +245,7 @@ export function ChatPanel({
     api.proposedPlans.listBySession,
     isRouteActive ? { sessionId } : "skip",
   );
-  const { implementPlan, implementPlanContent, implementInNewSession } =
+  const { implementPlan, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
       handleSend,
@@ -358,21 +356,6 @@ export function ChatPanel({
   );
 
   const capturedPlans = proposedPlans ?? [];
-  const lastAssistantMessageId = [...messages]
-    .toReversed()
-    .find(
-      (message) =>
-        message.role === "assistant" && message.isSystemAlert !== true,
-    )?._id;
-  const planContentMarkdown =
-    typeof planContent === "string" && planContent.trim().length > 0
-      ? planContent
-      : null;
-  const planContentAlreadyInChat =
-    planContentMarkdown !== null &&
-    capturedPlans.some(
-      (plan) => plan.planMarkdown.trim() === planContentMarkdown.trim(),
-    );
 
   const preInputContent = (
     <SandboxChatPreInput
@@ -487,60 +470,33 @@ export function ChatPanel({
         onCancel={handleCancel}
         onForkTranscript={handleForkTranscript}
         afterMessage={(messageId) => {
+          // Only plans captured on a message render in the transcript, so a
+          // plan stays where it was proposed. Unanchored plan content (Edit,
+          // update_plan, a seeded implementation session) lives in the Plan tab.
           const plan = proposedPlanForMessage(capturedPlans, messageId);
-          if (plan) {
-            return (
-              <ProposedPlanCard
-                planMarkdown={plan.planMarkdown}
-                implemented={plan.implementedAt !== undefined}
-                onImplement={
-                  isReadOnly || plan.implementedAt !== undefined
-                    ? undefined
-                    : () => implementPlan(plan)
-                }
-                onImplementInNewSession={
-                  isReadOnly || plan.implementedAt !== undefined
-                    ? undefined
-                    : () => void implementInNewSession(plan.planMarkdown, plan)
-                }
-                onSave={isReadOnly ? undefined : savePlan}
-                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
-                saveAsDocumentLabel={saveAsDocumentLabel}
-                isSaving={isSaving}
-                isSavingDoc={isSavingDoc}
-                isArchived={isReadOnly}
-              />
-            );
-          }
-          if (
-            planContentMarkdown &&
-            !planContentAlreadyInChat &&
-            messageId === lastAssistantMessageId
-          ) {
-            return (
-              <ProposedPlanCard
-                planMarkdown={planContentMarkdown}
-                implemented={false}
-                onImplement={
-                  isReadOnly
-                    ? undefined
-                    : () => implementPlanContent(planContentMarkdown)
-                }
-                onImplementInNewSession={
-                  isReadOnly
-                    ? undefined
-                    : () => void implementInNewSession(planContentMarkdown)
-                }
-                onSave={isReadOnly ? undefined : savePlan}
-                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
-                saveAsDocumentLabel={saveAsDocumentLabel}
-                isSaving={isSaving}
-                isSavingDoc={isSavingDoc}
-                isArchived={isReadOnly}
-              />
-            );
-          }
-          return null;
+          if (!plan) return null;
+          return (
+            <ProposedPlanCard
+              planMarkdown={plan.planMarkdown}
+              implemented={plan.implementedAt !== undefined}
+              onImplement={
+                isReadOnly || plan.implementedAt !== undefined
+                  ? undefined
+                  : () => implementPlan(plan)
+              }
+              onImplementInNewSession={
+                isReadOnly || plan.implementedAt !== undefined
+                  ? undefined
+                  : () => void implementInNewSession(plan.planMarkdown, plan)
+              }
+              onSave={isReadOnly ? undefined : savePlan}
+              onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
+              saveAsDocumentLabel={saveAsDocumentLabel}
+              isSaving={isSaving}
+              isSavingDoc={isSavingDoc}
+              isArchived={isReadOnly}
+            />
+          );
         }}
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}
