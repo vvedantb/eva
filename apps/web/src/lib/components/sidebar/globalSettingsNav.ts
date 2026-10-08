@@ -1,4 +1,5 @@
 import {
+  IconActivity,
   IconBell,
   IconCode,
   IconFlask,
@@ -53,6 +54,11 @@ export const GLOBAL_SETTINGS_NAV = [
     name: "Sandboxes",
     href: "/settings/sandboxes",
     icon: IconServerBolt,
+  },
+  {
+    name: "Sandbox status",
+    href: "/settings/sandbox-status",
+    icon: IconActivity,
   },
   {
     name: "Sync",

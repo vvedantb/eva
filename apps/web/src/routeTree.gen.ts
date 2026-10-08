@@ -34,6 +34,7 @@ import { Route as GlobalSettingsExperimentalRouteImport } from './routes/_global
 import { Route as GlobalSettingsGrokBotRouteImport } from './routes/_global/settings/grok-bot'
 import { Route as GlobalSettingsNotificationsRouteImport } from './routes/_global/settings/notifications'
 import { Route as GlobalSettingsPersonalisationRouteImport } from './routes/_global/settings/personalisation'
+import { Route as GlobalSettingsSandboxStatusRouteImport } from './routes/_global/settings/sandbox-status'
 import { Route as GlobalSettingsSandboxesRouteImport } from './routes/_global/settings/sandboxes'
 import { Route as GlobalSettingsShortcutsRouteImport } from './routes/_global/settings/shortcuts'
 import { Route as GlobalSettingsSyncRouteImport } from './routes/_global/settings/sync'
@@ -274,6 +275,12 @@ const GlobalSettingsPersonalisationRoute =
   GlobalSettingsPersonalisationRouteImport.update({
     id: '/personalisation',
     path: '/personalisation',
+    getParentRoute: () => GlobalSettingsRouteRoute,
+  } as any)
+const GlobalSettingsSandboxStatusRoute =
+  GlobalSettingsSandboxStatusRouteImport.update({
+    id: '/sandbox-status',
+    path: '/sandbox-status',
     getParentRoute: () => GlobalSettingsRouteRoute,
   } as any)
 const GlobalSettingsSandboxesRoute = GlobalSettingsSandboxesRouteImport.update({
@@ -966,6 +973,7 @@ export interface FileRoutesByFullPath {
   '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
+  '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
   '/settings/sync': typeof GlobalSettingsSyncRoute
@@ -1102,6 +1110,7 @@ export interface FileRoutesByTo {
   '/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
+  '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
   '/settings/sync': typeof GlobalSettingsSyncRoute
@@ -1220,6 +1229,7 @@ export interface FileRoutesById {
   '/_global/settings/grok-bot': typeof GlobalSettingsGrokBotRoute
   '/_global/settings/notifications': typeof GlobalSettingsNotificationsRoute
   '/_global/settings/personalisation': typeof GlobalSettingsPersonalisationRoute
+  '/_global/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/_global/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/_global/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
   '/_global/settings/sync': typeof GlobalSettingsSyncRoute
@@ -1360,6 +1370,7 @@ export interface FileRouteTypes {
     | '/settings/grok-bot'
     | '/settings/notifications'
     | '/settings/personalisation'
+    | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
     | '/settings/sync'
@@ -1496,6 +1507,7 @@ export interface FileRouteTypes {
     | '/settings/grok-bot'
     | '/settings/notifications'
     | '/settings/personalisation'
+    | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
     | '/settings/sync'
@@ -1613,6 +1625,7 @@ export interface FileRouteTypes {
     | '/_global/settings/grok-bot'
     | '/_global/settings/notifications'
     | '/_global/settings/personalisation'
+    | '/_global/settings/sandbox-status'
     | '/_global/settings/sandboxes'
     | '/_global/settings/shortcuts'
     | '/_global/settings/sync'
@@ -1916,6 +1929,13 @@ declare module '@tanstack/react-router' {
       path: '/personalisation'
       fullPath: '/settings/personalisation'
       preLoaderRoute: typeof GlobalSettingsPersonalisationRouteImport
+      parentRoute: typeof GlobalSettingsRouteRoute
+    }
+    '/_global/settings/sandbox-status': {
+      id: '/_global/settings/sandbox-status'
+      path: '/sandbox-status'
+      fullPath: '/settings/sandbox-status'
+      preLoaderRoute: typeof GlobalSettingsSandboxStatusRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/sandboxes': {
@@ -2719,6 +2739,7 @@ interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsGrokBotRoute: typeof GlobalSettingsGrokBotRoute
   GlobalSettingsNotificationsRoute: typeof GlobalSettingsNotificationsRoute
   GlobalSettingsPersonalisationRoute: typeof GlobalSettingsPersonalisationRoute
+  GlobalSettingsSandboxStatusRoute: typeof GlobalSettingsSandboxStatusRoute
   GlobalSettingsSandboxesRoute: typeof GlobalSettingsSandboxesRoute
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
   GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
@@ -2733,6 +2754,7 @@ const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsGrokBotRoute: GlobalSettingsGrokBotRoute,
   GlobalSettingsNotificationsRoute: GlobalSettingsNotificationsRoute,
   GlobalSettingsPersonalisationRoute: GlobalSettingsPersonalisationRoute,
+  GlobalSettingsSandboxStatusRoute: GlobalSettingsSandboxStatusRoute,
   GlobalSettingsSandboxesRoute: GlobalSettingsSandboxesRoute,
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
   GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,

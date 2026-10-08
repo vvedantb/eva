@@ -6,14 +6,14 @@ import {
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import { authMutation, authQuery, hasActiveRun } from "./functions";
 import {
-  authMutation,
-  authQuery,
-  hasActiveRun,
-  hasRepoAccess,
-  hasTaskAccess,
-} from "./functions";
+  gatherAccessibleRepos,
+  repoBasePath,
+  repoDisplayLabel,
+} from "./_githubRepos/helpers";
+import { filterActiveEntities } from "./numId";
 import { resolveUserDisplayFirstName } from "./_userProviderAccounts/defaults";
 import { sandboxPresenceRoomId } from "@eva/shared";
 import { firstPresentUserInRoom } from "./presence";
@@ -40,6 +40,7 @@ import {
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
 import {
+  sandboxActivityKindValidator,
   sandboxActivitySourceValidator,
   sandboxIdlePauseModeValidator,
 } from "./_validators/tableFields";
@@ -115,53 +116,151 @@ export const setSandboxIdlePauseSettings = authMutation({
   },
 });
 
+/** Same cap per repo and kind as the rail's awake-sandbox counts. */
+const AWAKE_PER_REPO_LIMIT = 64;
+
+const awakeSandboxValidator = v.object({
+  kind: sandboxActivityKindValidator,
+  entityId: v.string(),
+  title: v.string(),
+  repoLabel: v.string(),
+  /** App path to the session, quick task or project; absent before numId backfill. */
+  href: v.optional(v.string()),
+  /** An agent turn, run or queued follow-up holds the sandbox awake. */
+  busy: v.boolean(),
+  /** First name of someone with a sandbox tab open right now. */
+  viewerName: v.optional(v.string()),
+  lastUserActivityAt: v.number(),
+  lastUserActivitySource: v.optional(sandboxActivitySourceValidator),
+  lastUserName: v.optional(v.string()),
+  lastAgentFinishedAt: v.optional(v.number()),
+  /** When both idle graces end; the 5-minute sweep pauses it after this. */
+  idleDeadline: v.number(),
+});
+
 /**
- * Sandbox panel read: who or what last reset this entity's idle clock, so a
- * sandbox that stays awake can be traced to a person and a channel. Null when
- * nothing was recorded or the caller cannot see the entity.
+ * Sandbox status page: every awake sandbox the caller can see, with who last
+ * kept it awake and when idle pause will stop it. Indexed per accessible repo,
+ * so it never scans the entity tables.
  */
-export const getSandboxLastActivity = authQuery({
-  args: sandboxActivityRefArgs,
-  returns: v.union(
-    v.null(),
-    v.object({
-      at: v.number(),
-      source: v.optional(sandboxActivitySourceValidator),
-      userName: v.optional(v.string()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    if (!(await canSeeEntity(ctx, args, ctx.userId))) return null;
-    const row = await getSandboxActivity(ctx.db, args);
-    if (row?.lastUserActivityAt === undefined) return null;
+export const listAwakeSandboxes = authQuery({
+  args: {},
+  returns: v.object({
+    mode: sandboxIdlePauseModeValidator,
+    sandboxes: v.array(awakeSandboxValidator),
+  }),
+  handler: async (ctx) => {
+    const thresholds = resolveIdleThresholds(
+      await ctx.db.query("appSettings").first(),
+    );
+    const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, true);
+    const perRepo = await Promise.all(
+      repos.map(async (repo) => {
+        const entities = await awakeEntitiesInRepo(ctx, repo._id);
+        const rows = await Promise.all(
+          entities.map(async (entity) => {
+            const candidate = await inspectEntity(ctx, entity);
+            if (!candidate) return null;
+            return {
+              kind: entity.kind,
+              entityId: String(entity.doc._id),
+              title: entity.doc.title,
+              repoLabel: repoDisplayLabel(repo),
+              href:
+                entity.doc.numId === undefined
+                  ? undefined
+                  : `${repoBasePath(repo)}/${ENTITY_SECTION[entity.kind]}/${entity.doc.numId}`,
+              busy: candidate.busy,
+              viewerName: await displayName(ctx, candidate.presentUserId),
+              lastUserActivityAt: candidate.lastUserActivityAt,
+              lastUserActivitySource: candidate.lastUserActivitySource,
+              lastUserName: await displayName(
+                ctx,
+                candidate.lastUserActivityUserId,
+              ),
+              lastAgentFinishedAt: candidate.lastAgentFinishedAt,
+              idleDeadline: Math.max(
+                (candidate.lastAgentFinishedAt ?? 0) + thresholds.afterAgentMs,
+                candidate.lastUserActivityAt + thresholds.afterInteractionMs,
+              ),
+            };
+          }),
+        );
+        return rows.filter((row) => row !== null);
+      }),
+    );
     return {
-      at: row.lastUserActivityAt,
-      source: row.lastUserActivitySource,
-      userName: row.lastUserActivityUserId
-        ? await resolveUserDisplayFirstName(ctx.db, row.lastUserActivityUserId)
-        : undefined,
+      mode: thresholds.mode,
+      sandboxes: perRepo
+        .flat()
+        .sort((a, b) => b.lastUserActivityAt - a.lastUserActivityAt),
     };
   },
 });
 
-async function canSeeEntity(
+const ENTITY_SECTION: Record<AwakeEntity["kind"], string> = {
+  session: "sessions",
+  task: "quick-tasks",
+  project: "projects",
+};
+
+type AwakeEntity =
+  | { kind: "session"; doc: Doc<"sessions"> }
+  | { kind: "task"; doc: Doc<"agentTasks"> }
+  | { kind: "project"; doc: Doc<"projects"> };
+
+/** Awake (status `active`, sandbox attached, not deleted) entities in one repo. */
+async function awakeEntitiesInRepo(
   ctx: QueryCtx,
-  ref: SandboxActivityRef,
-  userId: Id<"users">,
-): Promise<boolean> {
-  if (ref.kind === "session") {
-    const id = ctx.db.normalizeId("sessions", ref.entityId);
-    const session = id ? await ctx.db.get(id) : null;
-    return session ? hasRepoAccess(ctx.db, session.repoId, userId) : false;
-  }
-  if (ref.kind === "task") {
-    const id = ctx.db.normalizeId("agentTasks", ref.entityId);
-    const task = id ? await ctx.db.get(id) : null;
-    return task ? hasTaskAccess(ctx.db, task, userId) : false;
-  }
-  const id = ctx.db.normalizeId("projects", ref.entityId);
-  const project = id ? await ctx.db.get(id) : null;
-  return project ? hasRepoAccess(ctx.db, project.repoId, userId) : false;
+  repoId: Id<"githubRepos">,
+): Promise<AwakeEntity[]> {
+  const [sessions, tasks, projects] = await Promise.all([
+    ctx.db
+      .query("sessions")
+      .withIndex("by_repo_and_status", (q) =>
+        q.eq("repoId", repoId).eq("status", "active"),
+      )
+      .take(AWAKE_PER_REPO_LIMIT),
+    ctx.db
+      .query("agentTasks")
+      .withIndex("by_repo_and_sandbox_status", (q) =>
+        q.eq("repoId", repoId).eq("reviewTaskSandboxStatus", "active"),
+      )
+      .take(AWAKE_PER_REPO_LIMIT),
+    ctx.db
+      .query("projects")
+      .withIndex("by_repo_and_sandbox_status", (q) =>
+        q.eq("repoId", repoId).eq("reviewProjectSandboxStatus", "active"),
+      )
+      .take(AWAKE_PER_REPO_LIMIT),
+  ]);
+  return [
+    ...filterActiveEntities(sessions)
+      .filter((doc) => doc.sandboxId)
+      .map((doc) => ({ kind: "session" as const, doc })),
+    ...filterActiveEntities(tasks)
+      .filter((doc) => doc.sandboxId)
+      .map((doc) => ({ kind: "task" as const, doc })),
+    ...filterActiveEntities(projects)
+      .filter((doc) => doc.sandboxId)
+      .map((doc) => ({ kind: "project" as const, doc })),
+  ];
+}
+
+async function inspectEntity(
+  ctx: QueryCtx,
+  entity: AwakeEntity,
+): Promise<Candidate | null> {
+  if (entity.kind === "session") return await inspectSession(ctx, entity.doc._id);
+  if (entity.kind === "task") return await inspectTask(ctx, entity.doc._id);
+  return await inspectProject(ctx, entity.doc._id);
+}
+
+async function displayName(
+  ctx: QueryCtx,
+  userId: Id<"users"> | undefined,
+): Promise<string | undefined> {
+  return userId ? await resolveUserDisplayFirstName(ctx.db, userId) : undefined;
 }
 
 /** Internal: thresholds in milliseconds for the sweep. */

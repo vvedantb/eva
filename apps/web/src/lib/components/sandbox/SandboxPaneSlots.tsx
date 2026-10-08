@@ -8,7 +8,6 @@ import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { SandboxPresenceBeacon } from "./SandboxPresenceBeacon";
 import { SandboxAutoWake } from "./SandboxAutoWake";
-import { SandboxLastActivity } from "./SandboxLastActivity";
 import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
 import { CustomTabPanel } from "./CustomTabPanel";
 import { TerminalPanel } from "@/routes/_repo/$owner/$repo/sessions/TerminalPanel";
@@ -226,7 +225,6 @@ export function SandboxPaneSlots({
           </div>
         ))}
       </div>
-      {isActive ? <SandboxLastActivity owner={owner} /> : null}
     </div>
   );
 

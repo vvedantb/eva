@@ -224,6 +224,7 @@ import type * as _sandbox_stopRecovery from "../_sandbox/stopRecovery.js";
 import type * as _sandbox_tags from "../_sandbox/tags.js";
 import type * as _sandbox_vercelEnvFile from "../_sandbox/vercelEnvFile.js";
 import type * as _sandbox_vercelProvider from "../_sandbox/vercelProvider.js";
+import type * as _sandbox_vercelRegion from "../_sandbox/vercelRegion.js";
 import type * as _sandbox_vercelSnapshotOptions from "../_sandbox/vercelSnapshotOptions.js";
 import type * as _sandbox_runtime_agentLaunchStep from "../_sandbox_runtime/agentLaunchStep.js";
 import type * as _sandbox_runtime_attachments from "../_sandbox_runtime/attachments.js";
@@ -742,6 +743,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/tags": typeof _sandbox_tags;
   "_sandbox/vercelEnvFile": typeof _sandbox_vercelEnvFile;
   "_sandbox/vercelProvider": typeof _sandbox_vercelProvider;
+  "_sandbox/vercelRegion": typeof _sandbox_vercelRegion;
   "_sandbox/vercelSnapshotOptions": typeof _sandbox_vercelSnapshotOptions;
   "_sandbox_runtime/agentLaunchStep": typeof _sandbox_runtime_agentLaunchStep;
   "_sandbox_runtime/attachments": typeof _sandbox_runtime_attachments;
