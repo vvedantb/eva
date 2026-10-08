@@ -69,6 +69,7 @@ const handleUpstreamFactory = new Function(
     // Stubbed: the real ping script interpolates the heartbeat interval.
     'const visibilityPingScript = "PING";',
     extractFunctionSource("function isDocumentRequest(req) {"),
+    extractFunctionSource("function insertBeforeHeadOrBodyClose(html, tag) {"),
     extractFunctionSource("function injectVisibilityPing(html) {"),
     extractFunctionSource("function stripModuleCrossorigin(html) {"),
     extractFunctionSource("function rewriteNovncModuleImports(html) {"),
@@ -92,6 +93,8 @@ interface HarnessOptions {
   requestHeaders?: Record<string, string>;
   /** `false` makes every clientRes.write report backpressure. */
   acceptWrites?: boolean;
+  /** Replaces the stubbed nav-sync tag. */
+  injectionTag?: string;
 }
 
 function createHarness(options: HarnessOptions = {}) {
@@ -100,6 +103,7 @@ function createHarness(options: HarnessOptions = {}) {
     acceptWrites = true,
     pingPages = false,
     requestHeaders = {},
+    injectionTag = INJECTION_TAG,
   } = options;
 
   const drainListeners: Array<() => void> = [];
@@ -133,7 +137,7 @@ function createHarness(options: HarnessOptions = {}) {
   const handleUpstream: HandleUpstream = handleUpstreamFactory(
     /^\/(?:__tab\/|__convex|__agentation|__eva_preview_proxy)/,
     bufferWholeHtml,
-    INJECTION_TAG,
+    injectionTag,
     3000,
     ".vercel.run",
     /^$/,
@@ -392,5 +396,25 @@ describe("on-screen ping injection", () => {
     res.emit("end");
 
     expect(received(clientRes)).not.toContain(PING_TAG);
+  });
+
+  // The annotation script's CSS escape holds "$&". String.replace expanded it
+  // to </head>, so the ping tag landed inside the nav-sync script and its
+  // </script> leaked the rest of that script onto the page as text.
+  test("a '$&' in the nav-sync script stays literal and the ping lands after it", () => {
+    const navTag = '<script data-eva-preview-nav-sync>x.replace(/a/g, "\\\\$&");</script>';
+    const { clientRes, handleUpstream, upstream } = createHarness({
+      pingPages: true,
+      requestHeaders: { "sec-fetch-dest": "iframe" },
+      injectionTag: navTag,
+    });
+    const res = upstream();
+    handleUpstream(res);
+    res.emit("data", Buffer.from("<html><head></head><body>x</body></html>"));
+    res.emit("end");
+
+    expect(received(clientRes)).toBe(
+      `<html><head>${navTag}${PING_TAG}</head><body>x</body></html>`,
+    );
   });
 });
