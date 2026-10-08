@@ -37,24 +37,39 @@ export type CompletionTurnResolution =
   | { status: "legacy" }
   | { status: "stale" };
 
-export async function findOpenSessionTurn(
+/** The one open turn of a session chat, if any. Chats run one turn at a time. */
+export async function findOpenChatTurn(
   ctx: QueryCtx,
-  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
       q
-        .eq("surface", "session")
-        .eq("entityId", String(sessionId))
+        .eq("surface", "sessionChat")
+        .eq("entityId", String(chatId))
         .eq("open", true),
     )
     .first();
 }
 
-export async function openSessionTurn(
+/** Open turns across every chat of a session (the parallel-chat cap reads this). */
+export async function listOpenSessionTurns(
+  ctx: QueryCtx,
+  sessionId: Id<"sessions">,
+): Promise<Doc<"turns">[]> {
+  return await ctx.db
+    .query("turns")
+    .withIndex("by_session_open", (q) =>
+      q.eq("sessionId", sessionId).eq("open", true),
+    )
+    .collect();
+}
+
+export async function openChatTurn(
   ctx: MutationCtx,
   params: {
+    chatId: Id<"sessionChats">;
     sessionId: Id<"sessions">;
     streamingEntityId: string;
     placeholderMessageId: Id<"messages">;
@@ -66,15 +81,16 @@ export async function openSessionTurn(
   },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenSessionTurn(ctx, params.sessionId);
+  const previous = await findOpenChatTurn(ctx, params.chatId);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
     });
   }
-  const turnId = await ctx.db.insert("turns", {
-    surface: "session",
-    entityId: String(params.sessionId),
+  return await ctx.db.insert("turns", {
+    surface: "sessionChat",
+    entityId: String(params.chatId),
+    sessionId: params.sessionId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
     open: true,
@@ -92,8 +108,6 @@ export async function openSessionTurn(
     sandboxId: params.sandboxId,
     repoId: params.repoId,
   });
-  await ctx.db.patch(params.sessionId, { turnLifecycleVersion: 2 });
-  return turnId;
 }
 
 export async function bindTurnWorkflow(
@@ -174,9 +188,9 @@ export async function renewTurnLease(
   if (turn.leaseGeneration !== params.leaseGeneration) {
     return { status: "terminal", reason: "superseded" };
   }
-  const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-  if (!sessionId) return { status: "terminal", reason: "unknown_turn" };
-  const current = await findOpenSessionTurn(ctx, sessionId);
+  const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
+  if (!chatId) return { status: "terminal", reason: "unknown_turn" };
+  const current = await findOpenChatTurn(ctx, chatId);
   if (!current || current._id !== turn._id) {
     return { status: "terminal", reason: "superseded" };
   }
@@ -216,13 +230,13 @@ export async function renewTurnLease(
 export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
-    sessionId: Id<"sessions">;
+    chatId: Id<"sessionChats">;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenSessionTurn(ctx, params.sessionId);
+  const current = await findOpenChatTurn(ctx, params.chatId);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -232,7 +246,7 @@ export async function resolveCompletionTurn(
   if (
     !turn ||
     !turn.open ||
-    turn.entityId !== String(params.sessionId) ||
+    turn.entityId !== String(params.chatId) ||
     turn.leaseGeneration !== params.leaseGeneration ||
     !current ||
     current._id !== turn._id ||
@@ -259,24 +273,24 @@ export async function closeTurn(
   });
 }
 
-export async function closeOpenSessionTurn(
+export async function closeOpenChatTurn(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenChatTurn(ctx, chatId);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
 export async function closeTurnForWorkflow(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
   workflowId: string,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenChatTurn(ctx, chatId);
   if (!turn || turn.workflowId !== workflowId) return;
   await closeTurn(ctx, turn, state, patch);
 }

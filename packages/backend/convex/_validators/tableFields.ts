@@ -188,8 +188,14 @@ export type TurnState = Infer<typeof turnStateValidator>;
 
 /** Durable ownership record for one session chat turn. */
 export const turnFields = {
-  surface: v.literal("session"),
+  // "session" rows predate per-chat turns; `backfillSessionChats` closes
+  // them. New turns are always "sessionChat", keyed by the chat id.
+  surface: v.union(v.literal("session"), v.literal("sessionChat")),
   entityId: v.string(),
+  // The session the chat belongs to, so one indexed scan answers "how many
+  // chats are running in this session" (the parallel-chat cap) and "is any
+  // chat of this session executing" (the sidebar).
+  sessionId: v.optional(v.id("sessions")),
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -253,6 +259,43 @@ export const chatDaemonEntityFields = {
   // hands back an empty claim so a dying daemon cannot take the turn (and its
   // 2-minute running lease) with it.
   claimPausedUntil: v.optional(v.number()),
+};
+
+/**
+ * One chat thread inside a session. The session owns the sandbox, branch,
+ * PR and preview; the chat owns the transcript, the warm daemon, the open
+ * turn and the model settings. Every session has a Main chat (number 1);
+ * further chats run in parallel on the same checkout, each with its own
+ * daemon and provider transcript (`sessionClaudeUuid(chat._id)`).
+ */
+export const sessionChatFields = {
+  sessionId: v.id("sessions"),
+  repoId: v.id("githubRepos"),
+  /** Session owner, mirrored so the 50ms daemon claim poll skips the repo access read. */
+  userId: v.id("users"),
+  title: v.string(),
+  /** Per-session sequence; 1 is Main. Stable for links (`?chat=2`). */
+  number: v.number(),
+  isMain: v.boolean(),
+  /** Closed by the user. Main can never be archived. */
+  archived: v.optional(v.boolean()),
+  createdBy: v.optional(v.id("users")),
+  updatedAt: v.optional(v.number()),
+  activeWorkflowId: v.optional(v.string()),
+  // Composer settings, sticky per chat (see the matching session comments
+  // for each field's contract).
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  provider: v.optional(aiProviderValidator),
+  lastModel: v.optional(aiModelValidator),
+  lastReasoningLevel: v.optional(reasoningLevelValidator),
+  lastThinkingEnabled: v.optional(v.boolean()),
+  lastUse1mContext: v.optional(v.boolean()),
+  lastFastMode: v.optional(v.boolean()),
+  // A Main chat backfilled from an existing session keeps the session id as
+  // its provider-transcript seed so it resumes the conversation Claude
+  // already holds instead of starting cold. New chats hash their own id.
+  claudePersistenceSeed: v.optional(v.id("sessions")),
+  ...chatDaemonEntityFields,
 };
 
 export const agentTaskFields = {
@@ -758,7 +801,14 @@ export const messageFields = {
   finishedAt: v.optional(v.number()),
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  // Session chat rows hang off their `sessionChats` row. `sessions` is only
+  // still here for rows `backfillSessionChats` has not repointed yet.
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   // Client-generated id (crypto.randomUUID) set when a user message is sent
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
@@ -798,7 +848,12 @@ export const messageFields = {
 };
 
 export const queuedMessageFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
@@ -1006,6 +1061,8 @@ export const draftFields = {
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),
   sessionId: v.optional(v.id("sessions")),
+  /** Session chat drafts are per chat tab; `sessionId` stays for list grouping. */
+  chatId: v.optional(v.id("sessionChats")),
   content: v.string(),
   updatedAt: v.number(),
 };
@@ -1056,6 +1113,7 @@ export const draftTarget = v.union(
   v.object({
     kind: v.literal("sessionChat"),
     sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
   }),
 );
 
