@@ -21,7 +21,7 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { previewWakePath } from "@eva/shared";
 

@@ -39,8 +39,8 @@ import {
   resolveIdleThresholds,
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
+import { chatEntityKindValidator } from "./_validators/enums";
 import {
-  sandboxActivityKindValidator,
   sandboxActivitySourceValidator,
   sandboxIdlePauseModeValidator,
 } from "./_validators/tableFields";
@@ -120,7 +120,7 @@ export const setSandboxIdlePauseSettings = authMutation({
 const AWAKE_PER_REPO_LIMIT = 64;
 
 const awakeSandboxValidator = v.object({
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
   title: v.string(),
   repoLabel: v.string(),
@@ -251,7 +251,8 @@ async function inspectEntity(
   ctx: QueryCtx,
   entity: AwakeEntity,
 ): Promise<Candidate | null> {
-  if (entity.kind === "session") return await inspectSession(ctx, entity.doc._id);
+  if (entity.kind === "session")
+    return await inspectSession(ctx, entity.doc._id);
   if (entity.kind === "task") return await inspectTask(ctx, entity.doc._id);
   return await inspectProject(ctx, entity.doc._id);
 }
@@ -306,7 +307,10 @@ type Candidate = Infer<typeof candidateValidator>;
  * Open turns, runs and workflows are the authoritative busy signals and are
  * checked separately by the callers.
  */
-async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean> {
+async function hasPendingWork(
+  ctx: QueryCtx,
+  entityId: string,
+): Promise<boolean> {
   const streaming = await ctx.db
     .query("streamingActivity")
     .withIndex("by_entity", (q) => q.eq("entityId", entityId))
@@ -456,7 +460,12 @@ export const pause = internalMutation({
     if (args.kind === "session") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       const candidate = id ? await inspectSession(ctx, id) : null;
-      if (!id || !candidate || candidate.status !== "active" || candidate.busy) {
+      if (
+        !id ||
+        !candidate ||
+        candidate.status !== "active" ||
+        candidate.busy
+      ) {
         return false;
       }
       await requestSessionSandboxStop(ctx, id, { stopReason });
@@ -465,7 +474,12 @@ export const pause = internalMutation({
     if (args.kind === "task") {
       const id = ctx.db.normalizeId("agentTasks", args.entityId);
       const candidate = id ? await inspectTask(ctx, id) : null;
-      if (!id || !candidate || candidate.status !== "active" || candidate.busy) {
+      if (
+        !id ||
+        !candidate ||
+        candidate.status !== "active" ||
+        candidate.busy
+      ) {
         return false;
       }
       await requestTaskSandboxStop(ctx, id, { stopReason });
@@ -555,10 +569,10 @@ export const run = internalAction({
         `[sandboxIdlePause] ${verb} kind=${ref.kind} id=${ref.entityId} idleMinutes=${decision.idleMinutes} lastUser=${new Date(candidate.lastUserActivityAt).toISOString()} lastAgent=${candidate.lastAgentFinishedAt === undefined ? "none" : new Date(candidate.lastAgentFinishedAt).toISOString()} lastSource=${candidate.lastUserActivitySource ?? "unknown"} lastUserId=${candidate.lastUserActivityUserId ?? "none"}`,
       );
       if (thresholds.mode === "on") {
-        const stopped = await ctx.runMutation(
-          internal.sandboxIdlePause.pause,
-          { ...ref, idleMinutes: decision.idleMinutes },
-        );
+        const stopped = await ctx.runMutation(internal.sandboxIdlePause.pause, {
+          ...ref,
+          idleMinutes: decision.idleMinutes,
+        });
         if (!stopped) continue;
       }
       paused += 1;

@@ -4,8 +4,10 @@ import {
   authAction,
   authQuery,
   authMutation,
+  getSessionWithAccess,
   hasRepoAccess,
 } from "./functions";
+import { findDocWithAccess, getDocWithAccess } from "./_docs/access";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
 import {
   internalMutation,
@@ -14,7 +16,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { components, internal } from "./_generated/api";
-import { extractPrNumberFromUrl } from "./_github/prUrl";
+import { extractPrNumber } from "./_github/prUrl";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -291,18 +293,8 @@ export const get = authQuery({
   args: { id: v.id("docs") },
   returns: v.union(docValidator, v.null()),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) return null;
-
-    if (doc.kind === "pr-recap") {
-      if (!(await hasCodebaseRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-        return null;
-      }
-      return entityVisible(doc);
-    }
-
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) return null;
-    return entityVisible(doc);
+    const doc = await findDocWithAccess(ctx.db, args.id, ctx.userId);
+    return doc ? entityVisible(doc) : null;
   },
 });
 
@@ -390,10 +382,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
       title?: string;
       content?: string;
@@ -430,11 +419,11 @@ export const createFromSession = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     const planContent = session.planContent?.trim();
     if (!planContent) {
       throw new Error("Session has no plan content to save");
@@ -493,11 +482,7 @@ export const ensureSyncDoc = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
 
     const existing = await ctx.runQuery(
       components.prosemirrorSync.lib.getSnapshot,
@@ -515,13 +500,7 @@ export const remove = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
     return null;
   },
@@ -537,8 +516,7 @@ export const addInterviewMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const history = doc.interviewHistory ?? [];
     history.push({
       role: args.role,
@@ -556,8 +534,7 @@ export const clearInterview = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       interviewHistory: undefined,
       sandboxId: undefined,
@@ -976,7 +953,7 @@ export const generatePrRecap = authAction({
       throw new Error("Not authorized");
     }
 
-    const prNumber = extractPrNumberFromUrl(args.prUrl);
+    const prNumber = extractPrNumber(args.prUrl);
     if (prNumber === null) {
       throw new Error("Invalid pull request URL");
     }

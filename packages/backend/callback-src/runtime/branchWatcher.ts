@@ -1,8 +1,8 @@
 import { statSync, watch, type FSWatcher } from "fs";
 import { ENTITY_ID, ENTITY_ID_FIELD, WORK_DIR } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
-import { log } from "../utils.js";
-import { git } from "./gitExec.js";
+import { log, errorText } from "../utils.js";
+import { git, readCurrentBranch } from "./gitExec.js";
 
 /**
  * Reports the branch the sandbox checkout is actually on, so the UI can show it
@@ -64,12 +64,13 @@ export function decideBranchReport(input: {
   return input.current;
 }
 
-function readCurrentBranch(): string | null {
-  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
-  if (!abbrev.ok) return null;
-  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
-  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
-  return formatBranch(abbrev.out, short.ok ? short.out : "");
+function readWatchedBranch(): string | null {
+  const abbrev = readCurrentBranch({ timeoutMs: GIT_TIMEOUT_MS });
+  if (abbrev !== "HEAD") return formatBranch(abbrev, "");
+  const short = git(["rev-parse", "--short", "HEAD"], {
+    timeoutMs: GIT_TIMEOUT_MS,
+  });
+  return formatBranch(abbrev, short.ok ? short.out : "");
 }
 
 let target: BranchTarget | null = null;
@@ -96,7 +97,7 @@ async function runCheckLoop(): Promise<void> {
     while (again) {
       again = false;
       const branch = decideBranchReport({
-        current: readCurrentBranch(),
+        current: readWatchedBranch(),
         lastReported,
       });
       if (branch !== null) {
@@ -108,10 +109,7 @@ async function runCheckLoop(): Promise<void> {
           lastReported = branch;
         } catch (error) {
           // Leave lastReported alone so the next tick retries this branch.
-          log(
-            "branchWatcher: report failed: " +
-              (error instanceof Error ? error.message : String(error)),
-          );
+          log("branchWatcher: report failed: " + errorText(error));
         }
       }
       if (recheckQueued) {
@@ -144,8 +142,7 @@ function watchHeadIn(gitDir: string): void {
     headWatcher.unref();
   } catch (error) {
     log(
-      "branchWatcher: fs.watch unavailable, polling only: " +
-        (error instanceof Error ? error.message : String(error)),
+      "branchWatcher: fs.watch unavailable, polling only: " + errorText(error),
     );
   }
 }

@@ -16,7 +16,7 @@ import {
   writeFileSync,
 } from "fs";
 import { WORK_DIR } from "../config.js";
-import { log, tryParseJson } from "../utils.js";
+import { isJsonObject, log, tryParseJsonObject } from "../utils.js";
 
 /** Written by `launch.ts` on every launch, empty list included. */
 const SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
@@ -41,18 +41,14 @@ export type SystemSkillStub = { name: string; stub: string };
  * empty array is a real instruction to remove every Eva stub.
  */
 export function parseSystemSkillsFile(raw: string): SystemSkillStub[] | null {
-  const parsed = tryParseJson(raw);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(raw);
+  if (!parsed) return null;
   const skills = parsed.skills;
   if (!Array.isArray(skills)) return null;
 
   const result: SystemSkillStub[] = [];
   for (const entry of skills) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      continue;
-    }
+    if (!isJsonObject(entry)) continue;
     const name = entry.name;
     const stub = entry.stub;
     if (typeof name !== "string" || typeof stub !== "string") continue;

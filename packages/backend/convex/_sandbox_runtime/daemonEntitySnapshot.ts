@@ -2,8 +2,13 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
+import {
+  sandboxEntityTableValidator,
+  type SandboxEntityTable,
+} from "../_validators/enums";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
 const emptyDaemonEntitySnapshot = {
   pendingTurn: undefined,
@@ -73,11 +78,7 @@ export const releaseDaemonLaunchLease = internalMutation({
  */
 export const setDaemonClaimPause = internalMutation({
   args: {
-    entityTable: v.union(
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: sandboxEntityTableValidator,
     entityId: v.string(),
     paused: v.boolean(),
   },
@@ -113,11 +114,7 @@ export const setDaemonClaimPause = internalMutation({
 /** Reads daemon-relevant fields for mid-turn respawn deferral decisions. */
 export const readDaemonEntitySnapshot = internalQuery({
   args: {
-    entityTable: v.union(
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: sandboxEntityTableValidator,
     entityId: v.string(),
   },
   returns: v.object({
@@ -168,39 +165,29 @@ export const readDaemonEntitySnapshot = internalQuery({
  */
 export const isEntitySandboxStopRequested = internalQuery({
   args: {
-    entityTable: v.union(
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: sandboxEntityTableValidator,
     entityId: v.string(),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const isStopped = (status: string | undefined) =>
-      status === "stopping" || status === "closed";
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       const doc = id ? await ctx.db.get(id) : null;
-      return !doc || isStopped(doc.status);
+      return !doc || isSandboxClosingStatus(doc.status);
     }
     if (args.entityTable === "agentTasks") {
       const id = ctx.db.normalizeId("agentTasks", args.entityId);
       const doc = id ? await ctx.db.get(id) : null;
-      return !doc || isStopped(doc.reviewTaskSandboxStatus);
+      return !doc || isSandboxClosingStatus(doc.reviewTaskSandboxStatus);
     }
     const id = ctx.db.normalizeId("projects", args.entityId);
     const doc = id ? await ctx.db.get(id) : null;
-    return !doc || isStopped(doc.reviewProjectSandboxStatus);
+    return !doc || isSandboxClosingStatus(doc.reviewProjectSandboxStatus);
   },
 });
 
 const activeSandboxEntityValidator = v.object({
-  entityTable: v.union(
-    v.literal("sessions"),
-    v.literal("agentTasks"),
-    v.literal("projects"),
-  ),
+  entityTable: sandboxEntityTableValidator,
   entityId: v.string(),
   sandboxId: v.string(),
   repoId: v.id("githubRepos"),
@@ -221,7 +208,7 @@ export const listActiveSandboxEntities = internalQuery({
       ctx.db.query("projects").collect(),
     ]);
     const out: Array<{
-      entityTable: "sessions" | "agentTasks" | "projects";
+      entityTable: SandboxEntityTable;
       entityId: string;
       sandboxId: string;
       repoId: Id<"githubRepos">;
@@ -282,11 +269,7 @@ export const listActiveSandboxEntities = internalQuery({
  */
 export const reconcileStoppedSandboxStatus = internalMutation({
   args: {
-    entityTable: v.union(
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: sandboxEntityTableValidator,
     entityId: v.string(),
     sandboxId: v.string(),
   },

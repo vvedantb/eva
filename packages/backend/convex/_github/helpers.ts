@@ -8,8 +8,6 @@ const packageJsonSchema = z.object({
   scripts: z.object({ dev: z.string() }).partial().optional(),
 });
 
-export { extractPrNumber } from "./prUrl";
-
 /** Scans the apps/ directory of a repo to detect monorepo sub-applications. */
 export async function detectAppsForRepo(
   octokit: Octokit,

@@ -15,10 +15,6 @@ export const revealValue = action({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     await getActionRepoWithAccess(ctx, args.repoId);
     const vars: Array<{ key: string; value: string }> = await ctx.runQuery(
       internal.repoEnvVars.getAllInternal,
@@ -38,10 +34,6 @@ export const upsertVar = action({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     await getActionRepoWithAccess(ctx, args.repoId);
     const stored = encryptValue(args.value);
     await ctx.runMutation(internal.repoEnvVars.upsertVarInternal, {

@@ -1,5 +1,8 @@
 import { v, type Infer } from "convex/values";
-import type { GenericDatabaseReader } from "convex/server";
+import type {
+  GenericDatabaseReader,
+  GenericDatabaseWriter,
+} from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 
@@ -46,6 +49,17 @@ export function sandboxOwnerKey(owner: SandboxOwner): string {
   if (owner.kind === "session") return `session-${owner.sessionId}`;
   if (owner.kind === "task") return `task-${owner.taskId}`;
   return `project-${owner.projectId}`;
+}
+
+/**
+ * streamingActivity entityId for sandbox startup progress. These strings are
+ * persisted and subscribed to by apps/web (SessionDetailClient.tsx,
+ * useTaskDetail.tsx, useProjectSandbox.ts); do not change them.
+ */
+export function sandboxStartupEntityId(owner: SandboxOwner): string {
+  if (owner.kind === "session") return `session-startup-${owner.sessionId}`;
+  if (owner.kind === "task") return `task-sandbox-startup-${owner.taskId}`;
+  return `project-sandbox-startup-${owner.projectId}`;
 }
 
 /**
@@ -132,4 +146,40 @@ export async function resolveSandboxOwnerForUser(
     ownerKey: sandboxOwnerKey(owner),
     doc: project,
   };
+}
+
+/** Like `resolveSandboxOwnerForUser`, but a missing or forbidden owner throws. */
+export async function resolveSandboxOwnerOrThrow(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+  owner: SandboxOwner,
+): Promise<ResolvedSandboxOwner> {
+  const resolved = await resolveSandboxOwnerForUser(db, userId, owner);
+  if (!resolved) throw new Error("Sandbox owner not found");
+  return resolved;
+}
+
+/** Fields every sandbox owner table declares, so one patch fits all three. */
+type SandboxOwnerPatch = Partial<
+  Pick<
+    Doc<"sessions">,
+    | "terminalPanes"
+    | "previewPath"
+    | "devPort"
+    | "terminalHistoryTail"
+    | "agentBrowsingAt"
+    | "updatedAt"
+    | "sandboxBranch"
+  >
+>;
+
+/** The one place that narrows a resolved owner back to its table for db.patch. */
+export async function patchSandboxOwner(
+  db: GenericDatabaseWriter<DataModel>,
+  owner: ResolvedSandboxOwner,
+  fields: SandboxOwnerPatch,
+): Promise<void> {
+  if (owner.kind === "session") await db.patch(owner.doc._id, fields);
+  else if (owner.kind === "task") await db.patch(owner.doc._id, fields);
+  else await db.patch(owner.doc._id, fields);
 }

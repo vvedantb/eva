@@ -52,7 +52,7 @@ describe("base rebuild followed by seeding", () => {
    */
   test("the base step completes the build only when nothing is seeded next", () => {
     const successAt = workflow.indexOf(
-      "built successfully.\\n`,\n            });",
+      "built successfully.\\n`,\n          });",
     );
     expect(successAt, "the base-only success moved").toBeGreaterThan(-1);
     const guard = workflow.slice(Math.max(0, successAt - 700), successAt);

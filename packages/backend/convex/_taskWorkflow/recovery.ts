@@ -4,11 +4,7 @@ import { cancelTrackedWorkflow } from "../workflowManager";
 import type { Id } from "../_generated/dataModel";
 import type { TurnState } from "../validators";
 import { closeOpenTurn } from "../_chat/turnStore";
-import {
-  clearStreamingActivity,
-  getTaskRunStreamingEntityId,
-  snapshotStreamingActivityToLog,
-} from "./helpers";
+import { clearTaskRunStreaming } from "./helpers";
 
 const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
@@ -177,10 +173,9 @@ export async function cleanUpStaleRun(
     error: params.errorMessage,
   });
 
-  const runStreamingEntityId = getTaskRunStreamingEntityId(params.runId);
-  await snapshotStreamingActivityToLog(ctx, runStreamingEntityId, params.runId);
-  await clearStreamingActivity(ctx, runStreamingEntityId);
-  await clearStreamingActivity(ctx, String(params.taskId));
+  await clearTaskRunStreaming(ctx, params.taskId, params.runId, {
+    snapshot: true,
+  });
 }
 
 /**

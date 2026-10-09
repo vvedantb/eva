@@ -2,7 +2,11 @@ import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
 } from "convex/server";
-import { hasRepoAccess } from "../functions";
+import {
+  getProjectWithAccess,
+  getSessionWithAccess,
+  hasRepoAccess,
+} from "../functions";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { Infer } from "convex/values";
 import { type draftTarget } from "../validators";
@@ -133,11 +137,7 @@ export async function resolveTarget(
   }
 
   if (target.kind === "projectChat") {
-    const project = await db.get(target.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(db, project.repoId, userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(db, target.projectId, userId);
     const { repoId } = project;
     const projectId = target.projectId;
     return {
@@ -147,11 +147,7 @@ export async function resolveTarget(
   }
 
   if (target.kind === "sessionChat") {
-    const session = await db.get(target.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(db, session.repoId, userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(db, target.sessionId, userId);
     const { repoId } = session;
     const sessionId = target.sessionId;
     return {

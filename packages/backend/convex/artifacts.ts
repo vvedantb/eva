@@ -19,6 +19,7 @@ import {
   resolveChatSource,
   type RepoCache,
 } from "./_chatSource/helpers";
+import { errorText } from "./_shared/errors";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
@@ -238,9 +239,10 @@ export const remove = authMutation({
 // existing read-only MCP tools as the SIGNED-IN user — no OAuth, no MCP wire
 // protocol — and return the identical envelope so the artifact runs unmodified.
 //
-// Access is enforced per call against the caller's own repo access
-// (checkRepoAccessForUser = repo owner OR team member). Team binding only scopes
-// where the artifact is listed; a call may target any repo the caller can reach.
+// Every allowed tool except list_repos is forwarded to eva's MCP server as the
+// caller (no scopedRepoId), so access, args and error text match mcp/tools.ts.
+// Team binding only scopes where the artifact is listed; a call may target any
+// repo the caller can reach.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Claude names MCP tools `mcp__<serverId>__<bareName>`. Strip through the last
@@ -250,76 +252,7 @@ function bareToolName(toolName: string): string {
   return idx === -1 ? toolName : toolName.slice(idx + 2);
 }
 
-// Per-tool argument schemas, mirroring the zod shapes (and defaults) in
-// mcp/tools.ts. The action receives `args` as a JSON string; each tool parses it
-// with its schema, so the parsed value is precisely typed without `any`/`as`.
-const postgresQueryArgs = z.object({
-  sql: z.string(),
-  limit: z.number().max(1000).default(100),
-  repoId: z.string(),
-});
-const environmentArg = z.enum(["staging", "prod"]).default("prod");
-const queryTableArgs = z.object({
-  table: z.string(),
-  order: z.enum(["asc", "desc"]).default("desc"),
-  limit: z.number().max(1000).default(100),
-  cursor: z.string().optional(),
-  repoId: z.string(),
-  environment: environmentArg,
-});
-const runQueryArgs = z.object({
-  code: z.string(),
-  repoId: z.string(),
-  environment: environmentArg,
-});
-const getDocumentArgs = z.object({
-  id: z.string(),
-  repoId: z.string(),
-  environment: environmentArg,
-});
-const countTableArgs = z.object({
-  table: z.string(),
-  repoId: z.string(),
-  environment: environmentArg,
-});
-
-/** Throws unless the caller can access the repo (owner or team member). */
-async function assertRepoAccess(
-  ctx: ActionCtx,
-  repoId: string,
-  userId: Id<"users">,
-): Promise<void> {
-  const ok = await ctx.runQuery(internal.mcp.queries.checkRepoAccessForUser, {
-    repoId,
-    userId,
-  });
-  if (!ok) {
-    throw new Error("Access denied: you do not have access to this repo.");
-  }
-}
-
-/** Asserts access, then resolves the repo's Convex credentials for the environment. */
-async function resolveCreds(
-  ctx: ActionCtx,
-  repoId: string,
-  userId: Id<"users">,
-  environment: "staging" | "prod",
-): Promise<{ convexUrl: string; deployKey: string }> {
-  await assertRepoAccess(ctx, repoId, userId);
-  const creds = await ctx.runAction(
-    internal.mcp.nodeActions.getRepoConvexCredentials,
-    { repoId, userId, environment },
-  );
-  if (!creds) {
-    throw new Error(
-      `Repo ${repoId} has no Convex credentials configured for "${environment}". Add them in the repo's Environment Variables in Eva.`,
-    );
-  }
-  return creds;
-}
-
-// Read-only tools that aren't dispatched directly above — Supabase (discovered
-// dynamically from its remote MCP) and list_tables — are forwarded to eva's MCP
+// Forwards a read-only tool (Convex data, Postgres, Supabase) to eva's MCP
 // server via a single stateless tools/call, the same path the hosted /mcp
 // endpoint uses. This keeps the bridge in sync with the server's tool registry
 // without re-implementing each tool here.
@@ -401,15 +334,12 @@ export const callTool = authAction({
     try {
       switch (name) {
         case "list_repos": {
-          const repos: Array<{
-            id: string;
-            owner: string;
-            name: string;
-            rootDirectory: string | null;
-            mcpRootPrompt: string | null;
-          }> = await ctx.runAction(internal.mcp.nodeActions.listUserRepos, {
-            userId,
-          });
+          // Kept direct: artifacts parse this bare-array shape, while the MCP
+          // tool now returns `{ repos, groups }` plus repo instructions.
+          const repos = await ctx.runQuery(
+            internal.mcp.queries.listUserRepos,
+            { userId },
+          );
           const replicaIds = new Set(
             await ctx.runQuery(internal.mcp.queries.reposWithPostgresReplica, {
               repoIds: repos.map((r) => r.id),
@@ -426,108 +356,11 @@ export const callTool = authAction({
           );
         }
 
-        case "postgres_query": {
-          const a = postgresQueryArgs.parse(JSON.parse(args));
-          await assertRepoAccess(ctx, a.repoId, userId);
-          const result = await ctx.runAction(
-            internal.mcp.postgres.runPostgresQuery,
-            { repoId: a.repoId, sql: a.sql, maxRows: a.limit },
-          );
-          if (!result.ok) {
-            return errorResult(`Postgres query failed: ${result.error}`);
-          }
-          return textResult({
-            columns: result.columns,
-            rows: result.rows,
-            rowCount: result.rowCount,
-            truncated: result.truncated,
-          });
-        }
-
-        case "query_table": {
-          const a = queryTableArgs.parse(JSON.parse(args));
-          const t = await resolveCreds(ctx, a.repoId, userId, a.environment);
-          const result = await ctx.runAction(
-            internal.mcp.nodeActions.queryTable,
-            {
-              convexUrl: t.convexUrl,
-              deployKey: t.deployKey,
-              table: a.table,
-              order: a.order,
-              numItems: a.limit,
-              cursor: a.cursor ?? null,
-            },
-          );
-          return textResult({
-            page: result.page,
-            isDone: result.isDone,
-            continueCursor: result.continueCursor,
-            count: result.page.length,
-          });
-        }
-
-        case "run_query": {
-          const a = runQueryArgs.parse(JSON.parse(args));
-          const t = await resolveCreds(ctx, a.repoId, userId, a.environment);
-          const result = await ctx.runAction(
-            internal.mcp.nodeActions.runTestQuery,
-            { convexUrl: t.convexUrl, deployKey: t.deployKey, code: a.code },
-          );
-          if (!result.ok) return errorResult(result.error);
-          return textResult(
-            result.logLines.length > 0
-              ? { result: result.value, logLines: result.logLines }
-              : { result: result.value },
-          );
-        }
-
-        case "get_document": {
-          const a = getDocumentArgs.parse(JSON.parse(args));
-          if (!/^[a-zA-Z0-9_]+$/.test(a.id)) {
-            return errorResult("Invalid document ID format.");
-          }
-          const t = await resolveCreds(ctx, a.repoId, userId, a.environment);
-          const result = await ctx.runAction(
-            internal.mcp.nodeActions.runTestQuery,
-            {
-              convexUrl: t.convexUrl,
-              deployKey: t.deployKey,
-              code: `return await ctx.db.get(${JSON.stringify(a.id)});`,
-            },
-          );
-          if (!result.ok) return errorResult(result.error);
-          return textResult(
-            result.logLines.length > 0
-              ? { document: result.value, logLines: result.logLines }
-              : { document: result.value },
-          );
-        }
-
-        case "count_table": {
-          const a = countTableArgs.parse(JSON.parse(args));
-          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(a.table)) {
-            return errorResult("Invalid table name.");
-          }
-          const t = await resolveCreds(ctx, a.repoId, userId, a.environment);
-          const result = await ctx.runAction(
-            internal.mcp.nodeActions.runTestQuery,
-            {
-              convexUrl: t.convexUrl,
-              deployKey: t.deployKey,
-              code: `const docs = await ctx.db.query(${JSON.stringify(a.table)}).collect(); return docs.length;`,
-            },
-          );
-          if (!result.ok) return errorResult(result.error);
-          return textResult({ table: a.table, count: result.value });
-        }
-
         default:
-          // Allowed read-only tools not dispatched directly above (Supabase,
-          // list_tables) go through eva's MCP server.
           return await callViaMcpServer(ctx, userId, name, args);
       }
     } catch (err) {
-      return errorResult(err instanceof Error ? err.message : String(err));
+      return errorResult(errorText(err));
     }
   },
 });

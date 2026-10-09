@@ -5,8 +5,10 @@ import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { errorResult } from "./toolShared";
+import { errorResult, type McpCredentials } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { errorText } from "../_shared/errors";
+import { withTimeout } from "../_shared/async";
 
 const SUPABASE_PREFIX = "supabase_";
 const TOOL_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -96,29 +98,6 @@ function toolSchemaToZodShape(
   return shape;
 }
 
-function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  label: string,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms}ms`)),
-      ms,
-    );
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e: unknown) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
-
 function createTransport(token: string): StreamableHTTPClientTransport {
   return new StreamableHTTPClientTransport(new URL(SUPABASE_REMOTE_URL), {
     requestInit: {
@@ -136,7 +115,10 @@ async function connectClient(token: string): Promise<Client> {
     await withTimeout(
       client.connect(transport),
       CONNECT_TIMEOUT_MS,
-      "Supabase MCP connect",
+      () =>
+        new Error(
+          `Supabase MCP connect timed out after ${CONNECT_TIMEOUT_MS}ms`,
+        ),
     );
   } catch (err) {
     await client.close().catch(() => {});
@@ -156,7 +138,10 @@ async function discoverTools(token: string): Promise<Tool[]> {
     const result = await withTimeout(
       client.listTools(),
       CONNECT_TIMEOUT_MS,
-      "Supabase tools/list",
+      () =>
+        new Error(
+          `Supabase tools/list timed out after ${CONNECT_TIMEOUT_MS}ms`,
+        ),
     );
     toolDefinitionCache.set(token, {
       tools: result.tools,
@@ -166,11 +151,6 @@ async function discoverTools(token: string): Promise<Tool[]> {
   } finally {
     await client.close();
   }
-}
-
-interface McpCredentials {
-  clerkUserId: string;
-  scopedRepoId?: string;
 }
 
 export async function supabaseTools(
@@ -244,7 +224,10 @@ export async function supabaseTools(
               const result = await withTimeout(
                 client.callTool({ name: tool.name, arguments: args }),
                 CALL_TIMEOUT_MS,
-                `Supabase tool ${tool.name}`,
+                () =>
+                  new Error(
+                    `Supabase tool ${tool.name} timed out after ${CALL_TIMEOUT_MS}ms`,
+                  ),
               );
 
               const parsedResult = toolResultContentSchema.safeParse(result);
@@ -282,7 +265,7 @@ export async function supabaseTools(
               await client.close();
             }
           } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
+            const message = errorText(err);
             return errorResult(`Supabase tool error: ${message}`);
           }
         },

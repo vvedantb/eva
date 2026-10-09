@@ -4,7 +4,11 @@ import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
-import { authMutation, hasRepoAccess } from "../functions";
+import {
+  authMutation,
+  getSessionWithAccess,
+  hasRepoAccess,
+} from "../functions";
 import {
   aiModelValidator,
   DEFAULT_AI_MODEL,
@@ -13,6 +17,7 @@ import {
   normalizeAIModel,
   sessionStatusValidator,
   turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   usesChatDaemon,
   daemonClaimResultValidator,
@@ -33,13 +38,14 @@ import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt } from "./prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { z } from "zod";
-import {
-  assistantReplyContent,
-  formatDelayedPublishFailureError,
-} from "./resultTarget";
+import { formatDelayedPublishFailureError } from "./resultTarget";
 import {
   applyChatTurnResult,
+  finalizeOpenSyntheticTurnOnCancel,
   insertAssistantPlaceholderIfNeeded,
+  syntheticTurnCompletionPatch,
+  turnCheckpointPatch,
+  type AssistantTurnResultPatch,
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
@@ -48,8 +54,9 @@ import {
   isTurnClaimed,
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
-import type { QueryCtx, MutationCtx } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { sandboxOwnerKey } from "../_sandbox/owner";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
@@ -70,6 +77,7 @@ import {
   openSessionTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
+import { errorText } from "../_shared/errors";
 
 // --- Completion event ---
 
@@ -114,24 +122,6 @@ function parseDesignResult(
   const raw = extractFirstJsonValue(text);
   const parsed = designResultSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
-}
-
-/** Finalizes and clears an open synthetic-turn placeholder on session hygiene paths. */
-async function finalizeOpenSyntheticTurn(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-  syntheticTurnMessageId: Id<"messages"> | undefined,
-): Promise<void> {
-  if (syntheticTurnMessageId === undefined) return;
-  const syntheticMessage = await ctx.db.get(syntheticTurnMessageId);
-  if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", String(sessionId)))
-      .first();
-    await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-  }
-  await ctx.db.patch(sessionId, { syntheticTurnMessageId: undefined });
 }
 
 /**
@@ -192,31 +182,29 @@ export async function buildSessionPrompt(
     branchName: row.branchName,
     baseBranch: row.baseBranch,
   }));
-  let prompt = buildEditPrompt(
-    {
+  let prompt = buildEditPrompt({
+    repo: {
       owner: repo.owner,
       name: repo.name,
       baseBranch: resolveSessionBaseBranch(session, repo),
     },
     branchName,
-    "",
-    resolvedMessage,
+    message: resolvedMessage,
     rootDirectory,
     customInstructionsBlock,
-    repo.systemPrompt,
-    session.devPort ?? repo.devPort,
-    [],
+    systemPrompt: repo.systemPrompt,
+    devPort: session.devPort ?? repo.devPort,
     readableRepos,
     linkedRepos,
-    {
-      ownerKey: `session-${session._id}`,
+    runtime: {
+      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       prUrl: session.prUrl,
       devCommand: session.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
     },
-  );
+  });
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;
   }
@@ -297,7 +285,7 @@ export const sessionSandboxStartupWorkflow = workflow.define({
         await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
           sessionId: args.sessionId,
           content: `Failed to prepare linked repo ${linkedRepo.name}`,
-          errorDetail: error instanceof Error ? error.message : String(error),
+          errorDetail: errorText(error),
         });
       }
     }
@@ -564,7 +552,7 @@ export const sessionExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("session", error);
         console.error(
-          `[sessionWorkflow] pushSandboxBranch failed sessionId=${args.sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[sessionWorkflow] pushSandboxBranch failed sessionId=${args.sessionId}: ${errorText(error)}`,
         );
         await step.runMutation(internal.sessionWorkflow.saveResult, {
           sessionId: args.sessionId,
@@ -605,7 +593,7 @@ export const sessionExecuteWorkflow = workflow.define({
           });
         } catch (error) {
           const errorDetail =
-            error instanceof Error ? error.message : String(error);
+            errorText(error);
           console.error(
             `[sessionWorkflow] createDraftSessionPr failed sessionId=${args.sessionId}: ${errorDetail}`,
           );
@@ -641,7 +629,7 @@ export const sessionExecuteWorkflow = workflow.define({
         );
       } catch (error) {
         const errorDetail =
-          error instanceof Error ? error.message : String(error);
+          errorText(error);
         console.error(
           `[sessionWorkflow] pushLinkedRepoBranches failed sessionId=${args.sessionId}: ${errorDetail}`,
         );
@@ -662,7 +650,7 @@ export const sessionExecuteWorkflow = workflow.define({
         } catch (error) {
           // One repo's PR failing must not stop its siblings' PRs.
           const errorDetail =
-            error instanceof Error ? error.message : String(error);
+            errorText(error);
           console.error(
             `[sessionWorkflow] createDraftSessionRepoPr failed sessionRepoId=${linkedPush.sessionRepoId}: ${errorDetail}`,
           );
@@ -761,10 +749,14 @@ export const clearStuckWorkingState = internalMutation({
     }
     const session = await ctx.db.get(args.sessionId);
     if (session?.syntheticTurnMessageId) {
-      await finalizeOpenSyntheticTurn(
+      const streaming = await ctx.db
+        .query("streamingActivity")
+        .withIndex("by_entity", (q) => q.eq("entityId", String(args.sessionId)))
+        .first();
+      await finalizeOpenSyntheticTurnOnCancel(
         ctx,
-        args.sessionId,
         session.syntheticTurnMessageId,
+        streaming,
       );
     }
     await clearStreamingActivity(ctx, String(args.sessionId));
@@ -980,37 +972,20 @@ export const saveResult = internalMutation({
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
     const designParsed = args.success ? parseDesignResult(args.result) : null;
-    const extraPatch: {
-      isSystemAlert?: boolean;
-      errorDetail?: string;
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-      variations?: Array<{
-        label: string;
-        route?: string;
-        filePath?: string;
-      }>;
-    } = {
+    const extraPatch: Omit<AssistantTurnResultPatch, "content"> = {
       isSystemAlert: undefined,
       errorDetail: undefined,
+      ...(designParsed
+        ? {
+            variations: designParsed.variations.map((variation) => ({
+              label: variation.label,
+              route: variation.route,
+              filePath: variation.filePath,
+            })),
+          }
+        : {}),
+      ...turnCheckpointPatch(args),
     };
-    if (designParsed) {
-      extraPatch.variations = designParsed.variations.map((variation) => ({
-        label: variation.label,
-        route: variation.route,
-        filePath: variation.filePath,
-      }));
-    }
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      extraPatch.beforeSha = args.beforeSha;
-      extraPatch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      extraPatch.beforeShas = args.beforeShas;
-      extraPatch.afterShas = args.afterShas;
-    }
 
     const outcome = await applyChatTurnResult(ctx, {
       parentId: args.sessionId,
@@ -1257,10 +1232,11 @@ export const updateBackgroundAgents = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     if (args.agents.length === 0) return null;
 
     const backgroundAgents = mergeBackgroundAgents(
@@ -1290,10 +1266,11 @@ export const requestStopBackgroundAgent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
 
     const pending = session.pendingTaskStops ?? [];
     if (pending.includes(args.toolUseId)) return null;
@@ -1488,10 +1465,11 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
 
     const turnModel = normalizeAIModel(args.model ?? session.lastModel);
     const messageId = await ctx.db.insert("messages", {
@@ -1575,42 +1553,7 @@ export const completeSyntheticTurn = authMutation({
       return null;
     }
 
-    const patch: {
-      content: string;
-      activityLog?: string;
-      finishedAt: number;
-      pendingQuestion?: string;
-      model?: Doc<"messages">["model"];
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-    } = {
-      content: assistantReplyContent({
-        success: args.success,
-        result: args.result,
-        error: args.error,
-      }),
-      finishedAt: Date.now(),
-    };
-    if (args.activityLog) {
-      patch.activityLog = args.activityLog;
-    }
-    if (args.pendingQuestion) {
-      patch.pendingQuestion = args.pendingQuestion;
-    }
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      patch.beforeSha = args.beforeSha;
-      patch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      patch.beforeShas = args.beforeShas;
-      patch.afterShas = args.afterShas;
-    }
-    // Drops the open-time stamp so a failed turn never becomes a checkpoint.
-    if (!args.success) {
-      patch.model = undefined;
-    }
+    const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
     // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {
@@ -1695,14 +1638,9 @@ export const handleStaleSyntheticTurn = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     sessionId: v.id("sessions"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
+    ...completionCallbackArgs,
     pendingQuestion: v.optional(v.string()),
     ...turnLeaseFenceArgs,
-    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {

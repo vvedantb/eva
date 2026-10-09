@@ -3,10 +3,6 @@
  */
 export const SKILL_TOKEN_REGEX = /\/\[([^\]]{1,200})\]\(([a-z0-9_]{16,40})\)/g;
 
-export function formatSkillToken(title: string, skillId: string): string {
-  return `/[${title}](${skillId})`;
-}
-
 export function stripSkillTokens(message: string): string {
   return message.replace(SKILL_TOKEN_REGEX, (_full, title) => `/${title}`);
 }

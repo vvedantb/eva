@@ -943,23 +943,29 @@ describe("MCP task and session creation always run on the repo default model", (
     expect(createSession).not.toMatch(/\bmodel\b/);
   });
 
-  test("the backing actions never send a model to the create mutations", () => {
+  test("the create calls never send a model to the create mutations", () => {
+    // Tasks call their mutations straight from tools.ts via mcpCallAsUser.
     const createTask = between(
-      nodeActions,
-      "export const createTask",
-      "export const startTaskExecution",
+      tools,
+      "async function createTaskForRepo(",
+      '"create_and_run_task"',
     );
     const createBatch = between(
-      nodeActions,
-      "export const createTasksBatch",
-      "export const createEvaDoc",
+      tools,
+      '"create_tasks_batch"',
+      '"send_chat_message"',
     );
     const createSession = between(
       nodeActions,
       "export const orchestratorCreateSession",
       "export const orchestratorSetWatch",
     );
+    expect(createTask).toContain("_agentTasks/mutations:createQuickTask");
+    expect(createBatch).toContain(
+      "_agentTasks/mutations:createBatchWithDependencies",
+    );
     for (const action of [createTask, createBatch, createSession]) {
+      expect(action.length).toBeGreaterThan(0);
       expect(action).not.toMatch(/\bmodel:/);
       expect(action).not.toContain("mutationArgs.model");
       expect(action).not.toContain("normalizeAIModel(");
@@ -981,4 +987,23 @@ describe("MCP task and session creation always run on the repo default model", (
     expect(createFn).not.toContain("if (!args.model)");
     expect(createFn).not.toContain("model: args.model");
   });
+});
+
+/**
+ * Every as-user call goes through one runner: per-endpoint copies drifted and
+ * thin per-function actions only re-shaped args mcpCallAsUser already carries.
+ */
+test("as-user calls share one runner and one HTTP helper", () => {
+  const nodeActions = convexSource("mcp/nodeActions.ts");
+  expect(nodeActions).toContain("async function runAsUser(");
+  expect(nodeActions).toContain("async function postConvex(");
+  for (const removed of [
+    "runQueryAsUser",
+    "runMutationAsUser",
+    "runActionAsUser",
+    "export const createEvaDoc",
+    "export const createTasksBatch",
+  ]) {
+    expect(nodeActions).not.toContain(removed);
+  }
 });

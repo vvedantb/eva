@@ -1,6 +1,7 @@
 "use node";
 
 import { z } from "zod";
+import { errorText } from "../_shared/errors";
 
 // Thin wrapper around Vercel's "Get a Deployment by ID or URL" REST endpoint.
 // We call this after we already know the per-commit deployment URL (from GitHub
@@ -74,7 +75,7 @@ export async function fetchStableBranchAlias(args: {
     return branchAlias ?? null;
   } catch (error) {
     console.log(
-      `[vercel-alias] Fetch failed for ${hostname}: ${error instanceof Error ? error.message : String(error)}`,
+      `[vercel-alias] Fetch failed for ${hostname}: ${errorText(error)}`,
     );
     return null;
   }

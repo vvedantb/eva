@@ -1,11 +1,11 @@
 import { v, type Infer } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import {
   authMutation,
+  getRepoWithAccess,
   getSessionWithAccess,
-  hasRepoAccess,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import {
@@ -13,7 +13,6 @@ import {
   getAIModelProvider,
   reasoningLevelValidator,
   roleValidator,
-  sessionStatusValidator,
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -45,18 +44,6 @@ import {
 } from "../repoGroups";
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
-
-/** Loads a session by id, throwing if it does not exist. */
-async function getSessionOrThrow(
-  db: DatabaseReader,
-  id: Id<"sessions">,
-): Promise<Doc<"sessions">> {
-  const session = await db.get(id);
-  if (!session) {
-    throw new Error("Session not found");
-  }
-  return session;
-}
 
 const createSessionArgs = v.object({
   repoId: v.id("githubRepos"),
@@ -108,11 +95,7 @@ export async function createSession(
   args: CreateSessionArgs,
   fork?: CreateSessionFork,
 ): Promise<{ sessionId: Id<"sessions">; numId: number }> {
-  if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
-    throw new Error("Not authorized");
-  }
-  const repo = await ctx.db.get(args.repoId);
-  if (!repo) throw new Error("Repository not found");
+  const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
   const title = args.title?.trim() || DEFAULT_SESSION_TITLE;
   const baseBranch = resolveSessionBaseBranch(
     { baseBranch: args.baseBranch },
@@ -132,12 +115,7 @@ export async function createSession(
   const linkedRepoIds = args.linkedRepoIds ?? group?.linkedRepoIds ?? [];
   const linkedRepos: Array<Doc<"githubRepos">> = [];
   for (const linkedRepoId of linkedRepoIds) {
-    if (!(await hasRepoAccess(ctx.db, linkedRepoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const linkedRepo = await ctx.db.get(linkedRepoId);
-    if (!linkedRepo) throw new Error("Repository not found");
-    linkedRepos.push(linkedRepo);
+    linkedRepos.push(await getRepoWithAccess(ctx.db, linkedRepoId, ctx.userId));
   }
   if (linkedRepos.length > 0) {
     assertValidRepoGroupMembers(repo, linkedRepos);
@@ -368,10 +346,7 @@ export const setModel = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const providerAccountId = await reconcileProviderAccountForModel(
       ctx.db,
       session.createdBy ?? session.userId,
@@ -400,10 +375,7 @@ export const setProviderAccountId = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     const ownerUserId = session.createdBy ?? session.userId;
     const providerAccountId = await assertProviderAccountUsableBy(
       ctx.db,
@@ -430,28 +402,11 @@ export const setTraits = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     if (!hasComposerTraitUpdate(args)) {
       return null;
     }
     await ctx.db.patch(args.id, composerTraitFields(args));
-    return null;
-  },
-});
-
-/** Updates the status of a session. */
-export const updateStatus = authMutation({
-  args: {
-    id: v.id("sessions"),
-    status: sessionStatusValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { status: args.status });
     return null;
   },
 });
@@ -491,23 +446,10 @@ export const update = authMutation({
   },
 });
 
-/** Updates the summary bullet points on a session. */
-export const updateSummary = authMutation({
-  args: {
-    id: v.id("sessions"),
-    summary: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { summary: args.summary });
-    return null;
-  },
-});
-
 /**
- * Archives a session: sandbox to cold storage, every open/draft PR it holds
- * closed (merged PRs are left alone), row flagged so the active list drops it.
+ * Archives a session: sandbox stopped (Vercel stop auto-snapshots; there is no
+ * separate cold storage), every open/draft PR it holds closed (merged PRs are
+ * left alone), row flagged so the active list drops it.
  *
  * Split from the `archive` mutation so server-side callers that already hold
  * the doc and its access check — `resetOrchestratorSession` retiring the old
@@ -517,9 +459,9 @@ export async function archiveSessionDoc(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
-  // Archive the sandbox (stops it first, then moves to cold storage)
+  // Stop the sandbox; Vercel stop auto-snapshots (no separate cold storage).
   if (session.sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.archiveSandbox, {
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
       sandboxId: session.sandboxId,
       repoId: session.repoId,
     });
@@ -545,10 +487,7 @@ export const archive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     await archiveSessionDoc(ctx, session);
     return null;
   },
@@ -560,10 +499,7 @@ export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
 
     await reopenArchivedPullRequests(ctx, {
       kind: "session",
@@ -583,39 +519,11 @@ export const updatePlanContent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       planContent: args.planContent,
       updatedAt: Date.now(),
     });
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the most recent message in a session. */
-export const updateLastMessage = authMutation({
-  args: {
-    id: v.id("sessions"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.id))
-      .order("desc")
-      .first();
-    if (!last) return null;
-    const patch: { content?: string; activityLog?: string } = {};
-    if (args.content !== undefined) patch.content = args.content;
-    if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
-    await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(args.id, { updatedAt: Date.now() });
     return null;
   },
 });

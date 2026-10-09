@@ -2,10 +2,6 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   activityLogTypeValidator,
-  notificationTypeValidator,
-  notificationUrgencyValidator,
-  snapshotScheduleValidator,
-  teamMemberRoleValidator,
   webhookEventStatusValidator,
   messageFields,
   aveThreadFields,
@@ -68,6 +64,14 @@ import {
   proposedPlanFields,
   agentUsageLimitFields,
   logFields,
+  notificationFields,
+  teamMemberFields,
+  taskDependencyFields,
+  repoSnapshotFields,
+  sandboxConfigFileFields,
+  repoEnvVarFields,
+  teamEnvVarFields,
+  presentationStatusValidator,
 } from "./validators";
 
 const schema = defineSchema({
@@ -168,10 +172,7 @@ const schema = defineSchema({
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
 
-  taskDependencies: defineTable({
-    taskId: v.id("agentTasks"),
-    dependsOnId: v.id("agentTasks"),
-  })
+  taskDependencies: defineTable(taskDependencyFields)
     .index("by_task", ["taskId"])
     .index("by_task_and_depends_on", ["taskId", "dependsOnId"])
     .index("by_dependency", ["dependsOnId"]),
@@ -342,106 +343,27 @@ const schema = defineSchema({
   harnessSkillReportTokens: defineTable(harnessSkillReportTokenFields)
     .index("by_token_hash", ["tokenHash"])
     .index("by_expires_at", ["expiresAt"]),
-  notifications: defineTable({
-    userId: v.id("users"),
-    type: notificationTypeValidator,
-    title: v.string(),
-    message: v.optional(v.string()),
-    read: v.boolean(),
-    href: v.optional(v.string()),
-    repoId: v.optional(v.id("githubRepos")),
-    createdAt: v.number(),
-    // Human-readable task/project context shown on the notification card, e.g.
-    // a quick task's title or "Project title: issue title" for project tasks.
-    // Only set for types whose title does not already name the task (mentions,
-    // comment replies); snapshotted at creation, absent otherwise.
-    contextLabel: v.optional(v.string()),
-    // Set once this notification has been included in an email (instant send or
-    // daily digest), so neither path emails the same notification twice.
-    emailedAt: v.optional(v.number()),
-    // When the user archived this notification out of the inbox. Absent means
-    // "in the inbox" — archiving is reversible, so the row is kept and only
-    // this stamp moves. Archived rows never count as unread.
-    archivedAt: v.optional(v.number()),
-    // The comment this notification was generated from, when it came from one.
-    // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
-    // field so the anchor survives independently of the href string. Absent on
-    // non-comment notifications and on every notification created before this
-    // field existed — those keep landing at the top of the target page.
-    commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
-    // How loudly to deliver this one: high = instant email, normal = daily
-    // digest only, low = inbox only. Undefined means not yet routed (a mention
-    // whose routing action has not landed) or legacy; treated as normal.
-    urgency: v.optional(notificationUrgencyValidator),
-  })
+  notifications: defineTable(notificationFields)
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
     .index("by_repo", ["repoId"]),
-  repoEnvVars: defineTable({
-    repoId: v.id("githubRepos"),
-    vars: v.array(
-      v.object({
-        key: v.string(),
-        value: v.string(),
-        sandboxExclude: v.optional(v.boolean()),
-      }),
-    ),
-    updatedAt: v.number(),
-  }).index("by_repo", ["repoId"]),
+  repoEnvVars: defineTable(repoEnvVarFields).index("by_repo", ["repoId"]),
   extensionReleases: defineTable({
     version: v.string(),
     crxStorageId: v.id("_storage"),
     releasedAt: v.number(),
     notes: v.optional(v.string()),
   }).index("by_version", ["version"]),
-  repoSnapshots: defineTable({
-    repoId: v.id("githubRepos"),
-    snapshotName: v.string(),
-    schedule: snapshotScheduleValidator,
-    enabled: v.optional(v.boolean()),
-    cronJobId: v.optional(v.string()),
-    workflowRef: v.optional(v.string()),
-    buildCommands: v.optional(v.array(v.string())),
-    // Seed-once commands run ONLY during seeded-snapshot builds, in the
-    // post-daemon phase (services like `convex dev` are up). For one-time
-    // data seeding (env set, convex import). Never re-run on sandbox boot,
-    // unlike githubRepos.startupCommands. Not part of the image fingerprint.
-    seedCommands: v.optional(v.array(v.string())),
-    // Fingerprint of the image inputs (lockfile sha on the build branch,
-    // buildCommands, config-file blobs, image definition version) stored at the
-    // last successful Image build. When unchanged, the build workflow skips the
-    // ~11-15m image rebuild — its output would be byte-identical.
-    imageFingerprint: v.optional(v.string()),
-    // Vercel base Image capture (`snap_*`) from a running sandbox — separate
-    // from `snapshotName` and per-app `seededSnapshotName`.
-    baseSnapshotId: v.optional(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_repo", ["repoId"]),
+  repoSnapshots: defineTable(repoSnapshotFields).index("by_repo", ["repoId"]),
   snapshotBuilds: defineTable(snapshotBuildFields)
     .index("by_repo_snapshot", ["repoSnapshotId"])
     .index("by_repo_snapshot_and_status", ["repoSnapshotId", "status"])
     .index("by_status", ["status"]),
-  sandboxConfigFiles: defineTable({
-    repoId: v.id("githubRepos"),
-    // Legacy single-blob storage (kept for backwards compat with existing records).
-    // New uploads always use `chunks` instead.
-    storageId: v.optional(v.id("_storage")),
-    // Ordered list of storage blob IDs that, when concatenated in order, form the file.
-    // Single-blob files use a 1-element array; multi-chunk files split a large file by ~100MB.
-    chunks: v.optional(v.array(v.id("_storage"))),
-    fileName: v.string(),
-    fileSize: v.number(),
-    uploadedBy: v.id("users"),
-    createdAt: v.number(),
-  }).index("by_repo", ["repoId"]),
+  sandboxConfigFiles: defineTable(sandboxConfigFileFields).index("by_repo", [
+    "repoId",
+  ]),
   teams: defineTable(teamFields).index("by_created_by", ["createdBy"]),
-  teamMembers: defineTable({
-    teamId: v.id("teams"),
-    userId: v.id("users"),
-    role: teamMemberRoleValidator,
-    joinedAt: v.number(),
-  })
+  teamMembers: defineTable(teamMemberFields)
     .index("by_team", ["teamId"])
     .index("by_team_and_role", ["teamId", "role"])
     .index("by_user", ["userId"])
@@ -471,17 +393,7 @@ const schema = defineSchema({
     "by_nonce",
     ["nonce"],
   ),
-  teamEnvVars: defineTable({
-    teamId: v.id("teams"),
-    vars: v.array(
-      v.object({
-        key: v.string(),
-        value: v.string(),
-        sandboxExclude: v.optional(v.boolean()),
-      }),
-    ),
-    updatedAt: v.number(),
-  }).index("by_team", ["teamId"]),
+  teamEnvVars: defineTable(teamEnvVarFields).index("by_team", ["teamId"]),
   automations: defineTable(automationFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_enabled", ["repoId", "enabled"])
@@ -559,25 +471,9 @@ const schema = defineSchema({
     code: v.string(),
     hostKey: v.string(),
     slide: v.number(),
-    status: v.union(v.literal("live"), v.literal("ended")),
+    status: presentationStatusValidator,
     lastActiveAt: v.number(),
   }).index("by_code", ["code"]),
-
-  // Per-participant poll votes within a presentation session.
-  presentationVotes: defineTable({
-    code: v.string(),
-    pollId: v.string(),
-    participantKey: v.string(),
-    optionId: v.string(),
-  })
-    .index("by_code_poll", ["code", "pollId"])
-    .index("by_code_poll_participant", ["code", "pollId", "participantKey"])
-    .index("by_code_poll_participant_option", [
-      "code",
-      "pollId",
-      "participantKey",
-      "optionId",
-    ]),
 });
 
 export default schema;

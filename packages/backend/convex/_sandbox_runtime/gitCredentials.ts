@@ -5,12 +5,8 @@ import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
-import {
-  execHandle,
-  LEGACY_WORKSPACE_DIR,
-  requireEnv,
-  WORKSPACE_DIR,
-} from "./helpers";
+import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
+import { requireEnv } from "../_env/requireEnv";
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
@@ -219,4 +215,18 @@ export async function ensureGitCredentialHelper(
     ].join(" && "),
     20,
   );
+}
+
+/** Best-effort teardown of a sandbox eva created and no longer wants: delete the VM, then the credential-helper row keyed by its id. */
+export async function deleteSandboxAndCredentials(
+  ctx: GenericActionCtx<DataModel>,
+  sandbox: SandboxHandle,
+): Promise<void> {
+  try {
+    await sandbox.delete();
+  } catch {}
+  // No-op if the credential row is absent.
+  await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
+    sandboxId: sandbox.id,
+  });
 }

@@ -15,8 +15,8 @@ export const WORKSPACE_ROOT = "/tmp/workspace";
 
 /**
  * The primary repo's checkout. Unchanged by multi-repo sessions — the workspace
- * only gains a symlink pointing here. Mirrors the `WORKSPACE_DIR` constants in
- * the node-only sandbox modules, which queries and workflows cannot import.
+ * only gains a symlink pointing here. The node runtime's `WORKSPACE_DIR`
+ * (helpers.ts) re-exports this.
  */
 export const PRIMARY_REPO_DIR = "/tmp/repo";
 

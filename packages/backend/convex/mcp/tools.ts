@@ -13,22 +13,27 @@ import {
   orchestratorQuestionTools,
 } from "./agentInteractionTools";
 import { defineTool, type EvaTool } from "./registry";
+import { jsonValue } from "../_jev/jsonValue";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
+import type { ChatEntityKind } from "../validators";
 import {
   entityAccess,
   entityRefArgs,
   entitySummary,
   repoRefArgs,
+  type RepoRef,
 } from "./entityRef";
 
 import {
+  chatSourceArg,
   errorResult,
   matchRepoByName,
   repoRefLabel,
+  mcpCallAsUser,
   mcpGetContext,
   mcpListUserRepos,
   textResult,
@@ -64,7 +69,7 @@ export function buildTools(
   const { assertRepoAccess, resolveRepoRef, resolveEntityTarget } =
     entityAccess(ctx, credentials);
 
-  async function getContext(): Promise<{ deployKey: string; userId: string }> {
+  async function getContext(): Promise<{ userId: string }> {
     return mcpGetContext(ctx, clerkUserId);
   }
 
@@ -72,12 +77,16 @@ export function buildTools(
     return mcpListUserRepos(ctx, userId);
   }
 
+  // Shared preamble of the Convex-data tools: resolve the repo ref as the
+  // caller, run the pinned access check, then hand out the repo's credentials.
   async function resolveTargetWithAccess(
-    repoId: string,
-    _deployKey: string,
-    userId: string,
+    ref: RepoRef,
     environment: "staging" | "prod",
-  ): Promise<RepoCredentials> {
+  ): Promise<RepoCredentials | ReturnType<typeof errorResult>> {
+    const { userId } = await getContext();
+    const resolved = await resolveRepoRef(ref, userId);
+    if ("isError" in resolved) return resolved;
+    const repoId = resolved.repoId;
     await assertRepoAccess(repoId, userId);
 
     const repoCreds = await ctx.runAction(
@@ -94,6 +103,25 @@ export function buildTools(
       );
     }
     return repoCreds;
+  }
+
+  // Runs read-only query code on the target and wraps its value under `key`,
+  // adding logLines only when the code logged something.
+  async function runRemote(
+    target: RepoCredentials,
+    code: string,
+    key: "result" | "document",
+  ) {
+    const result = await ctx.runAction(internal.mcp.nodeActions.runTestQuery, {
+      convexUrl: target.convexUrl,
+      deployKey: target.deployKey,
+      code,
+    });
+    if (!result.ok) return errorResult(result.error);
+    return textResult({
+      [key]: result.value,
+      ...(result.logLines.length > 0 ? { logLines: result.logLines } : {}),
+    });
   }
 
   const environmentArg = z
@@ -195,15 +223,11 @@ export function buildTools(
         environment: environmentArg,
       },
       handler: async ({ repoId, repoName, app, environment }) => {
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
         const target = await resolveTargetWithAccess(
-          ref.repoId,
-          deployKey,
-          userId,
+          { repoId, repoName, app },
           environment,
         );
+        if ("isError" in target) return target;
 
         const tables = await ctx.runAction(
           internal.mcp.nodeActions.listTables,
@@ -256,15 +280,11 @@ export function buildTools(
         app,
         environment,
       }) => {
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
         const target = await resolveTargetWithAccess(
-          ref.repoId,
-          deployKey,
-          userId,
+          { repoId, repoName, app },
           environment,
         );
+        if ("isError" in target) return target;
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.queryTable,
@@ -310,34 +330,17 @@ export function buildTools(
             "Invalid document ID format. IDs should be alphanumeric.",
           );
         }
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
         const target = await resolveTargetWithAccess(
-          ref.repoId,
-          deployKey,
-          userId,
+          { repoId, repoName, app },
           environment,
         );
+        if ("isError" in target) return target;
 
-        const result = await ctx.runAction(
-          internal.mcp.nodeActions.runTestQuery,
-          {
-            convexUrl: target.convexUrl,
-            deployKey: target.deployKey,
-            code: `return await ctx.db.get(${JSON.stringify(id)});`,
-          },
+        return runRemote(
+          target,
+          `return await ctx.db.get(${JSON.stringify(id)});`,
+          "document",
         );
-        if (!result.ok) return errorResult(result.error);
-
-        const output: { document: unknown; logLines?: string[] } = {
-          document: result.value,
-        };
-        if (result.logLines.length > 0) {
-          output.logLines = result.logLines;
-        }
-
-        return textResult(output);
       },
     }),
   );
@@ -367,34 +370,13 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
         environment: environmentArg,
       },
       handler: async ({ code, repoId, repoName, app, environment }) => {
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
         const target = await resolveTargetWithAccess(
-          ref.repoId,
-          deployKey,
-          userId,
+          { repoId, repoName, app },
           environment,
         );
+        if ("isError" in target) return target;
 
-        const result = await ctx.runAction(
-          internal.mcp.nodeActions.runTestQuery,
-          {
-            convexUrl: target.convexUrl,
-            deployKey: target.deployKey,
-            code,
-          },
-        );
-        if (!result.ok) return errorResult(result.error);
-
-        const output: { result: unknown; logLines?: string[] } = {
-          result: result.value,
-        };
-        if (result.logLines.length > 0) {
-          output.logLines = result.logLines;
-        }
-
-        return textResult(output);
+        return runRemote(target, code, "result");
       },
     }),
   );
@@ -419,15 +401,11 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
             "Invalid table name. Use alphanumeric characters and underscores.",
           );
         }
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
         const target = await resolveTargetWithAccess(
-          ref.repoId,
-          deployKey,
-          userId,
+          { repoId, repoName, app },
           environment,
         );
+        if ("isError" in target) return target;
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.runTestQuery,
@@ -681,14 +659,22 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     if ("isError" in resolved) return resolved;
     const { repo } = resolved;
 
-    const taskId = await ctx.runAction(internal.mcp.nodeActions.createTask, {
+    const taskId = await mcpCallAsUser(
+      ctx,
       clerkUserId,
-      repoId: repo.id,
-      title: input.title,
-      description: input.description,
-      baseBranch: input.baseBranch,
-      projectId: input.projectId,
-    });
+      {
+        type: "mutation",
+        path: "_agentTasks/mutations:createQuickTask",
+        args: {
+          repoId: repo.id,
+          title: input.title,
+          description: input.description,
+          ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
+          ...(input.projectId ? { projectId: input.projectId } : {}),
+        },
+      },
+      z.string(),
+    );
 
     await watchTaskAsAve(taskId);
 
@@ -707,10 +693,16 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         const result = await createTaskForRepo(input, userId);
         if ("isError" in result) return result;
 
-        await ctx.runAction(internal.mcp.nodeActions.startTaskExecution, {
+        await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          taskId: result.taskId,
-        });
+          {
+            type: "mutation",
+            path: "_agentTasks/execution:startExecution",
+            args: { id: result.taskId },
+          },
+          jsonValue,
+        );
 
         return textResult({
           taskId: result.taskId,
@@ -812,43 +804,37 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
         if ("isError" in resolved) return resolved;
         const { repo } = resolved;
 
-        const tasksForMutation = input.tasks.map((t) => ({
-          title: t.title,
-          description: t.description,
-          dependsOn: t.dependsOn,
-        }));
-
-        const result = await ctx.runAction(
-          internal.mcp.nodeActions.createTasksBatch,
+        const result = await mcpCallAsUser(
+          ctx,
+          clerkUserId,
           {
-            clerkUserId,
-            repoId: repo.id,
-            tasks: tasksForMutation,
-            projectTitle: input.projectTitle,
-            baseBranch: input.baseBranch,
+            type: "mutation",
+            path: "_agentTasks/mutations:createBatchWithDependencies",
+            args: {
+              repoId: repo.id,
+              tasks: input.tasks.map((t) => ({
+                title: t.title,
+                ...(t.description ? { description: t.description } : {}),
+                ...(t.dependsOn ? { dependsOn: t.dependsOn } : {}),
+              })),
+              ...(input.projectTitle
+                ? { projectTitle: input.projectTitle }
+                : {}),
+              ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
+            },
           },
+          z.object({
+            taskIds: z.array(z.string()),
+            projectId: z.string().optional(),
+          }),
         );
 
-        // Result is typed as 'any' from Convex; launder to unknown, then narrow to
-        // an object before spreading so no assertion is needed.
-        const rawResult: unknown = result;
-        const batchResult =
-          typeof rawResult === "object" && rawResult !== null
-            ? { ...rawResult }
-            : {};
-
-        const created = z
-          .object({ taskIds: z.array(z.string()) })
-          .safeParse(rawResult);
-        if (created.success) {
-          for (const taskId of created.data.taskIds) {
-            await watchTaskAsAve(taskId);
-          }
-        }
+        for (const taskId of result.taskIds) await watchTaskAsAve(taskId);
 
         return textResult({
           repo: repoRefLabel(repo),
-          ...batchResult,
+          taskIds: result.taskIds,
+          ...(result.projectId ? { projectId: result.projectId } : {}),
           taskCount: input.tasks.length,
           status: "created",
         });
@@ -962,17 +948,22 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("isError" in resolved) return resolved;
         const { repo } = resolved;
 
-        const docId = await ctx.runAction(
-          internal.mcp.nodeActions.createEvaDoc,
+        const docId = await mcpCallAsUser(
+          ctx,
+          clerkUserId,
           {
-            clerkUserId,
-            repoId: repo.id,
-            title,
-            content,
-            ...(entityKind !== undefined && entityId !== undefined
-              ? { sourceKind: entityKind, sourceId: entityId }
-              : {}),
+            type: "mutation",
+            path: "docs:create",
+            args: {
+              repoId: repo.id,
+              title,
+              content,
+              ...(entityKind !== undefined && entityId !== undefined
+                ? { source: chatSourceArg(entityKind, entityId) }
+                : {}),
+            },
           },
+          z.string(),
         );
 
         return textResult({
@@ -1000,10 +991,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         // Resolve identity first (ensures the Eva user row exists) so the
         // as-user query can authenticate.
         await getContext();
-        const doc = await ctx.runAction(internal.mcp.nodeActions.getEvaDoc, {
+        const doc = await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          docId,
-        });
+          { type: "query", path: "docs:get", args: { id: docId } },
+          jsonValue,
+        );
         return textResult({ document: doc });
       },
     }),
@@ -1038,11 +1031,16 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("isError" in resolved) return resolved;
         const { repo } = resolved;
 
-        const docs = await ctx.runAction(internal.mcp.nodeActions.listEvaDocs, {
+        const docs = await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          repoId: repo.id,
-          kind,
-        });
+          {
+            type: "query",
+            path: "docs:list",
+            args: { repoId: repo.id, ...(kind !== undefined ? { kind } : {}) },
+          },
+          jsonValue,
+        );
         return textResult({ repo: repoRefLabel(repo), docs });
       },
     }),
@@ -1062,13 +1060,21 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       },
       handler: async ({ docId, title, content, description }) => {
         await getContext();
-        await ctx.runAction(internal.mcp.nodeActions.updateEvaDoc, {
+        await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          docId,
-          title,
-          content,
-          description,
-        });
+          {
+            type: "mutation",
+            path: "docs:update",
+            args: {
+              id: docId,
+              ...(title !== undefined ? { title } : {}),
+              ...(content !== undefined ? { content } : {}),
+              ...(description !== undefined ? { description } : {}),
+            },
+          },
+          z.null(),
+        );
         return textResult({ docId, status: "updated" });
       },
     }),
@@ -1081,7 +1087,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
   async function getUserTeams(
     userId: string,
   ): Promise<{ id: string; name: string }[]> {
-    return ctx.runAction(internal.mcp.nodeActions.listUserTeams, { userId });
+    return ctx.runQuery(internal.mcp.queries.listUserTeams, { userId });
   }
 
   async function resolveTeam(
@@ -1289,7 +1295,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   // ─────────────────────────────────────────────────────────────────────────────
 
   function requireBrowserEntity():
-    | { entityKind: "session" | "task" | "project"; entityId: string }
+    | { entityKind: ChatEntityKind; entityId: string }
     | ReturnType<typeof errorResult> {
     if (entityKind === undefined || entityId === undefined) {
       return errorResult(

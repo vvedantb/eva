@@ -3,21 +3,17 @@ import {
   CLAIM_MUTATION,
   ENTITY_ID,
 } from "../config.js";
-import {
-  callConvexWithRetry,
-  unwrapConvexMutationPayload,
-} from "../http/convexClient.js";
+import { callConvexWithRetry } from "../http/convexClient.js";
 import { callbackState as S } from "./state.js";
 import type { JsonValue } from "../types.js";
 import type { JsonLike, SdkCanUseTool } from "../providers/claudeSdk.js";
-import { log } from "../utils.js";
+import { log, unwrapConvexMutationPayload } from "../utils.js";
 import { sleep } from "./daemonProcess.js";
 
 // How often the paused turn polls Convex for the user's answer. Matches the
 // daemon's turn-claim cadence — the model is idle while waiting, so this only
 // adds at most one poll of latency once the answer lands.
 const POLL_INTERVAL_MS = 300;
-
 
 /**
  * Reads `.value.answer` (a JSON string, or null) out of a claimAnswer result.

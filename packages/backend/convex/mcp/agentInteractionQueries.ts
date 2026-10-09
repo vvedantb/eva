@@ -8,7 +8,10 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess } from "../functions";
 import { entityVisible } from "../numId";
 import { createNotification } from "../notifications";
-import { notificationUrgencyValidator } from "../validators";
+import {
+  chatEntityKindValidator,
+  notificationUrgencyValidator,
+} from "../validators";
 
 // Backing functions for mcp/agentInteractionTools.ts. Internal only: the tools
 // resolve the caller's Eva user id first and pass it in, and every function
@@ -20,12 +23,6 @@ import { notificationUrgencyValidator } from "../validators";
  * stops), so the whole table is small; the cap just keeps the read bounded.
  */
 const PENDING_SCAN_LIMIT = 500;
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 type ChatHit =
   | { kind: "session"; doc: Doc<"sessions"> }
@@ -86,7 +83,7 @@ export const listPendingQuestionsForUser = internalQuery({
       payload: v.string(),
       createdAt: v.number(),
       entityId: v.string(),
-      kind: chatKindValidator,
+      kind: chatEntityKindValidator,
       numId: v.optional(v.number()),
       title: v.string(),
       repoOwner: v.string(),
@@ -100,7 +97,10 @@ export const listPendingQuestionsForUser = internalQuery({
 
     let rows: Doc<"pendingQuestions">[];
     if (args.questionId !== undefined) {
-      const questionId = ctx.db.normalizeId("pendingQuestions", args.questionId);
+      const questionId = ctx.db.normalizeId(
+        "pendingQuestions",
+        args.questionId,
+      );
       const row = questionId ? await ctx.db.get(questionId) : null;
       rows = row ? [row] : [];
     } else if (args.entityId !== undefined) {
@@ -158,7 +158,9 @@ export const notifyUserFromAgent = internalMutation({
     title: v.string(),
     message: v.optional(v.string()),
     urgency: notificationUrgencyValidator,
-    chat: v.optional(v.object({ kind: chatKindValidator, id: v.string() })),
+    chat: v.optional(
+      v.object({ kind: chatEntityKindValidator, id: v.string() }),
+    ),
   },
   returns: v.id("notifications"),
   handler: async (ctx, args) => {

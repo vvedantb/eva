@@ -155,6 +155,32 @@ describe("sandboxGit.reportBranch", () => {
   );
 
   test(
+    "a project-only task authorises through its project and records the branch",
+    async () => {
+      const f = await fixture();
+      const projectTaskId = await f.t.run((ctx) =>
+        ctx.db.insert("agentTasks", {
+          projectId: f.projectId,
+          title: "Project task",
+          status: "todo",
+          numId: 8,
+          createdAt: STAMP,
+          updatedAt: STAMP,
+          createdBy: f.userId,
+        }),
+      );
+      await f.asUser.mutation(api.sandboxGit.reportBranch, {
+        target: { kind: "task", taskId: projectTaskId },
+        branch: "feature/project",
+      });
+      expect(
+        (await f.t.run((ctx) => ctx.db.get(projectTaskId)))?.sandboxBranch,
+      ).toBe("feature/project");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a task with no repo has nothing to authorise against and is refused",
     async () => {
       const f = await fixture();

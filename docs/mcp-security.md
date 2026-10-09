@@ -26,7 +26,7 @@ Every MCP tool resolves the authenticated user's Clerk ID to a Convex user ID, t
 Two independent secrets are used:
 
 - **`MCP_JWT_SECRET`**: Signs and verifies JWT access/refresh tokens. Only needed in the MCP app (Railway).
-- **`MCP_BOOTSTRAP_SECRET`**: Authenticates the bootstrap call from the MCP app to Convex to retrieve the deploy key. Needed in both Railway and Convex env vars.
+- **`EVA_DEPLOY_KEY`**: Authenticates calls to `/api/mcp/env-vars`. Set in Convex env vars.
 
 If one leaks, the other remains secure.
 
@@ -78,11 +78,10 @@ Tools that interpolate user input into Convex query code (`get_document`, `count
 | Variable                | Where            | Purpose                                    |
 | ----------------------- | ---------------- | ------------------------------------------ |
 | `MCP_JWT_SECRET`        | Railway          | JWT signing/verification                   |
-| `MCP_BOOTSTRAP_SECRET`  | Railway + Convex | Bootstrap endpoint auth                    |
 | `CLERK_PUBLISHABLE_KEY` | Railway          | Clerk sign-in UI                           |
 | `CLERK_SECRET_KEY`      | Railway          | Clerk token verification + user validation |
 | `CONVEX_CLOUD_URL`      | Railway          | Convex API endpoint                        |
-| `EVA_DEPLOY_KEY`        | Convex           | Deploy key returned by bootstrap           |
+| `EVA_DEPLOY_KEY`        | Convex           | Auth for `/api/mcp/env-vars`               |
 
 ## Known Limitations
 

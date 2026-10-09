@@ -1,19 +1,15 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
+import { startTaskRun } from "../_taskWorkflow/startRun";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation, hasActiveRun } from "../functions";
+import { loadRunWithAccess } from "./helpers";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import type { Doc, Id } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { normalizeAIModel } from "../validators";
-import {
-  createTaskRunSummary,
-  setTaskLastRunStartedAt,
-} from "../_agentTasks/runSummary";
+import { createTaskRunSummary } from "../_agentTasks/runSummary";
 
 /**
  * Inserts a `todo` quick task on the automation's repo, as the automation's
@@ -64,15 +60,12 @@ export const createTasksFromFindings = authMutation({
   },
   returns: v.array(v.id("agentTasks")),
   handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run) throw new Error("Run not found");
+    const { run, automation } = await loadRunWithAccess(
+      ctx.db,
+      ctx.userId,
+      args.runId,
+    );
     if (!run.findings) throw new Error("Run has no findings");
-
-    const automation = await ctx.db.get(run.automationId);
-    if (!automation) throw new Error("Automation not found");
-    if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
 
     const repo = await ctx.db.get(automation.repoId);
     if (!repo) throw new Error("Repo not found");
@@ -135,67 +128,27 @@ export const autoStartTask = internalMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    if (
-      existingRuns.some((r) => r.status === "queued" || r.status === "running")
-    ) {
+    if (await hasActiveRun(ctx.db, args.taskId)) {
       return null;
     }
 
-    const startedAt = Date.now();
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: args.taskId,
-      status: "queued",
-      logs: [],
-      startedAt,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        task.providerAccountId,
-        task.createdBy,
-      ),
-      model: normalizeAIModel(task.model),
-    });
-    await setTaskLastRunStartedAt(ctx, args.taskId, task.repoId, startedAt);
-
-    await ctx.db.patch(args.taskId, {
-      status: "in_progress",
-      updatedAt: Date.now(),
-    });
-
+    // Swallow a start failure so the error run stays visible.
     try {
-      await startTaskRunWorkflow(ctx, {
-        runId,
-        taskId: args.taskId,
-        repoId: task.repoId,
-        installationId: repo.installationId,
+      await startTaskRun(ctx, {
+        task,
+        repo,
+        userId: args.userId,
         baseBranch: await resolveTaskWorkflowBaseBranchForTask(
           ctx.db,
           task,
           repo,
         ),
         isFirstTaskOnBranch: true,
-        model: task.model ?? repo.defaultModel,
-        providerAccountId: task.providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: args.userId,
+        clearPendingChangeRequest: false,
+        rollbackStatus: "todo",
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to start workflow";
-      await ctx.db.patch(runId, {
-        status: "error",
-        error: message,
-        finishedAt: Date.now(),
-        exitReason: "workflow_start_failed",
-      });
-      await ctx.db.patch(args.taskId, {
-        status: "todo",
-        activeWorkflowId: undefined,
-        updatedAt: Date.now(),
-      });
+      console.error("[automations] autoStartTask failed to start workflow", error);
     }
 
     return null;

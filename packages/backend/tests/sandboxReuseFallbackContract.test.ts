@@ -13,19 +13,16 @@ const OWNERS = [
     createStep: "createSessionSandboxAndPrepareRepo",
   },
   {
-    reuseStep: "tryReuseTaskSandbox",
-    createStep: "createTaskSandboxAndPrepareRepo",
-  },
-  {
-    reuseStep: "tryReuseProjectSandbox",
-    createStep: "createProjectSandboxAndPrepareRepo",
+    // Task and project share preparePreviewSandboxInternal.
+    reuseStep: "tryReuse${hooks.label}Sandbox",
+    createStep: "create${hooks.label}SandboxAndPrepareRepo",
   },
 ] as const;
 
 /**
  * Session 65 resumed a live VM, then dump restore failed with a Postgres
  * relation error. Reuse treated that as "sandbox gone" and created a second
- * box. These pins keep the three gates that stop that from happening again.
+ * box. These pins keep the gates that stop that from happening again.
  */
 describe("reuse does not mint a replacement for a live sandbox", () => {
   test.each(OWNERS)(
@@ -90,7 +87,7 @@ describe("seeded dump restore does not wipe a populated public schema", () => {
     expect(helper).toContain("internal._chat.seededRestoreAlert.insert");
     const routed =
       sessions.match(/\(\) =>\s*startServicesWithRestoreAlert\(/g) ?? [];
-    expect(routed.length, "session/task/project create + reuse").toBe(6);
+    expect(routed.length, "session + preview create + reuse").toBe(4);
   });
 });
 

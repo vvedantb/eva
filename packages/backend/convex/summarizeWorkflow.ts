@@ -8,7 +8,7 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
 import {
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
 } from "./validators";
@@ -49,8 +49,6 @@ export const summarizeSessionWorkflow = workflow.define({
       repoOwner: sessionData.repoOwner,
       repoName: sessionData.repoName,
       repoId: sessionData.repoId,
-      sessionPersistenceId: args.sessionId,
-      sessionPersistenceKind: "sessions",
       streamingEntityId: sessionSummaryStreamingEntityId(args.sessionId),
       ephemeral: false,
     });
@@ -170,12 +168,7 @@ export const saveResult = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     sessionId: v.id("sessions"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),

@@ -5,16 +5,18 @@ import { quote } from "shell-quote";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import type { ProgressStep } from "../_sandbox/startupActivity";
 import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
   getAIModelProvider,
   normalizeAIModel,
   reasoningLevelValidator,
+  sandboxEntityTableValidator,
   turnEntityIdValidator,
   turnLaneValidator,
   usesChatDaemon,
+  type SandboxEntityTable,
 } from "../validators";
 import {
   execHandle,
@@ -43,16 +45,14 @@ import {
   materializeAttachmentsToSandbox,
   buildAttachmentPromptNote,
 } from "./attachments";
-import {
-  resolveProviderAccountCredentialRevision,
-  resolveSandboxCredentials,
-} from "../envVarResolver";
+import { resolveProviderAccountCredentialRevision } from "../envVarResolver";
 import {
   buildConvexBackgroundScriptBody,
   isConvexBackendCommand,
   CONVEX_FUNCTIONS_READY_LOG_LINE,
 } from "./convexLocalBackend";
 import { ensureSwapFile } from "./swap";
+import { buildPortListenProbeCommand } from "./httpReadyProbe";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
 import { isDaytonaNetworkIssue } from "../_taskWorkflow/recovery";
 import { assertActionSandboxAccess } from "../functions";
@@ -66,18 +66,6 @@ import {
 } from "../_chat/daemonClaimPause";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
-/** True if anything is LISTEN on `port` (Vercel images often lack `ss`). */
-function portListenProbeCmd(port: number): string {
-  const hex = port.toString(16).toUpperCase().padStart(4, "0");
-  return [
-    `if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q ":${port} " && echo yes && exit 0; fi`,
-    `if command -v lsof >/dev/null 2>&1; then lsof -iTCP:${port} -sTCP:LISTEN >/dev/null 2>&1 && echo yes && exit 0; fi`,
-    // /proc/net/tcp{,6} local_address port is hex, big-endian (13000 → 32C8).
-    `if grep -Eiq ":${hex}[[:space:]]" /proc/net/tcp /proc/net/tcp6 2>/dev/null; then echo yes; exit 0; fi`,
-    "echo no",
-  ].join("; ");
-}
-
 async function probePreviewReady(
   handle: SandboxHandle,
   port: number,
@@ -87,7 +75,7 @@ async function probePreviewReady(
     // finishes compiling. A short HTTP curl times out mid-compile and used to
     // trigger remount → kill → relaunch loops (session 41 / CarePulse web).
     const listening = (
-      await execHandle(handle, portListenProbeCmd(port), 5)
+      await execHandle(handle, buildPortListenProbeCommand(port), 5)
     ).trim();
     if (listening === "yes") return true;
 
@@ -108,11 +96,12 @@ import {
   checkoutFetchedBaseBranch,
   createSandboxAndPrepareRepo,
   getOrCreateSandbox,
+  isTransientTransportError,
   pushBranchToOrigin,
   EPHEMERAL_LIFECYCLE,
   SESSION_LIFECYCLE,
 } from "./git";
-import { startDesktopWithChrome } from "./desktop";
+import { deleteSandboxAndCredentials } from "./gitCredentials";
 import {
   ensurePreviewNavigationProxy,
   PREVIEW_TAB_PREFIX,
@@ -126,6 +115,8 @@ import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { createHmac } from "node:crypto";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
+import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
+import { errorText } from "../_shared/errors";
 
 /**
  * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
@@ -146,12 +137,6 @@ function previewActivityParams(sandboxId: string): {
       .digest("hex"),
   };
 }
-
-const sessionPersistenceKindValidator = v.union(
-  v.literal("sessions"),
-  v.literal("projects"),
-  v.literal("agentTasks"),
-);
 
 const sessionPersistenceIdValidator = v.union(
   v.id("sessions"),
@@ -205,23 +190,6 @@ export const validateSandbox = internalAction({
       console.error("Sandbox validation failed:", e);
       return { healthy: false };
     }
-  },
-});
-
-/** Executes a shell command on a sandbox and returns the output. */
-export const runSandboxCommand = internalAction({
-  args: {
-    sandboxId: v.string(),
-    command: v.string(),
-    timeoutSeconds: v.optional(v.number()),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.string(),
-  handler: async (ctx, args) => {
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    return (
-      await execHandle(handle, args.command, args.timeoutSeconds ?? 30)
-    ).trim();
   },
 });
 
@@ -819,58 +787,6 @@ export const watchConvexReadiness = internalAction({
   },
 });
 
-/**
- * Runs a repo's clean-stop commands (e.g. `supabase stop`, `pkill convex dev`)
- * sequentially, foreground, so on-disk volumes flush before a filesystem
- * snapshot. Used only by the seeded-snapshot build; never on normal starts.
- * Non-fatal per command so a partial stop still lets the snapshot proceed.
- */
-export const runStopCommands = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.object({
-    ran: v.boolean(),
-    commandCount: v.number(),
-    errors: v.array(v.string()),
-  }),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> => {
-    const commands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStopCommands,
-      { repoId: args.repoId },
-    );
-
-    if (!commands || commands.length === 0) {
-      return { ran: false, commandCount: 0, errors: [] };
-    }
-
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
-    console.log(
-      `[sandbox] runStopCommands: running ${commands.length} stop command(s)`,
-    );
-
-    const errors: string[] = [];
-    for (const command of commands) {
-      console.log(`[sandbox] runStopCommands: running: ${command}`);
-      try {
-        await execHandle(handle, command, 300);
-        console.log(`[sandbox] runStopCommands: completed: ${command}`);
-      } catch (e) {
-        const msg = errorMessage(e, "command failed");
-        console.error(`[sandbox] runStopCommands: failed: ${command}`, msg);
-        errors.push(`${command}: ${msg}`);
-      }
-    }
-
-    return { ran: true, commandCount: commands.length, errors };
-  },
-});
-
 const previewUrlArgs = {
   sandboxId: v.string(),
   port: v.number(),
@@ -934,9 +850,6 @@ async function buildPreviewUrl(
   }
   const responsePort = customTabPort ?? args.port;
 
-  // Validates that the repo has Vercel sandbox credentials configured;
-  // throws before touching the sandbox if it does not.
-  await resolveSandboxCredentials(ctx, args.repoId);
   const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
   // Services listen on internal ports and the auth proxy owns the exposed
@@ -1031,7 +944,7 @@ async function buildPreviewUrl(
           publicKeyJwk: previewPublicJwk,
           sandboxId: args.sandboxId,
           repoId: args.repoId,
-          webAppUrl: process.env.WEB_APP_URL ?? "",
+          webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort ?? args.port,
@@ -1125,210 +1038,17 @@ const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
-  if (isDaytonaNetworkIssue(message)) {
-    return true;
-  }
-  const lowered = message.toLowerCase();
-  const gitNetworkMarkers = [
-    "status code 502",
-    "status code 503",
-    "status code 504",
-    "fetch failed",
-    "gnutls recv error",
-    "tls connection was non-properly terminated",
-    "remote end hung up unexpectedly",
-    "http/2 stream",
-    "early eof",
-    "connection reset by peer",
-    "rpc failed",
-  ];
   return (
-    (lowered.includes("sandbox exec") && lowered.includes("timed out")) ||
-    lowered.includes("command execution timeout") ||
+    isDaytonaNetworkIssue(message) ||
+    // Transport only: setup deletes and recreates the VM, so a permanent auth
+    // failure or a bare "network" substring must not trigger it.
+    isTransientTransportError(message) ||
     // Exit code -1 typically means the command was terminated abnormally
     // (sandbox not yet accepting commands, transport error, killed mid-exec) —
     // this is transient, unlike non-zero exit codes from real command failures.
-    lowered.includes("sandbox command failed with exit code -1") ||
-    gitNetworkMarkers.some((marker) => lowered.includes(marker))
+    message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
-
-/** Creates or resumes a sandbox with local branch setup, desktop, and retry logic. */
-export const prepareSandbox = internalAction({
-  args: {
-    existingSandboxId: v.optional(v.string()),
-    installationId: v.number(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    ephemeral: v.optional(v.boolean()),
-    repoId: v.id("githubRepos"),
-    attachRunId: v.optional(v.id("agentRuns")),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    sessionPersistenceKind: v.optional(sessionPersistenceKindValidator),
-    startDesktop: v.optional(v.boolean()),
-    streamingEntityId: v.optional(v.string()),
-  },
-  returns: v.object({
-    sandboxId: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    const completedSteps: Array<{
-      type: string;
-      label: string;
-      status: string;
-    }> = [];
-    const emitProgress = async (label: string): Promise<void> => {
-      if (!args.streamingEntityId) return;
-      const steps = [
-        ...completedSteps,
-        { type: "tool", label, status: "active" },
-      ];
-      await ctx.runMutation(internal.streaming.internalSet, {
-        entityId: args.streamingEntityId,
-        currentActivity: JSON.stringify(steps),
-      });
-      completedSteps.push({ type: "tool", label, status: "complete" });
-    };
-
-    const setupStartedAt = Date.now();
-    console.log(
-      `[sandbox] prepareSandbox: resolving context for repo=${args.repoOwner}/${args.repoName} repoId=${args.repoId} ephemeral=${args.ephemeral ?? false}`,
-    );
-    const { client, sandboxEnvVars, snapshotName } =
-      await resolveSandboxContext(ctx, args.repoId);
-    const existingSandboxId = args.existingSandboxId;
-    console.log(
-      `[sandbox] prepareSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
-    );
-    let sandbox: SandboxHandle | undefined;
-    let deleteSandboxOnFailure = false;
-    let attempt = 1;
-    const maxSetupAttempts = 3;
-    const attachRunSandbox = async (
-      sandboxToAttach: SandboxHandle,
-    ): Promise<void> => {
-      if (!args.attachRunId) {
-        return;
-      }
-      await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-        runId: args.attachRunId,
-        sandboxId: sandboxToAttach.id,
-      });
-    };
-
-    while (true) {
-      try {
-        if (args.ephemeral) {
-          const prepared = await createSandboxAndPrepareRepo(
-            ctx,
-            client,
-            args.installationId,
-            args.repoOwner,
-            args.repoName,
-            sandboxEnvVars,
-            EPHEMERAL_LIFECYCLE,
-            snapshotName,
-            attachRunSandbox,
-            emitProgress,
-            { mode: "none" },
-          );
-          sandbox = prepared.sandbox;
-          deleteSandboxOnFailure = true;
-        } else {
-          const prepared = await getOrCreateSandbox(
-            ctx,
-            client,
-            existingSandboxId,
-            args.installationId,
-            args.repoOwner,
-            args.repoName,
-            sandboxEnvVars,
-            SESSION_LIFECYCLE,
-            snapshotName,
-            emitProgress,
-            { mode: "none" },
-          );
-          sandbox = prepared.sandbox;
-          deleteSandboxOnFailure = prepared.isNew;
-        }
-
-        if (args.branchName) {
-          await emitProgress("Setting up branch...");
-          await setupBranch(
-            sandbox,
-            args.branchName,
-            args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-          );
-        } else if (args.baseBranch) {
-          await emitProgress("Checking out base branch...");
-          await checkoutFetchedBaseBranch(sandbox, args.baseBranch);
-        }
-
-        if (args.startDesktop) {
-          await emitProgress("Starting desktop...");
-          await startDesktopWithChrome(sandbox);
-        }
-
-        break;
-      } catch (error) {
-        if (deleteSandboxOnFailure && sandbox) {
-          console.warn(
-            `[sandbox] prepareSandbox: deleting failed sandbox ${sandbox.id}`,
-          );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
-        }
-
-        const message = errorMessage(error, "Sandbox setup failed");
-        const elapsed = Date.now() - setupStartedAt;
-        const retryable = isSandboxSetupRetryable(message);
-        const withinTimeLimit = elapsed < MAX_SETUP_ELAPSED_MS;
-        const shouldRetry = retryable && withinTimeLimit;
-
-        console.warn(
-          `[sandbox] prepareSandbox: attempt ${attempt}/${maxSetupAttempts} failed after ${elapsed}ms — retryable=${retryable}, withinTimeLimit=${withinTimeLimit}, shouldRetry=${shouldRetry}: ${message}`,
-        );
-
-        if (!shouldRetry || attempt >= maxSetupAttempts) {
-          console.error(
-            `[sandbox] prepareSandbox: giving up after ${attempt} attempt(s), total elapsed=${elapsed}ms: ${message}`,
-          );
-          throw error;
-        }
-
-        const delayMs =
-          2500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[sandbox] prepareSandbox: retrying in ${delayMs}ms`);
-        await sleep(delayMs);
-        completedSteps.length = 0;
-        await emitProgress("Retrying sandbox setup...");
-        attempt += 1;
-        sandbox = undefined;
-        deleteSandboxOnFailure = false;
-      }
-    }
-
-    if (!sandbox) {
-      throw new Error("Sandbox setup failed");
-    }
-
-    const totalElapsed = Date.now() - setupStartedAt;
-    console.log(
-      `[sandbox] prepareSandbox: success in ${totalElapsed}ms, sandboxId=${sandbox.id}, attempts=${attempt}`,
-    );
-    return {
-      sandboxId: sandbox.id,
-    };
-  },
-});
 
 /** Creates or resumes a sandbox without performing repo sync. */
 export const createOrResumeSandbox = internalAction({
@@ -1337,12 +1057,8 @@ export const createOrResumeSandbox = internalAction({
     installationId: v.number(),
     repoOwner: v.string(),
     repoName: v.string(),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
     ephemeral: v.optional(v.boolean()),
     repoId: v.id("githubRepos"),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    sessionPersistenceKind: v.optional(sessionPersistenceKindValidator),
     attachRunId: v.optional(v.id("agentRuns")),
     streamingEntityId: v.optional(v.string()),
   },
@@ -1351,11 +1067,7 @@ export const createOrResumeSandbox = internalAction({
     resumeFellBack: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const completedSteps: Array<{
-      type: string;
-      label: string;
-      status: string;
-    }> = [];
+    const completedSteps: ProgressStep[] = [];
     const emitProgress = async (label: string): Promise<void> => {
       if (!args.streamingEntityId) return;
       const steps = [
@@ -1448,14 +1160,7 @@ export const createOrResumeSandbox = internalAction({
           console.warn(
             `[sandbox] createOrResumeSandbox: deleting failed sandbox ${sandbox.id}`,
           );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
+          await deleteSandboxAndCredentials(ctx, sandbox);
         }
 
         const message = errorMessage(error, "Sandbox setup failed");
@@ -1600,7 +1305,7 @@ export const pushSandboxBranch = internalAction({
       );
     } catch (error) {
       console.error(
-        `[sandbox][execution] pushSandboxBranch failed sandbox=${args.sandboxId} repo=${args.repoOwner}/${args.repoName} branch=${args.branchName}: ${error instanceof Error ? error.message : String(error)}`,
+        `[sandbox][execution] pushSandboxBranch failed sandbox=${args.sandboxId} repo=${args.repoOwner}/${args.repoName} branch=${args.branchName}: ${errorText(error)}`,
       );
       // Rethrow so callers can surface the failure and preserve the sandbox for
       // recovery. Swallowing here made every caller's error handling dead code.
@@ -1784,12 +1489,11 @@ type PrewarmEntityDaemonBaseParams = {
   credentialOwnerUserId?: Id<"users">;
   sessionPersistenceId?: Infer<typeof sessionPersistenceIdValidator>;
   streamingEntityId?: string;
-  activeWorkflowField: "activeWorkflowId" | "activeChatWorkflowId";
   skipPrewarm?: boolean;
 };
 
 type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
-  entityTable: "sessions" | "agentTasks" | "projects";
+  entityTable: SandboxEntityTable;
 };
 
 /** Shared implementation for prewarmEntityDaemon and prewarmSessionDaemon. */
@@ -2104,7 +1808,7 @@ async function runPrewarmEntityDaemon(
     }
   } catch (error) {
     console.log(
-      `[sandbox][execution] prewarmEntityDaemon: skipped in ${Date.now() - startedAt}ms entityId=${args.entityId}: ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox][execution] prewarmEntityDaemon: skipped in ${Date.now() - startedAt}ms entityId=${args.entityId}: ${errorText(error)}`,
     );
     return { prewarmed: false };
   }
@@ -2137,16 +1841,8 @@ export const prewarmEntityDaemon = internalAction({
     credentialOwnerUserId: v.optional(v.id("users")),
     sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
     streamingEntityId: v.optional(v.string()),
-    activeWorkflowField: v.union(
-      v.literal("activeWorkflowId"),
-      v.literal("activeChatWorkflowId"),
-    ),
     skipPrewarm: v.optional(v.boolean()),
-    entityTable: v.union(
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: sandboxEntityTableValidator,
   },
   returns: v.object({ prewarmed: v.boolean() }),
   handler: async (ctx, args): Promise<{ prewarmed: boolean }> =>
@@ -2175,7 +1871,7 @@ export const extendSandboxDeadline = internalAction({
       await sandbox.extendTimeout(args.durationMs);
     } catch (error) {
       console.log(
-        `[sandbox][execution] extendSandboxDeadline: skipped sandboxId=${args.sandboxId}: ${error instanceof Error ? error.message : String(error)}`,
+        `[sandbox][execution] extendSandboxDeadline: skipped sandboxId=${args.sandboxId}: ${errorText(error)}`,
       );
     }
     return null;
@@ -2232,7 +1928,7 @@ export const reconcileStaleActiveSandboxes = internalAction({
         }
       } catch (error) {
         console.log(
-          `[sandbox][reconcile-sweep] skipped ${entity.entityTable} ${entity.entityId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[sandbox][reconcile-sweep] skipped ${entity.entityTable} ${entity.entityId}: ${errorText(error)}`,
         );
       }
     }
@@ -2323,7 +2019,6 @@ export const prewarmSessionDaemon = internalAction({
       providerAccountId: args.providerAccountId,
       credentialOwnerUserId: args.credentialOwnerUserId,
       sessionPersistenceId: args.sessionPersistenceId,
-      activeWorkflowField: "activeWorkflowId",
       skipPrewarm,
       entityTable: "sessions",
     });

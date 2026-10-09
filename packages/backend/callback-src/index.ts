@@ -14,10 +14,9 @@ import {
   REPO_ID,
   REQUIRE_TASK_COMMIT,
   RUN_ID,
-  SCRIPT_STARTED_AT,
   WORK_DIR,
-  hasMcpConfig,
 } from "./config.js";
+import { hasEvaMcpConfig } from "./evaMcp.js";
 import { runSdkDaemon } from "./providers/claudeSdkDaemon.js";
 import { runCodexAppServerDaemon } from "./providers/codexAppServerDaemon.js";
 import {
@@ -63,7 +62,12 @@ import {
   syncProviderStateToPersist,
 } from "./providers/attempts.js";
 import type { JsonObject } from "./types.js";
-import { hasNewTaskCommitSince, log, readGitHeadSha } from "./utils.js";
+import {
+  hasNewTaskCommitSince,
+  log,
+  readGitHeadSha,
+  errorText,
+} from "./utils.js";
 import { writeOomScoreAdj } from "./runtime/daemonProcess.js";
 import { serializeSteps } from "./parse/stepBudget.js";
 
@@ -76,10 +80,7 @@ if (IS_CURSOR_TURN_WORKER) {
     await runCursorTurnWorker();
     process.exit(0);
   } catch (error) {
-    log(
-      "cursor turn worker failed: " +
-        (error instanceof Error ? error.message : String(error)),
-    );
+    log("cursor turn worker failed: " + errorText(error));
     process.exit(1);
   }
 }
@@ -172,7 +173,7 @@ log(
     " sessionId=" +
     (process.env.CLAUDE_SESSION_ID || "none") +
     " mcp=" +
-    (hasMcpConfig ? "yes" : "no"),
+    (hasEvaMcpConfig ? "yes" : "no"),
 );
 
 try {
@@ -189,20 +190,7 @@ try {
   const firstAttempt = await runProviderAttempt(initialSessionMode);
   await flushStreaming();
 
-  let finalCode = firstAttempt.code;
-  let finalTimedOutForNoOutput = Boolean(firstAttempt.timedOutForNoOutput);
-  let finalTimedOutForMaxRuntime = Boolean(firstAttempt.timedOutForMaxRuntime);
-  let finalTimedOutForFirstEvent = Boolean(firstAttempt.timedOutForFirstEvent);
-  let finalTimedOutForFirstAssistant = Boolean(
-    firstAttempt.timedOutForFirstAssistant,
-  );
-  let finalTimedOutAfterFirstText = Boolean(
-    firstAttempt.timedOutAfterFirstText,
-  );
-  let finalTimedOutForZombie = Boolean(firstAttempt.timedOutForZombie);
-  const finalTerminatedBySignal = firstAttempt.terminatedBySignal;
-  const finalToolStallErrorMessage = firstAttempt.toolStallErrorMessage || "";
-  let finalResultEvent = extractResultEvent(firstAttempt.output);
+  const finalResultEvent = extractResultEvent(firstAttempt.output);
   log(
     "firstAttempt result: code=" +
       firstAttempt.code +
@@ -220,28 +208,16 @@ try {
 
   if (await setFinalizingState()) process.exit(0);
 
-  const finalAttempt = {
-    code: finalCode,
-    terminatedBySignal: finalTerminatedBySignal,
-    output: firstAttempt.output,
-    timedOutForNoOutput: finalTimedOutForNoOutput,
-    timedOutForMaxRuntime: finalTimedOutForMaxRuntime,
-    timedOutForFirstEvent: finalTimedOutForFirstEvent,
-    timedOutForFirstAssistant: finalTimedOutForFirstAssistant,
-    timedOutAfterFirstText: finalTimedOutAfterFirstText,
-    timedOutForZombie: finalTimedOutForZombie,
-    toolStallErrorMessage: finalToolStallErrorMessage,
-  };
   // Cursor can flush partial assistant text while a SIGTERM/SIGKILL is tearing
   // down the process. extractResultEvent deliberately falls back to that text,
   // so without this guard an interrupted recording turn reported its
   // "recording now…" preamble as a successful final answer. Node reports a
   // direct signal with `code=null`; shells can translate it to 137/143. Keep
   // both forms so neither can masquerade as genuine completion.
-  const agentWasInterrupted = providerAttemptWasInterrupted(finalAttempt);
-  const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
+  const agentWasInterrupted = providerAttemptWasInterrupted(firstAttempt);
+  const attemptEndedDueToTimeout = providerAttemptTimedOut(firstAttempt);
   const { success: runSucceededWithResult, error: resolvedError } =
-    resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
+    resolveProviderAttemptOutcome(firstAttempt, finalResultEvent);
   let errorValue: string | null = resolvedError;
 
   // The final result text is delivered separately (rendered as the chat
@@ -277,7 +253,7 @@ try {
     ? false
     : finalResultEvent
       ? !finalResultEvent.isError
-      : finalCode === 0;
+      : firstAttempt.code === 0;
   if (attemptEndedDueToTimeout && !runSucceededWithResult) {
     completionSuccess = false;
   }
@@ -302,7 +278,7 @@ try {
     "completion: success=" +
       completionSuccess +
       " code=" +
-      finalCode +
+      firstAttempt.code +
       " hasResult=" +
       Boolean(finalResultEvent) +
       " error=" +
@@ -333,7 +309,7 @@ try {
     await stopStreamingLoops();
     await waitForPendingClaudeUsageReport();
     writeDoneFile(completionSuccess ? "success" : "error", {
-      exitCode: finalCode,
+      exitCode: firstAttempt.code,
       error: errorValue,
     });
     // Hard-exit: a tool step can leave a background child holding our stdio
@@ -347,8 +323,8 @@ try {
     syncProviderStateToPersist("completion-error");
     await stopStreamingLoops();
     writeDoneFile("completion-error", {
-      exitCode: finalCode,
-      error: e instanceof Error ? e.message : String(e),
+      exitCode: firstAttempt.code,
+      error: errorText(e),
     });
     process.exit(1);
   }
@@ -361,7 +337,7 @@ try {
   syncProviderStateToPersist("fatal-error");
   await stopStreamingLoops();
   writeDoneFile("fatal-error", {
-    error: err instanceof Error ? err.message : String(err),
+    error: errorText(err),
   });
   const errorArgs: JsonObject = {
     [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",
@@ -391,5 +367,3 @@ try {
   }
   process.exit(1);
 }
-
-void SCRIPT_STARTED_AT;

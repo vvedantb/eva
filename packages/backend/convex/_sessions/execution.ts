@@ -5,10 +5,16 @@ import {
   internalQuery,
   type MutationCtx,
 } from "../_generated/server";
-import { workflow, cancelTrackedWorkflow } from "../workflowManager";
-import { authAction, authMutation, hasRepoAccess } from "../functions";
+import { workflow } from "../workflowManager";
+import {
+  authAction,
+  authMutation,
+  getSessionWithAccess,
+  hasRepoAccess,
+} from "../functions";
 import {
   aiModelValidator,
+  launchTraitsFromEntity,
   launchTraitsFromStored,
   normalizeAIModel,
   reasoningLevelValidator,
@@ -16,8 +22,6 @@ import {
 } from "../validators";
 import { trackSessionWorkflow } from "../workflowWatchdog";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { syncSessionDaemonState } from "./daemonState";
 import {
   drainChatQueueQuietly,
@@ -31,15 +35,10 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
-import { detectCancelSupersession } from "../_chat/cancelRace";
+import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { touchUserActivity } from "../_sandbox/activity";
-import {
-  bindTurnWorkflow,
-  closeOpenTurn,
-  closeTurnForWorkflow,
-  openSessionTurn,
-} from "../_chat/turnStore";
+import { bindTurnWorkflow, openSessionTurn } from "../_chat/turnStore";
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 
 async function stageAndStartSessionTurn(
@@ -234,10 +233,11 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     if (
       session.activeWorkflowId !== undefined ||
       session.pendingTurn !== undefined
@@ -301,10 +301,11 @@ export const startExecute = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     await touchUserActivity(
       ctx,
       { kind: "session", entityId: String(args.sessionId) },
@@ -387,7 +388,7 @@ export const prewarmDaemon = authMutation({
     // Match the turn path's launch options so the first real message does not
     // immediately optsmismatch-kill this daemon (which races with
     // claimPendingTurn and leaves the chat stuck on Working). The sticky traits
-    // must go through `launchTraitsFromStored` — the same normalisation the
+    // must go through `launchTraitsFromEntity` — the same normalisation the
     // composer applies — because the send path omits defaults. Forwarding the
     // stored values verbatim (e.g. reasoning "high", which is the Claude
     // default, or `fastMode: false` on a model with no Fast trait) yields a
@@ -401,12 +402,7 @@ export const prewarmDaemon = authMutation({
       repoId: session.repoId,
       userId: session.userId,
       model: normalizedModel,
-      ...launchTraitsFromStored(normalizedModel, {
-        reasoningLevel: session.lastReasoningLevel,
-        thinkingEnabled: session.lastThinkingEnabled,
-        use1mContext: session.lastUse1mContext,
-        fastMode: session.lastFastMode,
-      }),
+      ...launchTraitsFromEntity(normalizedModel, session),
       allowedTools: SESSION_TOOLS,
       providerAccountId: session.providerAccountId,
       credentialOwnerUserId,
@@ -470,11 +466,11 @@ export const getDaemonPrewarmData = internalQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      args.userId,
+    );
     if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
       return null;
     }
@@ -488,12 +484,7 @@ export const getDaemonPrewarmData = internalQuery({
       // Normalised here, not in the caller: the traits must be exactly what the
       // composer sends (defaults omitted) or the prewarm's opts sig differs from
       // the turn path's and kills the warm daemon.
-      ...launchTraitsFromStored(normalizedModel, {
-        reasoningLevel: session.lastReasoningLevel,
-        thinkingEnabled: session.lastThinkingEnabled,
-        use1mContext: session.lastUse1mContext,
-        fastMode: session.lastFastMode,
-      }),
+      ...launchTraitsFromEntity(normalizedModel, session),
       providerAccountId: session.providerAccountId,
     };
   },
@@ -522,10 +513,11 @@ export const enqueueMessage = authMutation({
     if (!content) return null;
     const displayContent = args.displayContent?.trim();
 
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     await touchUserActivity(
       ctx,
       { kind: "session", entityId: String(args.sessionId) },
@@ -587,81 +579,32 @@ export const cancelExecution = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
 
-    // Snapshot what this cancel owns. A concurrent startExecute may stage a
-    // newer pendingTurn / activeWorkflowId while we run — must not clear those
-    // or mark the newer assistant placeholder as cancelled.
-    const workflowIdToCancel = session.activeWorkflowId;
-    const pendingRequestedAt = session.pendingTurn?.requestedAt;
-
-    await cancelTrackedWorkflow(ctx, workflowIdToCancel);
-
-    if (usesChatDaemon(normalizeAIModel(session.lastModel))) {
-      const cancelRequestedAt = Date.now();
-      await ctx.db.patch(args.sessionId, { cancelRequestedAt });
-      await syncSessionDaemonState(ctx, session, { cancelRequestedAt });
-    } else if (session.sandboxId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-        sandboxId: session.sandboxId,
-        repoId: session.repoId,
-      });
-    }
-
-    if (workflowIdToCancel !== undefined) {
-      await closeTurnForWorkflow(
-        ctx,
-        args.sessionId,
-        workflowIdToCancel,
-        "cancelled",
-        { error: "Cancelled by the user" },
-      );
-    }
-
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", String(args.sessionId)))
-      .first();
-
-    const latest = await ctx.db.get(args.sessionId);
-    if (!latest) return null;
-
-    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-      latestPendingTurn: latest.pendingTurn,
-      cancelPendingRequestedAt: pendingRequestedAt,
-      latestActiveWorkflowId: latest.activeWorkflowId,
-      cancelWorkflowId: workflowIdToCancel,
+    const cancelled = await cancelChatTurn(ctx, {
+      id: args.sessionId,
+      entity: session,
+      activeWorkflowId: (s) => s.activeWorkflowId,
+      streamingEntityId: String(args.sessionId),
+      interrupt: async () => {
+        if (usesChatDaemon(normalizeAIModel(session.lastModel))) {
+          const cancelRequestedAt = Date.now();
+          await ctx.db.patch(args.sessionId, { cancelRequestedAt });
+          await syncSessionDaemonState(ctx, session, { cancelRequestedAt });
+        } else if (session.sandboxId) {
+          await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+            sandboxId: session.sandboxId,
+            repoId: session.repoId,
+          });
+        }
+      },
+      getLatest: () => ctx.db.get(args.sessionId),
     });
-
-    if (cancelOwnsCurrentTurn) {
-      const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-        .order("desc")
-        .first();
-      if (
-        last &&
-        last.role === "assistant" &&
-        last.finishedAt === undefined &&
-        last._id !== syntheticTurnMessageId
-      ) {
-        await finalizeCancelledAssistantMessage(ctx, last, streaming);
-      }
-      await finalizeOpenSyntheticTurnOnCancel(
-        ctx,
-        syntheticTurnMessageId,
-        streaming,
-      );
-      await closeOpenTurn(ctx, args.sessionId, "cancelled", {
-        error: "Cancelled by the user",
-      });
-    }
-
-    await clearStreamingActivity(ctx, String(args.sessionId));
+    if (!cancelled) return null;
 
     const sessionPatch: {
       activeWorkflowId?: undefined;
@@ -669,26 +612,16 @@ export const cancelExecution = authMutation({
       syntheticTurnMessageId?: undefined;
       updatedAt: number;
     } = { updatedAt: Date.now() };
-
-    if (
-      workflowIdToCancel !== undefined &&
-      latest.activeWorkflowId === workflowIdToCancel
-    ) {
-      sessionPatch.activeWorkflowId = undefined;
-    }
-    const clearsPendingTurn =
-      pendingRequestedAt !== undefined &&
-      latest.pendingTurn?.requestedAt === pendingRequestedAt;
-    if (clearsPendingTurn) {
-      sessionPatch.pendingTurn = undefined;
-    }
-    if (cancelOwnsCurrentTurn) {
+    if (cancelled.clearsWorkflow) sessionPatch.activeWorkflowId = undefined;
+    if (cancelled.clearsPendingTurn) sessionPatch.pendingTurn = undefined;
+    if (cancelled.cancelOwnsCurrentTurn) {
       sessionPatch.syntheticTurnMessageId = undefined;
     }
-
     await ctx.db.patch(args.sessionId, sessionPatch);
-    if (clearsPendingTurn) {
-      await syncSessionDaemonState(ctx, latest, { pendingTurn: undefined });
+    if (cancelled.clearsPendingTurn) {
+      await syncSessionDaemonState(ctx, cancelled.latest, {
+        pendingTurn: undefined,
+      });
     }
 
     await startNextQueuedSessionMessage(ctx, args.sessionId);

@@ -11,11 +11,6 @@ export const syncRepos = action({
   args: {},
   returns: v.object({ success: v.boolean(), synced: v.number() }),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
     const accessibleRepos = await ctx.runQuery(api.githubRepos.list, {
       includeHidden: true,
     });

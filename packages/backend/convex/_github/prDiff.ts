@@ -5,8 +5,8 @@ import { v } from "convex/values";
 import { z } from "zod";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
-import { getInstallationOctokit } from "../githubAuth";
-import { extractPrNumber } from "./helpers";
+import { getInstallationOctokit, getRepoOctokit } from "../githubAuth";
+import { extractPrNumber } from "./prUrl";
 import {
   decodeGitHubContent,
   decodeGitHubContentBytes,
@@ -78,12 +78,7 @@ export const fetchPrDiff = internalAction({
   },
   returns: prDiffResultValidator,
   handler: async (ctx, args): Promise<PrDiffResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     // JSON PR metadata is fine for large PRs — start it alongside the diff
     // attempt so a fallback listFiles path still reuses one meta round-trip.
     const metaPromise = octokit.rest.pulls.get({
@@ -160,8 +155,6 @@ export const getPrDiff = action({
   },
   returns: prDiffResultValidator,
   handler: async (ctx, args): Promise<PrDiffResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const prNumber =
@@ -220,12 +213,7 @@ export const fetchCommitDiff = internalAction({
   },
   returns: commitDiffResultValidator,
   handler: async (ctx, args): Promise<CommitDiffResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const [res, meta] = await Promise.all([
       octokit.rest.repos.getCommit({
         owner: repo.owner,
@@ -280,8 +268,6 @@ export const getCommitDiff = action({
   },
   returns: commitDiffResultValidator,
   handler: async (ctx, args): Promise<CommitDiffResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await commitDiffCache.fetch(ctx, {
@@ -319,12 +305,7 @@ export const fetchCompareDiff = internalAction({
   },
   returns: compareDiffResultValidator,
   handler: async (ctx, args): Promise<CompareDiffResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     let data: unknown;
     try {
       const res = await octokit.rest.repos.compareCommitsWithBasehead({
@@ -379,8 +360,6 @@ export const getCompareDiff = action({
   },
   returns: compareDiffResultValidator,
   handler: async (ctx, args): Promise<CompareDiffResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await compareDiffCache.fetch(
@@ -481,12 +460,7 @@ export const fetchPrFileContents = internalAction({
   },
   returns: prFileContentsValidator,
   handler: async (ctx, args): Promise<PrFileContents> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const [old, next] = await Promise.all([
       readFileAtRef(octokit, repo.owner, repo.name, args.path, args.baseSha),
       readFileAtRef(octokit, repo.owner, repo.name, args.path, args.headSha),
@@ -521,8 +495,6 @@ export const getPrFileContents = action({
   },
   returns: prFileContentsValidator,
   handler: async (ctx, args): Promise<PrFileContents> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prFileContentsCache.fetch(ctx, {

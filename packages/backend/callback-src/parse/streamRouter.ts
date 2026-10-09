@@ -3,7 +3,7 @@ import { flushStreaming } from "../runtime/heartbeats.js";
 import { getProviderAdapter } from "../providers/index.js";
 import { appendToRawLogFile, appendToRawOutput } from "../runtime/buffers.js";
 import { callbackState as S } from "../runtime/state.js";
-import { tryParseJson } from "../utils.js";
+import { tryParseJsonObject } from "../utils.js";
 
 /** Durable log + bounded buffer + live stream for one parsed JSON line. */
 export function emitParsedStreamLine(line: string): void {
@@ -35,9 +35,7 @@ export function processRealtimeStdoutChunk(text: string): void {
 }
 
 function handleRealtimeStreamLine(line: string): void {
-  const parsed = tryParseJson(line);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return;
-  }
+  const parsed = tryParseJsonObject(line);
+  if (!parsed) return;
   getProviderAdapter(PROVIDER).onStreamLine(line, parsed);
 }

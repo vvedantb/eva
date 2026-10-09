@@ -11,13 +11,24 @@ import {
 import type { WorkflowId } from "@convex-dev/workflow";
 import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
-import { sessionSummaryStreamingEntityId } from "./agentStreamIds";
+import {
+  PROJECT_CHAT_STREAM_PREFIX,
+  TASK_CHAT_STREAM_PREFIX,
+  projectChatStreamEntityId,
+  sessionSummaryStreamingEntityId,
+  taskChatStreamEntityId,
+} from "./agentStreamIds";
 import type { TurnLane } from "../validators";
 
-/** Streaming entityId prefix for project chat workflows. */
-export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
-/** Streaming entityId prefix for agent task chat workflows. */
-export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
+// Re-exported so existing importers (workflowWatchdog.ts, mcp/nodeActions.ts,
+// _queues/helpers.ts, tests) keep resolving the chat stream ids from here; the
+// definitions live in the leaf ./agentStreamIds.ts.
+export {
+  PROJECT_CHAT_STREAM_PREFIX,
+  TASK_CHAT_STREAM_PREFIX,
+  projectChatStreamEntityId,
+  taskChatStreamEntityId,
+};
 
 /** A standalone system-alert message surfaced when a stale turn is torn down. */
 export type ChatAlert = { text: string; detail?: string };
@@ -207,7 +218,7 @@ const taskChatAdapter: ChatSurfaceAdapter<
   parseId: (db, raw) => db.normalizeId("agentTasks", raw),
   getEntity: (ctx, id) => ctx.db.get(id),
   activeWorkflowId: (task) => task.activeChatWorkflowId,
-  streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+  streamingEntityId: taskChatStreamEntityId,
   parseStreamingEntityId: (db, streamingEntityId) =>
     streamingEntityId.startsWith(TASK_CHAT_STREAM_PREFIX)
       ? db.normalizeId(
@@ -294,7 +305,7 @@ const projectChatAdapter: ChatSurfaceAdapter<
   parseId: (db, raw) => db.normalizeId("projects", raw),
   getEntity: (ctx, id) => ctx.db.get(id),
   activeWorkflowId: (project) => project.activeChatWorkflowId,
-  streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+  streamingEntityId: projectChatStreamEntityId,
   parseStreamingEntityId: (db, streamingEntityId) =>
     streamingEntityId.startsWith(PROJECT_CHAT_STREAM_PREFIX)
       ? db.normalizeId(

@@ -373,21 +373,37 @@ test("a lease-terminal exit persists the turn's work before exiting", () => {
  */
 test("every completion releases the turn lease before the closing mutation is sent", () => {
   const completion = source("../callback-src/runtime/completion.ts");
+  // One send sequence owns the release-before-send order.
+  const helperAt = completion.indexOf(
+    "export async function sendTurnCompletion",
+  );
+  expect(helperAt, "sendTurnCompletion moved or was renamed").toBeGreaterThan(
+    -1,
+  );
+  const releaseAt = completion.indexOf(
+    "releaseTurnLeaseForCompletion();",
+    helperAt,
+  );
+  const sendAt = completion.indexOf("await callConvexWithRetry(", helperAt);
+  expect(
+    releaseAt,
+    "sendTurnCompletion lost its lease release",
+  ).toBeGreaterThan(-1);
+  expect(releaseAt).toBeLessThan(sendAt);
+  // Every turn-closing send goes through it.
   for (const fn of [
     "export async function deliverCompletionWithMedia",
     "export async function postClaimedTurnFailureCompletion",
   ]) {
     const startAt = completion.indexOf(fn);
     expect(startAt, fn + " moved or was renamed").toBeGreaterThan(-1);
-    const releaseAt = completion.indexOf(
-      "releaseTurnLeaseForCompletion();",
+    const body = completion.slice(
       startAt,
+      completion.indexOf("\n}\n", startAt),
     );
-    // The first send after the function start is this function's own.
-    const sendAt = completion.indexOf("await callConvexWithRetry(", startAt);
-    expect(releaseAt, fn + " lost its lease release").toBeGreaterThan(-1);
-    expect(sendAt).toBeGreaterThan(-1);
-    expect(releaseAt).toBeLessThan(sendAt);
+    expect(body, fn + " bypasses sendTurnCompletion").toContain(
+      "await sendTurnCompletion(",
+    );
   }
   const daemon = source("../callback-src/providers/claudeSdkDaemon.ts");
   for (const fn of [
@@ -396,16 +412,13 @@ test("every completion releases the turn lease before the closing mutation is se
   ]) {
     const startAt = daemon.indexOf(fn);
     expect(startAt, fn + " moved or was renamed").toBeGreaterThan(-1);
-    const releaseAt = daemon.indexOf(
-      "releaseTurnLeaseForCompletion();",
-      startAt,
+    const body = daemon.slice(startAt, daemon.indexOf("\n}\n", startAt));
+    expect(
+      body.replace(/\s+/g, " "),
+      fn + " bypasses sendTurnCompletion",
+    ).toContain(
+      'await sendTurnCompletion( COMPLETE_SYNTHETIC_TURN_MUTATION ?? ""',
     );
-    const sendAt = daemon.indexOf(
-      'COMPLETE_SYNTHETIC_TURN_MUTATION ?? ""',
-      startAt,
-    );
-    expect(releaseAt, fn + " lost its lease release").toBeGreaterThan(-1);
-    expect(releaseAt).toBeLessThan(sendAt);
   }
 });
 

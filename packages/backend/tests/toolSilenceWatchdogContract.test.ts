@@ -8,6 +8,9 @@ const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const claudeSdk = readSource("callback-src/providers/claudeSdk.ts");
 const claudeSdkDaemon = readSource("callback-src/providers/claudeSdkDaemon.ts");
 const codexSdk = readSource("callback-src/providers/codexSdk.ts");
+const codexAppServerDaemon = readSource(
+  "callback-src/providers/codexAppServerDaemon.ts",
+);
 const cursorSdk = readSource("callback-src/providers/cursorSdk.ts");
 const opencodeSdk = readSource("callback-src/providers/opencodeSdk.ts");
 const bundledScript = readSource(
@@ -83,6 +86,37 @@ describe("a tool in flight exempts the turn from the silence kill", () => {
     const runtimeResets = body.split("turnStartedAtMs = now").length - 1;
     expect(runtimeResets, "one reset, in the awaiting-answer branch").toBe(1);
     expect(body.indexOf("turnStartedAtMs = now")).toBeLessThan(exemptionAt);
+  });
+
+  test("the codex App Server daemon watchdog refreshes only the silence clock", () => {
+    const daemon = sliceBetween(
+      codexAppServerDaemon,
+      "export async function runCodexAppServerDaemon(",
+      "\n}",
+    );
+    const body = sliceBetween(
+      daemon,
+      "const now = Date.now();",
+      "await sleep(POLL_INTERVAL_MS);",
+    );
+    const exemption = guardedBlock(body, "if (S.inFlightToolUses > 0) {");
+    expect(exemption).toContain("lastEventAt = now;");
+    expect(
+      exemption,
+      "refreshing the runtime clock would remove the backstop",
+    ).not.toContain("activeTurnStartedAt");
+
+    // Same shape as the Claude daemon: a standalone exemption, then the cap /
+    // silence chain. The cap reads the runtime clock, so it still fires mid-tool.
+    const exemptionAt = body.indexOf("if (S.inFlightToolUses > 0) {");
+    const capAt = body.indexOf(
+      "now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS",
+    );
+    const silenceAt = body.indexOf("now - lastEventAt > NO_MESSAGE_TIMEOUT_MS");
+    expect(capAt, "the runtime cap moved").toBeGreaterThan(-1);
+    expect(silenceAt, "the silence kill moved").toBeGreaterThan(-1);
+    expect(exemptionAt).toBeLessThan(capAt);
+    expect(capAt).toBeLessThan(silenceAt);
   });
 
   /**

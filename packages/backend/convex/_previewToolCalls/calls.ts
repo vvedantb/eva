@@ -10,11 +10,8 @@ import {
   authMutation,
   authQuery,
 } from "../functions";
-import { previewToolCallFields } from "../validators";
-import {
-  chatEntityKindValidator,
-  resolveChatParent,
-} from "../_chat/chatParent";
+import { chatEntityKindValidator, previewToolCallFields } from "../validators";
+import { resolveChatParent } from "../_chat/chatParent";
 
 /**
  * Relay for agent → live-preview WebMCP tool calls. The sandbox cannot reach

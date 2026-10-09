@@ -4,6 +4,7 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { githubRepoFields } from "../validators";
 import { hasRepoAccess } from "../functions";
 import { pickSandboxRepoId } from "./sandboxRepoPick";
+import { findRepoEnvVarDoc } from "../_envVars/documentStore";
 
 export {
   pickDefaultVisibleAppRepo,
@@ -11,24 +12,6 @@ export {
   pickSnapshotCredentialRepoId,
   type AppRepoPickFields,
 } from "./sandboxRepoPick";
-
-/** True when the user connected the repo or shares its team. */
-export async function userCanAccessRepo(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  repo: Doc<"githubRepos">,
-): Promise<boolean> {
-  if (repo.connectedBy === userId) return true;
-  const teamId = repo.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
-}
 
 /** Resolves a repo ID to its parent repo ID if it is a sub-app, otherwise returns itself. */
 export async function resolveCanonicalRepoId(
@@ -74,6 +57,19 @@ export async function hasCodebaseRepoAccess(
   return false;
 }
 
+/** All repo rows for one GitHub owner/name codebase (root + sub-apps). */
+export function findReposByOwnerAndName(
+  db: GenericDatabaseReader<DataModel>,
+  repo: { owner: string; name: string },
+): Promise<Array<Doc<"githubRepos">>> {
+  return db
+    .query("githubRepos")
+    .withIndex("by_owner_and_name", (q) =>
+      q.eq("owner", repo.owner).eq("name", repo.name),
+    )
+    .collect();
+}
+
 /** Finds all repo rows sharing the same GitHub owner and name (root + sub-apps). */
 export async function findSiblingRepos(
   db: GenericDatabaseReader<DataModel>,
@@ -81,13 +77,7 @@ export async function findSiblingRepos(
 ): Promise<Array<Doc<"githubRepos">>> {
   const repo = await db.get(repoId);
   if (!repo) return [];
-
-  return await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", repo.owner).eq("name", repo.name),
-    )
-    .collect();
+  return await findReposByOwnerAndName(db, repo);
 }
 
 /** Finds all repo entry ids sharing the same owner and name (root + sub-apps). */
@@ -178,10 +168,7 @@ export async function resolveSandboxRepoId(
 ): Promise<Id<"githubRepos">> {
   const siblingRepos = siblings ?? (await findSiblingRepos(db, workflowRepoId));
   return pickSandboxRepoId(workflowRepoId, siblingRepos, async (repoId) => {
-    const envDoc = await db
-      .query("repoEnvVars")
-      .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-      .first();
+    const envDoc = await findRepoEnvVarDoc(db, repoId);
     return (
       envDoc?.vars.some((entry) => entry.key === "VERCEL_PROJECT_ID") === true
     );

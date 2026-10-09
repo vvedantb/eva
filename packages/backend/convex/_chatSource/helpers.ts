@@ -4,6 +4,12 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 import { isEntityDeleted } from "../numId";
+import {
+  chatEntityKindValidator,
+  chatRefValidator,
+  type ChatEntityKind,
+  type ChatRef,
+} from "../validators";
 
 /**
  * The chat (session / quick task / project) a doc or artifact was created
@@ -11,21 +17,13 @@ import { isEntityDeleted } from "../numId";
  * caller can see it, and resolve it to a display summary for lists.
  */
 
-export const chatSourceArgValidator = v.union(
-  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
-  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
-  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
-);
-export type ChatSourceArg = Infer<typeof chatSourceArgValidator>;
+export const chatSourceArgValidator = chatRefValidator;
+export type ChatSourceArg = ChatRef;
 
 export const chatSourceSummaryValidator = v.union(
   v.null(),
   v.object({
-    kind: v.union(
-      v.literal("session"),
-      v.literal("task"),
-      v.literal("project"),
-    ),
+    kind: chatEntityKindValidator,
     id: v.string(),
     title: v.string(),
     numId: v.optional(v.number()),
@@ -37,7 +35,7 @@ export const chatSourceSummaryValidator = v.union(
 type ChatSourceSummary = Infer<typeof chatSourceSummaryValidator>;
 
 type ChatSourceStoredFields = {
-  sourceKind?: "session" | "task" | "project";
+  sourceKind?: ChatEntityKind;
   sourceSessionId?: Id<"sessions">;
   sourceTaskId?: Id<"agentTasks">;
   sourceProjectId?: Id<"projects">;
@@ -121,7 +119,7 @@ async function repoFromCache(
 }
 
 function summarise(
-  kind: "session" | "task" | "project",
+  kind: ChatEntityKind,
   entity: { _id: string; title: string; numId?: number; deletedAt?: number },
   repo: Doc<"githubRepos"> | null,
 ): ChatSourceSummary {

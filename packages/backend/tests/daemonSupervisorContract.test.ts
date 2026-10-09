@@ -10,9 +10,10 @@ const read = (path: string): string =>
 const daemons = [
   read("callback-src/providers/claudeSdkDaemon.ts"),
   read("callback-src/providers/codexAppServerDaemon.ts"),
+  read("callback-src/providers/cursorSdkDaemon.ts"),
 ];
 
-test("Claude and Codex share one local lifecycle supervisor", () => {
+test("Claude, Codex and Cursor share one local lifecycle supervisor", () => {
   for (const daemon of daemons) {
     expect(daemon).toContain("new DaemonSupervisor<");
     expect(daemon).toContain("supervisor.parkClaim(");

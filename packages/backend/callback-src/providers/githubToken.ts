@@ -1,7 +1,7 @@
 import { CONVEX_TOKEN, CONVEX_URL, REPO_ID } from "../config.js";
 import { fetchWithTimeout } from "../http/convexClient.js";
 import type { JsonValue } from "../types.js";
-import { readResponseJson } from "../utils.js";
+import { isJsonObject, readResponseJson } from "../utils.js";
 
 export type GithubTokenFetch = (
   url: string,
@@ -15,13 +15,9 @@ export type GithubTokenEnv = {
 
 /** Pulls `data.value.token` out of a Convex action JSON envelope. */
 export function tokenFromActionResponse(data: JsonValue | null): string | null {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    return null;
-  }
+  if (!isJsonObject(data)) return null;
   const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
-  }
+  if (!isJsonObject(value)) return null;
   return typeof value.token === "string" ? value.token : null;
 }
 

@@ -6,6 +6,7 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { AVE_CONTEXT_ROWS, type AveContextRow } from "./context";
 import { buildAveInstructions } from "./prompt";
 import { startRun } from "./threads";
+import { roleValidator } from "../_validators/enums";
 
 /**
  * Run-state mutations for one Manager Ave run (`mcp/aveRun.ts`). Every one is
@@ -32,7 +33,7 @@ const claimedRunValidator = v.object({
   instructions: v.string(),
   rows: v.array(
     v.object({
-      role: v.union(v.literal("user"), v.literal("assistant")),
+      role: roleValidator,
       content: v.string(),
       isSystemAlert: v.optional(v.boolean()),
       modelMessages: v.optional(v.string()),

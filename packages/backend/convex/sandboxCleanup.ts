@@ -7,6 +7,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { SANDBOX_DELETE_GRACE_MS } from "./_sandbox/vercelSnapshotOptions";
+import { sandboxEntityTableValidator } from "./_validators/enums";
 
 const SWEEP_BATCH_SIZE = 16;
 const DELETE_STAGGER_MS = 2000;
@@ -177,10 +178,7 @@ export const sweepDeadSandboxes = internalMutation({
         if (!isSessionDead(session)) continue;
         // Normal sweeps wait for closed (stop finished). skipGrace one-offs
         // also clear stopping/active leftovers that still bill for snapshots.
-        if (
-          !skipGrace &&
-          session.status !== "closed"
-        ) {
+        if (!skipGrace && session.status !== "closed") {
           continue;
         }
         if (
@@ -205,20 +203,28 @@ export const sweepDeadSandboxes = internalMutation({
       }
 
       if (!page.isDone) {
-        await ctx.scheduler.runAfter(0, internal.sandboxCleanup.sweepDeadSandboxes, {
-          cursor: page.continueCursor,
-          phase: "sessions",
-          deleted,
-          skipGrace,
-        });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.sandboxCleanup.sweepDeadSandboxes,
+          {
+            cursor: page.continueCursor,
+            phase: "sessions",
+            deleted,
+            skipGrace,
+          },
+        );
         return { deleted, done: false, phase: "sessions" as const };
       }
 
-      await ctx.scheduler.runAfter(0, internal.sandboxCleanup.sweepDeadSandboxes, {
-        phase: "agentTasks",
-        deleted,
-        skipGrace,
-      });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.sandboxCleanup.sweepDeadSandboxes,
+        {
+          phase: "agentTasks",
+          deleted,
+          skipGrace,
+        },
+      );
       return { deleted, done: false, phase: "sessions" as const };
     }
 
@@ -254,12 +260,16 @@ export const sweepDeadSandboxes = internalMutation({
     }
 
     if (!page.isDone) {
-      await ctx.scheduler.runAfter(0, internal.sandboxCleanup.sweepDeadSandboxes, {
-        cursor: page.continueCursor,
-        phase: "agentTasks",
-        deleted,
-        skipGrace,
-      });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.sandboxCleanup.sweepDeadSandboxes,
+        {
+          cursor: page.continueCursor,
+          phase: "agentTasks",
+          deleted,
+          skipGrace,
+        },
+      );
       return { deleted, done: false, phase: "agentTasks" as const };
     }
 
@@ -290,29 +300,14 @@ const liveCandidateValidator = v.object({
 export const listLiveSandboxCandidates = internalQuery({
   args: {
     cursor: v.optional(v.string()),
-    phase: v.optional(
-      v.union(
-        v.literal("sessions"),
-        v.literal("projects"),
-        v.literal("agentTasks"),
-      ),
-    ),
+    phase: v.optional(sandboxEntityTableValidator),
   },
   returns: v.object({
     candidates: v.array(liveCandidateValidator),
     continueCursor: v.union(v.string(), v.null()),
     isDone: v.boolean(),
-    phase: v.union(
-      v.literal("sessions"),
-      v.literal("projects"),
-      v.literal("agentTasks"),
-    ),
-    nextPhase: v.union(
-      v.literal("sessions"),
-      v.literal("projects"),
-      v.literal("agentTasks"),
-      v.null(),
-    ),
+    phase: sandboxEntityTableValidator,
+    nextPhase: v.union(sandboxEntityTableValidator, v.null()),
   }),
   handler: async (ctx, args) => {
     const phase = args.phase ?? "sessions";

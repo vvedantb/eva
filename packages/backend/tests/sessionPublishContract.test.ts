@@ -380,7 +380,7 @@ describe("session branch publication reconciles concurrent remote work", () => {
   });
 
   test("the pre-completion durability push follows the same protocol", () => {
-    const syncAt = turnPersist.indexOf("synchronizeForPush(branch.out)");
+    const syncAt = turnPersist.indexOf("synchronizeForPush(branch)");
     const gateAt = turnPersist.indexOf("tipAlreadyPublished(exclusion)");
     const pushAt = turnPersist.indexOf('git(["push", "origin", refspec]');
     expect(turnPersist).toContain('"fetch",\n      "--no-tags"');
@@ -534,7 +534,7 @@ describe("a callback-published session still opens its first pull request", () =
    */
   test("both push paths push a fully-qualified refspec", () => {
     expect(turnPersist).toContain(
-      "const refspec = `refs/heads/${branch.out}:refs/heads/${branch.out}`",
+      "const refspec = `refs/heads/${branch}:refs/heads/${branch}`",
     );
     const body = functionBody(
       sandboxGit,
@@ -635,16 +635,24 @@ describe("a callback-published session still opens its first pull request", () =
       "Session branch could not be created",
     );
     expect(body, "generic copy lost").toContain("Sandbox startup unfinished");
+    const runtimeSessions = readSource("_sandbox_runtime/sessions.ts");
+    expect(runtimeSessions, "session checkout step label renamed").toContain(
+      "newSessionSandbox.checkoutSessionBranch",
+    );
+    // Task and project build their label from `new${hooks.label}Sandbox`.
+    expect(
+      functionBody(
+        runtimeSessions,
+        "async function preparePreviewSandboxInternal(",
+      ),
+      "preview checkout step label renamed",
+    ).toContain("Sandbox.checkoutBranch`");
     const stepLabels = [
       "newSessionSandbox.checkoutSessionBranch:",
       "newTaskSandbox.checkoutBranch:",
       "newProjectSandbox.checkoutBranch:",
     ];
-    const runtimeSessions = readSource("_sandbox_runtime/sessions.ts");
     for (const label of stepLabels) {
-      expect(runtimeSessions, `step label ${label} renamed`).toContain(
-        label.slice(0, -1),
-      );
       expect(
         /\.(checkoutSessionBranch|checkoutBranch):/.test(label),
         `routing regex no longer matches ${label}`,

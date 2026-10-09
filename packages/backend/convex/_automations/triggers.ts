@@ -3,9 +3,12 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../validators";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation } from "../functions";
 import { workflow } from "../workflowManager";
-import { buildAutomationRunBranchName } from "./helpers";
+import {
+  buildAutomationRunBranchName,
+  getAutomationWithAccess,
+} from "./helpers";
 import {
   EVENT_RUN_MAX_WAIT_MS,
   EVENT_RUN_RETRY_MS,
@@ -118,11 +121,11 @@ export const runNow = authMutation({
   args: { automationId: v.id("automations") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const stored = await ctx.db.get(args.automationId);
-    if (!stored) throw new Error("Automation not found");
-    if (!(await hasRepoAccess(ctx.db, stored.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const stored = await getAutomationWithAccess(
+      ctx.db,
+      args.automationId,
+      ctx.userId,
+    );
     // Resolved so the prompt guard sees the catalog definition, not the
     // placeholder stored on a system install.
     const automation = resolveAutomationDoc(stored);

@@ -6,7 +6,7 @@ import { api, internal } from "../_generated/api";
 import { appendRelatedPrsSection, buildPrBody, type SiblingPr } from "../prBody";
 import { buildEvaSessionUrl } from "../_taskWorkflow/urls";
 import { resolveSessionBaseBranch } from "../_sessions/baseBranch";
-import { extractPrNumber } from "./helpers";
+import { extractPrNumber } from "./prUrl";
 import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -24,10 +24,6 @@ export const createSessionPr = action({
   args: { sessionId: v.id("sessions") },
   returns: v.object({ url: v.string() }),
   handler: async (ctx, args): Promise<{ url: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     const session = await ctx.runQuery(api.sessions.get, {
       id: args.sessionId,
     });

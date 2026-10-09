@@ -14,10 +14,23 @@ import {
   CLAUDE_RUNTIME_CONFIG_DIR,
   CLAUDE_SYNC_PER_FILE_TIMEOUT_SECONDS,
   CLAUDE_SYNC_TIMEOUT_MS,
+  PROMPT_FILE,
+  SYSTEM_PROMPT,
   WORK_DIR,
 } from "./config.js";
+import { git } from "./runtime/gitExec.js";
 import { callbackState as S } from "./runtime/state.js";
 import type { JsonObject, JsonValue } from "./types.js";
+
+/** Read the turn prompt that launch.ts uploads to PROMPT_FILE. */
+export function readTurnPrompt(): string {
+  return readFileSync(PROMPT_FILE, "utf8");
+}
+
+/** Prepend SYSTEM_PROMPT for providers that have no system-prompt option. */
+export function withSystemPrompt(prompt: string): string {
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\n\n" + prompt : prompt;
+}
 
 /** Narrow JSON.parse / Response.json() payloads into JsonValue (null if invalid). */
 function narrowJsonValue(
@@ -78,11 +91,61 @@ export function log(msg: string): void {
   }
 }
 
+/** Message text of an Error, or `String(value)` for anything else. */
+export function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** True when the JSON value is a plain object (not null, not an array). */
+export function isJsonObject(
+  value: JsonValue | null | undefined,
+): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Coerces a JSON value to an object; non-objects become `{}`. */
 export function asJsonObject(value: JsonValue | undefined): JsonObject {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
+  return isJsonObject(value) ? value : {};
+}
+
+/** Trimmed string when the value is a string with non-blank content. */
+export function readTrimmedString(
+  value: JsonValue | undefined,
+): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Raw (untrimmed) value of the first key whose value is a string with
+ * non-blank content; "" when none match.
+ */
+export function readStringField(
+  obj: JsonObject,
+  keys: readonly string[],
+): string {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
+/**
+ * Convex `/api/mutation` wraps returns in `{ status, value }`. Readers accept
+ * either that envelope or a bare object so older/unwrapped fixtures still work.
+ */
+export function unwrapConvexMutationPayload(
+  result: JsonValue,
+): JsonObject | null {
+  if (!isJsonObject(result)) return null;
+  const inner = result.value;
+  return isJsonObject(inner) ? inner : result;
+}
+
+/** Parses JSON text and keeps it only when it is a plain object. */
+export function tryParseJsonObject(text: string): JsonObject | null {
+  const parsed = tryParseJson(text);
+  return isJsonObject(parsed) ? parsed : null;
 }
 
 /** Attempts to parse a JSON string, returning null on failure. */
@@ -186,14 +249,11 @@ export function runTimedBashSync(script: string, label: string): boolean {
  * than distinguishing why.
  */
 export function readGitHeadSha(dir: string = WORK_DIR): string {
-  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
-    encoding: "utf8",
-    timeout: CLAUDE_SYNC_TIMEOUT_MS,
+  const result = git(["rev-parse", "HEAD"], {
+    cwd: dir,
+    timeoutMs: CLAUDE_SYNC_TIMEOUT_MS,
   });
-  if (result.status !== 0) {
-    return "";
-  }
-  return (result.stdout || "").trim();
+  return result.ok ? result.stdout : "";
 }
 
 /** True when the workspace has at least one commit after baselineHead. */
@@ -205,15 +265,14 @@ export function hasNewTaskCommitSince(baselineHead: string): boolean {
   if (!currentHead || currentHead === baselineHead) {
     return false;
   }
-  const countResult = spawnSync(
-    "git",
-    ["-C", WORK_DIR, "rev-list", "--count", baselineHead + ".." + currentHead],
-    { encoding: "utf8", timeout: CLAUDE_SYNC_TIMEOUT_MS },
+  const countResult = git(
+    ["rev-list", "--count", baselineHead + ".." + currentHead],
+    { timeoutMs: CLAUDE_SYNC_TIMEOUT_MS },
   );
-  if (countResult.status !== 0) {
+  if (!countResult.ok) {
     return true;
   }
-  const count = Number((countResult.stdout || "").trim());
+  const count = Number(countResult.stdout);
   return Number.isFinite(count) && count > 0;
 }
 
@@ -289,9 +348,4 @@ export function attemptElapsedMs(): number {
   return S.activeAttemptStartedAt > 0
     ? Date.now() - S.activeAttemptStartedAt
     : 0;
-}
-
-/** Returns milliseconds elapsed since the current attempt started. */
-export function elapsedAttemptMs(): number {
-  return attemptElapsedMs();
 }

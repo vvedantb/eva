@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 
 export const taskStatusValidator = v.union(
   v.literal("draft"),
@@ -358,4 +358,25 @@ export const notificationUrgencyValidator = v.union(
   v.literal("low"),
   v.literal("normal"),
   v.literal("high"),
+);
+
+/** The chat surface a sandbox MCP token or activity row names. */
+export const chatEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+export type ChatEntityKind = Infer<typeof chatEntityKindValidator>;
+
+/** The table that owns a sandbox. */
+export const sandboxEntityTableValidator = v.union(
+  v.literal("sessions"),
+  v.literal("agentTasks"),
+  v.literal("projects"),
+);
+export type SandboxEntityTable = Infer<typeof sandboxEntityTableValidator>;
+
+export const presentationStatusValidator = v.union(
+  v.literal("live"),
+  v.literal("ended"),
 );
