@@ -9,7 +9,11 @@ export {
   isSandboxPausedAlert,
   sandboxPausedAlertText,
 } from "./sandboxStopReason";
-export { sandboxPresenceRoomId } from "./sandboxPresence";
+export {
+  SANDBOX_ENGAGED_WINDOW_MS,
+  isSandboxUserEngaged,
+  sandboxPresenceRoomId,
+} from "./sandboxPresence";
 export {
   PREVIEW_WAKE_KINDS,
   previewWakePath,

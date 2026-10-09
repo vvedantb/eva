@@ -1,6 +1,7 @@
 "use node";
 
 import type { JWK } from "jose";
+import { SANDBOX_ENGAGED_WINDOW_MS } from "@eva/shared";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
@@ -35,7 +36,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v26";
+const SCRIPT_VERSION = "stream-v27";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -909,8 +910,9 @@ const PARENT_ORIGIN_SCRIPT =
   JSON.stringify(annotationParentOrigin()) +
   ";";
 
-// On-screen ping (idle pause): while the page is visible, POST to the proxy at
-// most once per heartbeat interval. A hidden tab sends nothing, so it no longer
+// On-screen ping (idle pause): while the page is visible AND had input in the
+// engaged window, POST to the proxy at most once per heartbeat interval. A
+// hidden tab, or a visible one nobody touches, sends nothing, so it no longer
 // keeps the sandbox awake. Loopback pages are the agent's own browser.
 const visibilityPingScript = "(" + function () {
   const flag = "__evaPreviewVisibilityPing";
@@ -920,9 +922,12 @@ const visibilityPingScript = "(" + function () {
   if (host === "127.0.0.1" || host === "localhost" || host === "[::1]") return;
 
   let lastSentAt = 0;
+  // Page load counts as input: someone just opened or navigated the page.
+  let lastInputAt = Date.now();
   function ping() {
     if (document.visibilityState !== "visible") return;
     const now = Date.now();
+    if (now - lastInputAt >= ${SANDBOX_ENGAGED_WINDOW_MS}) return;
     if (now - lastSentAt < ${ACTIVITY_HEARTBEAT_INTERVAL_MS}) return;
     lastSentAt = now;
     fetch("/__eva_preview_proxy/active", {
@@ -931,7 +936,19 @@ const visibilityPingScript = "(" + function () {
       keepalive: true,
     }).catch(function () {});
   }
-  document.addEventListener("visibilitychange", ping);
+  function onInput() {
+    const wasIdle = Date.now() - lastInputAt >= ${SANDBOX_ENGAGED_WINDOW_MS};
+    lastInputAt = Date.now();
+    if (wasIdle) ping();
+  }
+  ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"].forEach(
+    function (type) {
+      window.addEventListener(type, onInput, { capture: true, passive: true });
+    },
+  );
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") onInput();
+  });
   window.setInterval(ping, ${ACTIVITY_HEARTBEAT_INTERVAL_MS});
   ping();
 }.toString() + ")();";
