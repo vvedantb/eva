@@ -191,7 +191,7 @@ export function readGitHeadSha(dir: string = WORK_DIR): string {
     cwd: dir,
     timeoutMs: CLAUDE_SYNC_TIMEOUT_MS,
   });
-  return result.ok ? result.out : "";
+  return result.ok ? result.stdout : "";
 }
 
 /** True when the workspace has at least one commit after baselineHead. */
@@ -210,7 +210,7 @@ export function hasNewTaskCommitSince(baselineHead: string): boolean {
   if (!countResult.ok) {
     return true;
   }
-  const count = Number(countResult.out);
+  const count = Number(countResult.stdout);
   return Number.isFinite(count) && count > 0;
 }
 

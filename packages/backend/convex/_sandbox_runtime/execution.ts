@@ -108,7 +108,7 @@ import {
   checkoutFetchedBaseBranch,
   createSandboxAndPrepareRepo,
   getOrCreateSandbox,
-  isRetryableGitNetworkError,
+  isTransientTransportError,
   pushBranchToOrigin,
   EPHEMERAL_LIFECYCLE,
   SESSION_LIFECYCLE,
@@ -1129,7 +1129,9 @@ const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 function isSandboxSetupRetryable(message: string): boolean {
   return (
     isDaytonaNetworkIssue(message) ||
-    isRetryableGitNetworkError(message) ||
+    // Transport only: setup deletes and recreates the VM, so a permanent auth
+    // failure or a bare "network" substring must not trigger it.
+    isTransientTransportError(message) ||
     // Exit code -1 typically means the command was terminated abnormally
     // (sandbox not yet accepting commands, transport error, killed mid-exec) —
     // this is transient, unlike non-zero exit codes from real command failures.

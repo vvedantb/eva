@@ -24,7 +24,7 @@ import {
   createSandboxAndPrepareRepo,
   fetchBranchRefs,
   forcePushBranchToOrigin,
-  isRetryableGitNetworkError,
+  isRetryableSessionStepError,
   isUnresolvedGitIndexError,
   recoverUnresolvedGitIndex,
   retryGitNetworkOperation,
@@ -278,7 +278,7 @@ async function checkoutSessionBranchWithRetry(
         continue;
       }
       const canRetry =
-        attempt < maxAttempts && isRetryableGitNetworkError(message);
+        attempt < maxAttempts && isRetryableSessionStepError(message);
       if (!canRetry) {
         throw error;
       }
@@ -529,6 +529,9 @@ async function installSnapshotDependenciesWithRetry(
     "installSnapshotDependencies",
     `rootDir=${rootDir || "."}, pm=${pm}`,
     () => execHandle(sandbox, installCommand, timeoutSeconds),
+    3,
+    1000,
+    isRetryableSessionStepError,
   );
 }
 

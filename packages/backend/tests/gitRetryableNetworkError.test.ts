@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { isRetryableGitNetworkError } from "../convex/_sandbox_runtime/git";
+import {
+  isRetryableGitNetworkError,
+  isRetryableSessionStepError,
+  isTransientTransportError,
+} from "../convex/_sandbox_runtime/git";
 
 /**
  * Session 300 (7 Oct 2026): GitHub answered a push with a 500 and the whole
@@ -14,10 +18,6 @@ describe("retryable git network errors", () => {
       "To https://github.com/evalucom/eva.git\n ! [remote rejected] refs/heads/eva/x -> eva/x (Internal Server Error)\nerror: failed to push some refs to 'https://github.com/evalucom/eva.git'",
     ],
     ["an HTTP-status 500", "fatal: unable to access: status code 500"],
-    [
-      "an unreachable network",
-      "fatal: unable to access 'https://github.com/evalucom/eva.git/': Failed to connect to github.com port 443: Network is unreachable",
-    ],
   ])("retries %s", (_label, message) => {
     expect(isRetryableGitNetworkError(message)).toBe(true);
   });
@@ -38,5 +38,19 @@ describe("retryable git network errors", () => {
     ["missing remote ref", "fatal: couldn't find remote ref eva/x"],
   ])("does not retry %s", (_label, message) => {
     expect(isRetryableGitNetworkError(message)).toBe(false);
+  });
+
+  test("session checkout and install also retry a bare network failure", () => {
+    const message =
+      "fatal: unable to access 'https://github.com/evalucom/eva.git/': Failed to connect to github.com port 443: Network is unreachable";
+    expect(isRetryableSessionStepError(message)).toBe(true);
+    expect(isRetryableGitNetworkError(message)).toBe(false);
+  });
+
+  test("sandbox setup never recreates the VM for a permanent auth failure", () => {
+    const message =
+      "fatal: Authentication failed for 'https://github.com/evalucom/eva.git/'";
+    expect(isRetryableGitNetworkError(message)).toBe(true);
+    expect(isTransientTransportError(message)).toBe(false);
   });
 });

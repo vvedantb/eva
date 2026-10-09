@@ -68,6 +68,7 @@ describe("gitExec", () => {
     expect(git(["rev-parse", "--abbrev-ref", "HEAD"], { cwd: other })).toEqual({
       ok: true,
       out: "main",
+      stdout: "main",
     });
   });
 });

@@ -487,12 +487,13 @@ function git(args, {
     timeout: timeoutMs,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
   });
+  const stdout = (result.stdout || "").trim();
   const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
+  return { ok: result.status === 0, out, stdout };
 }
 function readCurrentBranch(options = {}) {
   const result = git(["rev-parse", "--abbrev-ref", "HEAD"], options);
-  return result.ok ? result.out : "";
+  return result.ok ? result.stdout : "";
 }
 
 // callback-src/parse/questionInput.ts
@@ -838,7 +839,7 @@ function readGitHeadSha(dir = WORK_DIR) {
     cwd: dir,
     timeoutMs: CLAUDE_SYNC_TIMEOUT_MS
   });
-  return result.ok ? result.out : "";
+  return result.ok ? result.stdout : "";
 }
 function hasNewTaskCommitSince(baselineHead) {
   if (!baselineHead) {
@@ -855,7 +856,7 @@ function hasNewTaskCommitSince(baselineHead) {
   if (!countResult.ok) {
     return true;
   }
-  const count = Number(countResult.out);
+  const count = Number(countResult.stdout);
   return Number.isFinite(count) && count > 0;
 }
 function copyBaseClaudeConfig() {
@@ -6473,7 +6474,6 @@ async function finalizeSyntheticTurn(output) {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = syntheticCompletionArgs(messageId, {
     success,

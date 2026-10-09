@@ -419,10 +419,13 @@ export const taskExecutionWorkflow = workflow.define({
         !keepTaskSandboxActiveAfterRun
       ) {
         try {
-          await step.runAction(internal.sandbox.stopSandbox, {
-            sandboxId,
-            repoId: args.repoId,
-          });
+          // Retried: before the tail was unified, a failed stop on the success
+          // path got a second attempt from the catch block.
+          await step.runAction(
+            internal.sandbox.stopSandbox,
+            { sandboxId, repoId: args.repoId },
+            PR_STEP_RETRY,
+          );
           await step.runMutation(internal.taskWorkflow.markTaskSandboxStopped, {
             taskId: args.taskId,
           });

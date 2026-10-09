@@ -969,7 +969,6 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(S.accumulatedSteps);
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = syntheticCompletionArgs(messageId, {
     success,

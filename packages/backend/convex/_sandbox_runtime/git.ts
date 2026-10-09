@@ -241,21 +241,14 @@ function isSafeBranchName(branchName: string): boolean {
   return /^[^\s\\:?*[~^]+$/.test(branchName) && !branchName.includes("..");
 }
 
-/** Transient git failure (network, GitHub 5xx, token race) worth a retry. */
-export function isRetryableGitNetworkError(message: string): boolean {
+/** Transport-level hiccup (exec timeout, dropped connection, TLS, gateway 5xx) — never a real command failure. */
+export function isTransientTransportError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     isSandboxExecTimeout(message) ||
-    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
-    lower.includes("internal server error") ||
-    lower.includes("status code 500") ||
     lower.includes("status code 502") ||
     lower.includes("status code 503") ||
     lower.includes("status code 504") ||
-    lower.includes("status code 401") ||
-    lower.includes("http 401") ||
-    lower.includes("authentication failed") ||
-    lower.includes("could not read username") ||
     lower.includes("fetch failed") ||
     lower.includes("econnreset") ||
     lower.includes("econnrefused") ||
@@ -267,9 +260,34 @@ export function isRetryableGitNetworkError(message: string): boolean {
     lower.includes("connection reset by peer") ||
     lower.includes("rpc failed") ||
     lower.includes("early eof") ||
-    lower.includes("http/2 stream") ||
-    // npm "network request to ... failed", git "Network is unreachable".
-    lower.includes("network")
+    lower.includes("http/2 stream")
+  );
+}
+
+/**
+ * Transient git push/fetch/clone failure: transport hiccups plus GitHub-side
+ * 500s and the installation-token race (401 / auth prompt right after a token
+ * rotation). Too broad for sandbox setup, where an auth failure is permanent.
+ */
+export function isRetryableGitNetworkError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    isTransientTransportError(message) ||
+    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
+    lower.includes("internal server error") ||
+    lower.includes("status code 500") ||
+    lower.includes("status code 401") ||
+    lower.includes("http 401") ||
+    lower.includes("authentication failed") ||
+    lower.includes("could not read username")
+  );
+}
+
+/** Session checkout and dependency install: transport hiccups plus npm "network request … failed" / git "Network is unreachable". */
+export function isRetryableSessionStepError(message: string): boolean {
+  return (
+    isTransientTransportError(message) ||
+    message.toLowerCase().includes("network")
   );
 }
 
@@ -294,6 +312,7 @@ export async function retryGitNetworkOperation<T>(
   fn: () => Promise<T>,
   maxAttempts = 3,
   delayStepMs = 1000,
+  isRetryable: (message: string) => boolean = isRetryableGitNetworkError,
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -307,7 +326,7 @@ export async function retryGitNetworkOperation<T>(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const shouldRetry =
-        attempt < maxAttempts && isRetryableGitNetworkError(message);
+        attempt < maxAttempts && isRetryable(message);
       if (!shouldRetry) {
         throw error;
       }
