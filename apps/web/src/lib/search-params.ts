@@ -474,6 +474,15 @@ export const pullRequestListStateParser = parseAsStringLiteral(
 
 export const previewPortParser = parseAsInteger.withOptions(searchOptions);
 
+/**
+ * Active chat tab of a session (`?chat=2`), by the chat's per-session number.
+ * Absent means Main, so every pre-existing session link still opens Main. A
+ * query param rather than a path segment because the chat axis is orthogonal
+ * to the `$sandboxTab` / `review/*` / `pr/*` segments that already hang off
+ * `$numId`, and nesting one inside the other would break every existing link.
+ */
+export const chatParser = parseAsInteger.withOptions(tabOptions);
+
 export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);

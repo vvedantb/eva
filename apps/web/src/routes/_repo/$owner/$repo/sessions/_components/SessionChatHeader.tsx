@@ -27,6 +27,8 @@ import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
   sessionId: Id<"sessions">;
+  /** The chat tab shown — context usage is per chat, like its transcript. */
+  chatId: Id<"sessionChats">;
   title: string;
   branchName?: string;
   prUrl?: string;
@@ -60,6 +62,7 @@ interface SessionChatHeaderArgs {
 export function useSessionChatHeader({
   repoId,
   sessionId,
+  chatId,
   title,
   branchName,
   prUrl,
@@ -106,7 +109,7 @@ export function useSessionChatHeader({
           onRetry={() => onSandboxToggle("start")}
         />
       ) : null}
-      <EntityContextUsage repoId={repoId} entityId={sessionId} />
+      <EntityContextUsage repoId={repoId} entityId={chatId} />
       <UsageLimitsIndicator
         repoId={repoId}
         model={model}

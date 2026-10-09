@@ -67,6 +67,7 @@ export const set = authMutation({
       await ctx.db.insert("drafts", {
         ...base,
         sessionId: args.target.sessionId,
+        chatId: args.target.chatId,
       });
     }
 

@@ -4,8 +4,16 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
 
-type ChatEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
-type ChatEntity = Doc<"sessions"> | Doc<"agentTasks"> | Doc<"projects">;
+type ChatEntityId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
+type ChatEntity =
+  | Doc<"sessionChats">
+  | Doc<"sessions">
+  | Doc<"agentTasks">
+  | Doc<"projects">;
 
 /** Chats the user "owns": creator, owner or project member. Shared chats they never opened stay quiet. */
 export function isOwnChat(

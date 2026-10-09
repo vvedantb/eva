@@ -34,7 +34,7 @@ function applyAddMessageOptimistically(
 ) {
   if (args.role !== "user") return;
   const existing = localStore.getQuery(api.messages.listByParent, {
-    parentId: args.id,
+    parentId: args.chatId,
   });
   if (existing === undefined) return;
 
@@ -42,7 +42,7 @@ function applyAddMessageOptimistically(
   const userMsg: SessionMessage = {
     _id: optimisticMessageId(),
     _creationTime: now,
-    parentId: args.id,
+    parentId: args.chatId,
     role: "user",
     content: args.content,
     timestamp: now,
@@ -58,13 +58,13 @@ function applyAddMessageOptimistically(
   const assistantPlaceholder: SessionMessage = {
     _id: optimisticMessageId(),
     _creationTime: now + 1,
-    parentId: args.id,
+    parentId: args.chatId,
     role: "assistant",
     content: "",
     timestamp: now + 1,
     activityLog: "",
   };
-  localStore.setQuery(api.messages.listByParent, { parentId: args.id }, [
+  localStore.setQuery(api.messages.listByParent, { parentId: args.chatId }, [
     ...existing,
     userMsg,
     assistantPlaceholder,
@@ -81,8 +81,11 @@ export interface SessionSendOptions extends ChatSendOptions {
   sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
-interface UseSessionSendParams {
+interface UseChatSendParams {
+  /** The session the chat belongs to; the restore-draft row is keyed on both. */
   sessionId: Id<"sessions">;
+  /** The chat tab the send lands in; its turn, queue and transcript are its own. */
+  chatId: Id<"sessionChats">;
   model: AIModel;
   executionTraits: ModelTraitsExecutionArgs;
   /** Effective effort shown in the composer; snapshotted onto the user message. */
@@ -102,8 +105,14 @@ interface UseSessionSendParams {
   isRouteActive?: boolean;
 }
 
-export function useSessionSend({
+/**
+ * Send / queue / cancel for one chat tab of a session. `startExecute` itself
+ * decides whether the message runs now or waits for a free parallel-chat
+ * slot, so the composer never has to know the session-wide cap.
+ */
+export function useChatSend({
   sessionId,
+  chatId,
   model,
   executionTraits,
   reasoningLevel,
@@ -113,7 +122,7 @@ export function useSessionSend({
   messages,
   queuesSends,
   isRouteActive = true,
-}: UseSessionSendParams) {
+}: UseChatSendParams) {
   const review = usePendingReviewComments();
   const addMessage = useMutation(api.sessions.addMessage).withOptimisticUpdate(
     (localStore, args) =>
@@ -126,8 +135,8 @@ export function useSessionSend({
   );
   const setDraft = useMutation(api.drafts.set);
   const turnStatus = useHeldQuery(
-    api.turns.getSessionStatus,
-    isRouteActive ? { sessionId } : "skip",
+    api.turns.getChatStatus,
+    isRouteActive ? { entityId: chatId } : "skip",
   );
 
   // The persisted open turn is canonical. Message shape only covers the first
@@ -151,7 +160,7 @@ export function useSessionSend({
         label: "Restore draft",
         onClick: () => {
           void setDraft({
-            target: { kind: "sessionChat", sessionId },
+            target: { kind: "sessionChat", sessionId, chatId },
             content: draftContent,
           });
         },
@@ -181,7 +190,7 @@ export function useSessionSend({
     if (isExecuting || queuesSends) {
       try {
         await enqueueMessage({
-          sessionId,
+          chatId,
           message: finalContent,
           model,
           ...executionTraits,
@@ -208,7 +217,7 @@ export function useSessionSend({
     // of blocking its submit on it.
     await Promise.all([
       addMessage({
-        id: sessionId,
+        chatId,
         role: "user",
         content: finalContent,
         attachmentStorageIds,
@@ -217,7 +226,7 @@ export function useSessionSend({
         reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
       }),
       startExecution({
-        sessionId,
+        chatId,
         message: finalContent,
         model,
         ...executionTraits,
@@ -247,7 +256,7 @@ export function useSessionSend({
 
   const handleCancel = async () => {
     await catchMutationError(
-      cancelExecutionMutation({ sessionId }),
+      cancelExecutionMutation({ chatId }),
       "Couldn't cancel execution",
       "session-cancel-execution",
     );

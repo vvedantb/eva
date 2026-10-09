@@ -243,6 +243,7 @@ export type TurnState = Infer<typeof turnStateValidator>;
 
 /** Chat entities that own durable turns; the id's table picks the surface. */
 export const chatTurnEntityIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("agentTasks"),
   v.id("projects"),
@@ -253,6 +254,7 @@ export const chatTurnEntityIdValidator = v.union(
  * one-shot agents work on (automation runs, docs, evaluation reports).
  */
 export const turnEntityIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("agentTasks"),
   v.id("projects"),
@@ -278,6 +280,10 @@ export const turnFields = {
   // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
   lane: v.optional(turnLaneValidator),
+  // The session a chat turn belongs to, so one indexed scan answers "how many
+  // chats of this session are running" (the parallel-chat cap) and "is any
+  // chat of this session executing" (the sidebar).
+  sessionId: v.optional(v.id("sessions")),
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -443,6 +449,45 @@ const prSummaryFields = {
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   prCount: v.optional(v.number()),
+};
+
+/**
+ * One chat thread inside a session. The session owns the sandbox, branch,
+ * PR and preview; the chat owns the transcript, the warm daemon, the open
+ * turn and the model settings. Every session has a Main chat (number 1);
+ * further chats run in parallel on the same checkout, each with its own
+ * daemon and provider transcript (`sessionClaudeUuid(chat._id)`).
+ */
+export const sessionChatFields = {
+  sessionId: v.id("sessions"),
+  repoId: v.id("githubRepos"),
+  /** Session owner, mirrored so the 50ms daemon claim poll skips the repo access read. */
+  userId: v.id("users"),
+  title: v.string(),
+  /** Per-session sequence; 1 is Main. Stable for links (`?chat=2`). */
+  number: v.number(),
+  isMain: v.boolean(),
+  /** Closed by the user. Main can never be archived. */
+  archived: v.optional(v.boolean()),
+  createdBy: v.optional(v.id("users")),
+  updatedAt: v.optional(v.number()),
+  activeWorkflowId: v.optional(v.string()),
+  /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
+  lastTurnFinishedAt: v.optional(v.number()),
+  // Composer settings, sticky per chat (see the matching session comments
+  // for each field's contract).
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  provider: v.optional(aiProviderValidator),
+  lastModel: v.optional(aiModelValidator),
+  lastReasoningLevel: v.optional(reasoningLevelValidator),
+  lastThinkingEnabled: v.optional(v.boolean()),
+  lastUse1mContext: v.optional(v.boolean()),
+  lastFastMode: v.optional(v.boolean()),
+  // A Main chat backfilled from an existing session keeps the session id as
+  // its provider-transcript seed so it resumes the conversation Claude
+  // already holds instead of starting cold. New chats hash their own id.
+  claudePersistenceSeed: v.optional(v.id("sessions")),
+  ...chatDaemonEntityFields,
 };
 
 export const agentTaskFields = {
@@ -1152,7 +1197,12 @@ export const messageFields = {
   finishedAt: v.optional(v.number()),
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   // Client-generated id (crypto.randomUUID) set when a user message is sent
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
@@ -1262,7 +1312,12 @@ export const aveMessageFields = {
 };
 
 export const queuedMessageFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
@@ -1569,6 +1624,8 @@ export const draftFields = {
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),
   sessionId: v.optional(v.id("sessions")),
+  // One draft per session chat tab; `sessionId` stays for the index and repo scope.
+  chatId: v.optional(v.id("sessionChats")),
   content: v.string(),
   updatedAt: v.number(),
 };
@@ -1619,6 +1676,7 @@ export const draftTarget = v.union(
   v.object({
     kind: v.literal("sessionChat"),
     sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
   }),
 );
 
@@ -1724,7 +1782,12 @@ export const agentUsageLimitFields = {
  * client boundary (`@eva/shared/generativeUi`).
  */
 export const chatUiPanelFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the panel appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.optional(v.string()),
@@ -1740,7 +1803,12 @@ export const chatUiPanelFields = {
  * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
  */
 export const chatHtmlRenderFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the page appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.string(),
@@ -1767,7 +1835,12 @@ export const envVarRequestScopeValidator = v.union(
  * lands here.
  */
 export const envVarRequestFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the card appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   key: v.string(),
@@ -1795,7 +1868,12 @@ export const envVarRequestFields = {
  * because their shape is the previewed app's business, not the database's.
  */
 export const previewToolCallFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   kind: v.union(v.literal("list"), v.literal("invoke")),
   /** Invoke only: the page tool to run. */
   name: v.optional(v.string()),

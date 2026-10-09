@@ -15,6 +15,8 @@ interface ChatPageWrapperProps {
   readOnlyMessage?: string;
   /** Design sessions still pass this; prefer `readOnlyMessage` for custom copy. */
   isArchived?: boolean;
+  /** A tab strip rendered under the header row (session chat tabs). */
+  tabs?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -26,6 +28,7 @@ export function ChatPageWrapper({
   headerRight,
   readOnlyMessage,
   isArchived,
+  tabs,
   children,
 }: ChatPageWrapperProps) {
   const bannerMessage =
@@ -72,6 +75,7 @@ export function ChatPageWrapper({
           </m.div>
         )}
       </AnimatePresence>
+      {tabs}
       {children}
     </div>
   );

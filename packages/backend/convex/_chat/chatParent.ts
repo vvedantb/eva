@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { findMainChat } from "../_sessionChats/helpers";
 
 /** The chat surface a sandbox MCP token names. */
 export const chatEntityKindValidator = v.union(
@@ -11,7 +12,11 @@ export const chatEntityKindValidator = v.union(
 
 type ChatEntityKind = typeof chatEntityKindValidator.type;
 
-type ChatParentId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+type ChatParentId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
 
 /**
  * Narrows a bare turn owner id to a chat entity. Null for runs, docs,
@@ -22,19 +27,31 @@ export function chatParentIdOf(
   entityId: string,
 ): ChatParentId | null {
   return (
+    db.normalizeId("sessionChats", entityId) ??
     db.normalizeId("sessions", entityId) ??
     db.normalizeId("agentTasks", entityId) ??
     db.normalizeId("projects", entityId)
   );
 }
 
-/** The chat a sandbox token names, resolved to the id its messages hang off. */
-export function resolveChatParent(
+/**
+ * The chat a sandbox token names, resolved to the id its messages hang off.
+ * A session's messages live on its chats, so a bare session id (an MCP caller
+ * naming the session, or a token minted before chats) lands on its Main chat.
+ */
+export async function resolveChatParent(
   db: DatabaseReader,
   entityKind: ChatEntityKind,
   entityId: string,
-): ChatParentId | null {
-  if (entityKind === "session") return db.normalizeId("sessions", entityId);
+): Promise<ChatParentId | null> {
+  if (entityKind === "session") {
+    const chatId = db.normalizeId("sessionChats", entityId);
+    if (chatId) return chatId;
+    const sessionId = db.normalizeId("sessions", entityId);
+    if (!sessionId) return null;
+    const mainChat = await findMainChat(db, sessionId);
+    return mainChat?._id ?? null;
+  }
   if (entityKind === "task") return db.normalizeId("agentTasks", entityId);
   return db.normalizeId("projects", entityId);
 }

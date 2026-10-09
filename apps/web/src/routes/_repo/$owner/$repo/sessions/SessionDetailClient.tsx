@@ -1,7 +1,7 @@
 import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@eva/ui";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
+import type { Doc, Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
@@ -17,11 +17,16 @@ import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSn
 import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
 import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
-import { catchMutationError } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export function SessionDetailClient({
   sessionId,
+  chatNumber,
+  onChatChange,
   activeSandboxTab,
   onSandboxTabChange,
   onOpenFile,
@@ -29,6 +34,9 @@ export function SessionDetailClient({
   isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
+  /** Chat tab from the URL (`?chat=N`); null means Main. */
+  chatNumber: number | null;
+  onChatChange: (number: number | null) => void;
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeSandboxTab: string;
   onSandboxTabChange: (tab: string) => void;
@@ -51,17 +59,34 @@ export function SessionDetailClient({
     api.sessions.get,
     isRouteActive ? { id: sessionId } : "skip",
   );
+  // The session's chats: Main plus any parallel chats. The URL picks one;
+  // a missing or closed number falls back to Main server-side.
+  const chats = useHeldQuery(
+    api.sessionChats.listForSession,
+    isRouteActive ? { sessionId } : "skip",
+  );
+  const activeChat = useHeldQuery(
+    api.sessionChats.resolveForSession,
+    isRouteActive
+      ? { sessionId, ...(chatNumber !== null ? { number: chatNumber } : {}) }
+      : "skip",
+  );
+  const chatStatuses = useHeldQuery(
+    api.turns.listSessionChatStatuses,
+    isRouteActive ? { sessionId } : "skip",
+  );
+  const chatId = activeChat?._id;
   const messages = useHeldQuery(
     api.messages.listByParent,
-    isRouteActive ? { parentId: sessionId } : "skip",
+    isRouteActive && chatId ? { parentId: chatId } : "skip",
   );
   const queuedMessages = useHeldQuery(
     api.queuedMessages.listByParent,
-    isRouteActive ? { parentId: sessionId } : "skip",
+    isRouteActive && chatId ? { parentId: chatId } : "skip",
   );
   const streaming = useHeldQuery(
     api.streaming.get,
-    isRouteActive ? { entityId: sessionId } : "skip",
+    isRouteActive && chatId ? { entityId: chatId } : "skip",
   );
   const summaryStreaming = useHeldQuery(
     api.streaming.get,
@@ -76,11 +101,29 @@ export function SessionDetailClient({
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
+  const ensureMainChat = useMutation(api.sessionChats.ensureMain);
+  const createChat = useMutation(api.sessionChats.create);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
-  // Pre-warm the Claude daemon as soon as the session opens (once its sandbox is
-  // known), so the user's first message is warm instead of paying a ~20s cold
-  // respawn. Idempotent server-side (skips if a daemon is already alive), so
-  // re-firing when the sandbox id resolves is cheap.
+  // A session created before chats existed has no Main chat row yet; opening
+  // it is what creates one (and moves its transcript onto it). Keyed on the
+  // boolean so it fires once per empty result, not on every chats update.
+  const needsMainChat =
+    isRouteActive && chats !== undefined && chats.length === 0;
+  /* eslint-disable no-effect/no-event-handler --
+     The missing Main chat is a server-side fact about a legacy session that
+     only the live query reveals; there is no click to hang this on. */
+  useEffect(() => {
+    if (!needsMainChat) return;
+    void ensureMainChat({ sessionId });
+  }, [needsMainChat, sessionId, ensureMainChat]);
+  /* eslint-enable no-effect/no-event-handler */
+
+  // Pre-warm the active chat's daemon as soon as it is known (once the sandbox
+  // is), so the user's first message is warm instead of paying a ~20s cold
+  // respawn. Only the visible tab: idle daemons for every chat would hold
+  // memory the running ones need. Idempotent server-side (skips if a daemon
+  // is already alive), so re-firing when the sandbox id resolves is cheap.
   const prewarmDaemon = useMutation(api.sessionWorkflow.prewarmDaemon);
   const sandboxId = session?.sandboxId;
   // A closed/stopping session keeps its sandboxId, so gate on status too:
@@ -98,15 +141,15 @@ export function SessionDetailClient({
   useEffect(() => {
     // A hidden cached shell must not resume a VM the user is not looking at.
     if (!isRouteActive) return;
-    if (!sandboxId) return;
+    if (!sandboxId || !chatId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
     // Don't prewarm (which resumes the VM) when the PR is already terminal —
     // auto-stop below owns teardown for merged/closed sessions.
     if (isSessionPrReadOnly(sessionPrState)) return;
-    void prewarmDaemon({ sessionId });
+    void prewarmDaemon({ chatId });
   }, [
     isRouteActive,
-    sessionId,
+    chatId,
     sandboxId,
     sandboxStatus,
     sessionPrState,
@@ -183,6 +226,31 @@ export function SessionDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
+  const handleCreateChat = async () => {
+    if (isCreatingChat) return;
+    setIsCreatingChat(true);
+    try {
+      const created = await withMutationToast(
+        createChat({
+          sessionId,
+          ...(chatId ? { fromChatId: chatId } : {}),
+        }),
+        "New chat opened",
+        "Couldn't open a new chat",
+        "session-chat-create",
+      );
+      onChatChange(created.number);
+    } catch {
+      setIsCreatingChat(false);
+      return;
+    }
+    setIsCreatingChat(false);
+  };
+
+  const handleSelectChat = (chat: Doc<"sessionChats">) => {
+    onChatChange(chat.number);
+  };
+
   const agentBrowsingAt =
     session === null || session === undefined
       ? undefined
@@ -200,7 +268,7 @@ export function SessionDetailClient({
   }, [agentBrowsingAt, onSandboxTabChange, isRouteActive]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
-  if (session === undefined) {
+  if (session === undefined || activeChat === undefined) {
     return <CenteredSpinner label="Loading session" />;
   }
 
@@ -208,6 +276,11 @@ export function SessionDetailClient({
     return (
       <EntityNotFound entityLabel="session" backTo={`${basePath}/sessions`} />
     );
+  }
+
+  // Main is being created by the effect above (legacy session on first open).
+  if (activeChat === null) {
+    return <CenteredSpinner label="Opening chat" />;
   }
 
   const isSandboxActive = session.status === "active";
@@ -218,6 +291,12 @@ export function SessionDetailClient({
   const chatPanel = (sandboxCollapsed?: boolean) => (
     <ChatPanel
       sessionId={sessionId}
+      chat={activeChat}
+      chats={chats ?? []}
+      chatStatuses={chatStatuses ?? []}
+      onSelectChat={handleSelectChat}
+      onCreateChat={() => void handleCreateChat()}
+      isCreatingChat={isCreatingChat}
       title={session.title}
       branchName={session.branchName}
       sandboxBranch={session.sandboxBranch}
@@ -253,7 +332,7 @@ export function SessionDetailClient({
         onSandboxTabChange("agents");
         setExpandRightSignal((n) => n + 1);
       }}
-      backgroundAgents={session.backgroundAgents}
+      backgroundAgents={activeChat.backgroundAgents}
     />
   );
 
@@ -279,6 +358,7 @@ export function SessionDetailClient({
                   rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
                     <SandboxPanel
                       sessionId={sessionId}
+                      chatId={activeChat._id}
                       sandboxId={session.sandboxId}
                       isActive={isSandboxActive}
                       isRouteActive={isRouteActive}
@@ -293,7 +373,7 @@ export function SessionDetailClient({
                       terminalPanel={terminalPanel}
                       planContent={session.planContent}
                       messages={messages ?? []}
-                      backgroundAgents={session.backgroundAgents}
+                      backgroundAgents={activeChat.backgroundAgents}
                       streamingActivity={streaming?.currentActivity}
                       isArchived={isReadOnly}
                       activeTab={activeSandboxTab}

@@ -5,7 +5,7 @@ import { stripSkillTokens } from "../_mentions/skillToken";
 
 const PREVIEW_MAX_CHARS = 160;
 
-type MessageParentId = Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+type MessageParentId = Id<"sessionChats"> | Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
 
 /** Collapses whitespace and truncates for sidebar hover previews. */
 export function formatMessagePreview(content: string): string {

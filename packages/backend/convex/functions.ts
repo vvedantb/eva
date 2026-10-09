@@ -160,10 +160,22 @@ export async function getSessionWithAccess(
 /** Verifies access to a message parent regardless of its entity kind. */
 export async function assertMessageParentAccess(
   db: GenericDatabaseReader<DataModel>,
-  parentId: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">,
+  parentId:
+    | Id<"sessionChats">
+    | Id<"sessions">
+    | Id<"projects">
+    | Id<"agentTasks">,
   userId: Id<"users">,
 ): Promise<void> {
   const rawId = String(parentId);
+  const chatId = db.normalizeId("sessionChats", rawId);
+  if (chatId) {
+    const chat = await db.get(chatId);
+    if (!chat) throw new Error("Chat not found");
+    await getSessionWithAccess(db, chat.sessionId, userId);
+    return;
+  }
+
   const sessionId = db.normalizeId("sessions", rawId);
   if (sessionId) {
     await getSessionWithAccess(db, sessionId, userId);

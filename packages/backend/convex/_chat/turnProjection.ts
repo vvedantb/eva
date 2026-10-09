@@ -42,7 +42,9 @@ export function isLegacyChatExecuting(
 /**
  * Every chat entity in one repo with a turn open. One indexed query per list
  * subscription, never one turn lookup per row. Ids are unique across tables,
- * so one set serves sessions, tasks and projects alike.
+ * so one set serves sessions, tasks and projects alike. A session chat's turn
+ * is filed under both the chat and its session, so a session row lights up
+ * while any of its chats runs.
  */
 export async function openChatEntityIdsForRepo(
   db: DatabaseReader,
@@ -53,11 +55,13 @@ export async function openChatEntityIdsForRepo(
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
   // A lane turn (summary, interview) is a one-shot agent, not a chat turn.
-  return new Set(
-    turns
-      .filter((turn) => turn.lane === undefined)
-      .map((turn) => String(turn.entityId)),
-  );
+  const ids = new Set<string>();
+  for (const turn of turns) {
+    if (turn.lane !== undefined) continue;
+    ids.add(String(turn.entityId));
+    if (turn.sessionId !== undefined) ids.add(String(turn.sessionId));
+  }
+  return ids;
 }
 
 /** True while one named chat entity has a turn open. */
@@ -65,6 +69,17 @@ export async function hasOpenChatTurn(
   db: DatabaseReader,
   entityId: Doc<"turns">["entityId"],
 ): Promise<boolean> {
+  const sessionId = db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    // A session runs through its chats: any chat's open turn counts.
+    const chatTurn = await db
+      .query("turns")
+      .withIndex("by_session_open", (q) =>
+        q.eq("sessionId", sessionId).eq("open", true),
+      )
+      .first();
+    if (chatTurn !== null) return true;
+  }
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>

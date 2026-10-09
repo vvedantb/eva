@@ -360,6 +360,7 @@ export const mcpHandler = httpAction(async (ctx, request) => {
       scopedRepoId: credentials.scopedRepoId,
       entityId: credentials.entityId,
       entityKind: credentials.entityKind,
+      chatId: credentials.chatId,
       body: JSON.stringify(body),
     },
   );

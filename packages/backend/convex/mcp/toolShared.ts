@@ -36,6 +36,11 @@ export interface McpCredentials {
   entityId?: string;
   entityKind?: "session" | "task" | "project";
   /**
+   * The session chat a session daemon runs in. Chat content (panels, HTML,
+   * preview tool calls, env var cards) lands here; `entityId` is the session.
+   */
+  chatId?: string;
+  /**
    * Set only by Manager Ave's own server-side run (`mcp/aveRun.ts`) — no token
    * path can carry it. Unlocks `send_agent_message` and makes the tools that
    * start or message agents register a watch on this thread.

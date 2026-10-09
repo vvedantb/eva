@@ -59,6 +59,8 @@ import { designVariationPrompt } from "./_utils/composerPrompts";
 
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
+  /** The active chat tab; annotations, plan sends and agent stops route to it. */
+  chatId: Id<"sessionChats">;
   sandboxId: string | undefined;
   isActive: boolean;
   /**
@@ -99,6 +101,7 @@ interface SandboxPanelProps {
 }
 export function SandboxPanel({
   sessionId,
+  chatId,
   sandboxId,
   isActive,
   isRouteActive = true,
@@ -126,10 +129,15 @@ export function SandboxPanel({
 }: SandboxPanelProps) {
   const simpleView = useSimpleView();
   const sessionIdStr = String(sessionId);
-  const submitAnnotation = useSessionAnnotationSend(sessionId, isRouteActive);
+  const submitAnnotation = useSessionAnnotationSend(
+    sessionId,
+    chatId,
+    isRouteActive,
+  );
   const seedChatDraft = useSeedChatDraft({
     kind: "sessionChat",
     sessionId,
+    chatId,
   });
   const proposedPlans = useHeldQuery(
     api.proposedPlans.listBySession,
@@ -138,6 +146,7 @@ export function SandboxPanel({
   const { implementPlan, implementPlanContent, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
+      chatId,
       handleSend: (content) => {
         void seedChatDraft(content);
       },
@@ -378,7 +387,7 @@ export function SandboxPanel({
           }
         >
           <SandboxAgentsPanel
-            entity={{ kind: "session", sessionId }}
+            entity={{ kind: "session", sessionId, chatId }}
             agents={agents}
             isReadOnly={isArchived === true}
           />

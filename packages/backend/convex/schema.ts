@@ -59,6 +59,7 @@ import {
   backgroundProcessFields,
   snapshotBuildFields,
   sessionDaemonStateFields,
+  sessionChatFields,
   turnFields,
   chatUiPanelFields,
   chatHtmlRenderFields,
@@ -198,6 +199,15 @@ const schema = defineSchema({
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"]),
+  // Chat threads inside a session (Main + parallel chats). See
+  // `sessionChatFields` for the session/chat ownership split.
+  sessionChats: defineTable(sessionChatFields)
+    .index("by_session", ["sessionId"])
+    .index("by_session_and_number", ["sessionId", "number"])
+    .index("by_repo", ["repoId"]),
+  // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
+  // directly; `backfillSessionChats` empties this table and it can then be
+  // dropped from the schema.
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
@@ -213,6 +223,7 @@ const schema = defineSchema({
     .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
     .index("by_entity_open", ["entityId", "lane", "open"])
+    .index("by_session_open", ["sessionId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
@@ -543,6 +554,7 @@ const schema = defineSchema({
     .index("by_user_and_task", ["userId", "taskId"])
     .index("by_user_and_project", ["userId", "projectId"])
     .index("by_user_and_session", ["userId", "sessionId"])
+    .index("by_user_and_chat", ["userId", "chatId"])
     .index("by_user_and_repo", ["userId", "repoId"]),
 
   // Explicit ⌘S queue of frozen composer snapshots (text + attachment blobs),

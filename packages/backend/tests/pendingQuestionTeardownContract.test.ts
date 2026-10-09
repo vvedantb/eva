@@ -22,10 +22,33 @@ test("every sandbox stop path clears pending questions", () => {
   ];
   for (const path of paths) {
     const source = readFileSync(join(testsDir, path), "utf8");
-    expect(source, `${path} must clear pending questions on stop`).toContain(
-      "clearPendingQuestionsForEntity(ctx.db,",
+    expect(source, `${path} must clear pending questions on stop`).toMatch(
+      /clearPendingQuestionsForEntity\(\s*ctx\.db,/,
     );
   }
+});
+
+/**
+ * A session's sandbox is shared by every one of its chats, and each chat's
+ * turn keys its own pendingQuestions row, so the session stop has to clear
+ * every live chat — clearing only Main would leave a parallel chat's composer
+ * hidden.
+ */
+test("the session stop clears every live chat's pending questions", () => {
+  const source = readFileSync(
+    join(testsDir, "../convex/_sessions/sandbox.ts"),
+    "utf8",
+  );
+  const stopAt = source.indexOf(
+    "export async function requestSessionSandboxStop(",
+  );
+  expect(stopAt).toBeGreaterThan(-1);
+  const body = source.slice(stopAt, source.indexOf("\n}", stopAt));
+  const listAt = body.indexOf("await listLiveSessionChats(ctx.db, sessionId)");
+  const clearAt = body.indexOf("clearPendingQuestionsForEntity(");
+  expect(listAt, "the stop must enumerate the live chats").toBeGreaterThan(-1);
+  expect(clearAt).toBeGreaterThan(listAt);
+  expect(body).toContain("sessionChatStreamingEntityId(chat._id)");
 });
 
 /**

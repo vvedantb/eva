@@ -18,6 +18,7 @@ import {
   taskChatAdapter,
   trackAgentTaskChatWorkflow,
   trackProjectChatWorkflow,
+  trackSessionChatWorkflow,
   trackSessionWorkflow,
   type ChatAlert,
 } from "./_chat/surfaceAdapters";
@@ -26,6 +27,8 @@ import {
   finalizeStaleChatTurn,
 } from "./_chat/stallWatchdog";
 import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
+import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
+import { ensureMainChat } from "./_sessionChats/helpers";
 
 // Re-exported so existing importers (agentTaskChatWorkflow.ts,
 // projectChatWorkflow.ts, _queues/helpers.ts, and others — see
@@ -38,6 +41,7 @@ export {
   RUN_TIMEOUT_MS,
   trackAgentTaskChatWorkflow,
   trackProjectChatWorkflow,
+  trackSessionChatWorkflow,
   trackSessionWorkflow,
 };
 
@@ -117,7 +121,7 @@ export async function trackProjectBuildWorkflow(
   );
 }
 
-/** Cancels a stale chat session workflow and starts the next queued message. */
+/** Tears down a stale session-level workflow (the summary); chats use `handleStaleSessionChat`. */
 export const handleStaleSession = internalMutation({
   args: {
     sessionId: v.id("sessions"),
@@ -136,9 +140,9 @@ export const handleStaleSession = internalMutation({
 });
 
 /**
- * Tears down a session workflow the 2-hour backstop or the lease reconciler
- * gave up on (a session summary has no chat turn of its own). No-op once the
- * session tracks another workflow.
+ * Tears down a session-level workflow (the summary — chat turns live on their
+ * chat) the 2-hour backstop or the lease reconciler gave up on. No-op once
+ * the session tracks another workflow. The alert lands in the Main chat.
  */
 export async function tearDownStaleSessionWorkflow(
   ctx: MutationCtx,
@@ -146,19 +150,52 @@ export async function tearDownStaleSessionWorkflow(
   workflowId: string,
   alert: ChatAlert,
 ): Promise<void> {
-  const session = await sessionChatAdapter.getEntity(ctx, sessionId);
-  if (!session || sessionChatAdapter.activeWorkflowId(session) !== workflowId) {
-    return;
-  }
-  await finalizeStaleChatTurn(
-    ctx,
-    sessionChatAdapter,
-    sessionId,
-    session,
-    workflowId,
-    alert,
-  );
+  const session = await ctx.db.get(sessionId);
+  if (!session || session.activeWorkflowId !== workflowId) return;
+  await cancelStaleWorkflow(ctx, workflowId, [
+    sessionSummaryStreamingEntityId(sessionId),
+  ]);
+  const mainChat = await ensureMainChat(ctx, session);
+  await ctx.db.insert("messages", {
+    parentId: mainChat._id,
+    role: "assistant",
+    content: alert.text,
+    timestamp: Date.now(),
+    isSystemAlert: true,
+    ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
+  });
+  await ctx.db.patch(sessionId, {
+    activeWorkflowId: undefined,
+    updatedAt: Date.now(),
+  });
 }
+
+/** Cancels a stale session chat workflow and starts the next queued message. */
+export const handleStaleSessionChat = internalMutation({
+  args: {
+    chatId: v.id("sessionChats"),
+    workflowId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const context = await sessionChatAdapter.getEntity(ctx, args.chatId);
+    if (
+      !context ||
+      sessionChatAdapter.activeWorkflowId(context) !== args.workflowId
+    ) {
+      return null;
+    }
+    await finalizeStaleChatTurn(
+      ctx,
+      sessionChatAdapter,
+      args.chatId,
+      context,
+      args.workflowId,
+      sessionChatAdapter.alerts.timeout,
+    );
+    return null;
+  },
+});
 
 
 
