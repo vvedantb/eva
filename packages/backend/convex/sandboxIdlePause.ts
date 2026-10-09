@@ -349,7 +349,11 @@ async function inspectSession(
     sessionIsExecuting(
       session,
       await openChatEntityIdsFor(ctx.db, sessionId),
-    ) || chatBusy;
+    ) ||
+    chatBusy ||
+    // Streaming rows keyed by the session itself: a session that predates
+    // chats and has not been opened (so has no Main chat row) yet.
+    (await hasPendingWork(ctx, String(sessionId)));
   return await finishCandidate(
     ctx,
     { kind: "session", entityId: String(sessionId) },

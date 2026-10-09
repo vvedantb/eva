@@ -154,7 +154,11 @@ export async function openSessionChatTurn(
   },
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
-  return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  // Marks the session as a durable-turn user so the legacy "activeWorkflowId
+  // means executing" bridge never becomes authoritative for it again.
+  await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
+  return turnId;
 }
 
 /**

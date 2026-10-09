@@ -19,17 +19,17 @@ const executionSource = readFileSync(
 ).replaceAll("\r\n", "\n");
 
 /**
- * `stageAndStartSessionTurn`'s body with `//` comments stripped — the prose
+ * `stageAndStartChatTurn`'s body with `//` comments stripped — the prose
  * names the very identifiers these tests assert are absent, so an assertion
  * over the raw text would match the comment instead of the code.
  */
 const stageBody = (() => {
   const startAt = executionSource.indexOf(
-    "async function stageAndStartSessionTurn(",
+    "async function stageAndStartChatTurn(",
   );
   expect(
     startAt,
-    "stageAndStartSessionTurn moved or was renamed",
+    "stageAndStartChatTurn moved or was renamed",
   ).toBeGreaterThan(-1);
   const nextAt = executionSource.indexOf("\nexport ", startAt + 1);
   return executionSource
@@ -93,7 +93,7 @@ const RAW_COMPOSER_ARGS: readonly string[] = [
  * The fix is one normalisation, before both launch call sites. It is invisible
  * at runtime, so pin it.
  */
-describe("stageAndStartSessionTurn normalises launch traits once", () => {
+describe("stageAndStartChatTurn normalises launch traits once", () => {
   const normaliseAt = stageBody.indexOf("launchTraitsFromStored(");
   const prewarmAt = stageBody.indexOf("internal.sandbox.prewarmSessionDaemon");
   const workflowStartAt = stageBody.indexOf("workflow.start(");
@@ -146,7 +146,7 @@ const occurrences = (text: string, needle: string): number =>
   text.split(needle).length - 1;
 
 /**
- * `stageAndStartSessionTurn` is not the only door into a chat workflow, and
+ * `stageAndStartChatTurn` is not the only door into a chat workflow, and
  * every one of these workflows forwards whatever traits it is given straight
  * back into its `prewarm*Daemon`. The queue drains read the composer's enqueued
  * values (same display-value override as the send path), the orchestrator
@@ -172,7 +172,7 @@ describe("every chat workflow start normalises its launch traits", () => {
       label: "the session queued-message drain",
       path: "../convex/_queues/helpers.ts",
       anchor: "internal.sessionWorkflow.sessionExecuteWorkflow",
-      entityField: "sessionId",
+      entityField: "chatId",
       spread: "launchTraitsFromStored(",
       rawFields: [
         "next.reasoningLevel",
